@@ -238,6 +238,18 @@ export type WorkUnitSurfaceModel = {
          */
         errorKind?: "authorization" | "configuration" | "subject" | "records";
         /**
+         * Did the operator select a cohort (Work View) at all?
+         *
+         * `false` ONLY on a contextual surface, where attention is a host + subject and no lens was
+         * chosen. It exists because `rows: []` is otherwise ambiguous: with a lens it means "this view
+         * holds nothing", and QueueRegion says so ("No records in this view") — a sentence that names a
+         * view the operator never selected. Absent/`true` keeps every existing surface exactly as it was.
+         *
+         * This is a statement about SELECTION, never a render instruction: no consumer may read `false`
+         * as licence to pick a view.
+         */
+        cohortSelected?: boolean;
+        /**
          * Published Queue Row surface config mapped onto the COMPACT row anatomy's fixed
          * slots (visibility + label overrides). Server owns row order/membership/filtering;
          * this only tunes per-slot placement of the compact card. Generic-context fallback

@@ -169,3 +169,20 @@ export function hasOperatorSelectedWorkView(
 ): boolean {
     return Boolean(answer?.activeWorkView?.id);
 }
+
+/**
+ * WHICH cohort the operator selected, or `null` for none.
+ *
+ * The value form of {@link hasOperatorSelectedWorkView}, and structurally typed the same way so it
+ * accepts the whole `ProvisioningAnswer` union — including the `error` variant, which carries no
+ * `activeWorkView` field at all. Every call site that wants "the lens, if any" reads it here, so no
+ * consumer re-derives the answer with its own `terminal !== "error"` guess — a guess that was correct
+ * only while every non-error terminal happened to have a lens.
+ *
+ * `null` means NO LENS. It is never an instruction to find one.
+ */
+export function selectedWorkViewId(
+    answer: { activeWorkView?: { id: string } | null } | null | undefined,
+): string | null {
+    return answer?.activeWorkView?.id ?? null;
+}

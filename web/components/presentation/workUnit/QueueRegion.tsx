@@ -81,7 +81,7 @@ function rowIsSelected(row: QueueRowModel, selectedRecordId: string | null): boo
     );
 }
 
-export type QueueRegionRenderState = "error" | "cold-loading" | "empty" | "rows";
+export type QueueRegionRenderState = "error" | "cold-loading" | "empty" | "rows" | "no-cohort";
 
 /**
  * Queue-lane hold decision (adminv2-runtime-performance-doctrine §Queue). The runtime never
@@ -96,11 +96,17 @@ export function queueRegionRenderState(queue: {
     rows: readonly unknown[];
     loading: boolean;
     error: string | null;
+    cohortSelected?: boolean;
 }): QueueRegionRenderState {
     const hasRows = queue.rows.length > 0;
     // Hard error with nothing to hold — full error surface. When rows exist, hold them and
     // surface the error inline (never drop to empty/skeleton).
     if (queue.error && !hasRows) return "error";
+    // NO COHORT SELECTED — checked after `error` (a real failure still surfaces) and before `empty`,
+    // because zero rows here does NOT mean "this view holds nothing": there is no view. `empty`'s copy
+    // would name a Work View the operator never chose, which is the same lie as lighting its pill.
+    // Explicit `false` only — an omitted flag leaves every existing surface on its existing path.
+    if (queue.cohortSelected === false) return "no-cohort";
     if (queue.loading && !hasRows) return "cold-loading";
     if (!hasRows) return "empty";
     return "rows";
@@ -385,6 +391,18 @@ export function QueueRegion({
                             which the surface model now carries through a refusal. Passing the lens set
                             into the queue region just to word a hint would couple this component to
                             navigation it does not own. */}
+                    </div>
+                ) : renderState === "no-cohort" ? (
+                    /* NO COHORT SELECTED. Deliberately NOT the empty state's ghost rows: dashed
+                       placeholders promise rows that are coming, and none are — nothing was asked for.
+                       Deliberately not a skeleton either, for the same reason. The operator is on a
+                       record; the pill strip above is where a cohort would be chosen, and this says so
+                       without choosing one for them. */
+                    <div data-queue-no-cohort="true" className="py-8 text-center">
+                        <p className="text-sm text-alloy-midnight/55">No Work View selected</p>
+                        <p className="mt-1 text-[13px] text-alloy-midnight/40">
+                            Choose one above to browse records.
+                        </p>
                     </div>
                 ) : renderState === "cold-loading" ? (
                     <ul

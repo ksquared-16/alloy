@@ -18,6 +18,20 @@ import type { ProvisioningAnswer } from "./workUnitProvisioningAnswer";
 
 export function destinationIdFromAnswer(answer: ProvisioningAnswer): DestinationId | null {
     if (answer.terminal === "error") return null;
+
+    // CONTEXTUAL — a destination the operator reached by naming a record. The host is real and the
+    // subject is real; the LENS is genuinely absent and is recorded as absent. Substituting the host's
+    // default view here would make Back navigation land on a cohort the operator never chose — the
+    // exact defect the nullable lens exists to remove, arriving by way of history instead of entry.
+    if (answer.terminal === "contextual") {
+        return {
+            workUnitId: answer.workUnit.id,
+            workViewId: null,
+            subjectId: answer.subject.id,
+            focusMode: null,
+        };
+    }
+
     return {
         workUnitId: answer.workUnit.id,
         workViewId: answer.activeWorkView.id,
