@@ -166,6 +166,28 @@ trigger via `triggerClassName` — the element it always described.
 
 ---
 
+## Input platform — CLOSED at program level (2026-08-14)
+
+Single-select is complete and handed to a parallel lane. Slot 5 remains owner of the
+primitive if a migration batch discovers a genuine shared deficiency.
+
+| Item | State |
+|---|---|
+| One canonical single-select implementation | ✅ `AlloySelect` |
+| `SelectFieldControl` delegates | ✅ adapter only — no value semantics, keyboard model or menu |
+| Identity field-name allowlist | ✅ removed |
+| Typeahead | ✅ native semantics, 21 tests |
+| Required / empty semantics | ✅ `allowEmpty` |
+| Density | ✅ `density="compact"` |
+| Keyboard-active styling | ✅ browser focus ring replaced with Bend Pine marker |
+| First owner-based batch | ✅ organization calculations, 13 → 0 |
+| Raw-select ratchet | ✅ active, 414 remaining |
+| Remaining migration | ✅ classified, **parallelizable** |
+| Multi-select | ⏸ separate platform-input gap — NOT AlloySelect work |
+| Portal · read-only | ⏸ deferred pending evidence |
+
+---
+
 ## Select primitive — limitations still open
 
 Recorded so the mass migration is planned against what the primitive actually does.
