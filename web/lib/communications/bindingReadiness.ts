@@ -169,6 +169,15 @@ export function evaluateBindingReadiness(
          * most likely to hit and least able to interpret.
          */
         approvedConnectionAvailable?: boolean;
+        /**
+         * The organization's own connection was REJECTED by the provider.
+         *
+         * Supplied by the caller because only it can see the provider account's
+         * verification state; this function sees a binding. Without it the state
+         * would be decorative — the compiler proved it unreachable here, which is
+         * exactly the kind of dead branch that reads as covered and is not.
+         */
+        credentialRejected?: boolean;
     },
 ): BindingReadiness {
     const channel = channelOf(binding);
@@ -206,13 +215,17 @@ export function evaluateBindingReadiness(
 
     // `none_approved` first: when the deployment offers nothing to pick, that is
     // the only actionable truth, and it is actionable by someone else.
-    const providerConnection: ProviderConnectionState = !anyApproved
-        ? "none_approved"
-        : !referenced
-          ? "not_connected"
-          : available
-            ? "configured"
-            : "unavailable";
+    // Rejection outranks everything below it: a provider that refused these
+    // credentials is a more specific and more actionable truth than "unavailable".
+    const providerConnection: ProviderConnectionState = options?.credentialRejected
+        ? "invalid_credential"
+        : !anyApproved
+          ? "none_approved"
+          : !referenced
+            ? "not_connected"
+            : available
+              ? "configured"
+              : "unavailable";
 
     if (
         providerConnection === "none_approved" ||

@@ -99,6 +99,28 @@ describe("a connection was chosen but this deployment lost it", () => {
 });
 
 describe("a rejected credential is a distinct, actionable state", () => {
+    it("is REACHABLE — the provider refused the organization's own connection", () => {
+        const r = evaluateBindingReadiness(emailBinding(), {
+            credentialAvailable: true,
+            approvedConnectionAvailable: true,
+            credentialRejected: true,
+        });
+        expect(r.providerConnection).toBe("invalid_credential");
+        expect(r.send.detail).toMatch(/rejected this connection/i);
+        expect(r.send.detail).toMatch(/Reconnect with a current Resend API key/i);
+        // Still two different sentences.
+        expect(r.send.detail).not.toBe(r.receive.detail);
+    });
+
+    it("outranks every other state — it is the most specific truth", () => {
+        const r = evaluateBindingReadiness(emailBinding(), {
+            credentialAvailable: false,
+            approvedConnectionAvailable: false,
+            credentialRejected: true,
+        });
+        expect(r.providerConnection).toBe("invalid_credential");
+    });
+
     it("is labelled as rejected, never as merely unavailable", () => {
         expect(providerConnectionLabelFor("invalid_credential")).toMatch(/rejected/i);
         expect(providerConnectionLabelFor("unavailable")).toMatch(/could not reach/i);
