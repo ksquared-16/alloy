@@ -68,7 +68,18 @@ export type DirectionReadiness = {
  * domain is verified or MX records point anywhere. Those stay "verification
  * required" — an honest unknown — rather than invented.
  */
-export type ProviderConnectionState = "configured" | "unavailable" | "not_connected" | "none_approved";
+export type ProviderConnectionState =
+    | "configured"
+    | "unavailable"
+    | "not_connected"
+    | "none_approved"
+    /**
+     * The organization connected its own account and the provider REJECTED the
+     * credential. Distinct from `unavailable`, which means Alloy could not tell:
+     * telling an administrator their key is wrong while the provider is merely
+     * unreachable sends them to replace a key that works.
+     */
+    | "invalid_credential";
 
 export type BindingReadiness = {
     send: DirectionReadiness;
@@ -203,7 +214,11 @@ export function evaluateBindingReadiness(
             ? "configured"
             : "unavailable";
 
-    if (providerConnection === "none_approved" || providerConnection === "unavailable") {
+    if (
+        providerConnection === "none_approved" ||
+        providerConnection === "unavailable" ||
+        providerConnection === "invalid_credential"
+    ) {
         return { providerConnection, ...providerBlockedReadiness(channel, providerConnection) };
     }
 
@@ -227,16 +242,19 @@ export function evaluateBindingReadiness(
  */
 function providerBlockedReadiness(
     channel: string,
-    state: "none_approved" | "unavailable",
+    state: "none_approved" | "unavailable" | "invalid_credential",
 ): { send: DirectionReadiness; receive: DirectionReadiness } {
     const email = channel === "email";
     const providerName = email ? "Resend" : "Twilio";
 
-    // Who can act. This is the whole point of separating the two states.
+    // Who can act, and what they do about it. Three different answers, because
+    // three different things are wrong.
     const remedy =
-        state === "none_approved"
-            ? `No ${providerName} connection is available in this deployment. An Alloy administrator has to make one available — this cannot be completed from here.`
-            : `The ${providerName} connection this channel uses is no longer available in this deployment. Choose another approved connection, or ask an Alloy administrator to restore it.`;
+        state === "invalid_credential"
+            ? `${providerName} rejected this connection's credentials. Reconnect with a current ${providerName} API key.`
+            : state === "none_approved"
+              ? `No ${providerName} connection is available yet. Connect your organization's own ${providerName} account to finish setup.`
+              : `Alloy could not reach ${providerName} to confirm this connection. Nothing is lost — try again, and reconnect if it keeps failing.`;
 
     return {
         send: {

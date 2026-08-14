@@ -397,10 +397,15 @@ export function providerConnectionLabelFor(state: ProviderConnectionState): stri
     switch (state) {
         case "configured":
             return "Connected";
+        case "invalid_credential":
+            return "Credentials rejected";
         case "unavailable":
-            return "Unavailable in this deployment";
+            return "Could not reach provider";
+        // `none_approved` used to read "Needs an Alloy administrator". That was
+        // true only while a credential could live nowhere but the deployment.
+        // An organization now connects its own account, so the honest label is
+        // the same one an unconnected channel gets — and the card offers Connect.
         case "none_approved":
-            return "Needs an Alloy administrator";
         default:
             return "Not connected";
     }

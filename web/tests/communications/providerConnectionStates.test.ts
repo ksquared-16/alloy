@@ -16,6 +16,7 @@
 import { describe, expect, it } from "vitest";
 
 import { evaluateBindingReadiness } from "@/lib/communications/bindingReadiness";
+import { providerConnectionLabelFor } from "@/lib/communications/organizationCommunicationsModel";
 import type { BindingSummary } from "@/lib/communications/composerChannels";
 
 type Row = BindingSummary & { inbound_address?: string | null };
@@ -54,13 +55,15 @@ describe("the deployment offers no approved connection at all", () => {
         expect(r.providerConnection).toBe("none_approved");
     });
 
-    it("names the person who can actually act, and says it cannot be done here", () => {
+    it("points at connecting the organization's OWN account, not at Alloy staff", () => {
         const r = evaluateBindingReadiness(emailBinding(), {
             credentialAvailable: false,
             approvedConnectionAvailable: false,
         });
-        expect(r.send.detail).toMatch(/Alloy administrator/i);
-        expect(r.send.detail).toMatch(/cannot be completed from here/i);
+        // The old copy told an administrator to ask an Alloy employee. That was
+        // true only while a credential could live nowhere but the deployment.
+        expect(r.send.detail).toMatch(/Connect your organization's own Resend account/i);
+        expect(r.send.detail).not.toMatch(/Alloy administrator/i);
     });
 
     it("does NOT tell the operator to choose another connection — there is none", () => {
@@ -82,13 +85,26 @@ describe("the deployment offers no approved connection at all", () => {
 });
 
 describe("a connection was chosen but this deployment lost it", () => {
-    it("is `unavailable`, and DOES offer choosing another", () => {
+    it("is `unavailable`, and says Alloy could not confirm it — not that the key is wrong", () => {
         const r = evaluateBindingReadiness(emailBinding(), {
             credentialAvailable: false,
             approvedConnectionAvailable: true,
         });
         expect(r.providerConnection).toBe("unavailable");
-        expect(r.send.detail).toMatch(/another approved connection/i);
+        expect(r.send.detail).toMatch(/could not reach Resend/i);
+        // Never blame the credential for a provider outage.
+        expect(r.send.detail).not.toMatch(/rejected/i);
+    });
+
+});
+
+describe("a rejected credential is a distinct, actionable state", () => {
+    it("is labelled as rejected, never as merely unavailable", () => {
+        expect(providerConnectionLabelFor("invalid_credential")).toMatch(/rejected/i);
+        expect(providerConnectionLabelFor("unavailable")).toMatch(/could not reach/i);
+        // `none_approved` no longer names an Alloy employee — connecting is self-service.
+        expect(providerConnectionLabelFor("none_approved")).toBe("Not connected");
+        expect(providerConnectionLabelFor("configured")).toBe("Connected");
     });
 });
 
