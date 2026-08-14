@@ -150,6 +150,31 @@ describe("a subject's stage resolves its own configured Work View", () => {
         expect(targets.size).toBe(0);
     });
 
+    it("the FILTERLESS CATCH-ALL can never satisfy a stage lookup", async () => {
+        // Stated outright rather than left implicit. `all_work` is the process-wide catch-all: it is
+        // visible, it is a perfectly good destination for "show me everything", and it is the view a
+        // loose lookup would fall into for ANY stage — which would send every participant to the same
+        // place and make the whole participant-grain fix look like it worked.
+        //
+        // It cannot win, by construction: `normalizeCatchAllWorkViewCompatBinding` strips
+        // `compat_queue_key` from any filterless view, so a catch-all has no lane to match. This
+        // asserts the consequence, so a future change that re-binds catch-alls fails here.
+        const onlyCatchAll = [{ id: "all_work", label: "All", display_order: 1, visible_in_runtime: true }];
+        const targets = await fetchStageWorkViewTargets(
+            supabaseDouble({ metadata: departmentMetadata(onlyCatchAll, STAGES) }),
+            ORG,
+            [{ opportunityId: CASE, stageKey: "waitlist" }],
+        );
+        expect(targets.size, "the catch-all answered a stage-specific lookup").toBe(0);
+
+        // And with real stage-bound views present, the stage-bound one wins — the catch-all is never
+        // preferred just because it is also visible.
+        const withBoth = await fetchStageWorkViewTargets(supabaseDouble(), ORG, [
+            { opportunityId: CASE, stageKey: "waitlist" },
+        ]);
+        expect(withBoth.get(stageWorkViewCacheKey(CASE, "waitlist"))).toBe("waitlist");
+    });
+
     it("a hidden view is not a destination", async () => {
         const hidden = VIEWS.map((v) =>
             v.id === "waitlist" ? { ...v, visible_in_runtime: false } : v,
