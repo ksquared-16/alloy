@@ -551,7 +551,7 @@ describe("provider connection is observed, never assumed", () => {
         // Says the connection is gone AND what to do about it. The two directions
         // no longer share one sentence — `providerConnectionStates.test.ts` owns
         // that guarantee, and the state that names a platform administrator.
-        expect(r.send.detail).toMatch(/no longer available in this deployment/i);
+        expect(r.send.detail).toMatch(/could not reach Resend/i);
         expect(r.send.detail).not.toBe(r.receive.detail);
     });
 

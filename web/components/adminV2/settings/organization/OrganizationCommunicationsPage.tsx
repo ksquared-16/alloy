@@ -87,11 +87,17 @@ function ReadinessRow({
     state,
     text,
     testId,
+    value,
+    action,
 }: {
     label: string;
     state: ReadinessState;
     text: string;
     testId: string;
+    /** What this direction actually uses today — an address, a number. */
+    value?: string | null;
+    /** The one next step for this direction, when there is one. */
+    action?: { label: string; onClick: () => void } | null;
 }) {
     return (
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5" data-testid={testId}>
@@ -102,8 +108,35 @@ function ReadinessRow({
             >
                 {text}
             </span>
+            {value ? (
+                <span className="min-w-0 break-all text-[12px] text-alloy-midnight/85" data-testid={`${testId}-value`}>
+                    {value}
+                </span>
+            ) : null}
+            {action ? (
+                <button
+                    type="button"
+                    onClick={action.onClick}
+                    className="shrink-0 text-[11px] font-semibold text-alloy-bend-pine hover:underline"
+                    data-testid={`${testId}-action`}
+                >
+                    {action.label}
+                </button>
+            ) : null}
         </div>
     );
+}
+
+/**
+ * The one next step for a direction — the question "what should I do next?"
+ * answered in the operator's words, or nothing when the answer is "nothing".
+ */
+function nextActionLabel(channel: ChannelKey, direction: "sending" | "receiving", state: ReadinessState): string | null {
+    if (state === "ready" || state === "disabled") return null;
+    if (direction === "sending") {
+        return state === "verification_required" ? "Verify domain" : "Set up sending";
+    }
+    return channel === "email" ? "Set up replies" : "Set up receiving";
 }
 
 export default function OrganizationCommunicationsPage() {
@@ -427,7 +460,11 @@ function ChannelPanel({
                 ) : (
                     <ConfigurationPrimaryButton onClick={onConnect} data-testid={`communications-connect-${card.channel}`}>
                         <Plus className="mr-1 h-3.5 w-3.5" strokeWidth={2.5} />
-                        Connect {card.channelLabel}
+                        {/* Name the provider, not the channel. "Connect Email" is a
+                            category; "Connect Resend" is the thing the administrator
+                            is about to do, in the vocabulary of the account they
+                            already have. */}
+                        Connect {card.channel === "email" ? "Resend" : "Twilio"}
                     </ConfigurationPrimaryButton>
                 )}
             </div>
@@ -459,48 +496,42 @@ function ChannelPanel({
                             state={card.sending.state}
                             text={card.sending.label}
                             testId={`communications-${card.channel}-sending`}
+                            value={card.identity.find((l) => l.label === "From" || l.label === "Number")?.value || null}
+                            action={
+                                nextActionLabel(card.channel, "sending", card.sending.state)
+                                    ? { label: nextActionLabel(card.channel, "sending", card.sending.state)!, onClick: onConfigure }
+                                    : null
+                            }
                         />
                         <ReadinessRow
                             label="Receiving"
                             state={card.receiving.state}
                             text={card.receiving.label}
                             testId={`communications-${card.channel}-receiving`}
+                            value={card.identity.find((l) => l.label === "Replies")?.value || null}
+                            action={
+                                nextActionLabel(card.channel, "receiving", card.receiving.state)
+                                    ? { label: nextActionLabel(card.channel, "receiving", card.receiving.state)!, onClick: onConfigure }
+                                    : null
+                            }
                         />
                     </div>
 
-                    <dl className="mt-3 space-y-1 border-t border-alloy-stone/25 pt-2.5">
-                        {card.identity.map((line) => (
-                            <div key={line.label} className="flex flex-wrap items-baseline gap-x-2">
-                                <dt className="w-[68px] shrink-0 text-[11px] font-medium text-alloy-midnight/50">{line.label}</dt>
-                                <dd
-                                    className={`min-w-0 break-all text-[12px] ${line.value ? "text-alloy-midnight/85" : "italic text-alloy-midnight/45"}`}
-                                    data-testid={`communications-${card.channel}-identity-${line.label.toLowerCase()}`}
-                                >
-                                    {line.value || line.placeholder}
-                                </dd>
-                            </div>
-                        ))}
-                    </dl>
+                    {/* The From/Replies list moved INTO the Sending and Receiving rows.
+                        Showing an address twice, once as a value and once as a
+                        readiness detail, made the card longer without answering
+                        anything the rows do not. */}
 
                     {card.schools.length || card.unparentedRooms.length ? (
                         <SchoolHierarchy card={card} onConfigureLocation={onConfigureLocation} />
                     ) : null}
 
-                    {card.outstanding.length ? (
-                        <div
-                            className="mt-3 rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.05] px-2.5 py-2"
-                            data-testid={`communications-${card.channel}-outstanding`}
-                        >
-                            <p className="text-[11px] font-semibold text-alloy-midnight/62">Still needs setup</p>
-                            <ul className="mt-1 space-y-0.5">
-                                {card.outstanding.map((item) => (
-                                    <li key={item} className="text-[11px] leading-snug text-alloy-midnight/70">
-                                        {item}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ) : null}
+                    {/* The "Still needs setup" paragraph list used to live here. It
+                        restated, at length, what the three rows above already say —
+                        and it was where deployment and credential mechanics leaked
+                        onto a page an administrator reads every day. Each row now
+                        carries its own next action; the detail belongs in the setup
+                        flow, not permanently on the card. */}
                 </>
             ) : (
                 <p className="mt-3 text-[12px] leading-snug text-alloy-midnight/58">

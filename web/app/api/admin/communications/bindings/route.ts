@@ -69,6 +69,8 @@ function sanitizeBindings(
     raw: BindingRow[],
     availableCredentialKeys: Set<string>,
     approvedChannels?: Set<string>,
+    /** Providers whose organization-owned connection the provider REJECTED. */
+    rejectedProviders?: Set<string>,
 ): unknown[] {
     return raw.map((b) => {
         const cfg = b.config != null && typeof b.config === "object" ? b.config : null;
@@ -80,6 +82,7 @@ function sanitizeBindings(
             // Undefined when the caller did not compute it — readiness then keeps
             // its previous behaviour rather than inventing `none_approved`.
             approvedConnectionAvailable: approvedChannels ? approvedChannels.has(channelKey) : undefined,
+            credentialRejected: rejectedProviders?.has(String(b.provider ?? "").trim().toLowerCase()) ?? false,
         });
         return {
             id: b.id,
@@ -167,14 +170,31 @@ export async function GET() {
     // connection" and "a platform administrator must provision one".
     const approvedChannels = new Set(credentialOptions.filter((o) => o.available).map((o) => o.channel));
 
+    // A connection the organization owns can be REJECTED by the provider — a key
+    // revoked in Resend, for instance. That is not "unavailable"; it is specific
+    // and the administrator can fix it by reconnecting.
+    const { data: accountRows } = await supabase
+        .from("communication_provider_accounts")
+        .select("provider_type, verification_state, secret_ref")
+        .eq("org_id", ctx.orgId);
+    const rejectedProviders = new Set(
+        (accountRows ?? [])
+            .filter(
+                (a) =>
+                    String((a as { secret_ref?: string }).secret_ref ?? "").startsWith("vault:") &&
+                    String((a as { verification_state?: string }).verification_state ?? "") === "failed",
+            )
+            .map((a) => String((a as { provider_type?: string }).provider_type ?? "").trim().toLowerCase()),
+    );
+
     const channels_available = availableComposerChannels(list);
 
     return NextResponse.json({
-        bindings: sanitizeBindings(list, availableCredentialKeys, approvedChannels),
+        bindings: sanitizeBindings(list, availableCredentialKeys, approvedChannels, rejectedProviders),
         channels_available,
         selectable_by_channel: {
-            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys, approvedChannels),
-            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys, approvedChannels),
+            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys, approvedChannels, rejectedProviders),
+            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys, approvedChannels, rejectedProviders),
         },
         /** Flat roster, kept for existing consumers that index by location id. */
         locations: (locationRows ?? []).map((l) => ({

@@ -57,6 +57,115 @@ type Props = {
  * it controls. Saying so at the point of entry is cheaper than correcting the
  * belief later, and the belief is a privacy one.
  */
+
+/**
+ * Connect the organization's OWN Resend account.
+ *
+ * The key is entered once and never comes back. It is posted to the one endpoint
+ * that accepts a credential, verified against Resend BEFORE the connection is
+ * called connected, and stored through the organization-owned credential
+ * authority. Nothing here reads it back, and the field is cleared the moment the
+ * request is made so it does not linger in the DOM.
+ *
+ * The "Real messages" warning is deliberately kept nearby: an organization's own
+ * Resend account CAN reach real families, and that is exactly the point of
+ * connecting it — but it should never be a surprise.
+ */
+function ConnectResendStep({
+    onConnected,
+    hasDeploymentOption,
+}: {
+    onConnected: () => void;
+    hasDeploymentOption: boolean;
+}) {
+    const [apiKey, setApiKey] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [domains, setDomains] = useState<string[] | null>(null);
+
+    const connect = async () => {
+        setBusy(true);
+        setError(null);
+        const submitted = apiKey;
+        // Cleared before the await: a rejected key must not sit in the DOM while
+        // the request is in flight.
+        setApiKey("");
+        try {
+            const res = await fetch("/api/admin/communications/provider-connection", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ provider: "resend", api_key: submitted }),
+            });
+            const json = (await res.json()) as {
+                error?: string;
+                connection?: { verified_domains?: string[] };
+            };
+            if (!res.ok) {
+                setError(json.error ?? "Could not connect.");
+                return;
+            }
+            setDomains(json.connection?.verified_domains ?? []);
+            onConnected();
+        } catch {
+            setError("Could not reach Alloy to complete the connection.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <div
+            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.05] px-2.5 py-2"
+            data-testid="communications-dialog-connect-resend"
+        >
+            <p className="text-[11px] font-semibold text-alloy-midnight/70">Connect your Resend account</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/60">
+                Create an API key in Resend and paste it here. Alloy stores it securely for your organization and never
+                shows it again. You can replace or remove it at any time.
+            </p>
+            <div className="mt-1.5 flex gap-1.5">
+                <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="re_..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="config-input w-full rounded border border-alloy-stone/30 px-2 py-1.5 font-mono text-[12px]"
+                    data-testid="communications-dialog-resend-key"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !apiKey.trim()}
+                    onClick={() => void connect()}
+                    className="shrink-0 rounded bg-alloy-bend-pine px-2.5 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40"
+                    data-testid="communications-dialog-resend-connect"
+                >
+                    {busy ? "Verifying…" : "Connect"}
+                </button>
+            </div>
+            {error ? (
+                <p className="mt-1 text-[11px] text-alloy-ember" data-testid="communications-dialog-resend-error">
+                    {error}
+                </p>
+            ) : null}
+            {domains ? (
+                <p className="mt-1 text-[11px] text-emerald-800" data-testid="communications-dialog-resend-connected">
+                    Connected.{" "}
+                    {domains.length
+                        ? `Verified for sending from ${domains.join(", ")}.`
+                        : "No verified sending domain yet — verify one in Resend before mail will be delivered."}
+                </p>
+            ) : null}
+            {hasDeploymentOption ? null : (
+                <p className="mt-1 text-[10px] leading-snug text-alloy-midnight/45">
+                    Connecting your own account is the normal path — Alloy staff are not involved.
+                </p>
+            )}
+        </div>
+    );
+}
+
 function MailboxPrivacyNote() {
     return (
         <p
@@ -293,14 +402,18 @@ export default function CommunicationsChannelDialog({
                                 </div>
                             </dl>
 
-                            {credentialOptions.length === 0 || !credentialOptions.some((c) => c.available) ? (
+                            {isEmail ? (
+                                <ConnectResendStep
+                                    onConnected={() => void onSaved()}
+                                    hasDeploymentOption={credentialOptions.some((c) => c.available)}
+                                />
+                            ) : credentialOptions.length === 0 || !credentialOptions.some((c) => c.available) ? (
                                 <p
-                                    className="rounded-md border border-alloy-ember/30 bg-alloy-ember/[0.06] px-2.5 py-2 text-[11px] leading-snug text-alloy-ember"
+                                    className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.06] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/70"
                                     data-testid="communications-dialog-no-connection"
                                 >
-                                    <strong>No approved connection is available.</strong> This deployment has no{" "}
-                                    {isEmail ? "email" : "SMS"} provider connection configured, so this channel cannot be
-                                    completed here. An administrator must configure one for the deployment first.
+                                    <strong>No SMS connection yet.</strong> Connecting a Twilio account from here is not
+                                    available in this release. Everything else on this screen can still be configured.
                                 </p>
                             ) : null}
 
@@ -395,6 +508,14 @@ export default function CommunicationsChannelDialog({
                         </>
                     ) : (
                         <>
+                            {/* Connecting the organization's own account belongs in BOTH
+                                modes. An administrator whose channel is already
+                                connected — to the deployment credential, or to a key
+                                that has since been rotated — reaches this screen through
+                                Configure, and previously had nowhere to put their own
+                                Resend key. */}
+                            {isEmail ? <ConnectResendStep onConnected={() => void onSaved()} hasDeploymentOption /> : null}
+
                             {scopedBindings.length > 1 ? (
                                 <Field label="Which one">
                                     <select

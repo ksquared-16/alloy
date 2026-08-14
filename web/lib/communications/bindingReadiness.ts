@@ -68,7 +68,18 @@ export type DirectionReadiness = {
  * domain is verified or MX records point anywhere. Those stay "verification
  * required" — an honest unknown — rather than invented.
  */
-export type ProviderConnectionState = "configured" | "unavailable" | "not_connected" | "none_approved";
+export type ProviderConnectionState =
+    | "configured"
+    | "unavailable"
+    | "not_connected"
+    | "none_approved"
+    /**
+     * The organization connected its own account and the provider REJECTED the
+     * credential. Distinct from `unavailable`, which means Alloy could not tell:
+     * telling an administrator their key is wrong while the provider is merely
+     * unreachable sends them to replace a key that works.
+     */
+    | "invalid_credential";
 
 export type BindingReadiness = {
     send: DirectionReadiness;
@@ -158,6 +169,15 @@ export function evaluateBindingReadiness(
          * most likely to hit and least able to interpret.
          */
         approvedConnectionAvailable?: boolean;
+        /**
+         * The organization's own connection was REJECTED by the provider.
+         *
+         * Supplied by the caller because only it can see the provider account's
+         * verification state; this function sees a binding. Without it the state
+         * would be decorative — the compiler proved it unreachable here, which is
+         * exactly the kind of dead branch that reads as covered and is not.
+         */
+        credentialRejected?: boolean;
     },
 ): BindingReadiness {
     const channel = channelOf(binding);
@@ -195,15 +215,23 @@ export function evaluateBindingReadiness(
 
     // `none_approved` first: when the deployment offers nothing to pick, that is
     // the only actionable truth, and it is actionable by someone else.
-    const providerConnection: ProviderConnectionState = !anyApproved
-        ? "none_approved"
-        : !referenced
-          ? "not_connected"
-          : available
-            ? "configured"
-            : "unavailable";
+    // Rejection outranks everything below it: a provider that refused these
+    // credentials is a more specific and more actionable truth than "unavailable".
+    const providerConnection: ProviderConnectionState = options?.credentialRejected
+        ? "invalid_credential"
+        : !anyApproved
+          ? "none_approved"
+          : !referenced
+            ? "not_connected"
+            : available
+              ? "configured"
+              : "unavailable";
 
-    if (providerConnection === "none_approved" || providerConnection === "unavailable") {
+    if (
+        providerConnection === "none_approved" ||
+        providerConnection === "unavailable" ||
+        providerConnection === "invalid_credential"
+    ) {
         return { providerConnection, ...providerBlockedReadiness(channel, providerConnection) };
     }
 
@@ -227,16 +255,19 @@ export function evaluateBindingReadiness(
  */
 function providerBlockedReadiness(
     channel: string,
-    state: "none_approved" | "unavailable",
+    state: "none_approved" | "unavailable" | "invalid_credential",
 ): { send: DirectionReadiness; receive: DirectionReadiness } {
     const email = channel === "email";
     const providerName = email ? "Resend" : "Twilio";
 
-    // Who can act. This is the whole point of separating the two states.
+    // Who can act, and what they do about it. Three different answers, because
+    // three different things are wrong.
     const remedy =
-        state === "none_approved"
-            ? `No ${providerName} connection is available in this deployment. An Alloy administrator has to make one available — this cannot be completed from here.`
-            : `The ${providerName} connection this channel uses is no longer available in this deployment. Choose another approved connection, or ask an Alloy administrator to restore it.`;
+        state === "invalid_credential"
+            ? `${providerName} rejected this connection's credentials. Reconnect with a current ${providerName} API key.`
+            : state === "none_approved"
+              ? `No ${providerName} connection is available yet. Connect your organization's own ${providerName} account to finish setup.`
+              : `Alloy could not reach ${providerName} to confirm this connection. Nothing is lost — try again, and reconnect if it keeps failing.`;
 
     return {
         send: {

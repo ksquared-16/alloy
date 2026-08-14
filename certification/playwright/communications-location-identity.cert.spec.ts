@@ -87,8 +87,8 @@ test.describe("Location identity — the configuration surface tells the truth",
         await expect(page.getByTestId("organization-communications-page")).toBeVisible();
 
         // The card speaks for the ORGANIZATION default, never a location override.
-        await expect(page.getByTestId("communications-email-identity-from")).toHaveText(ORG_EMAIL);
-        await expect(page.getByTestId("communications-sms-identity-number")).toHaveText(ORG_NUMBER);
+        await expect(page.getByTestId("communications-email-sending-value")).toHaveText(ORG_EMAIL);
+        await expect(page.getByTestId("communications-sms-sending-value")).toHaveText(ORG_NUMBER);
 
         await expect(page.getByTestId("communications-email-locations")).toBeVisible();
         await expect(page.getByTestId("communications-sms-locations")).toBeVisible();
@@ -296,7 +296,10 @@ test.describe("Location identity — the identity model is kept in step", () => 
         await page.goto(PAGE);
         await page.getByTestId("communications-configure-email").click();
         await expect(page.getByTestId("communications-channel-dialog")).toBeVisible();
-        await expect(page.locator('input[type="password"]')).toHaveCount(0);
+        // A credential field now exists — in exactly one place, masked, and never
+        // pre-filled. What must remain true is that no STORED secret is exposed.
+        const keyField = page.getByTestId("communications-dialog-resend-key");
+        await expect(keyField).toHaveValue("");
         const html = await page.content();
         for (const term of ["secret_ref", "RESEND_API_KEY", "env:"]) {
             expect(html).not.toContain(term);
@@ -418,7 +421,7 @@ test.describe("Removing an override — assignment removed, identity preserved",
             // And the organization identity is unchanged — the retired campus
             // address has NOT become what the organization sends as.
             await page.goto(PAGE);
-            await expect(page.getByTestId("communications-email-identity-from")).toHaveText(ORG_EMAIL);
+            await expect(page.getByTestId("communications-email-sending-value")).toHaveText(ORG_EMAIL);
             await expect(
                 page.getByTestId(`communications-email-location-${riverside.id}-identity`),
             ).toHaveText("Uses organization identity");
