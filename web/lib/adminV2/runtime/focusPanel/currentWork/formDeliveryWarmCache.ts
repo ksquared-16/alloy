@@ -69,8 +69,23 @@ async function fetchSubjects(opportunityId: string): Promise<FormDeliverySubject
     return j.subjects ?? j.data?.subjects ?? [];
 }
 
-/** Warm the form-delivery inputs for a record on intent. Deduped + TTL'd. Best-effort, non-throwing. */
-export function prefetchFormDelivery(
+/**
+ * The ONE place form-delivery inputs are loaded.
+ *
+ * Warming on intent and loading on open are the same operation with different motives, so
+ * they share this seam rather than each owning a copy of the three fetches. Returning the
+ * existing entry is what makes that safe: an open that follows a completed warm resolves
+ * from cache with no request at all, and an open that races an in-flight warm joins that
+ * promise instead of doubling every request.
+ *
+ * The surface previously peeked the cache to paint, then re-ran all three fetches itself in
+ * a hand-copied duplicate of the functions above — so a warm hit cost 3 redundant requests
+ * and a warm race cost 6 requests for 3 resources.
+ *
+ * Freshness is the TTL plus explicit invalidation after a delivery. Deduped, best-effort,
+ * non-throwing for callers that ignore the result.
+ */
+export function loadFormDelivery(
     opportunityId: string | null | undefined,
     now: number = Date.now(),
 ): Promise<WarmFormDelivery | null> | null {
@@ -99,6 +114,12 @@ export function prefetchFormDelivery(
     void promise.catch(() => {});
     return promise;
 }
+
+/**
+ * Warm the inputs on operator intent (What's Next showing the action, or hover).
+ * The same seam as {@link loadFormDelivery}; the name records why it was called.
+ */
+export const prefetchFormDelivery = loadFormDelivery;
 
 /** Peek the warm form-delivery inputs WITHOUT consuming — the surface renders synchronously on open. */
 export function peekWarmFormDelivery(
