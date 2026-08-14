@@ -87,11 +87,19 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
             const nodeDestination = stamped
                 ? nodeDestinationId(stamped.workUnitId, stamped.workViewId)
                 : undefined;
+            // A STAMPED DESTINATION WITH NO LENS IS AN ANSWER, NOT A GAP.
+            //
+            // `stamped.workViewId === null` is K3 recording that the commit selected no cohort. Restore
+            // that as stated, or Back out of a contextual surface lands on the host's default lens —
+            // the defect returning through history, which is the one road where it would look like
+            // correct restoration. `?? h.cohort` covers the older entries that carry no stamp at all,
+            // where the URL's own `?cohort=none` is the honest record.
+            const cohort = stamped ? (stamped.workViewId === null ? ("none" as const) : null) : h.cohort ?? null;
 
             if (!kernel.attention.get()) {
                 // A cold Back INTO the app: one hydration establishes surface + lens + subject at once
                 // (hydrate derives its scope from the finest field present).
-                kernel.attention.hydrate({ ...h, lens, subject, destination: nodeDestination });
+                kernel.attention.hydrate({ ...h, lens, cohort, subject, destination: nodeDestination });
                 return;
             }
             // A SURFACE movement keyed on the canonical node identity: `surfaceIdFor` now matches the
@@ -104,6 +112,7 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
                 scope: ATTENTION_SCOPE.SURFACE,
                 target: h.target,
                 lens,
+                cohort,
                 destination: nodeDestination,
                 source: "history",
             });

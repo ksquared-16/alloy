@@ -58,6 +58,22 @@ export type AttentionRef = {
     target: string;
     /** The active lens. Present at LENS scope and finer. */
     lens: string | null;
+    /**
+     * COHORT SELECTION — stated, not inferred.
+     *
+     * `"none"` means the operator selected NO Work View: they named a record. `null` means nothing was
+     * stated, and the surface resolves its configured default lens as it always has.
+     *
+     * These cannot be collapsed into `lens: null`, and that is the whole reason this field exists.
+     * `lens: null` ALREADY means "no lens named, use the default" — it is what every Workspace link,
+     * every cold URL without `?work_view_id`, and every Search click has always sent. Reading that same
+     * absence as "no cohort selected" would silently turn `Lennon → Waitlist` contextual, because that
+     * destination has never named its lens either. Two different intents were sharing one encoding;
+     * this separates them rather than guessing between them.
+     *
+     * A LENS movement clears it: choosing a cohort is precisely what stops being contextual.
+     */
+    cohort: "none" | null;
     /** Record of Attention — the Operational Subject. Present at SUBJECT scope and finer. */
     subject: string | null;
     /** Present at ASPECT scope only. */
@@ -85,6 +101,12 @@ export type AttentionIntent =
           source: AttentionSource;
           target: string;
           lens?: string | null;
+          /**
+           * `"none"` = the operator named a record and selected no cohort. Only expressible at SURFACE
+           * scope, because that is the movement that decides what kind of place this is; a finer
+           * movement inherits the answer and a LENS movement replaces it by choosing.
+           */
+          cohort?: "none" | null;
           /** The producer's server-resolved canonical destination, when known (Workspace links). */
           destination?: DestinationId | null;
       }
@@ -102,6 +124,8 @@ export type AttentionHydration = {
     aspect?: string | null;
     /** Server-resolved canonical destination, when the hydrating context could resolve it. */
     destination?: DestinationId | null;
+    /** See {@link AttentionRef.cohort}. `"none"` survives a reload; that is what it is for. */
+    cohort?: "none" | null;
     source: Extract<AttentionSource, "direct_url" | "history" | "reload">;
 };
 
@@ -191,6 +215,7 @@ export class AttentionOwner {
             scope,
             target: h.target,
             lens: h.lens ?? null,
+            cohort: h.cohort ?? null,
             subject: h.subject ?? null,
             aspect: h.aspect ?? null,
             destination: h.destination ?? null,
@@ -234,6 +259,9 @@ export class AttentionOwner {
                     target: intent.target,
                     // A surface movement abandons the lens/subject/aspect of the surface it leaves.
                     lens: intent.lens ?? null,
+                    // …and its cohort selection with them. Carried forward would mean arriving at a new
+                    // surface already claiming the last one's answer about whether a cohort was chosen.
+                    cohort: intent.cohort ?? null,
                     subject: null,
                     aspect: null,
                     // The canonical destination the producer resolved for this surface (null if it
@@ -248,6 +276,10 @@ export class AttentionOwner {
                     ...prev!,
                     scope: ATTENTION_SCOPE.LENS,
                     lens: intent.lens,
+                    // CHOOSING A COHORT IS WHAT ENDS CONTEXTUAL FOCUS. Cleared here, so a lens
+                    // selection out of a contextual surface cannot leave "no cohort selected" standing
+                    // next to a lit pill. There is no intent shape that can set it back at this scope.
+                    cohort: null,
                     // A lens movement abandons the subject/aspect under the lens it leaves.
                     subject: null,
                     aspect: null,
@@ -325,6 +357,9 @@ export function attentionFromUrl(
             principal: identity.principal,
             target: decodeURIComponent(m[1]),
             lens: url.searchParams.get("work_view_id"),
+            // Read STRICTLY: only the exact token counts. Hostile or stale query state must not be able
+            // to suppress a cohort by accident, and an unrecognised value is not a request for anything.
+            cohort: url.searchParams.get("cohort") === "none" ? "none" : null,
             subject: url.searchParams.get("subject_id"),
             aspect: url.searchParams.get("aspect"),
             source,
@@ -350,6 +385,11 @@ export function attentionFromUrl(
 export function urlFromAttention(ref: AttentionRef, base = ""): string {
     const p = new URLSearchParams();
     if (ref.lens) p.set("work_view_id", ref.lens);
+    // THE ABSENCE OF A COHORT IS PROJECTED, because it has to survive a reload. A contextual URL
+    // carrying no `work_view_id` and nothing else would read on cold entry exactly like every ordinary
+    // link that omits one — and resolve the default lens, which is the defect returning by refresh.
+    // Never both: a chosen lens and "no cohort" cannot be true at once.
+    else if (ref.cohort === "none") p.set("cohort", "none");
     if (ref.subject) p.set("subject_id", ref.subject);
     if (ref.aspect) p.set("aspect", ref.aspect);
     const q = p.toString();

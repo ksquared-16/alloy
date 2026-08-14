@@ -61,10 +61,20 @@ export function useWorkUnitEntryMovement() {
              * never cancel their preparation.
              */
             aspect?: string | null,
+            /**
+             * `{ cohort: "none" }` — the producer resolved a RECORD destination and no cohort holds the
+             * subject. Stated, never inferred from `t.lens == null`: almost every entry href omits
+             * `work_view_id` and means "resolve the default", so inferring here would make ordinary
+             * navigation contextual.
+             */
+            opts?: { cohort?: "none" | null },
         ): boolean => {
             if (!kernel || !href || !orgId) return false;
             const t = attentionTargetFromEntryHref(href);
             if (!t) return false;
+            // A named lens and "no cohort" cannot both be true. The lens wins — it is the more specific
+            // statement, and a producer that supplied one has selected a cohort by definition.
+            const cohort = t.lens ? null : opts?.cohort ?? null;
 
             const current = kernel.attention.get();
             if (!current) {
@@ -75,6 +85,7 @@ export function useWorkUnitEntryMovement() {
                     principal: principalUserId ?? "",
                     target: t.target,
                     lens: t.lens,
+                    cohort,
                     subject: subject ?? null,
                     aspect: aspect ?? null,
                     destination: destination ?? null,
@@ -87,6 +98,7 @@ export function useWorkUnitEntryMovement() {
                 scope: ATTENTION_SCOPE.SURFACE,
                 target: t.target,
                 lens: t.lens,
+                cohort,
                 destination: destination ?? null,
                 source: "pointer",
             });

@@ -106,6 +106,39 @@ export type ContextualFocusResult =
     | { ok: false; reason: string };
 
 /**
+ * The contextual subject's grain, from the ENTITY CLASS the producer named.
+ *
+ * The sibling of `resolveSubjectGrain`, which answers the same question for a lens by way of its Row
+ * Grain. A contextual subject has no lens, so there is no Row Grain to translate — but the producer
+ * always knows what kind of record it asked for (`OperatorFocusSelectionDetail.entity_type`), and that
+ * is the honest input.
+ *
+ * TOTAL, and its failure is a VALUE. The same discipline `subjectGrain.ts` is built on: a silent
+ * `?? "case"` here would let an unrecognised entity class compose a panel as a family, which is how a
+ * surface ends up answering a question it was not asked. An unknown class refuses instead.
+ */
+export function contextualSubjectGrainFromEntityType(
+    entityType: string,
+): { ok: true; grain: OperationalGrain; subjectType: OperationalSubjectType } | { ok: false; reason: string } {
+    switch (entityType.trim()) {
+        // A family case. `opportunity` → `case` is the same rename the lens seam absorbs.
+        case "opportunity":
+            return { ok: true, grain: "case", subjectType: "opportunity" };
+        case "child":
+            return { ok: true, grain: "child", subjectType: "child" };
+        // A durable person record — the class contextual focus exists for, and the one that has no
+        // queue lens anywhere in the platform to arrive through.
+        case "person":
+            return { ok: true, grain: "person", subjectType: "person" };
+        default:
+            return {
+                ok: false,
+                reason: `no Focus Panel subject grain for entity type "${entityType}"`,
+            };
+    }
+}
+
+/**
  * Compose the contextual answer.
  *
  * PURE — no Supabase, no fetching. The caller has already established authorization, the Work Unit,
