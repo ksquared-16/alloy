@@ -164,8 +164,26 @@ export function composeContextualFocusAnswer(
  * whether to mark something selected. Written as a predicate over the ABSENCE rather than a
  * `terminal === "contextual"` check, so it stays correct if other lens-free terminals appear.
  */
+/**
+ * What both readers below accept: ANY terminal answer, asked only about its lens.
+ *
+ * Structural on purpose — neither function should have to know the terminal vocabulary, so a future
+ * lens-free terminal is handled correctly by existing call sites rather than silently landing on the
+ * "has a lens" side.
+ *
+ * `terminal` is declared solely to make that work. With `activeWorkView` as the only member, this is a
+ * WEAK TYPE (all properties optional), and TypeScript then requires the argument to share at least one
+ * property with it — which the `error` variant, carrying no `activeWorkView` at all, does not. So the
+ * whole `ProvisioningAnswer` union was rejected at the one call site that matters most. Naming the
+ * discriminant every variant does carry restores the overlap without narrowing what is accepted.
+ */
+type LensBearingAnswer = {
+    terminal?: string;
+    activeWorkView?: { id: string } | null;
+};
+
 export function hasOperatorSelectedWorkView(
-    answer: { activeWorkView?: { id: string } | null } | null | undefined,
+    answer: LensBearingAnswer | null | undefined,
 ): boolean {
     return Boolean(answer?.activeWorkView?.id);
 }
@@ -182,7 +200,7 @@ export function hasOperatorSelectedWorkView(
  * `null` means NO LENS. It is never an instruction to find one.
  */
 export function selectedWorkViewId(
-    answer: { activeWorkView?: { id: string } | null } | null | undefined,
+    answer: LensBearingAnswer | null | undefined,
 ): string | null {
     return answer?.activeWorkView?.id ?? null;
 }
