@@ -231,7 +231,7 @@ export async function POST(request: Request) {
     // behind a write-once field would make the connection unmanageable for no
     // security gain.
     const providerLabel =
-        displayLabel || (verification.outcome === "ok" && isTwilio ? (verification.accountLabel ?? "") : "");
+        displayLabel || (verification.outcome === "ok" && "accountLabel" in verification ? (verification.accountLabel ?? "") : "");
     await supabase
         .from("communication_provider_accounts")
         .update({
@@ -262,8 +262,8 @@ export async function POST(request: Request) {
         connection: {
             state: "connected",
             /** What the account can send from today. Never a credential. */
-            verified_domains: verification.outcome === "ok" && !isTwilio ? verification.verifiedDomains : [],
-            account_label: verification.outcome === "ok" && isTwilio ? verification.accountLabel : null,
+            verified_domains: verification.outcome === "ok" && "verifiedDomains" in verification ? verification.verifiedDomains : [],
+            account_label: verification.outcome === "ok" && "accountLabel" in verification ? verification.accountLabel : null,
             messaging_service_sid: messagingServiceSid || null,
         },
     });
