@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -9,6 +9,11 @@ import {
     allowListIsImpossible,
     resolveSearchAccessEnvelope,
 } from "@/lib/search/searchAccessEnvelope";
+import {
+    isChildCohortKey,
+    queryChildCohortPage,
+    type ChildCohortKey,
+} from "@/lib/adminV2/records/childCohortQuery";
 
 /**
  * Records → Children — the durable child population, read-only.
@@ -28,6 +33,14 @@ import {
  *
  * No new persistence: every field is read from `customer_members`, `customers` and (for
  * participation) `process_instances`. Cohort membership is derived on read and never stored.
+ *
+ * ── COHORT MEMBERSHIP IS SERVER-OWNED ──
+ *
+ * The COHORT is a request parameter, not a client-side filter over whatever page happened to load.
+ * V1 shipped it the wrong way round and an Enrolled child alphabetically beyond the first page
+ * silently vanished from the Enrolled cohort. `queryChildCohortPage` owns the order —
+ * scope → site → cohort → search → ordering → pagination — and the totals it returns describe the
+ * whole cohort, never the page.
  */
 
 export type RecordsChildEntry = {
@@ -48,10 +61,27 @@ export type RecordsChildEntry = {
     siteLocationLabel: string | null;
 };
 
-/** How many rows one Records page holds. Records is for review, not for exhaustive export. */
-const PAGE_LIMIT = 500;
+/**
+ * How many rows one Records page holds — a PAGE size, not a cap on the cohort.
+ *
+ * The difference is the whole fix: membership is decided server-side over the full population, and
+ * this only bounds how many of the qualifying records travel at once. The response carries the
+ * cohort's true total so the surface can say so.
+ */
+const PAGE_LIMIT = 100;
 
-export async function GET() {
+function emptyPage(cohort: string) {
+    return NextResponse.json({
+        ok: true,
+        children: [],
+        cohort,
+        total: 0,
+        hasMore: false,
+        nextOffset: null,
+    });
+}
+
+export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
 
@@ -63,6 +93,22 @@ export async function GET() {
         return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: access.status });
     }
 
+    const { searchParams } = new URL(request.url);
+    const rawCohort = (searchParams.get("cohort") ?? "all").trim();
+    // An unknown cohort is refused rather than silently widened to All — answering a question the
+    // caller did not ask is how a cohort surface stops meaning anything.
+    if (!isChildCohortKey(rawCohort)) {
+        return NextResponse.json(
+            { ok: false, error: "UNKNOWN_COHORT", message: `Unknown cohort "${rawCohort}"` },
+            { status: 400 }
+        );
+    }
+    const cohort: ChildCohortKey = rawCohort;
+    const siteLocationId = (searchParams.get("site_location_id") ?? "").trim() || null;
+    const search = (searchParams.get("q") ?? "").trim() || null;
+    const limit = Math.min(Math.max(Number(searchParams.get("limit") ?? PAGE_LIMIT) || PAGE_LIMIT, 1), PAGE_LIMIT);
+    const offset = Math.max(Number(searchParams.get("offset") ?? 0) || 0, 0);
+
     const supabase = createAdminClient();
 
     try {
@@ -72,29 +118,58 @@ export async function GET() {
             scopeDimensionsFromAccess(access)
         );
         // The operator can reach nothing: an empty population is the honest answer, not an error.
-        if (envelope.impossible) return NextResponse.json({ ok: true, children: [] });
+        if (envelope.impossible) return emptyPage(cohort);
+        if (envelope.restricted && allowListIsImpossible(envelope.allowedCustomerIds)) {
+            return emptyPage(cohort);
+        }
 
-        let query = supabase
+        const page = await queryChildCohortPage({
+            supabase,
+            orgId: ctx.orgId,
+            cohort,
+            allowedCustomerIds: envelope.restricted ? (envelope.allowedCustomerIds ?? null) : null,
+            siteLocationId,
+            search,
+            limit,
+            offset,
+        });
+
+        if (page.memberIds.length === 0) {
+            return NextResponse.json({
+                ok: true,
+                children: [],
+                cohort,
+                total: page.total,
+                hasMore: page.hasMore,
+                nextOffset: page.nextOffset,
+                limit,
+                offset,
+            });
+        }
+
+        // Hydrate ONLY this page. The cohort decided WHO; this decides what to show about them.
+        const { data, error } = await supabase
             .from("customer_members")
             .select("id, person_id, customer_id, display_name, first_name, last_name, dob, is_active")
             .eq("org_id", ctx.orgId)
-            .eq("relationship", "child")
-            .order("display_name")
-            .limit(PAGE_LIMIT);
-
-        if (envelope.restricted) {
-            if (allowListIsImpossible(envelope.allowedCustomerIds)) {
-                return NextResponse.json({ ok: true, children: [] });
-            }
-            if (envelope.allowedCustomerIds) {
-                query = query.in("customer_id", envelope.allowedCustomerIds);
-            }
-        }
-
-        const { data, error } = await query;
+            .in("id", page.memberIds);
         if (error) throw new Error(error.message);
 
-        const rows = (data ?? []) as {
+        const byId = new Map(
+            ((data ?? []) as {
+                id: string;
+                person_id: string | null;
+                customer_id: string | null;
+                display_name: string | null;
+                first_name: string | null;
+                last_name: string | null;
+                dob: string | null;
+                is_active: boolean | null;
+            }[]).map((r) => [r.id, r])
+        );
+        // Preserve the cohort's order — the hydration query returns rows in whatever order it likes,
+        // and re-sorting here would be a second ordering authority that can disagree with paging.
+        const rows = page.memberIds.map((id) => byId.get(id)).filter(Boolean) as {
             id: string;
             person_id: string | null;
             customer_id: string | null;
@@ -104,7 +179,6 @@ export async function GET() {
             dob: string | null;
             is_active: boolean | null;
         }[];
-        if (rows.length === 0) return NextResponse.json({ ok: true, children: [] });
 
         const householdIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))] as string[];
         const memberIds = rows.map((r) => r.id);
@@ -190,7 +264,16 @@ export async function GET() {
             };
         });
 
-        return NextResponse.json({ ok: true, children });
+        return NextResponse.json({
+            ok: true,
+            children,
+            cohort,
+            total: page.total,
+            hasMore: page.hasMore,
+            nextOffset: page.nextOffset,
+            limit,
+            offset,
+        });
     } catch (e) {
         console.error("[records-children]", e);
         return NextResponse.json(

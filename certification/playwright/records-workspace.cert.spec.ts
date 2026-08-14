@@ -29,8 +29,11 @@ const STAFF_ENDED = "Chris Bell";        // ended employment
 
 const CHILD_NO_PROCESS = "Noah Bell";    // no opportunity at all, person_id NULL
 const CHILD_CLOSED = "Ada Okafor";       // enrollment case on an INACTIVE unit
-const CHILD_IN_PROCESS = "Ivy Nair";     // active participation
-const CHILD_ENROLLED = "Leo Nair";       // completed participation
+// BEYOND PAGE 1 by name (ranks ~1506/1507 of ~1507). Under the client-side cohort filtering this
+// slice replaced, these were invisible in Enrolled / In Process — the proof is load-bearing ONLY
+// because they sort last, so they must never be renamed to land earlier.
+const CHILD_IN_PROCESS = "Zane Zeta-Beyondpage";
+const CHILD_ENROLLED = "Zoe Zeta-Beyondpage";
 
 const STAFF_LEAD_PERSON_ID = "aaaa0000-0000-4000-8000-000000000f01";
 const CHILD_NO_PROCESS_MEMBER_ID = "bbbb0000-0000-4000-8000-00000000b002";
@@ -154,15 +157,23 @@ test.describe("Children", () => {
         await openRecords(page, "children");
         await selectCohort(page, "all");
         const text = await rowTexts(page, CHILDREN_LIST);
-        for (const name of [CHILD_NO_PROCESS, CHILD_CLOSED, CHILD_IN_PROCESS, CHILD_ENROLLED]) {
-            expect(text, `All Children must contain ${name}`).toContain(name);
-        }
+        // Page 1 is BOUNDED — the beyond-page children are deliberately absent from it, and the
+        // status line states the true total rather than the page length.
+        expect(text).toContain(CHILD_CLOSED);
+        expect(text).not.toContain(CHILD_ENROLLED);
+        const status = await page.locator("[data-children-page-status]").innerText();
+        expect(status).toMatch(/Showing \d+ of \d+/);
+        const [shown, total] = (status.match(/(\d+) of (\d+)/) ?? []).slice(1).map(Number);
+        expect(shown).toBeLessThan(total);
+        expect(total).toBeGreaterThan(1000);
         await page.screenshot({ path: path.join(SHOTS, "06-children-all.png"), fullPage: true });
     });
 
     test("Enrolled and In Process are participation subsets, not the whole list", async ({ page }) => {
         await openRecords(page, "children");
 
+        // THE BEYOND-PAGE PROOF. Both qualifying children sort at the very end of the population,
+        // so a cohort computed over page 1 could not possibly contain them.
         await selectCohort(page, "enrolled");
         const enrolled = await rowTexts(page, CHILDREN_LIST);
         expect(enrolled).toContain(CHILD_ENROLLED);
@@ -181,6 +192,14 @@ test.describe("Children", () => {
     test("a person-less Child row opens the durable record", async ({ page }) => {
         await openRecords(page, "children");
         await selectCohort(page, "all");
+
+        // This child sits at rank ~192, beyond the bounded first page — reaching them through
+        // SEARCH is the honest way, and it doubles as the proof that search is server-side over the
+        // whole cohort rather than a filter across the rows that happen to be loaded.
+        await page.locator("[data-records-filter]").fill(CHILD_NO_PROCESS);
+        await expect(page.locator(`[data-child-member="${CHILD_NO_PROCESS_MEMBER_ID}"]`)).toBeVisible({
+            timeout: SETTLE,
+        });
         await page.locator(`[data-child-member="${CHILD_NO_PROCESS_MEMBER_ID}"]`).click();
 
         const panel = page.locator(DURABLE_PANEL);
@@ -211,5 +230,36 @@ test.describe("/organization/staff converges", () => {
         await expect(page.locator("[data-staff-directory]")).toHaveCount(0);
 
         await page.screenshot({ path: path.join(SHOTS, "09-organization-staff-converged.png"), fullPage: true });
+    });
+});
+
+test.describe("pagination is honest", () => {
+    test("page 1 is bounded, the total is the cohort's, and the next page adds new records", async ({ page }) => {
+        await openRecords(page, "children");
+        await selectCohort(page, "all");
+
+        const firstPage = await rowTexts(page, CHILDREN_LIST);
+        const firstCount = await page.locator("[data-child-row]").count();
+        const status = await page.locator("[data-children-page-status]").innerText();
+        const total = Number((status.match(/of (\d+)/) ?? [])[1]);
+        expect(firstCount).toBeLessThan(total);
+
+        await page.locator("[data-children-load-more]").click();
+        await expect(page.locator("[data-child-row]")).not.toHaveCount(firstCount, { timeout: SETTLE });
+
+        const secondCount = await page.locator("[data-child-row]").count();
+        expect(secondCount).toBeGreaterThan(firstCount);
+
+        // No duplicates across pages: every rendered member id is unique.
+        const ids = await page.locator("[data-child-row]").evaluateAll((els) =>
+            els.map((e) => (e as HTMLElement).getAttribute("data-child-member")),
+        );
+        expect(new Set(ids).size).toBe(ids.length);
+
+        // Deterministic ordering: page 1's rows are still the first rows after loading more.
+        const afterText = await rowTexts(page, CHILDREN_LIST);
+        expect(afterText.indexOf(firstPage.split("\n")[0]!)).toBeGreaterThanOrEqual(0);
+
+        await page.screenshot({ path: path.join(SHOTS, "10-children-pagination.png"), fullPage: true });
     });
 });

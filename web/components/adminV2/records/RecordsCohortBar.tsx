@@ -20,6 +20,7 @@ export default function RecordsCohortBar<T>({
     activeCohortKey,
     onCohortChange,
     records,
+    activeCohortTotal,
     filter,
     onFilterChange,
     filterPlaceholder,
@@ -28,7 +29,19 @@ export default function RecordsCohortBar<T>({
     cohorts: readonly RecordCohort<T>[];
     activeCohortKey: string;
     onCohortChange: (key: string) => void;
-    records: readonly T[];
+    /**
+     * The COMPLETE population, for surfaces that load it (Staff). Counts are derived from it.
+     * Omit it when membership is server-owned — see `activeCohortTotal`.
+     */
+    records?: readonly T[];
+    /**
+     * The active cohort's true total, for server-owned surfaces (Children).
+     *
+     * Only the ACTIVE cohort has one: the server answered for that cohort alone. The others show NO
+     * count rather than a page length dressed as a total — an inaccurate count is worse than none,
+     * because it looks authoritative.
+     */
+    activeCohortTotal?: number;
     filter: string;
     onFilterChange: (value: string) => void;
     filterPlaceholder: string;
@@ -40,7 +53,11 @@ export default function RecordsCohortBar<T>({
             <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Record cohorts">
                 {cohorts.map((cohort) => {
                     const active = cohort.key === activeCohortKey;
-                    const count = cohortCount(cohort, records);
+                    const count = records
+                        ? cohortCount(cohort, records)
+                        : active
+                          ? (activeCohortTotal ?? null)
+                          : null;
                     return (
                         <button
                             key={cohort.key}
@@ -49,7 +66,7 @@ export default function RecordsCohortBar<T>({
                             aria-selected={active}
                             data-records-cohort={cohort.key}
                             data-records-cohort-active={active ? "true" : "false"}
-                            data-records-cohort-count={count}
+                            data-records-cohort-count={count ?? undefined}
                             onClick={() => onCohortChange(cohort.key)}
                             className={[
                                 "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
@@ -59,9 +76,12 @@ export default function RecordsCohortBar<T>({
                             ].join(" ")}
                         >
                             {cohort.label}
-                            {/* The count is on the tab because "how many" is most of why an operator
-                                switches cohort — and an empty cohort says so rather than vanishing. */}
-                            <span className="ml-1.5 tabular-nums opacity-60">{count}</span>
+                            {/* "How many" is most of why an operator switches cohort — and an empty
+                                cohort says 0 rather than vanishing. A count is shown only when it is
+                                TRUE for the whole cohort. */}
+                            {count != null ? (
+                                <span className="ml-1.5 tabular-nums opacity-60">{count}</span>
+                            ) : null}
                         </button>
                     );
                 })}

@@ -13,6 +13,13 @@
  * every child has a null person — a surface keyed on the person would show an empty Children section
  * while 1500 children existed.
  *
+ * ── COHORT MEMBERSHIP IS THE SERVER'S ANSWER ──
+ *
+ * Switching cohort issues a REQUEST; it never filters whatever page happens to be loaded. V1 did the
+ * latter and an Enrolled child beyond the first page silently vanished from the Enrolled cohort —
+ * the surface said "nobody is enrolled" when the truth was "we only looked at 500 of them". The
+ * count on each tab is the cohort's true total for the same reason.
+ *
  * ── ADD CHILD IS DELIBERATELY ABSENT ──
  *
  * Phase 0 found the existing child-create path resolves ambiguous identity SILENTLY (an org-wide
@@ -25,7 +32,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
-import { applyCohort, buildChildCohorts, type RecordCohort } from "@/lib/adminV2/records/recordCohorts";
+import { buildChildCohorts } from "@/lib/adminV2/records/recordCohorts";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 
 export type ChildEntry = {
@@ -67,50 +74,102 @@ function ageLabel(dob: string | null, todayYmd: string): string | null {
 
 export default function RecordsChildrenSection({
     todayYmd,
+    siteLocationId = null,
     onClose,
 }: {
     todayYmd: string;
+    /**
+     * Selected site, or null for All sites. Composes WITH the cohort SERVER-SIDE — Records V1 ships
+     * no site picker in its chrome, so this is null today; the parameter exists because site scope
+     * must never be a client-side narrowing of an already-paged result.
+     */
+    siteLocationId?: string | null;
     onClose?: () => void;
 }) {
     const [children, setChildren] = useState<ChildEntry[] | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [cohortKey, setCohortKey] = useState("all");
     const [filter, setFilter] = useState("");
+    /** The cohort's TRUE total, from the server. Never the page length. */
+    const [total, setTotal] = useState(0);
+    const [nextOffset, setNextOffset] = useState<number | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
 
     const focusRecord = useOperatorRecordFocus();
+    const cohorts = useMemo(() => buildChildCohorts(), []);
 
-    const load = useCallback(async () => {
-        setError(null);
-        try {
-            const res = await fetch("/api/admin/records/children", { credentials: "include" });
-            const json = (await res.json()) as { ok?: boolean; children?: ChildEntry[]; message?: string };
-            if (!res.ok || !json.ok) throw new Error(json.message ?? "Could not load children");
-            setChildren(json.children ?? []);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Could not load children");
-            setChildren([]);
-        }
-    }, []);
-
+    /** Debounced so typing does not issue a request per keystroke — search is server-side. */
+    const [debouncedFilter, setDebouncedFilter] = useState("");
     useEffect(() => {
-        void load();
-    }, [load]);
+        const t = setTimeout(() => setDebouncedFilter(filter.trim()), 250);
+        return () => clearTimeout(t);
+    }, [filter]);
 
-    const cohorts = useMemo(() => buildChildCohorts() as RecordCohort<ChildEntry>[], []);
-    const rows = children ?? [];
-    const activeCohort = cohorts.find((c) => c.key === cohortKey) ?? cohorts[0]!;
+    const buildUrl = useCallback(
+        (offset: number) => {
+            const p = new URLSearchParams({ cohort: cohortKey, offset: String(offset) });
+            if (debouncedFilter) p.set("q", debouncedFilter);
+            if (siteLocationId) p.set("site_location_id", siteLocationId);
+            return `/api/admin/records/children?${p.toString()}`;
+        },
+        [cohortKey, debouncedFilter, siteLocationId],
+    );
 
-    const visible = useMemo(() => {
-        const inCohort = applyCohort(activeCohort, rows);
-        const q = filter.trim().toLowerCase();
-        if (!q) return inCohort;
-        return inCohort.filter(
-            (c) =>
-                c.displayName.toLowerCase().includes(q) ||
-                (c.householdName ?? "").toLowerCase().includes(q) ||
-                (c.siteLocationLabel ?? "").toLowerCase().includes(q),
-        );
-    }, [activeCohort, rows, filter]);
+    // Cohort / site / search change → a new server request. Not a re-filter.
+    useEffect(() => {
+        let alive = true;
+        setChildren(null);
+        setError(null);
+        void (async () => {
+            try {
+                const res = await fetch(buildUrl(0), { credentials: "include" });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    children?: ChildEntry[];
+                    total?: number;
+                    nextOffset?: number | null;
+                    message?: string;
+                };
+                if (!alive) return;
+                if (!res.ok || !json.ok) throw new Error(json.message ?? "Could not load children");
+                setChildren(json.children ?? []);
+                setTotal(json.total ?? 0);
+                setNextOffset(json.nextOffset ?? null);
+            } catch (e) {
+                if (!alive) return;
+                setError(e instanceof Error ? e.message : "Could not load children");
+                setChildren([]);
+                setTotal(0);
+                setNextOffset(null);
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [buildUrl]);
+
+    const loadMore = useCallback(async () => {
+        if (nextOffset == null || loadingMore) return;
+        setLoadingMore(true);
+        try {
+            const res = await fetch(buildUrl(nextOffset), { credentials: "include" });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                children?: ChildEntry[];
+                total?: number;
+                nextOffset?: number | null;
+            };
+            if (res.ok && json.ok) {
+                setChildren((prev) => [...(prev ?? []), ...(json.children ?? [])]);
+                setTotal(json.total ?? 0);
+                setNextOffset(json.nextOffset ?? null);
+            }
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [buildUrl, nextOffset, loadingMore]);
+
+    const visible = children ?? [];
 
     /** The record gesture — the member id, durable intent, and the child identity aspect. */
     const openChild = useCallback(
@@ -131,12 +190,15 @@ export default function RecordsChildrenSection({
         <div className="flex min-h-0 flex-1 flex-col" data-records-children="true">
             <RecordsCohortBar
                 cohorts={cohorts}
-                activeCohortKey={activeCohort.key}
+                activeCohortKey={cohortKey}
                 onCohortChange={setCohortKey}
-                records={rows}
                 filter={filter}
                 onFilterChange={setFilter}
                 filterPlaceholder="Filter children"
+                // Only the ACTIVE cohort's total is known — the server answered for that one. A count
+                // beside the others would be the page length wearing a total's clothes, which is the
+                // defect this slice removed. @see RecordsCohortBar
+                activeCohortTotal={total}
             />
 
             {error ? (
@@ -204,6 +266,23 @@ export default function RecordsChildrenSection({
                         })}
                     </ul>
                 )}
+
+                {nextOffset != null ? (
+                    <div className="mt-2 flex items-center justify-between px-1">
+                        <p className="text-[11px] text-alloy-midnight/50" data-children-page-status="true">
+                            Showing {visible.length} of {total}
+                        </p>
+                        <button
+                            type="button"
+                            className="rounded border border-admin-border px-2.5 py-1 text-[12px] font-medium text-alloy-midnight/75 hover:border-alloy-stone/45 disabled:opacity-50"
+                            onClick={() => void loadMore()}
+                            disabled={loadingMore}
+                            data-children-load-more="true"
+                        >
+                            {loadingMore ? "Loading…" : "Load more"}
+                        </button>
+                    </div>
+                ) : null}
             </div>
         </div>
     );

@@ -71,3 +71,17 @@ select 'positions' k, count(*)::text v from employment_positions where org_id = 
 union all select 'employments', count(*)::text from employments where org_id = :'org'::uuid
 union all select 'fixture children', count(*)::text from customer_members where id::text like 'bbbb%' or id::text like 'cccc%' or id::text like 'eeee%'
 union all select 'participation', count(*)::text from process_instances where subject_type = 'child';
+
+-- ── BEYOND-PAGE children. Named to sort LAST so they are provably outside page 1 of the All
+-- ordering (the tenant seeds ~1500 children whose names start R/S). Under client-side cohort
+-- filtering these were invisible in Enrolled / In Process; the proof is load-bearing only because
+-- they sort late, so do NOT rename them to land earlier.
+insert into customer_members (id, org_id, customer_id, display_name, first_name, last_name, dob, relationship, is_active, person_id) values
+  ('ffff0000-0000-4000-8000-00000000f001'::uuid, :'org'::uuid, 'eeee0000-0000-4000-8000-00000000e001'::uuid, 'Zoe Zeta-Beyondpage',  'Zoe',  'Zeta-Beyondpage', '2021-02-02', 'child', true, null),
+  ('ffff0000-0000-4000-8000-00000000f002'::uuid, :'org'::uuid, 'eeee0000-0000-4000-8000-00000000e001'::uuid, 'Zane Zeta-Beyondpage', 'Zane', 'Zeta-Beyondpage', '2020-06-06', 'child', true, null)
+on conflict (id) do nothing;
+
+insert into process_instances (id, org_id, process_key, subject_type, subject_id, state, stage_key) values
+  ('ffff0000-0000-4000-8000-00000000f003'::uuid, :'org'::uuid, 'enrollment', 'child', 'ffff0000-0000-4000-8000-00000000f001'::uuid, 'completed', 'enrolled'),
+  ('ffff0000-0000-4000-8000-00000000f004'::uuid, :'org'::uuid, 'enrollment', 'child', 'ffff0000-0000-4000-8000-00000000f002'::uuid, 'active',    'registration')
+on conflict (id) do nothing;
