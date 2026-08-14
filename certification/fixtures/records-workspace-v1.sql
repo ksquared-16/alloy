@@ -94,6 +94,17 @@ insert into customers (id, org_id, name) values
   ('dddd0000-0000-4000-8000-00000000d001'::uuid, :'org'::uuid, 'Addchild Cert Household')
 on conflict (id) do nothing;
 
+-- Return the Add Child household to its FIXTURE state by removing what previous cert runs
+-- created in it. Without this the file is idempotent only on a freshly reset tenant: the reuse
+-- scenario asserts that Juniper is not yet a member, and a second run would find the membership
+-- the first one made and prove something else entirely while still passing a row count.
+--
+-- Scoped to this one household AND to rows `child.add` stamped, so it can never remove seeded or
+-- another session's data.
+delete from customer_members
+where customer_id = 'dddd0000-0000-4000-8000-00000000d001'::uuid
+  and external_source = 'child_add';
+
 -- One existing sibling, so the household is a real household rather than an empty shell.
 insert into customer_members (id, org_id, customer_id, display_name, first_name, last_name, dob, relationship, is_active, person_id) values
   ('dddd0000-0000-4000-8000-00000000d002'::uuid, :'org'::uuid, 'dddd0000-0000-4000-8000-00000000d001'::uuid, 'Wren Addchild', 'Wren', 'Addchild', '2019-07-07', 'child', true, null)
@@ -125,4 +136,10 @@ union all select 'emma chen persons', count(*)::text from persons where org_id =
 union all select 'juniper persons', count(*)::text from persons where org_id = :'org'::uuid and last_name = 'Reusewell'
 union all select 'org opportunities', count(*)::text from opportunities where org_id = :'org'::uuid
 union all select 'org child process_instances', count(*)::text from process_instances where org_id = :'org'::uuid and subject_type = 'child'
-union all select 'org opportunity_customer_members', count(*)::text from opportunity_customer_members where org_id = :'org'::uuid;
+union all select 'org opportunity_customer_members', count(*)::text from opportunity_customer_members where org_id = :'org'::uuid
+-- Household-SCOPED participation. The org-wide counts above drift when another session writes to
+-- this shared tenant; this one can only move if Add Child created participation, which it must not.
+union all select 'addchild household participation', count(*)::text
+  from process_instances pi
+  join customer_members cm on cm.id = pi.subject_id
+ where pi.subject_type = 'child' and cm.customer_id = 'dddd0000-0000-4000-8000-00000000d001'::uuid;
