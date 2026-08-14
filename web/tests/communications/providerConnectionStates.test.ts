@@ -15,7 +15,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { evaluateBindingReadiness, type BindingSummary } from "@/lib/communications/bindingReadiness";
+import { evaluateBindingReadiness } from "@/lib/communications/bindingReadiness";
+import type { BindingSummary } from "@/lib/communications/composerChannels";
 
 type Row = BindingSummary & { inbound_address?: string | null };
 

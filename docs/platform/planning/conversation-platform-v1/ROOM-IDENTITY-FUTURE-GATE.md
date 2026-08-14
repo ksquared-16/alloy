@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-14
+---
+
 # Room-level Communications identity — the gate that must be crossed first
 
 **Status: BLOCKED, deliberately. Not scheduled.**
