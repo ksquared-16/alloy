@@ -97,6 +97,34 @@ export type SearchRecognition = {
  */
 export type SearchContextKind = "process" | "schedule" | "relationship" | "placement";
 
+/**
+ * One configured Work View this subject ACTUALLY belongs to, and can actually compose in.
+ *
+ * A Work View is an overlapping operational COHORT, not a stage. A subject routinely belongs to
+ * several at once — the live case is a family at stage `waitlist` sitting in both `All` and `Tours`,
+ * the latter because Tours publishes `has_active_tour` with deliberately NO stage predicate.
+ *
+ * Every entry has already passed all four gates in `resolveOperationalMemberships`: correct grain,
+ * fully-supported predicate evaluation, operator access, and operational availability. Nothing
+ * downstream re-decides eligibility — ranking may reorder these, never extend them.
+ */
+export type SearchOperationalMembershipRef = {
+    /** Configured Work View id — identity, never the label, which tenants rename. */
+    work_view_id: string;
+    /** Configured operator-facing label. */
+    label: string;
+    /**
+     * The grain the lens ROWS at, which is the subject the destination actually selects. A child is
+     * never offered a `family` lens: the row there is the case, and selecting it would present a
+     * family row as though it were the child.
+     */
+    row_grain: "child" | "family";
+    /** The Work Unit hosting this view's surface — `work_units.key`, never a process key. */
+    host_work_unit_key: string | null;
+    /** The record whose Focus Panel hosts the subject inside that view. */
+    host_entity_id: string | null;
+};
+
 export type SearchContext = {
     kind: SearchContextKind;
     /**
@@ -147,8 +175,21 @@ export type SearchContext = {
      *
      * Null when this participation's stage has no stage-bound view. The caller then falls back to
      * the host record's unit — the family answer is a fallback, never an override.
+     *
+     * ── DEMOTED (see `operational_memberships`) ──
+     * This is a RANKING and compatibility signal, not proof of eligibility. Stage alignment says
+     * where a participant is in the Process; it does not establish which cohorts contain them, and
+     * binding through `compat_queue_key` cannot express a booking-predicated or catch-all lens at
+     * all. The runtime authority declines to read that key as identity for exactly this reason
+     * ("a lane binding assigned by array position"). Eligibility comes from evaluated membership.
      */
     destination_work_view_id?: string | null;
+    /**
+     * Every configured Work View this subject truthfully belongs to and can compose in — the
+     * operational destinations Search may offer. Empty means none could be PROVEN, which is a
+     * complete answer: the subject still exposes its entity contexts.
+     */
+    operational_memberships?: SearchOperationalMembershipRef[] | null;
 };
 
 /**

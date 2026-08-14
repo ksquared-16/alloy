@@ -46,6 +46,7 @@ import {
 } from "@/lib/lifecycle/resolveWorkViewRuntimeContext";
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
+import { familyStageDestinationOperability } from "@/lib/runtime/provisioning/workViewDestinationOperability";
 import {
     loadSettlementLocators,
     resolveProvisioningPopulationWorkUnitId,
@@ -1214,25 +1215,31 @@ export async function composeWorkUnitProvisioningAnswer(
                 navFrame,
             );
         }
+        // ── ONE definition of "can a family surface be entered here" ──
+        // Extracted so anything that OFFERS this lens as a destination (Search) asks the SAME
+        // question this answer asks on arrival. Two readings of it is how a pill came to light up
+        // over a Focus Panel with zero cells while the answer behind it was refusing.
+        //
+        // Child-segment stages (Waitlist, Assignment, …) often publish templates without a
+        // primary_action. When Mission is EPP-derived onto such a stage, the rule allows a null
+        // primary action with an absence reason — same as the child path — so What's Next can
+        // project from templates instead of falling back to stale Lead Contact Family.
+        const operability = familyStageDestinationOperability(found, {
+            missionDerivedFromEffectiveParticipants: mission.derivedFromEffectiveParticipants,
+        });
+        if (!operability.ok) {
+            return fail("no_truthful_primary_action", operability.reason, workUnit, navFrame);
+        }
+
         const foundPlan = found.stage_operating_plan_v1 ?? null;
         const template = foundPlan?.work_templates?.find((t) => t.primary) ?? foundPlan?.work_templates?.[0] ?? null;
         const actionRef = template?.primary_action?.action_ref ?? null;
         if (!foundPlan || !template) {
+            // Unreachable — the operability rule above already refused exactly this case. Kept as a
+            // type narrowing so it can never silently degrade into a different answer.
             return fail(
                 "no_truthful_primary_action",
                 `stage "${found.key}" offers no work templates — the answer will not claim operational on identity alone`,
-                workUnit,
-                navFrame,
-            );
-        }
-        // Child-segment stages (Waitlist, Assignment, …) often publish templates without a
-        // primary_action. When Mission is EPP-derived onto such a stage, allow null primary
-        // action with an absence reason — same as the child path — so What's Next can project
-        // from templates instead of falling back to stale Lead Contact Family.
-        if (!actionRef && !mission.derivedFromEffectiveParticipants) {
-            return fail(
-                "no_truthful_primary_action",
-                `stage "${found.key}" offers no reachable primary action — the answer will not claim operational on identity alone`,
                 workUnit,
                 navFrame,
             );

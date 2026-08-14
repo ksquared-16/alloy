@@ -299,13 +299,40 @@ export function recordMatchesWorkView(
     view: Pick<WorkViewConfigV1Stored, "filters_v1" | "match"> | null | undefined,
     statusStageMap?: StatusStageMap | null,
 ): boolean {
-    if (!view) return true;
+    return recordWorkViewMembership(record, view, statusStageMap).pass;
+}
+
+/**
+ * Membership WITH the evaluator's own confidence in it.
+ *
+ * `pass` alone is not always enough. Unsupported fields and operators are deliberately FAIL-OPEN
+ * under AND — they pass through rather than exclude the row — which is the right call for a count or
+ * a queue that would rather over-include than hide work from an operator.
+ *
+ * It is the wrong call for anything that must PROVE membership before acting on it. Search offers
+ * Work Views as destinations, and a destination derived from a predicate that never actually
+ * evaluated is a fabricated one: the view would be offered, entered, and found not to contain the
+ * subject. Such callers require `fullySupported` as well.
+ *
+ * This is the same evaluator and the same enrichment — only the evidence it already produces is now
+ * readable, rather than discarded at the boundary.
+ */
+export function recordWorkViewMembership(
+    record: OperationalProjectionRow,
+    view: Pick<WorkViewConfigV1Stored, "filters_v1" | "match"> | null | undefined,
+    statusStageMap?: StatusStageMap | null,
+): { pass: boolean; fullySupported: boolean } {
+    if (!view) return { pass: true, fullySupported: true };
     const [enriched] = enrichRowsWithDerivedStage([record], statusStageMap);
-    return evaluateWorkViewFiltersForRow(
+    const result = evaluateWorkViewFiltersForRow(
         enriched ?? record,
         view.filters_v1,
         resolveWorkViewMatchV1(view.match),
-    ).pass;
+    );
+    return {
+        pass: result.pass,
+        fullySupported: result.notes.every((note) => note.supported),
+    };
 }
 
 /**
