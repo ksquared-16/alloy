@@ -30,6 +30,7 @@ import {
     NULL_PLACEMENT_SIGNAL,
 } from "@/lib/adminV2/runtime/queueRow/queueRowOperationalContext";
 import { FOCUS_PANEL_CARD_KEYS } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -349,22 +350,31 @@ describe("Doctrine §8.4 — billing signal evidence builder", () => {
 // ─── §8.5 — FocusPanelCardKey grain annotations ──────────────────────────────
 
 describe("Doctrine §8.5 — FocusPanelCardKey grain annotations", () => {
-    // 24 since `employment` joined the vocabulary: person-owned employment truth displayed at
-    // case grain, because a person has no host Work Unit of its own and the case panel is the
-    // only surface that composes for them.
-    it("FOCUS_PANEL_CARD_KEYS contains all 24 keys", () => {
-        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(24);
+    // 25 since `child_identity` joined the vocabulary — the first CHILD-grain card, for the durable
+    // child record. (24 was the count once `employment` joined: person-owned truth projected at case
+    // grain, back when the case panel was the only surface that composed for a person.)
+    it("FOCUS_PANEL_CARD_KEYS contains all 25 keys", () => {
+        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(25);
     });
 
-    it("focusPanelCardModel.ts has @grain case annotations on card keys", () => {
+    it("focusPanelCardModel.ts still annotates each key's grain of origin", () => {
         const src = readFileSync(
             path.join(process.cwd(), "lib/adminV2/runtime/focusPanel/focusPanelCardModel.ts"),
             "utf8",
         );
         expect(src).toContain("@grain case");
-        // Every key should have a grain annotation (21 keys + 1 block-comment mention)
         const grainAnnotationCount = (src.match(/@grain case/g) ?? []).length;
         expect(grainAnnotationCount).toBeGreaterThanOrEqual(21);
+        // Not every key is case-grain any more, and the comments are no longer the authority: card
+        // applicability is DECLARED on the registry and read by a composer. The annotations remain
+        // as provenance, so this asserts they still exist rather than that they are exhaustive.
+        expect(src).toContain("@grain child");
+    });
+
+    it("grain applicability is read from the registry, not from the @grain comments", () => {
+        expect(cardAppliesToGrain("child_identity", "child")).toBe(true);
+        expect(cardAppliesToGrain("child_identity", "opportunity")).toBe(false);
+        expect(cardAppliesToGrain("household", "child")).toBe(false);
     });
 });
 

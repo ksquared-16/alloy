@@ -31,6 +31,8 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     work_launcher: "launcher",
     timeline: "timeline",
     billing_preview: "status",
+    // Durable child identity — a profile of durable facts, the same archetype `household` uses.
+    child_identity: "profile",
 };
 
 export function system5ArchetypeForCard(key: FocusPanelCardKey): FocusPanelCardArchetype {

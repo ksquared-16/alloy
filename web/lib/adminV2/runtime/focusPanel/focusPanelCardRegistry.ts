@@ -85,6 +85,12 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * `context.employment` contract — only the producer of that projection differs.
      */
     { key: "employment", title: "Employment", grains: ["opportunity", "person"] },
+    /**
+     * The first CHILD-grain card. Declared for `child` ONLY: it is the durable child's own identity,
+     * not a family's roster, so it has no meaning on a case panel where `children` already answers
+     * "who are this family's children".
+     */
+    { key: "child_identity", title: "Child", grains: ["child"] },
     { key: "milestones", title: "Milestones" },
     { key: "readiness_kpi", title: "Readiness" },
     { key: "health", title: "Enrollment Health" },

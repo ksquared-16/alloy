@@ -298,6 +298,37 @@ export type OperationalContext = {
      * absent projection and an empty one are different facts, and only the latter is an answer.
      */
     employment?: OperationalEmploymentSignal | null;
+    /**
+     * The operational case this subject is ALSO being worked in, when one exists. Durable panels only.
+     *
+     * ── ENRICHMENT, NEVER AUTHORITY ──
+     *
+     * A durable record exists because the record exists. This field says "a family case for this
+     * subject is currently on an active Work Unit" — it may add an affordance (go to where this is
+     * being worked) and it may never decide whether the subject exists, change its identity, or
+     * supply its `businessProcess`. Borrowing the family's stage would put household process state
+     * onto a staff member's or a child's own record.
+     *
+     * Null on every queue-hosted panel, because those panels ARE the host. Null on a durable panel
+     * means no active unit pages this subject's case — the ordinary state after an enrollment ends.
+     *
+     * @see docs/runtime/DURABLE-RECORD-ATTENTION.md
+     */
+    operationalHost?: OperationalHostContext | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
+};
+
+/**
+ * Where a durable subject is additionally being worked.
+ *
+ * Deliberately a NARROW shape rather than the whole `AttentionResolution`: a durable panel must be
+ * able to note that a case exists without being able to reach into that case's composition. Widening
+ * this is how the case would creep back into being the durable record's authority.
+ */
+export type OperationalHostContext = {
+    /** The case (`opportunities.id`) hosting this subject's family work. */
+    opportunityId: string;
+    /** Active Work Unit key paging that case, or null when no active unit does. */
+    workUnitKey: string | null;
 };

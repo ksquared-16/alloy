@@ -152,15 +152,28 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
 ];
 
 /**
- * CHILD-grain default composition — declared EMPTY, on purpose.
+ * CHILD-grain default composition — the durable child's own identity.
  *
- * Workstream C builds the durable Child subject. Until it does, no card declares the `child` grain,
- * so any list here would name cards that cannot compose. An empty composition makes a child surface
- * render honestly-empty rather than rendering the enrollment cards — which is exactly the defect
- * `SECOND-SURFACE-INVENTORY.md` R3 recorded ("a second surface with nothing published renders the
- * Enrollment composition; it neither crashes nor comes up empty").
+ * One card, for the same reason Person has one: `child_identity` is the only card with canonical
+ * Child truth that does not require an enrollment. The case-grain `children` card is deliberately
+ * absent — it is a family's ROSTER, and placing it here would make a child's own record display a
+ * list containing itself.
+ *
+ * Program / room / schedule / readiness are enrollment-scoped and belong to operational-context
+ * enrichment (Workstream E), not to identity.
  */
-export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionEntry[] = [];
+export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    {
+        key: "child_identity",
+        tier: "reference",
+        visibility: "visible",
+        // Six columns in the left lane — a 12-column card forces `planPublishedLayout` to fall back
+        // from `lanes` to `grid`, the trap documented on the case composition's Employment entry.
+        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+];
 
 /**
  * The default composition for a subject grain.

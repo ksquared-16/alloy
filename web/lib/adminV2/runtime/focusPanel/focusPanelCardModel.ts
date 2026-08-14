@@ -75,10 +75,12 @@ export type FocusPanelCardPayload = {
 /**
  * Platform-owned card blueprint keys (not layout section keys).
  *
- * All keys in this registry are `@grain case` — the Focus Panel is always
- * case-grain (subject is an Opportunity). Child-grain and candidate-grain cards
- * are defined separately and never rendered in the case-grain Focus Panel.
+ * ONE vocabulary for every surface. Which subject a card can compose for is a DECLARATION on the
+ * registry (`CardGrainApplicability`), not a property of this list and no longer a property of the
+ * `@grain` comments below — those record each key's origin, and the registry is the authority a
+ * composer actually reads. An undeclared card is case-only.
  *
+ * @see lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern.ts
  * @see docs/platform/operator/operational-grain-doctrine.md §5
  */
 export const FOCUS_PANEL_CARD_KEYS = [
@@ -116,6 +118,18 @@ export const FOCUS_PANEL_CARD_KEYS = [
     "communications",
     /** @grain case — uploaded documents */
     "documents",
+    /**
+     * @grain child — the durable child's own identity (name · date of birth · age · household).
+     *
+     * The FIRST child-grain card. Deliberately NOT the `children` card, which is a case-grain
+     * ROSTER of a family's children and answers a different question. Everything here comes from
+     * the `customer_members` row, which is the canonical child identity — `person_id` on it is
+     * NULLABLE, so a child can exist with no `persons` row at all and must still be identifiable.
+     *
+     * Enrollment-scoped facts (program, room, schedule, start date) are deliberately absent: they
+     * require an enrollment, and a durable child record must open without one.
+     */
+    "child_identity",
     /** @grain case — available workflow actions launcher */
     "work_launcher",
     /** @grain case — lifecycle workflow steps rail */

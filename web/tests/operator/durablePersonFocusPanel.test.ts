@@ -219,8 +219,12 @@ describe("card applicability is declared per card, not switched centrally", () =
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
     });
 
-    it("every registered card still applies to the case grain", () => {
-        expect(cardKeysForGrain("opportunity")).toEqual(FOCUS_PANEL_CARDS.map((c) => c.key));
+    it("every card that was case-grain is still case-grain — only child-grain cards are excluded", () => {
+        // Written when every registered card was case-only. It is no longer "all of them", and that
+        // is the point: the ONLY cards outside the case grain are ones explicitly declared elsewhere.
+        const caseKeys = cardKeysForGrain("opportunity");
+        const excluded = FOCUS_PANEL_CARDS.map((c) => c.key).filter((k) => !caseKeys.includes(k));
+        expect(excluded).toEqual(["child_identity"]);
     });
 
     it("an unsupported grain/card pair is refused deterministically, never thrown", () => {
@@ -252,9 +256,11 @@ describe("default composition varies by grain", () => {
         expect(composition[0]!.visibility).toBe("visible");
     });
 
-    it("child is declared empty until Workstream C, rather than borrowing the case composition", () => {
-        expect(focusPanelDefaultCompositionForGrain("child")).toEqual([]);
-        expect(focusPanelSummaryDefaultDocForGrain("child").sections).toEqual([]);
+    it("child composes its own identity card, never the case composition", () => {
+        // Was asserted EMPTY before Workstream C — the point then and now is the same: a second
+        // surface must not fall through to the enrollment cards (inventory R3).
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["child_identity"]);
+        expect(focusPanelSummaryDefaultDocForGrain("child").sections).toHaveLength(1);
     });
 
     it("every card a grain's default composition places is declared for that grain", () => {
@@ -309,5 +315,37 @@ describe("the existing case surface is unchanged", () => {
         expect(asFocusPanelSubjectGrain("typo")).toBe("opportunity");
         expect(asFocusPanelSubjectGrain("person")).toBe("person");
         expect(asFocusPanelSubjectGrain("child")).toBe("child");
+    });
+});
+
+// ── E — optional operational-host enrichment (person) ────────────────────────────────
+
+describe("a person's operational host is enrichment only", () => {
+    const HOST = { opportunityId: "opp-active", workUnitKey: "enrollment_pipeline" };
+
+    function personModel(host: typeof HOST | null) {
+        return focusPanelWorkModeModelFromDurablePerson({
+            mode: "summary",
+            subject: staffSubject(),
+            canMutate: true,
+            operationalHost: host,
+        });
+    }
+
+    it("is null for a staff member with no household — the ordinary case", () => {
+        expect(personModel(null).context.operationalHost).toBeNull();
+    });
+
+    it("is carried when a household case is being worked", () => {
+        expect(personModel(HOST).context.operationalHost).toEqual(HOST);
+    });
+
+    it("changes neither identity, cards, nor businessProcess", () => {
+        const withHost = personModel(HOST);
+        const without = personModel(null);
+        expect(withHost.subject).toEqual(without.subject);
+        expect([...withHost.cardModels.keys()]).toEqual([...without.cardModels.keys()]);
+        expect(withHost.cardModels.get("employment")).toEqual(without.cardModels.get("employment"));
+        expect(withHost.context.businessProcess).toEqual({ key: null, label: null, stageKey: null });
     });
 });
