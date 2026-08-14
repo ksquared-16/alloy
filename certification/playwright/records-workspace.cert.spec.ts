@@ -207,13 +207,11 @@ test.describe("Children", () => {
         expect(inProcess).not.toContain(CHILD_ENROLLED);
         expect(inProcess).not.toContain(CHILD_NO_PROCESS);
 
-        // And the search genuinely reached PAST page 1 of the cohort: the unfiltered cohort is
-        // larger than one page, so this child was not simply sitting in the first 100 rows.
-        await filter.fill("");
-        await expect(page.locator("[data-children-page-status]")).toBeVisible({ timeout: SETTLE });
-        const status = await page.locator("[data-children-page-status]").innerText();
-        const [shown, total] = (status.match(/(\d+) of (\d+)/) ?? []).slice(1).map(Number);
-        expect(shown).toBeLessThan(total);
+        // NOTHING here asserts how many rows a cohort holds. The participation cohorts are driven
+        // by other sessions' data on this shared tenant — In Process was observed at 144 and then
+        // at 4 within one afternoon — so any assertion about page boundaries HERE measures the
+        // tenant rather than the product. That page-1-is-bounded property has its own test, over
+        // the All cohort, whose size the fixtures actually control.
 
         await page.screenshot({ path: path.join(SHOTS, "07-children-in-process.png"), fullPage: true });
     });
