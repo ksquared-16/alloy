@@ -84,3 +84,39 @@ this checklist.
 
 **Nothing was changed for this item.** A speculative edit was reverted rather than left on a decision
 that had not been made.
+
+---
+
+# Option 1 landed — and it rippled cleanly
+
+`DestinationId.workViewId` is now `string | null`. **The migration produced no new consumer errors.**
+
+| | errors | files |
+|---|---:|---|
+| after union membership | 42 | 8 |
+| after Option 1 migration | **38** | 7 |
+
+The count went *down* (the grain-import fix), and the file set is unchanged. Nothing outside
+`destinationId.ts` broke on the nullable dimension: the encoder already carried `NULL_SEGMENT`, the
+parser needed only to stop requiring the lens, and `destinationNodeKey` needed the sentinel so a
+lens-free destination gets its own graph node.
+
+That is strong evidence Option 1 was the right call — the destination model absorbed an optional
+cohort dimension without collateral damage, which is what you would expect if the dimension was
+genuinely optional all along and had merely been typed as required.
+
+## Remaining — all contextual-terminal exhaustiveness, none of it destination-model
+
+| File | Errors |
+|---|---:|
+| `ProvisionedWorkUnitSurface.tsx` | 12 |
+| `workUnitSurfaceModelFromSnapshot.ts` | 10 |
+| `useWorkUnitSettlement.ts` | 6 |
+| `d4Focus.test.ts` | 4 |
+| `d3AttentionToProvisioning.live.test.ts` | 2 |
+| `provisioningAnswerDestination.ts` | 2 |
+| `provisioning.ts` (K2) | 2 |
+
+`provisioningAnswerDestination.ts` is now unblocked: with a nullable lens it can map a contextual
+answer to `{ workUnitId: host, workViewId: null, subjectId: subject.id }` — the edit reverted earlier
+pending this decision.
