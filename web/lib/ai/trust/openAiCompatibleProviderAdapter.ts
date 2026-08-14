@@ -131,13 +131,26 @@ function buildReasoningPayload(request: GovernedProviderExecutionRequestV1): Rec
     };
 }
 
-function systemPrompt(): string {
-    return [
+/**
+ * Transport framing, plus whatever output contract the CALLER declared.
+ *
+ * The adapter states no schema of its own and interprets none. It cannot: it
+ * serves every decision class and knows the meaning of none of them. When a
+ * caller declares `expected_output_shape` the text is forwarded verbatim as
+ * part of the request framing — the same way the payload is forwarded — so the
+ * authority over "what a valid answer looks like" stays with the capability
+ * that registered the validation policy.
+ */
+function systemPrompt(expectedOutputShape?: string): string {
+    const base = [
         "You are a reasoning provider for a governed decision system.",
         "Return a single JSON object only — no markdown, no prose, no code fences.",
         "The caller validates your output against its own contract; return your best structured answer.",
         "The input has already been minimized. Do not ask for more data and do not invent identifiers.",
-    ].join(" ");
+    ];
+    const declared = expectedOutputShape?.trim();
+    if (declared) base.push(declared);
+    return base.join(" ");
 }
 
 export function buildChatCompletionsBody(input: {
@@ -149,7 +162,7 @@ export function buildChatCompletionsBody(input: {
         model: input.model,
         response_format: { type: "json_object" },
         messages: [
-            { role: "system", content: systemPrompt() },
+            { role: "system", content: systemPrompt(input.request.expected_output_shape) },
             { role: "user", content: JSON.stringify(buildReasoningPayload(input.request)) },
         ],
     };

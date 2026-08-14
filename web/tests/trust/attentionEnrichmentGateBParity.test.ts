@@ -203,14 +203,21 @@ describe("P28B-1 — the governed pipeline across the scenario matrix", () => {
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("invalid enum: no enrichment", async () => {
-        vi.stubGlobal("fetch", stubTransport(completion({ ...VALID, provider_report: { provider_key: "impostor", execution_mode: "live" } })));
+    it("invalid model-owned value: no enrichment", async () => {
+        // A wrong TYPE on a field the model genuinely owns. `provider_report`
+        // used to be the vehicle here, but as of D-80 the platform writes that
+        // field over whatever the model says, so an "impostor" provider is no
+        // longer a way to produce an invalid envelope — it is simply ignored.
+        vi.stubGlobal("fetch", stubTransport(completion({ ...VALID, tone_variant: 123 })));
         expect((await governed()).enriched).toBe(false);
     });
 
-    it("missing required field: no enrichment", async () => {
-        const { generated_at_iso: _drop, ...missing } = VALID;
-        vi.stubGlobal("fetch", stubTransport(completion(missing)));
+    it("no overlay content: no enrichment", async () => {
+        // `generated_at_iso` used to be dropped here to force a missing required
+        // field. The platform now supplies it, so the equivalent absence is the
+        // one the model is actually answerable for: no wording at all.
+        const { reasoning_summary_overlay: _a, suggested_draft_body_overlay: _b, ...noContent } = VALID;
+        vi.stubGlobal("fetch", stubTransport(completion(noContent)));
         expect((await governed()).enriched).toBe(false);
     });
 

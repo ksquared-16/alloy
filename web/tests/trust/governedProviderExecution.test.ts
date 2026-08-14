@@ -93,12 +93,22 @@ function request(over: Partial<GovernedProviderExecutionRequestV1> = {}): Govern
     };
 }
 
-/** A valid enrichment payload — what a well-behaved provider would return. */
+/**
+ * A valid enrichment payload, as seen by THIS seam.
+ *
+ * Phase 2.4 tests governed execution, so the fixture is what reaches Trust
+ * validation — envelope included. (The provider-facing contract narrowed to
+ * wording-only in D-80; that split is proven in the capability's own suites.)
+ * The overlay is required here because an enrichment carrying no enrichment is
+ * no longer valid — an empty overlay was exactly the operator-visible symptom
+ * the live QA hit, so a fixture without one would assert the wrong thing.
+ */
 function validOutput(over: Record<string, unknown> = {}) {
     return {
         version: 1,
         agent_key: NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY,
         generated_at_iso: NOW,
+        suggested_draft_body_overlay: "A warmer follow-up note.",
         provider_report: { provider_key: "openai", execution_mode: "live" },
         ...over,
     };

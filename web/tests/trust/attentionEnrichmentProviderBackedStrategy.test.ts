@@ -238,18 +238,30 @@ describe("P28GA-3 — Trust owns business validation, and the strategy is not Tr
         ).toBe(REGISTERED_VALIDATION_POLICY_KEY);
     });
 
-    it("an invalid enum is forwarded by the strategy and refused by the policy", async () => {
-        const invalid = { ...VALID_ENRICHMENT, provider_report: { provider_key: "impostor", execution_mode: "live" } };
+    it("an invalid model-owned value is forwarded by the strategy and refused by the policy", async () => {
+        // `tone_variant` is model-owned, so a number there is genuinely
+        // off-contract and the strategy must NOT be the thing that notices.
+        const invalid = { ...VALID_ENRICHMENT, tone_variant: 123 };
         const { exec } = run(invalid);
         const outcome = await exec();
 
         // Forwarded, not judged.
         expect(outcome.ok).toBe(true);
-        expect(outcome.ok && outcome.proposal.recommendation).toMatchObject({
-            provider_report: { provider_key: "impostor" },
-        });
+        expect(outcome.ok && outcome.proposal.recommendation).toMatchObject({ tone_variant: 123 });
         // And refused by the authority that owns the question.
         expect(await validateThroughRegisteredPolicy(invalid)).toBe(false);
+    });
+
+    it("a model-stated provider identity is overwritten by governed evidence (D-82)", async () => {
+        const spoofed = { ...VALID_ENRICHMENT, provider_report: { provider_key: "impostor", execution_mode: "live" } };
+        const outcome = await run(spoofed).exec();
+
+        // Not refused — overruled. The model's claim never survives assembly,
+        // so it cannot be the reason a decision fails.
+        expect(outcome.ok).toBe(true);
+        expect(outcome.ok && outcome.proposal.recommendation).toMatchObject({
+            provider_report: { provider_key: "openai" },
+        });
     });
 
     it("a missing required field is refused by the policy", async () => {
@@ -279,7 +291,9 @@ describe("P28GA-3 — Trust owns business validation, and the strategy is not Tr
         });
         expect(raw.ok).toBe(true);
 
-        // ...the strategy forwarded it verbatim...
+        // ...the strategy passed the nonsense through, wrapped in the envelope
+        // Alloy owns. The nonsense SURVIVES: dropping unknown keys here would
+        // hide a hostile answer from the only authority allowed to refuse it.
         const outcome = await strategy().reason({
             context: {} as never,
             nowIso: "2026-08-10T00:00:00.000Z",
@@ -287,10 +301,15 @@ describe("P28GA-3 — Trust owns business validation, and the strategy is not Tr
             correlation_id: "corr-1",
         });
         expect(outcome.ok).toBe(true);
-        expect(outcome.ok && outcome.proposal.recommendation).toEqual({ utter: "nonsense" });
+        expect(outcome.ok && outcome.proposal.recommendation).toMatchObject({ utter: "nonsense" });
 
-        // ...and Trust is what refuses it.
+        // ...and Trust is what refuses it, envelope or no envelope.
         expect(await validateThroughRegisteredPolicy({ utter: "nonsense" })).toBe(false);
+        expect(
+            await validateThroughRegisteredPolicy(
+                (outcome as { proposal: { recommendation: Record<string, unknown> } }).proposal.recommendation,
+            ),
+        ).toBe(false);
     });
 });
 
