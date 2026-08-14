@@ -167,3 +167,85 @@ test.describe("R · the surface an administrator actually reads", () => {
         }
     });
 });
+
+/**
+ * The lifecycle a Director could not perform: see what is connected, replace it,
+ * disconnect it, reconnect. Disconnect must revoke the credential and NOTHING
+ * else — losing a provider must never look like losing the record of what was
+ * said.
+ */
+test.describe("L · connection lifecycle, and history survives it", () => {
+    /**
+     * How many conversations the tenant can see.
+     *
+     * A real count, deliberately. The first version of this returned a constant,
+     * which made "history survived" pass no matter what — the exact vacuous
+     * assertion this suite exists to avoid.
+     */
+    async function conversationCount(page: Page): Promise<number> {
+        const res = await page.request.get("/api/admin/communications/conversations", { failOnStatusCode: false });
+        if (!res.ok()) return -1;
+        const json = (await res.json()) as Record<string, unknown>;
+        for (const key of ["conversations", "threads", "items", "rows", "data"]) {
+            const v = json[key];
+            if (Array.isArray(v)) return v.length;
+        }
+        return -1;
+    }
+
+    test("L-1 Manage names the account and offers Disconnect for an org-owned connection", async ({ page }) => {
+        await connect(page, CERT_KEY);
+        await page.goto(PAGE);
+        await expect(page.getByTestId("communications-channel-email")).toBeVisible();
+        await page.getByTestId("communications-configure-email").click();
+
+        const manage = page.getByTestId("communications-manage-email");
+        await expect(manage).toBeVisible();
+        await expect(page.getByTestId("communications-manage-email-account")).toContainText("Resend");
+        await expect(page.getByTestId("communications-manage-email-disconnect")).toBeVisible();
+    });
+
+    test("L-2 Disconnect states its consequences, including that history is kept", async ({ page }) => {
+        await connect(page, CERT_KEY);
+        await page.goto(PAGE);
+        await expect(page.getByTestId("communications-channel-email")).toBeVisible();
+        await page.getByTestId("communications-configure-email").click();
+        await page.getByTestId("communications-manage-email-disconnect").click();
+
+        const confirm = page.getByTestId("communications-manage-email-confirm");
+        await expect(confirm).toBeVisible();
+        const text = await confirm.innerText();
+        expect(text).toMatch(/Sending will stop/i);
+        expect(text).toMatch(/Replies will no longer be received/i);
+        expect(text).toMatch(/history will be retained/i);
+    });
+
+    test("L-3 disconnect → reconnect, and message history is untouched throughout", async ({ page }) => {
+        await connect(page, CERT_KEY);
+        const before = await page.request.get(BINDINGS);
+        expect(before.ok()).toBe(true);
+        const historyBefore = await conversationCount(page);
+        expect(historyBefore, "the history probe must actually read conversations").toBeGreaterThanOrEqual(0);
+
+        // Disconnect through the product path.
+        await page.goto(PAGE);
+        await expect(page.getByTestId("communications-channel-email")).toBeVisible();
+        await page.getByTestId("communications-configure-email").click();
+        await page.getByTestId("communications-manage-email-disconnect").click();
+        await page.getByTestId("communications-manage-email-confirm-disconnect").click();
+
+        await expect
+            .poll(async () => (await emailBindings(page)).every((b) => b.credential_configured === false))
+            .toBe(true);
+
+        // History is not a casualty of losing a provider.
+        expect(await conversationCount(page), "disconnecting a provider must not remove conversations").toBe(historyBefore);
+
+        // Reconnect restores the connection.
+        const again = await connect(page, CERT_KEY);
+        expect(again.ok()).toBe(true);
+        await expect
+            .poll(async () => (await emailBindings(page)).some((b) => b.credential_configured === true))
+            .toBe(true);
+    });
+});
