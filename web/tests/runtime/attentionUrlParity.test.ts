@@ -22,7 +22,7 @@ const IDENT = { tenant: "org-1", principal: "user-1" };
 /** Build a full AttentionRef from just the URL-carried coordinates (the rest are non-URL fillers). */
 function ref(
     partial: Pick<AttentionRef, "target"> &
-        Partial<Pick<AttentionRef, "lens" | "subject" | "aspect">>,
+        Partial<Pick<AttentionRef, "lens" | "subject" | "aspect" | "cohort">>,
 ): AttentionRef {
     return {
         tenant: IDENT.tenant,
@@ -30,6 +30,8 @@ function ref(
         scope: 0,
         target: partial.target,
         lens: partial.lens ?? null,
+        // URL-carried too (`?cohort=none`), so parity is a question about it as well.
+        cohort: partial.cohort ?? null,
         subject: partial.subject ?? null,
         aspect: partial.aspect ?? null,
         destination: null,

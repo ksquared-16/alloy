@@ -258,7 +258,7 @@ describe("D4 — K3 Focus", () => {
 
     it("surface identity is keyed by (target, lens) — subject is not part of the visible world's identity", () => {
         const base: AttentionRef = {
-            ...IDENT, scope: 2, target: "new_leads", lens: "new_leads",
+            ...IDENT, scope: 2, target: "new_leads", lens: "new_leads", cohort: null,
             subject: "opp-1", aspect: null, destination: null, source: "pointer", version: 1,
         };
         expect(surfaceIdFor(base)).toBe(surfaceIdFor({ ...base, subject: "opp-2" }));

@@ -181,7 +181,7 @@ describe("D2 — K1 Attention", () => {
 
     it("tenant/principal isolation is absolute — attention never supersedes across a boundary", () => {
         const mine: AttentionRef = {
-            tenant: "org-1", principal: "user-1", scope: 0, target: "t", lens: null,
+            tenant: "org-1", principal: "user-1", scope: 0, target: "t", lens: null, cohort: null,
             subject: null, aspect: null, destination: null, source: "pointer", version: 9,
         };
         const theirs: AttentionRef = { ...mine, tenant: "org-2", version: 1 };
