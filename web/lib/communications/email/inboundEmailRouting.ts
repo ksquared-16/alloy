@@ -24,6 +24,22 @@ export type InboundEmailBinding = {
     status: string;
     inbound_address: string | null;
     location_id?: string | null;
+    /**
+     * Delivery destinations routed to this binding, from
+     * `communication_ingress_routes`.
+     *
+     * Under selective routing the organization keeps its own MX and forwards ONE
+     * mailbox onward, so the destination the provider reports is the opaque
+     * ingress address — NOT `inbound_address`, which is the address the parent
+     * actually wrote to. Matching ownership only on `inbound_address` would fail
+     * to attribute every such message and quarantine mail the tenant owns.
+     *
+     * These decide OWNERSHIP and are never rendered. When ownership resolves
+     * through one, `receivingAddress` still reports the VISIBLE identity, so
+     * nothing downstream — thread endpoints, conversation headers, sent history —
+     * learns the transport address.
+     */
+    ingress_destinations?: string[];
 };
 
 export type InboundEmailOwnership =
@@ -47,12 +63,35 @@ export function normalizeEmailAddress(raw: string | null | undefined): string | 
     return value.includes("@") ? value : null;
 }
 
-/** A binding may own inbound only while it is actually active. */
+/**
+ * Every address that can attribute a message to this binding.
+ *
+ * The visible identity FIRST, so that when a message names both — a forwarded
+ * copy still carrying the original `To` — ownership resolves through the address
+ * a human would recognise, and the transport address never becomes a thread
+ * endpoint.
+ */
+export function bindingClaimableDestinations(binding: InboundEmailBinding): string[] {
+    const out: string[] = [];
+    const visible = normalizeEmailAddress(binding.inbound_address);
+    if (visible) out.push(visible);
+    for (const raw of binding.ingress_destinations ?? []) {
+        const destination = normalizeEmailAddress(raw);
+        if (destination && !out.includes(destination)) out.push(destination);
+    }
+    return out;
+}
+
+/**
+ * A binding may own inbound only while it is actually active, and only if it
+ * claims some destination — a visible receiving address or a routed ingress
+ * destination. A binding with neither owns nothing.
+ */
 export function bindingAcceptsInbound(binding: InboundEmailBinding): boolean {
     return (
         binding.channel.trim().toLowerCase() === "email" &&
         binding.status.trim().toLowerCase() === "active" &&
-        normalizeEmailAddress(binding.inbound_address) !== null
+        bindingClaimableDestinations(binding).length > 0
     );
 }
 
@@ -77,8 +116,17 @@ export function resolveInboundEmailOwnership(params: {
     const matches: Array<{ binding: InboundEmailBinding; receivingAddress: string }> = [];
     for (const binding of params.bindings) {
         if (!bindingAcceptsInbound(binding)) continue;
-        const address = normalizeEmailAddress(binding.inbound_address)!;
-        if (destinations.includes(address)) matches.push({ binding, receivingAddress: address });
+        const claimable = bindingClaimableDestinations(binding);
+        const matched = claimable.find((address) => destinations.includes(address));
+        if (!matched) continue;
+        // The RECEIVING ADDRESS reported onward is the visible identity whenever
+        // the binding has one, even when ownership was proven by the hidden
+        // ingress destination. It becomes a thread endpoint and is compared
+        // against outbound `from_address`, so reporting the transport address
+        // here would both split the conversation and leak the destination into
+        // canonical history.
+        const visible = normalizeEmailAddress(binding.inbound_address);
+        matches.push({ binding, receivingAddress: visible ?? matched });
     }
 
     if (matches.length === 0) return { kind: "no_attributable_org" };

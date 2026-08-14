@@ -15,6 +15,11 @@ import {
     sendingDomain,
 } from "@/lib/communications/bindingReadiness";
 import {
+    EMPTY_INGRESS_OBSERVATIONS,
+    loadIngressObservations,
+    type IngressObservations,
+} from "@/lib/communications/ingress/loadIngressObservations";
+import {
     credentialKeyForSecretRef,
     detectSecretBoundaryViolation,
     isConnectableChannel,
@@ -71,6 +76,14 @@ function sanitizeBindings(
     approvedChannels?: Set<string>,
     /** Providers whose organization-owned connection the provider REJECTED. */
     rejectedProviders?: Set<string>,
+    /**
+     * What Alloy has OBSERVED about inbound delivery, per binding.
+     *
+     * Receiving readiness is answered from arrival, not from `inbound_address`
+     * holding a value. Absent observations mean "nothing has arrived", which is
+     * reported as routing setup outstanding rather than as Ready.
+     */
+    ingressObservations: IngressObservations = EMPTY_INGRESS_OBSERVATIONS,
 ): unknown[] {
     return raw.map((b) => {
         const cfg = b.config != null && typeof b.config === "object" ? b.config : null;
@@ -83,6 +96,8 @@ function sanitizeBindings(
             // its previous behaviour rather than inventing `none_approved`.
             approvedConnectionAvailable: approvedChannels ? approvedChannels.has(channelKey) : undefined,
             credentialRejected: rejectedProviders?.has(String(b.provider ?? "").trim().toLowerCase()) ?? false,
+            ingress: ingressObservations.routeByBindingId.get(String(b.id)) ?? null,
+            observedInboundAt: ingressObservations.observedInboundAtByBindingId.get(String(b.id)) ?? null,
         });
         return {
             id: b.id,
@@ -217,12 +232,22 @@ export async function GET() {
 
     const channels_available = availableComposerChannels(list);
 
+    // Loaded ONCE for the whole payload. Receiving readiness is answered from
+    // observed arrival, and every projection below must answer it the same way —
+    // a card that says "Ready" beside a selector that says "Routing setup
+    // required" is the same class of contradiction this model exists to remove.
+    const ingressObservations = await loadIngressObservations(
+        supabase,
+        ctx.orgId,
+        list.map((b) => String(b.id)),
+    );
+
     return NextResponse.json({
-        bindings: sanitizeBindings(list, availableCredentialKeys, approvedChannels, rejectedProviders),
+        bindings: sanitizeBindings(list, availableCredentialKeys, approvedChannels, rejectedProviders, ingressObservations),
         channels_available,
         selectable_by_channel: {
-            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys, approvedChannels, rejectedProviders),
-            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys, approvedChannels, rejectedProviders),
+            sms: sanitizeBindings(activeOutboundBindings(list, "sms"), availableCredentialKeys, approvedChannels, rejectedProviders, ingressObservations),
+            email: sanitizeBindings(activeOutboundBindings(list, "email"), availableCredentialKeys, approvedChannels, rejectedProviders, ingressObservations),
         },
         /** Flat roster, kept for existing consumers that index by location id. */
         locations: (locationRows ?? []).map((l) => ({
