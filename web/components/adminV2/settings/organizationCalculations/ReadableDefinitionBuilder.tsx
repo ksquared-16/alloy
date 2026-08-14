@@ -4,6 +4,7 @@
  * Readable definition builder — operator-facing definition, not AST controls.
  */
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { useEffect, useMemo, useState } from "react";
 import {
     ConfigurationPrimaryButton,
@@ -378,23 +379,21 @@ export default function ReadableDefinitionBuilder({
                         {draft.valueMode === "catalog_input" ?
                             <label className="block space-y-1">
                                 <span className="config-typo-field-label">Count</span>
-                                <select
-                                    className="config-runtime-input"
+                                <AlloySelect
+                                    triggerClassName="config-runtime-input"
+                                    allowEmpty={false}
+                                    placeholder="No approved facts available"
                                     value={draft.valueRef ?? ""}
-                                    onChange={(e) =>
+                                    options={factChoices.map((c) => ({ value: c.ref, label: c.label }))}
+                                    aria-label="Count"
+                                    testId="definition-fact-select"
+                                    onChange={(next) =>
                                         onChange({
                                             ...draft,
-                                            valueRef: e.target.value as ApprovedInputRef,
+                                            valueRef: next as ApprovedInputRef,
                                         })
                                     }
-                                    data-testid="definition-fact-select"
-                                >
-                                    {factChoices.map((c) => (
-                                        <option key={c.ref} value={c.ref}>
-                                            {c.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </label>
                         :   <>
                                 {catalogLoading ?
@@ -405,24 +404,20 @@ export default function ReadableDefinitionBuilder({
                                     </p>
                                 :   <label className="block space-y-1">
                                         <span className="config-typo-field-label">Count</span>
-                                        <select
-                                            className="config-runtime-input"
+                                        <AlloySelect
+                                            triggerClassName="config-runtime-input"
+                                            placeholder="Select who should count…"
                                             value={draft.populationVersionId ?? ""}
-                                            onChange={(e) =>
+                                            options={populations.map((p) => ({ value: p.versionId, label: p.label }))}
+                                            aria-label="Count"
+                                            testId="definition-population-select"
+                                            onChange={(next) =>
                                                 onChange({
                                                     ...draft,
-                                                    populationVersionId: e.target.value || null,
+                                                    populationVersionId: next || null,
                                                 })
                                             }
-                                            data-testid="definition-population-select"
-                                        >
-                                            <option value="">Select who should count…</option>
-                                            {populations.map((p) => (
-                                                <option key={p.versionId} value={p.versionId}>
-                                                    {p.label}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        />
                                     </label>
                                 }
                                 {selectedPopulation ?
@@ -454,24 +449,20 @@ export default function ReadableDefinitionBuilder({
                                 </p>
                             :   <label className="block space-y-1">
                                     <span className="config-typo-field-label">How should scheduled children count?</span>
-                                    <select
-                                        className="config-runtime-input"
+                                    <AlloySelect
+                                        triggerClassName="config-runtime-input"
+                                        placeholder="Select how children should count…"
                                         value={draft.weightingVersionId ?? ""}
-                                        onChange={(e) =>
+                                        options={compatibleEquivalencies.map((w) => ({ value: w.versionId, label: w.label }))}
+                                        aria-label="How should scheduled children count?"
+                                        testId="definition-equivalency-select"
+                                        onChange={(next) =>
                                             onChange({
                                                 ...draft,
-                                                weightingVersionId: e.target.value || null,
+                                                weightingVersionId: next || null,
                                             })
                                         }
-                                        data-testid="definition-equivalency-select"
-                                    >
-                                        <option value="">Select how children should count…</option>
-                                        {compatibleEquivalencies.map((w) => (
-                                            <option key={w.versionId} value={w.versionId}>
-                                                {w.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </label>
                             }
                             {selectedEquivalency ?
@@ -515,46 +506,39 @@ export default function ReadableDefinitionBuilder({
                         :   null}
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">Then</span>
-                            <select
-                                className="config-runtime-input"
+                            <AlloySelect
+                                triggerClassName="config-runtime-input"
+                                allowEmpty={false}
                                 value={draft.operator}
-                                onChange={(e) =>
+                                options={OPERATORS.map((op) => ({ value: op, label: op }))}
+                                aria-label="Then"
+                                testId="definition-operator"
+                                onChange={(next) =>
                                     onChange({
                                         ...draft,
-                                        operator: e.target.value as PivotOperatorLabel,
+                                        operator: next as PivotOperatorLabel,
                                     })
                                 }
-                                data-testid="definition-operator"
-                            >
-                                {OPERATORS.map((op) => (
-                                    <option key={op} value={op}>
-                                        {op}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </label>
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">
                                 {draft.operator === "Divide" ? "Compare against" : "Compare against"}
                             </span>
-                            <select
-                                className="config-runtime-input"
+                            <AlloySelect
+                                triggerClassName="config-runtime-input"
+                                placeholder="No comparison"
                                 value={draft.compareRef ?? ""}
-                                onChange={(e) =>
+                                options={factChoices.map((c) => ({ value: c.ref, label: c.label }))}
+                                aria-label="Compare against"
+                                testId="definition-compare-select"
+                                onChange={(next) =>
                                     onChange({
                                         ...draft,
-                                        compareRef: (e.target.value || null) as ApprovedInputRef | null,
+                                        compareRef: (next || null) as ApprovedInputRef | null,
                                     })
                                 }
-                                data-testid="definition-compare-select"
-                            >
-                                <option value="">No comparison</option>
-                                {factChoices.map((c) => (
-                                    <option key={c.ref} value={c.ref}>
-                                        {c.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </label>
                         <label className="flex items-center gap-2 text-sm">
                             <input
@@ -591,18 +575,16 @@ export default function ReadableDefinitionBuilder({
                     </p>
                     <label className="block space-y-1">
                         <span className="config-typo-field-label">Room</span>
-                        <select
-                            className="config-runtime-input"
+                        <AlloySelect
+                            triggerClassName="config-runtime-input"
+                            allowEmpty={false}
+                            placeholder="No rooms available"
                             value={roomId}
-                            onChange={(e) => setRoomId(e.target.value)}
-                            data-testid="definition-try-room"
-                        >
-                            {rooms.map((r) => (
-                                <option key={r.id} value={r.id}>
-                                    {r.siteLabel} / {r.label}
-                                </option>
-                            ))}
-                        </select>
+                            options={rooms.map((r) => ({ value: r.id, label: `${r.siteLabel} / ${r.label}` }))}
+                            aria-label="Room"
+                            testId="definition-try-room"
+                            onChange={setRoomId}
+                        />
                     </label>
                     <label className="block space-y-1">
                         <span className="config-typo-field-label">Date</span>

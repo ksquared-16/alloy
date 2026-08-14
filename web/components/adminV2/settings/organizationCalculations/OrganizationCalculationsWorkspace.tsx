@@ -6,6 +6,7 @@
  * Collection → Selected workspace (Overview / Definition / Test / Versions / Where used / Lifecycle).
  */
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1403,18 +1404,15 @@ function TestPanel({
                             <label className="block space-y-1">
                                 <span className="config-typo-field-label">Room</span>
                                 {rooms.length > 0 ?
-                                    <select
-                                        className="config-runtime-input"
+                                    <AlloySelect
+                                        triggerClassName="config-runtime-input"
+                                        allowEmpty={false}
                                         value={roomId}
-                                        onChange={(e) => setRoomId(e.target.value)}
-                                        data-testid="organization-calculations-room-id"
-                                    >
-                                        {rooms.map((r) => (
-                                            <option key={r.id} value={r.id}>
-                                                {r.siteLabel} / {r.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        options={rooms.map((r) => ({ value: r.id, label: `${r.siteLabel} / ${r.label}` }))}
+                                        aria-label="Room"
+                                        testId="organization-calculations-room-id"
+                                        onChange={setRoomId}
+                                    />
                                 :   <input
                                         className="config-runtime-input"
                                         value={roomId}

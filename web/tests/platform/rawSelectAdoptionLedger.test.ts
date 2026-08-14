@@ -203,9 +203,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/settings/OpportunityDrawerLayoutSectionRowEditor.tsx": 4,
     "components/adminV2/settings/OpportunityWorkflowV1SectionsEditor.tsx": 1,
     "components/adminV2/settings/organization/CommunicationsChannelDialog.tsx": 2,
-    "components/adminV2/settings/organizationCalculations/OrganizationCalculationsWorkspace.tsx": 1,
-    "components/adminV2/settings/organizationCalculations/OrgCalcPivotBuilder.tsx": 6,
-    "components/adminV2/settings/organizationCalculations/ReadableDefinitionBuilder.tsx": 6,
     "components/adminV2/settings/PlacementPrioritySettingsClient.tsx": 3,
     "components/adminV2/settings/programs/ProgramDomainSections.tsx": 2,
     "components/adminV2/settings/programs/ProgramOperatorDialogs.tsx": 2,
@@ -310,6 +307,7 @@ describe("raw <select> adoption ledger", () => {
         const ledgerTotal = Object.values(LEDGER).reduce((a, b) => a + b, 0);
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
-        expect(ledgerTotal).toBe(427);
+        // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
+        expect(ledgerTotal).toBe(414);
     });
 });
