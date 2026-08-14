@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
 import type { AttentionSuggestionActionFamily } from "@/lib/agent/needsAttentionSuggestion/types";
 import { tryBuildOperationalRecommendationFromAttention } from "@/lib/adminV2/bos/recommendations/adapters/tryBuildOperationalRecommendationFromAttention";
+import { buildLegacyAttentionSuggestionCompat } from "@/lib/adminV2/bos/recommendations/adapters/buildLegacySuggestionCompat";
 import {
     operationalRecommendationToAttentionSuggestionV1,
     projectRecommendationToLegacyAttentionSuggestion,
@@ -128,10 +129,38 @@ describe("projectRecommendationToLegacyAttentionSuggestion", () => {
         expect(rec).toEqual(before);
     });
 
-    it("does not emit AI suggested_content bodies", () => {
+    it("emits the DETERMINISTIC template draft, never AI content (D-78)", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const legacy = projectRecommendationToLegacyAttentionSuggestion(rec);
-        expect(legacy?.suggested_content).toBeNull();
+
+        // The distinction this test now guards is deterministic vs model-generated,
+        // not present vs absent. Emitting nothing was the old way of guaranteeing
+        // "no AI here", and it cost the operator the draft entirely (D-78).
+        const content = legacy?.suggested_content ?? null;
+        expect(content).not.toBeNull();
+        expect(content!.template_key).toBeTruthy();
+
+        // Same reason, same inputs, same copy, every time — a model cannot
+        // produce that, so byte-stability is the property that proves the source.
+        const again = projectRecommendationToLegacyAttentionSuggestion(
+            buildOperationalRecommendationV1(buildTestOperationalRecommendationInput()),
+        );
+        expect(again?.suggested_content).toEqual(content);
+    });
+
+    it("emits no draft for a reason the template owner does not map", () => {
+        const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
+        const unmapped = {
+            ...rec,
+            stale_state_check: {
+                ...rec.stale_state_check,
+                fingerprint_inputs: {
+                    ...rec.stale_state_check.fingerprint_inputs,
+                    primary_reason_code: "stage_missing_required_fields",
+                },
+            },
+        };
+        expect(projectRecommendationToLegacyAttentionSuggestion(unmapped)?.suggested_content).toBeNull();
     });
 
     it("fails soft for unsupported or incomplete recommendations", () => {
@@ -192,7 +221,19 @@ describe("legacy ↔ canonical structural parity", () => {
             expect(VALID_ACTION_FAMILIES.has(legacy!.next_action.action_family)).toBe(true);
             expect(adapted!.next_action.label.trim()).not.toBe("");
             expect(adapted!.reasoning.summary.trim()).not.toBe("");
-            expect(adapted!.suggested_content).toBeNull();
+
+            // D-78. This asserted `toBeNull()`, and that assertion was the defect
+            // written down as an expectation: all six of these reasons are
+            // catalog-covered, so all six routed through this projection and lost
+            // the draft the legacy builder had produced — which is what made the
+            // governed enrichment control unreachable in normal operation.
+            //
+            // Parity is the right assertion, not merely "non-null": the two paths
+            // must agree, or an operator sees different copy depending on which
+            // builder happened to answer.
+            expect(adapted!.suggested_content).toEqual(legacy!.suggested_content);
+            expect(adapted!.suggested_content?.body?.trim()).toBeTruthy();
+            expect(adapted!.suggested_content?.template_key).toBeTruthy();
         });
     }
 
@@ -273,5 +314,136 @@ describe("projectRecommendationPreviewToLegacyAttentionSuggestionPreview", () =>
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const broken = { ...rec, render: { ...rec.render, queue: { ...rec.render.queue, next_label: "" } } };
         expect(projectRecommendationPreviewToLegacyAttentionSuggestionPreview(broken)).toBeNull();
+    });
+});
+
+/**
+ * D-78 — enrichment reachability through the entry point the runtime actually uses.
+ *
+ * The projection tests above prove the adapter. This proves the CONSEQUENCE, and it
+ * is the assertion that matters: `buildLegacyAttentionSuggestionCompat` is
+ * canonical-first with a legacy fallback, and the operator's Enhance control
+ * renders only when the suggestion it receives carries a draft body. Testing the
+ * adapter alone would have missed the defect entirely — the adapter was behaving
+ * exactly as written; the reachability was the thing that was broken.
+ *
+ * Every one of the six catalog-covered reasons is exercised, with no attention
+ * priority manipulation and no tenant fixture.
+ */
+describe("D-78 — the enrichment control is reachable for catalog-covered reasons", () => {
+    for (const caseDef of PARITY_CASES) {
+        it(`yields a draft body for ${caseDef.primaryCode}`, () => {
+            const attention = attentionFixture(caseDef);
+            const legacyInput = {
+                opportunity: {
+                    id: ENTITY_ID,
+                    status_key: caseDef.statusKey,
+                    metadata: {},
+                    primary_display_name: "Lee Household",
+                },
+                attention,
+                activity: null,
+                nowIso: NOW_ISO,
+            };
+            const recommendation = tryBuildOperationalRecommendationFromAttention({
+                orgId: ORG_ID,
+                opportunityRow: opportunityRow(caseDef.statusKey),
+                attention,
+                activity: null,
+                nowMs: NOW_MS,
+                sourceSurface: "entity_get",
+            });
+
+            const compat = buildLegacyAttentionSuggestionCompat({ recommendation, legacyInput });
+
+            // The render predicate of `OperationalAttentionEnhanceDraft`, asserted
+            // directly: no body, no control, no governed enrichment.
+            expect(compat?.suggested_content?.body?.trim()).toBeTruthy();
+            expect(compat?.suggested_content?.template_key).toBeTruthy();
+            // The enrichment information spec reads the channel, so it must survive too.
+            expect(compat?.suggested_content?.channel).toBeTruthy();
+        });
+    }
+
+    it("keeps the canonical recommendation authoritative for the recommended action", () => {
+        const caseDef = PARITY_CASES.find((c) => c.primaryCode === "waiting_on_family")!;
+        const attention = attentionFixture(caseDef);
+        const recommendation = tryBuildOperationalRecommendationFromAttention({
+            orgId: ORG_ID,
+            opportunityRow: opportunityRow(caseDef.statusKey),
+            attention,
+            activity: null,
+            nowMs: NOW_MS,
+            sourceSurface: "entity_get",
+        });
+        expect(recommendation).not.toBeNull();
+
+        const compat = buildLegacyAttentionSuggestionCompat({
+            recommendation,
+            legacyInput: {
+                opportunity: {
+                    id: ENTITY_ID,
+                    status_key: caseDef.statusKey,
+                    metadata: {},
+                    primary_display_name: "Lee Household",
+                },
+                attention,
+                activity: null,
+                nowIso: NOW_ISO,
+            },
+        });
+
+        // The ACTION still comes from the canonical recommendation. Adding a draft
+        // did not move authority to the compatibility projection.
+        expect(compat!.next_action.key).toBe(recommendation!.recommended_action.key);
+        expect(compat!.next_action.label).toBe(recommendation!.recommended_action.label);
+        expect(compat!.reasoning.summary).toBe(recommendation!.why_it_matters);
+    });
+
+    it("waiting_on_documents keeps its draft on EITHER path (no regression)", () => {
+        // The path Phase 2.8 live QA used, and it must survive this change.
+        //
+        // Not in `PHASE1_ATTENTION_REASON_CATALOG_KEYS` — but that does not mean no
+        // canonical recommendation exists: a breached SLA maps it to the
+        // `sla_breach` SUPPLEMENTAL key, so this reason reaches the projection too.
+        // I asserted `recommendation === null` here at first and the test corrected
+        // me. Which path answers is therefore not the guarantee worth pinning; the
+        // draft surviving either way is.
+        const attention = attentionFixture({
+            primaryCode: "waiting_on_documents",
+            primaryLabel: "Waiting on documents",
+            statusKey: "application_started",
+            waiting: { bucket: "waiting_on_documents", since_iso: "2026-05-18T12:00:00.000Z", active: true },
+        });
+        const recommendation = tryBuildOperationalRecommendationFromAttention({
+            orgId: ORG_ID,
+            opportunityRow: opportunityRow("application_started"),
+            attention,
+            activity: null,
+            nowMs: NOW_MS,
+            sourceSurface: "entity_get",
+        });
+
+        const legacyInput = {
+            opportunity: {
+                id: ENTITY_ID,
+                status_key: "application_started",
+                metadata: {},
+                primary_display_name: "Lee Household",
+            },
+            attention,
+            activity: null,
+            nowIso: NOW_ISO,
+        };
+
+        // Canonical-first, exactly as the runtime calls it.
+        const compat = buildLegacyAttentionSuggestionCompat({ recommendation, legacyInput });
+        expect(compat?.suggested_content?.template_key).toBe("documents_request_short");
+        expect(compat?.suggested_content?.body?.trim()).toBeTruthy();
+
+        // And with no recommendation at all, which is what live QA observed when
+        // the SLA tier was `ok`. Same template, same draft, either way.
+        const fallbackOnly = buildLegacyAttentionSuggestionCompat({ recommendation: null, legacyInput });
+        expect(fallbackOnly?.suggested_content).toEqual(compat?.suggested_content);
     });
 });
