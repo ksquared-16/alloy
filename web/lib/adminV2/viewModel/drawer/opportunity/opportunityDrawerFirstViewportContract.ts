@@ -95,9 +95,9 @@ export function opportunityFirstPaintDependencySatisfiedFromRecord(
     record: Record<string, unknown>
 ): boolean {
     if (key === "record_visible") return true;
-    if (key === "tour_bookings") {
-        return opportunityInquiryTourDisplayFromPrimaryMetadata(record);
-    }
+    // Metadata may warm Tour *display*, but never satisfies authoritative tour_bookings.
+    // Emptying bookings when metadata has tour_date/time left Current Work stuck on Schedule Tour.
+    if (key === "tour_bookings") return false;
     if (key === "inquiry_children") {
         return Array.isArray(record._inquiry_children);
     }
@@ -108,8 +108,9 @@ export function opportunityFirstPaintDependencySatisfiedFromRecord(
     return false;
 }
 
-export function opportunityTourBookingsFetchRequired(record: Record<string, unknown>): boolean {
-    return !opportunityInquiryTourDisplayFromPrimaryMetadata(record);
+/** Always fetch active tour_bookings — command eligibility depends on authoritative rows. */
+export function opportunityTourBookingsFetchRequired(_record: Record<string, unknown>): boolean {
+    return true;
 }
 
 export type TourSlotDisplaySource = "metadata" | "bookings" | "none";

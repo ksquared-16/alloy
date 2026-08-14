@@ -33,6 +33,11 @@ import {
     type OperationalWorkItem,
     type OperationalWorkUrgency,
 } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import {
+    attendanceStatusLabel,
+    readAttendanceConfirmation,
+} from "@/lib/tours/bookings/tourBookingAttendance";
 
 export type BuildOperationalContextInput = {
     subjectId: string;
@@ -216,7 +221,18 @@ function buildOperationalContextSignals(
     const openCount = items.filter((i) => i.state === "open").length;
     const overdueCount = items.filter((i) => i.urgency === "overdue").length;
 
-    const nextBooking = tourBookings[0];
+    const nextBooking = tourBookings[0] as TourBookingRow | undefined;
+    const attendance = nextBooking ? readAttendanceConfirmation(nextBooking.metadata) : null;
+    const confirmedBy = attendance?.confirmed_by_person_id
+        ? truthScalarName(truth)
+        : null;
+    const parentConfirmationLabel = nextBooking
+        ? attendance?.status === "confirmed_by_parent"
+            ? confirmedBy
+                ? `Confirmed by ${confirmedBy}`
+                : "Confirmed by parent"
+            : attendanceStatusLabel(attendance?.status ?? "awaiting_response")
+        : null;
 
     return {
         work: {
@@ -234,12 +250,28 @@ function buildOperationalContextSignals(
         tour: {
             scheduled: tourBookings.length > 0,
             startAt: trimOrNull(nextBooking?.start_at),
+            // Keep raw booking status_key for command/eligibility seams — What's Next must not
+            // render this under Primary contact (see buildWhatsNextContextFacts).
             statusLabel: trimOrNull(nextBooking?.status_key),
             bookingId: trimOrNull(nextBooking?.id),
+            parentConfirmationLabel,
         },
         communications: buildCommunicationsSignal(subjectVm),
         billing: buildBillingSignal(truth),
     };
+}
+
+function truthScalarName(truth: Record<string, unknown>): string | null {
+    const candidates = [
+        truth["primary_contact.name"],
+        truth["primary_person.full_name"],
+        truth["_primary_contact_name"],
+        truth["contact.full_name"],
+    ];
+    for (const c of candidates) {
+        if (typeof c === "string" && c.trim()) return c.trim();
+    }
+    return null;
 }
 
 function buildCommunicationsSignal(

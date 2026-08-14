@@ -97,7 +97,8 @@ describe("Contact Family compact Current Work presentation", () => {
     it("scopes compact timeline CSS to current_work entry context", () => {
         const css = readFileSync(resolve(webRoot, "app/adminV2/components/alloyOsRuntime.css"), "utf8");
         expect(css).toContain('[data-cc-entry-context="current_work"]');
-        expect(css).toContain("max-height: 9.5rem");
+        expect(css).toContain("max-height: 6.5rem");
+        expect(css).toContain('data-cc-compose-intent="new_message"');
         const workspace = readFileSync(
             resolve(webRoot, "app/adminV2/communications/FamilyCommunicationWorkspace.tsx"),
             "utf8",

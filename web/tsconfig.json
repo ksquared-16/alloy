@@ -36,6 +36,9 @@
     "test-results",
     "playwright-report",
     "coverage",
-    "tmp"
+    "tmp",
+    "scripts/tmp-*.mts",
+    "scripts/tmp-*.mjs",
+    "scripts/tmp-*.ts"
   ]
 }

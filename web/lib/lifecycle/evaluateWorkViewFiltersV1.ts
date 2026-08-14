@@ -147,6 +147,10 @@ function fieldValue(
             }
             return enrichment.tourDisplay ?? null;
         }
+        case "has_active_tour":
+            if (row._has_active_tour === true || row.has_active_tour === true) return "true";
+            if (row._has_active_tour === false || row.has_active_tour === false) return "false";
+            return "false";
         case "updated_at":
             return readRowString(row, "updated_at");
         case "needs_follow_up":

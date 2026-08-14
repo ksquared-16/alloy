@@ -65,7 +65,15 @@ export function focusPanelSeedFromQueueRow(
         context.row_stage?.trim() ||
         null;
 
-    return { title, statusLabel };
+    const familyOpportunityId =
+        (typeof context.drawer_open?.entity_id === "string" && context.drawer_open.entity_id.trim()
+            ? context.drawer_open.entity_id.trim()
+            : null)
+        || (typeof context.case_context?.case_id === "string" && context.case_context.case_id.trim()
+            ? context.case_context.case_id.trim()
+            : null);
+
+    return { title, statusLabel, ...(familyOpportunityId ? { familyOpportunityId } : {}) };
 }
 
 /**

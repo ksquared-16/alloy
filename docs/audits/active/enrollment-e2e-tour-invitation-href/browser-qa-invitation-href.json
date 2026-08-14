@@ -1,0 +1,15 @@
+[
+  {
+    "t": "2026-08-13T17:51:53.019Z",
+    "step": "prepare",
+    "status": 200
+  },
+  {
+    "t": "2026-08-13T17:51:53.032Z",
+    "step": "prepare-draft",
+    "hasUrl": true,
+    "urlTail": "5/a/HbcuTWB6",
+    "bodyHasUrl": true,
+    "subject": "Come visit North Campus — pick a time that works"
+  }
+]

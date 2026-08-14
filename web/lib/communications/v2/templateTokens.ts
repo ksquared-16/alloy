@@ -117,8 +117,105 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     },
     { path: "job.id", label: "Job ID", group: "schedule", sample: "job_9012" },
     { path: "job.title", label: "Job title", group: "schedule", sample: "North Campus tour" },
+    // Tour system templates (snake_case merge fields used by Tour lifecycle copy)
+    {
+        path: "invitation_action_url",
+        label: "Choose-tour-time link",
+        group: "schedule",
+        sample: "https://example.com/a/tour",
+    },
+    {
+        path: "add_to_calendar_url",
+        label: "Calendar link",
+        group: "schedule",
+        sample: "https://calendar.google.com/calendar/render?action=TEMPLATE",
+    },
+    {
+        path: "reschedule_url",
+        label: "Reschedule-tour link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/reschedule",
+    },
+    {
+        path: "confirm_attendance_url",
+        label: "Confirm-attendance link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/confirm-coming",
+    },
+    {
+        path: "confirm_reply_instruction",
+        label: "SMS confirm-reply instruction",
+        group: "schedule",
+        sample: " Reply 1 to confirm you're coming.",
+    },
+    {
+        path: "cancel_url",
+        label: "Manage-tour link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/manage",
+    },
+    {
+        path: "public_booking_url",
+        label: "Public booking link",
+        group: "schedule",
+        sample: "https://example.com/tour-booking/book",
+    },
+    {
+        path: "tour_display_label",
+        label: "Tour date and time",
+        group: "schedule",
+        sample: "Monday, August 10 at 10:00 AM",
+    },
+    {
+        path: "tour_date_label",
+        label: "Tour date",
+        group: "schedule",
+        sample: "Monday, August 10",
+    },
+    {
+        path: "tour_time_label",
+        label: "Tour time",
+        group: "schedule",
+        sample: "10:00 AM",
+    },
+    {
+        path: "parent_name",
+        label: "Contact first name",
+        group: "contact",
+        sample: "Kelly",
+    },
+    {
+        path: "location_name",
+        label: "Location",
+        group: "location",
+        sample: "North Campus",
+    },
+    {
+        path: "location_address",
+        label: "Location address",
+        group: "location",
+        sample: "123 Main St",
+    },
+    {
+        path: "org_name",
+        label: "Organization name",
+        group: "org",
+        sample: "Bright Beginnings",
+    },
+    {
+        path: "organization_name",
+        label: "Organization name (alias)",
+        group: "org",
+        sample: "Bright Beginnings",
+    },
+    {
+        path: "site_line",
+        label: "Site line",
+        group: "location",
+        sample: "North Campus · 123 Main St",
+    },
     // org
-    { path: "org.name", label: "Organization name", group: "org", sample: "Bright Beginnings" },
+    { path: "org.name", label: "Organization name (dot path)", group: "org", sample: "Bright Beginnings" },
 ] as const;
 
 const TOKEN_BY_PATH: ReadonlyMap<string, CommunicationTokenDef> = new Map(

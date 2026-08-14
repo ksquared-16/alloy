@@ -43,6 +43,8 @@ const ALLOWED_DETAIL_KEYS = [
     "reason",
     "channel",
     "idempotent_replay",
+    /** Operator Activity detail — never a credential; display name only. */
+    "recipient_display_name",
 ] as const;
 
 /**

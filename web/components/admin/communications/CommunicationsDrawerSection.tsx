@@ -31,6 +31,10 @@ import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communicati
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import type { OpportunityComposeContext } from "@/lib/communications/opportunityComposeTemplates";
 import type { FamilyCommunicationWorkspacePreviewVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 
 type ThreadRow = {
     id: string;
@@ -129,6 +133,10 @@ export interface CommunicationsDrawerSectionProps {
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     /** Current Work Contact Family: post-send returns to What's Next without opening the thread. */
     entryContext?: "current_work" | null;
+    /** Command-driven New Message vs Activity browse/Reply. */
+    composeIntent?: FamilyComposeIntent | null;
+    /** Prefill for New Message (Tour Invitation, etc.). */
+    draftSeed?: FamilyComposeDraftSeed | null;
     className?: string;
     /** Opportunity-only: lightweight starter templates when there is no message history yet. */
     opportunityComposeContext?: OpportunityComposeContext | null;
@@ -1452,6 +1460,8 @@ export default function CommunicationsDrawerSection(props: CommunicationsDrawerS
                 compactActivityLoading={props.embedded}
                 surfaceVariant={props.surfaceVariant}
                 entryContext={props.entryContext}
+                composeIntent={props.composeIntent}
+                draftSeed={props.draftSeed}
             />
         );
     }

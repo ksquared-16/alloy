@@ -31,7 +31,7 @@ export function starterEnrollmentQueueRowVariants(): QueueRowVariant[] {
             label: "Enrolling",
             priority: 30,
             subjectFocus: "active_child",
-            appliesWhen: { stage_key: ["enrolling", "registration", "enrolled"] },
+            appliesWhen: { stage_key: ["enrolling", "registration", "enrolled"], grain: ["candidate", "child"] },
             columns: [],
             fixedControls,
         },

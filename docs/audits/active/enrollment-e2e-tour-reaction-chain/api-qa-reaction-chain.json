@@ -1,0 +1,167 @@
+[
+  {
+    "t": "2026-08-12T20:57:26.110Z",
+    "step": "health",
+    "status": 200
+  },
+  {
+    "t": "2026-08-12T20:57:41.542Z",
+    "step": "baseline",
+    "bookings": [
+      {
+        "id": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+        "status": "confirmed",
+        "start": "2026-08-14T16:00:00+00:00"
+      }
+    ],
+    "activityHead": [
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:48:13.682982+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:47:03.240685+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:46:00.993333+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:37:40.229076+00:00"
+      },
+      {
+        "type": "tour_confirmed",
+        "title": null,
+        "at": "2026-08-12T20:36:57.094+00:00"
+      },
+      {
+        "type": "opportunity_status_changed",
+        "title": null,
+        "at": "2026-08-12T20:36:51.581+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:36:25.689836+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:34:03.786005+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:33:49.911088+00:00"
+      },
+      {
+        "type": "tour_invitation_activated",
+        "title": null,
+        "at": "2026-08-12T20:25:25.192842+00:00"
+      }
+    ],
+    "activityTypes": [
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_confirmed",
+      "opportunity_status_changed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "stage_work_outcome_recorded",
+      "tour_invitation_activated"
+    ],
+    "titles": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  {
+    "t": "2026-08-12T20:57:44.938Z",
+    "step": "reschedule",
+    "status": 400,
+    "booking": null,
+    "err": "tour_bookings: selected slot is not available (overlap, capacity, or rules)"
+  },
+  {
+    "t": "2026-08-12T20:57:54.618Z",
+    "step": "after-reschedule",
+    "hasRescheduled": false,
+    "bookings": [
+      {
+        "id": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+        "status": "confirmed",
+        "start": "2026-08-14T16:00:00+00:00"
+      }
+    ],
+    "titles": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ],
+    "types": [
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_confirmed",
+      "opportunity_status_changed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated"
+    ]
+  },
+  {
+    "t": "2026-08-12T20:58:04.801Z",
+    "step": "cancel",
+    "status": 200,
+    "booking": {
+      "id": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+      "status": "canceled"
+    },
+    "err": null
+  },
+  {
+    "t": "2026-08-12T20:58:15.567Z",
+    "step": "SUMMARY",
+    "activityInvite": true,
+    "activityScheduled": true,
+    "hydrateInvite": true,
+    "reschedulePass": false,
+    "cancelPass": true,
+    "bookingRow": {
+      "id": "0f3ed75f-8102-422e-b0da-2b90cd9c9ca6",
+      "status_key": "canceled",
+      "start_at": "2026-08-14T16:00:00+00:00",
+      "canceled_at": "2026-08-12T20:57:57.083+00:00"
+    },
+    "activeBeforeCancel": true,
+    "activeAfterCancel": false
+  }
+]

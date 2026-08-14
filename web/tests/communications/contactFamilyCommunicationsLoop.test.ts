@@ -76,10 +76,12 @@ describe("Contact Family → Communications loop", () => {
         expect(route).not.toContain("stage transition");
     });
 
-    it("Current Work entryContext skips thread open and refreshes Focus Panel", () => {
+    it("Current Work entryContext defers workspace close until Done acknowledgement", () => {
         const runtime = read("lib/communications/v2/familyWorkspace/useFamilyCommunicationRuntime.ts");
         expect(runtime).toContain('entryContext?: "current_work"');
         expect(runtime).toContain('fromCurrentWork = input.entryContext === "current_work"');
+        expect(runtime).toContain("pendingContactFamilyCompleteRef");
+        expect(runtime).toContain("acknowledgeSendSuccess");
         expect(runtime).toContain("dispatchContactFamilySendComplete");
         expect(runtime).toContain("dispatchOperationalWorkRefresh");
         expect(runtime).toContain("dispatchOpportunityDrawerScopedUpdate");
@@ -89,22 +91,21 @@ describe("Contact Family → Communications loop", () => {
 
         const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
         expect(card).toContain("ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE");
-        expect(card).toContain("setHandoffNotice");
-        expect(card).toContain("closeActionPanel");
+        expect(card).toContain("closeWorkspace()");
+        expect(card).not.toContain("buildContactFamilySendFollowOnNotice");
     });
 
-    it("send review replaces Send footer with Confirm send only", () => {
+    it("send opens shared centered confirmation with Confirm send", () => {
         const view = read("app/adminV2/communications/FamilyCommunicationWorkspaceView.tsx");
-        expect(view).toContain('sendResult?.mode === "preflight"');
-        expect(view).toContain("Ready to send");
-        expect(view).toContain("Confirm send");
-        expect(view).toContain("Back to edit");
-        expect(view).toContain("data-cc-send-confirm=");
-        expect(view).toContain("data-cc-send-confirm-preview");
-        expect(view).toContain('data-cc-composer-footer');
-        expect(view).toMatch(/!\(LIVE_WORKSPACE && sendResult\?\.mode === "preflight"\)/);
-        // Preflight must not leave the normal Send / Send later / BOS footer visible.
-        expect(view).not.toMatch(/preflight[\s\S]{0,200}Send SMS/);
+        expect(view).toContain("FamilySendConfirmationDialog");
+        expect(view).toContain("onConfirmSend");
+        expect(view).toContain("onBackToEdit={onDismissSend}");
+        expect(view).toContain("data-cc-composer-footer");
+        const dialog = read("components/admin/communications/FamilySendConfirmationDialog.tsx");
+        expect(dialog).toContain("Ready to send");
+        expect(dialog).toContain("Confirm send");
+        expect(dialog).toContain("Back to edit");
+        expect(dialog).toContain("data-cc-send-confirm-preview");
     });
 
     it("success copy names channel and recipient without inferring outcomes", () => {
@@ -115,13 +116,11 @@ describe("Contact Family → Communications loop", () => {
         expect(ADMIN_V2_CONTACT_FAMILY_SEND_COMPLETE).toBe("adminv2:contact-family-send-complete");
     });
 
-    it("post-send follow-on explains attempt-only when associated as left_message", () => {
+    it("follow-on helper remains available for attempt association copy (not post-send UI)", () => {
         expect(
             buildContactFamilySendFollowOnNotice({ associated: true, outcome_key: "left_message" }),
         ).toMatch(/stays open/i);
         expect(buildContactFamilySendFollowOnNotice({ associated: false })).toBeNull();
-        const card = read("components/admin/focusPanel/cards/CurrentWorkCard.tsx");
-        expect(card).toContain("buildContactFamilySendFollowOnNotice");
     });
 
     it("What's Next presents dominant action separately from supporting commands", () => {

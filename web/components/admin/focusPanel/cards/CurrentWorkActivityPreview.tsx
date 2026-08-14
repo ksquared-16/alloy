@@ -113,10 +113,10 @@ export default function CurrentWorkActivityPreview({
                                         <span className="alloy-os-currentwork__activity-preview-when">{item.occurredAt}</span>
                                     :   null}
                                     <span className="alloy-os-currentwork__activity-preview-label">{item.label}</span>
-                                    {item.category ?
-                                        <span className="alloy-os-currentwork__activity-preview-detail">{item.category}</span>
-                                    : item.detail ?
+                                    {item.detail ?
                                         <span className="alloy-os-currentwork__activity-preview-detail">{item.detail}</span>
+                                    : item.category ?
+                                        <span className="alloy-os-currentwork__activity-preview-detail">{item.category}</span>
                                     :   null}
                                 </span>
                             </li>

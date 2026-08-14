@@ -19,7 +19,7 @@ import { isValidatorAllowedQueueRecordFieldRefKey } from "@/lib/layout/queueReco
 const root = resolve(__dirname, "../..");
 
 describe("fieldSurfaceAvailability", () => {
-    it("marks gender available on drawer and forms but not queue rows", () => {
+    it("marks gender available on drawer, forms, and queue rows", () => {
         const input = {
             entity_type: "customer_member",
             field_key: "gender",
@@ -36,10 +36,10 @@ describe("fieldSurfaceAvailability", () => {
         const bySurface = Object.fromEntries(rows.map((r) => [r.surface, r.status]));
         expect(bySurface.drawer).toBe("available");
         expect(bySurface.forms).toBe("available");
-        expect(bySurface.queue_row).toBe("unavailable");
+        expect(bySurface.queue_row).toBe("available");
     });
 
-    it("marks gender available on focus panel and business process with child context", () => {
+    it("marks gender available on focus panel, business process, and queue rows with child context", () => {
         const input = {
             entity_type: "customer_member",
             field_key: "gender",
@@ -60,18 +60,18 @@ describe("fieldSurfaceAvailability", () => {
         const bySurface = Object.fromEntries(contextual.map((r) => [r.surface, r.status]));
         expect(bySurface.focus_panel).toBe("available");
         expect(bySurface.business_process).toBe("available");
-        expect(bySurface.queue_row).toBe("unavailable");
-        expect(unavailableSurfacesForField(input).some((r) => r.surface === "queue_row")).toBe(true);
+        expect(bySurface.queue_row).toBe("available");
+        expect(unavailableSurfacesForField(input).some((r) => r.surface === "queue_row")).toBe(false);
     });
 
-    it("child.gender ref is not on queue validator allow-list", () => {
-        expect(isValidatorAllowedQueueRecordFieldRefKey("child.gender", false)).toBe(false);
-        expect(isValidatorAllowedQueueRecordFieldRefKey("child.gender", true)).toBe(false);
-        expect(isQueueCompositionFieldResolverBacked("child.gender")).toBe(false);
+    it("child.gender ref is on queue validator allow-list and composition-backed", () => {
+        expect(isValidatorAllowedQueueRecordFieldRefKey("child.gender", false)).toBe(true);
+        expect(isValidatorAllowedQueueRecordFieldRefKey("child.gender", true)).toBe(true);
+        expect(isQueueCompositionFieldResolverBacked("child.gender")).toBe(true);
     });
 
-    it("queue composition adapter excludes gender from builder fields", () => {
-        const fields = availableFieldsForZone("primary", false, [
+    it("queue composition adapter includes gender in children zone builder fields", () => {
+        const fields = availableFieldsForZone("children", false, [
             {
                 entity_type: "customer_member",
                 field_key: "gender",
@@ -82,7 +82,7 @@ describe("fieldSurfaceAvailability", () => {
                 is_visible_in_drawer: true,
             },
         ]);
-        expect(fields.some((f) => f.key === "child.gender")).toBe(false);
+        expect(fields.some((f) => f.key === "child.gender")).toBe(true);
     });
 
     it("forms picker includes customer_member gender from registry", () => {

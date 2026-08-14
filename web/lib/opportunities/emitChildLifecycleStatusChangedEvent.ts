@@ -20,6 +20,8 @@ export type EmitChildLifecycleStatusChangedEventParams = {
     reason?: string | null;
     rowGrain?: "child" | "candidate" | "case" | null;
     placementCandidateId?: string | null;
+    /** Operator-facing child identity for Activity copy (e.g. "Wrigley Kurzman"). */
+    childDisplayName?: string | null;
     metadata?: Record<string, unknown>;
 };
 
@@ -58,6 +60,9 @@ export async function emitChildLifecycleStatusChangedEvent(
         ...(params.reason ? { reason: params.reason } : {}),
         ...(params.rowGrain ? { row_grain: params.rowGrain } : {}),
         ...(params.placementCandidateId ? { placement_candidate_id: params.placementCandidateId } : {}),
+        ...(params.childDisplayName && String(params.childDisplayName).trim()
+            ? { child_display_name: String(params.childDisplayName).trim() }
+            : {}),
         ...(params.metadata ?? {}),
     };
     if (params.actorUserId != null && String(params.actorUserId).trim() !== "") {

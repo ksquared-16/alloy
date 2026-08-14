@@ -6334,21 +6334,29 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   max-height: min(70vh, 640px);
 }
 
-/* What's Next → Contact Family: execution-focused compact variant.
- * Composer stays visible; history is a bounded internal scroll (latest messages).
- * Activity → Communications keeps the richer tall workspace. */
+/* What's Next → Contact Family / Send Message / Tour Invitation: New Message focused.
+ * History rail stays hidden while composing; composer body gets usable height. */
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] {
   max-height: min(70vh, 640px);
+}
+.alloy-os-currentwork__composer-host [data-work-compose-intent="new_message"] [data-cc-topic-rail],
+.alloy-os-currentwork__composer-host [data-cc-compose-intent="new_message"] [data-cc-topic-rail] {
+  display: none !important;
 }
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="conversation"] > [data-cc-ws-section="timeline"],
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="timeline"] {
   flex: 0 1 auto;
-  max-height: 9.5rem;
+  max-height: 6.5rem;
   min-height: 0;
   overflow-y: auto;
 }
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 12rem;
+}
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] [contenteditable="true"],
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="composer"] textarea {
+  min-height: 8.5rem;
 }
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-ws-column="threadlist"],
 .alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] [data-cc-topic-rail] {
@@ -6357,6 +6365,17 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   min-width: 9rem;
   max-width: 11rem;
   max-height: min(70vh, 640px);
+}
+
+/* Bend Pine primary Send on Current Work New Message footer */
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] button:not([disabled]):has(svg.lucide-send) {
+  background-color: rgba(46, 125, 92, 0.12);
+  border-color: rgba(46, 125, 92, 0.35);
+  color: #1f5c42;
+}
+.alloy-os-currentwork__composer-host [data-cc-entry-context="current_work"] button:not([disabled]):has(svg.lucide-send):hover {
+  background-color: rgba(46, 125, 92, 0.18);
+  border-color: rgba(46, 125, 92, 0.5);
 }
 
 /* Mode panel hosts Linked overlays relative to the Focus Panel column. */
@@ -6458,29 +6477,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   -webkit-overflow-scrolling: touch;
 }
 
-/* Capability compose: Close sits on the What's Next header (top-right), not under the title. */
-.alloy-os-currentwork[data-capability-active="true"] {
-  position: relative;
-}
-.alloy-os-currentwork__capability-close {
-  position: absolute;
-  top: 10px;
-  right: 12px;
-  z-index: 3;
-  margin: 0;
-  padding: 2px 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 62%, #64748b);
-}
-.alloy-os-currentwork__capability-close:hover,
-.alloy-os-currentwork__capability-close:focus-visible {
-  color: var(--alloy-os-bend-pine, #00a283);
-}
+/* Capability compose: Close lives on outside-click / Esc (depth scrim), not a
+ * floating control outside the elevated card chrome. */
 
 /* Generic form-delivery surface (send-form capability). */
 .alloy-os-formdelivery {
@@ -6573,7 +6571,6 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-currentwork[data-capability-active="true"] .alloy-os-ucard__header {
   flex: 0 0 auto;
   padding-bottom: 6px;
-  padding-right: 52px; /* room for capability Close */
 }
 /* Cap the centered card to the viewport; height follows content (max-content on the base rule). */
 .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
@@ -6925,6 +6922,72 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   box-sizing: border-box;
 }
 
+/* Tour ▾ — Alloy platform menu (shared DropdownMenu + restrained River Stone chrome). */
+.alloy-os-currentwork__tour-menu {
+  z-index: 60;
+  min-width: 11.5rem;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+  background: #fff;
+  color: var(--alloy-os-midnight, #273f52);
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.06),
+    0 8px 20px -12px rgba(15, 23, 42, 0.22);
+}
+
+.alloy-os-currentwork__tour-menu-item,
+.alloy-os-currentwork__tour-menu [role="menuitem"] {
+  min-height: 2rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--alloy-os-midnight, #273f52);
+  cursor: pointer;
+}
+
+.alloy-os-currentwork__tour-menu-item:focus,
+.alloy-os-currentwork__tour-menu-item[data-highlighted],
+.alloy-os-currentwork__tour-menu [role="menuitem"]:focus,
+.alloy-os-currentwork__tour-menu [role="menuitem"][data-highlighted],
+.alloy-os-currentwork__tour-menu-item:hover,
+.alloy-os-currentwork__tour-menu [role="menuitem"]:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+  outline: none;
+}
+
+.alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] [data-work-tour-menu="true"] {
+  /* Portaled menu — width follows content; do not stretch to trigger cell. */
+  width: max-content;
+  min-width: 11.5rem;
+  max-width: min(18rem, calc(100vw - 24px));
+}
+
+.alloy-os-currentwork__helpful-row > [data-work-tour-grouped="true"] [data-work-tour-menu="true"] button,
+.alloy-os-currentwork__tour-menu-item {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* Tour invitation compose — match communications channel + equal footer actions */
+[data-tour-invitation-compose="true"] .alloy-os-tour-invitation-channels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  width: 100%;
+}
+[data-tour-invitation-compose="true"] .alloy-os-tour-invitation-channels > button {
+  width: 100%;
+  justify-content: center;
+}
+[data-tour-invitation-compose="true"] .alloy-os-tour-invitation-footer > button {
+  width: 100%;
+  justify-content: center;
+}
+
 .alloy-os-currentwork__helpful-action {
   display: inline-flex;
   align-items: center;
@@ -7070,9 +7133,22 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   grid-column: 1 / -1;
 }
 
-/* Recent Activity alone stays in the right column so the slot is stable across stages. */
-.alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child {
-  grid-column: 2;
+/* After "View work items" removal: a lone Recent activity block stays left-aligned,
+ * not parked in the right column of the two-up grid (that read as centered). */
+.alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child,
+.alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__focused-activity:only-child {
+  grid-column: 1 / -1;
+  justify-self: stretch;
+  text-align: left;
+}
+
+.alloy-os-currentwork__focused-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
 }
 
 @media (max-width: 640px) {
@@ -7080,7 +7156,8 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child {
+  .alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__recent-activity:only-child,
+  .alloy-os-currentwork__still-activity-row > .alloy-os-currentwork__focused-activity:only-child {
     grid-column: 1;
   }
 }
@@ -7179,6 +7256,14 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+.alloy-os-currentwork__current-work-label {
+  margin: 0 0 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
 }
 
 .alloy-os-currentwork__progress-summary {

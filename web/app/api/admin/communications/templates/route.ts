@@ -18,7 +18,7 @@ import {
  */
 
 const TEMPLATE_COLS =
-    "id, org_id, name, description, category, channel, status, current_version_id, created_by, updated_by, created_at, updated_at";
+    "id, org_id, name, description, category, channel, status, current_version_id, system_key, created_by, updated_by, created_at, updated_at";
 const VERSION_COLS = "id, template_id, version_number, subject, body, token_paths, created_at";
 
 /** GET /api/admin/communications/templates — list org templates (optional category/channel/status filters). */
@@ -40,6 +40,18 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 100, 1), 200);
     const supabase = createAdminClient();
     const orgId = ctx.orgId;
+
+    // Ensure Tour system templates exist before listing (idempotent seed).
+    try {
+        const { ensureOrgTourCommunicationTemplates } = await import("@/lib/tours/comms/tourSystemTemplates");
+        await ensureOrgTourCommunicationTemplates({
+            supabase,
+            orgId,
+            actorUserId: ctx.userId,
+        });
+    } catch (e) {
+        console.warn("[templates] tour system provision skipped", e instanceof Error ? e.message : e);
+    }
 
     let query = supabase
         .from("communication_templates")

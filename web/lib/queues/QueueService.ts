@@ -50,7 +50,11 @@ import {
     assertLifecycleStageOpportunityQueryHasStatusFilters,
     LifecycleStageQueueFiltersEmptyError,
 } from "@/lib/lifecycle/lifecycleStageQueueFilters";
-import { resolveWorkUnitRowListUi } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import {
+    resolveWorkUnitRowListUi,
+    isLifecycleStageWorkUnitKey,
+    stageKeyFromLifecycleWorkUnitMetadata,
+} from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import {
     fetchEffectiveStatusDefinitions,
     fetchEffectiveStatusDefinitionsTagged,
@@ -572,6 +576,44 @@ function buildOpportunityPlan(
     }
 
     return { ops, sort, calendar_meta: useCalendarMeta ? resolved.calendar_meta : undefined };
+}
+
+/**
+ * Lifecycle stage work units (and case-grain builder membership) select by persisted
+ * `opportunities.stage_key` after enrollment status collapse. Legacy lane status filters
+ * (`open` / `tour_scheduled`) must not empty the lane when the family is already on the stage.
+ *
+ * Exception — Tour lane: membership is active `tour_bookings` (operational fact), so
+ * Waitlist subjects with a booked Tour overlap Tours without leaving Waitlist.
+ */
+function applyLifecycleStageOpportunityOps(
+    ops: OpportunityQueryPlanOp[],
+    params: {
+        membership: OpportunityQueueLaneRouting["builderMembership"];
+        workUnitMetadata: unknown | null;
+        workUnitKey: string | null;
+    },
+): OpportunityQueryPlanOp[] {
+    let stageKey = "";
+    if (params.membership?.subject_type === "case") {
+        stageKey = String(params.membership.stage_key ?? "").trim();
+    }
+    if (!stageKey) {
+        stageKey = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata)?.trim() ?? "";
+    }
+    if (!stageKey && isLifecycleStageWorkUnitKey(params.workUnitKey)) {
+        stageKey = String(params.workUnitKey).slice("lifecycle_wu_".length).trim();
+    }
+    const isLifecycleWu =
+        isLifecycleStageWorkUnitKey(params.workUnitKey)
+        || Boolean(stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata));
+    if (!stageKey || !isLifecycleWu) return ops;
+
+    const withoutStatus = ops.filter((op) => !(op.kind === "in" && op.column === "status_key"));
+    if (withoutStatus.some((op) => op.kind === "eq" && op.column === "stage_key")) {
+        return withoutStatus;
+    }
+    return [{ kind: "eq", column: "stage_key", value: stageKey }, ...withoutStatus];
 }
 
 function jobFilterToOps(f: QueueFilter, dayBounds: OrgLocalDayUtcBounds): JobQueryPlanOp[] {
@@ -3235,7 +3277,11 @@ export async function getWorkUnitQueueSummaries(params: {
         let calendar_meta: QueueOperationalCalendarMeta | undefined;
         try {
             const plan = buildOpportunityPlan(q, refUtc, operationalDay);
-            ops = plan.ops;
+            ops = applyLifecycleStageOpportunityOps(plan.ops, {
+                membership: laneRouting.builderMembership,
+                workUnitMetadata,
+                workUnitKey,
+            });
             sort = plan.sort;
             calendar_meta = plan.calendar_meta;
             guardLifecycleStageOpportunityQueryFilters({
@@ -4366,7 +4412,12 @@ export async function getWorkUnitQueueItems(params: {
         }
     }
 
-    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    const { ops: planOps, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    let ops = applyLifecycleStageOpportunityOps(planOps, {
+        membership: laneRouting.builderMembership,
+        workUnitMetadata,
+        workUnitKey,
+    });
     guardLifecycleStageOpportunityQueryFilters({
         workUnitKey,
         opportunityScopeMode: opportunityScopeBundle?.scope.mode,

@@ -1,0 +1,62 @@
+[
+  {
+    "t": "2026-08-12T20:51:44.585Z",
+    "step": "health",
+    "status": 200
+  },
+  {
+    "t": "2026-08-12T20:51:48.347Z",
+    "step": "activity-api",
+    "status": 200,
+    "types": [
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_confirmed",
+      "opportunity_status_changed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated"
+    ],
+    "hasInvite": true,
+    "hasConfirmed": true
+  },
+  {
+    "t": "2026-08-12T20:51:58.038Z",
+    "step": "drawer-vm",
+    "status": 200,
+    "ok": true,
+    "bookingCount": 1,
+    "bookingStatuses": [
+      "confirmed"
+    ],
+    "activityOnRecord": [
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_confirmed",
+      "opportunity_status_changed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated"
+    ],
+    "hasInviteOnRecord": true,
+    "hasConfirmedOnRecord": true,
+    "phases": [
+      "activity_timeline_hydrate_ms"
+    ]
+  },
+  {
+    "t": "2026-08-12T20:51:58.039Z",
+    "step": "ERROR",
+    "message": "Cannot find package '@/lib' imported from /Users/Kelly/Code/alloy-worktrees/wt5-epp-runtime-convergence/web/[eval1]"
+  }
+]

@@ -1,0 +1,128 @@
+[
+  {
+    "t": "2026-08-12T21:27:02.189Z",
+    "step": "prewarm",
+    "status": 200,
+    "bookings": 1,
+    "activity": 24
+  },
+  {
+    "t": "L Lennon Kurzman 1 / 1 Adjust 4/2/2024 (2y4m) 2d",
+    "step": "row"
+  },
+  {
+    "t": "2026-08-12T21:27:27.389Z",
+    "step": "poll",
+    "i": 0,
+    "marker": "pending",
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:27:29.392Z",
+    "step": "poll",
+    "i": 1,
+    "marker": "pending",
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:27:31.396Z",
+    "step": "poll",
+    "i": 2,
+    "marker": "pending",
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:27:33.400Z",
+    "step": "poll",
+    "i": 3,
+    "marker": "pending",
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:27:35.404Z",
+    "step": "poll",
+    "i": 4,
+    "marker": "pending",
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:28:22.432Z",
+    "step": "poll",
+    "i": 5,
+    "marker": null,
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:29:09.437Z",
+    "step": "poll",
+    "i": 6,
+    "marker": null,
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:29:56.441Z",
+    "step": "poll",
+    "i": 7,
+    "marker": null,
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:30:43.450Z",
+    "step": "poll",
+    "i": 8,
+    "marker": null,
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:31:12.982Z",
+    "step": "poll",
+    "i": 9,
+    "marker": null,
+    "displayVmId": null,
+    "runtimeError": null,
+    "bookingCount": null,
+    "activityCount": null,
+    "settlementSubjectId": "d097e1a8-c3c0-4c51-a113-2275b009b9a9"
+  },
+  {
+    "t": "2026-08-12T21:31:14.983Z",
+    "step": "ERROR",
+    "message": "page.evaluate: Target page, context or browser has been closed"
+  }
+]

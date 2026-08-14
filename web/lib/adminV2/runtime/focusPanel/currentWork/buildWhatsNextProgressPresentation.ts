@@ -290,6 +290,23 @@ export function selectCompactProgressSequence(
 }
 
 /**
+ * Sequential progress is for an operational flow the operator has already entered
+ * (at least one completed step) or for repeated attempts.
+ *
+ * Optional concurrent stage-work templates with nothing completed yet (e.g. open
+ * "review" + planned "offer") must not paint as a fake mini-lifecycle / stage ladder.
+ */
+export function isMeaningfulWorkProgressSequence(
+    steps: WhatsNextSequenceStep[],
+    presentation: WhatsNextProgressPresentation,
+): boolean {
+    if (presentation.mode === "repeated") return presentation.items.length > 0;
+    if (steps.some((step) => step.state === "completed")) return true;
+    if (presentation.collapsedEarlierLabel) return true;
+    return false;
+}
+
+/**
  * Build progress presentation from runtime → attempt policy → checklist fallback.
  */
 export function buildWhatsNextProgressPresentation(args: {
@@ -299,7 +316,11 @@ export function buildWhatsNextProgressPresentation(args: {
 }): WhatsNextProgressPresentation | null {
     const fromRuntime = sequenceStepsFromStageRuntime(args.runtime ?? null);
     if (fromRuntime.length > 1) {
-        return selectCompactProgressSequence(fromRuntime);
+        const selected = selectCompactProgressSequence(fromRuntime);
+        if (selected && isMeaningfulWorkProgressSequence(fromRuntime, selected)) {
+            return selected;
+        }
+        // Fall through — optional concurrent templates are not a progress strip.
     }
 
     // Single runtime item may still be repeated work via attempt policy.
@@ -311,13 +332,16 @@ export function buildWhatsNextProgressPresentation(args: {
     }
 
     const fromChecklist = sequenceStepsFromStageWorkChecklist(args.checklist);
-    if (fromChecklist.length > 0) {
-        return selectCompactProgressSequence(fromChecklist);
+    if (fromChecklist.length > 1) {
+        const selected = selectCompactProgressSequence(fromChecklist);
+        if (selected && isMeaningfulWorkProgressSequence(
+            sequenceStepsFromStageWorkChecklist(args.checklist),
+            selected,
+        )) {
+            return selected;
+        }
     }
 
-    if (fromRuntime.length === 1) {
-        return selectCompactProgressSequence(fromRuntime);
-    }
-
+    // Single open work item is Current Work — not a lifecycle progress strip.
     return null;
 }

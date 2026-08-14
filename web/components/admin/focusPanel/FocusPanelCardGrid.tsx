@@ -89,6 +89,18 @@ export default function FocusPanelCardGrid({
     const [columns, setColumns] = useState<1 | 2 | 3 | 4>(2);
     const [widthPx, setWidthPx] = useState(0);
     const composed = !!composeCards && composeCards.length > 0;
+    // Ignore backdrop clicks briefly after elevation so the same pointer gesture that
+    // opened a Focus Card (Message / Tour / etc.) cannot immediately dismiss it.
+    const [backdropArmed, setBackdropArmed] = useState(false);
+    useEffect(() => {
+        if (!elevatedCellKey) {
+            setBackdropArmed(false);
+            return;
+        }
+        setBackdropArmed(false);
+        const t = window.setTimeout(() => setBackdropArmed(true), 450);
+        return () => window.clearTimeout(t);
+    }, [elevatedCellKey]);
 
     // Depth = overlay, not layout. When a card elevates its content lifts out of the
     // cell (absolute via CSS), which would collapse the cell and let neighbors reflow.
@@ -293,7 +305,11 @@ export default function FocusPanelCardGrid({
             className="alloy-os-fp-depth-scrim"
             aria-label="Return to work surface"
             data-fp-depth-scrim="true"
-            onClick={onBackdropClick}
+            data-fp-scrim-armed={backdropArmed ? "true" : "false"}
+            onClick={() => {
+                if (!backdropArmed) return;
+                onBackdropClick?.();
+            }}
         />
     ) : null;
 

@@ -2,6 +2,10 @@ import { fromZonedTime, toZonedTime } from "date-fns-tz";
 
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import type { TourCommsChannel, TourCommsConfig, TourCommsQuietHoursConfig, TourReminderOffset } from "@/lib/tours/comms/tourCommsConfig";
+import {
+    evaluateTourAutomationConditions,
+    type TourAutomationConditionFacts,
+} from "@/lib/tours/comms/tourCommsAutomationConditions";
 import type { TourBookingStatusKey } from "@/lib/tours/bookings/types";
 
 export type TourReminderSuppressionReason =
@@ -9,6 +13,7 @@ export type TourReminderSuppressionReason =
     | "booking_not_eligible"
     | "comms_disabled"
     | "channel_disabled"
+    | "conditions_not_met"
     | "past"
     | "after_tour_start"
     | "too_close_to_start"
@@ -197,6 +202,8 @@ export function buildTourReminderSchedulePlans(input: {
     config: TourCommsConfig;
     orgTimezoneIana?: string | null;
     now: Date;
+    /** Opportunity/booking facts for automation_conditions_v1 (AND). */
+    conditionFacts?: TourAutomationConditionFacts | null;
 }): TourReminderSchedulePlan[] {
     if (isTourBookingTerminalForReminders(input.bookingStatusKey)) {
         return [];
@@ -206,6 +213,26 @@ export function buildTourReminderSchedulePlans(input: {
     }
     if (!input.config.enabled) {
         return [];
+    }
+
+    const conditions = input.config.automation_conditions_v1 ?? [];
+    if (conditions.length > 0) {
+        const facts = input.conditionFacts ?? {};
+        if (!evaluateTourAutomationConditions(conditions, facts).pass) {
+            const plans: TourReminderSchedulePlan[] = [];
+            for (const offset of input.config.reminder_offsets) {
+                for (const channel of offset.channels) {
+                    plans.push({
+                        kind: "suppressed",
+                        channel,
+                        reminderKey: offset.reminder_key,
+                        offsetMinutes: offset.offset_minutes,
+                        reason: "conditions_not_met",
+                    });
+                }
+            }
+            return plans;
+        }
     }
 
     const plans: TourReminderSchedulePlan[] = [];

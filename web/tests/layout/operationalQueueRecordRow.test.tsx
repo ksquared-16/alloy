@@ -257,7 +257,8 @@ describe("OperationalQueueRecordRow", () => {
         expect(html).toContain('data-queue-child-row="true"');
         expect(html).toContain("queue-record-field__inline-label");
         expect(html).toContain("DOB:");
-        expect(html).toContain("Mar 15, 2024");
+        expect(html).toMatch(/3\/15\/2024 \(/);
+        expect(html).not.toContain("2024-03-15");
         expect(html).toContain("Alex Johnson");
         expect(html).toContain("Sam Johnson");
         expect(html).not.toContain("each child would appear on its own row");

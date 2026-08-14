@@ -196,7 +196,8 @@ describe("queue record layout runtime fidelity", () => {
         expect(dobField.type === "repeated_record_block" ? dobField.fields[1] : null).toBeTruthy();
         if (dobField.type !== "repeated_record_block") throw new Error("expected repeat block");
         const resolved = resolveQueueRecordField(dobField.fields[1]!, childRow as never);
-        expect(resolved.display).toBe("Mar 15, 2024");
+        expect(resolved.display).toMatch(/^3\/15\/2024 \(/);
+        expect(resolved.display).not.toBe("2024-03-15");
         expect(resolved.display).not.toBe("(2y)");
     });
 

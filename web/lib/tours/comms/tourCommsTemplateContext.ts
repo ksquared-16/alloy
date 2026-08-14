@@ -36,6 +36,13 @@ export type TourCommsTemplateContext = {
     invitationActionUrl?: string | null;
     /** Single-use decline link. */
     declineUrl?: string | null;
+    /** Attendance affirmation ("Confirm I'm coming") — reminder CTA. */
+    confirmAttendanceUrl?: string | null;
+    /**
+     * Optional SMS fragment when ask_parent_confirm_attendance is ON.
+     * Empty when confirmation is disabled (informational reminder only).
+     */
+    confirmReplyInstruction?: string | null;
     /** Pre-formatted labels (optional); computed via {@link formatTourCommsDateTimeLabels} when omitted. */
     tourDateLabel?: string | null;
     tourTimeLabel?: string | null;
@@ -147,5 +154,7 @@ export function buildTourCommsMergeFields(ctx: TourCommsTemplateContext): Record
         tour_options_block: String(ctx.tourOptionsBlock ?? "").trim(),
         invitation_action_url: String(ctx.invitationActionUrl ?? "").trim(),
         decline_url: String(ctx.declineUrl ?? "").trim(),
+        confirm_attendance_url: String(ctx.confirmAttendanceUrl ?? "").trim(),
+        confirm_reply_instruction: String(ctx.confirmReplyInstruction ?? "").trim(),
     };
 }

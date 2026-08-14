@@ -13,7 +13,7 @@
  */
 
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourParentView";
 import {
@@ -21,7 +21,6 @@ import {
     formatParentDayLabel,
     formatParentMonthLabel,
     formatParentTimeOnly,
-    formatParentTourTime,
     tourSlotDayKey,
 } from "@/lib/tours/public/tourParentView";
 
@@ -31,7 +30,6 @@ type ResolveJson = { ok?: boolean; view?: TourParentView };
  * How many times to show at once. A full availability set runs to dozens of rows,
  * which reads as work rather than an invitation. The parent can ask for more.
  */
-const VISIBLE_SLOTS = 8;
 type SlotsJson = { ok?: boolean; slots?: AvailableTourSlot[] };
 
 /** One authored sentence per failure. The server's own wording never reaches here. */
@@ -39,6 +37,7 @@ const TROUBLE = "We couldn't load this page just now. Please try again in a mome
 const ACTION_TROUBLE = "That didn't go through. Please try again, or reply to our message and we'll sort it out.";
 const GONE = "This link is no longer active. Please reply to our message and we'll send you a new one.";
 const SPENT = "Thanks — we already have your answer. If something doesn't look right, reply to our message and we'll sort it out.";
+const SLOT_GONE = "That time is no longer available. Please choose another.";
 
 export default function TourBookingPublicClient({ token }: { token: string }) {
     const [view, setView] = useState<TourParentView | null>(null);
@@ -138,6 +137,9 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                 case "confirm":
                     path = "/confirm";
                     break;
+                case "confirm_attendance":
+                    path = "/confirm-attendance";
+                    break;
                 case "cancel": {
                     if (!confirmingCancel) {
                         // First press only REVEALS the consequence. Nothing is
@@ -178,6 +180,9 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                     setBusy(false);
                     return;
                 }
+                default:
+                    setBusy(false);
+                    return;
             }
 
             const res = await fetch(api(path), {
@@ -186,7 +191,28 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                 body: body ? JSON.stringify(body) : undefined,
             });
 
-            if (!res.ok && res.status !== 409) {
+            if (res.status === 409) {
+                let code = "";
+                try {
+                    const j = (await res.json()) as { code?: string };
+                    code = String(j.code ?? "");
+                } catch {
+                    /* ignore */
+                }
+                if (code === "SLOT_UNAVAILABLE" && action.intent === "book") {
+                    setTrouble(SLOT_GONE);
+                    setPick(null);
+                    await loadSlots();
+                    return;
+                }
+                // Spent / already answered — re-read so a successful double-confirm
+                // still lands on the confirmation state when the server allows it.
+                setPick(null);
+                await load();
+                return;
+            }
+
+            if (!res.ok) {
                 setTrouble(res.status === 404 || res.status === 403 ? GONE : ACTION_TROUBLE);
                 return;
             }
@@ -201,6 +227,16 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             setBusy(false);
         }
     };
+
+    // Confirm I'm coming links auto-affirm attendance on open (idempotent; once per mount).
+    const autoAttendanceRan = useRef(false);
+    useEffect(() => {
+        if (!loaded || busy || autoAttendanceRan.current) return;
+        if (view?.autoIntent !== "confirm_attendance") return;
+        autoAttendanceRan.current = true;
+        void act({ intent: "confirm_attendance", label: "Confirm I'm coming", tone: "primary" });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot auto intent
+    }, [view?.autoIntent, loaded, busy]);
 
     const loadSlots = async () => {
         const from = new Date();
@@ -232,6 +268,8 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     }
 
     const needsPick = view.actions.some((a) => a.intent === "book");
+    const bookAction = view.actions.find((a) => a.intent === "book") ?? null;
+    const otherActions = view.actions.filter((a) => a.intent !== "book");
 
     return (
         <main className="mx-auto max-w-md space-y-6 p-5 pb-16 pt-6">
@@ -354,6 +392,28 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                         })}
                                     </div>
                                 </div>
+
+                                {pick && bookAction ? (
+                                    <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
+                                        <div className="space-y-0.5">
+                                            <p className="text-[15px] font-semibold text-alloy-midnight">
+                                                {formatParentDayLabel(tourSlotDayKey(pick.startAt, pick.timezone) ?? activeDay)}
+                                            </p>
+                                            <p className="text-[15px] text-alloy-midnight/80">
+                                                {formatParentTimeOnly(pick.startAt, pick.timezone)}
+                                            </p>
+                                            <p className="text-[15px] text-alloy-midnight/70">{view.locationLine}</p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={busy}
+                                            onClick={() => void act(bookAction)}
+                                            className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
+                                        >
+                                            {bookAction.label}
+                                        </button>
+                                    </div>
+                                ) : null}
                             </div>
                         );
                     })()
@@ -395,7 +455,7 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             ) : null}
 
             <div className="space-y-2.5 pt-1">
-                {(confirmingCancel ? [] : view.actions).map((a) => {
+                {(confirmingCancel ? [] : otherActions).map((a) => {
                     const disabled = busy || (needsPick && a.intent === "book" && !pick);
                     const cls =
                         a.tone === "primary"
@@ -418,10 +478,6 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             </div>
 
             {view.notice ? <p className="text-[14px] leading-relaxed text-alloy-midnight/55">{view.notice}</p> : null}
-
-            <p className="pt-2 text-[13px] leading-relaxed text-alloy-midnight/45">
-                No account is needed — this link is just for you.
-            </p>
         </main>
     );
 }

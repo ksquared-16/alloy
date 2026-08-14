@@ -60,6 +60,7 @@ describe("queue row builder library", () => {
         expect(fieldKeys).toContain("inquiry_child.program_category");
         expect(fieldKeys).toContain("child.room");
         expect(fieldKeys).toContain("child.date_of_birth");
+        expect(fieldKeys).toContain("child.gender");
         expect(fieldKeys).not.toContain("child.start_date");
         // Sibling vocabulary is not yet compact-effective — omit until restored.
         expect(fieldKeys).not.toContain("sibling.names");
@@ -94,6 +95,7 @@ describe("queue row builder library", () => {
         const fields = availableFieldsForZone("children", true);
         const keys = fields.map((f) => f.key);
         expect(keys).toContain("child.dob_age");
+        expect(keys).toContain("child.gender");
         expect(keys).toContain("child.location");
         expect(keys).toContain("inquiry_child.program_category");
         expect(keys).toContain("waitlist.siblingContext");

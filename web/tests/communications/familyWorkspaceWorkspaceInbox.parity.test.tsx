@@ -199,13 +199,21 @@ describe("family workspace workspace_inbox parity", () => {
         await act(async () => {
             buttonByText(el, "Reply").click();
         });
-        const textarea = el.querySelector('textarea[aria-label="Message body"]') as HTMLTextAreaElement;
-        expect(textarea).toBeTruthy();
+        const bodyEl =
+            (el.querySelector('[aria-label="Message body"][contenteditable="true"]') as HTMLElement | null)
+            ?? (el.querySelector('textarea[aria-label="Message body"]') as HTMLTextAreaElement | null);
+        expect(bodyEl).toBeTruthy();
 
         await act(async () => {
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
-            setter?.call(textarea, "Please review the packet.");
-            textarea.dispatchEvent(new Event("input", { bubbles: true }));
+            if (bodyEl instanceof HTMLTextAreaElement) {
+                const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                setter?.call(bodyEl, "Please review the packet.");
+                bodyEl.dispatchEvent(new Event("input", { bubbles: true }));
+            } else if (bodyEl) {
+                bodyEl.focus();
+                bodyEl.textContent = "Please review the packet.";
+                bodyEl.dispatchEvent(new InputEvent("input", { bubbles: true }));
+            }
         });
 
         await act(async () => {
@@ -213,7 +221,8 @@ describe("family workspace workspace_inbox parity", () => {
             await Promise.resolve();
         });
         await flush();
-        expect(el.textContent).toContain("Review before sending");
+        expect(el.textContent).toContain("Ready to send");
+        expect(el.querySelector("[data-cc-send-confirm-dialog='true']")).toBeTruthy();
 
         await act(async () => {
             buttonByText(el, "Confirm send").click();
@@ -222,8 +231,17 @@ describe("family workspace workspace_inbox parity", () => {
         });
         await flush();
 
+        expect(el.textContent).toMatch(/Message sent|Tour invitation sent/);
+        expect(el.querySelector("[data-cc-send-success='true']")).toBeTruthy();
+
+        await act(async () => {
+            buttonByText(el, "Done").click();
+            await Promise.resolve();
+        });
+        await flush();
+
         expect(el.textContent).toContain("Reply confirmed");
         expect(el.querySelector('[data-cc-reply-collapsed]')).toBeTruthy();
-        expect(el.querySelector('textarea[aria-label="Message body"]')).toBeFalsy();
+        expect(el.querySelector('[aria-label="Message body"]')).toBeFalsy();
     });
 });

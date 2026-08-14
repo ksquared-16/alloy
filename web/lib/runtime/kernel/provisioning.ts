@@ -58,8 +58,14 @@ export type PreparationTerminal = {
  * inconsistent runtime." So the deadline must never fire on mere slowness — it sits far above the
  * cold Operational Commit ceiling (≤1200 ms p95) and exists only to conclude a preparation that will
  * not conclude itself. It replaces the deleted 2.5 s reveal timer, which committed regardless of truth.
+ *
+ * Floor (60s): Work View lens switches share this deadline. Measured D1 compose on the Enrollment
+ * surface regularly lands in the 7–20s band under ordinary local load (family All / Tours and child
+ * Waitlist). A 10s floor concluded still-in-flight answers as `error`, wiping a held same-target
+ * queue ("preparation did not terminate within 10000 ms") while Settlement pills still showed counts.
+ * 60s matches the provisioning prefetch TTL band and stays a NON-TERMINATION floor, not a latency budget.
  */
-export const PROVISIONING_DEADLINE_MS = 10_000;
+export const PROVISIONING_DEADLINE_MS = 60_000;
 
 /**
  * The scope at which coarser-movement SUPERSESSION is normalised: a movement at LENS scope or coarser

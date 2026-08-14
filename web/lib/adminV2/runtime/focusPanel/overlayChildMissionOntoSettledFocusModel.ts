@@ -9,6 +9,7 @@
 
 import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
 import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { mergeSubjectIdentityTruthOntoSettled } from "@/lib/adminV2/runtime/focusPanel/mergeSubjectIdentityTruthOntoSettled";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
@@ -88,9 +89,11 @@ export function overlayChildMissionOntoSettledFocusModel(
                 },
             },
             truth: {
-                ...settled.context.truth,
+                ...mergeSubjectIdentityTruthOntoSettled(
+                    settled.context.truth,
+                    commitCritical.subjectIdentityTruth,
+                ),
                 ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
-                ...(commitCritical.subjectIdentityTruth ?? {}),
             },
         },
         cardModels,

@@ -203,7 +203,7 @@ export type OpportunityDrawerViewModel = {
     summaries: {
         tasks: InquirySummaryTaskPreviewPayload;
         /** Active tour_bookings rows from first-paint compose (tour block + lifecycle bar). */
-        active_tour_bookings: TourBookingRow[];
+            active_tour_bookings: TourBookingRow[];
         reminders: RemindersSummaryVm;
         bos: BosSummaryVm | null;
         attention: AttentionSummaryVm | null;

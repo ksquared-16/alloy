@@ -14,10 +14,13 @@ function randomShortCode(length = 8): string {
 }
 
 /** Public path for SMS (uses short_code when present). */
-export function buildShortActionLinkUrl(shortCode: string): string {
+export function buildShortActionLinkUrl(shortCode: string, originOverride?: string | null): string {
     const code = String(shortCode ?? "").trim();
     if (!code) return "";
-    const root = getPublicAppOrigin();
+    const override = String(originOverride ?? "")
+        .trim()
+        .replace(/\/$/, "");
+    const root = override || getPublicAppOrigin() || "";
     return root ? `${root}/a/${code}` : `/a/${code}`;
 }
 

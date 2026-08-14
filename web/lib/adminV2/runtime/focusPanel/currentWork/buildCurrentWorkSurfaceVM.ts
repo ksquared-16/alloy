@@ -445,7 +445,8 @@ function mergeActionVms(
 
 /**
  * When a tour booking already exists, What's Next must not keep advertising "Schedule tour".
- * Rewrite schedule_tour → reschedule_tour so the CTA matches Tour card / helpful-action truth.
+ * Rewrite schedule_tour → reschedule_tour and ensure Cancel Tour is available from authoritative
+ * booking state (not stage alone).
  */
 export function alignTourScheduleActionForBookingState(
     action: CurrentWorkActionVM,
@@ -458,8 +459,54 @@ export function alignTourScheduleActionForBookingState(
         ...action,
         key: "reschedule_tour",
         handlerKey: "reschedule_tour",
-        label: "Reschedule tour",
+        label: "Reschedule Tour",
     };
+}
+
+/** Align the full Tour supporting-action list to authoritative booking presence. */
+export function alignTourSupportingActionsForBookingState(
+    actions: CurrentWorkActionVM[],
+    tour: { scheduled: boolean; bookingId: string | null },
+): CurrentWorkActionVM[] {
+    const scheduled = tour.scheduled === true;
+    const bookingId = (tour.bookingId ?? "").trim() || null;
+
+    let next = actions
+        .map((action) => alignTourScheduleActionForBookingState(action, scheduled))
+        .filter((action) => {
+            const key = (action.handlerKey || action.key || "").trim();
+            if (scheduled && key === "schedule_tour") return false;
+            if (!scheduled && (key === "reschedule_tour" || key === "cancel_tour")) return false;
+            return true;
+        });
+
+    if (scheduled && bookingId && !next.some((a) => (a.handlerKey || a.key).trim() === "cancel_tour")) {
+        next = [
+            ...next,
+            {
+                key: "cancel_tour",
+                label: "Cancel Tour",
+                description: "Cancel the scheduled tour",
+                category: "supporting",
+                placement: "current_work_supporting",
+                handlerKey: "cancel_tour",
+                actionRef: bookingId,
+                resolved: null,
+            },
+        ];
+    }
+
+    // Prefer Reschedule / Cancel labels in title case for the Tour menu.
+    return next.map((action) => {
+        const key = (action.handlerKey || action.key || "").trim();
+        if (key === "reschedule_tour" && action.label.toLowerCase().includes("reschedule")) {
+            return { ...action, label: "Reschedule Tour" };
+        }
+        if (key === "cancel_tour") {
+            return { ...action, label: "Cancel Tour", actionRef: action.actionRef || bookingId };
+        }
+        return action;
+    });
 }
 
 /** Config-owned helpful actions only — never invent from record-header registry placement. */
@@ -694,10 +741,16 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         dueLabel: context.signals.work.primary?.dueLabel ?? null,
     });
 
-    const title =
+    const stageLabel = runtime?.stage_label?.trim() || null;
+    const workTitle =
         templateConfig?.title?.trim()
         ?? primaryWorkItem?.label?.trim()
-        ?? (runtime && checklist.length > 0 ? runtime.stage_label?.trim() : null)
+        ?? null;
+    // Stage owns process position; work owns operational detail. Prefer stage label so
+    // What's Next does not paint Current Work (e.g. "Review waitlist position") as lifecycle.
+    const title =
+        stageLabel
+        ?? workTitle
         ?? "No current work configured";
 
     const description =
@@ -776,13 +829,18 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
     // Command integrity (Slice F): thread each action's resolved execution state onto the VM so
     // the card renders enabled only what is provably executable, and config errors stay observable.
     const tourScheduled = context.signals.tour.scheduled === true;
+    const tourBookingId = context.signals.tour.bookingId ?? null;
     const withActionExecution = <T extends CurrentWorkActionVM | null | undefined>(action: T): T => {
         if (!action) return action;
-        const aligned = alignTourScheduleActionForBookingState(action, tourScheduled);
-        return { ...aligned, execution: resolveCurrentWorkActionExecution(aligned) } as T;
+        return { ...action, execution: resolveCurrentWorkActionExecution(action) } as T;
     };
     const withActionExecutionAll = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
         actions.map((action) => withActionExecution(action)!);
+    const withTourAlignedSupporting = (actions: CurrentWorkActionVM[]): CurrentWorkActionVM[] =>
+        alignTourSupportingActionsForBookingState(actions, {
+            scheduled: tourScheduled,
+            bookingId: tourBookingId,
+        }).map((action) => withActionExecution(action)!);
 
     const configuredStageWorkResolved = Boolean(
         templateConfig != null
@@ -827,7 +885,7 @@ export function buildCurrentWorkSurfaceVM(input: BuildCurrentWorkSurfaceVMInput)
         primaryAction: withActionExecution(primaryAction),
         recordOutcomeAction: withActionExecution(recordOutcomeAction),
         execution,
-        supportingActions: withActionExecutionAll(supportingActions),
+        supportingActions: withTourAlignedSupporting(supportingActions),
         alternatePaths: resolvedAlternatePaths,
         administrativeActions: withActionExecutionAll(classified.administrative),
         communicationActions: withActionExecutionAll(communicationActions),

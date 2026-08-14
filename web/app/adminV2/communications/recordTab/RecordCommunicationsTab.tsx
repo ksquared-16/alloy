@@ -3,6 +3,10 @@
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
 import type { FamilyWorkspaceSurfaceVariant } from "@/lib/communications/v2/familyWorkspace/surfaceVariant";
+import type {
+    FamilyComposeDraftSeed,
+    FamilyComposeIntent,
+} from "@/lib/communications/v2/familyWorkspace/familyComposeIntent";
 import {
     buildRecordCommunicationsModel,
     type RecordTimelineEntry,
@@ -22,6 +26,8 @@ export default function RecordCommunicationsTab(props: {
     compactActivityLoading?: boolean;
     surfaceVariant?: FamilyWorkspaceSurfaceVariant;
     entryContext?: "current_work" | null;
+    composeIntent?: FamilyComposeIntent | null;
+    draftSeed?: FamilyComposeDraftSeed | null;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
@@ -47,6 +53,8 @@ export default function RecordCommunicationsTab(props: {
                     compactActivityLoading={props.compactActivityLoading}
                     surfaceVariant={props.surfaceVariant}
                     entryContext={props.entryContext}
+                    composeIntent={props.composeIntent}
+                    draftSeed={props.draftSeed}
                 />
             </div>
         );

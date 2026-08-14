@@ -26,6 +26,12 @@ import {
     runPlatformTransaction,
     type PlatformTransactionStep,
 } from "@/lib/platform/transaction/platformTransaction";
+import {
+    asMetadataRecord,
+    bumpIcsSequence,
+    resetAttendanceAwaitingResponse,
+    withAttendanceConfirmation,
+} from "@/lib/tours/bookings/tourBookingAttendance";
 
 const ACTIVE = [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS];
 
@@ -253,6 +259,11 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                 name: "insert_booking",
                 stage: "persist",
                 run: async () => {
+                    let metadata = asMetadataRecord(input.metadata ?? {});
+                    // Parent attendance affirmation starts awaiting once the visit is scheduled.
+                    if (status === "confirmed" || status === "pending_approval") {
+                        metadata = withAttendanceConfirmation(metadata, { status: "awaiting_response" });
+                    }
                     const insertRow = {
                         org_id: orgId,
                         opportunity_id: opportunityId,
@@ -267,7 +278,7 @@ export async function createTourBooking(supabase: SupabaseClient, input: CreateT
                         source: input.source,
                         form_submission_id: input.formSubmissionId ?? null,
                         form_public_link_id: input.formPublicLinkId ?? null,
-                        metadata: input.metadata ?? {},
+                        metadata,
                     };
                     const { data, error } = await supabase.from("tour_bookings").insert(insertRow).select("*").single();
                     if (error) throw new Error(`tour_bookings insert: ${error.message}`);
@@ -618,6 +629,11 @@ export async function rescheduleTourBooking(
                 excludeBookingId: existing.id,
             });
 
+            // Material time change: re-affirm parent attendance; bump ICS SEQUENCE.
+            const { metadata: bumpedMeta } = bumpIcsSequence(
+                resetAttendanceAwaitingResponse(existing.metadata),
+            );
+
             return {
                 ok: true,
                 existing,
@@ -626,8 +642,9 @@ export async function rescheduleTourBooking(
                     end_at: input.endAt.toISOString(),
                     timezone: nextTz,
                     location_id: nextLoc,
+                    metadata: bumpedMeta,
                 } as Partial<TourBookingRow>,
-                restoreFields: ["start_at", "end_at", "timezone", "location_id"],
+                restoreFields: ["start_at", "end_at", "timezone", "location_id", "metadata"],
             };
         },
         integration: (row) =>

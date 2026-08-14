@@ -1,0 +1,112 @@
+[
+  {
+    "t": "2026-08-13T17:23:59.665Z",
+    "step": "goto"
+  },
+  {
+    "t": "2026-08-13T17:24:17.090Z",
+    "step": "inbox-open"
+  },
+  {
+    "t": "2026-08-13T17:24:25.027Z",
+    "step": "01-default-metrics",
+    "rowCount": 13,
+    "advancedVisible": false,
+    "filtersExpanded": false,
+    "listScroll": {
+      "top": 357,
+      "bottom": 843,
+      "height": 485,
+      "width": 272,
+      "overflowY": "auto",
+      "borderColor": "rgb(39, 63, 82)",
+      "borderLeftWidth": "0px"
+    },
+    "editor": {
+      "top": 214,
+      "bottom": 843,
+      "height": 628,
+      "width": 654
+    },
+    "details": {
+      "top": 248,
+      "bottom": 465,
+      "height": 217,
+      "width": 629
+    },
+    "message": {
+      "top": 473,
+      "bottom": 793,
+      "height": 319,
+      "width": 629
+    },
+    "subject": null,
+    "body": {
+      "top": 559,
+      "bottom": 782,
+      "height": 222,
+      "width": 607
+    },
+    "subjectInViewport": false,
+    "bodyStartsHigh": true,
+    "divideClass": "relative grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-0 divide-x divide-alloy-stone/28"
+  },
+  {
+    "t": "2026-08-13T17:24:25.553Z",
+    "step": "02-filters-open",
+    "advanced": true,
+    "expanded": "true"
+  },
+  {
+    "t": "2026-08-13T17:24:27.235Z",
+    "step": "03-filters-collapsed-persist",
+    "advancedHidden": true,
+    "badge": "1",
+    "rowCount": 13
+  },
+  {
+    "t": "2026-08-13T17:24:27.364Z",
+    "step": "04-list-scroll",
+    "ok": true,
+    "canScroll": true,
+    "listMoved": true,
+    "editorUnmoved": true,
+    "scrollHeight": 757,
+    "clientHeight": 485
+  },
+  {
+    "t": "2026-08-13T17:24:27.964Z",
+    "step": "05-selection-density",
+    "selectedFound": true,
+    "name": "Tour Reminder",
+    "status": "active",
+    "channel": "email",
+    "subjectTop": 528.25,
+    "bodyTop": 617.75,
+    "detailsHeight": 217,
+    "subjectVisible": true,
+    "bodyStartsHigh": true,
+    "subjectInUpperHalf": false
+  },
+  {
+    "t": "2026-08-13T17:24:28.662Z",
+    "step": "06-narrow",
+    "workspaceWidth": 999,
+    "horizontalOverflow": false
+  },
+  {
+    "t": "2026-08-13T17:24:28.663Z",
+    "step": "RESULT",
+    "pass": {
+      "workspaceMounted": true,
+      "filtersToggleWorks": true,
+      "filtersPersistCollapsed": true,
+      "listCanScrollOrShort": true,
+      "editorNotScrolledByList": true,
+      "subjectHigh": true,
+      "bodyHigh": true,
+      "editorHydrated": true,
+      "noHorizontalClip": true
+    }
+  }
+]

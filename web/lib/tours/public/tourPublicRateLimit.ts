@@ -21,6 +21,8 @@ export const TOUR_PUBLIC_RATE_LIMIT = {
     book: { max: 30, windowMs: 60_000 },
     decline: { max: 30, windowMs: 60_000 },
     confirm: { max: 30, windowMs: 60_000 },
+    /** Parent "Confirm I'm coming" — attendance affirmation, not booking confirm. */
+    "confirm-attendance": { max: 30, windowMs: 60_000 },
     reschedule: { max: 30, windowMs: 60_000 },
     cancel: { max: 30, windowMs: 60_000 },
     // Authorises the bounded cancellation step; mints a credential, so it is

@@ -24,6 +24,11 @@ import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/reso
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { attachEffectiveEnrollmentStagesToOpportunityRows } from "@/lib/process/definitions/enrollment/attachEffectiveEnrollmentStagesToOpportunityRows";
+import {
+    effectiveParticipantStageKeysFromRow,
+    resolveContextMissionStages,
+} from "@/lib/process/engine/resolveContextMissionStages";
 import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import type { SharedCanonicalDeps } from "@/lib/adminV2/viewModel/drawer/opportunity/drawerVmComposition.types";
@@ -181,15 +186,36 @@ export async function resolveSharedCanonicalDeps(
         statusDefs,
         workUnitMetadata: wuData?.metadata ?? null,
     });
-    const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
+    // Mission stage for Current Work: Effective Process Position when participants diverge.
+    // Lifecycle rail still reflects shared/context stage for chrome; stage-work uses Mission.
+    const [recordWithEpp] = await attachEffectiveEnrollmentStagesToOpportunityRows({
+        supabase,
+        orgId,
+        rows: [record as Record<string, unknown>],
+        logLabel: "drawer-mission",
+    });
+    const mission = resolveContextMissionStages({
+        contextStageKey: trimOrNull((recordWithEpp ?? record).stage_key),
+        effectiveParticipantStageKeys: effectiveParticipantStageKeysFromRow(
+            (recordWithEpp ?? record) as Record<string, unknown>,
+        ),
+        // Drawer open has no Work View lens — Mission from effective tracks only.
+        workViewLensStageKeys: [],
+    });
+    const missionStageKey = mission.primaryMissionStageKey;
+    const railStageKey = lifecycle_rail?.current_stage_key ?? null;
+    const currentStageKey = missionStageKey ?? railStageKey;
     const currentStageLabel =
-        lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
+        lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label
+        ?? (currentStageKey === railStageKey
+            ? lifecycle_rail?.stages.find((s) => s.key === railStageKey)?.label ?? null
+            : null);
 
     return {
         ok: true,
         orgId,
         opportunityId,
-        record: record as Record<string, unknown>,
+        record: (recordWithEpp ?? record) as Record<string, unknown>,
         departmentId,
         workUnitId: workUnitId || null,
         layoutConfigJson: layoutParsed.config_json,

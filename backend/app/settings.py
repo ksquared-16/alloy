@@ -100,3 +100,6 @@ PUBLIC_TWILIO_STATUS_CALLBACK_BASE = os.getenv("PUBLIC_TWILIO_STATUS_CALLBACK_BA
 
 # Internal cron token for POST /internal/messages/process
 INTERNAL_CRON_TOKEN = os.getenv("INTERNAL_CRON_TOKEN")
+
+# Public base URL for Twilio status callbacks (optional; empty disables absolute callback URLs).
+PUBLIC_TWILIO_STATUS_CALLBACK_BASE = os.getenv("PUBLIC_TWILIO_STATUS_CALLBACK_BASE", "").strip()

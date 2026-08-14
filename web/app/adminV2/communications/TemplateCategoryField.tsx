@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import {
     COMMS_FIELD_LABEL_CLASS,
+    COMMS_FIELD_STACK_CLASS,
     COMMS_INPUT_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
@@ -69,7 +70,7 @@ export default function TemplateCategoryField({
     };
 
     return (
-        <div className="flex flex-col gap-1.5" data-template-category-field="true">
+        <div className={COMMS_FIELD_STACK_CLASS} data-template-category-field="true">
             <span className={COMMS_FIELD_LABEL_CLASS}>Category</span>
 
             {!creating ? (

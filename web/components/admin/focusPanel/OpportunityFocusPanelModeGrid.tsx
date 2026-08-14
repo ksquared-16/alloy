@@ -241,10 +241,20 @@ export default function OpportunityFocusPanelModeGrid({
             setCurrentWorkWorkspace({ open: false, intent: null });
         }
     }, [mode]);
+    // Attention identity (queue row / subject), not resolved family opportunity id.
+    // Child Waitlist truth enrichment often flips drawerId process-instance → family
+    // opportunity without changing Attention — resetting on drawerId was closing
+    // Current Work mid-open (Message / Tour Invitation composer vanishing).
+    // Skip the initial mount: ModeGrid remounts on context enrich, and a mount-time
+    // reset was collapsing a just-opened workspace before the composer could paint.
+    const attentionSubjectId = model.subject.id;
+    const prevAttentionSubjectIdRef = useRef<string | null>(null);
     useEffect(() => {
-        // Record swap resets workspace so the operator returns to that record's summary.
+        const prev = prevAttentionSubjectIdRef.current;
+        prevAttentionSubjectIdRef.current = attentionSubjectId;
+        if (prev == null || prev === attentionSubjectId) return;
         setCurrentWorkWorkspace({ open: false, intent: null });
-    }, [drawerId]);
+    }, [attentionSubjectId]);
 
     // In-panel depth layer: a card reports when it opens deep (focused / edit). The
     // host raises that card and recedes the rest — no route, no drawer, no modal.

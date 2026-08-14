@@ -21,34 +21,42 @@ export const COMMS_WORKSPACE_EXECUTION_CLASS =
     "flex min-h-0 flex-1 flex-col overflow-hidden p-3";
 export const COMMS_EXECUTION_FRAME_CLASS =
     "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_4px_rgba(15,23,42,0.07)]";
-export const COMMS_LIBRARY_RAIL_HEADER_CLASS = "border-b border-alloy-stone/15 bg-alloy-stone/[0.04] p-3";
+export const COMMS_LIBRARY_RAIL_HEADER_CLASS =
+    "shrink-0 border-b border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2.5";
 export const COMMS_LIBRARY_ROW_SELECTED_CLASS =
-    "border-alloy-juniper/40 border-l-2 border-l-alloy-juniper bg-alloy-juniper/10 shadow-[0_1px_4px_rgba(0,162,131,0.1)] ring-1 ring-alloy-juniper/15";
+    "border-alloy-juniper/45 border-l-[3px] border-l-alloy-juniper bg-alloy-juniper/[0.09] shadow-[0_1px_4px_rgba(0,162,131,0.1)] ring-1 ring-alloy-juniper/18";
 export const COMMS_LIBRARY_ROW_CLASS =
-    "mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border border-transparent px-2.5 py-2 text-left transition-colors hover:border-alloy-stone/15 hover:bg-alloy-stone/[0.06]";
+    "mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border border-alloy-stone/18 bg-white px-2.5 py-2 text-left transition-colors hover:border-alloy-stone/28 hover:bg-alloy-stone/[0.05]";
 export const COMMS_EMPTY_STATE_COMPACT_CLASS =
-    "flex flex-col items-center justify-center rounded-xl border border-dashed border-alloy-stone/22 bg-alloy-stone/[0.02] px-4 py-8 text-center";
+    "flex flex-col items-center justify-center rounded-xl border border-dashed border-alloy-stone/28 bg-alloy-stone/[0.02] px-4 py-8 text-center";
 export const COMMS_CARD_CLASS =
-    "rounded-xl border border-alloy-stone/20 bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)]";
+    "rounded-xl border border-alloy-stone/28 bg-white p-3 shadow-[0_1px_3px_rgba(15,23,42,0.07)]";
 export const COMMS_FIELD_LABEL_CLASS = "text-[11px] font-medium text-alloy-midnight/70";
+/** Compact label→control gap for dense configuration headers. */
+export const COMMS_FIELD_STACK_CLASS = "flex flex-col gap-1";
 export const COMMS_INPUT_CLASS =
-    "w-full rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-[12px] text-alloy-midnight shadow-sm focus:border-alloy-juniper/40 focus:outline-none focus:ring-2 focus:ring-alloy-juniper/15";
+    "w-full rounded-lg border border-alloy-stone/35 bg-white px-2.5 py-1.5 text-[12px] text-alloy-midnight shadow-sm focus:border-alloy-juniper/45 focus:outline-none focus:ring-2 focus:ring-alloy-juniper/15";
 export const COMMS_SELECT_CLASS = COMMS_INPUT_CLASS;
 export const COMMS_SECTION_TITLE_CLASS = "text-[11px] font-semibold tracking-wide text-alloy-midnight/85";
 export const COMMS_SECTION_HELPER_CLASS = "mt-0.5 text-[10px] leading-snug text-alloy-midnight/50";
 export const COMMS_PRIMARY_BTN_CLASS = COMMS_BEND_PINE_BTN_CLASS;
 export const COMMS_SECONDARY_BTN_CLASS =
-    "rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
+    "rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
 export const COMMS_OUTLINE_ACCENT_BTN_CLASS =
     "rounded-lg border border-alloy-juniper/40 bg-white px-3 py-1.5 text-xs font-medium text-alloy-juniper shadow-sm hover:bg-alloy-juniper/5 disabled:opacity-50";
 export const COMMS_DESTRUCTIVE_BTN_CLASS =
-    "rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
+    "rounded-lg border border-alloy-stone/30 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
+/** Queue-style Filters toggle for library rails. */
+export const COMMS_FILTERS_TOGGLE_CLASS =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-alloy-stone/35 bg-white px-2.5 py-1.5 text-[12px] font-semibold text-alloy-midnight/70 shadow-sm transition-colors hover:border-alloy-juniper/40 hover:text-alloy-juniper";
+export const COMMS_FILTERS_TOGGLE_ACTIVE_CLASS =
+    "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2.5 py-1.5 text-[12px] font-semibold text-alloy-juniper shadow-sm";
 
 /** Level B — section / panel shells */
 export const COMMS_PANEL_SHELL_CLASS =
-    "rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]";
+    "rounded-xl border border-alloy-stone/28 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.07)]";
 /** Level C — nested utility / preview blocks */
-export const COMMS_UTILITY_CARD_CLASS = "rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-2.5 py-2";
+export const COMMS_UTILITY_CARD_CLASS = "rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.03] px-2.5 py-2";
 export const COMMS_EMPTY_STATE_CLASS = `${COMMS_EMPTY_STATE_COMPACT_CLASS} min-h-[10rem] text-[12px] text-alloy-midnight/55`;
 export const COMMS_EMPTY_STATE_DASHED_CLASS = `${COMMS_EMPTY_STATE_COMPACT_CLASS} min-h-[10rem] text-[12px] text-alloy-midnight/55`;
 
@@ -234,20 +242,36 @@ export function CommsSectionCard({
     helper,
     children,
     className,
+    headerClassName,
+    bodyClassName,
+    dense = false,
     ...rest
 }: {
     title: string;
     helper?: string;
     children: ReactNode;
     className?: string;
+    /** Optional override for the title band (e.g. padded flush cards). */
+    headerClassName?: string;
+    /** Optional override for the body wrapper — use `min-h-0 flex-1` for scroll owners. */
+    bodyClassName?: string;
+    /** Tighter title/body gaps for configuration headers. */
+    dense?: boolean;
 } & HTMLAttributes<HTMLDivElement>) {
     return (
         <div {...rest} className={`${COMMS_CARD_CLASS} ${className ?? ""}`}>
-            <div className="mb-2.5 border-b border-alloy-stone/12 pb-2">
+            <div
+                className={
+                    headerClassName ??
+                    `shrink-0 border-b border-alloy-stone/22 ${dense ? "mb-0 px-0 pb-1.5" : "mb-2 pb-2"}`
+                }
+            >
                 <div className={COMMS_SECTION_TITLE_CLASS}>{title}</div>
                 {helper ? <p className={COMMS_SECTION_HELPER_CLASS}>{helper}</p> : null}
             </div>
-            <div className="flex flex-col gap-2.5">{children}</div>
+            <div className={`flex flex-col ${dense ? "gap-1.5" : "gap-2.5"} ${bodyClassName ?? ""}`}>
+                {children}
+            </div>
         </div>
     );
 }

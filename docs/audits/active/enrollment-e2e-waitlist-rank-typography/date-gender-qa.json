@@ -1,0 +1,19 @@
+{
+  "rows": [
+    {
+      "contactVm": "person.primary_contact_name|person.primary_phone",
+      "groupVm": "child.date_of_birth|waitlist.positionLabel|waitlist.waitSince",
+      "contact": null,
+      "group": "3/15/2026 (4m)",
+      "text": "WWrigley Kurzman1/1Adjust3/15/2026 (4m)2d"
+    },
+    {
+      "contactVm": "person.primary_contact_name|person.primary_phone",
+      "groupVm": "child.date_of_birth|waitlist.positionLabel|waitlist.waitSince",
+      "contact": null,
+      "group": "4/2/2024 (2y4m)",
+      "text": "LLennon Kurzman1/1Adjust4/2/2024 (2y4m)2d"
+    }
+  ],
+  "hasIso": false
+}

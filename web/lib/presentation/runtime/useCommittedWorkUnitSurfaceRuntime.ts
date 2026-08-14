@@ -40,7 +40,7 @@ import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { resolveSelectWorkViewAction } from "@/lib/presentation/runtime/workUnitPillSwitching";
 import type { WorkViewCanonicalLocation } from "@/lib/workspace/resolveWorkViewCanonicalLocation";
-import { resolveWorkViewTargetHref } from "@/lib/presentation/runtime/workViewTargetHref";
+import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 
 /**
  * Warm a subject's COMPLETE commit-critical answer for a row selection: the K2 provisioning answer
@@ -160,11 +160,15 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // `isOperationallyResolved` asks nothing of any fetch. Certification: operational at first sight,
     // 0 hollow frames. Do not reintroduce a subject read from the drawer store.
 
+    // THE one work-unit entry adapter — a second navigation path is what left these pills dead.
+    const moveToWorkUnitEntry = useWorkUnitEntryMovement();
+
     const selectWorkView = useCallback(
         (workViewId: string) => {
             // Same-host: LENS attention move (Excel-tab swap, no remount).
-            // Cross-host: navigate to the view's canonical host so pill count + queue rows share
-            // one cohort (All Family Leads must not show host-A count over host-B empty rows).
+            // Cross-host: SURFACE movement via the shared work-unit entry adapter (never router.push —
+            // `/workspace/work-unit/:slug` is seed-only and a push changes the address without moving
+            // attention).
             const id = workViewId.trim();
             if (!id) return;
             // Read Focus at click time — do not trust a stale React closure for settlement/lensSet.
@@ -190,6 +194,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 id: lens.id,
                 label: lens.label,
             }));
+            const surfaceLensIds = views.map((v) => v.id);
             const targetInputs = {
                 views,
                 canonicalLocationByViewId,
@@ -201,31 +206,45 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 currentWorkUnitId,
                 canonicalLocationByViewId,
                 targetInputs,
+                surfaceLensIds,
             });
             if (action.kind === "noop") return;
+
+            // Pill-strip Work View selection is ALWAYS a LENS move on the current Work Unit target.
+            // Never SURFACE-navigate to a label slug (`/work-unit/tours`, `/work-unit/waitlist`) —
+            // that remounts `[workUnitSlug]` and yields Tours count=1 / rows=0. Workspace entry
+            // (Process cards / Today's Work) remains the sole owner of true host SURFACE movement.
             if (action.kind === "navigate") {
-                router.push(action.href);
-                return;
+                // Defensive: a view not present in lensSet (should not come from the pill strip).
+                if (moveToWorkUnitEntry(action.href, null, null, null)) return;
             }
-            // Pathname safety net: even if settlement locators are unavailable/mis-classified as
-            // same-host, a label-derived href that leaves this work-unit path must navigate so
-            // count host + row host stay one cohort.
-            const href = resolveWorkViewTargetHref(id, targetInputs);
-            if (typeof window !== "undefined" && href) {
-                const currentPath = window.location.pathname.replace(/\/$/, "");
-                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
-                if (hrefPath && hrefPath !== currentPath) {
-                    router.push(href);
-                    return;
-                }
+
+            if (typeof window !== "undefined") {
+                const w = window as Window & {
+                    __ALLOY_WV_CLICK_TRACE__?: Array<Record<string, unknown>>;
+                };
+                const trace = (w.__ALLOY_WV_CLICK_TRACE__ ??= []);
+                trace.push({
+                    t: Date.now(),
+                    intentWorkViewId: id,
+                    actionKind: action.kind,
+                    currentWorkViewId,
+                    currentWorkUnitId,
+                    attentionTarget: kernel.attention.get()?.target ?? null,
+                    attentionLens: kernel.attention.get()?.lens ?? null,
+                    surfaceLensIds,
+                    href: action.kind === "navigate" ? action.href : null,
+                });
+                if (trace.length > 20) trace.splice(0, trace.length - 20);
             }
+
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.LENS,
                 lens: id,
                 source: "work_view_selection",
             });
         },
-        [kernel, focus, router, selectedSiteId],
+        [kernel, focus, selectedSiteId, moveToWorkUnitEntry],
     );
 
     const openRecord = useCallback(
@@ -286,26 +305,35 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 currentWorkUnitId: snap?.workUnit.id ?? null,
                 canonicalLocationByViewId,
                 targetInputs,
+                surfaceLensIds: views.map((v) => v.id),
             });
             if (action.kind === "navigate") {
                 router.prefetch(action.href);
                 return;
             }
-            const href = resolveWorkViewTargetHref(id, targetInputs);
-            if (typeof window !== "undefined" && href) {
-                const currentPath = window.location.pathname.replace(/\/$/, "");
-                const hrefPath = href.split("?")[0]!.replace(/\/$/, "");
-                if (hrefPath && hrefPath !== currentPath) {
-                    router.prefetch(href);
-                    return;
-                }
-            }
             // Same-host: prepare the sibling view's provisioning answer AND its default subject's
             // complete VM — so a pill switch commits a complete Focus Panel, not just a warm queue.
+            // Do not pathname-compare against label-derived hrefs (same false cross-host trap as
+            // selectWorkView) — that skipped K2 warm for ordinary same-host pills.
+            //
+            // CRITICAL: provisioningKey prefers destination.workViewId over ref.lens when a
+            // destination is present. Spreading `current` without re-pointing destination would key
+            // the warm as the ACTIVE lens and overwrite that lens's completed snapshot with the
+            // sibling's answer (Tours warm stored under All — K2 reuse then serves the wrong world).
             void prepareOperationalDestination(kernel, {
                 ...current,
                 lens: id,
                 scope: ATTENTION_SCOPE.LENS,
+                subject: null,
+                aspect: null,
+                destination: current.destination
+                    ? {
+                          ...current.destination,
+                          workViewId: id,
+                          subjectId: null,
+                          focusMode: null,
+                      }
+                    : null,
             });
         },
         [kernel, focus, router, selectedSiteId],

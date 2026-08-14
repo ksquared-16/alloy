@@ -436,6 +436,9 @@ export type BuildFocusPanelMutationInput = {
  * Child Attention overlays rewrite `model.subject.id` to the child / process-instance id.
  * PATCH merges + drawer refresh events must still target `child.family_opportunity_id`
  * (or settlement `truth.id`) so saves stick and the Work Unit Focus Panel re-merges.
+ *
+ * Child commit-critical truth often sets `truth.id` to the process_instance id (same as
+ * subjectId). In that shape only `child.family_opportunity_id` identifies the family case.
  */
 export function resolveFocusPanelMutationOpportunityId(args: {
     subjectId: string;
@@ -447,15 +450,29 @@ export function resolveFocusPanelMutationOpportunityId(args: {
         typeof args.truth?.["child.family_opportunity_id"] === "string"
             ? String(args.truth["child.family_opportunity_id"]).trim()
             : "";
+    const processInstanceFromTruth =
+        typeof args.truth?.["child.process_instance_id"] === "string"
+            ? String(args.truth["child.process_instance_id"]).trim()
+            : "";
     const truthId =
         typeof args.truth?.id === "string" ? String(args.truth.id).trim() : "";
 
-    if (args.grain === "child") {
-        if (familyFromTruth) return familyFromTruth;
-        // Settlement truth id is the family opportunity; Attention subject is the child.
-        if (truthId && truthId !== subjectId) return truthId;
-    }
+    // Family opportunity binding wins whenever present — including when grain was
+    // still reported as "case" while Attention subject is the child participation.
     if (familyFromTruth) return familyFromTruth;
+
+    if (args.grain === "child") {
+        // Settlement truth id is the family opportunity; Attention subject is the child.
+        // Commit-critical child truth sets truth.id to the process instance — ignore that.
+        if (
+            truthId
+            && truthId !== subjectId
+            && truthId !== processInstanceFromTruth
+        ) {
+            return truthId;
+        }
+    }
+
     return subjectId;
 }
 

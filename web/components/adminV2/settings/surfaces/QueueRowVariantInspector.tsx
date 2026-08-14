@@ -159,7 +159,10 @@ export default function QueueRowVariantInspector({
             <header className="mb-3 flex items-start justify-between gap-2">
                 <div>
                     <p className="text-sm font-semibold text-alloy-midnight">{variant.label || "Untitled variant"}</p>
-                    <p className="mt-1 text-[11px] text-alloy-midnight/50">Applies when selected stages match.</p>
+                    <p className="mt-1 text-[11px] text-alloy-midnight/50">
+                        Applies when selected stages match. Candidate-focused variants should also constrain grain
+                        (candidate/child) so family-grain All / Tours keep Default.
+                    </p>
                 </div>
                 {onClose ? (
                     <button type="button" onClick={onClose} className="rounded p-1 text-alloy-midnight/35 hover:bg-alloy-stone/10" aria-label="Close variant editor">✕</button>

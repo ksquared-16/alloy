@@ -53,12 +53,12 @@ export const ENROLLMENT_COMMAND_SURFACE_AUDIT: EnrollmentCommandAuditRow[] = [
     },
     {
         command: "Send Tour Invitation",
-        existingRuntime: "communications_composer → CurrentWorkTourInvitationPanel (prepare → compose → mark_sent)",
-        existingPresentation: "Centered command card + editable compose",
+        existingRuntime: "communications_composer → canonical New Message (prepare seed → family-send → mark_sent)",
+        existingPresentation: "Same Contact Family New Message composer + Tour draft seed",
         immediateOpen: true,
         confirmPattern: "Confirm send (no silent send)",
         needsConvergence: false,
-        notes: "Converged this sprint; Manage path prepare + QuickMessage seed",
+        notes: "Composer converged onto FamilyCommunicationWorkspace; Tour prepare still owns link mint",
     },
     {
         command: "Move to Waitlist",

@@ -116,16 +116,17 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
             },
             {
-                rule_key: "tour_scheduled_to_tour",
+                rule_key: "tour_scheduled_remain",
                 when_outcome_key: "tour_scheduled",
-                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+                // Booked Tour is an overlapping operational fact — do not leave Lead/Waitlist
+                // solely because a tour_bookings row was confirmed. Tours Work View is booking-based.
+                targets: [{ kind: "no_movement" }],
             },
             {
-                // Domain signal from confirmed booking — same progression as Tour Scheduled outcome.
-                // Actions never hardcode stage moves; configuration owns meaning.
-                rule_key: "domain_tour_booking_scheduled_to_tour",
+                // Domain signal from confirmed booking — keep current stage; Tours lane uses bookings.
+                rule_key: "domain_tour_booking_scheduled_remain",
                 when_domain_signal: { domain: "tour_booking", signal: "scheduled" },
-                targets: [{ kind: "move_to_stage", transition_ref: "lead_to_tour" }],
+                targets: [{ kind: "no_movement" }],
             },
             {
                 rule_key: "not_interested_close",

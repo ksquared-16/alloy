@@ -1,0 +1,93 @@
+[
+  {
+    "t": "2026-08-12T21:01:13.996Z",
+    "step": "bookings",
+    "bookings": [
+      {
+        "id": "34dd9d9d-8800-401b-968c-e1472c9730c3",
+        "status": "confirmed",
+        "start": "2026-08-14T16:00:00+00:00"
+      }
+    ]
+  },
+  {
+    "t": "2026-08-12T21:01:16.575Z",
+    "step": "admin-slots",
+    "status": 200,
+    "count": 35,
+    "sample": [
+      {
+        "startAt": "2026-08-14T17:00:00.000Z",
+        "endAt": "2026-08-14T17:45:00.000Z",
+        "timezone": "America/Los_Angeles",
+        "remainingCapacity": 1,
+        "ruleId": "3f600420-1fe7-4822-ae0c-92ff4834cb99",
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "userId": null
+      },
+      {
+        "startAt": "2026-08-14T18:00:00.000Z",
+        "endAt": "2026-08-14T18:45:00.000Z",
+        "timezone": "America/Los_Angeles",
+        "remainingCapacity": 1,
+        "ruleId": "3f600420-1fe7-4822-ae0c-92ff4834cb99",
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "userId": null
+      },
+      {
+        "startAt": "2026-08-17T16:00:00.000Z",
+        "endAt": "2026-08-17T16:45:00.000Z",
+        "timezone": "America/Los_Angeles",
+        "remainingCapacity": 1,
+        "ruleId": "823fd406-cdb9-4cf9-bff1-26d0f511d0a3",
+        "locationId": "1a5644a7-45c4-413b-9021-5f556118b6e2",
+        "userId": null
+      }
+    ]
+  },
+  {
+    "t": "2026-08-12T21:01:16.575Z",
+    "step": "target",
+    "current": "2026-08-14T16:00:00+00:00",
+    "target": {
+      "startAt": "2026-08-14T17:00:00.000Z",
+      "endAt": "2026-08-14T17:45:00.000Z"
+    }
+  },
+  {
+    "t": "2026-08-12T21:01:32.787Z",
+    "step": "reschedule",
+    "status": 200,
+    "booking": {
+      "id": "34dd9d9d-8800-401b-968c-e1472c9730c3",
+      "status": "confirmed",
+      "start": "2026-08-14T17:00:00+00:00"
+    },
+    "err": null
+  },
+  {
+    "t": "2026-08-12T21:01:41.175Z",
+    "step": "SUMMARY",
+    "hasRescheduled": true,
+    "bookings": [
+      {
+        "id": "34dd9d9d-8800-401b-968c-e1472c9730c3",
+        "status": "confirmed",
+        "start": "2026-08-14T17:00:00+00:00"
+      }
+    ],
+    "typesHead": [
+      "tour_invitation_activated",
+      "tour_rescheduled",
+      "tour_confirmed",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_canceled",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated",
+      "tour_invitation_activated"
+    ],
+    "pass": true
+  }
+]
