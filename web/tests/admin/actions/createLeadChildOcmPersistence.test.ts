@@ -161,7 +161,14 @@ describe("applyCreateLeadChildParticipation", () => {
             from: vi.fn((table: string) => {
                 if (table === "customer_members") {
                     return {
-                        select: vi.fn().mockReturnValue({ eq: vi.fn().mockReturnThis() }),
+                        // The child-member write authority asks "is this person already an active
+                        // child of this household?" BEFORE inserting, so the select chain now ends
+                        // in `.limit(1)`. Empty = not a member yet, which is this scenario.
+                        // @see web/lib/records/childMemberAuthority.ts
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnThis(),
+                            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                        }),
                         insert: vi.fn().mockReturnValue({
                             select: vi.fn().mockReturnValue({
                                 single: vi.fn().mockResolvedValue({ data: { id: "cm-1" }, error: null }),
