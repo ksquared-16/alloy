@@ -212,9 +212,15 @@ test.describe("Children", () => {
         await page.screenshot({ path: path.join(SHOTS, "08-child-record-open.png"), fullPage: true });
     });
 
-    test("Add Child is NOT offered — it is held back until identity resolution is safe", async ({ page }) => {
+    /**
+     * V1 asserted the OPPOSITE of this: Add Child was held back because child identity resolution
+     * was not safe. Phase 2 shipped the gate, so the affordance is present — and what it does under
+     * an ambiguous name is proved in `records-add-child.cert.spec.ts`, not here. Restoring the old
+     * assertion would now be asserting the absence of a shipped capability.
+     */
+    test("Add Child is offered, now that identity resolution is gated", async ({ page }) => {
         await openRecords(page, "children");
-        await expect(page.getByRole("button", { name: /add child/i })).toHaveCount(0);
+        await expect(page.locator("[data-child-add-open]")).toBeVisible({ timeout: SETTLE });
     });
 });
 

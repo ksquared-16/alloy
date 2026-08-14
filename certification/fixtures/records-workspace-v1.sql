@@ -85,3 +85,44 @@ insert into process_instances (id, org_id, process_key, subject_type, subject_id
   ('ffff0000-0000-4000-8000-00000000f003'::uuid, :'org'::uuid, 'enrollment', 'child', 'ffff0000-0000-4000-8000-00000000f001'::uuid, 'completed', 'enrolled'),
   ('ffff0000-0000-4000-8000-00000000f004'::uuid, :'org'::uuid, 'enrollment', 'child', 'ffff0000-0000-4000-8000-00000000f002'::uuid, 'active',    'registration')
 on conflict (id) do nothing;
+
+-- ══ PHASE 2 — ADD CHILD ════════════════════════════════════════════════════════════════════════
+--
+-- The household Add Child writes into. Named with a leading token the picker can search for
+-- exactly, so the cert never depends on which of ~1500 households happens to sort first.
+insert into customers (id, org_id, name) values
+  ('dddd0000-0000-4000-8000-00000000d001'::uuid, :'org'::uuid, 'Addchild Cert Household')
+on conflict (id) do nothing;
+
+-- One existing sibling, so the household is a real household rather than an empty shell.
+insert into customer_members (id, org_id, customer_id, display_name, first_name, last_name, dob, relationship, is_active, person_id) values
+  ('dddd0000-0000-4000-8000-00000000d002'::uuid, :'org'::uuid, 'dddd0000-0000-4000-8000-00000000d001'::uuid, 'Wren Addchild', 'Wren', 'Addchild', '2019-07-07', 'child', true, null)
+on conflict (id) do nothing;
+
+-- ── THE LOAD-BEARING AMBIGUITY.
+--
+-- Two people, same full name, no date of birth, no email, no phone. There is genuinely nothing
+-- here that could distinguish them, which is the entire point: the path this slice replaced
+-- matched org-wide on first/last name with `ilike`, took the first row, and returned it silently.
+-- Give either of these a DOB or a contact detail and the ambiguity — and the proof — disappears.
+insert into persons (id, org_id, first_name, last_name, full_name, date_of_birth, email, phone, external_source) values
+  ('dddd0000-0000-4000-8000-00000000dd01'::uuid, :'org'::uuid, 'Emma', 'Chen', 'Emma Chen', null, null, null, 'records_cert'),
+  ('dddd0000-0000-4000-8000-00000000dd02'::uuid, :'org'::uuid, 'Emma', 'Chen', 'Emma Chen', null, null, null, 'records_cert')
+on conflict (id) do nothing;
+
+-- ── THE REUSE CANDIDATE. Exactly one person carries this name, so the resolver can name a single
+-- record for the operator to reuse. Deliberately NOT a member of any household yet — reuse must
+-- create the membership without creating a second person.
+insert into persons (id, org_id, first_name, last_name, full_name, date_of_birth, email, phone, external_source) values
+  ('dddd0000-0000-4000-8000-00000000dd03'::uuid, :'org'::uuid, 'Juniper', 'Reusewell', 'Juniper Reusewell', '2020-03-03', null, null, 'records_cert')
+on conflict (id) do nothing;
+
+-- Bracket counts for the Add Child run. Compare these BEFORE and AFTER every browser cert: the
+-- cert tenant is shared and another session's reset wipes fixtures mid-run, which reads as a
+-- product failure when it is an environment failure.
+select 'addchild household members' k, count(*)::text v from customer_members where customer_id = 'dddd0000-0000-4000-8000-00000000d001'::uuid
+union all select 'emma chen persons', count(*)::text from persons where org_id = :'org'::uuid and first_name = 'Emma' and last_name = 'Chen'
+union all select 'juniper persons', count(*)::text from persons where org_id = :'org'::uuid and last_name = 'Reusewell'
+union all select 'org opportunities', count(*)::text from opportunities where org_id = :'org'::uuid
+union all select 'org child process_instances', count(*)::text from process_instances where org_id = :'org'::uuid and subject_type = 'child'
+union all select 'org opportunity_customer_members', count(*)::text from opportunity_customer_members where org_id = :'org'::uuid;
