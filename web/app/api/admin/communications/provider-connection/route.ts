@@ -43,6 +43,54 @@ function badRequest(error: string, code?: string) {
     return NextResponse.json({ error, code: code ?? null }, { status: 400 });
 }
 
+
+/** The account holding this organization's own credential, if there is one. */
+async function findOrgOwnedAccount(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    provider: string,
+): Promise<string | null> {
+    const { data } = await supabase
+        .from("communication_provider_accounts")
+        .select("id, secret_ref")
+        .eq("org_id", orgId)
+        .eq("provider_type", provider);
+    const rows = (data ?? []) as { id: string; secret_ref: string | null }[];
+    const owned = rows.find((r) => String(r.secret_ref ?? "").startsWith("vault:"));
+    return owned?.id ?? null;
+}
+
+/**
+ * The account a connect should write to: the organization-owned one if it exists
+ * (so replacement keeps every binding working), otherwise a fresh one. Never an
+ * arbitrary pre-existing account — writing an organization credential onto a
+ * seeded or certification account would conflate two different things.
+ */
+async function findOrCreateOrgAccount(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    provider: string,
+    displayLabel: string,
+): Promise<string | null> {
+    const owned = await findOrgOwnedAccount(supabase, orgId, provider);
+    if (owned) return owned;
+
+    const { data: created, error } = await supabase
+        .from("communication_provider_accounts")
+        .insert({
+            org_id: orgId,
+            provider_type: provider,
+            display_label: displayLabel || "Resend",
+            status: "pending_verification",
+            verification_state: "pending",
+            secret_ref: "unconfigured",
+        })
+        .select("id")
+        .single();
+    if (error || !created) return null;
+    return (created as { id: string }).id;
+}
+
 export async function POST(request: Request) {
     const ctx = await requireAdminOrgContextLight();
     if (ctx instanceof Response) return ctx;
@@ -91,35 +139,14 @@ export async function POST(request: Request) {
     const supabase = createAdminClient();
     const displayLabel = typeof body.display_label === "string" ? body.display_label.trim().slice(0, 80) : "";
 
-    // One provider account per organization per provider. Reused on replacement so
-    // every binding already pointing at it keeps working.
-    const { data: existing } = await supabase
-        .from("communication_provider_accounts")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .eq("provider_type", provider)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-
-    let accountId = (existing as { id?: string } | null)?.id ?? null;
-
-    if (!accountId) {
-        const { data: created, error: createError } = await supabase
-            .from("communication_provider_accounts")
-            .insert({
-                org_id: ctx.orgId,
-                provider_type: provider,
-                display_label: displayLabel || "Resend",
-                status: "pending_verification",
-                verification_state: "pending",
-                secret_ref: "unconfigured",
-            })
-            .select("id")
-            .single();
-        if (createError || !created) return badRequest("Could not create the connection.", "account_create_failed");
-        accountId = (created as { id: string }).id;
-    }
+    // WHICH ACCOUNT IS "the organization's connection"? The one already holding an
+    // organization-owned credential — i.e. a `vault:` reference. A tenant can carry
+    // several provider accounts (seeded, migrated, certification), so "the oldest"
+    // is arbitrary: it picked a synthetic account here and left the real connection
+    // untouched, which made revoke silently succeed while the tenant stayed
+    // connected. Identity by role, not by age.
+    const accountId = await findOrCreateOrgAccount(supabase, ctx.orgId, provider, displayLabel);
+    if (!accountId) return badRequest("Could not create the connection.", "account_create_failed");
 
     const stored = await putOrgProviderCredential(supabase, {
         orgId: ctx.orgId,
@@ -175,15 +202,10 @@ export async function DELETE(request: Request) {
     if (!SELF_SERVICE_PROVIDERS.has(provider)) return badRequest("Unknown provider.", "unsupported_provider");
 
     const supabase = createAdminClient();
-    const { data: account } = await supabase
-        .from("communication_provider_accounts")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .eq("provider_type", provider)
-        .limit(1)
-        .maybeSingle();
-
-    const accountId = (account as { id?: string } | null)?.id ?? null;
+    // Revoke the ORGANIZATION-owned connection specifically — the account holding a
+    // `vault:` reference. Revoking "the first account" would report success while
+    // leaving the real credential live.
+    const accountId = await findOrgOwnedAccount(supabase, ctx.orgId, provider);
     if (!accountId) return NextResponse.json({ ok: true, connection: { state: "not_connected" } });
 
     const revoked = await revokeOrgProviderCredential(supabase, {

@@ -90,9 +90,12 @@ test.describe("Organization Communications — the five questions", () => {
 
     test("Q2 what identity Alloy sends and receives as", async ({ page }) => {
         await page.goto(PAGE);
-        await expect(page.getByTestId("communications-email-identity-from")).toHaveText(ACTIVE_EMAIL);
-        await expect(page.getByTestId("communications-email-identity-replies")).toHaveText(ACTIVE_EMAIL);
-        await expect(page.getByTestId("communications-sms-identity-number")).toHaveText(CERT_NUMBER);
+        // The identity list was folded INTO the Sending and Receiving rows: showing
+        // an address twice, once as a value and once as a readiness detail, made the
+        // card longer without answering anything the rows do not.
+        await expect(page.getByTestId("communications-email-sending-value")).toHaveText(ACTIVE_EMAIL);
+        await expect(page.getByTestId("communications-email-receiving-value")).toHaveText(ACTIVE_EMAIL);
+        await expect(page.getByTestId("communications-sms-sending-value")).toHaveText(CERT_NUMBER);
     });
 
     test("Q3 and Q4 sending and receiving are separate, visible answers", async ({ page }) => {
@@ -140,12 +143,20 @@ test.describe("Organization Communications — secrets never surface", () => {
         for (const term of ["secret_ref", "RESEND_API_KEY", "TWILIO_AUTH_TOKEN", "env:", "legacy_global_twilio"]) {
             expect(html, `DOM must not contain "${term}"`).not.toContain(term);
         }
-        // There is nowhere to enter a credential, by construction.
+        // A credential cannot be entered from the CARD. It has exactly one home —
+        // the connect step inside the dialog — and this used to assert that no such
+        // field existed anywhere, which was right while a credential could only be
+        // provisioned by an Alloy employee. Self-service changes where the field
+        // lives, not whether the secret can be read back.
         await expect(page.locator('input[type="password"]')).toHaveCount(0);
 
         await page.getByTestId("communications-configure-email").click();
         await expect(page.getByTestId("communications-channel-dialog")).toBeVisible();
-        await expect(page.locator('input[type="password"]')).toHaveCount(0);
+        // Exactly one, masked, and empty — never pre-filled from stored state.
+        const keyField = page.getByTestId("communications-dialog-resend-key");
+        await expect(keyField).toBeVisible();
+        await expect(keyField).toHaveAttribute("type", "password");
+        await expect(keyField).toHaveValue("");
         const dialogHtml = await page.content();
         for (const term of ["secret_ref", "RESEND_API_KEY", "env:"]) {
             expect(dialogHtml, `dialog must not contain "${term}"`).not.toContain(term);
@@ -168,7 +179,7 @@ test.describe("Organization Communications — configure", () => {
             await page.getByTestId("communications-dialog-submit").click();
 
             await expect(page.getByTestId("communications-channel-dialog")).toBeHidden();
-            await expect(page.getByTestId("communications-email-identity-from")).toHaveText(next);
+            await expect(page.getByTestId("communications-email-sending-value")).toHaveText(next);
         } finally {
             // Restore UNCONDITIONALLY. This spec mutates shared fixture state, and an
             // assertion failure between the edit and the restore would otherwise leave

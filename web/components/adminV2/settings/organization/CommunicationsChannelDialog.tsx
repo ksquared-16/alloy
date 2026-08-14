@@ -508,6 +508,14 @@ export default function CommunicationsChannelDialog({
                         </>
                     ) : (
                         <>
+                            {/* Connecting the organization's own account belongs in BOTH
+                                modes. An administrator whose channel is already
+                                connected — to the deployment credential, or to a key
+                                that has since been rotated — reaches this screen through
+                                Configure, and previously had nowhere to put their own
+                                Resend key. */}
+                            {isEmail ? <ConnectResendStep onConnected={() => void onSaved()} hasDeploymentOption /> : null}
+
                             {scopedBindings.length > 1 ? (
                                 <Field label="Which one">
                                     <select
