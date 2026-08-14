@@ -1,0 +1,19 @@
+{
+  "selected": "new_work_view_5",
+  "url": "http://127.0.0.1:3015/workspace/work-unit/new-leads?work_view_id=new_work_view_5",
+  "queueTotal": "1",
+  "surface": "published",
+  "hasKurzman": true,
+  "noRecords": false,
+  "hasTourScheduled": true,
+  "hasScheduledTour": false,
+  "log": [
+    {
+      "status": 200,
+      "rows": 1,
+      "title": "Kurzman Family"
+    }
+  ],
+  "bodySlice": "1 ⌘K All locations ▾ KK Enrollment Pipeline 1 Needs attention 1 Overdue work 2 Pipeline Children Actions (2) ▶ New 0 Active Pipeline 0 Registration 0 Waitlist 2 Tours 1 All 1 Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 22h 2 children Kurzman Family Waitlist · Tour Scheduled Work Activity This stage's work configures no action. WHAT'S NEXT In progress Waitlist Manage waitlist candidates and spot offers. Current work · Review waitlist position PRIMARY CONTACT Kelly Kurzman Message Send form Tour ▾ View all activity BILLING PREVIEW CHILDREN HOUSEHOLD Needs contact Kurzman household KK Kelly Kurzman Primary kelly.kurzman@gmail.com (602) 290-4816 0 Emergency contacts 0 Authorized pickups Add emergency contact → View household → BOS Operational Intelligence Reset Pin Close Helping with Business Process: Enrollment Subject: Kurzman Family Attention · No urgent issues Here are some ways I can help ▾ Summarize this lead Get a quick overview of details and history Identify missing information See what's needed to move forward Draft follow-up Create a personalized follow-up message / commands · ↵ to send · ⇧↵ new line BOS uses AI. Review for accuracy.",
+  "pass": true
+}

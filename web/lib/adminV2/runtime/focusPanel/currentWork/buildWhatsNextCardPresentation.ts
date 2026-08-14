@@ -126,17 +126,19 @@ export function buildWhatsNextContextFacts(args: {
     }
 
     const tour = signals?.tour;
-    if (tour?.scheduled && tour.startAt) {
-        // Labeled Tour fact — never unlabeled under Location / Primary contact.
-        // Omit raw booking status (`confirmed`): an active scheduled Tour already conveys that.
-        const startLabel = formatTourStartLabel(tour.startAt, args.timeZone) || tour.startAt;
-        facts.push({ key: "scheduled_tour", label: "Scheduled Tour", value: startLabel });
+    if (tour?.scheduled) {
+        // Prefer early placement so the Scheduled Tour fact is not truncated by the fact cap
+        // behind waitlist/program/contact rows on family All/Tours lenses.
+        const startLabel = tour.startAt
+            ? formatTourStartLabel(tour.startAt, args.timeZone) || tour.startAt
+            : "Scheduled";
+        facts.unshift({ key: "scheduled_tour", label: "Scheduled Tour", value: startLabel });
         // Only surface parent confirmation when the parent has affirmed — not "Awaiting response".
         if (
             tour.parentConfirmationLabel?.trim()
             && !/^awaiting response$/i.test(tour.parentConfirmationLabel.trim())
         ) {
-            facts.push({
+            facts.splice(1, 0, {
                 key: "tour_parent_confirmation",
                 label: "Parent confirmation",
                 value: tour.parentConfirmationLabel.trim(),

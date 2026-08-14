@@ -29,6 +29,34 @@ describe("workUnitPillSwitching", () => {
         expect(isSameHostWorkView("v-leads", "wu-other", map)).toBe(false);
     });
 
+    it("isSameHostWorkView is true when target shares the active view's settled host (Tours↔All)", () => {
+        const map = new Map<string, WorkViewCanonicalLocation>([
+            ["new_work_view_5", location("wu-lead", "tours")],
+            ["new_work_view_6", location("wu-lead", "all")],
+        ]);
+        expect(isSameHostWorkView("new_work_view_5", null, map, "new_work_view_6")).toBe(true);
+        expect(isSameHostWorkView("new_work_view_5", "wu-other", map, "new_work_view_6")).toBe(true);
+    });
+
+    it("unknown host while on a work unit stays in-page (never label-slug navigate)", () => {
+        const empty = new Map<string, WorkViewCanonicalLocation>();
+        const action = resolveSelectWorkViewAction({
+            workViewId: "new_work_view_5",
+            currentWorkViewId: "new_work_view_6",
+            currentWorkUnitId: "wu-lead",
+            canonicalLocationByViewId: empty,
+            targetInputs: {
+                views: [
+                    { id: "new_work_view_5", label: "Tours" },
+                    { id: "new_work_view_6", label: "All" },
+                ],
+                canonicalLocationByViewId: empty,
+                selectedSiteId: null,
+            },
+        });
+        expect(action).toEqual({ kind: "in-page", workViewId: "new_work_view_5" });
+    });
+
     it("cross-host All Leads navigates; same-host All Leads stays in-page (count + queue share canonical host)", () => {
         const lifecycleViews = [
             { id: "new_leads", label: "New Leads" },
@@ -62,6 +90,7 @@ describe("workUnitPillSwitching", () => {
         expect(crossHost.kind).toBe("navigate");
         if (crossHost.kind === "navigate") {
             expect(crossHost.href).toContain("all-leads");
+            expect(crossHost.href).toContain("work_view_id=new_work_view_6");
         }
     });
 
@@ -95,6 +124,7 @@ describe("workUnitPillSwitching", () => {
         expect(action.kind).toBe("navigate");
         if (action.kind === "navigate") {
             expect(action.href).toContain("new-leads");
+            expect(action.href).toContain("work_view_id=v-leads");
         }
     });
 

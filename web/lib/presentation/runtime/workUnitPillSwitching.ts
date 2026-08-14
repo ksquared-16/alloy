@@ -18,11 +18,30 @@ export function isSameHostWorkView(
     workViewId: string,
     currentWorkUnitId: string | null,
     canonicalLocationByViewId: ReadonlyMap<string, WorkViewCanonicalLocation>,
+    /** When set, also treat as same-host when the target shares the active view's settled host. */
+    currentWorkViewId?: string | null,
 ): boolean {
     const id = workViewId.trim();
-    if (!id || !currentWorkUnitId) return false;
+    if (!id) return false;
     const location = canonicalLocationByViewId.get(id);
-    return location?.workUnitId === currentWorkUnitId;
+    if (!location?.workUnitId) return false;
+    if (currentWorkUnitId && location.workUnitId === currentWorkUnitId) return true;
+    const activeId = currentWorkViewId?.trim() || "";
+    if (!activeId) return false;
+    const activeHost = canonicalLocationByViewId.get(activeId)?.workUnitId ?? null;
+    return Boolean(activeHost && activeHost === location.workUnitId);
+}
+
+export function hrefWithWorkViewId(href: string, workViewId: string): string {
+    const id = workViewId.trim();
+    if (!id || !href.trim()) return href;
+    try {
+        const u = new URL(href, "http://local");
+        u.searchParams.set("work_view_id", id);
+        return `${u.pathname}${u.search}${u.hash}`;
+    } catch {
+        return href;
+    }
 }
 
 export function resolveSelectWorkViewAction(args: {
@@ -38,8 +57,22 @@ export function resolveSelectWorkViewAction(args: {
     }
 
     if (
-        isSameHostWorkView(id, args.currentWorkUnitId, args.canonicalLocationByViewId)
+        isSameHostWorkView(
+            id,
+            args.currentWorkUnitId,
+            args.canonicalLocationByViewId,
+            args.currentWorkViewId,
+        )
     ) {
+        return { kind: "in-page", workViewId: id };
+    }
+
+    const location = args.canonicalLocationByViewId.get(id) ?? null;
+    // Unknown host while already on a Work Unit: NEVER invent a label-slug SURFACE navigation
+    // (`Tours` → `/workspace/work-unit/tours`). That changes attention.target away from the live host,
+    // drops `work_view_id`, and leaves Settlement painting the pill count while K3 never commits the
+    // lens (count=1 / rows=0). Prefer an in-page LENS move until Settlement proves a different host.
+    if (!location && args.currentWorkUnitId) {
         return { kind: "in-page", workViewId: id };
     }
 
@@ -52,7 +85,7 @@ export function resolveSelectWorkViewAction(args: {
         return { kind: "noop" };
     }
 
-    return { kind: "navigate", workViewId: id, href };
+    return { kind: "navigate", workViewId: id, href: hrefWithWorkViewId(href, id) };
 }
 
 /** Whether to auto-open the first queue row after a view's rows settle. */

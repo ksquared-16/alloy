@@ -1428,31 +1428,14 @@ export async function composeWorkUnitProvisioningAnswer(
             {})) as Record<string, unknown>;
     const householdChildren = chosenEnrichedRow._household_children;
     const enrichedInquiryChildren = chosenEnrichedRow._inquiry_children;
-    const relatedSubjectsSummary = Array.isArray(
-        familyContextForChild?.related_subjects_summary ?? chosenRowContext.related_subjects_summary,
-    )
-        ? ((familyContextForChild?.related_subjects_summary ??
-              chosenRowContext.related_subjects_summary) as Array<Record<string, unknown>>)
-        : [];
-    const childrenFromContext = relatedSubjectsSummary
-        .filter((s) => s.subject_type === "child")
-        .map((s) => ({
-            id: strOrNull(s.subject_id) ?? "",
-            person_id: strOrNull(s.subject_id),
-            display_name: strOrNull(s.display_name),
-            dob: strOrNull(s.date_of_birth),
-            age: strOrNull(s.age_label),
-            outcome_status_label: strOrNull(s.status_label),
-            ...(childSubjectRow?.subjectId && strOrNull(s.subject_id) === childSubjectRow.subjectId
-                ? { focused: true }
-                : {}),
-        }));
+    // Queue `related_subjects_summary` is recognition-only (names/DOB). Never promote it to
+    // `_inquiry_children` — that falsely marks Children commit-critical and Mission overlays
+    // would clobber Settlement's authoritative roster with a thin seed.
     const inquiryChildren =
         (Array.isArray(enrichedInquiryChildren) && enrichedInquiryChildren.length
             ? enrichedInquiryChildren
             : null)
         ?? (Array.isArray(householdChildren) && householdChildren.length ? householdChildren : null)
-        ?? (childrenFromContext.length ? childrenFromContext : null)
         ?? subjectMetadata?.inquiry_children
         ?? null;
     const subjectIdentityTruthBindings: SubjectIdentityTruth = {

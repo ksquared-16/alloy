@@ -10,6 +10,7 @@ import {
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import TourInternalRecipientsMultiSelect from "@/app/adminV2/communications/TourInternalRecipientsMultiSelect";
+import { AlloyCheckbox } from "@/app/adminV2/pos/ProcessingAlloyControls";
 import {
     TOUR_COMMS_STUDIO_INHERITANCE_HELPER,
     TOUR_COMMS_STUDIO_PARENT_RECIPIENT_LABEL,
@@ -93,17 +94,15 @@ function AutomationRuleFields({
 
             {showReminder ? (
                 <div className="flex flex-col gap-2" data-tour-delivery-reminder="true">
-                    <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-alloy-midnight/75">
-                        <input
-                            type="checkbox"
-                            data-tour-reminder-enabled="true"
+                    <div data-tour-reminder-enabled={draft.reminderEnabled ? "true" : "false"}>
+                        <AlloyCheckbox
                             checked={draft.reminderEnabled}
                             disabled={disabled}
-                            onChange={(e) => patch({ reminderEnabled: e.target.checked })}
-                            className="rounded border-alloy-stone/35 text-alloy-juniper focus:ring-alloy-juniper/30"
+                            label="Reminder enabled"
+                            testId="tour-reminder-enabled"
+                            onChange={(reminderEnabled) => patch({ reminderEnabled })}
                         />
-                        Reminder enabled
-                    </label>
+                    </div>
 
                     <div className="flex flex-wrap items-end gap-1.5">
                         <span className="pb-1.5 text-[11px] font-medium text-alloy-midnight/55">Send</span>
@@ -189,34 +188,37 @@ function AutomationRuleFields({
                             className={`${COMMS_INPUT_CLASS} bg-alloy-stone/[0.04] text-alloy-midnight/60`}
                         />
                     </label>
-                    <label className="inline-flex items-center gap-1.5 self-end pb-1.5 text-[11px] font-medium text-alloy-midnight/75">
-                        <input
-                            type="checkbox"
-                            data-tour-ask-parent-confirm="true"
+                    <div
+                        className="self-end pb-0.5"
+                        data-tour-ask-parent-confirm={draft.askParentConfirmAttendance ? "true" : "false"}
+                    >
+                        <AlloyCheckbox
                             checked={draft.askParentConfirmAttendance}
                             disabled={disabled || !draft.reminderEnabled}
-                            onChange={(e) => patch({ askParentConfirmAttendance: e.target.checked })}
-                            className="rounded border-alloy-stone/35 text-alloy-juniper focus:ring-alloy-juniper/30"
+                            label="Ask parent to confirm attendance"
+                            testId="tour-ask-parent-confirm"
+                            onChange={(askParentConfirmAttendance) => patch({ askParentConfirmAttendance })}
                         />
-                        Ask parent to confirm attendance
-                    </label>
+                    </div>
                 </div>
             ) : null}
 
             {showInternal ? (
                 <div className="flex flex-col gap-1.5" data-tour-delivery-internal="true">
                     <p className={COMMS_SECTION_HELPER_CLASS}>{TOUR_COMMS_STUDIO_INHERITANCE_HELPER}</p>
-                    <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-alloy-midnight/75">
-                        <input
-                            type="checkbox"
-                            data-tour-internal-recipients-enabled="true"
+                    <div
+                        data-tour-internal-recipients-enabled={
+                            draft.internalRecipientsEnabled ? "true" : "false"
+                        }
+                    >
+                        <AlloyCheckbox
                             checked={draft.internalRecipientsEnabled}
                             disabled={disabled}
-                            onChange={(e) => patch({ internalRecipientsEnabled: e.target.checked })}
-                            className="rounded border-alloy-stone/35 text-alloy-juniper focus:ring-alloy-juniper/30"
+                            label="Send internal calendar notifications"
+                            testId="tour-internal-recipients-enabled"
+                            onChange={(internalRecipientsEnabled) => patch({ internalRecipientsEnabled })}
                         />
-                        Send internal calendar notifications
-                    </label>
+                    </div>
                     <TourInternalRecipientsMultiSelect
                         id={`tour-internal-recipients-${eventKey}`}
                         selectedUserIds={draft.internalRecipientUserIds}

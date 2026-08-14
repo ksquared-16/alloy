@@ -209,11 +209,14 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             if (action.kind === "noop") return;
 
             // Active-runtime Work View selection never ends in a route push. Cross-host uses the
-            // shared entry adapter; same-host is always a LENS move. The former pathname "safety net"
-            // compared view href slugs to the current work-unit path and falsely treated ordinary
-            // same-host tab switches as navigation — URL changed, attention never moved (wt4 cert).
+            // shared entry adapter (href MUST carry `?work_view_id=` — see resolveSelectWorkViewAction);
+            // same-host is always a LENS move. The former pathname "safety net" compared view href
+            // slugs to the current work-unit path and falsely treated ordinary same-host tab switches
+            // as navigation — URL changed, attention never moved (wt4 cert).
             if (action.kind === "navigate") {
                 if (moveToWorkUnitEntry(action.href, null, null, null)) return;
+                // Adapter could not parse the href (no kernel / unroutable target). Fall through to
+                // the lens move rather than leaving the click dead.
             }
 
             kernel.attention.move({
@@ -292,10 +295,25 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             // complete VM — so a pill switch commits a complete Focus Panel, not just a warm queue.
             // Do not pathname-compare against label-derived hrefs (same false cross-host trap as
             // selectWorkView) — that skipped K2 warm for ordinary same-host pills.
+            //
+            // CRITICAL: provisioningKey prefers destination.workViewId over ref.lens when a
+            // destination is present. Spreading `current` without re-pointing destination would key
+            // the warm as the ACTIVE lens and overwrite that lens's completed snapshot with the
+            // sibling's answer (Tours warm stored under All — K2 reuse then serves the wrong world).
             void prepareOperationalDestination(kernel, {
                 ...current,
                 lens: id,
                 scope: ATTENTION_SCOPE.LENS,
+                subject: null,
+                aspect: null,
+                destination: current.destination
+                    ? {
+                          ...current.destination,
+                          workViewId: id,
+                          subjectId: null,
+                          focusMode: null,
+                      }
+                    : null,
             });
         },
         [kernel, focus, router, selectedSiteId],
