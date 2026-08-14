@@ -36,6 +36,7 @@ const ELIGIBLE_INPUT: EligibleReasoningInputV1 = {
     pii_mode: "minimized",
     transformations: [],
     text_minimizations: [],
+    participant_redactions: [],
     redaction_steps: [],
     // Built to the real shape rather than cast into it. A cast here would let a
     // fixture drift from the contract it claims to represent, which is how a

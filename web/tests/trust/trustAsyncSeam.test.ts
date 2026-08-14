@@ -188,6 +188,7 @@ describe("the registered synchronous strategy is unchanged", () => {
                 pii_mode: "strict",
                 transformations: [],
                 text_minimizations: [],
+                participant_redactions: [],
             },
             nowIso: NOW,
         });

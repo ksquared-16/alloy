@@ -19,6 +19,11 @@ import type {
     TextMinimizationRefusalCode,
 } from "@/lib/privacy/minimizeTextContent";
 import { minimizeTextContent, validateTextMinimizationRequest } from "@/lib/privacy/minimizeTextContent";
+import type {
+    ParticipantRedactionRecord,
+    ParticipantRedactionRefusalCode,
+} from "@/lib/privacy/redactKnownParticipants";
+import { expandParticipantTokens, redactKnownParticipants } from "@/lib/privacy/redactKnownParticipants";
 import type { PrivacyTransformRefusalCode, TransformationRecord } from "@/lib/trust/privacy/transformationDispatch";
 import { applyTransformation } from "@/lib/trust/privacy/transformationDispatch";
 import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
@@ -40,6 +45,23 @@ export type PrivacyPolicyV1 = {
      * transform — see {@link validateTextMinimizationRequest}.
      */
     readonly required_text_minimizers?: readonly TextMinimizationClass[];
+    /**
+     * Whether admitted text must have known participant names removed.
+     *
+     * Absent or false means no participant redaction runs, so every policy
+     * registered before Phase 2.9a behaves exactly as it did — the capability is
+     * opt-in per policy, never a new default.
+     *
+     * True makes the caller's roster MANDATORY: a policy that requires this and
+     * receives no usable roster refuses the whole transform. That is what stops
+     * the requirement from degrading into a no-op on the one thread whose
+     * participants failed to resolve.
+     *
+     * This removes named-roster occurrences ONLY. It is not a person-name
+     * detector, and `person_name` remains an unsupported minimization class —
+     * see {@link redactKnownParticipants}.
+     */
+    readonly requires_participant_redaction?: boolean;
 };
 
 /**
@@ -90,6 +112,16 @@ export type ReasoningContextV1 = {
      * Empty when the policy requires no text minimization.
      */
     readonly text_minimizations: readonly TextMinimizationRecord[];
+    /**
+     * What known-participant redaction removed, across all admitted text.
+     *
+     * Counts only, for the same reason as {@link text_minimizations}: the roster
+     * entries and the matched spans are the identities being removed, so
+     * recording either to prove the removal happened would defeat it.
+     *
+     * Empty when the policy requires no participant redaction.
+     */
+    readonly participant_redactions: readonly ParticipantRedactionRecord[];
 };
 
 export type KnowledgeReference = {
@@ -101,7 +133,8 @@ export type KnowledgeReference = {
 export type PrivacyTransformRefusal =
     | "PRIVACY_PROHIBITED_CLASS"
     | PrivacyTransformRefusalCode
-    | TextMinimizationRefusalCode;
+    | TextMinimizationRefusalCode
+    | ParticipantRedactionRefusalCode;
 
 export type PrivacyTransformResult =
     | { readonly ok: true; readonly context: ReasoningContextV1 }
@@ -137,6 +170,14 @@ export function transformForReasoning(input: {
     classification: ClassificationResult;
     policy: PrivacyPolicyV1;
     knowledge: readonly KnowledgeReference[];
+    /**
+     * Known participant display names, supplied by the capability from resolved
+     * records. Read ONLY when the policy sets `requires_participant_redaction`;
+     * a roster passed to a policy that does not require redaction is ignored
+     * rather than silently applied, so the policy stays the authority on what
+     * happens to text.
+     */
+    participants?: readonly string[];
 }): PrivacyTransformResult {
     // Policy validity is checked BEFORE any element is examined. A policy asking
     // for a class this platform cannot detect is wrong whether or not a given
@@ -149,6 +190,23 @@ export function transformForReasoning(input: {
             ok: false,
             refusal_code: minimizerCheck.refusal_code,
             detail: `Privacy policy ${input.policy.key}: ${minimizerCheck.detail}`,
+            transformations: [],
+        };
+    }
+
+    // Roster sufficiency is checked here, before any element is examined, for
+    // the same reason the minimizer check is: a policy requiring participant
+    // redaction with nothing to redact is wrong whether or not this particular
+    // request happens to carry a string element. Deciding it from the data would
+    // make the refusal depend on which message arrived.
+    const participantRedactionRequired = input.policy.requires_participant_redaction === true;
+    if (participantRedactionRequired && expandParticipantTokens(input.participants ?? []).length === 0) {
+        return {
+            ok: false,
+            refusal_code: "PARTICIPANT_REDACTION_EMPTY_ROSTER",
+            detail:
+                `Privacy policy ${input.policy.key} requires known-participant redaction, but no usable ` +
+                `participant roster was supplied. Admitting text unredacted would claim a redaction that never ran.`,
             transformations: [],
         };
     }
@@ -170,6 +228,8 @@ export function transformForReasoning(input: {
     const admitted: Record<string, unknown> = {};
     const transformations: TransformationRecord[] = [];
     const textMinimizations = new Map<TextMinimizationClass, TextMinimizationRecord>();
+    let participantReplacedCount = 0;
+    let participantRosterTokenCount = 0;
 
     for (const element of input.classification.elements) {
         const outcome = applyTransformation({ transformation: element.transformation, value: element.value });
@@ -249,6 +309,35 @@ export function transformForReasoning(input: {
             }
         }
 
+        // Participant redaction runs AFTER content minimization, and the order is
+        // not interchangeable either. An address like `maya.kurzman@example.com`
+        // contains the participant's name: redacting the name first would leave
+        // `[name removed].[name removed]@example.com`, which no longer matches the
+        // email detector, so the domain and the address shape would survive.
+        // Removing the whole address first means this pass sees ordinary prose.
+        if (participantRedactionRequired && typeof value === "string") {
+            const redacted = redactKnownParticipants(value, input.participants ?? []);
+            if (!redacted.ok) {
+                transformations.push({
+                    ...base,
+                    disposition: "refused",
+                    support: "unsupported",
+                    rationale: redacted.detail,
+                });
+                return {
+                    ok: false,
+                    refusal_code: redacted.refusal_code,
+                    // As above: no element key, and no fragment of the text or of
+                    // the roster that was being removed from it.
+                    detail: `Privacy policy ${input.policy.key}: ${redacted.detail}`,
+                    transformations,
+                };
+            }
+            value = redacted.text;
+            participantReplacedCount += redacted.record.replaced_count;
+            participantRosterTokenCount = redacted.record.roster_token_count;
+        }
+
         admitted[element.key] = value;
         transformations.push({
             ...base,
@@ -273,6 +362,19 @@ export function transformForReasoning(input: {
             text_minimizations: [...textMinimizations.values()].sort((a, b) =>
                 a.detector_key.localeCompare(b.detector_key),
             ),
+            // One aggregate record across every admitted string, present only
+            // when the policy required the pass. A zero `replaced_count` is a
+            // real and reportable outcome — it means the roster matched nothing
+            // in this text, which is different from the pass not having run.
+            participant_redactions: participantRedactionRequired
+                ? [
+                      {
+                          redaction_kind: "person_name",
+                          replaced_count: participantReplacedCount,
+                          roster_token_count: participantRosterTokenCount,
+                      },
+                  ]
+                : [],
         },
     };
 }
