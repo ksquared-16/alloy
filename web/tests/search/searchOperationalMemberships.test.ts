@@ -117,8 +117,21 @@ function process(over: Partial<SearchConfiguredProcess> = {}): SearchConfiguredP
     } as SearchConfiguredProcess;
 }
 
-const child = (stageKey: string | null) =>
-    resolveOperationalMemberships({ process: process(), subject: { grain: "child", stageKey } });
+/**
+ * A child's Work View ROW identity is its PARTICIPATION (`process_instances.id`).
+ *
+ * Never the durable child: one child can hold two participations across two leads, and those are two
+ * different rows — so the durable id names no single row and the runtime's guard refuses it.
+ */
+const PARTICIPATION_A = "pi-lennon-enrollment";
+/** The durable child. Correct as the ASPECT item; never as the child-grain row id. */
+const DURABLE_CHILD = "cm-lennon";
+
+const child = (stageKey: string | null, memberRowId: string | null = PARTICIPATION_A) =>
+    resolveOperationalMemberships({
+        process: process(),
+        subject: { grain: "child", stageKey, memberRowId },
+    });
 
 /** A family row as the queue materializes it — EPP keys and tour facts, not raw columns. */
 const familyRow = (over: Record<string, unknown> = {}) => ({
@@ -131,8 +144,53 @@ const familyRow = (over: Record<string, unknown> = {}) => ({
 const family = (row: Record<string, unknown> | null, proc = process()) =>
     resolveOperationalMemberships({
         process: proc,
-        subject: { grain: "family", stageKey: (row?.stage_key as string) ?? null, row },
+        subject: {
+            grain: "family",
+            stageKey: (row?.stage_key as string) ?? null,
+            row,
+            // A family lens rows at the CASE, so the case id is the row identity — here the two
+            // genuinely coincide, which is precisely why the child case had to be separated out.
+            memberRowId: (row?.id as string) ?? null,
+        },
     });
+
+describe("a membership carries the Work View's own row identity", () => {
+    it("a CHILD membership carries the PARTICIPATION id, not the durable child", () => {
+        // The defect this sprint exists to fix, at its source. The runtime selects child rows on
+        // `process_instances.id`; anything else names no row in the evaluated page and is refused
+        // with `subject_unavailable` — "That record isn't in this Work View".
+        for (const membership of child("waitlist")) {
+            expect(membership.operationalMemberId).toBe(PARTICIPATION_A);
+            expect(membership.operationalMemberId).not.toBe(DURABLE_CHILD);
+        }
+    });
+
+    it("a FAMILY membership carries the case id — there the row and the host coincide", () => {
+        for (const membership of family(familyRow({ has_active_tour: true }))) {
+            expect(membership.operationalMemberId).toBe("opp-kurzman");
+        }
+    });
+
+    it("ONE CHILD, TWO PARTICIPATIONS ⇒ two distinct row identities", () => {
+        // Why the durable id cannot be the row id, stated as behaviour: the same child across two
+        // leads is two different rows, and a destination must name which one.
+        const first = child("waitlist", "pi-lead-one")[0];
+        const second = child("waitlist", "pi-lead-two")[0];
+
+        expect(first.operationalMemberId).toBe("pi-lead-one");
+        expect(second.operationalMemberId).toBe("pi-lead-two");
+        expect(first.operationalMemberId).not.toBe(second.operationalMemberId);
+        // …and they are the SAME cohort, so the view alone could never disambiguate them.
+        expect(first.workViewId).toBe(second.workViewId);
+    });
+
+    it("NO resolvable member identity ⇒ NO destination, even when membership is true", () => {
+        // The added truth gate. Membership can be provable while the way to REACH it is unknown, and
+        // offering it then is what delivered the operator to the refusal banner.
+        expect(child("waitlist", null)).toEqual([]);
+        expect(child("waitlist", "   ")).toEqual([]);
+    });
+});
 
 describe("a subject's ACTUAL Work View memberships", () => {
     it("OVERLAPPING: a waitlisted child belongs to more than one cohort at once", () => {
@@ -222,7 +280,7 @@ describe("membership is gated by permission and by operability", () => {
         // Naming the cohort would itself disclose where the subject is.
         const memberships = resolveOperationalMemberships({
             process: process({ operator_has_access: false }),
-            subject: { grain: "child", stageKey: "waitlist" },
+            subject: { grain: "child", stageKey: "waitlist", memberRowId: PARTICIPATION_A },
         });
         expect(memberships).toEqual([]);
     });
@@ -233,7 +291,7 @@ describe("membership is gated by permission and by operability", () => {
         });
         const memberships = resolveOperationalMemberships({
             process: hidden,
-            subject: { grain: "child", stageKey: "waitlist" },
+            subject: { grain: "child", stageKey: "waitlist", memberRowId: PARTICIPATION_A },
         });
         expect(ids(memberships)).toEqual(["all_children"]);
     });
@@ -278,7 +336,7 @@ describe("membership is gated by permission and by operability", () => {
         };
         const memberships = resolveOperationalMemberships({
             process: process({ work_views: [ambiguous] as never }),
-            subject: { grain: "child", stageKey: "waitlist" },
+            subject: { grain: "child", stageKey: "waitlist", memberRowId: PARTICIPATION_A },
         });
         expect(memberships).toEqual([]);
     });
@@ -291,7 +349,7 @@ describe("the membership answer stays configuration-driven", () => {
         });
         const memberships = resolveOperationalMemberships({
             process: renamed,
-            subject: { grain: "child", stageKey: "waitlist" },
+            subject: { grain: "child", stageKey: "waitlist", memberRowId: PARTICIPATION_A },
         });
         expect(ids(memberships)).toContain("waitlist_view");
         expect(memberships.find((m) => m.workViewId === "waitlist_view")?.workViewLabel).toBe(
@@ -305,7 +363,7 @@ describe("the membership answer stays configuration-driven", () => {
         });
         const memberships = resolveOperationalMemberships({
             process: reordered,
-            subject: { grain: "child", stageKey: "waitlist" },
+            subject: { grain: "child", stageKey: "waitlist", memberRowId: PARTICIPATION_A },
         });
         expect(ids(memberships)).toEqual(["priority_children", "all_children", "waitlist_view"]);
     });
@@ -325,7 +383,7 @@ describe("the membership answer stays configuration-driven", () => {
         };
         const memberships = resolveOperationalMemberships({
             process: process({ work_views: [view] as never, stages: stages as never }),
-            subject: { grain: "child", stageKey: "phase_x" },
+            subject: { grain: "child", stageKey: "phase_x", memberRowId: PARTICIPATION_A },
         });
         expect(ids(memberships)).toEqual(["phase_x_view"]);
     });

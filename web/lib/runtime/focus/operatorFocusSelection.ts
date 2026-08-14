@@ -38,6 +38,15 @@ export type OperatorFocusSelectionDetail = {
      * Work View slugs alike.
      */
     host_work_view_id?: string | null;
+    /**
+     * The Work View ROW to select — `subjectRows[].entityId`.
+     *
+     * Separate from `entity_id` above, which stays the HOST the panel composes against. For a
+     * family-grain lens the two coincide; for a child-grain lens the row is a participation and the
+     * host is the case, and sending the host as the subject is refused by the runtime's membership
+     * guard. Absent, the host remains the subject and nothing changes for existing callers.
+     */
+    operational_member_id?: string | null;
     /** Card + item to land on inside that panel, carried as the kernel's ASPECT. */
     card_focus?: CardFocusInput | null;
 };

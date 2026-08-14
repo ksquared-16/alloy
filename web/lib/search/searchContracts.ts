@@ -123,6 +123,19 @@ export type SearchOperationalMembershipRef = {
     host_work_unit_key: string | null;
     /** The record whose Focus Panel hosts the subject inside that view. */
     host_entity_id: string | null;
+    /**
+     * THE WORK VIEW ROW IDENTITY — what the runtime selects on, and what its membership guard matches.
+     *
+     *   child grain    `process_instances.id`   the PARTICIPATION
+     *   family grain   `opportunities.id`       the case
+     *
+     * SEPARATE from `host_entity_id`, and the separation is the point. For a family-grain lens the two
+     * coincide; for a child-grain lens they never do — the evaluated rows are participations while the
+     * Focus Panel still composes against the family case. Collapsing them is what made a truthful
+     * Waitlist destination answer "That record isn't in this Work View": the case was sent as the
+     * subject, and no child row could match it.
+     */
+    operational_member_id: string;
 };
 
 export type SearchContext = {
@@ -250,6 +263,18 @@ export type SearchDestination = {
      * `/workspace/work-unit/:slug`, which resolves work-unit keys AND Work View slugs.
      */
     host_work_view_id?: string | null;
+    /**
+     * The Work View ROW to select — `subjectRows[].entityId` in the runtime's own vocabulary.
+     *
+     * Distinct from `host_entity_id` (what the Focus Panel composes against) and from `item_id` (the
+     * durable child focused as an ASPECT). For a child-grain lens all three are different objects:
+     * a participation, a case, and a child.
+     *
+     * Null for destinations that name no Work View row — the subject destination and route
+     * destinations. Present, the runtime selects this row and its membership guard validates it; the
+     * guard stays fail-closed, and an id that names no row is still refused.
+     */
+    operational_member_id?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
     /**

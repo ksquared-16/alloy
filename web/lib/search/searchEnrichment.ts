@@ -299,6 +299,11 @@ export async function enrichSearchCandidates(args: {
                                       c.kind === "child" || !row.context_id
                                           ? null
                                           : familyMembershipRows.get(row.context_id) ?? null,
+                                  // THE ROW IDENTITY, at the grain the lens actually rows at.
+                                  // A child-grain lens selects PARTICIPATIONS, so the participation
+                                  // this membership was evaluated from IS the member — not the
+                                  // durable child (one child, two leads, two rows) and not the case.
+                                  memberRowId: c.kind === "child" ? row.id : row.context_id,
                               },
                           }).map((m) => ({
                               work_view_id: m.workViewId,
@@ -311,6 +316,9 @@ export async function enrichSearchCandidates(args: {
                                   ? hostWorkUnitKeys.get(row.context_id) ?? null
                                   : null,
                               host_entity_id: row.context_id ?? null,
+                              // Carried SEPARATELY from the host. For a child these differ; for a
+                              // family they coincide — and the runtime is entitled to both.
+                              operational_member_id: m.operationalMemberId,
                           }))
                         : null,
                 });
@@ -436,6 +444,14 @@ function resolveTypeLabel(
 // ---------------------------------------------------------------------------
 
 type ProcessInstanceRow = {
+    /**
+     * `process_instances.id` — the PARTICIPATION.
+     *
+     * For a child-grain Work View this is the row identity the runtime selects on. It is deliberately
+     * not the durable child: one child can hold two participations across two leads, and those are
+     * two different rows.
+     */
+    id: string;
     subject_id: string;
     process_key: string;
     stage_key: string | null;
@@ -453,12 +469,17 @@ async function fetchProcessInstances(
     if (!subjectIds.length) return [];
     const { data, error } = await supabase
         .from("process_instances")
-        .select("subject_id, process_key, stage_key, state, context_type, context_id, metadata")
+        // `id` is the PARTICIPATION — and for a child-grain Work View it is the row identity the
+        // runtime selects on (`subjectRows[].entityId` is `participationId`). Without it Search can
+        // prove a child belongs to a cohort and still be unable to say WHICH ROW that is, which is
+        // how the destination came to carry the family case as the subject and be refused.
+        .select("id, subject_id, process_key, stage_key, state, context_type, context_id, metadata")
         .eq("org_id", orgId)
         .in("subject_id", subjectIds);
     if (error) throw new Error(error.message);
 
     return ((data ?? []) as Array<{
+        id: string;
         subject_id: string;
         process_key: string;
         stage_key?: string | null;
@@ -467,6 +488,7 @@ async function fetchProcessInstances(
         context_id?: string | null;
         metadata?: Record<string, unknown> | null;
     }>).map((row) => ({
+        id: String(row.id),
         subject_id: String(row.subject_id),
         process_key: String(row.process_key ?? "").trim(),
         stage_key: row.stage_key ?? null,

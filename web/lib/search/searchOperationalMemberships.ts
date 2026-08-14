@@ -69,6 +69,19 @@ export type SearchOperationalMembership = {
     workViewLabel: string;
     /** The grain the lens rows at — the subject the destination will actually select. */
     rowGrain: MembershipSubjectGrain;
+    /**
+     * THE WORK VIEW ROW IDENTITY — what the runtime selects on, and what the membership guard matches
+     * against (`subjectRows[].entityId` in the provisioning answer).
+     *
+     *   child grain    `process_instances.id`   the PARTICIPATION
+     *   family grain   `opportunities.id`       the case
+     *
+     * Deliberately NOT the durable child id. One child can hold two participations across two leads,
+     * and those are two different rows — so the durable id names no single row, and sending it would
+     * reproduce the very failure this field exists to remove: a plausible identity that matches
+     * nothing in the evaluated page, refused as `subject_unavailable`.
+     */
+    operationalMemberId: string;
     membershipReason: string;
 };
 
@@ -79,6 +92,15 @@ export type MembershipSubject = {
      * to its family case, exactly as the provider resolves it); for a family it is the context stage.
      */
     stageKey: string | null;
+    /**
+     * The canonical Work View row identity for this subject AT THIS GRAIN — the participation id for
+     * a child, the case id for a family.
+     *
+     * Absent means Search cannot say how the runtime would select this member, and no destination is
+     * emitted. That is the added truth gate: membership can be true while the way to *reach* it is
+     * unknown, and offering it anyway is what produced "That record isn't in this Work View".
+     */
+    memberRowId?: string | null;
     /**
      * The subject's materialized operational row — required for FAMILY membership, because family
      * predicates read fields the queue attaches (`has_active_tour`, tour wall date, …), not raw
@@ -104,6 +126,13 @@ export function resolveOperationalMemberships(params: {
     if (!process.operator_has_access) return [];
     if (!process.work_views.length) return [];
 
+    // THE ADDED TRUTH GATE: a destination Search cannot say how to SELECT is not a destination.
+    // Membership can be true while the row identity is unknown (a participation Search never read, a
+    // family whose row was not materialized) — and offering it then is exactly what delivered the
+    // operator to "That record isn't in this Work View".
+    const memberRowId = (subject.memberRowId ?? "").trim();
+    if (!memberRowId) return [];
+
     const out: SearchOperationalMembership[] = [];
 
     for (const view of process.work_views) {
@@ -127,6 +156,7 @@ export function resolveOperationalMemberships(params: {
             workViewId: view.id,
             workViewLabel: view.label,
             rowGrain: grain.grain,
+            operationalMemberId: memberRowId,
             membershipReason: decided,
         });
     }

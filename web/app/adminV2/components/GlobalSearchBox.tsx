@@ -280,6 +280,11 @@ export default function GlobalSearchBox() {
                 // it over the case unit above — a waitlisted child must not be sent to the family's
                 // Lead queue, which does not contain them.
                 host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
+                // The Work View's own ROW identity, kept apart from the host above. A child-grain
+                // lens evaluates participations, so the case that hosts the panel is not a row in it
+                // — sending the case as the subject is what produced "That record isn't in this
+                // Work View" over a destination whose membership was perfectly truthful.
+                operational_member_id: (destination.operational_member_id ?? "").trim() || null,
                 card_focus: {
                     card_key: destination.card_key,
                     item_id: destination.item_id ?? null,

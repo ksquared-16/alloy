@@ -171,6 +171,10 @@ function resolveMembershipDestinations(
         // The lens to COMMIT. The runtime swaps it on the host unit's surface — the live shape is
         // `/workspace/work-unit/new-leads?work_view_id=new_work_view_4`.
         host_work_view_id: membership.work_view_id,
+        // …and the ROW to select inside it. Deliberately not the host: for a child-grain lens the row
+        // is a participation while the host is the case, and sending the host as the subject is what
+        // the runtime refused as `subject_unavailable`.
+        operational_member_id: membership.operational_member_id,
     }));
 }
 
