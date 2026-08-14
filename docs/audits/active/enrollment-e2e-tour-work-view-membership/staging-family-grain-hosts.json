@@ -1,0 +1,282 @@
+{
+  "steps": [
+    {
+      "label": "land:new-leads",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/new-leads",
+      "wv": null,
+      "active": "new_leads",
+      "terminal": "empty",
+      "noRecords": true,
+      "family": false,
+      "infant": false,
+      "sample": "No records in this view",
+      "answers": []
+    },
+    {
+      "label": "from-new-leads:Waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/new-leads?work_view_id=new_work_view_4",
+      "wv": "new_work_view_4",
+      "active": "new_work_view_4",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": false,
+      "infant": true,
+      "sample": "Filters",
+      "clicked": "Waitlist 2",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_4",
+          "terminal": "operational",
+          "rows": 2,
+          "subjects": [
+            "Wrigley Kurzman",
+            "Lennon Kurzman"
+          ],
+          "active": {
+            "id": "new_work_view_4",
+            "label": "Waitlist"
+          },
+          "rowGrain": "child"
+        }
+      ]
+    },
+    {
+      "label": "from-new-leads:All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/new-leads?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "sample": "Filters",
+      "clicked": "All 1",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_6",
+          "terminal": "operational",
+          "rows": 1,
+          "subjects": [
+            "Kurzman Family"
+          ],
+          "active": {
+            "id": "new_work_view_6",
+            "label": "All"
+          },
+          "rowGrain": "family"
+        }
+      ]
+    },
+    {
+      "label": "from-new-leads:Tours",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/new-leads?work_view_id=new_work_view_5",
+      "wv": "new_work_view_5",
+      "active": "new_work_view_5",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "sample": "Filters",
+      "clicked": "Tours 1",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_3",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_work_view_3",
+            "label": "Registration"
+          },
+          "rowGrain": "child"
+        },
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_leads",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_leads",
+            "label": "New"
+          },
+          "rowGrain": "family"
+        },
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_5",
+          "terminal": "operational",
+          "rows": 1,
+          "subjects": [
+            "Kurzman Family"
+          ],
+          "active": {
+            "id": "new_work_view_5",
+            "label": "Tours"
+          },
+          "rowGrain": "family"
+        },
+        {
+          "url": "/api/admin/work-units/new-leads/provisioning-answer?work_view_id=new_work_view_2",
+          "terminal": "operational",
+          "rows": 1,
+          "subjects": [
+            "Kurzman Family"
+          ],
+          "active": {
+            "id": "new_work_view_2",
+            "label": "Active Pipeline"
+          },
+          "rowGrain": "family"
+        }
+      ]
+    },
+    {
+      "label": "from-new-leads:All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/new-leads?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": true,
+      "infant": false,
+      "sample": "Filters",
+      "clicked": "All 1",
+      "answers": []
+    },
+    {
+      "label": "land:waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/waitlist",
+      "wv": null,
+      "active": "new_work_view_4",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": false,
+      "infant": true,
+      "sample": "Filters",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_6",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_work_view_6",
+            "label": "All"
+          },
+          "rowGrain": "family"
+        }
+      ]
+    },
+    {
+      "label": "from-waitlist:Waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/waitlist",
+      "wv": null,
+      "active": "new_work_view_4",
+      "terminal": "operational",
+      "noRecords": false,
+      "family": true,
+      "infant": true,
+      "sample": "Filters",
+      "clicked": "Waitlist 2",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_2",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_work_view_2",
+            "label": "Active Pipeline"
+          },
+          "rowGrain": "family"
+        },
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_5",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_work_view_5",
+            "label": "Tours"
+          },
+          "rowGrain": "family"
+        },
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_leads",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_leads",
+            "label": "New"
+          },
+          "rowGrain": "family"
+        },
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_3",
+          "terminal": "empty",
+          "rows": 0,
+          "subjects": [],
+          "active": {
+            "id": "new_work_view_3",
+            "label": "Registration"
+          },
+          "rowGrain": "child"
+        }
+      ]
+    },
+    {
+      "label": "from-waitlist:All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/waitlist?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "empty",
+      "noRecords": true,
+      "family": false,
+      "infant": false,
+      "sample": "No records in this view",
+      "clicked": "All 1",
+      "answers": [
+        {
+          "url": "/api/admin/work-units/waitlist/provisioning-answer?work_view_id=new_work_view_4",
+          "terminal": "operational",
+          "rows": 2,
+          "subjects": [
+            "Wrigley Kurzman",
+            "Lennon Kurzman"
+          ],
+          "active": {
+            "id": "new_work_view_4",
+            "label": "Waitlist"
+          },
+          "rowGrain": "child"
+        }
+      ]
+    },
+    {
+      "label": "from-waitlist:Tours",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/waitlist?work_view_id=new_work_view_5",
+      "wv": "new_work_view_5",
+      "active": "new_work_view_5",
+      "terminal": "empty",
+      "noRecords": true,
+      "family": false,
+      "infant": false,
+      "sample": "No records in this view",
+      "clicked": "Tours 1",
+      "answers": []
+    },
+    {
+      "label": "from-waitlist:All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/waitlist?work_view_id=new_work_view_6",
+      "wv": "new_work_view_6",
+      "active": "new_work_view_6",
+      "terminal": "empty",
+      "noRecords": true,
+      "family": false,
+      "infant": false,
+      "sample": "No records in this view",
+      "clicked": "All 1",
+      "answers": []
+    }
+  ]
+}

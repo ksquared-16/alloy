@@ -1,0 +1,961 @@
+{
+  "steps": [
+    {
+      "label": "cold-all",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_6",
+      "work_view_id": "new_work_view_6",
+      "terminal": "operational",
+      "activeView": "new_work_view_6",
+      "shellMountId": "wu-shell_r_0_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "infantSection": false,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled Work Activity This stage's work configures no action. WHAT'S "
+    },
+    {
+      "label": "cold-tours",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_5",
+      "work_view_id": "new_work_view_5",
+      "terminal": "operational",
+      "activeView": "new_work_view_5",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": false,
+      "infantSection": false,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled Work Activity This stage's work configures no action. WHAT'S "
+    },
+    {
+      "label": "cold-waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_4",
+      "work_view_id": "new_work_view_4",
+      "terminal": "operational",
+      "activeView": "new_work_view_4",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": false,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": false,
+      "scheduledTour": false,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+          "text": "W Wrigley Kurzman 3/15/2026 (4m) · — 4d"
+        },
+        {
+          "id": "93722453-33e9-4207-8774-8931ee2c855d",
+          "text": "L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "sample": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d Lennon Kurzman Waitlist Work Activity WHAT'S NEXT In progress Waitlist Manage waitlist candidates and spot offers. C"
+    },
+    {
+      "label": "start-waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_4",
+      "work_view_id": "new_work_view_4",
+      "terminal": "operational",
+      "activeView": "new_work_view_4",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": false,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": false,
+      "scheduledTour": false,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+          "text": "W Wrigley Kurzman 3/15/2026 (4m) · — 4d"
+        },
+        {
+          "id": "93722453-33e9-4207-8774-8931ee2c855d",
+          "text": "L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "sample": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d Lennon Kurzman Waitlist Work Activity WHAT'S NEXT In progress Waitlist Manage waitlist candidates and spot offers. C"
+    },
+    {
+      "label": "click-All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_6",
+      "work_view_id": "new_work_view_6",
+      "terminal": "operational",
+      "activeView": "new_work_view_6",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": true,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled North Campus Manage ▾ Work Activity WHAT'S NEXT In progress W",
+      "clicked": "All 1"
+    },
+    {
+      "label": "click-Tours",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_5",
+      "work_view_id": "new_work_view_5",
+      "terminal": "operational",
+      "activeView": "new_work_view_5",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": true,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled North Campus Manage ▾ Work Activity WHAT'S NEXT In progress W",
+      "clicked": "Tours 1"
+    },
+    {
+      "label": "click-Waitlist",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_4",
+      "work_view_id": "new_work_view_4",
+      "terminal": "operational",
+      "activeView": "new_work_view_4",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": true,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+          "text": "W Wrigley Kurzman 3/15/2026 (4m) · — 4d"
+        },
+        {
+          "id": "93722453-33e9-4207-8774-8931ee2c855d",
+          "text": "L Lennon Kurzman 4/2/2024 (2y4m) · — 4d"
+        }
+      ],
+      "sample": "Filters ▼ INFANT 1 W Wrigley Kurzman 3/15/2026 (4m) · — 4d ▼ TODDLER 1 L Lennon Kurzman 4/2/2024 (2y4m) · — 4d Lennon Kurzman Waitlist · Tour Scheduled North Campus Manage ▾ Work Activity WHAT'S NEXT In progress Waitlist Manage",
+      "clicked": "Waitlist 2"
+    },
+    {
+      "label": "click-All",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_6",
+      "work_view_id": "new_work_view_6",
+      "terminal": "operational",
+      "activeView": "new_work_view_6",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": true,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled North Campus Manage ▾ Work Activity WHAT'S NEXT In progress W",
+      "clicked": "All 1"
+    },
+    {
+      "label": "click-Tours",
+      "href": "https://staging.workwithalloy.com/workspace/work-unit/all?work_view_id=new_work_view_5",
+      "work_view_id": "new_work_view_5",
+      "terminal": "operational",
+      "activeView": "new_work_view_5",
+      "shellMountId": "wu-shell_r_2_",
+      "noRecords": false,
+      "prepTimeout": false,
+      "kurzmanFamily": true,
+      "lennon": true,
+      "wrigley": true,
+      "waitlistTour": true,
+      "scheduledTour": true,
+      "infantSection": true,
+      "strip": [
+        "All locations ▾",
+        "Waitlist 2",
+        "Tours 1",
+        "All 1"
+      ],
+      "pills": [
+        {
+          "id": "new_leads",
+          "text": "New 0"
+        },
+        {
+          "id": "new_work_view_2",
+          "text": "Active Pipeline 0"
+        },
+        {
+          "id": "new_work_view_3",
+          "text": "Registration 0"
+        },
+        {
+          "id": "new_work_view_4",
+          "text": "Waitlist 2"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Tours 1"
+        },
+        {
+          "id": "new_work_view_6",
+          "text": "All 1"
+        },
+        {
+          "id": "new_work_view_5",
+          "text": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children"
+        }
+      ],
+      "queueRows": [
+        {
+          "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+          "text": "K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon"
+        }
+      ],
+      "sample": "Filters K Kurzman Family Waitlist · Tour Scheduled Kelly Kurzman · (602) 290-4816 Lennon (2y4m) | Wrigley (4m) 1d 2 children Kurzman Family Waitlist · Tour Scheduled North Campus Manage ▾ Work Activity WHAT'S NEXT In progress W",
+      "clicked": "Tours 1"
+    }
+  ],
+  "network": [
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/queue-view-totals",
+      "body": {
+        "terminal": null,
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": null,
+        "slug": null,
+        "counts": [
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_leads",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_5",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_6",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+            "queueKey": "lifecycle_qualification",
+            "workViewId": "new_work_view_2",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+            "queueKey": "lifecycle_tour",
+            "workViewId": "new_work_view_3",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+            "queueKey": "lifecycle_waitlist",
+            "workViewId": "new_work_view_4",
+            "count": 2,
+            "known": true
+          }
+        ],
+        "subjects": [],
+        "timings": null
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/queue-view-totals",
+      "body": {
+        "terminal": null,
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": null,
+        "slug": null,
+        "counts": [
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_leads",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_5",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_6",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+            "queueKey": "lifecycle_qualification",
+            "workViewId": "new_work_view_2",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+            "queueKey": "lifecycle_tour",
+            "workViewId": "new_work_view_3",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+            "queueKey": "lifecycle_waitlist",
+            "workViewId": "new_work_view_4",
+            "count": 2,
+            "known": true
+          }
+        ],
+        "subjects": [],
+        "timings": null
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/queue-view-totals",
+      "body": {
+        "terminal": null,
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": null,
+        "slug": null,
+        "counts": [
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_leads",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_5",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_6",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+            "queueKey": "lifecycle_qualification",
+            "workViewId": "new_work_view_2",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+            "queueKey": "lifecycle_tour",
+            "workViewId": "new_work_view_3",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+            "queueKey": "lifecycle_waitlist",
+            "workViewId": "new_work_view_4",
+            "count": 2,
+            "known": true
+          }
+        ],
+        "subjects": [],
+        "timings": null
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/queue-view-totals",
+      "body": {
+        "terminal": null,
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": null,
+        "slug": null,
+        "counts": [
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_leads",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_5",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "587de5bc-c43d-47b1-b1a0-0a3ee2ff2c37",
+            "queueKey": "lifecycle_lead",
+            "workViewId": "new_work_view_6",
+            "count": 1,
+            "known": true
+          },
+          {
+            "workUnitId": "a428520f-b6a1-4913-8209-2d45a9affcd9",
+            "queueKey": "lifecycle_qualification",
+            "workViewId": "new_work_view_2",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "5c0d15fc-6545-411c-9a73-8df3df772f62",
+            "queueKey": "lifecycle_tour",
+            "workViewId": "new_work_view_3",
+            "count": 0,
+            "known": true
+          },
+          {
+            "workUnitId": "99bc2a38-6d47-4abc-8ec6-88d7f31dd59b",
+            "queueKey": "lifecycle_waitlist",
+            "workViewId": "new_work_view_4",
+            "count": 2,
+            "known": true
+          }
+        ],
+        "subjects": [],
+        "timings": null
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_work_view_6",
+      "body": {
+        "terminal": "operational",
+        "message": null,
+        "rowCount": 1,
+        "total": null,
+        "work_view_id": "new_work_view_6",
+        "slug": "all",
+        "counts": null,
+        "subjects": [
+          {
+            "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+            "title": "Kurzman Family"
+          }
+        ],
+        "timings": {
+          "authorization_ms": 0.012851999999838881,
+          "work_unit_ms": 111.14225099999749,
+          "configuration_ms": 358.783362999995,
+          "presentation_ms": 722.7513370000088,
+          "records_ms": 0.09726100000261795,
+          "projection_ms": 395.6087839999964,
+          "composition_ms": 325.4822050000075,
+          "total_ms": 1200.6634200000117
+        }
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_work_view_3",
+      "body": {
+        "terminal": "empty",
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": "new_work_view_3",
+        "slug": "all",
+        "counts": null,
+        "subjects": [],
+        "timings": {
+          "authorization_ms": 0.0074499999900581315,
+          "work_unit_ms": 0.05616100000042934,
+          "configuration_ms": 1.0966650000045775,
+          "presentation_ms": 344.0907690000022,
+          "records_ms": 135.38347500000964,
+          "projection_ms": 109.97256599999673,
+          "composition_ms": 97.78122099999746,
+          "total_ms": 350.43304199998965
+        }
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_leads",
+      "body": {
+        "terminal": "empty",
+        "message": null,
+        "rowCount": 0,
+        "total": null,
+        "work_view_id": "new_leads",
+        "slug": "all",
+        "counts": null,
+        "subjects": [],
+        "timings": {
+          "authorization_ms": 0.007775999998557381,
+          "work_unit_ms": 0.03501299998606555,
+          "configuration_ms": 0.7422759999899426,
+          "presentation_ms": 333.5678239999979,
+          "records_ms": 119.8151130000042,
+          "projection_ms": 213.22502199999872,
+          "composition_ms": 0.03262900000845548,
+          "total_ms": 337.6215660000016
+        }
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_work_view_5",
+      "body": {
+        "terminal": "operational",
+        "message": null,
+        "rowCount": 1,
+        "total": null,
+        "work_view_id": "new_work_view_5",
+        "slug": "all",
+        "counts": null,
+        "subjects": [
+          {
+            "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+            "title": "Kurzman Family"
+          }
+        ],
+        "timings": {
+          "authorization_ms": 0.010259999995469116,
+          "work_unit_ms": 0.052639000001363456,
+          "configuration_ms": 1.0658950000070035,
+          "presentation_ms": 683.4189859999897,
+          "records_ms": 129.10995900000853,
+          "projection_ms": 212.9739830000035,
+          "composition_ms": 341.1543129999918,
+          "total_ms": 688.6229750000057
+        }
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_work_view_2",
+      "body": {
+        "terminal": "operational",
+        "message": null,
+        "rowCount": 1,
+        "total": null,
+        "work_view_id": "new_work_view_2",
+        "slug": "all",
+        "counts": null,
+        "subjects": [
+          {
+            "id": "d097e1a8-c3c0-4c51-a113-2275b009b9a9",
+            "title": "Kurzman Family"
+          }
+        ],
+        "timings": {
+          "authorization_ms": 0.007889000000432134,
+          "work_unit_ms": 0.03040299999702256,
+          "configuration_ms": 0.9651029999949969,
+          "presentation_ms": 676.8604259999993,
+          "records_ms": 104.70486800000072,
+          "projection_ms": 248.0208469999925,
+          "composition_ms": 323.6769469999999,
+          "total_ms": 680.8882440000016
+        }
+      }
+    },
+    {
+      "status": 200,
+      "url": "https://staging.workwithalloy.com/api/admin/work-units/all/provisioning-answer?work_view_id=new_work_view_4&subject_id=9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+      "body": {
+        "terminal": "operational",
+        "message": null,
+        "rowCount": 2,
+        "total": null,
+        "work_view_id": "new_work_view_4",
+        "slug": "all",
+        "counts": null,
+        "subjects": [
+          {
+            "id": "9ab36f48-7bd0-4a4e-8538-2afb46a8c9a8",
+            "title": "Wrigley Kurzman"
+          },
+          {
+            "id": "93722453-33e9-4207-8774-8931ee2c855d",
+            "title": "Lennon Kurzman"
+          }
+        ],
+        "timings": {
+          "authorization_ms": 0.01006000000052154,
+          "work_unit_ms": 0.036175000001094304,
+          "configuration_ms": 0.7527109999937238,
+          "presentation_ms": 1402.885991999996,
+          "records_ms": 124.32932800000708,
+          "projection_ms": 431.54375899999286,
+          "composition_ms": 967.969895000002,
+          "total_ms": 1532.077376000001
+        }
+      }
+    }
+  ],
+  "clicked": [
+    "All 1",
+    "Tours 1",
+    "Waitlist 2",
+    "All 1",
+    "Tours 1"
+  ]
+}

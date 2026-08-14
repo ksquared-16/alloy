@@ -48,6 +48,7 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import {
     loadSettlementLocators,
+    resolveProvisioningPopulationWorkUnitId,
     SETTLEMENT_LOCATORS_UNAVAILABLE,
     type SettlementLocators,
 } from "./settlementLocators";
@@ -114,6 +115,7 @@ import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { loadChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
 import {
+    loadWorkUnitProcessPopulation,
     PROCESS_POPULATION_CAP,
     PROCESS_POPULATION_SELECT,
 } from "@/lib/runtime/provisioning/workUnitProcessPopulation";
@@ -631,15 +633,13 @@ export async function composeWorkUnitProvisioningAnswer(
         departmentId: wuRow.department_id ? String(wuRow.department_id) : null,
     };
 
-    // ── COLD-PATH PARALLELISM: the operational records depend ONLY on work_unit.id (available now), not on
-    //    configuration, queue-layout, or presentation. Kick the fetch off here so it overlaps that whole
-    //    independent branch; it is awaited at the projection join below. This is still ONE atomic Preparation
-    //    answer — an internal read reordering, never a second round-trip. Supabase returns errors in-band
-    //    (no rejection), so an early return that never awaits this promise cannot leak an unhandled rejection.
+    // ── COLD-PATH PARALLELISM: kick a surface-scoped population read so it overlaps configuration.
+    //    After Settlement locators resolve, rows MUST use the active lens's COUNT host when that host
+    //    differs from the surface slug (Waitlist shell → All/Tours family lenses). In that case this
+    //    early read is discarded and replaced below — still one atomic answer.
     //
-    // THE POPULATION IS SHARED WITH THE COUNT PATH. This read defines what "every record in this
-    // process" means; the totals route now derives its counts from the SAME definition, so an
-    // include-all Work View's rows and its pill can no longer be answers to different questions.
+    // THE POPULATION IS SHARED WITH THE COUNT PATH. Counts already evaluate on `hostWorkUnitId`;
+    // Operational Commit must project the same population or pills and rows diverge.
     const recordsPromise = (async () =>
         req.supabase
             .from("opportunities")
@@ -726,6 +726,12 @@ export async function composeWorkUnitProvisioningAnswer(
               deptWorkUnits,
           })
         : SETTLEMENT_LOCATORS_UNAVAILABLE;
+    // Rows + child membership follow the active lens's Settlement count host when it differs from the
+    // surface slug. Shell identity (`workUnit`) stays the open unit so pill LENS switches do not remount.
+    const populationWorkUnitId = resolveProvisioningPopulationWorkUnitId({
+        surfaceWorkUnitId: workUnit.id,
+        settlement,
+    });
     // ── U-P7: resolve the operational presentation composition server-side, into THIS answer. ──
     // An identifier would be the round-trip U-P7 exists to remove; resolving here means the first
     // visible frame is already in final layout and nothing re-lays out after commit.
@@ -835,13 +841,39 @@ export async function composeWorkUnitProvisioningAnswer(
     const subjectGrain = { grain: subject.grain, subjectType: subject.subjectType };
 
     // ── Stage Membership: base rows, Work Unit scoped, bounded. Persisted stage_key IS membership. ──
-    // Awaited here at the projection join — the fetch was kicked off at gesture-entry (above) so it ran
-    // CONCURRENTLY with configuration + queue-layout + presentation. `records_ms` now measures the residual
-    // wait (near-zero when it has already resolved), which is exactly the overlap we bought.
+    // Awaited here at the projection join — the surface-scoped fetch was kicked off early so it ran
+    // CONCURRENTLY with configuration when the count host IS the surface. Cross-host lenses reload the
+    // count host's population via the same helper Settlement totals use.
     const tRec = now();
-    const { data: baseRows, error: rowErr } = await recordsPromise;
-    timings.records_ms = now() - tRec;
-    if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit, navFrame);
+    let baseRows: Record<string, unknown>[] | null = null;
+    if (populationWorkUnitId === workUnit.id) {
+        const { data, error: rowErr } = await recordsPromise;
+        timings.records_ms = now() - tRec;
+        if (rowErr) return fail("records_unavailable", `records unavailable: ${rowErr.message}`, workUnit, navFrame);
+        baseRows = (data ?? []) as Record<string, unknown>[];
+    } else {
+        void recordsPromise.then(
+            () => undefined,
+            () => undefined,
+        );
+        try {
+            const population = await loadWorkUnitProcessPopulation({
+                supabase: req.supabase,
+                orgId: req.orgId,
+                workUnitId: populationWorkUnitId,
+            });
+            timings.records_ms = now() - tRec;
+            baseRows = population.rows;
+        } catch (e) {
+            timings.records_ms = now() - tRec;
+            return fail(
+                "records_unavailable",
+                `records unavailable: ${e instanceof Error ? e.message : String(e)}`,
+                workUnit,
+                navFrame,
+            );
+        }
+    }
 
     // ── R1: THE ROW SOURCE IS THE RESOLVED GRAIN'S, NOT ALWAYS `opportunities`. ──
     //
@@ -873,7 +905,7 @@ export async function composeWorkUnitProvisioningAnswer(
             childRows = await loadChildGrainMembersForLens({
                 supabase: req.supabase,
                 orgId: req.orgId,
-                workUnitId: workUnit.id,
+                workUnitId: populationWorkUnitId,
                 view: activeView,
             });
         } catch (e) {

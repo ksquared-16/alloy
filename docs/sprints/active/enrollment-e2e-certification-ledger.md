@@ -1,24 +1,39 @@
 # Enrollment E2E Certification Ledger
 
 **Worktree:** `wt5-epp-runtime-convergence` · **Slot:** 5 · **Port:** 3015  
-**Updated:** 2026-08-14 (PR #416 integrated to staging — Waitlist/Tour runtime-convergence slice closed)
+**Updated:** 2026-08-14 (family-grain All/Tours rows on Waitlist shell — final correctness)
 
-## Slice status (this PR)
+## Slice status
 
-This merge closes the **Waitlist / Tour runtime-convergence** slice. It does **not** claim the entire Enrollment E2E journey is complete.
+This closes the **Waitlist / Tour runtime-convergence** correctness slice (including the staging family-grain empty-queue defect). It does **not** claim the entire Enrollment E2E journey is complete.
 
 | Concern | Status |
 |---------|--------|
 | Waitlist | **Certified** (current scope) |
 | Tour Invitation | **Certified** |
 | Public Tour booking | **Certified** |
-| All / Tours overlapping Work Views | **Certified** |
+| All / Tours overlapping Work Views | **Certified** (family row + Focus on staging, including from Waitlist shell) |
 | Work View switching (in-page lenses) | **Certified** |
 | Queue Surface authority | **Certified** |
 | Child truth parity | **Certified** |
 | Tour automation Rule multi-AND conditions | **Certified** |
-| Enrollment compose performance (7–20s+) | **FOLLOW-UP** (not a merge blocker; 60s deadline is non-termination floor) |
+| Family-grain count/row cohort parity | **Certified** — Operational Commit uses Settlement count host population |
+| Enrollment compose performance (7–20s+) | **FOLLOW-UP** — next sprint: *Enrollment runtime performance + UX responsiveness audit* |
 | Offer Spot / Registration / Enrollment Packet / final Enrolled | **Subsequent** Enrollment work |
+
+### Next sprint (deferred — do not solve here)
+
+**Enrollment runtime performance + UX responsiveness audit**
+
+Observed / in-scope for that sprint only:
+
+* 7–20s+ composition under load
+* click / queue / Focus latency
+* navigation smoothness
+* save / dropdown / field latency
+* unnecessary fan-out / recomposition
+
+`PROVISIONING_DEADLINE_MS = 60_000` remains a **non-termination floor**, not a latency target.
 
 **Doctrine:** Templates own content; Rule / `TourCommsConfig` owns automation policy. Booked Tour overlaps Waitlist. Internal recipients ≠ Tour Host.
 
@@ -34,6 +49,7 @@ Canonical ownership: `docs/sprints/active/tour-comms-internal-recipients-config-
 | Templates | Communications Template Library |
 | Reschedule/cancel safety | platform invariant |
 | K2 provisioning deadline | `PROVISIONING_DEADLINE_MS = 60_000` — **non-termination floor**, not latency budget |
+| Family-grain rows on any shell | Settlement `queueTotalTarget.hostWorkUnitId` population via `resolveProvisioningPopulationWorkUnitId` |
 
 ### Tours Work View (family-grain — configured, not hardcoded)
 
@@ -43,7 +59,7 @@ Canonical ownership: `docs/sprints/active/tour-comms-internal-recipients-config-
 - No `opportunity_stage = tour` (that kept Waitlist families out)
 - Settlement host: New Leads / All host — same process population
 
-**Browser evidence:** `docs/audits/active/enrollment-e2e-tour-work-view-membership/` (`family-row-fix-uat.json`, `post-rebase-smoke.json`, `rules-ui-automation-uat.*`, `rules-api-persist-uat.json`)
+**Browser evidence:** `docs/audits/active/enrollment-e2e-tour-work-view-membership/` (`family-row-fix-uat.json`, `post-rebase-smoke.json`, `staging-family-grain-hosts.json`, `rules-ui-automation-uat.*`)
 
 ### Studio Delivery & automation
 
