@@ -24,8 +24,21 @@
 export type FocusMode = string;
 
 export type DestinationId = {
+    /** Hosting truth. Always present — a destination is always somewhere. */
     workUnitId: string;
-    workViewId: string;
+    /**
+     * Operator cohort truth — OPTIONAL.
+     *
+     * `null` means **the operator has not selected a Work View**. It does NOT mean "use the default",
+     * "use the first", "restore the host's stage lens", or "infer New". No consumer may reinterpret
+     * this absence as an invitation to default: doing so is the exact defect this dimension exists to
+     * remove — `Kelly → Household` showing `New` as selected because the host unit happened to have
+     * one.
+     *
+     * Work Unit hosting and Work View selection are separate dimensions. A builder-owned stage unit
+     * is a legitimate host; that says nothing about what cohort the operator chose.
+     */
+    workViewId: string | null;
     /** Committed Record of Attention; `null` = resolve the Work View's default-subject strategy. */
     subjectId: string | null;
     /** Focus-Panel mode; `null` = the configured primary mode. */
@@ -46,7 +59,9 @@ export function destinationIdKey(id: DestinationId): string {
     const seg = (v: string | null): string => (v === null ? NULL_SEGMENT : encodeURIComponent(v));
     return [
         `wu:${encodeURIComponent(id.workUnitId)}`,
-        `wv:${encodeURIComponent(id.workViewId)}`,
+        // The absent lens collapses to the SAME sentinel the other optional segments use, so a
+        // lens-free destination is a first-class key rather than an unrepresentable one.
+        `wv:${seg(id.workViewId)}`,
         `s:${seg(id.subjectId)}`,
         `m:${seg(id.focusMode)}`,
     ].join("|");
@@ -62,8 +77,12 @@ export function parseDestinationIdKey(key: string): DestinationId | null {
     const decode = (raw: string): string | null =>
         raw === NULL_SEGMENT ? null : decodeURIComponent(raw);
     const workUnitId = decodeURIComponent(wuPart.slice(3));
-    const workViewId = decodeURIComponent(wvPart.slice(3));
-    if (!workUnitId || !workViewId) return null;
+    const workViewId = decode(wvPart.slice(3));
+    // The HOST is still required — a destination with no work unit is not a place. The LENS is not:
+    // its sentinel decodes to `null` and stays null. Rejecting the key here, or substituting a
+    // default, would make a contextual destination unrestorable and send Back navigation to a cohort
+    // the operator never chose.
+    if (!workUnitId) return null;
     return {
         workUnitId,
         workViewId,
@@ -87,7 +106,11 @@ export function destinationIdEquals(a: DestinationId, b: DestinationId): boolean
  * graph node; this is the key the Operational Graph enumerates (§1.1).
  */
 export function destinationNodeKey(id: Pick<DestinationId, "workUnitId" | "workViewId">): string {
-    return `wu:${encodeURIComponent(id.workUnitId)}|wv:${encodeURIComponent(id.workViewId)}`;
+    // A lens-free destination is its own node, distinct from every cohort node on the same host —
+    // collapsing it onto one of them would let a contextual state share a graph node with `New`.
+    return `wu:${encodeURIComponent(id.workUnitId)}|wv:${
+        id.workViewId === null ? NULL_SEGMENT : encodeURIComponent(id.workViewId)
+    }`;
 }
 
 /** Pin a subject onto a destination (default-subject resolved at prepare time → concrete id). */
@@ -101,6 +124,6 @@ export function withFocusMode(id: DestinationId, focusMode: FocusMode | null): D
 }
 
 /** Construct a node-level destination (subject + mode unresolved) for a (workUnit, workView) pair. */
-export function nodeDestinationId(workUnitId: string, workViewId: string): DestinationId {
+export function nodeDestinationId(workUnitId: string, workViewId: string | null): DestinationId {
     return { workUnitId, workViewId, subjectId: null, focusMode: null };
 }
