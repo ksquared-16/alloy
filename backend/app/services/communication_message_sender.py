@@ -24,6 +24,7 @@ from .dispatch_eligibility import revalidate_for_dispatch
 from ..settings import PUBLIC_TWILIO_STATUS_CALLBACK_BASE
 from .communications.secret_ref import (
     is_legacy_global_twilio_binding,
+    is_org_owned_secret_ref,
     resolve_secret_plaintext,
 )
 
@@ -313,7 +314,8 @@ def process_communication_messages(
                 elif binding:
                     sid_val = str(cfg.get("twilio_account_sid") or "").strip()
                     svc_sid = str(cfg.get("messaging_service_sid") or "").strip()
-                    token_plain = resolve_secret_plaintext(secret_ref)
+                    # org_id scopes an organization-owned credential; ignored for env refs.
+                    token_plain = resolve_secret_plaintext(secret_ref, org_id)
                     if not sid_val or not svc_sid or not token_plain:
                         raise RuntimeError(
                             "SMS binding incompletely configured — need twilio_account_sid,"
@@ -377,9 +379,14 @@ def process_communication_messages(
                     raise RuntimeError("email requires active resend binding")
 
                 api_key_ref = binding.get("secret_ref") or "env:RESEND_API_KEY"
-                api_key_plain = resolve_secret_plaintext(api_key_ref)
+                api_key_plain = resolve_secret_plaintext(api_key_ref, org_id)
                 if not api_key_plain:
-                    api_key_plain = resolve_secret_plaintext("env:RESEND_API_KEY")
+                    # Deployment fallback. Deliberately NOT attempted when the binding
+                    # names an org-owned credential: silently sending through Alloy's
+                    # own account after a tenant revoked theirs would defeat the
+                    # revocation and bill the wrong party.
+                    if not is_org_owned_secret_ref(api_key_ref):
+                        api_key_plain = resolve_secret_plaintext("env:RESEND_API_KEY")
                 if not api_key_plain:
                     raise RuntimeError("RESEND_API_KEY not configured")
 
