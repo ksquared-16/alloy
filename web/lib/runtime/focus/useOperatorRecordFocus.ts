@@ -72,6 +72,20 @@ export type OperatorRecordFocusRequest = {
      * round trip entirely; both fields must be present to be used.
      */
     known_host?: { entity_id: string; work_unit_key: string | null } | null;
+    /**
+     * The Work View ROW to select, when the caller knows it — `subjectRows[].entityId` in the
+     * runtime's vocabulary.
+     *
+     * THE HOST IS NOT ALWAYS THE SUBJECT. This request resolves a HOST record (the case whose Focus
+     * Panel composes), and for a family-grain lens that record is also the evaluated row, so passing
+     * the host as the subject worked and hid the distinction. In a CHILD-grain lens the evaluated
+     * rows are participations: the case matches nothing, and the runtime's membership guard refuses
+     * with `subject_unavailable` — "That record isn't in this Work View".
+     *
+     * Absent, the host remains the subject, which keeps every existing caller (and family grain)
+     * behaving exactly as before.
+     */
+    operational_member_id?: string | null;
 };
 
 /** Module-scoped so a repeated gesture on the same record does not re-ask. */
@@ -167,11 +181,16 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
             // inventing one commits the operator to a queue the record is not in.
             if (!workUnitKey || !hostId) return false;
 
+            // THE SELECTED ROW, which is not always the host. A caller that knows the Work View row
+            // (Search, from evaluated membership) names it; everyone else keeps the host, which is
+            // correct for family grain because there the case IS the evaluated row.
+            const memberId = (request.operational_member_id ?? "").trim() || hostId;
+
             const href = operatorWorkUnitHrefFromKey(workUnitKey);
 
             if (kernel) {
                 // Gate A: on an active runtime this is an attention movement, never a route push.
-                return move(href, null, hostId, aspect);
+                return move(href, null, memberId, aspect);
             }
 
             // Inside the workspace layout but above the kernel (shell chrome). A push here changes
@@ -181,8 +200,12 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
             if (path === CANONICAL_OPERATOR_BASE || path.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) {
                 dispatchOperatorFocusSelection({
                     entity_type: target?.host_entity_type ?? "opportunities",
+                    // The HOST stays the host — the Focus Panel composes against the case.
                     entity_id: hostId,
                     host_work_unit_key: workUnitKey,
+                    // …and the ROW travels beside it, so the listener can select a participation
+                    // without the panel losing the case it needs to render.
+                    operational_member_id: request.operational_member_id ?? null,
                     card_focus: request.card_focus ?? null,
                 });
                 return true;
@@ -190,7 +213,7 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
 
             // Outside the workspace layout entirely. The canonical address IS the intent here, and a
             // cold load hydrates attention from it exactly once (Art 2.4).
-            const params = new URLSearchParams({ subject_id: hostId });
+            const params = new URLSearchParams({ subject_id: memberId });
             if (aspect) params.set("aspect", aspect);
             router.push(`${href}${href.includes("?") ? "&" : "?"}${params.toString()}`);
             return true;

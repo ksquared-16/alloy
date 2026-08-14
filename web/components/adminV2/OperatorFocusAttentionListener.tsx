@@ -55,14 +55,21 @@ export default function OperatorFocusAttentionListener() {
             // one would commit the operator to a queue the record is not in.
             if (!hostSlug || !hostId) return;
 
+            // THE ROW, NOT THE HOST. `entity_id` is the record whose Focus Panel composes; the Work
+            // View selects on its own evaluated row identity, which for a child-grain lens is a
+            // participation, not the case. Sending the host here is what the runtime refused as
+            // `subject_unavailable`. Falls back to the host, which is exactly right for family grain
+            // because there the case IS the evaluated row.
+            const memberId = (detail?.operational_member_id ?? "").trim() || hostId;
+
             // The href is the destination's honest address; the adapter parses the attention it
-            // expresses. The subject rides along so the surface commits the record the operator
+            // expresses. The selected row rides along so the surface commits the record the operator
             // asked for rather than the lens's default subject, and the card + item ride along as
             // the ASPECT — the kernel's own name for "finer than the subject".
             move(
                 operatorWorkUnitHrefFromKey(hostSlug),
                 null,
-                hostId,
+                memberId,
                 formatCardFocusAspect(detail.card_focus ?? null),
             );
         };
