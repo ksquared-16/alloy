@@ -1417,9 +1417,21 @@ export default function LifecycleActivationBoard({
                     }
                 }
             }
-            void saveActivation({ stage_key: stage.key, stage_label: stage.label });
+            // NO durable write here, deliberately.
+            //
+            // This used to end `void saveActivation({ stage_key, stage_label })`, so selecting a
+            // stage to LOOK at it PATCHed the activation bundle and wrote departments.metadata.
+            // `activation.stage_key` is not editor position — the runtime reads it as a binding
+            // (builderOwnedLifecycleRuntime, lifecycleWorkUnitQueueValidation,
+            // lifecycleRuntimeBinding, validateLifecycleActivationRuntime), so browsing the stage
+            // list silently repointed which stage the activation targets.
+            //
+            // Selection is local: the flushSync above owns it and `stageKeyRef` carries it. The
+            // explicit save paths (saveStageUnified, saveStageStatuses) persist `stage_key` when
+            // the operator actually commits a change to that stage, so restore-on-load now
+            // reflects the last stage genuinely configured rather than the last one browsed.
         },
-        [statusesPayload, syncStatusKeysFromPayload, saveActivation, loadStatusStages]
+        [statusesPayload, syncStatusKeysFromPayload, loadStatusStages]
     );
 
     const renameLifecycle = useCallback(
