@@ -36,6 +36,7 @@ import {
     SidebarProcessingNavItem,
     SidebarSchedulingNavItem,
     SidebarRosterNavItem,
+    SidebarRecordsNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -240,6 +241,9 @@ function SidebarNav({
     const schedulingLink = <SidebarSchedulingNavItem collapsed={collapsed} />;
     // Roster sits next to Assignments: the plan beside the commitments it derives from.
     const rosterLink = <SidebarRosterNavItem collapsed={collapsed} />;
+    // Records sits after the operational workspaces: you reach for it when the queues are not the
+    // answer — a durable record, not a work item.
+    const recordsLink = <SidebarRecordsNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -489,6 +493,7 @@ function SidebarNav({
                                 {processingLink}
                                 {schedulingLink}
                                 {rosterLink}
+                                {recordsLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -510,6 +515,7 @@ function SidebarNav({
                                     {processingLink}
                                     {schedulingLink}
                                     {rosterLink}
+                                    {recordsLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}

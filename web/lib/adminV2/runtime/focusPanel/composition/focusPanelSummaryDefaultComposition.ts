@@ -31,6 +31,7 @@
  */
 
 import type { FocusPanelCardKey, FocusPanelCardTier } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { FocusPanelCardDensity, FocusPanelCardSpan } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrid";
 import {
     FOCUS_PANEL_GRID_COLUMNS,
@@ -124,10 +125,90 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
     { key: "milestones", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
 ];
 
-/** The 12-column grid the runtime renders — generated from the composition (Visible cards only). */
-export function focusPanelSummaryDefaultGrid(): FocusPanelGridLayout {
-    const areas: FocusPanelGridArea[] = FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.flatMap((entry) =>
+/**
+ * PERSON-grain default composition — a durable person record.
+ *
+ * Deliberately ONE card. Employment is the only card with canonical Person truth today, and a sparse
+ * truthful panel is the correct V1: copying case cards across for visual completeness would put
+ * `current_work`, `household` or `children` on a staff member who has no case, no household and no
+ * children — cards that would render empty shells asserting relationships that do not exist.
+ *
+ * Growing this list is a per-card decision that must be earned twice: the card declares the `person`
+ * grain in the registry (it has canonical Person truth), AND it is placed here (it belongs on the
+ * default surface). Either without the other is inert, which is the intended friction.
+ */
+export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    {
+        key: "employment",
+        tier: "reference",
+        visibility: "visible",
+        // Six columns in the left lane. A 12-column card cannot be planned into lanes and forces
+        // `planPublishedLayout` to fall back from `lanes` to `grid` for the whole panel — the same
+        // trap documented on the case composition's Employment entry.
+        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+];
+
+/**
+ * CHILD-grain default composition — the durable child's own identity.
+ *
+ * One card, for the same reason Person has one: `child_identity` is the only card with canonical
+ * Child truth that does not require an enrollment. The case-grain `children` card is deliberately
+ * absent — it is a family's ROSTER, and placing it here would make a child's own record display a
+ * list containing itself.
+ *
+ * Program / room / schedule / readiness are enrollment-scoped and belong to operational-context
+ * enrichment (Workstream E), not to identity.
+ */
+export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    {
+        key: "child_identity",
+        tier: "reference",
+        visibility: "visible",
+        // Six columns in the left lane — a 12-column card forces `planPublishedLayout` to fall back
+        // from `lanes` to `grid`, the trap documented on the case composition's Employment entry.
+        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+];
+
+/**
+ * The default composition for a subject grain.
+ *
+ * `opportunity` returns the case composition BY REFERENCE — the same array object, not a copy — so
+ * the existing enrollment surface is not merely equivalent but identical, and no regression can hide
+ * in a re-derivation.
+ */
+export function focusPanelDefaultCompositionForGrain(
+    grain: OperationalSubjectType
+): readonly SummaryCompositionEntry[] {
+    switch (grain) {
+        case "person":
+            return FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION;
+        case "child":
+            return FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION;
+        case "opportunity":
+            return FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION;
+    }
+}
+
+/** The 12-column grid the runtime renders — generated from a composition (Visible cards only). */
+function gridFromComposition(composition: readonly SummaryCompositionEntry[]): FocusPanelGridLayout {
+    const areas: FocusPanelGridArea[] = composition.flatMap((entry) =>
         entry.area ? [{ card: entry.key, ...entry.area }] : [],
     );
     return { columns: FOCUS_PANEL_GRID_COLUMNS, areas };
+}
+
+/** The 12-column grid the runtime renders — generated from the composition (Visible cards only). */
+export function focusPanelSummaryDefaultGrid(): FocusPanelGridLayout {
+    return gridFromComposition(FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION);
+}
+
+/** The 12-column grid for a subject grain's default composition. */
+export function focusPanelSummaryGridForGrain(grain: OperationalSubjectType): FocusPanelGridLayout {
+    return gridFromComposition(focusPanelDefaultCompositionForGrain(grain));
 }

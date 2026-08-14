@@ -76,6 +76,9 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     tour_summary: "Calendar",
     household: "Home",
     children: "Baby",
+    // The durable child's own identity. Same glyph family as `children` on purpose — same subject
+    // matter, different question (this child, vs this family's children).
+    child_identity: "Baby",
     employment: "Users",
     milestones: "Flag",
     scheduling: "CalendarDays",

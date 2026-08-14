@@ -194,19 +194,54 @@ export type OperationalContextSignals = {
 /**
  * The operational grain of this context.
  *
- * - `"case"` — subject is an Opportunity (household/family). All Focus Panel
- *   contexts are case-grain.
+ * - `"case"` — subject is an Opportunity (household/family). Every QUEUE-hosted Focus
+ *   Panel context is case-grain.
  * - `"child"` — subject is an OCM (child within a case). Not yet used in the
  *   Focus Panel; reserved for child-grain queue row contexts.
  * - `"candidate"` — subject is a PlacementCandidate. Reserved for candidate-
  *   grain queue row contexts (Waitlist queue).
+ * - `"person"` — subject is a durable `persons` row, attended SUBJECT-FIRST with no queue
+ *   and possibly no case at all. A staff member is the canonical example: `staff.add`
+ *   writes `persons` + `employments` and nothing else. This grain never arrives from a
+ *   lens — `subjectGrain.ts` explains why `resolveSubjectGrain` still refuses a
+ *   person-grain LENS, which is a different question.
  *
  * @see docs/platform/operator/operational-grain-doctrine.md §1
+ * @see docs/runtime/DURABLE-RECORD-ATTENTION.md
  */
-export type OperationalGrain = "case" | "child" | "candidate";
+export type OperationalGrain = "case" | "child" | "candidate" | "person";
+
+/**
+ * The case-shaped signals, in their not-applicable state.
+ *
+ * ⚠ READ THIS BEFORE USING IT. These are NOT zeroes meaning "this subject has no work / no
+ * attention / no tour". They mean **the question does not apply to this grain**: work, attention,
+ * tours, outreach and billing are all case concepts, and a durable Person is not a case.
+ *
+ * The distinction matters because `signals` is structurally required on every `OperationalContext`,
+ * so a non-case producer must supply *something*. Supplying this is safe only because no card
+ * declared for a non-case grain reads these fields — enforced by the grain concern
+ * (`focusPanelCardGrainConcern.ts`) and asserted directly in `durablePersonFocusPanel.test.ts`.
+ * If a future non-case card genuinely needs one of these answers, it must get a real projection
+ * for its own grain; widening this constant's meaning would be the lie.
+ *
+ * Follows the established `NULL_BILLING_SIGNAL` / `NULL_EMPLOYMENT_SIGNAL` pattern above.
+ */
+export const NOT_APPLICABLE_CASE_SIGNALS: OperationalContextSignals = {
+    work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
+    attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    communications: {
+        scheduledSendCount: 0,
+        nextFollowUpAt: null,
+        hasOutreach: false,
+        nextScheduledSendId: null,
+    },
+    billing: NULL_BILLING_SIGNAL,
+};
 
 export type OperationalContext = {
-    /** Grain of this context — always "case" in the Focus Panel. */
+    /** Grain of this context — `case` for every queue-hosted panel, `person` for a durable record. */
     grain: OperationalGrain;
     subject: OperationalSubjectRef;
     businessProcess: OperationalBusinessProcess;
@@ -263,6 +298,37 @@ export type OperationalContext = {
      * absent projection and an empty one are different facts, and only the latter is an answer.
      */
     employment?: OperationalEmploymentSignal | null;
+    /**
+     * The operational case this subject is ALSO being worked in, when one exists. Durable panels only.
+     *
+     * ── ENRICHMENT, NEVER AUTHORITY ──
+     *
+     * A durable record exists because the record exists. This field says "a family case for this
+     * subject is currently on an active Work Unit" — it may add an affordance (go to where this is
+     * being worked) and it may never decide whether the subject exists, change its identity, or
+     * supply its `businessProcess`. Borrowing the family's stage would put household process state
+     * onto a staff member's or a child's own record.
+     *
+     * Null on every queue-hosted panel, because those panels ARE the host. Null on a durable panel
+     * means no active unit pages this subject's case — the ordinary state after an enrollment ends.
+     *
+     * @see docs/runtime/DURABLE-RECORD-ATTENTION.md
+     */
+    operationalHost?: OperationalHostContext | null;
     capabilities: OperationalContextCapabilities;
     status: OperationalContextStatus;
+};
+
+/**
+ * Where a durable subject is additionally being worked.
+ *
+ * Deliberately a NARROW shape rather than the whole `AttentionResolution`: a durable panel must be
+ * able to note that a case exists without being able to reach into that case's composition. Widening
+ * this is how the case would creep back into being the durable record's authority.
+ */
+export type OperationalHostContext = {
+    /** The case (`opportunities.id`) hosting this subject's family work. */
+    opportunityId: string;
+    /** Active Work Unit key paging that case, or null when no active unit does. */
+    workUnitKey: string | null;
 };

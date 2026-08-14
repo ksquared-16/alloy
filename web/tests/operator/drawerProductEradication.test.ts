@@ -163,17 +163,39 @@ describe("Gate B — a Business Process key is never used as a Work Unit key", (
 });
 
 describe("Gate A — active-runtime movement is never a route push", () => {
-    it("the adapter pushes only when it is outside the workspace layout", () => {
+    it("the OPERATIONAL adapter pushes only when it is outside the workspace layout", () => {
         const src = code("lib/runtime/focus/useOperatorRecordFocus.ts");
-        const pushIndex = src.indexOf("router.push");
-        expect(pushIndex).toBeGreaterThan(-1);
 
-        // Everything above the push must have returned already for the two in-layout worlds:
+        // Gate A is about the WORK-UNIT route, which is seed-only: pushing it on an active runtime
+        // renders nothing. Anchor on that push specifically. (The durable-record push above it
+        // targets a different address whose semantics are the opposite — see the next test — so
+        // "the first push in the file" is no longer the right anchor.)
+        const pushIndex = src.indexOf("router.push(`${href}");
+        expect(pushIndex, "the work-unit push must still exist").toBeGreaterThan(-1);
+
+        // Everything above it must have returned already for the two in-layout worlds:
         // a kernel movement, and the event for shell chrome that sits above the kernel.
         const before = src.slice(0, pushIndex);
         expect(before).toContain("if (kernel) {");
         expect(before).toContain("dispatchOperatorFocusSelection");
         expect(before).toContain("CANONICAL_OPERATOR_BASE");
+    });
+
+    it("the durable push is gated on declared intent and never targets a work-unit route", () => {
+        const src = code("lib/runtime/focus/useOperatorRecordFocus.ts");
+        // The CALL SITE, not the import line.
+        const durableIndex = src.indexOf("durableRecordHref(grain");
+        expect(durableIndex).toBeGreaterThan(-1);
+
+        // It is reachable ONLY under an explicitly declared durable intent — an operational gesture
+        // can never fall into it, which is what keeps Gate A intact for every existing caller.
+        const before = src.slice(0, durableIndex);
+        expect(before).toContain('request.intent === "durable_record"');
+
+        // And it addresses the record, not a queue: no work-unit key is involved.
+        const durableCall = src.slice(durableIndex, durableIndex + 200);
+        expect(durableCall).not.toContain("workUnitKey");
+        expect(durableCall).not.toContain("operatorWorkUnitHrefFromKey");
     });
 
     it("the in-kernel listener has no router at all", () => {

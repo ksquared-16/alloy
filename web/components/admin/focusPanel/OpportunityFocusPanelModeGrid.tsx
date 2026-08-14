@@ -26,7 +26,8 @@ import {
     type FocusPanelCardConfig,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardConfigModel";
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
-import { FOCUS_PANEL_SUMMARY_DEFAULT_DOC } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
+import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
 import {
     buildOpportunityFocusPanelMutation,
     resolveFocusPanelMutationOpportunityId,
@@ -157,8 +158,24 @@ export default function OpportunityFocusPanelModeGrid({
     // The Household card is part of this canonical composition (no flag, no
     // reference-only override).
     const isSummary = mode === "summary";
-    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary);
-    const activeDoc = isSummary ? publishedDoc ?? FOCUS_PANEL_SUMMARY_DEFAULT_DOC : null;
+    const subjectGrain = asFocusPanelSubjectGrain(model.subject.type);
+    // ⚠ The published doc is CASE-ONLY, and the guard is load-bearing.
+    //
+    // `entity_layouts` addresses the Summary row by `entity_type="opportunities"` + a fixed layout
+    // key (R9), so the doc this hook returns is by definition the ENROLLMENT composition. Applying it
+    // to a person subject would put `current_work` / `household` / `children` on a staff member —
+    // i.e. a tenant who had ever opened the Surface Builder would silently break every non-case
+    // surface, while a tenant who had not would see the correct sparse panel. Two tenants, two
+    // behaviours, no error: exactly the class of failure this slice exists to remove.
+    //
+    // So the code-owned default is chosen by SUBJECT GRAIN, and only the case grain consults the
+    // publication. For the case grain that default is the SAME object reference the surface has
+    // always used, so the enrollment panel is identical rather than merely equivalent.
+    const isCaseGrain = subjectGrain === "opportunity";
+    const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain);
+    const activeDoc = isSummary
+        ? (isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefaultDocForGrain(subjectGrain)
+        : null;
     const instanceMap = useMemo(
         () => (activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map()),
         [activeDoc],

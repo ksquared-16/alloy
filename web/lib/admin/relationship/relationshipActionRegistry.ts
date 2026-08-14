@@ -135,9 +135,19 @@ const NATIVE_RELATIONSHIP_ACTION_ENTRIES: RelationshipActionRegistryEntry[] = [
         allowedContexts: ["section_row", "contact_related_list"],
         allowedScopes: ["this_opportunity", "household"],
         allowedSourceSurfaces: ["opportunity_drawer", "person_drawer", "bos_rail"],
-        writeTargets: ["persons", "customer_members", "opportunity_customer_members"],
+        /**
+         * `opportunity_customer_members` is NOT a write target here, and removing it is a
+         * CORRECTION rather than a change of intent: the OCM bridge write was already deleted
+         * from the child participation path (`applyCreateLeadChildParticipationFromIdentity`)
+         * when `process_instances` became the sole runtime owner of child participation. The
+         * declaration outlived the code and named a table this action no longer writes.
+         *
+         * The executor now reads this list as the authority for the bridge, so putting OCM back
+         * here would reintroduce the bridge. Do not.
+         */
+        writeTargets: ["persons", "customer_members", "process_instances"],
         executorKind: "add_child",
-        confirmationCopy: "This will create or link a child identity and enrollment participation.",
+        confirmationCopy: "This will create or link a child identity on this record.",
         bosExamples: ["Add a new child Avery to this opportunity."],
         runtimeWired: true,
     },

@@ -26,6 +26,7 @@ import { assignmentDeleteProposedAction } from "@/lib/adminV2/actions/definition
 import { assignmentChangeRoomAction } from "@/lib/adminV2/actions/definitions/assignmentChangeRoomAction";
 import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/sendTourInvitationAction";
 import { staffAddAction } from "@/lib/adminV2/actions/definitions/staffAddAction";
+import { childAddAction } from "@/lib/adminV2/actions/definitions/childAddAction";
 import {
     employmentEndAction,
     employmentUpdateAction,
@@ -49,6 +50,7 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     assignmentDeleteProposedAction,
     assignmentChangeRoomAction,
     staffAddAction,
+    childAddAction,
     employmentUpdateAction,
     employmentEndAction,
     staffPresenceRecordAction,

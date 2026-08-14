@@ -1,5 +1,12 @@
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { CardLifecycle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import {
+    declarationAppliesToGrain,
+    filterCardKeysForGrain,
+    grainsForDeclaration,
+    type CardGrainApplicability,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
 /**
  * THE FOCUS PANEL CARD REGISTRY — the extension model for Alloy surfaces (Runtime V1 Certification,
@@ -57,7 +64,7 @@ export type CardIdentity = {
  * `CardXxx` is a small contract imported from the module that OWNS that concern's composer. It must
  * never collapse into one flat schema this file defines wholesale.
  */
-export type CardDefinition = CardIdentity & Partial<CardLifecycle>;
+export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<CardGrainApplicability>;
 
 /**
  * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
@@ -69,8 +76,21 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
     { key: "household", title: "Household", ownsOperationalTruth: true },
     { key: "children", title: "Children", ownsOperationalTruth: true },
-    // Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
-    { key: "employment", title: "Employment" },
+    /**
+     * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
+     *
+     * The FIRST card declared for two grains, and the reason the GRAIN concern exists. Employment is
+     * a fact about a PERSON. On a case it is a related-subject projection ("which of my contacts work
+     * here"); on a durable Person it is the subject's own answer. Same card, same renderer, same
+     * `context.employment` contract — only the producer of that projection differs.
+     */
+    { key: "employment", title: "Employment", grains: ["opportunity", "person"] },
+    /**
+     * The first CHILD-grain card. Declared for `child` ONLY: it is the durable child's own identity,
+     * not a family's roster, so it has no meaning on a case panel where `children` already answers
+     * "who are this family's children".
+     */
+    { key: "child_identity", title: "Child", grains: ["child"] },
     { key: "milestones", title: "Milestones" },
     { key: "readiness_kpi", title: "Readiness" },
     { key: "health", title: "Enrollment Health" },
@@ -99,4 +119,30 @@ export function cardDefinition(key: FocusPanelCardKey): CardDefinition | undefin
 /** The declared reserved-cell / display title for a card, or undefined (card renders its own). */
 export function cardTitle(key: FocusPanelCardKey): string | undefined {
     return CARD_BY_KEY.get(key)?.title;
+}
+
+// ── GRAIN concern composer (contract: `focusPanelCardGrainConcern.ts`) ────────────────────────────
+
+/**
+ * Can this card compose for this subject grain?
+ *
+ * Total and deterministic. An unregistered key is not applicable to ANY grain — including `case`:
+ * a key the registry has never heard of has no declaration to trust, and admitting it on the default
+ * would let an unknown card onto the enrollment panel, which is the opposite of the guarantee.
+ */
+export function cardAppliesToGrain(key: FocusPanelCardKey, grain: OperationalSubjectType): boolean {
+    const definition = CARD_BY_KEY.get(key);
+    if (!definition) return false;
+    return declarationAppliesToGrain(definition, grain);
+}
+
+/** The grains a registered card admits — its declaration, or the case-only default. */
+export function cardGrains(key: FocusPanelCardKey): readonly OperationalSubjectType[] {
+    const definition = CARD_BY_KEY.get(key);
+    return definition ? grainsForDeclaration(definition) : [];
+}
+
+/** Every registered card key applicable to `grain`, in registry order. */
+export function cardKeysForGrain(grain: OperationalSubjectType): FocusPanelCardKey[] {
+    return filterCardKeysForGrain(FOCUS_PANEL_CARDS, grain);
 }

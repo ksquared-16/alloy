@@ -32,6 +32,7 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "assignment.promote_proposed",
     "assignment.delete_proposed",
     "staff.add",
+    "child.add",
     "employment.update",
     "employment.end",
     "staff_presence.record",
@@ -170,6 +171,22 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
         implementationStatus: "production",
         reason:
             "Staff Foundation. Capture-first: resolves identity through the canonical resolver before any persons row is written, then creates employment. Employment grants no access.",
+    }),
+    def({
+        capabilityKey: "child.add",
+        canonicalCommandKey: "child.add",
+        operatorLabel: "Add child",
+        family: "record_creation",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "confirm",
+        registeredActionKey: "child.add",
+        implementationStatus: "production",
+        reason:
+            "Records Phase 2. Capture-first: the household is explicit and identity passes the same operator gate as staff.add before any row is written. Writes customer_members only — no opportunity, no process_instances, no OCM bridge. Enrollment is a separate command.",
     }),
     def({
         capabilityKey: "employment.update",
