@@ -42,10 +42,8 @@
  */
 
 import type { LensSetEntry } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
-import type {
-    OperationalGrain,
-    OperationalSubjectType,
-} from "@/lib/lifecycle/grainVocabulary";
+import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
 /**
  * The card + item the operator asked for, in the kernel's own ASPECT vocabulary — finer than the
