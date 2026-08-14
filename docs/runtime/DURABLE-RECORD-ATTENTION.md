@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: IN PROGRESS — Workstreams A, B, D landed; C, E, F open
+status: IN PROGRESS — Workstreams A, B, C, D, E landed; F open
 last_reviewed: 2026-08-14
 sprint: records-roster-completion-phase0 (slot 1)
 base: origin/staging @ a38c1a260
@@ -133,6 +133,53 @@ persons row → composeDurablePersonSubject → focusPanelWorkModeModelFromDurab
    `system5ArchetypeForCard` / `system5IconForCard` — two answers for one card, guaranteed to drift
    at the first System 5 change. Both now read the same platform helpers.
 
+## Landed — Workstream C: the durable Child subject (commit `744154447`)
+
+**The child is the member row.** `customer_members` is the canonical child identity, and the schema
+is the argument:
+
+```
+display_name              NOT NULL      ← the child always has a name here
+first_name/last_name/dob                ← identity facts live ON the member row
+person_id                 NULLABLE      ← a durable `persons` row is OPTIONAL
+```
+
+A child can exist with **no `persons` row at all**. Keying the subject on `person_id` — which every
+caller had to do before Workstream A, because the resolver had no child arm — silently reframes the
+question as "this person" and loses those children entirely.
+
+- `composeDurableChildSubject` opens a child from the member row alone. The canonical person payload
+  is optional enrichment, merged UNDER the member's own facts (the member wins on identity fields,
+  because the membership is what an operator maintains). A person read failure is not fatal.
+- **The smallest canonical Child card:** `child_identity` — name · date of birth · age · household.
+  It renders through the EXISTING generic `profile` archetype, so there is no new component, no
+  renderer branch, and no parallel Child runtime.
+- **`children` is deliberately not reused.** It is a case-grain family ROSTER answering a different
+  question; reusing it would make a child's own record a list containing itself.
+- Enrollment-scoped facts (program, room, schedule, start date, readiness) are deliberately off the
+  identity card — they require an enrollment the durable record must open without.
+
+## Landed — Workstream E: host is enrichment, never authority (commit `744154447`)
+
+`OperationalContext.operationalHost` is an optional, deliberately NARROW shape (case id + active work
+unit key) so a durable panel can note that a case exists without reaching into its composition.
+
+It may add an affordance. It may never decide that a subject exists, change its identity, or supply
+its `businessProcess` — borrowing the family's stage would put household process state on a staff
+member's or a child's own record. **It does not participate in card derivation**, because otherwise
+the same record would show different cards depending on someone else's workflow state.
+
+Certified by asserting identity and card EQUALITY with and without a host, not merely that both
+composed.
+
+## Known cost, recorded rather than hidden
+
+Reusing the canonical person payload for a child brings its `_linked_opportunities` read along, so
+`opportunities` IS read when the child has a person. That is a READ, not a dependency: the no-process
+case composes with zero opportunity rows in existence, and a person-less child never reaches that
+composer at all. Reuse over invention was the right trade for V1; the cost is stated so a future
+slice can decide whether a narrower child payload is worth owning.
+
 ## Blocker status
 
 | # | Blocker | State |
@@ -149,8 +196,8 @@ persons row → composeDurablePersonSubject → focusPanelWorkModeModelFromDurab
 | **A** | attention contract: subject + optional host, declared intent | **DONE** — `616864314` |
 | **B** | durable Person payload + producer | **DONE** — `59cc710ee` |
 | **D** | grain concern + per-grain default composition | **DONE** — `59cc710ee` |
-| **C** | durable Child subject over `customer_members`, reusing `composeChildDrawerViewModel` | open — unblocked |
-| **E** | carry `operational_host` onto the durable panel as enrichment when present | open |
+| **C** | durable Child subject over `customer_members` | **DONE** — `744154447` |
+| **E** | `operationalHost` carried as enrichment when present | **DONE** — `744154447` |
 | **F** | client half: `intent` on `useOperatorRecordFocus`, durable destination, call-site compatibility | open |
 
 **Client half is still deliberately not written.** Threading `intent` through
