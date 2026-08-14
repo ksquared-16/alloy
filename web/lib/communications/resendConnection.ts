@@ -31,7 +31,17 @@ export type ResendVerification =
     /** Resend could not be reached, or answered in a way we cannot interpret. NOT
      *  the operator's fault, and explicitly not "invalid" — telling someone their
      *  key is wrong when the provider is down sends them to replace a good key. */
-    | { outcome: "unavailable"; detail: string };
+    | { outcome: "unavailable"; detail: string }
+    /**
+     * This environment refuses to contact Resend at all, so no real key can be
+     * verified here.
+     *
+     * Reported separately because saying "Resend did not accept that API key"
+     * would be FALSE — Alloy never asked Resend. A director pasting a valid
+     * production key into a certification build was told their key was rejected,
+     * which sent them looking for a problem with the key.
+     */
+    | { outcome: "certification_only" };
 
 export const RESEND_DOMAINS_ENDPOINT = "https://api.resend.com/domains";
 
@@ -63,7 +73,9 @@ export function certificationVerifier(apiKey: string): ResendVerification {
     if (apiKey.trim() === CERTIFICATION_RESEND_KEY) {
         return { outcome: "ok", verifiedDomains: ["northwind-cert.invalid"] };
     }
-    return { outcome: "invalid_credential" };
+    // NOT `invalid_credential`: nothing was asked of Resend, so nothing was
+    // rejected. Claiming otherwise blames a key that may be perfectly good.
+    return { outcome: "certification_only" };
 }
 
 /**

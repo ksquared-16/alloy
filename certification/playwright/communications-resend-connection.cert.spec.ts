@@ -34,12 +34,18 @@ async function emailBindings(page: Page) {
 }
 
 test.describe("R · connecting the organization's own Resend account", () => {
-    test("R-1 an invalid key is refused truthfully, and stores nothing", async ({ page }) => {
+    test("R-1 a key this environment cannot verify is refused truthfully, and stores nothing", async ({ page }) => {
         const before = await emailBindings(page);
         const res = await connect(page, "re_definitely_not_valid");
-        expect(res.status(), "an unusable key must not be accepted").toBe(422);
-        const body = await res.json();
-        expect(JSON.stringify(body)).toMatch(/did not accept/i);
+        expect(res.status(), "an unverifiable key must not be accepted").toBe(503);
+        const body = JSON.stringify(await res.json());
+
+        // The honest reason. Certification never contacts Resend, so claiming
+        // "Resend did not accept that API key" would be FALSE — that message sent
+        // a director hunting for a problem with a perfectly good production key.
+        expect(body).toMatch(/cannot verify real provider keys/i);
+        expect(body).toMatch(/was not stored/i);
+        expect(body).not.toMatch(/did not accept/i);
 
         // Nothing was written on the way to failing.
         const after = await emailBindings(page);
@@ -75,7 +81,7 @@ test.describe("R · connecting the organization's own Resend account", () => {
 
         // A failed replacement must not destroy the working connection.
         const failed = await connect(page, "re_not_valid_at_all");
-        expect(failed.status()).toBe(422);
+        expect(failed.ok()).toBe(false);
         const bindings = await emailBindings(page);
         expect(bindings.some((b) => b.credential_configured === true)).toBe(true);
     });

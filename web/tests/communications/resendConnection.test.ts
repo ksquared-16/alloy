@@ -108,8 +108,10 @@ describe("certification cannot reach the network, structurally", () => {
         });
     });
 
-    it("certification still proves the FAILURE path — any other key is invalid", () => {
-        expect(certificationVerifier("re_something_else")).toEqual({ outcome: "invalid_credential" });
+    it("a REAL key in certification is not called 'rejected' — Resend was never asked", () => {
+        // The Director pasted a valid production key into a certification build and
+        // was told Resend had rejected it. Nothing was asked of Resend.
+        expect(certificationVerifier("re_a_real_production_key")).toEqual({ outcome: "certification_only" });
         expect(certificationVerifier(CERTIFICATION_RESEND_KEY).outcome).toBe("ok");
     });
 });

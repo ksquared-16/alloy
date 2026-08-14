@@ -127,6 +127,19 @@ export async function POST(request: Request) {
             { status: 422 },
         );
     }
+    if (verification.outcome === "certification_only") {
+        // Honest about WHY: this build refuses to contact Resend, so a real key
+        // cannot be proven here — and must not be stored on an unverified guess.
+        return NextResponse.json(
+            {
+                error:
+                    "This environment cannot verify real provider keys, so the connection was not saved. " +
+                    "Your key was not stored. Use a deployment connected to Resend to complete setup.",
+                code: "certification_only",
+            },
+            { status: 503 },
+        );
+    }
     if (verification.outcome === "unavailable") {
         // Deliberately NOT 422: nothing is wrong with what the operator typed, so
         // the connection must not be recorded as rejected.
@@ -154,7 +167,24 @@ export async function POST(request: Request) {
         secret: apiKey,
         actorUserId: admin.userId ?? null,
     });
-    if (!stored.ok) return badRequest("Could not store the connection securely.", "credential_store_failed");
+    if (!stored.ok) {
+        // Say WHICH kind of failure. A single generic sentence could not tell an
+        // administrator apart "your key is bad" from "this environment cannot
+        // store keys at all" — and the second is not their fault, cannot be
+        // retried, and needs a different person. No database or vault language.
+        if (stored.reason === "storage_unavailable") {
+            return NextResponse.json(
+                {
+                    error:
+                        "Secure credential storage is unavailable in this environment, so the connection was not saved. " +
+                        "Your key was not stored. This needs an Alloy administrator — it cannot be fixed by retrying.",
+                    code: "storage_unavailable",
+                },
+                { status: 503 },
+            );
+        }
+        return badRequest("Could not save the connection. Nothing was stored.", "credential_store_failed");
+    }
 
     // Verified above, so this is a fact rather than an assumption.
     await supabase

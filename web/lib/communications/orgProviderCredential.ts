@@ -29,10 +29,43 @@ export function isOrgOwnedSecretRef(secretRef: string | null | undefined): boole
  * and cannot be read back through any API — the only path from reference to
  * plaintext is `resolveOrgProviderCredential`, which is service-role only.
  */
+export type CredentialWriteFailure =
+    /** Nothing was submitted. */
+    | "empty_credential"
+    /**
+     * The credential authority is not present or not callable in THIS database.
+     * The operator cannot fix it and neither can retrying — the environment is
+     * missing the platform migration, or the caller is not service-role.
+     *
+     * This exists because the first real use of this path failed with a single
+     * generic message that could not distinguish "your key is bad" from "this
+     * deployment cannot store keys at all". The second is not the operator's
+     * fault and must not be reported as though it were.
+     */
+    | "storage_unavailable"
+    /** The authority ran and refused — e.g. the account is not this org's. */
+    | "authority_refused";
+
+/**
+ * Classify a failed write WITHOUT reading the provider message.
+ *
+ * The error message can quote the arguments, and the arguments include the
+ * secret, so only the CODE is inspected. PostgREST answers a missing function
+ * with PGRST202, and PostgreSQL answers a permission failure with 42501; both
+ * mean the same thing to an operator — this environment cannot store credentials.
+ */
+function classifyWriteError(error: { code?: string | null } | null): CredentialWriteFailure {
+    const code = String(error?.code ?? "").trim().toUpperCase();
+    if (code === "PGRST202" || code === "PGRST203" || code === "42883" || code === "42501") {
+        return "storage_unavailable";
+    }
+    return "authority_refused";
+}
+
 export async function putOrgProviderCredential(
     supabase: SupabaseClient,
     params: { orgId: string; providerAccountId: string; secret: string; actorUserId?: string | null },
-): Promise<{ ok: true; secretRef: string } | { ok: false; reason: string }> {
+): Promise<{ ok: true; secretRef: string } | { ok: false; reason: CredentialWriteFailure }> {
     const secret = params.secret.trim();
     if (!secret) return { ok: false, reason: "empty_credential" };
 
@@ -43,11 +76,9 @@ export async function putOrgProviderCredential(
         p_actor_user_id: params.actorUserId ?? null,
     });
 
-    // The message can quote the arguments, which include the secret. Never
-    // propagate it — the caller gets a code, and the operator gets a sentence
-    // written by us.
-    if (error) return { ok: false, reason: "authority_refused" };
-    if (typeof data !== "string" || !isOrgOwnedSecretRef(data)) return { ok: false, reason: "authority_refused" };
+    if (error) return { ok: false, reason: classifyWriteError(error as { code?: string | null }) };
+    // A non-reference answer means the authority is not the one we expect.
+    if (typeof data !== "string" || !isOrgOwnedSecretRef(data)) return { ok: false, reason: "storage_unavailable" };
     return { ok: true, secretRef: data };
 }
 
