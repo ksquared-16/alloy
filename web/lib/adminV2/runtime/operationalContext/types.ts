@@ -194,19 +194,54 @@ export type OperationalContextSignals = {
 /**
  * The operational grain of this context.
  *
- * - `"case"` — subject is an Opportunity (household/family). All Focus Panel
- *   contexts are case-grain.
+ * - `"case"` — subject is an Opportunity (household/family). Every QUEUE-hosted Focus
+ *   Panel context is case-grain.
  * - `"child"` — subject is an OCM (child within a case). Not yet used in the
  *   Focus Panel; reserved for child-grain queue row contexts.
  * - `"candidate"` — subject is a PlacementCandidate. Reserved for candidate-
  *   grain queue row contexts (Waitlist queue).
+ * - `"person"` — subject is a durable `persons` row, attended SUBJECT-FIRST with no queue
+ *   and possibly no case at all. A staff member is the canonical example: `staff.add`
+ *   writes `persons` + `employments` and nothing else. This grain never arrives from a
+ *   lens — `subjectGrain.ts` explains why `resolveSubjectGrain` still refuses a
+ *   person-grain LENS, which is a different question.
  *
  * @see docs/platform/operator/operational-grain-doctrine.md §1
+ * @see docs/runtime/DURABLE-RECORD-ATTENTION.md
  */
-export type OperationalGrain = "case" | "child" | "candidate";
+export type OperationalGrain = "case" | "child" | "candidate" | "person";
+
+/**
+ * The case-shaped signals, in their not-applicable state.
+ *
+ * ⚠ READ THIS BEFORE USING IT. These are NOT zeroes meaning "this subject has no work / no
+ * attention / no tour". They mean **the question does not apply to this grain**: work, attention,
+ * tours, outreach and billing are all case concepts, and a durable Person is not a case.
+ *
+ * The distinction matters because `signals` is structurally required on every `OperationalContext`,
+ * so a non-case producer must supply *something*. Supplying this is safe only because no card
+ * declared for a non-case grain reads these fields — enforced by the grain concern
+ * (`focusPanelCardGrainConcern.ts`) and asserted directly in `durablePersonFocusPanel.test.ts`.
+ * If a future non-case card genuinely needs one of these answers, it must get a real projection
+ * for its own grain; widening this constant's meaning would be the lie.
+ *
+ * Follows the established `NULL_BILLING_SIGNAL` / `NULL_EMPLOYMENT_SIGNAL` pattern above.
+ */
+export const NOT_APPLICABLE_CASE_SIGNALS: OperationalContextSignals = {
+    work: { primary: null, items: [], openCount: 0, overdueCount: 0, nextActionLabel: null },
+    attention: { needsAttention: false, primaryReason: null, reasonCount: 0 },
+    tour: { scheduled: false, startAt: null, statusLabel: null, bookingId: null },
+    communications: {
+        scheduledSendCount: 0,
+        nextFollowUpAt: null,
+        hasOutreach: false,
+        nextScheduledSendId: null,
+    },
+    billing: NULL_BILLING_SIGNAL,
+};
 
 export type OperationalContext = {
-    /** Grain of this context — always "case" in the Focus Panel. */
+    /** Grain of this context — `case` for every queue-hosted panel, `person` for a durable record. */
     grain: OperationalGrain;
     subject: OperationalSubjectRef;
     businessProcess: OperationalBusinessProcess;

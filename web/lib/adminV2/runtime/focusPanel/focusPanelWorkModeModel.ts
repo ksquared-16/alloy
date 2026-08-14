@@ -39,8 +39,16 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
  */
 export type FocusPanelCardReadiness = "ready" | "reserved" | "not_applicable";
 
-/** Which producer built the model. DIAGNOSTIC ONLY — the grid must never branch on it. */
-export type FocusPanelWorkModeSource = "provisioning_answer" | "drawer_vm";
+/**
+ * Which producer built the model. DIAGNOSTIC ONLY — the grid must never branch on it.
+ *
+ * `durable_subject` is the queue-independent producer: a record attended subject-first, with no
+ * provisioning answer and possibly no case at all. It declares `phase: "settled"` like any other
+ * fully-composed producer — which is exactly why `phase` was separated from `source` in the first
+ * place (see {@link FocusPanelSettlementPhase}); under the old inference it would have had to call
+ * itself `drawer_vm` to be treated as resolved.
+ */
+export type FocusPanelWorkModeSource = "provisioning_answer" | "drawer_vm" | "durable_subject";
 
 /**
  * How far the surface has advanced — a DECLARED fact, not an inference from provenance.
@@ -67,7 +75,9 @@ export type FocusPanelWorkModeModel = {
      * `context.subject`), NOT the `"opportunity"` literal. Domain producers supply their concrete type
      * (the opportunity composers supply `"opportunity"`); a second surface (e.g. a `child` subject —
      * `SECOND-SURFACE-CERTIFICATION-DESIGN.md`) supplies its own without any platform-layer change. No
-     * runtime branches on this `type` (only `.id` is read); guards that DO test it (BillingPreview,
+     * runtime branch READS this `type` except composition selection — the grid narrows it through
+     * `asFocusPanelSubjectGrain` to pick the code-owned default composition, which is the selection
+     * this openness existed for. Nothing else branches on it (only `.id` is read); guards that DO test it (BillingPreview,
      * Scheduling) already compare against `"opportunity"` and correctly yield null for other subjects.
      */
     subject: OperationalSubjectRef;

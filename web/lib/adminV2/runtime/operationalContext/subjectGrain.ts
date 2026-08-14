@@ -30,18 +30,29 @@ import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/
  * only what the panel calls its subject, and existing guards that compare against `"opportunity"` keep
  * working unchanged for the family grain.
  */
-export type OperationalSubjectType = "opportunity" | "child";
+export type OperationalSubjectType = "opportunity" | "child" | "person";
 
 export type SubjectGrainResolution =
     | { ok: true; grain: OperationalGrain; subjectType: OperationalSubjectType }
     | { ok: false; reason: string };
 
 /**
- * Resolve a lens's Row Grain into the panel's subject grain.
+ * Resolve a LENS's Row Grain into the panel's subject grain.
  *
  * `family` → `case` is the rename this seam exists to absorb. `child` passes through. Everything else has no
  * Focus Panel representation TODAY, and says so — a `person`/`account`/`work_item` lens is a configuration
  * the panel cannot present, not a lens to render as a family.
+ *
+ * ── WHY `person` STILL REFUSES HERE, NOW THAT A PERSON SUBJECT EXISTS ──
+ *
+ * `OperationalSubjectType` gained `"person"` for DURABLE record attention, which arrives subject-first and
+ * never through a lens (`focusPanelWorkModeModelFromDurableSubject`). This function answers a different
+ * question: *"a queue lens declared Row Grain `person` — what should its rows compose?"* There is still no
+ * person-grain queue: no provider produces person rows, so a lens declaring it would page nothing. Answering
+ * `{ ok: true }` here would turn "this lens can never have rows" into an empty panel that looks configured.
+ *
+ * The refusal is therefore about the LENS, not about the subject. Widening it belongs to whatever slice
+ * actually builds a person-grain queue provider — a different, larger question than durable records.
  */
 export function resolveSubjectGrain(rowGrain: StageGrain): SubjectGrainResolution {
     switch (rowGrain) {

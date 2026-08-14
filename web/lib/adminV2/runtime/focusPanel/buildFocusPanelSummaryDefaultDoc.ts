@@ -28,8 +28,12 @@ import type {
 import { withPublishedLayoutMetadata } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelPublishedLayoutOps";
 import {
     FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+    focusPanelDefaultCompositionForGrain,
     focusPanelSummaryDefaultGrid,
+    focusPanelSummaryGridForGrain,
+    type SummaryCompositionEntry,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import { LAYOUT_DOC_FORMAT_VERSION, type LayoutDoc, type LayoutSection } from "@/lib/layout/layoutV2";
 
 /**
@@ -53,7 +57,17 @@ export function focusPanelSummaryDefaultPublishedLayout(): FocusPanelPublishedLa
  * `readFocusPanelCardSectionMeta`, render-inert, preserved verbatim for compatibility.
  */
 export function buildFocusPanelSummaryDefaultDoc(): LayoutDoc {
-    const sections: LayoutSection[] = FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION.map((entry, gridRow) =>
+    return encodeCompositionAsDoc(
+        FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION,
+        focusPanelSummaryDefaultPublishedLayout(),
+    );
+}
+
+function encodeCompositionAsDoc(
+    composition: readonly SummaryCompositionEntry[],
+    publishedLayout: FocusPanelPublishedLayout,
+): LayoutDoc {
+    const sections: LayoutSection[] = composition.map((entry, gridRow) =>
         buildFocusPanelCardSection({
             key: entry.key,
             span: entry.encodedSpan,
@@ -67,15 +81,48 @@ export function buildFocusPanelSummaryDefaultDoc(): LayoutDoc {
     return {
         formatVersion: LAYOUT_DOC_FORMAT_VERSION,
         surface: FOCUS_PANEL_SUMMARY_SURFACE,
+        // ⚠ STILL `opportunities`. This is the doc's ADDRESSING key, and `entity_layouts` constrains
+        // it (R9: the CHECK allows only `drawer|queue` for `surface`, and the Summary row is keyed by
+        // `entity_type="opportunities"`). A code-owned default never touches that table, so a
+        // person-grain default composes fine — but a tenant cannot PUBLISH one until the addressing
+        // is widened. Recorded in DURABLE-RECORD-ATTENTION.md; deliberately not solved in this slice.
         entityType: FOCUS_PANEL_SUMMARY_ENTITY_TYPE,
         sections,
         metadata: {
             focusPanelMode: "summary",
             layoutKey: FOCUS_PANEL_SUMMARY_LAYOUT_KEY,
-            ...withPublishedLayoutMetadata(null, focusPanelSummaryDefaultPublishedLayout()),
+            ...withPublishedLayoutMetadata(null, publishedLayout),
         },
     };
 }
 
-/** Stable singleton default doc (the builder is deterministic). */
+/** Stable singleton default doc — the CASE grain (the tenant-configurable enrollment surface). */
 export const FOCUS_PANEL_SUMMARY_DEFAULT_DOC: LayoutDoc = buildFocusPanelSummaryDefaultDoc();
+
+const PERSON_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
+    focusPanelDefaultCompositionForGrain("person"),
+    buildPublishedLayoutFromGrid(focusPanelSummaryGridForGrain("person")),
+);
+
+const CHILD_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
+    focusPanelDefaultCompositionForGrain("child"),
+    buildPublishedLayoutFromGrid(focusPanelSummaryGridForGrain("child")),
+);
+
+/**
+ * The code-owned default doc for a subject grain.
+ *
+ * `opportunity` returns {@link FOCUS_PANEL_SUMMARY_DEFAULT_DOC} — the SAME object reference the case
+ * surface has always used, so the enrollment panel is identical, not merely equivalent. Every other
+ * grain gets its own singleton, built by the same encoder from its own composition.
+ */
+export function focusPanelSummaryDefaultDocForGrain(grain: OperationalSubjectType): LayoutDoc {
+    switch (grain) {
+        case "person":
+            return PERSON_DEFAULT_DOC;
+        case "child":
+            return CHILD_DEFAULT_DOC;
+        case "opportunity":
+            return FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
+    }
+}
