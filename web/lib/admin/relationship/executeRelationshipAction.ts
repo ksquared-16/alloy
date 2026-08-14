@@ -360,7 +360,15 @@ export async function executeRelationshipAction(
                 }
                 affectedPreview.push({ label: "Household child member", table: "customer_members", record_ids: memberId ? [memberId] : [] });
             }
-        } else if (opportunityId && input.scope === "this_opportunity") {
+        } else if (
+            opportunityId
+            && input.scope === "this_opportunity"
+            // The bridge is written only by actions that DECLARE it. `add_child` no longer does:
+            // its participation owner is `process_instances`, and this branch was the last place
+            // the removed OCM bridge could still be created behind a stale declaration.
+            // `link_existing_child` keeps it, and keeps saying so.
+            && entry.writeTargets.includes("opportunity_customer_members")
+        ) {
             const ocmLink = await ensureOpportunityCustomerMemberLink(
                 supabase,
                 orgId,
