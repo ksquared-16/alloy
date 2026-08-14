@@ -33,6 +33,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AddChildModal from "@/components/adminV2/records/AddChildModal";
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
+import {
+    CHILD_RECORD_STATE_LABEL,
+    type ChildRecordState,
+} from "@/lib/adminV2/records/childEnrollmentState";
 import { buildChildCohorts } from "@/lib/adminV2/records/recordCohorts";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 
@@ -44,7 +48,12 @@ export type ChildEntry = {
     householdId: string | null;
     householdName: string | null;
     isActive: boolean;
-    participationState: "in_process" | "enrolled" | "closed" | null;
+    /**
+     * Imported, never redeclared. A local copy of this union silently discarded a state the route
+     * was already serialising once before — the row rendered the raw key while the surface looked
+     * fine. @see web/lib/adminV2/records/childEnrollmentState.ts
+     */
+    participationState: ChildRecordState;
     participationStageKey: string | null;
     siteLocationId: string | null;
     siteLocationLabel: string | null;
@@ -52,12 +61,6 @@ export type ChildEntry = {
 
 /** The child identity card key — the aspect a child gesture names. */
 const CHILD_IDENTITY_CARD = "child_identity";
-
-const PARTICIPATION_LABEL: Record<string, string> = {
-    in_process: "In process",
-    enrolled: "Enrolled",
-    closed: "Closed",
-};
 
 function ageLabel(dob: string | null, todayYmd: string): string | null {
     if (!dob) return null;
@@ -284,8 +287,7 @@ export default function RecordsChildrenSection({
                                                 data-child-state={c.participationState ?? "none"}
                                             >
                                                 {c.participationState
-                                                    ? (PARTICIPATION_LABEL[c.participationState] ??
-                                                      c.participationState)
+                                                    ? CHILD_RECORD_STATE_LABEL[c.participationState]
                                                     : c.isActive
                                                       ? "On record"
                                                       : "Inactive"}
