@@ -57,6 +57,46 @@ describe("workUnitPillSwitching", () => {
         expect(action).toEqual({ kind: "in-page", workViewId: "new_work_view_5" });
     });
 
+    it("pill-strip views are always in-page even when Settlement hosts count elsewhere (Waitlist)", () => {
+        const lifecycleViews = [
+            { id: "new_work_view_5", label: "Tours" },
+            { id: "new_work_view_4", label: "Waitlist" },
+            { id: "new_work_view_6", label: "All" },
+        ];
+        const crossHostMap = new Map<string, WorkViewCanonicalLocation>([
+            ["new_work_view_5", { workUnitId: "wu-lead", baseQueueKey: "lifecycle_lead", routeKey: "tours" }],
+            ["new_work_view_4", { workUnitId: "wu-waitlist", baseQueueKey: "lifecycle_waitlist", routeKey: "waitlist" }],
+            ["new_work_view_6", { workUnitId: "wu-lead", baseQueueKey: "lifecycle_lead", routeKey: "all" }],
+        ]);
+        const waitlist = resolveSelectWorkViewAction({
+            workViewId: "new_work_view_4",
+            currentWorkViewId: "new_work_view_6",
+            currentWorkUnitId: "wu-lead",
+            canonicalLocationByViewId: crossHostMap,
+            targetInputs: {
+                views: lifecycleViews,
+                canonicalLocationByViewId: crossHostMap,
+                selectedSiteId: null,
+            },
+            surfaceLensIds: lifecycleViews.map((v) => v.id),
+        });
+        expect(waitlist).toEqual({ kind: "in-page", workViewId: "new_work_view_4" });
+
+        const tours = resolveSelectWorkViewAction({
+            workViewId: "new_work_view_5",
+            currentWorkViewId: "new_work_view_6",
+            currentWorkUnitId: "wu-lead",
+            canonicalLocationByViewId: crossHostMap,
+            targetInputs: {
+                views: lifecycleViews,
+                canonicalLocationByViewId: crossHostMap,
+                selectedSiteId: null,
+            },
+            surfaceLensIds: lifecycleViews.map((v) => v.id),
+        });
+        expect(tours).toEqual({ kind: "in-page", workViewId: "new_work_view_5" });
+    });
+
     it("cross-host All Leads navigates; same-host All Leads stays in-page (count + queue share canonical host)", () => {
         const lifecycleViews = [
             { id: "new_leads", label: "New Leads" },

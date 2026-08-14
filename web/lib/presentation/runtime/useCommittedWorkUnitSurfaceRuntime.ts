@@ -194,6 +194,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 id: lens.id,
                 label: lens.label,
             }));
+            const surfaceLensIds = views.map((v) => v.id);
             const targetInputs = {
                 views,
                 canonicalLocationByViewId,
@@ -205,18 +206,36 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 currentWorkUnitId,
                 canonicalLocationByViewId,
                 targetInputs,
+                surfaceLensIds,
             });
             if (action.kind === "noop") return;
 
-            // Active-runtime Work View selection never ends in a route push. Cross-host uses the
-            // shared entry adapter (href MUST carry `?work_view_id=` — see resolveSelectWorkViewAction);
-            // same-host is always a LENS move. The former pathname "safety net" compared view href
-            // slugs to the current work-unit path and falsely treated ordinary same-host tab switches
-            // as navigation — URL changed, attention never moved (wt4 cert).
+            // Pill-strip Work View selection is ALWAYS a LENS move on the current Work Unit target.
+            // Never SURFACE-navigate to a label slug (`/work-unit/tours`, `/work-unit/waitlist`) —
+            // that remounts `[workUnitSlug]` and yields Tours count=1 / rows=0. Workspace entry
+            // (Process cards / Today's Work) remains the sole owner of true host SURFACE movement.
             if (action.kind === "navigate") {
+                // Defensive: a view not present in lensSet (should not come from the pill strip).
                 if (moveToWorkUnitEntry(action.href, null, null, null)) return;
-                // Adapter could not parse the href (no kernel / unroutable target). Fall through to
-                // the lens move rather than leaving the click dead.
+            }
+
+            if (typeof window !== "undefined") {
+                const w = window as Window & {
+                    __ALLOY_WV_CLICK_TRACE__?: Array<Record<string, unknown>>;
+                };
+                const trace = (w.__ALLOY_WV_CLICK_TRACE__ ??= []);
+                trace.push({
+                    t: Date.now(),
+                    intentWorkViewId: id,
+                    actionKind: action.kind,
+                    currentWorkViewId,
+                    currentWorkUnitId,
+                    attentionTarget: kernel.attention.get()?.target ?? null,
+                    attentionLens: kernel.attention.get()?.lens ?? null,
+                    surfaceLensIds,
+                    href: action.kind === "navigate" ? action.href : null,
+                });
+                if (trace.length > 20) trace.splice(0, trace.length - 20);
             }
 
             kernel.attention.move({
@@ -286,6 +305,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 currentWorkUnitId: snap?.workUnit.id ?? null,
                 canonicalLocationByViewId,
                 targetInputs,
+                surfaceLensIds: views.map((v) => v.id),
             });
             if (action.kind === "navigate") {
                 router.prefetch(action.href);

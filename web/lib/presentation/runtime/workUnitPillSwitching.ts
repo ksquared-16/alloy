@@ -1,8 +1,10 @@
 /**
  * Work Unit pill switching — pure decision helpers.
  *
- * Same-host views swap queue rows + focus panel in place (Excel tabs).
- * Cross-host views still navigate; Surface Hold minimizes shell remount.
+ * Doctrine: a Work View pill on an open Work Unit is a LENS, not a Work Unit change.
+ * Pill-strip views always swap queue + Focus in place (Excel tabs) — even when Settlement
+ * evaluates a view's COUNT on a different host. Workspace entry (not the pill strip) owns
+ * true host changes via `useWorkUnitEntryMovement`.
  */
 
 import { resolveWorkViewTargetHref, type WorkViewTargetInputs } from "@/lib/presentation/runtime/workViewTargetHref";
@@ -50,10 +52,31 @@ export function resolveSelectWorkViewAction(args: {
     currentWorkUnitId: string | null;
     canonicalLocationByViewId: ReadonlyMap<string, WorkViewCanonicalLocation>;
     targetInputs: WorkViewTargetInputs;
+    /**
+     * Ids from the committed surface's `lensSet` (the pill strip). A view on this strip is a
+     * LENS of the open Work Unit — never a pathname / Work Unit exchange, even when Settlement
+     * evaluates its COUNT on a different host work unit.
+     */
+    surfaceLensIds?: ReadonlyArray<string> | ReadonlySet<string> | null;
 }): SelectWorkViewAction {
     const id = args.workViewId.trim();
     if (!id || id === args.currentWorkViewId?.trim()) {
         return { kind: "noop" };
+    }
+
+    const onSurfacePillStrip = (() => {
+        const ids = args.surfaceLensIds;
+        if (!ids) return false;
+        if (ids instanceof Set) return ids.has(id);
+        return ids.some((x) => x.trim() === id);
+    })();
+
+    // Pill-strip contract: Work View = lens inside the open Work Unit. Never navigate to
+    // `/workspace/work-unit/tours` or `/waitlist` from a pill — that remounts the shell
+    // (`[workUnitSlug]` layout + `key={attention.target}`) and is how Tours count=1 / rows=0
+    // and "page refresh" appear.
+    if (onSurfacePillStrip) {
+        return { kind: "in-page", workViewId: id };
     }
 
     if (
@@ -68,17 +91,13 @@ export function resolveSelectWorkViewAction(args: {
     }
 
     const location = args.canonicalLocationByViewId.get(id) ?? null;
-    // Unknown host while already on a Work Unit: NEVER invent a label-slug SURFACE navigation
-    // (`Tours` → `/workspace/work-unit/tours`). That changes attention.target away from the live host,
-    // drops `work_view_id`, and leaves Settlement painting the pill count while K3 never commits the
-    // lens (count=1 / rows=0). Prefer an in-page LENS move until Settlement proves a different host.
+    // Unknown host while already on a Work Unit: NEVER invent a label-slug SURFACE navigation.
     if (!location && args.currentWorkUnitId) {
         return { kind: "in-page", workViewId: id };
     }
 
     const href = resolveWorkViewTargetHref(id, args.targetInputs);
     if (!href) {
-        // Label-less / unresolvable cross-host edge — fall back to in-page if we're already here.
         if (args.currentWorkUnitId) {
             return { kind: "in-page", workViewId: id };
         }
