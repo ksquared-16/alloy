@@ -65,6 +65,14 @@ export type ChannelCard = {
     providerConnection: ProviderConnectionState;
     /** Product wording for the state above. Never storage vocabulary. */
     providerConnectionLabel: string;
+    /**
+     * The account this channel is actually using, and who owns it.
+     *
+     * "Connected" without an account name left an administrator unable to say
+     * WHICH Twilio account was sending their texts, whether it was theirs, or how
+     * to change it. Null when nothing is connected.
+     */
+    providerAccount: ProviderAccountView | null;
     sending: DirectionView;
     receiving: DirectionView;
     identity: IdentityLine[];
@@ -93,6 +101,21 @@ export type ChannelCard = {
     schools: SchoolIdentityRow[];
     /** Rooms whose school is missing or inactive. Shown, never dropped. */
     unparentedRooms: RoomIdentityRow[];
+};
+
+/** Who owns the connection an administrator is looking at. */
+export type ProviderAccountView = {
+    /** "Resend" / "Twilio", as a person would name it. */
+    providerLabel: string;
+    /** The account's own name, when it has one. */
+    label: string | null;
+    /**
+     * `organization` — connected on this page, and replaceable here.
+     * `platform` — provisioned for the deployment; real, working, and not
+     * changeable by this administrator. Saying so beats leaving them to guess.
+     */
+    owner: "organization" | "platform";
+    connected: boolean;
 };
 
 /** The binding shape this model consumes — exactly what the bindings route emits. */
@@ -262,6 +285,13 @@ export function buildChannelCards(
     bindings: BindingView[],
     locations: OrgLocation[] = [],
     hierarchy?: LocationHierarchy,
+    providerAccounts: {
+        channel: string;
+        provider: string;
+        label: string | null;
+        owner: "organization" | "platform";
+        connected: boolean;
+    }[] = [],
 ): ChannelCard[] {
     return (["email", "sms"] as const).map((channel) => {
         const rows = bindings.filter((b) => String(b.channel ?? "").trim().toLowerCase() === channel);
@@ -351,6 +381,19 @@ export function buildChannelCards(
             connected,
             providerConnection,
             providerConnectionLabel: providerConnectionLabelFor(providerConnection),
+            providerAccount: (() => {
+                // Prefer the organization's own account: when both exist, the one
+                // the administrator can act on is the one worth naming.
+                const forChannel = providerAccounts.filter((a) => a.channel === channel);
+                const chosen = forChannel.find((a) => a.owner === "organization") ?? forChannel[0];
+                if (!chosen) return null;
+                return {
+                    providerLabel: providerLabelFor(chosen.provider) ?? chosen.provider,
+                    label: chosen.label,
+                    owner: chosen.owner,
+                    connected: chosen.connected,
+                };
+            })(),
             sending: view(face?.readiness?.send),
             receiving: view(face?.readiness?.receive),
             identity: identityLinesFor(channel, face),

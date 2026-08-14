@@ -168,15 +168,43 @@ export async function GET() {
     // Whether this deployment offers ANY approved connection per channel. Drives
     // the `none_approved` readiness state — the difference between "pick another
     // connection" and "a platform administrator must provision one".
-    const approvedChannels = new Set(credentialOptions.filter((o) => o.available).map((o) => o.channel));
+    const deploymentChannels = credentialOptions.filter((o) => o.available).map((o) => o.channel);
 
     // A connection the organization owns can be REJECTED by the provider — a key
     // revoked in Resend, for instance. That is not "unavailable"; it is specific
     // and the administrator can fix it by reconnecting.
     const { data: accountRows } = await supabase
         .from("communication_provider_accounts")
-        .select("provider_type, verification_state, secret_ref")
+        .select("id, provider_type, status, verification_state, secret_ref, display_label")
         .eq("org_id", ctx.orgId);
+    /**
+     * Providers the ORGANIZATION has connected itself — a `vault:` reference on an
+     * active, verified account.
+     *
+     * THE DEFECT THIS CLOSES. `approvedConnectionAvailable` was computed only from
+     * deployment environment variables, so an organization that had successfully
+     * connected its own Resend account was still told "Not connected": the
+     * deployment held no RESEND_API_KEY, the catalogue reported nothing available,
+     * and readiness concluded `none_approved`. The connection existed, the
+     * credential resolved, the binding pointed at it — and the card denied it.
+     * Self-service is exactly the case where the deployment has nothing.
+     */
+    const orgConnected = new Map<string, { id: string; label: string }>();
+    for (const a of accountRows ?? []) {
+        const row = a as { id?: string; provider_type?: string; status?: string; verification_state?: string; secret_ref?: string; display_label?: string };
+        if (!String(row.secret_ref ?? "").startsWith("vault:")) continue;
+        if (String(row.status ?? "") !== "active" || String(row.verification_state ?? "") !== "verified") continue;
+        orgConnected.set(String(row.provider_type ?? "").trim().toLowerCase(), {
+            id: String(row.id ?? ""),
+            label: String(row.display_label ?? "").trim(),
+        });
+    }
+    /** A channel is connectable if the DEPLOYMENT offers one or the ORG owns one. */
+    const approvedChannels = new Set([
+        ...deploymentChannels,
+        ...[...orgConnected.keys()].map((p) => (p === "resend" ? "email" : p === "twilio" ? "sms" : p)),
+    ]);
+
     const rejectedProviders = new Set(
         (accountRows ?? [])
             .filter(
@@ -208,6 +236,44 @@ export async function GET() {
         location_hierarchy: buildLocationHierarchy((locationRows ?? []) as LocationRow[]),
         /** What an operator may connect a channel to. Presence only, no values. */
         credential_options: credentialOptions,
+        /**
+         * WHICH provider account each channel is using, and WHO owns it.
+         *
+         * The Director could see "SMS · Connected" and had no way to learn what
+         * Twilio account that was, whether it belonged to their organization, or
+         * how to change it. A connection nobody can identify is not a connection
+         * an administrator can manage. Names and ownership only — never a
+         * credential, never a reference.
+         */
+        provider_accounts: (accountRows ?? [])
+            .map((a) => {
+                const row = a as {
+                    provider_type?: string;
+                    status?: string;
+                    verification_state?: string;
+                    secret_ref?: string;
+                    display_label?: string;
+                };
+                const provider = String(row.provider_type ?? "").trim().toLowerCase();
+                const orgOwned = String(row.secret_ref ?? "").startsWith("vault:");
+                const connected =
+                    String(row.status ?? "") === "active" && String(row.verification_state ?? "") === "verified";
+                return {
+                    provider,
+                    channel: provider === "resend" ? "email" : provider === "twilio" ? "sms" : provider,
+                    label: String(row.display_label ?? "").trim() || null,
+                    connected,
+                    /**
+                     * `organization` — connected here, replaceable here.
+                     * `platform`     — provisioned for the deployment. Real, working,
+                     *                  and NOT something this administrator can
+                     *                  change; saying so is better than leaving them
+                     *                  to guess whose account is sending their mail.
+                     */
+                    owner: orgOwned ? "organization" : "platform",
+                };
+            })
+            .filter((a) => a.connected || a.owner === "organization"),
         permission_stub: {
             gate: "admin_or_ops",
             finer_key: "communications.send",
