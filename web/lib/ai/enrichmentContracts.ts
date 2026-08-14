@@ -45,6 +45,28 @@ export type AttentionSuggestionAiEnrichmentV1 = {
 };
 
 /**
+ * The MODEL-OWNED half of {@link AttentionSuggestionAiEnrichmentV1} (D-80 / D-82).
+ *
+ * A provider is asked for reasoning, and reasoning is wording. It is never asked
+ * for `version`, `agent_key`, `generated_at_iso` or `provider_report`: Alloy
+ * already knows all four, and a value the platform knows must not be sourced
+ * from the thing being governed. The retired ungoverned provider did ask for
+ * them — its system prompt literally dictated
+ * `provider_report: { provider_key: "openai", execution_mode: "live" }` — which
+ * let the model state its own identity. Splitting the contract is what makes
+ * that class of spoof unrepresentable rather than merely discouraged.
+ *
+ * This type is the whole of what a provider may contribute. Everything absent
+ * from it is assembled by {@link assembleAttentionSuggestionAiEnrichment}.
+ */
+export type AttentionSuggestionAiEnrichmentProviderContentV1 = {
+    reasoning_summary_overlay?: string | null;
+    suggested_draft_body_overlay?: string | null;
+    tone_variant?: string | null;
+    confidence_notes?: string | null;
+};
+
+/**
  * Operational Summary contracts now live with the operational layer — see
  * `lib/operationalSummary/operationalSummaryContracts.ts`. Re-exported here so
  * existing consumers are unaffected.

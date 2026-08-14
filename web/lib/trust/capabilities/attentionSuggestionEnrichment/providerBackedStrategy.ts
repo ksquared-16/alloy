@@ -29,6 +29,12 @@
  * up, exactly the duplicated authority Phase 2.8 exists to remove.
  */
 
+import {
+    ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_OUTPUT_SHAPE,
+    assembleAttentionSuggestionAiEnrichment,
+    safeParseAttentionSuggestionAiEnrichmentProviderContentV1,
+} from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
+import { asAiProviderKey } from "@/lib/ai/providerTypes";
 import type {
     GovernedProviderExecutionRequestV1,
     GovernedReasoningProviderPortResolverV1,
@@ -42,8 +48,14 @@ import type {
 import { ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_BACKED_CLASS_KEY } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/keys";
 
 export const PROVIDER_BACKED_ENRICHMENT_STRATEGY_KEY = "attention_enrichment_provider_backed" as const;
-/** v2: content validation moved out of the strategy and onto the registered policy. */
-export const PROVIDER_BACKED_ENRICHMENT_STRATEGY_VERSION = "2.0.0" as const;
+/**
+ * v2: content validation moved out of the strategy and onto the registered policy.
+ * v3 (D-80/D-82): the provider is asked for model-owned wording only; the canonical
+ * envelope — version, agent key, timestamp, provider identity — is assembled here
+ * from trusted values. Recorded in evidence because it changes what a provider was
+ * asked for, which is not something a reader should have to infer from a diff.
+ */
+export const PROVIDER_BACKED_ENRICHMENT_STRATEGY_VERSION = "3.0.0" as const;
 
 /**
  * STABLE dependencies only — supplied once at composition time.
@@ -130,6 +142,10 @@ export function createProviderBackedAttentionEnrichmentStrategy(
                 requested_provider_key: port.requested_provider_key,
                 ...(port.requested_model_key ? { requested_model_key: port.requested_model_key } : {}),
                 deadline_ms: config.deadline_ms,
+                // The shape this strategy expects back, stated by the strategy
+                // that expects it. Model-owned wording only — the platform's own
+                // fields are deliberately not asked for (D-82).
+                expected_output_shape: ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_OUTPUT_SHAPE,
             };
 
             const executed = await executeGovernedProviderReasoning({
@@ -158,21 +174,64 @@ export function createProviderBackedAttentionEnrichmentStrategy(
                 };
             }
 
-            // The answer is FORWARDED, not judged. Whether it satisfies the
-            // enrichment contract is decided by the validation policy the
-            // capability registered, which the runtime runs through
-            // `orchestrateValidation` immediately after this returns.
+            // The model's CONTENT is mapped; the envelope around it is assembled
+            // from values Alloy already holds (D-82). Mapping is not validation:
+            // this reads the model-owned half of the contract and nothing more,
+            // and the assembled candidate still goes to the registered policy
+            // below untouched.
             //
-            // Gate A checked it here as well. That was one authority too many:
-            // Phase 2.8 exists to stop transport judging its own cargo, and a
-            // strategy re-running the registered policy just moves the duplicate
-            // one layer up. Two copies of a rule are two things to keep in
-            // agreement, and the first time they disagreed the strictest one
-            // would not be the one on the provider path.
+            // Gate A validated the FINAL schema here as well. That was one
+            // authority too many: Phase 2.8 exists to stop transport judging its
+            // own cargo, and a strategy re-running the registered policy just
+            // moves the duplicate one layer up. Two copies of a rule are two
+            // things to keep in agreement, and the first time they disagreed the
+            // strictest one would not be the one on the provider path. So the
+            // final `safeParseAttentionSuggestionAiEnrichmentV1` stays where it
+            // was registered, and is deliberately NOT called here.
+            const content = safeParseAttentionSuggestionAiEnrichmentProviderContentV1(executed.output);
+            if (!content) {
+                // A model that answered outside its content contract — including
+                // one that tried to state `agent_key` or `provider_report` — has
+                // not produced reasoning this strategy can map. Refusing is
+                // truthful; assembling around unusable content would launder it.
+                return {
+                    ok: false,
+                    refusal_code: "REASONING_UNABLE",
+                    detail: "Provider output did not match the declared enrichment content contract.",
+                    provider_execution,
+                };
+            }
+
+            // Provider identity comes from governed execution evidence, never
+            // from the model's JSON. An identity outside the operator-facing
+            // vocabulary is refused rather than coerced: reporting a provider we
+            // cannot name would put an invented value into immutable evidence.
+            const providerKey = asAiProviderKey(executed.provider_identity.provider_key);
+            if (!providerKey) {
+                return {
+                    ok: false,
+                    refusal_code: "REASONING_UNABLE",
+                    detail: "Governed execution reported a provider identity outside the operator-facing vocabulary.",
+                    provider_execution,
+                };
+            }
+
+            const recommendation = assembleAttentionSuggestionAiEnrichment({
+                content,
+                // The runtime's clock, forwarded through strategy execution —
+                // the same instant the deterministic strategy stamps. Never a
+                // wall clock read here, and never the model's.
+                generatedAtIso: execution.nowIso,
+                providerKey,
+                // A governed provider actually ran. That is what `live` means,
+                // and it is a fact about this execution, not a model claim.
+                executionMode: "live",
+            });
+
             return {
                 ok: true,
                 proposal: {
-                    recommendation: executed.output,
+                    recommendation,
                     // No calibrated confidence exists. A model's fluency is not a
                     // probability, and reporting a number would invent one.
                     confidence: null,

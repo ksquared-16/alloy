@@ -136,6 +136,21 @@ export type GovernedProviderExecutionRequestV1 = {
     readonly input: EligibleReasoningInputV1;
     /** What kind of reasoning is being asked for — from the ladder, not invented here. */
     readonly requested_strategy_kind: ReasoningStrategyKind;
+    /**
+     * What the CALLER expects back, declared by the caller (D-80 / D-82).
+     *
+     * The adapter is vendor-neutral and decision-class-agnostic; it cannot know
+     * what any capability's answer should look like, and Phase 2.8 exists so it
+     * never decides. But a provider asked for "your best structured answer"
+     * with no contract will not produce one that validates — that is precisely
+     * the defect this field closes. So the capability, which already owns "the
+     * shape it expects back", states it here and the adapter forwards it as
+     * transport payload without interpreting it.
+     *
+     * Optional: a caller that declares nothing gets the previous generic
+     * behaviour, so this is additive for every existing caller.
+     */
+    readonly expected_output_shape?: string;
     /** Routing request, not a routing decision. The adapter may answer with a different model and must say so. */
     readonly requested_provider_key: string;
     readonly requested_model_key?: string;
