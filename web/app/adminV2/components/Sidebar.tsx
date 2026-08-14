@@ -35,6 +35,7 @@ import {
     SidebarInboxNavItem,
     SidebarProcessingNavItem,
     SidebarSchedulingNavItem,
+    SidebarRosterNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -237,6 +238,8 @@ function SidebarNav({
 
     const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
     const schedulingLink = <SidebarSchedulingNavItem collapsed={collapsed} />;
+    // Roster sits next to Assignments: the plan beside the commitments it derives from.
+    const rosterLink = <SidebarRosterNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -485,6 +488,7 @@ function SidebarNav({
                                 {inboxLink}
                                 {processingLink}
                                 {schedulingLink}
+                                {rosterLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -505,6 +509,7 @@ function SidebarNav({
                                     {inboxLink}
                                     {processingLink}
                                     {schedulingLink}
+                                    {rosterLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}

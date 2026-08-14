@@ -18,6 +18,7 @@ import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
 import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
 import SchedulingModal from "@/app/adminV2/components/SchedulingModal";
+import RosterModal from "@/app/adminV2/components/RosterModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
@@ -134,6 +135,7 @@ export default function TopNavBar() {
   const analyticsModalOpen = activeWorkspaceModal === "analytics";
   const processingModalOpen = activeWorkspaceModal === "processing";
   const schedulingModalOpen = activeWorkspaceModal === "scheduling";
+  const rosterModalOpen = activeWorkspaceModal === "roster";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -255,6 +257,7 @@ export default function TopNavBar() {
         }}
       />
       <SchedulingModal open={schedulingModalOpen} onClose={() => closeWorkspaceModal("scheduling")} />
+      <RosterModal open={rosterModalOpen} onClose={() => closeWorkspaceModal("roster")} />
     </header>
   );
 }

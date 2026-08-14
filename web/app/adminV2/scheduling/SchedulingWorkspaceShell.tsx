@@ -2,8 +2,12 @@
 
 /**
  * Assignments operational workspace shell — composes the canonical WorkspaceShell
- * (the same chrome Processing / Communications / Work Items use). Module code supplies
- * only the site picker, the section body, and the section-scoped operational health band.
+ * (the same chrome Processing / Communications / Work Items / Roster use). Module code
+ * supplies only the site picker, the section body, and the section-scoped health band.
+ *
+ * Assignments owns durable placement and schedule COMMITMENTS. Roster (who is
+ * expected where and when) and Attendance (who is actually here) are their own
+ * workspace — see `app/adminV2/roster/`.
  *
  * Work | Studio mode switching + per-mode section tabs come from the shared shell; the
  * operational health metrics live in the control band (doctrine V3), never the body.
@@ -56,9 +60,9 @@ export default function SchedulingWorkspaceShell({
     /** Section-scoped operational health band (control band, right column). */
     metricsColumn?: ReactNode;
     onClose?: () => void;
-    /** Primary Overview / header Add Assignment — opens subject selection on Roster when needed. */
+    /** Primary Overview / header Add Assignment — opens subject selection when needed. */
     onAddAssignment?: () => void;
-    /** Opens Roster with the bulk command toolbar / preview for the selected command. */
+    /** Opens the Assignments index with the bulk command toolbar / preview. */
     onBulkCommand?: (command: "assignment" | "room" | "primary" | "archive") => void;
     children: ReactNode;
 }) {
@@ -119,13 +123,15 @@ export default function SchedulingWorkspaceShell({
                                         className="flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-[12px] font-semibold text-alloy-midnight hover:bg-alloy-stone/30"
                                         data-assignment-action={`bulk-${key}`}
                                         onClick={() => {
-                                            onWorkViewChange("roster");
+                                            // The ledger index, not Roster — these
+                                            // commands mutate commitments.
+                                            onWorkViewChange("assignments");
                                             onBulkCommand?.(key);
                                         }}
                                     >
                                         {label}
                                         <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-bend-pine">
-                                            Roster
+                                            Assignments
                                         </span>
                                     </button>
                                 ))}

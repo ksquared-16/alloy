@@ -17,7 +17,7 @@
  * Every mutation goes through a registered action. There are no inline writes.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, UserRound, Users } from "lucide-react";
 
 import {
@@ -93,6 +93,18 @@ type RosterModel = {
 export type AttendanceWorkspaceProps = {
     siteLocationId: string;
     siteName: string;
+    /**
+     * Room to open on arrival — set when Roster hands off "this room, today".
+     * Attendance is a today-only surface, so the handoff carries the room and the
+     * site; the date is the org's service date either way.
+     */
+    initialRoomId?: string | null;
+    /**
+     * Return to the expectation layer, carrying the room. The reciprocal of
+     * Roster's `Open Attendance`, so the operator is never left to rebuild their
+     * own context by re-picking a site and a room.
+     */
+    onBackToRoster?: (roomLocationId: string | null) => void;
     /**
      * Record gestures. Each resolves FALSE when no active Work Unit hosts the
      * record — a real platform answer, not an error. Attendance stops offering
@@ -179,6 +191,8 @@ const ACTION_SECONDARY = `${ACTION} border border-alloy-stone/25 bg-white text-a
 export default function AttendanceWorkspace({
     siteLocationId,
     siteName,
+    initialRoomId,
+    onBackToRoster,
     onOpenChild,
     onOpenStaff,
 }: AttendanceWorkspaceProps) {
@@ -193,7 +207,8 @@ export default function AttendanceWorkspace({
      */
     const [date, setDate] = useState<string | null>(null);
     const [model, setModel] = useState<RosterModel | null>(null);
-    const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+    /** A handoff from Roster names the room; otherwise the operator picks one. */
+    const [openRoomId, setOpenRoomId] = useState<string | null>(initialRoomId ?? null);
     const [busySubject, setBusySubject] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     /**
@@ -213,7 +228,19 @@ export default function AttendanceWorkspace({
         []
     );
 
+    /**
+     * Stale-response guard. Switching site fires a request per site and they can
+     * land out of order, so a late response paints the PREVIOUS campus's rooms
+     * while the header already shows the new campus's name. Only the newest
+     * request may write state.
+     */
+    const requestSeq = useRef(0);
+
     const load = useCallback(async () => {
+        // The workspace mounts this before a site resolves; fetching on "" is a
+        // guaranteed 400.
+        if (!siteLocationId) return;
+        const seq = ++requestSeq.current;
         setError(null);
         try {
             const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
@@ -225,11 +252,13 @@ export default function AttendanceWorkspace({
                 todayYmd?: string;
                 error?: string;
             };
+            if (seq !== requestSeq.current) return;
             if (!res.ok) throw new Error(json.error ?? "Could not load attendance");
             setModel(json.roster ?? null);
             // Adopt the org-local service date the server resolved.
             if (!date && json.roster?.date) setDate(json.roster.date);
         } catch (e) {
+            if (seq !== requestSeq.current) return;
             setError(e instanceof Error ? e.message : "Could not load attendance");
         }
     }, [siteLocationId, date]);
@@ -336,14 +365,31 @@ export default function AttendanceWorkspace({
         return (
             <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-room={openRoom.roomLocationId}>
                 <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
-                    <button
-                        type="button"
-                        className="inline-flex min-h-[40px] items-center gap-1 text-[12.5px] font-medium text-alloy-midnight/65 hover:text-alloy-midnight"
-                        onClick={() => setOpenRoomId(null)}
-                        data-attendance-back="true"
-                    >
-                        <ChevronLeft className="h-4 w-4" aria-hidden /> All rooms
-                    </button>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <button
+                            type="button"
+                            className="inline-flex min-h-[40px] items-center gap-1 text-[12.5px] font-medium text-alloy-midnight/65 hover:text-alloy-midnight"
+                            onClick={() => setOpenRoomId(null)}
+                            data-attendance-back="true"
+                        >
+                            <ChevronLeft className="h-4 w-4" aria-hidden /> All rooms
+                        </button>
+                        {/* Back to EXPECTATION, carrying this room. An operator who
+                            arrived here from Roster lands on the room detail, not the
+                            overview — putting the return only on the overview would
+                            make the reciprocal move unreachable from where the
+                            handoff actually lands. */}
+                        {onBackToRoster ? (
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                onClick={() => onBackToRoster(openRoom.roomLocationId)}
+                                data-attendance-back-to-roster="true"
+                            >
+                                ← Roster
+                            </button>
+                        ) : null}
+                    </div>
 
                     <header className="flex flex-wrap items-end justify-between gap-3">
                         <div>
@@ -584,10 +630,23 @@ export default function AttendanceWorkspace({
     return (
         <div className={`${WS_SURFACE_CONTENT_PAD} min-h-0 flex-1 overflow-y-auto`} data-attendance-overview="true">
             <div className={`${WS_OVERVIEW_CONTENT} space-y-4`}>
-                <header>
-                    <p className={WS_EYEBROW}>Attendance</p>
-                    <h2 className="text-[18px] font-semibold text-alloy-midnight">{date ? formatLongDate(date) : "Today"}</h2>
-                    <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
+                <header className="flex flex-wrap items-end justify-between gap-3">
+                    <div>
+                        <p className={WS_EYEBROW}>Attendance</p>
+                        <h2 className="text-[18px] font-semibold text-alloy-midnight">{date ? formatLongDate(date) : "Today"}</h2>
+                        <p className="mt-0.5 text-[12px] text-alloy-midnight/60">{siteName}</p>
+                    </div>
+                    {/* Back to what was EXPECTED, carrying the room. */}
+                    {onBackToRoster ? (
+                        <button
+                            type="button"
+                            className="rounded border border-alloy-stone/25 px-2.5 py-1 text-[11.5px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                            onClick={() => onBackToRoster(openRoomId)}
+                            data-attendance-back-to-roster="true"
+                        >
+                            ← Roster
+                        </button>
+                    ) : null}
                 </header>
 
                 {error ? (

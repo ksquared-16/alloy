@@ -13,12 +13,9 @@ import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import { WS_EYEBROW, WS_OVERVIEW_CONTENT } from "@/components/workspace/workspaceTokens";
 import SchedulingWorkspaceShell, { type Site } from "@/app/adminV2/scheduling/SchedulingWorkspaceShell";
 import SchedulingKpiStrip from "@/app/adminV2/scheduling/SchedulingKpiStrip";
-import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
-import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
-import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
-import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
     SCHEDULING_SECTION_MODE,
+    resolveWorkView,
     type SchedulingMode,
     type SchedulingStudioView,
     type SchedulingWorkView,
@@ -30,13 +27,10 @@ import SchedulingOverview, {
     type RosterSummary,
     type TodayActivity,
 } from "@/components/adminV2/scheduling/screens/SchedulingOverview";
-import SchedulingRoster, {
-    type RosterData,
-    type RosterFilterKind,
-    type RosterFilterContext,
-    type RosterViewMode,
-} from "@/components/adminV2/scheduling/screens/SchedulingRoster";
-import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
+import { type RosterData } from "@/components/adminV2/scheduling/screens/SchedulingRoster";
+import AssignmentRosterPanel, {
+    type AssignmentRosterSubject,
+} from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import SchedulingStudio, { type StudioCalculation } from "@/components/adminV2/scheduling/screens/SchedulingStudio";
 import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
@@ -45,6 +39,7 @@ import WorkspaceCreateAssignmentModal, {
 } from "@/components/adminV2/scheduling/WorkspaceCreateAssignmentModal";
 import {
     ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY,
+    dispatchAdminV2OpenRosterModal,
     type OpenSchedulingModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
 import {
@@ -66,6 +61,13 @@ type OverviewResp = {
     startsThisWeek?: OverviewStart[];
     activity?: TodayActivity;
     assignmentAttention?: AssignmentAttentionSummary;
+};
+
+/** Work views this workspace no longer owns — forwarded to the Roster workspace. */
+const MOVED_WORK_VIEWS: Record<string, { section: "roster" | "attendance"; range?: "day" | "week" }> = {
+    roster: { section: "roster" },
+    daily_roster: { section: "roster", range: "day" },
+    attendance: { section: "attendance" },
 };
 
 const EMPTY_STUDIO_CONFIG: PatternEditorConfig = { operatingDays: [], scheduleTypes: [], programs: [] };
@@ -201,9 +203,12 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     const [workView, setWorkView] = useState<SchedulingWorkView>("overview");
     const [rosterBulkIntent, setRosterBulkIntent] = useState<"assignment" | "room" | null>(null);
     const [studioView, setStudioView] = useState<SchedulingStudioView>("types");
-    const [rosterView, setRosterView] = useState<RosterViewMode>("assignments");
-    const [focusRoomId, setFocusRoomId] = useState<string | undefined>(undefined);
-    const [rosterFilter, setRosterFilter] = useState<RosterFilterKind | null>(null);
+    /** Context carried by a Roster → Assignments handoff, matched on identity. */
+    const [assignmentFocus, setAssignmentFocus] = useState<{
+        personId?: string | null;
+        customerMemberId?: string | null;
+        enrollmentAgreementId?: string | null;
+    } | null>(null);
 
     // Deep-link from Focus Panel (Configure Assignment Types) or header Actions.
     useEffect(() => {
@@ -217,10 +222,28 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     setStudioView("types");
                 }
             }
+            // Roster / Daily Roster / Attendance moved out. `dispatch…` forwards
+            // them, but a sessionStorage entry written by an older bundle reaches
+            // this listener directly — forward it here too rather than silently
+            // landing the operator on Overview.
+            if (detail.workView && MOVED_WORK_VIEWS[detail.workView]) {
+                dispatchAdminV2OpenRosterModal(MOVED_WORK_VIEWS[detail.workView]);
+                return;
+            }
             if (detail.mode === "work" || detail.workView) {
                 setMode("work");
-                if (detail.workView) setWorkView(detail.workView);
+                const resolved = resolveWorkView(detail.workView);
+                if (resolved) setWorkView(resolved);
             }
+            // Roster's `Manage →` crosses workspaces now, so the subject and the
+            // SITE both arrive on the deep link. Without the site, Assignments opens
+            // on its own default campus and the subject is simply not in the ledger
+            // it shows — the handoff looks broken and nothing says why.
+            if (detail.siteLocationId) {
+                siteChosenByOperatorRef.current = true;
+                setSiteId(detail.siteLocationId);
+            }
+            if (detail.focusSubject) setAssignmentFocus(detail.focusSubject);
         };
         try {
             const raw = sessionStorage.getItem(ASSIGNMENTS_WORKSPACE_DEEPLINK_KEY);
@@ -621,40 +644,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     );
 
     const siteName = useMemo(() => sites?.find((s) => s.id === siteId)?.name ?? "All sites", [sites, siteId]);
-    /**
-     * THE canonical record gesture. Attendance points at a record; the adapter
-     * decides where — and answers `false` when no active Work Unit hosts it.
-     * That is a platform answer, not a failure: an employed person with no open
-     * case has nowhere to be worked, and Attendance must not invent a
-     * destination for them. Durable record discovery belongs to the future
-     * Records workspace, not here.
-     */
-    const focusRecord = useOperatorRecordFocus();
-
-    /**
-     * State the record intent, then GET OUT OF THE WAY.
-     *
-     * This workspace is a modal mounted in `TopNavBar` — shell chrome, inside the workspace layout
-     * but above the kernel. The adapter therefore moves attention on the surface UNDERNEATH this
-     * modal. Without the close, the movement is real and completely invisible: the panel composes
-     * the record behind an opaque overlay and the operator sees their click do nothing, which is
-     * indistinguishable from the `openDrawer` defect this all replaced.
-     *
-     * Closing only on `true` is the point of the contract. A `false` answer means no active Work
-     * Unit hosts the record — there is nothing behind this modal to reveal, so dismissing it would
-     * throw the operator out of Attendance to look at the surface they were already on. The caller
-     * owning its own dismissal (rather than the listener closing modals for everyone) is the
-     * pattern the migrated callers already share — see `InboxPanel.onOpenRecord`.
-     */
-    const focusRecordAndYield = useCallback(
-        async (request: Parameters<typeof focusRecord>[0]): Promise<boolean> => {
-            const moved = await focusRecord(request);
-            if (moved) onClose?.();
-            return moved;
-        },
-        [focusRecord, onClose]
-    );
-
     const summary = useMemo(() => deriveRosterSummary(roster), [roster]);
 
     const unplaced = overview?.unplaced ?? [];
@@ -711,46 +700,18 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
     // A filter kind carries the operator's intent (unplaced / starts / near-capacity /
     // ratio-risk) into the roster so it opens focused on exactly what the card was about.
     const navigateToRoster = useCallback((roomId?: string, filter?: string) => {
-        setMode("work");
-        setWorkView("roster");
-        setFocusRoomId(roomId);
-        setRosterFilter((filter as RosterFilterKind) ?? null);
-    }, []);
-
-    // The roster's focused context, resolved from the active filter + live data.
-    const filterContext: RosterFilterContext | null = useMemo(() => {
-        if (!rosterFilter) return null;
-        if (rosterFilter === "unplaced") {
-            return {
-                kind: "unplaced",
-                label: "Missing assignments",
-                count: unplaced.length,
-                children: unplaced.map((c) => ({ name: c.name, sub: c.startDate ? `starts ${c.startDate}` : "ready to assign" })),
-            };
-        }
-        if (rosterFilter === "starts") {
-            return {
-                kind: "starts",
-                label: "Upcoming assignments",
-                count: starts.length,
-                children: starts.map((s) => ({ name: s.name, sub: `starts ${s.startDate}` })),
-            };
-        }
-        if (rosterFilter === "near_capacity") {
-            return {
-                kind: "near_capacity",
-                label: "Rooms near capacity",
-                count: summary.roomsNearCapacity.length,
-                highlightRoomIds: summary.roomsNearCapacity.map((r) => r.roomId),
-            };
-        }
-        return {
-            kind: "ratio_risk",
-            label: "Ratio risks",
-            count: summary.ratioRisks.length,
-            highlightRoomIds: [...new Set(summary.ratioRisks.map((r) => r.roomId))],
-        };
-    }, [rosterFilter, unplaced, starts, summary]);
+        // Roster is its own workspace now. An Overview attention card is about a
+        // room across the week, so the handoff opens Roster at the week range
+        // carrying the room and the operator's filter intent — the alternative is
+        // keeping a second Roster here and having two owners for one question.
+        dispatchAdminV2OpenRosterModal({
+            section: "roster",
+            range: "week",
+            siteLocationId: siteId || null,
+            roomLocationId: roomId ?? null,
+            filter: filter ?? null,
+        });
+    }, [siteId]);
 
     const onWeekChange = useCallback(
         (dir: -1 | 1 | 0) => {
@@ -826,13 +787,7 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             workView={workView}
             studioView={studioView}
             onModeChange={setMode}
-            onWorkViewChange={(v) => {
-                setWorkView(v);
-                if (v !== "roster") {
-                    setFocusRoomId(undefined);
-                    setRosterFilter(null);
-                }
-            }}
+            onWorkViewChange={setWorkView}
             onStudioViewChange={setStudioView}
             sites={sites}
             siteId={siteId}
@@ -846,8 +801,9 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
             onAddAssignment={() => openCreateAssignment(null)}
             onBulkCommand={(command) => {
                 setMode("work");
-                setWorkView("roster");
-                setRosterView("assignments");
+                // Bulk commands act on the assignment LEDGER, so they land on
+                // Assignments — not on Roster, which is a projection of it.
+                setWorkView("assignments");
                 if (command === "assignment" || command === "room") {
                     setRosterBulkIntent(command);
                 } else {
@@ -880,7 +836,9 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                 onSaved={refreshAfterMutation}
             />
             <WorkspaceSurface
-                tone={mode === "work" && workView === "roster" ? "canvas" : "stone"}
+                /* The assignment index keeps the canvas tone it had as a sub-view
+                   of the old Roster tab; Overview and Studio stay stone. */
+                tone={mode === "work" && workView === "assignments" ? "canvas" : "stone"}
                 scroll
                 padded
                 data-scheduling-section={mode === "work" ? workView : studioView}
@@ -898,26 +856,14 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                     />
                 ) : null}
 
-                {mode === "work" && workView === "roster" ? (
-                    <SchedulingRoster
-                        data={displayRoster}
-                        assignmentSubjects={assignmentRoster ?? []}
-                        rosterView={rosterView}
-                        onRosterViewChange={setRosterView}
-                        loading={loadingRoster}
-                        loadingAssignments={loadingAssignmentRoster}
+                {mode === "work" && workView === "assignments" ? (
+                    <AssignmentRosterPanel
+                        subjects={assignmentRoster ?? []}
+                        loading={loadingAssignmentRoster}
                         siteName={siteName}
-                        focusRoomId={focusRoomId}
-                        filter={filterContext}
-                        onClearFilter={() => setRosterFilter(null)}
-                        onSelectRoom={(roomId) => setFocusRoomId(roomId)}
-                        onSelectCell={(roomId) => setFocusRoomId(roomId)}
-                        onWeekChange={onWeekChange}
-                        onSelectWeek={onSelectWeek}
-                        weekChangePending={weekChangePending}
-                        lastWeekLoadMs={lastWeekLoadMs}
+                        focusSubject={assignmentFocus}
                         initialBulkMode={rosterBulkIntent}
-                        rosterBulk={{
+                        bulk={{
                             onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
                             onBulkArchive: async (assignmentIds) => {
                                 for (const assignment_id of assignmentIds) {
@@ -993,55 +939,6 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                             },
                             assignmentTypes: pickerAssignmentTypes ?? [],
                             siteId,
-                        }}
-                    />
-                ) : null}
-
-                {mode === "work" && workView === "daily_roster" ? (
-                    <DailyRoster
-                        siteLocationId={siteId}
-                        siteName={siteName}
-                        todayYmd={new Date().toISOString().slice(0, 10)}
-                        onOpenChild={(child) => {
-                            // Canonical record only — a child opens as its person
-                            // identity. Roster is a selection surface, not a record one.
-                            if (!child.personId) return false;
-                            return focusRecordAndYield({
-                                entity_type: "persons",
-                                entity_id: child.personId,
-                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
-                            });
-                        }}
-                        onOpenStaff={(staff) => {
-                            return focusRecordAndYield({
-                                entity_type: "persons",
-                                entity_id: staff.personId,
-                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
-                            });
-                        }}
-                    />
-                ) : null}
-                {mode === "work" && workView === "attendance" ? (
-                    <AttendanceWorkspace
-                        siteLocationId={siteId}
-                        siteName={siteName}
-                        onOpenChild={(child) => {
-                            // Canonical Child record — never an attendance-specific surface.
-                            if (!child.personId) return false;
-                            return focusRecordAndYield({
-                                entity_type: "persons",
-                                entity_id: child.personId,
-                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.children, item_id: child.personId },
-                            });
-                        }}
-                        onOpenStaff={(staff) => {
-                            // A staff gesture asks about this person's standing here, not the
-                            // family's enrollment work — so it names the Employment card.
-                            return focusRecordAndYield({
-                                entity_type: "persons",
-                                entity_id: staff.personId,
-                                card_focus: { card_key: OPERATOR_FOCUS_CARDS.employment, item_id: staff.personId },
-                            });
                         }}
                     />
                 ) : null}

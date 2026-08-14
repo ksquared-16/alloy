@@ -184,15 +184,42 @@ right now or a planning problem next week.
 
 ### Operator surface
 
-Attendance is an operator surface inside the **Assignments workspace** (Work → Attendance),
+Attendance is an operator surface inside the **Roster workspace** (Roster → Attendance),
 site-scoped, drilling site → room → subjects. Check-in / check-out / absence / correction are all
 registered actions; the surface authors nothing directly and re-reads the roster projection after
 every command.
 
-⚠ **Placement is provisional and is NOT the final navigation decision.** Roster / Attendance living
-inside Assignments is accepted for V1 only. Whether it becomes its own operational workspace (or
-part of a Daily Operations surface) will be revisited after real operator use — do not treat the
-current location as settled doctrine.
+⚠ **Attendance has no date control.** It adopts the org-local service date the roster route
+resolves and renders no way to change it — it is a TODAY-ONLY surface by construction. Anything
+handing off into Attendance must respect that. Roster offers `Open Attendance` only when the
+roster is on today, and states the reason on any other date rather than silently opening today,
+which would move the operator to a different day without saying so.
+
+### Workspace ownership (settled 2026-08-13)
+
+The provisional placement inside Assignments is **resolved**. Roster is now a first-class
+operational workspace, peer to Inbox / Work Items / Processing / Assignments:
+
+| Workspace | Owns | Question |
+|---|---|---|
+| **Assignments** | durable placement + schedule commitments, and every mutation of them | *What commitments exist?* |
+| **Roster** | the expected operating composition — Day/Week × Rooms/Staff | *Who is expected where and when?* |
+| **Roster → Attendance** | actuality over the same daily operating population | *Who is actually here?* |
+
+- **Roster writes no scheduling truth.** `Manage →` routes to the registered assignment commands in
+  Assignments; Roster composes certified projections and nothing else.
+- Attendance is a **mode of Roster**, not a separate workspace: expectation and actuality are two
+  readings of one operational day. There is exactly one canonical Attendance surface.
+- Assignments no longer exposes Roster or Attendance work views. Links written against the old
+  location are forwarded to Roster by `dispatchAdminV2OpenSchedulingModal` (and, for a stale
+  session deep-link written by an older bundle, by the Assignments workspace on mount) — they must
+  never dead-end.
+- The workspace is named **`Roster`** for V1. Whether a broader **"Daily Operations"** noun
+  eventually covers Roster + Attendance + adjacent daily surfaces is **undecided**, and deliberately
+  not pre-empted.
+
+Owners: `web/app/adminV2/roster/`, `web/components/adminV2/roster/RosterWorkspace.tsx`.
+Product record: [`../planning/roster-product-v1-stage1.md`](../planning/roster-product-v1-stage1.md).
 
 ### Known V1 boundaries
 
@@ -210,6 +237,7 @@ current location as settled doctrine.
 | Staff presence fact stream | `supabase/migrations/20260812090000_staff_presence_facts_v1.sql`, `web/lib/staffPresence/*` |
 | Staff assignment eligibility | `web/lib/operationalAssignments/staffAssignmentEligibility.ts` |
 | Combined roster + sufficiency | `web/lib/roster/buildCombinedRoster.ts`, `web/lib/scheduling/supply/staffingSufficiency.ts` |
+| Roster workspace (expectation + actuality) | `web/app/adminV2/roster/`, `web/components/adminV2/roster/RosterWorkspace.tsx` |
 | Certification fixture (cert-only) | `certification/attendance/01-attendance-fixture.sql` |
 
 ---
@@ -236,4 +264,4 @@ current location as settled doctrine.
 - Attendance moves from doctrine to implemented schema/runtime (record the model here).
 - The staff presence vocabulary changes, or staff facts acquire any payroll/timekeeping meaning.
 - The planned-vs-actual separation changes, or a new sufficiency verdict is introduced.
-- Roster / Attendance moves out of the Assignments workspace (the placement above is provisional).
+- Roster / Attendance change workspace again, or the "Daily Operations" naming question is settled.

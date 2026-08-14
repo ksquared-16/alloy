@@ -71,6 +71,7 @@ export default function WorkspaceShell<M extends string, S extends string>({
     bodyClassName,
     dataTestId,
     shellDataAttrs,
+    showModeRail,
     children,
 }: {
     header: WorkspaceShellHeader;
@@ -92,6 +93,8 @@ export default function WorkspaceShell<M extends string, S extends string>({
     dataTestId?: string;
     /** Extra data-* attributes on the root shell element (module certification markers). */
     shellDataAttrs?: Record<string, string | boolean>;
+    /** Render the Work | Studio rail. Default true; single-mode modules may opt out. */
+    showModeRail?: boolean;
     children: ReactNode;
 }) {
     const { expanded } = useWorkspaceExpand();
@@ -134,6 +137,7 @@ export default function WorkspaceShell<M extends string, S extends string>({
                     onSectionChange={onSectionChange}
                     sectionAriaLabel={sectionAriaLabel}
                     metricsColumn={metricsColumn}
+                    showModeRail={showModeRail}
                     sectionTrailing={sectionTrailing}
                     navDataAttr={navDataAttr}
                     sectionsDataAttr={sectionsDataAttr}

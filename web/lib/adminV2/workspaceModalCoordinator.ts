@@ -1,7 +1,21 @@
 import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentationFlags";
 
-/** Shell-level modals owned by AdminV2 workspace chrome (mutually exclusive). */
-export type AdminV2WorkspaceModalKey = "inbox" | "tasks" | "quick_message" | "analytics" | "processing" | "scheduling";
+/**
+ * Shell-level modals owned by AdminV2 workspace chrome (mutually exclusive).
+ *
+ * `roster` is the operating plan — who is expected where and when — and its
+ * actuality mode, Attendance. `scheduling` is Assignments: the durable commitment
+ * ledger those expectations are derived from. They lived under one noun and
+ * answered two different questions.
+ */
+export type AdminV2WorkspaceModalKey =
+    | "inbox"
+    | "tasks"
+    | "quick_message"
+    | "analytics"
+    | "processing"
+    | "scheduling"
+    | "roster";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;
