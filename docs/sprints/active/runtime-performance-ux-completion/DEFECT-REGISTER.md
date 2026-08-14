@@ -104,6 +104,55 @@ evidence — requests, call sites, render passes — is not load-sensitive and i
 
 ---
 
+### R-006 · Two competing shared select primitives
+
+| Field | Value |
+|---|---|
+| **Surface** | Universal Field System consumers (7 call sites) |
+| **Interaction** | Editing any `field_definitions`-backed option set |
+| **Expected** | One platform select |
+| **Observed** | `SelectFieldControl` was a *shared* wrapper around a **native** `<select>`, so the field system shipped its own input runtime beside `AlloySelect`. `IdentityFieldValue` imported both and chose between them with a hardcoded field-NAME allowlist, so two fields in one form could present two different design systems depending on what they were called |
+| **Root owner** | `components/admin/fields/SelectFieldControl.tsx` |
+| **Classification** | I |
+| **Evidence** | Consumer inventory below; `useAlloySelect` allowlist |
+| **Severity** | High |
+| **Shared vs local** | Shared — fixing the wrapper converted all 7 consumers at once |
+| **Status** | **Closed** `f68a7355a`. The adapter survives and keeps the field-system contract; it owns no value semantics, keyboard model or menu. Allowlist deleted |
+
+**Consumer inventory — behaviours actually used.** No consumer used validation, error, or
+help-text props; none exists on the adapter. **No consumer needs read-only** — every one
+uses `disabled` only, so read-only stays **deferred** per the standing rule against adding
+API surface for theoretical completeness.
+
+| Consumer | value | onChange | options | disabled | placeholder | className | testid | aria-label |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| `ConfiguredCreateFormFields` | ✓ | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ |
+| `ActionIntakeFieldGroups` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `ActionWorkspaceGatherFields` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `IdentityFieldValue` | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ |
+| `EmergencyContactsSection` | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ |
+| `CreateLeadHouseholdCardEditFields` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | — |
+| `CreateLeadRequiredChecklistRow` | ✓ | ✓ | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+
+`SelectOptionChoice` and `AlloySelectOption` were already structurally identical, so no
+option adaptation was needed. `className` replaced the control's chrome and now lands on the
+trigger via `triggerClassName` — the element it always described.
+
+---
+
+## Select primitive — limitations still open
+
+Recorded so the mass migration is planned against what the primitive actually does.
+
+| # | Limitation | Status |
+|---|---|---|
+| L-1 | **No portal.** The menu is absolutely positioned inside its own root. The upward flip handles viewport edges; an ancestor with `overflow: hidden` would still clip. | **Deferred by rule** — no clipping failure reproduced in a supported surface. Build it when one is. |
+| L-2 | **Read-only is not distinct from disabled.** | **Deferred by rule** — all 7 adapter consumers use `disabled` only. |
+| L-3 | **No multi-select.** Every consumer today is single-value. | Open — needed before any multi-select call site migrates. |
+| L-4 | **Typeahead has no visible feedback.** The buffer is invisible; the operator sees only the active option move, exactly like a native select. | Intentional. Revisit only if evidence shows it is insufficient. |
+
+---
+
 ## Open
 
 ### R-005 · Second instance of the warm-cache bypass
@@ -121,35 +170,53 @@ evidence — requests, call sites, render passes — is not load-sensitive and i
 | **Shared vs local** | Local, same shape as R-003 |
 | **Status** | **Open.** Not a straight swap: the panel's slots query carries `exclude_booking_id` in reschedule mode, so the cache key must cover that variant before the fetch can be folded in. Deliberately reported rather than half-fixed |
 
-### R-006 · Two competing shared select primitives
-
-| Field | Value |
-|---|---|
-| **Surface** | Universal Field System consumers |
-| **Interaction** | Editing any `field_definitions`-backed option set |
-| **Expected** | One platform select |
-| **Observed** | `components/admin/fields/SelectFieldControl.tsx` is a *shared* wrapper around a **native** `<select>` with 8 consumers. `IdentityFieldValue.tsx` imports both primitives and chooses between them with a hardcoded `fieldRef` substring allowlist (`.gender`, `assignment`, `program`, `location`, `room`, `schedule`) — so two fields in the same form get two different design systems depending on their name |
-| **Root owner** | `SelectFieldControl.tsx` |
-| **Classification** | I |
-| **Evidence** | `IdentityFieldValue.tsx` `useAlloySelect` branch |
-| **Severity** | High — highest leverage remaining: converting the wrapper to delegate retires 8 call sites at once and deletes the allowlist |
-| **Shared vs local** | Shared |
-| **Status** | **Open** — recommended first item of Wave 3 |
-
-### R-007 · Configuration surface attempts a write on ordinary interaction
+### R-007 · Selecting a stage to READ it writes to the database
 
 | Field | Value |
 |---|---|
 | **Surface** | `/organization/processes` → Stages |
-| **Interaction** | Selecting a stage and expanding "Operator work" |
+| **Interaction** | Clicking a stage in the Stages list |
 | **Expected** | Reading configuration does not write |
-| **Observed** | A `PATCH .../lifecycle-activation` fired during read-only navigation, and the header moved to "Unsaved changes" with Save enabled. Blocked by the probe's write guard, so nothing persisted |
-| **Root owner** | Unknown — not traced |
+| **Observed** | `PATCH /api/admin/departments/{id}/lifecycle-activation` fires on every stage selection |
+| **Root owner** | `LifecycleActivationBoard.tsx` → `selectStage` → `saveActivation` |
 | **Classification** | H / K |
-| **Evidence** | Blocked request logged during the Wave 1 browser probe |
-| **Severity** | **Needs triage** — correctness-adjacent, not performance |
-| **Shared vs local** | Unknown |
-| **Status** | **Open, untriaged.** Recorded because it was observed, not because it was investigated |
+| **Severity** | **Medium** |
+| **Shared vs local** | Local to the lifecycle activation board |
+| **Status** | **Investigated, not fixed** — see below |
+
+**Causal chain.** `selectStage(stage)` is the stage-list click handler. Its last statement is
+`void saveActivation({ stage_key: stage.key, stage_label: stage.label })` — fire-and-forget,
+so a failure is silent. `saveActivation` PATCHes the endpoint; the handler writes
+`departments.metadata` via `mergeCategoryFDepartmentMetadata` and stamps `updated_at`.
+
+**Is there a server-side write?** **Yes, durable** — `supabase.from("departments").update(...)`.
+
+**Can read/navigation produce durable mutation?** **Yes.** Clicking a stage to look at it
+persists `stage_key`, `stage_label` and a fresh `updated_at`.
+
+**Intended or accidental?** The *stage persistence* is deliberate — this is an activation
+wizard remembering which stage the operator is on. What is not obviously deliberate is
+**how**: `saveActivation` rebuilds the ENTIRE `LifecycleActivationV1` from current component
+state on every call (`status_keys: patch.status_keys ?? statusKeys`, and eight more fields
+the same way). A stage click therefore rewrites the whole bundle from whatever the client
+happens to hold, so a selection made before those values resolve can persist partial state.
+**That is the real hazard — not the cursor write.**
+
+**Mitigation already present.** The handler merges into a Category-F sibling key and is
+commented "never rewrite publication-owned builder", so it cannot clobber the published
+business process. Hence Medium, not High.
+
+**Why the header said "Unsaved changes."** Not this request. The stage draft state marks
+dirty on selection independently; the two coincide, which is what made an ordinary read look
+like an edit in progress.
+
+**Test coverage.** None. No test asserts that stage selection saves, or bounds what it saves.
+`tests/lifecycle/lifecycleStatusStepSaveFix.test.ts` asserts the `selectStage` call shape only.
+
+**Recommended fix — NOT applied.** Send a true partial patch, or persist editor position
+separately from the activation bundle, so a read gesture cannot carry stale field values.
+That changes the endpoint contract and its server handler — the Business Process editor
+refactor this investigation was explicitly bounded away from. It needs its own slice.
 
 ---
 
