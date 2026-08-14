@@ -3,8 +3,15 @@
 import clsx from "clsx";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { WS_FIELD_SELECT_CHROME } from "@/components/workspace/workspaceTokens";
+// The primitive carries its own presentation so it renders correctly on every surface
+// that imports it — not only inside the operator runtime shell that used to own these
+// rules. Without this, the trigger styled and the popup did not.
+import "./alloySelect.css";
 
 export type AlloySelectOption = { value: string; label: string };
+
+/** Menu max-height (220px) + the 2px offset, so the flip decision matches the CSS. */
+const MENU_SPACE_PX = 222;
 
 /**
  * Controlled select with Alloy chrome.
@@ -25,6 +32,8 @@ export function AlloySelect({
     placeholder = "Select…",
     /** Human label when `value` is a raw id and options have not resolved yet. */
     valueLabelHint,
+    allowEmpty = true,
+    density = "default",
     testId,
     id,
     "aria-label": ariaLabel,
@@ -36,12 +45,22 @@ export function AlloySelect({
     disabled?: boolean;
     placeholder?: string;
     valueLabelHint?: string | null;
+    /**
+     * Whether clearing back to no-value is a choice the operator can make.
+     * Default `true`: the placeholder is the first entry and selecting it yields "".
+     * Pass `false` for a required field — the list then offers only real options, while
+     * the trigger still reads the placeholder until a value is set.
+     */
+    allowEmpty?: boolean;
+    /** `compact` matches dense configuration forms; `default` matches operator surfaces. */
+    density?: "default" | "compact";
     testId?: string;
     id?: string;
     "aria-label"?: string;
     className?: string;
 }) {
     const [open, setOpen] = useState(false);
+    const [dropUp, setDropUp] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
@@ -80,8 +99,8 @@ export function AlloySelect({
      * traverse exactly the same sequence.
      */
     const entries = useMemo(
-        () => [{ value: "", label: placeholder }, ...options],
-        [options, placeholder]
+        () => (allowEmpty ? [{ value: "", label: placeholder }, ...options] : [...options]),
+        [options, placeholder, allowEmpty]
     );
 
     const pick = useCallback(
@@ -96,6 +115,15 @@ export function AlloySelect({
     const openList = useCallback(() => {
         const idx = entries.findIndex((e) => e.value === value);
         setActiveIndex(idx >= 0 ? idx : 0);
+        // Configuration forms are dense and often sit low in a scroll container. Opening
+        // downward there puts the options off-screen, so flip when there is no room below
+        // and there is room above. Measured at open time, not on every render.
+        const rect = rootRef.current?.getBoundingClientRect();
+        setDropUp(
+            rect
+                ? window.innerHeight - rect.bottom < MENU_SPACE_PX && rect.top > MENU_SPACE_PX
+                : false,
+        );
         setOpen(true);
     }, [entries, value]);
 
@@ -139,7 +167,12 @@ export function AlloySelect({
     return (
         <div
             ref={rootRef}
-            className={clsx("alloy-select", open && "alloy-select--open", className)}
+            className={clsx(
+                "alloy-select",
+                density === "compact" && "alloy-select--compact",
+                open && "alloy-select--open",
+                className,
+            )}
             data-testid={testId}
         >
             <button
@@ -175,7 +208,7 @@ export function AlloySelect({
                     id={listId}
                     ref={listRef}
                     role="listbox"
-                    className="alloy-select__list"
+                    className={clsx("alloy-select__list", dropUp && "alloy-select__list--above")}
                     aria-label={ariaLabel}
                     aria-activedescendant={`${listId}-opt-${activeIndex}`}
                 >

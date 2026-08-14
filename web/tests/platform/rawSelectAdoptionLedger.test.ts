@@ -175,7 +175,6 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor.tsx": 4,
     "components/adminV2/settings/lifecycle/LifecycleStageLayoutAssignmentsCard.tsx": 1,
     "components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx": 1,
-    "components/adminV2/settings/lifecycle/LifecycleStageOutcomeBehaviorEditor.tsx": 10,
     "components/adminV2/settings/lifecycle/LifecycleStageOutgoingTransitionsEditor.tsx": 2,
     "components/adminV2/settings/lifecycle/LifecycleStagePresentationCard.tsx": 1,
     "components/adminV2/settings/lifecycle/LifecycleStageQueueMembershipEditor.tsx": 4,
@@ -310,5 +309,7 @@ describe("raw <select> adoption ledger", () => {
         // Kept as a fixed number so the ledger's direction of travel is visible in one line.
         const ledgerTotal = Object.values(LEDGER).reduce((a, b) => a + b, 0);
         expect(ledgerTotal).toBeLessThanOrEqual(437);
+        // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
+        expect(ledgerTotal).toBe(427);
     });
 });
