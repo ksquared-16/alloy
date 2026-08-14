@@ -239,6 +239,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const isWorkspaceInbox = surfaceVariant === "workspace_inbox";
     const usesReplyLifecycle = isActivityEmbed || isWorkspaceInbox;
     const isNewMessageMode = usesReplyLifecycle && selectedThreadId == null;
+    /**
+     * Composing a NEW email — the only act that authors a Subject.
+     *
+     * `!usesReplyLifecycle` is included because surfaces outside the reply
+     * lifecycle have no thread to inherit from, so every send there is a new
+     * conversation.
+     */
+    const isNewEmailComposition = workspaceMode !== "sms" && (!usesReplyLifecycle || isNewMessageMode);
+    const subjectFieldVisible = isNewEmailComposition;
+    /** A new email with no Subject is refused by the server. Say so before the trip. */
+    const subjectMissingForNewEmail = isNewEmailComposition && !subjectDraft.trim();
     const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
     const [showCcBcc, setShowCcBcc] = useState(false);
@@ -903,13 +914,23 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 )}
 
-                <input
-                    aria-label="Subject"
-                    placeholder="Subject"
-                    value={subjectDraft}
-                    onChange={(e) => onSubjectChange(e.target.value)}
-                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" || (usesReplyLifecycle && !isNewMessageMode) ? "hidden" : ""}`}
-                />
+                {/* Subject belongs to a NEW email only. A reply inherits the
+                    conversation's subject on the server, so the field is not
+                    rendered at all — not merely hidden. An operator must not be
+                    able to rename a parent's conversation by typing here, and a
+                    field that exists in the DOM invisibly is a field that can
+                    still hold stale draft text. */}
+                {subjectFieldVisible ? (
+                    <input
+                        aria-label="Subject"
+                        placeholder="Subject"
+                        data-cc-subject-input="true"
+                        required
+                        value={subjectDraft}
+                        onChange={(e) => onSubjectChange(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
+                    />
+                ) : null}
 
                 <div
                     className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${
@@ -1050,7 +1071,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     />
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5" data-cc-composer-footer>
-                    <button type="button" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    <button type="button" data-cc-send-button="true" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim() || subjectMissingForNewEmail))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    {LIVE_WORKSPACE && subjectMissingForNewEmail && bodyDraft.trim() ? (
+                        <span data-cc-subject-required className="text-[10px] font-medium text-alloy-midnight/55">Add a subject to send</span>
+                    ) : null}
                     {/* Send later + BOS are canonical composer controls in EVERY mode (incl. new
                         message), matching Activity mode. Wired to the shared schedule/enhance modals. */}
                     <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
