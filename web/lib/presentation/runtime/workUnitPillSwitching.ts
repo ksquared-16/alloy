@@ -67,8 +67,10 @@ export function resolveSelectWorkViewAction(args: {
     const onSurfacePillStrip = (() => {
         const ids = args.surfaceLensIds;
         if (!ids) return false;
-        if (Array.isArray(ids)) return ids.some((x) => x.trim() === id);
-        return ids.has(id);
+        if (Array.isArray(ids)) {
+            return (ids as readonly string[]).some((x) => x.trim() === id);
+        }
+        return (ids as ReadonlySet<string>).has(id);
     })();
 
     // Pill-strip contract: Work View = lens inside the open Work Unit. Never navigate to
