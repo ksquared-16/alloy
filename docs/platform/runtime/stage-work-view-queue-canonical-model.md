@@ -545,3 +545,89 @@ identity — *"a lane binding assigned by array position"*.
 Lennon does **not** inherit All or Tours: both are family-grain. The household does **not** inherit
 Waitlist: it is child-grain. The two sets are disjoint, and a union in either direction is a
 fabrication.
+
+# 11. Row identity — four distinct things
+
+## 11.1 They are not interchangeable
+
+Entering a Work View with a named subject involves four identities. Collapsing any two of them
+produces a confident, navigable, wrong answer.
+
+| Concept | What it is | Child-grain example |
+|---|---|---|
+| **Work View** | the configured operational cohort the operator chose | `Waitlist` |
+| **Work View row identity** | the evaluated row the runtime SELECTS on | `process_instances.id` — the participation |
+| **Focus Panel host** | the record the panel COMPOSES against | the family case `opportunities.id` |
+| **Operator subject / ASPECT item** | what the operator searched for, focused inside a card | `customer_members.id` — the durable child |
+
+For a **family**-grain lens the row identity and the host coincide, which is exactly why the
+distinction stayed invisible until a child-grain lens shipped.
+
+> **A family/case may host a child's Focus Panel without itself being the selected child-grain Work
+> View member.**
+
+## 11.2 The row identity is grain-specific
+
+```
+child grain    subjectRows[].entityId = participationId  (process_instances.id)
+family grain   subjectRows[].entityId = row.id           (opportunities.id)
+```
+
+The durable child is **deliberately not** the child-grain row id: one child can hold two
+participations across two leads, and those are two different rows. A destination must name *which*.
+
+A child row has no `id` field at all — reading `.id` off one yields the string `"undefined"`, so the
+accessor must be chosen by grain rather than generically.
+
+## 11.3 Search must produce what a manual row click produces
+
+Manual selection is the authority:
+
+```
+openRecord(row) → attention.move({ scope: SUBJECT, subject: row.entityId })
+```
+
+`row.entityId` is the same field the membership guard matches on. Any other doorway to the same place
+— Search, a deep link, a notification — must resolve to the **same operational selection**. There is
+no second selection contract.
+
+> **Search destinations must retain the canonical operational member identity the Work View runtime
+> needs.** Membership reduced to a boolean cannot be navigated: the row key must survive evaluation,
+> not be reconstructed afterwards.
+
+Consequently a destination is **not emitted** when the member identity is unresolvable. Membership can
+be true while the way to reach it is unknown, and offering it then delivers the operator to a refusal.
+
+## 11.4 Membership is not pagination
+
+The published page is capped (`PROVISIONING_ROW_PAGE_CAP`). Resolving a named subject against that
+page answers
+
+> "is this record in the Work View?"
+
+with
+
+> "is it in the first 100 rows?"
+
+Those are different questions, and for a lens larger than the cap they disagree. A truthful member
+sorted past the cap was refused as `subject_unavailable` and was unreachable by direct navigation.
+
+> **Direct subject navigation must not depend on the member appearing on the first evaluated page.**
+
+The complete membership is already in memory when the guard runs, so targeted resolution
+(`resolveTargetedWorkViewMember`) costs no query, no larger page, and no prefetch. **The cap is not
+raised**: what the surface DISPLAYS and what the lens CONTAINS remain separate facts, and only the
+selectability of a *named* member widens to the truth.
+
+## 11.5 The guard stays fail-closed
+
+None of the above weakens the refusal. An id naming no member of the lens still resolves to nothing
+and is still refused, and **nothing is ever substituted**:
+
+```
+requested row absent → find some related family row → silently select it     ✗ NEVER
+```
+
+That would hide a grain defect behind an `operational` banner and hand the operator a different
+family — the most consequential form the fabrication defect can take. The correct repair is always to
+send the right member, never to accept the wrong one.

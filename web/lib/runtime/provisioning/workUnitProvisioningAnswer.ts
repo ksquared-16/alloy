@@ -47,6 +47,7 @@ import {
 import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import { familyStageDestinationOperability } from "@/lib/runtime/provisioning/workViewDestinationOperability";
+import { resolveTargetedWorkViewMember } from "@/lib/runtime/provisioning/targetedWorkViewMember";
 import {
     loadSettlementLocators,
     resolveProvisioningPopulationWorkUnitId,
@@ -1118,27 +1119,13 @@ export async function composeWorkUnitProvisioningAnswer(
      * This is not a weakening of the guard. An id that names no member of this lens still fails, and
      * nothing is ever substituted — the refusal below is untouched for genuine non-members.
      */
-    const resolveTargetedMember = (subjectId: string): OperationalSubjectQueueRow | null => {
-        if (childRows) {
-            const index = childRows.findIndex((r) => String(r.participationId ?? "") === subjectId);
-            if (index < 0) return null;
-            return {
-                id: subjectId,
-                entityId: subjectId,
-                entityType: "child",
-                sortIndex: index,
-            };
-        }
-        const index = familyMembership.findIndex(
-            (r) => String((r as Record<string, unknown>).id) === subjectId,
-        );
-        if (index < 0) return null;
-        return { id: subjectId, entityId: subjectId, entityType: "opportunity", sortIndex: index };
-    };
-
     const requested = req.requestedSubjectId
         ? subjectRows.find((s) => s.entityId === req.requestedSubjectId) ??
-          resolveTargetedMember(req.requestedSubjectId)
+          resolveTargetedWorkViewMember({
+              childRows,
+              familyMembership,
+              subjectId: req.requestedSubjectId,
+          })
         : null;
     if (req.requestedSubjectId && !requested) {
         // SUBJECT AUTHORITY. A caller that NAMES a subject is stating intent, not offering a hint.
