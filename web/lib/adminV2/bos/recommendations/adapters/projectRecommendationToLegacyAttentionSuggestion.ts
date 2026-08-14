@@ -12,6 +12,10 @@
 
 import { deterministicSuggestionId } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
 import {
+    greetingContactNameForDraft,
+    suggestedContentForReason,
+} from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
+import {
     NEEDS_ATTENTION_SUGGESTION_AGENT_KEY,
     type AttentionSuggestionActionFamily,
     type AttentionSuggestionV1,
@@ -63,9 +67,37 @@ function buildLegacyFactors(recommendation: OperationalRecommendationV1, primary
 }
 
 /**
+ * Deterministic draft material for the projected suggestion (D-78).
+ *
+ * Reuses the reason → template owner rather than restating it, and takes the
+ * greeting from the canonical recommendation's own operational context, so no
+ * caller has to supply anything this adapter was not already given.
+ *
+ * Returns null when the reason is unmapped — the previous behaviour for every
+ * reason, preserved for every reason the template owner does not cover.
+ */
+function deriveSuggestedContent(
+    recommendation: OperationalRecommendationV1,
+    primaryReasonCode: string | null,
+): AttentionSuggestionV1["suggested_content"] {
+    if (!primaryReasonCode) return null;
+    const ctx = recommendation.operational_context;
+    const entityId = ctx?.entity_id?.trim() ?? "";
+    const display = ctx?.primary_display_name?.trim() ?? "";
+    return suggestedContentForReason(primaryReasonCode, {
+        entity_id: entityId,
+        record_ref: entityId.length >= 8 ? entityId.slice(-8) : entityId || "record",
+        contact_name: greetingContactNameForDraft(display),
+        team_line: "Your team",
+    });
+}
+
+/**
  * Project a canonical {@link OperationalRecommendationV1} into legacy {@link AttentionSuggestionV1}.
  * Fail-soft: returns null when required recommendation fields are absent.
- * Does not mutate the input recommendation. Does not emit AI/suggested_content bodies.
+ * Does not mutate the input recommendation. Emits no AI content: `suggested_content`
+ * is the DETERMINISTIC template draft, produced by the same owner the legacy
+ * builder uses (D-78). Nothing model-generated passes through this adapter.
  */
 export function projectRecommendationToLegacyAttentionSuggestion(
     recommendation: OperationalRecommendationV1
@@ -125,7 +157,24 @@ export function projectRecommendationToLegacyAttentionSuggestion(
                 summary,
                 factors: buildLegacyFactors(recommendation, primaryReasonCode),
             },
-            suggested_content: null,
+            // D-78. This was hardcoded `null`, and that single line is what made
+            // the governed enrichment capability unreachable in normal operation:
+            // whenever a canonical recommendation exists this projection is
+            // preferred over the legacy builder, and the enrichment control
+            // self-suppresses without a draft body. Every reason in the
+            // recommendation catalog is also template-mapped, so the reasons that
+            // COULD produce a draft were exactly the reasons routed here.
+            //
+            // Derived, not stored, and not re-implemented: the reason → template
+            // mapping already has one owner and the legacy builder calls the same
+            // function with the same inputs, so both paths produce the same draft
+            // for the same reason by construction rather than by assertion.
+            //
+            // This does not make the projection authoritative. The recommended
+            // ACTION still comes from the canonical recommendation above; this is
+            // presentation material derived from the primary reason, and it stays
+            // null for any reason the template owner does not map.
+            suggested_content: deriveSuggestedContent(recommendation, primaryReasonCode),
             generated_at_iso: recommendation.generated_at_iso,
         };
     } catch {
