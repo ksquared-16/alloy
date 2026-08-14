@@ -26,7 +26,7 @@ import type {
     GovernedProviderExecutionRequestV1,
     ProviderAdapterResponseV1,
 } from "@/lib/trust/provider/governedProviderExecution";
-import type { EligibleReasoningInputV1 } from "@/lib/trust/privacy/eligibleReasoningInput";
+import type { EligibleReasoningInputV1 } from "@/lib/trust/information/informationPackage";
 
 /** Exactly what a provider is now asked for: wording, and nothing else. */
 const MODEL_CONTENT = {
