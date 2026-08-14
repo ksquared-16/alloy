@@ -113,6 +113,20 @@ export async function POST(req: Request) {
     const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
     const opportunityId = UUID_RE.test(opportunityIdRaw) ? opportunityIdRaw : null;
 
+    // ---- SUBJECT, PART 1: the refusal that needs no database ---------------
+    // A NEW email with no subject is refused on the request alone. Deciding it
+    // here rather than after the customer lookup keeps the cheapest validation
+    // the cheapest, and means the refusal cannot be masked by an unrelated 404.
+    // The REPLY case genuinely needs a read, and waits until the tenant boundary
+    // below has been proven.
+    const isReply = replyToThreadId !== null;
+    if (channel === "email" && !isReply) {
+        const decision = decideEmailSubject({ supplied: suppliedSubject, isReply: false });
+        if (decision.kind === "subject_required") {
+            return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+        }
+    }
+
     let message = messageRaw;
     let bodyIsHtml = false;
     if (channel === "email") {
@@ -131,10 +145,10 @@ export async function POST(req: Request) {
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
     if (!orgCheck.ok) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
-    // ---- SUBJECT ------------------------------------------------------------
-    // A new email needs one; a reply inherits the conversation's and shows no
-    // field. Deciding this AFTER the org check means the inheritance read is
-    // already inside a proven tenant boundary.
+    // ---- SUBJECT, PART 2: what a reply inherits -----------------------------
+    // Only reachable once the customer resolved, so the inheritance read sits
+    // inside a proven tenant boundary. A new email's subject was already settled
+    // above and is simply re-derived here from the same authority.
     let subject: string | null = null;
     if (channel === "email") {
         const decision = decideEmailSubject({
@@ -142,7 +156,7 @@ export async function POST(req: Request) {
             conversationSubject: replyToThreadId
                 ? await loadConversationSubject(supabase, ctx.orgId, replyToThreadId)
                 : null,
-            isReply: replyToThreadId !== null,
+            isReply,
         });
         if (decision.kind === "subject_required") {
             return NextResponse.json({ error: "subject is required for email" }, { status: 400 });

@@ -101,8 +101,32 @@ test.describe("Organization Communications — the five questions", () => {
     test("Q3 and Q4 sending and receiving are separate, visible answers", async ({ page }) => {
         await page.goto(PAGE);
         await expect(page.getByTestId("communications-email-sending-state")).toHaveText("Ready");
-        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Ready");
+        /*
+         * EMAIL RECEIVING IS NOT "READY", AND THAT IS THE POINT.
+         *
+         * This assertion used to read "Ready". The certification tenant has an
+         * active email binding with `inbound_address` set and NOTHING has ever
+         * been received through it — no forwarding rule exists at any mail
+         * provider, because there is no mail provider. The page was reporting
+         * "Ready" from the presence of a value in a column.
+         *
+         * A populated address is configuration, not evidence. Receiving is now
+         * answered from observed arrival, so an address that nothing has ever
+         * reached reads as outstanding routing work.
+         */
+        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
+            "Routing setup required"
+        );
+        // And it says so beside the address, so the row cannot be misread as
+        // "Alloy is already collecting that mailbox."
+        await expect(page.getByTestId("organization-communications-page")).toContainText(
+            "Not routed to Alloy"
+        );
         await expect(page.getByTestId("communications-sms-sending-state")).toHaveText("Ready");
+        // SMS is deliberately UNAFFECTED. Its inbound arrives on a signed webhook
+        // at a number the provider owns end to end — no third party holds a rule
+        // that could silently disappear. This is the regression guard on the
+        // live-certified SMS runtime.
         await expect(page.getByTestId("communications-sms-receiving-state")).toHaveText("Ready");
     });
 
