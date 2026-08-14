@@ -34,6 +34,8 @@ const CHILD_CLOSED = "Ada Okafor";       // enrollment case on an INACTIVE unit
 // because they sort last, so they must never be renamed to land earlier.
 const CHILD_IN_PROCESS = "Zane Zeta-Beyondpage";
 const CHILD_ENROLLED = "Zoe Zeta-Beyondpage";
+/** Shared by both, so a cohort search for it can only be separated by PARTICIPATION. */
+const BEYOND_PAGE_SURNAME = "Zeta-Beyondpage";
 
 const STAFF_LEAD_PERSON_ID = "aaaa0000-0000-4000-8000-000000000f01";
 const CHILD_NO_PROCESS_MEMBER_ID = "bbbb0000-0000-4000-8000-00000000b002";
@@ -169,22 +171,49 @@ test.describe("Children", () => {
         await page.screenshot({ path: path.join(SHOTS, "06-children-all.png"), fullPage: true });
     });
 
+    /**
+     * THE BEYOND-PAGE PROOF. Both qualifying children sort at the very end of the population, so a
+     * cohort computed over page 1 of ALL could not possibly contain them.
+     *
+     * ── WHY THIS REACHES THEM THROUGH SEARCH ──
+     *
+     * The first form of this test read the cohort's first page directly, which quietly assumed the
+     * qualifying cohort itself fits in one page. It stopped holding the moment another session
+     * seeded ~140 children with active enrollment: In Process grew to 144, and `Zane` — who sorts
+     * last there too — moved to page 2 of his own cohort. That is honest pagination doing its job,
+     * not the defect this test exists for.
+     *
+     * Reaching them by SEARCH inside the cohort proves strictly more, and cannot rot as the tenant
+     * grows: cohort membership is decided server-side over the whole population, search composes
+     * with it server-side, and the two cohorts stay disjoint. It is also the honest way an operator
+     * would find one named child among 1500.
+     */
     test("Enrolled and In Process are participation subsets, not the whole list", async ({ page }) => {
         await openRecords(page, "children");
+        const filter = page.locator("[data-records-filter]");
 
-        // THE BEYOND-PAGE PROOF. Both qualifying children sort at the very end of the population,
-        // so a cohort computed over page 1 could not possibly contain them.
         await selectCohort(page, "enrolled");
+        await filter.fill(BEYOND_PAGE_SURNAME);
+        await expect(page.locator(CHILDREN_LIST)).toContainText(CHILD_ENROLLED, { timeout: SETTLE });
         const enrolled = await rowTexts(page, CHILDREN_LIST);
-        expect(enrolled).toContain(CHILD_ENROLLED);
-        expect(enrolled).not.toContain(CHILD_NO_PROCESS);
+        // EXCLUSION is the real assertion — these two share a surname and differ ONLY by
+        // participation, so a cohort that showed both would not be a cohort.
         expect(enrolled).not.toContain(CHILD_IN_PROCESS);
+        expect(enrolled).not.toContain(CHILD_NO_PROCESS);
 
         await selectCohort(page, "in_process");
+        await expect(page.locator(CHILDREN_LIST)).toContainText(CHILD_IN_PROCESS, { timeout: SETTLE });
         const inProcess = await rowTexts(page, CHILDREN_LIST);
-        expect(inProcess).toContain(CHILD_IN_PROCESS);
         expect(inProcess).not.toContain(CHILD_ENROLLED);
         expect(inProcess).not.toContain(CHILD_NO_PROCESS);
+
+        // And the search genuinely reached PAST page 1 of the cohort: the unfiltered cohort is
+        // larger than one page, so this child was not simply sitting in the first 100 rows.
+        await filter.fill("");
+        await expect(page.locator("[data-children-page-status]")).toBeVisible({ timeout: SETTLE });
+        const status = await page.locator("[data-children-page-status]").innerText();
+        const [shown, total] = (status.match(/(\d+) of (\d+)/) ?? []).slice(1).map(Number);
+        expect(shown).toBeLessThan(total);
 
         await page.screenshot({ path: path.join(SHOTS, "07-children-in-process.png"), fullPage: true });
     });

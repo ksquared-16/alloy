@@ -62,7 +62,14 @@ export type RelationshipWriteTarget =
     | "customer_persons"
     | "customer_members"
     | "opportunity_persons"
+    /**
+     * The legacy participation bridge. `add_child` no longer declares it — `process_instances`
+     * became the sole runtime owner of child participation — but `link_existing_child` still
+     * declares and writes it, and the executor gates that write on this declaration.
+     */
     | "opportunity_customer_members"
+    /** Canonical child participation — the owner that replaced the OCM bridge. */
+    | "process_instances"
     | "customer_member_contacts";
 
 export type RelationshipExecutorKind =

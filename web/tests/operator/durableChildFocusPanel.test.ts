@@ -359,9 +359,13 @@ describe("age labelling", () => {
 // ── E — optional operational-host enrichment ─────────────────────────────────────────
 
 describe("operational host is enrichment and cannot change the record", () => {
-    const HOST = { opportunityId: "opp-active", workUnitKey: "enrollment_pipeline" };
+    // `workUnitKey` is nullable in the contract — a case whose unit went inactive is a KEYLESS
+    // host, which the last test in this block exercises. Inferring the literal type here would
+    // have made that case untypeable while the assertion still read as if it ran.
+    type OperationalHost = { opportunityId: string; workUnitKey: string | null };
+    const HOST: OperationalHost = { opportunityId: "opp-active", workUnitKey: "enrollment_pipeline" };
 
-    async function childModel(host: typeof HOST | null) {
+    async function childModel(host: OperationalHost | null) {
         const { result } = await compose(activeEnrollmentStore());
         const subject = (result as { ok: true; subject: DurableChildSubject }).subject;
         return focusPanelWorkModeModelFromDurableChild({
