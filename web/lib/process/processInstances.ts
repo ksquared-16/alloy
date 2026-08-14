@@ -85,31 +85,46 @@ export function buildEnrollmentParticipationByMemberMap(
     return out;
 }
 
-/** Build the insert row for an enrollment process instance (one per child per lead). */
+/**
+ * Build the insert row for an enrollment process instance.
+ *
+ * ── CONTEXT IS OPTIONAL, AS THE SCHEMA ALWAYS SAID ──
+ *
+ * `context_id` is nullable and the column's own comment calls the context "generic, optional".
+ * This helper nonetheless REQUIRED an opportunity, which made a code-level constraint look like a
+ * platform one — it is why Start Enrollment was previously judged impossible from a durable Child
+ * record. A child added to Records has no acquisition episode, and inventing an Opportunity to
+ * satisfy a helper would have manufactured an acquisition that never happened.
+ *
+ * When `contextId` is absent, `context_type` is omitted too: a context type naming nothing is a
+ * dangling label, and the pair is meaningful only together.
+ */
 export function buildEnrollmentProcessInstanceInsert(args: {
     orgId: string;
     /** child = customer_members.id */
     subjectId: string;
-    /** lead = opportunities.id */
-    contextId: string;
+    /** lead = opportunities.id. Absent = a context-free journey, which is legitimate. */
+    contextId?: string | null;
     /** Initial stage; a brand-new lead's child rides the family track → null until a decision. */
     stageKey?: string | null;
     /** Initial durable state; null at intake (no enrollment outcome yet). */
     state?: EnrollmentProcessState | null;
     participation?: EnrollmentParticipationMetadata;
+    /** Provenance. Defaults to `create_lead`, this helper's original and still-largest caller. */
+    source?: string;
 }): Record<string, unknown> {
-    const metadata: Record<string, unknown> = { source: "create_lead" };
+    const metadata: Record<string, unknown> = { source: args.source ?? "create_lead" };
     for (const [k, v] of Object.entries(args.participation ?? {})) {
         if (v !== undefined && v !== null && v !== "") metadata[k] = v;
     }
     const stageKey = args.stageKey ?? null;
+    const contextId = (args.contextId ?? "").trim() || null;
     return {
         org_id: args.orgId,
         process_key: ENROLLMENT_PROCESS_KEY,
         subject_type: ENROLLMENT_SUBJECT_TYPE,
         subject_id: args.subjectId,
-        context_type: ENROLLMENT_CONTEXT_TYPE,
-        context_id: args.contextId,
+        ...(contextId ? { context_type: ENROLLMENT_CONTEXT_TYPE, context_id: contextId } : {}),
         stage_key: stageKey,
         // Only stamp entry when the instance starts with an explicit stage membership.
         ...(stageKey ? { stage_entered_at: stageEnteredAtNowIso() } : {}),
@@ -118,12 +133,50 @@ export function buildEnrollmentProcessInstanceInsert(args: {
     };
 }
 
-/** Create an enrollment process instance for a child on a lead. Idempotent on the unique scope. */
+/**
+ * Create an enrollment process instance for a child. Idempotent.
+ *
+ * Two different idempotency mechanisms, because the database offers two:
+ *
+ *   • WITH a context — `ux_process_instances_scope` is a plain unique index, so the upsert's
+ *     conflict target matches and the duplicate is ignored. Unchanged.
+ *   • CONTEXT-FREE — that index cannot constrain NULL `context_id` (SQL treats NULLs as
+ *     distinct), so the guarantee comes from the partial index
+ *     `ux_process_instances_open_context_free`. PostgREST cannot name a partial index as an
+ *     `onConflict` target, so the open journey is looked up first and a lost race is recovered
+ *     from the unique violation rather than pretended away.
+ */
 export async function createEnrollmentProcessInstance(
     supabase: SupabaseClient,
     args: Parameters<typeof buildEnrollmentProcessInstanceInsert>[0],
-): Promise<{ id: string | null; error?: string }> {
+): Promise<{ id: string | null; error?: string; reused?: boolean }> {
     const row = buildEnrollmentProcessInstanceInsert(args);
+    const contextId = (args.contextId ?? "").trim() || null;
+
+    if (!contextId) {
+        const existing = await findOpenContextFreeEnrollmentInstance(supabase, args.orgId, args.subjectId);
+        if (existing) return { id: existing, reused: true };
+
+        const { data, error } = await supabase
+            .from(PROCESS_INSTANCES_TABLE)
+            .insert(row)
+            .select("id")
+            .maybeSingle();
+        if (error) {
+            // The partial index did its job against a concurrent writer.
+            if (error.code === "23505") {
+                const raced = await findOpenContextFreeEnrollmentInstance(
+                    supabase,
+                    args.orgId,
+                    args.subjectId,
+                );
+                if (raced) return { id: raced, reused: true };
+            }
+            return { id: null, error: error.message };
+        }
+        return { id: data ? String((data as { id: string }).id) : null };
+    }
+
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
         .upsert(row, { onConflict: "org_id,process_key,subject_id,context_id", ignoreDuplicates: true })
@@ -132,6 +185,42 @@ export async function createEnrollmentProcessInstance(
     if (error) return { id: null, error: error.message };
     return { id: data ? String((data as { id: string }).id) : null };
 }
+
+/**
+ * The child's OPEN context-free enrollment journey, if one exists.
+ *
+ * "Open" matches the partial index exactly: concluded journeys are excluded so a later
+ * re-enrollment episode is legal rather than blocked by the child's own history.
+ */
+export async function findOpenContextFreeEnrollmentInstance(
+    supabase: SupabaseClient,
+    orgId: string,
+    subjectId: string,
+): Promise<string | null> {
+    const { data, error } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id, state")
+        .eq("org_id", orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", subjectId)
+        .is("context_id", null);
+    if (error) throw new Error(error.message);
+    const open = ((data ?? []) as { id: string; state: string | null }[]).find(
+        (r) => !CONCLUDED_ENROLLMENT_PROCESS_STATES.includes((r.state ?? "").trim().toLowerCase()),
+    );
+    return open ? String(open.id) : null;
+}
+
+/**
+ * Journey-ending states. Must stay in step with the predicate of
+ * `ux_process_instances_open_context_free` — if they drift, the code and the database disagree
+ * about what "already running" means and one of them starts losing.
+ */
+export const CONCLUDED_ENROLLMENT_PROCESS_STATES: readonly string[] = [
+    "enrolled",
+    "withdrawn",
+    "not_enrolling",
+];
 
 /** Move a process instance's stage (outcome execution is the only caller). */
 export async function moveProcessInstanceStage(
