@@ -48,6 +48,8 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import { familyStageDestinationOperability } from "@/lib/runtime/provisioning/workViewDestinationOperability";
 import { resolveTargetedWorkViewMember } from "@/lib/runtime/provisioning/targetedWorkViewMember";
+// Type-only: erased at build time, so the reverse reference does NOT create an import cycle.
+import type { ContextualFocusAnswer } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import {
     loadSettlementLocators,
     resolveProvisioningPopulationWorkUnitId,
@@ -403,7 +405,24 @@ export type ProvisioningAnswer =
               activeWorkView: { id: string; label: string };
           } | null;
           timings: ProvisioningTimings;
-      };
+      }
+    /**
+     * CONTEXTUAL FOCUS — the operator named a RECORD, not a cohort.
+     *
+     * A distinct terminal rather than an `operational` answer with nullable fields, because every one
+     * of `activeWorkView` / `rowGrain` / `rows` / `recordOfAttention` / `contextFrame` would have to
+     * become optional to express it — and each `?` is a place a consumer can forget to check and
+     * silently fall back to a default lens. That fallback IS the defect: today
+     * `findWorkViewById(...) ?? firstVisibleWorkView(...)` makes "no lens requested" identical to
+     * "the first lens", which is why `Kelly → Household` shows `New` as selected.
+     *
+     * Nothing here failed. The operator asked for a person and got a person.
+     *
+     * The shape is owned by `contextualFocusAnswer.ts` and is proven independently there; this
+     * membership is what forces every consumer to decide, via exhaustiveness, what it renders when no
+     * cohort is selected.
+     */
+    | ContextualFocusAnswer;
 
 export type ProvisioningErrorCode =
     | "unauthorized"
