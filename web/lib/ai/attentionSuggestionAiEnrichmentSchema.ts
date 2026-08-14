@@ -107,31 +107,37 @@ export const ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_OUTPUT_SHAPE = [
 ].join(" ");
 
 /**
- * Deterministic assembly of the canonical envelope from model-owned content.
+ * Deterministic assembly of the canonical envelope around model-owned content.
  *
- * Every platform-owned field is written from a caller-supplied trusted value,
- * and the content fields are PICKED individually rather than spread. That is
- * deliberate: spreading would make a future added key in the content contract
- * silently able to overwrite `provider_report`, and this function's whole
- * purpose is that the model cannot reach those fields.
+ * Returns a CANDIDATE, deliberately typed as an opaque record rather than
+ * `AttentionSuggestionAiEnrichmentV1`. Nothing here has been validated, and
+ * giving it the validated type would assert exactly the thing the registered
+ * policy is about to decide.
  *
- * This performs no validation. The assembled candidate goes to the registered
- * Trust validation policy, which stays the sole business-schema authority.
+ * Two properties do the work:
+ *
+ * 1. Platform-owned fields are written LAST, so a model that states its own
+ *    `agent_key` or `provider_report` is overwritten by the trusted value. The
+ *    spoof cannot land, whatever the model sends.
+ * 2. Everything else the model sent SURVIVES into the candidate. That is not an
+ *    oversight — a foreign key like `trust_score` must reach the canonical
+ *    `.strict()` contract so the registered policy refuses it. Picking known
+ *    fields instead would silently drop smuggled content, and "dropped quietly"
+ *    is how a hostile answer becomes an accepted one.
+ *
+ * So the model cannot overwrite what Alloy owns, and cannot smuggle anything
+ * past the one authority allowed to judge it.
  */
 export function assembleAttentionSuggestionAiEnrichment(input: {
-    readonly content: AttentionSuggestionAiEnrichmentProviderContentV1;
+    readonly providerOutput: Readonly<Record<string, unknown>>;
     readonly generatedAtIso: string;
     readonly providerKey: AiProviderKey;
     readonly executionMode: AiProviderExecutionMode;
-}): AttentionSuggestionAiEnrichmentV1 {
-    const { content } = input;
+}): Record<string, unknown> {
     return {
+        ...input.providerOutput,
         version: 1,
         agent_key: NEEDS_ATTENTION_SUGGESTION_ENRICHMENT_AGENT_KEY,
-        reasoning_summary_overlay: content.reasoning_summary_overlay ?? null,
-        suggested_draft_body_overlay: content.suggested_draft_body_overlay ?? null,
-        tone_variant: content.tone_variant ?? null,
-        confidence_notes: content.confidence_notes ?? null,
         generated_at_iso: input.generatedAtIso,
         provider_report: {
             provider_key: input.providerKey,

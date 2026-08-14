@@ -177,15 +177,20 @@ function createRecordingRepository() {
     return { repository, contracts, packages, observations, usage, lifecycle };
 }
 
+/**
+ * What a provider may return, as of D-80/D-82: model-owned wording ONLY.
+ *
+ * This fixture used to carry `version`, `agent_key`, `generated_at_iso` and
+ * `provider_report` — and that is exactly what made the suite green while the
+ * live path could never validate. The fake adapter was being handed an answer
+ * no real model was ever asked to produce, so the tests agreed with each other
+ * and not with production. Content-only here is the point of the fix.
+ */
 const VALID_ENRICHMENT = {
-    version: 1,
-    agent_key: "needs_attention_suggestion_enrichment",
     reasoning_summary_overlay: "Follow up on the tour.",
     suggested_draft_body_overlay: "A warmer follow-up note.",
     tone_variant: "warm",
     confidence_notes: null,
-    generated_at_iso: "2026-08-10T00:00:01.000Z",
-    provider_report: { provider_key: "openai", execution_mode: "live" },
 };
 
 function completion(content: unknown, extra?: Record<string, unknown>): Response {
@@ -443,7 +448,7 @@ describe("P28C-3 — the provider-backed path runs the whole governed chain", ()
         expect(result.package.economics.strategy_key).toBe("attention_enrichment_provider_backed");
         expect(result.package.economics.strategy_kind).toBe("small_reasoning");
         expect(result.package.economics.escalation_level).toBe(3);
-        expect(result.package.strategy_version).toBe("2.0.0");
+        expect(result.package.strategy_version).toBe("3.0.0");
     });
 
     it("sends the governed Eligible Reasoning Input, and only that", async () => {
@@ -521,18 +526,35 @@ describe("P28C-3 — the provider-backed path runs the whole governed chain", ()
 
 describe("P28C-4 — the registered policy is the only validation authority", () => {
     it("a schema-violating answer becomes failed_validation, not a recommendation", async () => {
-        // An out-of-vocabulary `provider_report.provider_key`. Note the choice:
-        // `tone_variant` is a free string in the contract, so a "weird-looking"
-        // tone is VALID and asserting otherwise would have tested a rule that
-        // does not exist.
-        interceptTransport({
-            ...VALID_ENRICHMENT,
-            provider_report: { provider_key: "impostor", execution_mode: "live" },
-        });
+        // A model-owned field with the wrong TYPE. Note the choice: `tone_variant`
+        // is a free string in the contract, so a "weird-looking" tone is VALID and
+        // asserting otherwise would test a rule that does not exist. A NUMBER
+        // there is genuinely off-contract, and — this is the part that matters —
+        // the strategy does not catch it. It rides all the way to the registered
+        // policy, which is the only thing entitled to refuse it.
+        interceptTransport({ ...VALID_ENRICHMENT, tone_variant: 123 });
         const result = await decide({ provider: "openai" });
 
         expect(result.package.outcome).toBe("failed_validation");
         expect(result.enrichment).toBeNull();
+    });
+
+    it("a model that states its own provider identity is overruled, not obeyed (D-82)", async () => {
+        // The retired ungoverned provider ASKED the model for `provider_report`,
+        // so a model claiming to be someone else was once believed. Identity is
+        // now taken from governed execution evidence and written over whatever
+        // the model said, which is why this succeeds rather than failing: the
+        // spoof is not rejected, it is irrelevant.
+        interceptTransport({
+            ...VALID_ENRICHMENT,
+            provider_report: { provider_key: "impostor", execution_mode: "disabled" },
+            agent_key: "some_other_agent",
+        });
+        const result = await decide({ provider: "openai" });
+
+        expect(result.package.outcome).toBe("recommended");
+        expect(result.enrichment?.provider_report).toEqual({ provider_key: "openai", execution_mode: "live" });
+        expect(result.enrichment?.agent_key).toBe("needs_attention_suggestion_enrichment");
     });
 
     it("a smuggled Decision Package field is refused — the contract is strict", async () => {

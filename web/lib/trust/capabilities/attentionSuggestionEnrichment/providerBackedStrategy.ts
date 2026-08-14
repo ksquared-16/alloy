@@ -32,7 +32,6 @@
 import {
     ATTENTION_SUGGESTION_ENRICHMENT_PROVIDER_OUTPUT_SHAPE,
     assembleAttentionSuggestionAiEnrichment,
-    safeParseAttentionSuggestionAiEnrichmentProviderContentV1,
 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
 import { asAiProviderKey } from "@/lib/ai/providerTypes";
 import type {
@@ -188,20 +187,6 @@ export function createProviderBackedAttentionEnrichmentStrategy(
             // strictest one would not be the one on the provider path. So the
             // final `safeParseAttentionSuggestionAiEnrichmentV1` stays where it
             // was registered, and is deliberately NOT called here.
-            const content = safeParseAttentionSuggestionAiEnrichmentProviderContentV1(executed.output);
-            if (!content) {
-                // A model that answered outside its content contract — including
-                // one that tried to state `agent_key` or `provider_report` — has
-                // not produced reasoning this strategy can map. Refusing is
-                // truthful; assembling around unusable content would launder it.
-                return {
-                    ok: false,
-                    refusal_code: "REASONING_UNABLE",
-                    detail: "Provider output did not match the declared enrichment content contract.",
-                    provider_execution,
-                };
-            }
-
             // Provider identity comes from governed execution evidence, never
             // from the model's JSON. An identity outside the operator-facing
             // vocabulary is refused rather than coerced: reporting a provider we
@@ -217,7 +202,10 @@ export function createProviderBackedAttentionEnrichmentStrategy(
             }
 
             const recommendation = assembleAttentionSuggestionAiEnrichment({
-                content,
+                // Forwarded whole. Anything the model smuggled stays visible to
+                // the registered policy, which is the only thing allowed to
+                // refuse it.
+                providerOutput: executed.output,
                 // The runtime's clock, forwarded through strategy execution —
                 // the same instant the deterministic strategy stamps. Never a
                 // wall clock read here, and never the model's.
