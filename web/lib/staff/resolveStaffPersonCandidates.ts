@@ -14,27 +14,19 @@
  *
  * Frozen Decision C (web/lib/identity/README.md) still holds: email and phone
  * are strong signals, never unique identity keys. Nothing here auto-links.
+ *
+ * ── THIS IS NOW A PROJECTION, NOT AN IMPLEMENTATION ──
+ *
+ * The rule above outgrew Staff: Records → Add Child needs the identical gate.
+ * It lives in `@/lib/identity/resolveIdentityCandidates` and both surfaces
+ * consume it. What remains here is the Staff-shaped view of that answer, kept
+ * byte-for-byte so Staff is a usable regression control for the shared module.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import {
-    generatePersonCandidates,
-    normalizeEmail,
-    normalizeName,
-    normalizePhone,
-    type CandidateConfidenceBand,
-    type IdentityCandidate,
-} from "@/lib/identity";
-
-/** Bands that mean "we found someone who is probably already in Alloy". */
-const MATCH_BANDS: readonly CandidateConfidenceBand[] = [
-    "confirmed",
-    "strong",
-    "possible",
-    "weak",
-    "conflicted",
-];
+import type { CandidateConfidenceBand } from "@/lib/identity";
+import { resolvePersonCandidates } from "@/lib/identity/resolveIdentityCandidates";
 
 export type StaffIdentityInput = {
     firstName: string;
@@ -59,15 +51,6 @@ export type StaffIdentityResolution =
      */
     | { decision: "operator_choice_required"; candidates: StaffPersonCandidate[] };
 
-function toCandidate(c: IdentityCandidate): StaffPersonCandidate {
-    return {
-        person_id: c.recordId,
-        display_name: c.displayName ?? c.recordId,
-        confidence_band: c.confidenceBand,
-        explanation: c.explanation,
-    };
-}
-
 /**
  * Resolve who this identity might already be.
  *
@@ -81,22 +64,24 @@ export async function resolveStaffPersonCandidates(
     orgId: string,
     input: StaffIdentityInput
 ): Promise<StaffIdentityResolution> {
-    const firstName = normalizeName(input.firstName) ?? "";
-    const lastName = normalizeName(input.lastName) ?? "";
-
-    const candidates = await generatePersonCandidates(supabase, orgId, {
+    const resolution = await resolvePersonCandidates(supabase, orgId, {
+        kind: "person",
         subjectRef: "staff_add",
-        firstName,
-        lastName,
-        emailNorm: normalizeEmail(input.email ?? null),
-        phoneNorm: normalizePhone(input.phone ?? null),
-        factRefs: [],
+        firstName: input.firstName,
+        lastName: input.lastName,
+        email: input.email ?? null,
+        phone: input.phone ?? null,
     });
 
-    const matches = candidates.filter(
-        (c) => c.confidenceBand !== "excluded" && MATCH_BANDS.includes(c.confidenceBand)
-    );
-
-    if (matches.length === 0) return { decision: "no_match", candidates: [] };
-    return { decision: "operator_choice_required", candidates: matches.map(toCandidate) };
+    if (resolution.decision === "no_match") return { decision: "no_match", candidates: [] };
+    return {
+        decision: "operator_choice_required",
+        candidates: resolution.candidates.map((c) => ({
+            // `record_id` is the person id for a person subject, sentinel included.
+            person_id: c.record_id,
+            display_name: c.display_name,
+            confidence_band: c.confidence_band,
+            explanation: c.explanation,
+        })),
+    };
 }
