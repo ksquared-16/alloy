@@ -52,10 +52,20 @@ describe("D4 — Settlement reserves geometry, never constructs", () => {
         // Phase 4 widened WHICH committed fields count, not where they come from: resolution now means
         // the action QUESTION was answered — `action` present, or `actionAbsence` saying why not —
         // because a child at a stage that configures no action is fully resolved and was rendering as
-        // a permanent spinner. Still zero Settlement input, which is the invariant on the next line.
-        expect(ctx).toMatch(
-            /subjectId != null && s\.situation != null && \(s\.action != null \|\| s\.actionAbsence != null\)/,
-        );
+        // a permanent spinner. Still zero Settlement input, which is the invariant at the bottom.
+        //
+        // The predicate was later refactored from one conjunction into early returns, and this pattern
+        // was not updated with it — so it has been asserting against text that no longer exists, and
+        // failing, since before this sprint. Rewritten to the current shape: the guard is restored, not
+        // relaxed. Matching the clauses INDEPENDENTLY is also what stops the next refactor of the same
+        // kind from silently disarming it.
+        expect(ctx).toMatch(/s\.subjectId == null \|\| s\.situation == null\) return false/);
+        expect(ctx).toMatch(/s\.action != null \|\| s\.actionAbsence != null\) return true/);
+        // CONTEXTUAL attention resolves on the subject alone — the same widening, one grain over.
+        // Situation → Decision → Action describes a subject's position in a COHORT, and a contextual
+        // subject was NAMED rather than chosen from one; demanding a `situation` there would paint a
+        // permanent spinner over a subject that had already arrived.
+        expect(ctx).toMatch(/attentionKind === "contextual"\) return s\.subjectId != null/);
         expect(ctx).not.toMatch(/fetch|useOpportunityDrawerVmPayload|displayVm|record/);
     });
 

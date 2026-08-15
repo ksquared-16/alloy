@@ -299,6 +299,9 @@ export function ProvisionedWorkUnitSurface() {
                     // cohort was paged, and the NAMED subject when one was not — same panel, same
                     // provider, no second composition and no fabricated row to hang the person off.
                     subjectId={op ? op.recordOfAttention.id : contextual ? contextual.subject.id : null}
+                    // How the subject was reached, which is what decides when the panel is resolved.
+                    // A contextual subject has no stage to report, and that is an answer, not a gap.
+                    attentionKind={contextual ? "contextual" : "operational"}
                     identitySeed={identitySeed}
                     situation={
                         op
@@ -344,9 +347,20 @@ export function ProvisionedWorkUnitSurface() {
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
                     subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
                     // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
-                    // the panel never infers what the subject is. Taken from `op` only: a non-operational
-                    // terminal has no committed subject to describe.
-                    subjectGrain={op ? op.subjectGrain ?? null : null}
+                    // the panel never infers what the subject is. A contextual answer resolves it too
+                    // (from the subject's entity class rather than a lens's Row Grain), so it is carried
+                    // here as well — the alternative is the panel falling back to "a committed subject
+                    // is an opportunity", which is the assumption this field exists to retire.
+                    subjectGrain={
+                        op
+                            ? op.subjectGrain ?? null
+                            : contextual
+                              ? {
+                                    grain: contextual.subject.grain,
+                                    subjectType: contextual.subject.subjectType,
+                                }
+                              : null
+                    }
                     // A — the published Summary composition for the committed scope: the panel presents
                     // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}
