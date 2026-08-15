@@ -76,9 +76,10 @@ export async function loadSubjectContexts(
     const [processConfig, processRows, scheduleRow] = await Promise.all([
         loadSearchProcessConfiguration(supabase, orgId, input.dimensions),
         fetchProcessInstances(supabase, orgId, subjectKeys),
-        subject.grain === "child"
-            ? fetchLiveSchedule(supabase, orgId, subjectId)
-            : Promise.resolve(null),
+        // The SAME table for both grains. `schedule_assignments` was deliberately extended in place
+        // rather than forked so children and staff would not acquire competing scheduling engines;
+        // reading it per grain here honours that rather than working around it.
+        fetchLiveSchedule(supabase, orgId, subject.grain, subjectId),
     ]);
 
     const opportunityIds = [
@@ -192,16 +193,32 @@ async function fetchProcessInstances(
     }));
 }
 
+/**
+ * The subject's live recurring assignment.
+ *
+ * A child is keyed on `customer_member_id`; a staff member on `subject_person_id` with
+ * `subject_type = 'staff'`. Both are rows in the same table for the same reason the write service
+ * gives: one scheduling engine, extended in place.
+ *
+ * The staff filter carries `subject_type` explicitly rather than relying on `subject_person_id`
+ * being null for children — a child WITH a linked person would otherwise match a staff query.
+ */
 async function fetchLiveSchedule(
     supabase: SupabaseClient,
     orgId: string,
-    customerMemberId: string,
+    grain: "child" | "person",
+    subjectId: string,
 ): Promise<SubjectScheduleRow | null> {
-    const { data, error } = await supabase
+    const base = supabase
         .from("schedule_assignments")
         .select("customer_member_id, start_date, status, schedule_patterns(label, site_location_id)")
-        .eq("org_id", orgId)
-        .eq("customer_member_id", customerMemberId)
+        .eq("org_id", orgId);
+    const scoped =
+        grain === "child"
+            ? base.eq("customer_member_id", subjectId)
+            : base.eq("subject_type", "staff").eq("subject_person_id", subjectId);
+
+    const { data, error } = await scoped
         .in("status", LIVE_SCHEDULE_STATUSES)
         .order("start_date", { ascending: false })
         .limit(1);
