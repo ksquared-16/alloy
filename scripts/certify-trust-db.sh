@@ -44,6 +44,10 @@ SUITES=(
     # including the two immutability refusals, which are trigger-made claims and so are
     # only evidence when a real database refuses the write.
     "certification/enrollment-session-form-version/run.sh"
+    # D-95 participant session -> Enrollment process_instance anchor. Proves tenant
+    # integrity, immutability, cardinality and FK deletion semantics against a real
+    # database, since every one of those is a trigger- or index-made claim.
+    "certification/enrollment-process-instance-anchor/run.sh"
 )
 
 if ! command -v docker >/dev/null 2>&1; then
