@@ -1,5 +1,29 @@
 /**
  * Project operating-plan stage work runtime for drawer / layout / queue surfaces.
+ *
+ * ## D-96 — which configuration governs this projection
+ *
+ * Almost everything this module produces is TRANSACTION-GOVERNING, not decoration:
+ *
+ *   - `activeLifecycleProcess(...).is_active` gates whether any stage work exists at all;
+ *   - `plan.work_templates` decides WHAT WORK the stage has;
+ *   - `plan.journey_segment` reconciled with `stageRecord.grain` decides the execution GRAIN, and a
+ *     contradiction between them suppresses the projection entirely;
+ *   - `outcomesForTemplate(...)` and `requires_outcome_picker` decide how work COMPLETES;
+ *   - `completionPolicyForTemplate(...)` carries min/max attempts;
+ *   - `buildStageWorkOutcomeAutomationPreview(...)` states what the outcome will DO;
+ *   - `resolvePrimaryWorkIntentForStage(...)` decides which action is offered first.
+ *
+ * Only `plan.purpose`, `stageRecord.label`, `template.label` and `template.description` are
+ * presentation.
+ *
+ * So when the caller knows the running instance's governing revision it MUST pass it. Reading live
+ * `departments.metadata.lifecycle_builder_v1` here while `resolvePublishedStageInputsForCurrentWork`
+ * reads the pinned revision would put revision N requirements next to revision N+1 execution
+ * behaviour in the same response — one journey, two configurations.
+ *
+ * Callers with no process instance (batch queue enrichment) pass nothing and keep reading live
+ * configuration, exactly as before.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -8,6 +32,7 @@ import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 import { parseOperationalWorkViewFromTaskRow } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 import { buildStageWorkOutcomeAutomationPreview } from "@/lib/lifecycle/buildStageWorkOutcomeAutomationPreview";
 import {
+    LIFECYCLE_BUILDER_METADATA_KEY,
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
@@ -401,6 +426,12 @@ export type ProjectStageWorkRuntimeSyncInput = {
     opportunityId: string;
     departmentId: string;
     departmentMetadata: unknown;
+    /**
+     * D-96. The pinned revision's payload. When present it REPLACES `lifecycle_builder_v1` for this
+     * projection, so stage execution, grain, outcomes and completion policy all come from the
+     * revision that governs the journey rather than from whatever is published right now.
+     */
+    governingBuilderPayload?: Record<string, unknown> | null;
     builderStageKey: string | null;
     stageLabel?: string | null;
     openRows?: TaskDbRow[];
@@ -418,12 +449,19 @@ export function projectStageWorkRuntimeSync(
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
 
-    const departmentMetadata =
+    const liveMetadata =
         params.departmentMetadata != null &&
         typeof params.departmentMetadata === "object" &&
         !Array.isArray(params.departmentMetadata)
             ? (params.departmentMetadata as Record<string, unknown>)
             : {};
+
+    // Total substitution, matching `resolvePublishedStageInputsForCurrentWork`. A per-section pin
+    // would be the split-brain D-96 forbids: the stage list from one revision and its outcomes from
+    // another is a configuration nobody authored.
+    const departmentMetadata = params.governingBuilderPayload
+        ? { ...liveMetadata, [LIFECYCLE_BUILDER_METADATA_KEY]: params.governingBuilderPayload }
+        : liveMetadata;
 
     const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
     const process = activeLifecycleProcess(builder);
@@ -518,6 +556,8 @@ export async function projectStageWorkRuntime(params: {
     opportunityId: string;
     departmentId: string | null;
     departmentMetadata: unknown;
+    /** D-96. See {@link ProjectStageWorkRuntimeSyncInput.governingBuilderPayload}. */
+    governingBuilderPayload?: Record<string, unknown> | null;
     builderStageKey: string | null;
     stageLabel?: string | null;
     customerMemberId?: string | null;
@@ -570,6 +610,7 @@ export async function projectStageWorkRuntime(params: {
         opportunityId: params.opportunityId,
         departmentId,
         departmentMetadata: params.departmentMetadata,
+        governingBuilderPayload: params.governingBuilderPayload,
         builderStageKey: stageKey,
         stageLabel: params.stageLabel,
         openRows: (openRows ?? []) as TaskDbRow[],

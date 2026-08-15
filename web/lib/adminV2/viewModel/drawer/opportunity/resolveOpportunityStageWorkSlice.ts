@@ -64,26 +64,18 @@ export async function resolveOpportunityStageWorkSlice(
             ? params.departmentMetadata
             : await fetchDepartmentMetadataForActivity(params.supabase, params.orgId, params.departmentId);
 
-    const stage_work_runtime = await projectStageWorkRuntime({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        opportunityId: params.opportunityId,
-        departmentId: params.departmentId,
-        departmentMetadata,
-        builderStageKey: stageKey,
-        stageLabel: params.stageLabel ?? null,
-        customerMemberId: params.customerMemberId,
-        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
-        processInstanceId: params.processInstanceId,
-    });
-
-    // D-96. This is a Class-A read: the configuration that GOVERNS the running journey, not the
-    // configuration that happens to be published right now. `processInstanceId` was already threaded
-    // here for child-grain execution; resolving the pinned revision from it is what stops a family
-    // part-way through Enrollment from being re-judged the moment an operator publishes.
+    // D-96. Class-A read: the configuration that GOVERNS this running journey, not the configuration
+    // that happens to be published right now. `processInstanceId` was already threaded here for
+    // child-grain execution; resolving the pinned revision from it is what stops a family part-way
+    // through Enrollment from being re-judged the moment an operator publishes.
     //
-    // Unpinned instances resolve exactly as before — `resolveProcessInstanceConfiguration` owns that
-    // branch, and it returns no payload, so the live projection continues to govern.
+    // Resolved ONCE, above both consumers, and shared. Gate 0A of Slice 2.3 found that resolving it
+    // for `published_stage_inputs` alone put revision N requirements next to revision N+1 execution
+    // behaviour in the SAME response object — the stage's work templates, grain, outcomes and
+    // completion policy are all transaction-governing, and they were still coming from live config.
+    //
+    // Unpinned instances resolve exactly as before: `resolveProcessInstanceConfiguration` owns that
+    // branch and returns no payload, so the live projection continues to govern.
     const governing = params.processInstanceId?.trim()
         ? await resolveProcessInstanceConfigurationForStageWork({
               supabase: params.supabase,
@@ -92,12 +84,27 @@ export async function resolveOpportunityStageWorkSlice(
               departmentMetadata,
           })
         : null;
+    const governingBuilderPayload =
+        governing?.source === "pinned_revision" ? governing.payload : null;
+
+    const stage_work_runtime = await projectStageWorkRuntime({
+        supabase: params.supabase,
+        orgId: params.orgId,
+        opportunityId: params.opportunityId,
+        departmentId: params.departmentId,
+        departmentMetadata,
+        governingBuilderPayload,
+        builderStageKey: stageKey,
+        stageLabel: params.stageLabel ?? null,
+        customerMemberId: params.customerMemberId,
+        opportunityCustomerMemberId: params.opportunityCustomerMemberId,
+        processInstanceId: params.processInstanceId,
+    });
 
     const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
         departmentMetadata: departmentMetadata as Record<string, unknown> | null,
         builderStageKey: stageKey,
-        governingBuilderPayload:
-            governing?.source === "pinned_revision" ? governing.payload : null,
+        governingBuilderPayload,
     });
 
     return {

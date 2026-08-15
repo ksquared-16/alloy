@@ -20,12 +20,14 @@ import {
 } from "@/lib/process/processInstances";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { resolvePublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import { projectStageWorkRuntimeSync } from "@/lib/lifecycle/projectStageWorkRuntime";
 import { __clearConfigReadCacheForTests } from "@/lib/runtime/provisioning/configReadCache";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const REV_N = "aaaaaaaa-0000-4000-8000-000000000001";
 
-function stagePayload(ruleId: string) {
+function stagePayload(ruleId: string, workLabel = "Governing work") {
+    const templateKey = workLabel.toLowerCase().replace(/\s+/g, "_");
     return {
         version: 1,
         active_process_id: "p1",
@@ -34,6 +36,7 @@ function stagePayload(ruleId: string) {
                 id: "p1",
                 key: "enrollment",
                 name: "Enrollment",
+                is_active: true,
                 stages: [
                     {
                         id: "s1",
@@ -58,7 +61,16 @@ function stagePayload(ruleId: string) {
                             stage_key: "enrollment",
                             journey_segment: "child",
                             purpose: `Purpose from ${ruleId}`,
-                            work_templates: [],
+                            work_templates: [
+                                {
+                                    template_key: templateKey,
+                                    label: workLabel,
+                                    work_definition_key: "contact_family",
+                                    owner_strategy: "record_owner",
+                                    execution_mode: "direct_action",
+                                    due_policy: { kind: "same_day" },
+                                },
+                            ],
                             outcomes: [],
                             outcome_rules: [],
                             attention_rules: [],
@@ -109,6 +121,88 @@ describe("the governing revision is pinned atomically at creation", () => {
 
         expect(result.revisionPinOutcome).toBe("pinned");
         expect(inserted[0]!.business_process_revision_id).toBe(REV_N);
+    });
+
+    it("GATE 0B: a multi-department org pins from the journey's OWN context", async () => {
+        // `Org -> Department -> Work unit -> Record`, schema-enforced: `opportunities.work_unit_id`
+        // is a real FK and `work_units.department_id` is NOT NULL. Two departments each publish an
+        // Enrollment process; the context chain picks the right one instead of refusing.
+        const inserted: Record<string, unknown>[] = [];
+        const supabase = fakeSupabase({
+            enrollmentDepartments: { "dept-a": "rev-a", "dept-b": "rev-b" },
+            opportunityWorkUnit: { "opp-1": "wu-b" },
+            workUnitDepartment: { "wu-b": "dept-b" },
+            capture: inserted,
+        });
+
+        const result = await createEnrollmentProcessInstance(supabase, {
+            orgId: ORG,
+            subjectId: "child-1",
+            contextId: "opp-1",
+        });
+
+        expect(result.revisionPinOutcome).toBe("pinned");
+        expect(inserted[0]!.business_process_revision_id).toBe("rev-b");
+    });
+
+    it("GATE 0B: context is consulted even when the org has ONE department", async () => {
+        // Deliberately not short-circuited by the single-department case, so the chain is exercised
+        // by every tenant and cannot rot unnoticed until the day a second department appears.
+        const inserted: Record<string, unknown>[] = [];
+        const supabase = fakeSupabase({
+            enrollmentDepartments: { "dept-a": "rev-a" },
+            opportunityWorkUnit: { "opp-1": "wu-a" },
+            workUnitDepartment: { "wu-a": "dept-a" },
+            capture: inserted,
+        });
+
+        await createEnrollmentProcessInstance(supabase, {
+            orgId: ORG,
+            subjectId: "child-1",
+            contextId: "opp-1",
+        });
+        expect(inserted[0]!.business_process_revision_id).toBe("rev-a");
+    });
+
+    it("GATE 0B: an unassigned Opportunity falls back, it does not fail", async () => {
+        // A lead created before work-unit assignment genuinely has no department. With one
+        // Enrollment department there is still nothing to disambiguate.
+        const inserted: Record<string, unknown>[] = [];
+        const supabase = fakeSupabase({
+            enrollmentDepartments: { "dept-a": "rev-a" },
+            opportunityWorkUnit: {},
+            capture: inserted,
+        });
+
+        const result = await createEnrollmentProcessInstance(supabase, {
+            orgId: ORG,
+            subjectId: "child-1",
+            contextId: "opp-1",
+        });
+        expect(result.revisionPinOutcome).toBe("pinned");
+        expect(inserted[0]!.business_process_revision_id).toBe("rev-a");
+    });
+
+    it("GATE 0B STOP: a CONTEXT-FREE journey in a multi-department org still refuses", async () => {
+        // The residual ambiguity, kept explicit. Start Enrollment from a durable Child record has no
+        // Opportunity, so no fact in the system says which department governs. Picking one would
+        // bind a family to a configuration nobody chose, and the pin is immutable.
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+        const inserted: Record<string, unknown>[] = [];
+        const supabase = fakeSupabase({
+            enrollmentDepartments: { "dept-a": "rev-a", "dept-b": "rev-b" },
+            capture: inserted,
+        });
+
+        const result = await createEnrollmentProcessInstance(supabase, {
+            orgId: ORG,
+            subjectId: "child-1",
+        });
+
+        expect(result.revisionPinOutcome).toBe("ambiguous_multiple_enrollment_departments");
+        expect("business_process_revision_id" in inserted[0]!).toBe(false);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining("D-96"));
+        warn.mockRestore();
     });
 
     it("never writes an unpinned instance SILENTLY", async () => {
@@ -253,6 +347,61 @@ describe("Class-A current work is governed by the pinned revision", () => {
         expect(governed?.fieldRules?.required_rule_ids).toEqual(["child:first_name"]);
     });
 
+    it("GATE 0A: stage-work runtime is governed by the same revision, not live config", () => {
+        // The stage's work templates, grain, outcomes and completion policy are all
+        // transaction-governing. Before Gate 0A `projectStageWorkRuntime` still read live
+        // `lifecycle_builder_v1` while `resolvePublishedStageInputsForCurrentWork` read the pinned
+        // revision — revision N requirements beside revision N+1 execution behaviour, in one
+        // response object.
+        const governed = projectStageWorkRuntimeSync({
+            orgId: ORG,
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            departmentMetadata: { lifecycle_builder_v1: stagePayload("child:classroom", "Live work") },
+            governingBuilderPayload: stagePayload("child:first_name", "Governing work"),
+            builderStageKey: "enrollment",
+        });
+
+        expect(governed?.template_keys).toEqual(["governing_work"]);
+        expect(governed?.primary?.label).toBe("Governing work");
+    });
+
+    it("GATE 0A: both halves of the slice agree on one revision", () => {
+        // The invariant, stated directly: what the stage REQUIRES and what the stage EXECUTES must
+        // come from the same artifact.
+        const governingPayload = stagePayload("child:first_name", "Governing work");
+        const live = { lifecycle_builder_v1: stagePayload("child:classroom", "Live work") };
+
+        const inputs = resolvePublishedStageInputsForCurrentWork({
+            departmentMetadata: live,
+            builderStageKey: "enrollment",
+            governingBuilderPayload: governingPayload,
+        });
+        const runtime = projectStageWorkRuntimeSync({
+            orgId: ORG,
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            departmentMetadata: live,
+            governingBuilderPayload: governingPayload,
+            builderStageKey: "enrollment",
+        });
+
+        expect(inputs?.operatingPlan.work_templates.map((t) => t.template_key)).toEqual(
+            runtime?.template_keys,
+        );
+    });
+
+    it("GATE 0A: with no governing payload the runtime still reads live config", () => {
+        const live = projectStageWorkRuntimeSync({
+            orgId: ORG,
+            opportunityId: "opp-1",
+            departmentId: "dept-1",
+            departmentMetadata: { lifecycle_builder_v1: stagePayload("child:classroom", "Live work") },
+            builderStageKey: "enrollment",
+        });
+        expect(live?.template_keys).toEqual(["live_work"]);
+    });
+
     it("CLASS B: with no governing payload, current configuration still answers", () => {
         // Builder authoring, form coverage and latest-config discovery must keep showing what is
         // published NOW. They pass no governing payload, and nothing about their answer changes.
@@ -273,12 +422,22 @@ function fakeSupabase(opts: {
     publishedRevisionId?: string | null;
     revisionPayload?: Record<string, unknown> | null;
     capture?: Record<string, unknown>[];
+    /** departmentId -> revisionId, for departments whose latest publication configures Enrollment. */
+    enrollmentDepartments?: Record<string, string>;
+    opportunityWorkUnit?: Record<string, string>;
+    workUnitDepartment?: Record<string, string>;
 }) {
+    const departments: Record<string, string> =
+        opts.enrollmentDepartments ??
+        (opts.publishedRevisionId ? { "dept-1": opts.publishedRevisionId } : {});
+
     const rowsFor = (table: string): unknown[] => {
         if (table === "configuration_publications") {
-            return opts.publishedRevisionId
-                ? [{ revision_id: opts.publishedRevisionId, subject_id: "dept-1", revision_number: 1 }]
-                : [];
+            return Object.entries(departments).map(([subject_id, revision_id], i) => ({
+                revision_id,
+                subject_id,
+                revision_number: i + 1,
+            }));
         }
         if (table === "business_process_revisions") {
             // The pinned read goes through maybeSingle() and wants a payload; the resolution read is
@@ -288,9 +447,10 @@ function fakeSupabase(opts: {
                     ? [{ id: opts.publishedRevisionId ?? "rev", payload: opts.revisionPayload }]
                     : [];
             }
-            return opts.publishedRevisionId
-                ? [{ id: opts.publishedRevisionId, payload: stagePayload("child:first_name") }]
-                : [];
+            return Object.values(departments).map((id) => ({
+                id,
+                payload: stagePayload("child:first_name"),
+            }));
         }
         return [];
     };
@@ -298,11 +458,23 @@ function fakeSupabase(opts: {
     return {
         from(table: string) {
             const rows = rowsFor(table);
+            const filters: Record<string, unknown> = {};
             // One object that is BOTH the chain and the awaitable result — PostgREST builders are
             // thenable, and the list reads here await the builder rather than calling maybeSingle().
             const chain: Record<string, unknown> = {
-                maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
-                then: (resolve: (v: unknown) => unknown) => Promise.resolve(resolve({ data: rows, error: null })),
+                maybeSingle: async () => {
+                    if (table === "opportunities") {
+                        const wu = opts.opportunityWorkUnit?.[String(filters.id ?? "")] ?? null;
+                        return { data: { work_unit_id: wu }, error: null };
+                    }
+                    if (table === "work_units") {
+                        const dept = opts.workUnitDepartment?.[String(filters.id ?? "")] ?? null;
+                        return { data: { department_id: dept }, error: null };
+                    }
+                    return { data: rows[0] ?? null, error: null };
+                },
+                then: (resolve: (v: unknown) => unknown) =>
+                    Promise.resolve(resolve({ data: rows, error: null })),
                 insert: (row: Record<string, unknown>) => {
                     opts.capture?.push(row);
                     return {
@@ -311,8 +483,21 @@ function fakeSupabase(opts: {
                         }),
                     };
                 },
+                // The context-bearing path upserts on `ux_process_instances_scope`.
+                upsert: (row: Record<string, unknown>) => {
+                    opts.capture?.push(row);
+                    return {
+                        select: () => ({
+                            maybeSingle: async () => ({ data: { id: "created-instance" }, error: null }),
+                        }),
+                    };
+                },
             };
-            for (const key of ["select", "eq", "in", "is", "order", "limit"]) {
+            chain.eq = (col: string, val: unknown) => {
+                filters[col] = val;
+                return chain;
+            };
+            for (const key of ["select", "in", "is", "order", "limit"]) {
                 chain[key] = () => chain;
             }
             return chain;
