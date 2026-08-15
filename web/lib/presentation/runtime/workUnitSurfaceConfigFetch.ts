@@ -41,7 +41,41 @@ export function queueRowSurfaceIdForDepartment(departmentId: string | null, dept
     return "pipeline-queue-row";
 }
 
-export async function fetchWorkUnitSurfaceConfigBundle(args: {
+/**
+ * In-flight coalescing for the BUNDLE, not merely for its individual fetches.
+ *
+ * `dedupeAdminFetch` collapses only requests that overlap while in flight. The queue-row-layout
+ * read happens AFTER the three parallel reads resolve, so two callers arriving a few hundred
+ * milliseconds apart had both cleared the parallel block before either issued it — and the layout
+ * was fetched twice with a byte-identical URL, observed on every Work Unit entry.
+ *
+ * This module already promises that "the runtime config effect and the navigation prewarm both
+ * resolve the SAME config through this one function". Coalescing here is what makes that true for
+ * the serial tail as well as the parallel head.
+ */
+const bundleInflight = new Map<string, Promise<WorkUnitSurfaceConfigBundle>>();
+
+export function fetchWorkUnitSurfaceConfigBundle(args: {
+    departmentId: string;
+    workUnitId: string;
+    fetchInit?: RequestInit;
+}): Promise<WorkUnitSurfaceConfigBundle> {
+    const inflightKey = `${args.departmentId}::${args.workUnitId}`;
+    const existing = bundleInflight.get(inflightKey);
+    if (existing) return existing;
+    const started = resolveWorkUnitSurfaceConfigBundle(args).finally(() => {
+        bundleInflight.delete(inflightKey);
+    });
+    bundleInflight.set(inflightKey, started);
+    return started;
+}
+
+/** @internal test seam */
+export function clearWorkUnitSurfaceConfigBundleInflightForTests(): void {
+    bundleInflight.clear();
+}
+
+async function resolveWorkUnitSurfaceConfigBundle(args: {
     departmentId: string;
     workUnitId: string;
     fetchInit?: RequestInit;
