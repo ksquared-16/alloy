@@ -74,9 +74,18 @@ describe("the journey speaks when there is no durable relationship yet", () => {
         expect(deriveChildRecordState({ processStates: ["some_future_stage"] })).toBe("in_process");
     });
 
-    it("an empty state is not a journey position", () => {
-        expect(isProcessRunningState("")).toBe(false);
-        expect(deriveChildRecordState({ processStates: [""] })).toBeNull();
+    it("a just-started journey is In Process, even with no outcome yet", () => {
+        // `state` records the OUTCOME and is NULL at intake — both Create Lead and
+        // `enrollment.start` write it that way. Reading null as "no journey" made a child whose
+        // enrolment had just been started read as On record; browser certification caught it.
+        expect(isProcessRunningState("")).toBe(true);
+        expect(deriveChildRecordState({ processStates: [""] })).toBe("in_process");
+    });
+
+    it("still reads On record when there is no instance at all", () => {
+        // The distinction that matters: an EMPTY LIST is no journey; an empty STATE is a journey
+        // with no outcome.
+        expect(deriveChildRecordState({ processStates: [] })).toBeNull();
     });
 });
 

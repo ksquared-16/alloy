@@ -67,11 +67,21 @@ export function isProcessClosedState(state: string | null | undefined): boolean 
  *
  * An unknown state counts as running on purpose: a journey the platform has no word for is still
  * participation, and calling it "no process" would hide the child from the cohort that describes
- * them. An empty state is not a journey position at all and is excluded.
+ * them.
+ *
+ * ── AN EMPTY STATE IS A RUNNING JOURNEY, NOT AN ABSENT ONE ──
+ *
+ * `process_instances.state` is NULL at intake — it records the OUTCOME, and a journey that has just
+ * begun has not reached one. Create Lead writes exactly that, and so does `enrollment.start`.
+ * Treating null as "no journey" made a child whose enrolment had just been started read as "On
+ * record", which browser certification caught. The row's EXISTENCE is the participation; its state
+ * only says how it ended.
+ *
+ * Callers therefore pass one entry per instance, using `state ?? ""`, and the empty string means
+ * "an instance exists with no outcome yet" — not "no instance".
  */
 export function isProcessRunningState(state: string | null | undefined): boolean {
     const s = norm(state);
-    if (!s) return false;
     return !isProcessEnrolledState(s) && !isProcessClosedState(s);
 }
 
