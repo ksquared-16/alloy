@@ -28,6 +28,7 @@ import {
 import { deriveFocusPanelSummaryCompositionInputs } from "@/lib/adminV2/runtime/focusPanel/deriveFocusPanelSummaryCompositionInputs";
 import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 import { asFocusPanelSubjectGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelSubjectGrainRead";
+import { hasInnerDismissibleLayer } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import {
     buildOpportunityFocusPanelMutation,
     resolveFocusPanelMutationOpportunityId,
@@ -476,6 +477,10 @@ export default function OpportunityFocusPanelModeGrid({
         if (!currentWorkWorkspace.open && !activeDepth) return;
         const onKey = (event: KeyboardEvent) => {
             if (event.key !== "Escape") return;
+            // Capture beats the drawer (an OUTER layer) by design — but it also beats every INNER
+            // layer, so an open select menu, Radix menu or inline field editor would be collapsed
+            // along with the card by one keypress. Yield to whichever is open; it closes itself.
+            if (hasInnerDismissibleLayer(document)) return;
             event.preventDefault();
             event.stopPropagation();
             event.stopImmediatePropagation();

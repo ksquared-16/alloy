@@ -115,6 +115,7 @@ export function AlloySelect({
     const [activeIndex, setActiveIndex] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
     const listRef = useRef<HTMLUListElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
     const listId = useId();
 
     useEffect(() => {
@@ -204,6 +205,29 @@ export function AlloySelect({
         node?.focus();
     }, [open, activeIndex]);
 
+    /**
+     * Return focus to the trigger when the menu closes.
+     *
+     * Focus is moved INTO the list while open (above), so when the list unmounts the browser drops
+     * focus to `<body>` — the keyboard operator loses their place in the page and Tab restarts from
+     * the top. Observed on the Focus Panel: after Escape closed a menu, `document.activeElement`
+     * was BODY, which also made every enclosing layer unable to tell that the operator was still
+     * inside a field.
+     *
+     * Only reclaims focus when the list actually had it (activeElement is body, or still inside
+     * this control). Closing by clicking somewhere else must leave focus where the operator put it.
+     */
+    const wasOpen = useRef(false);
+    useEffect(() => {
+        const closing = wasOpen.current && !open;
+        wasOpen.current = open;
+        if (!closing || disabled) return;
+        const active = document.activeElement;
+        const strayed = active !== null && active !== document.body && !rootRef.current?.contains(active);
+        if (strayed) return;
+        triggerRef.current?.focus();
+    }, [open, disabled]);
+
     /** A printable, unmodified character — the only thing typeahead should react to. */
     const isTypeaheadKey = (event: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }) =>
         event.key.length === 1 && event.key !== " " && !event.ctrlKey && !event.metaKey && !event.altKey;
@@ -272,6 +296,7 @@ export function AlloySelect({
             data-testid={testId}
         >
             <button
+                ref={triggerRef}
                 type="button"
                 id={id}
                 disabled={disabled}

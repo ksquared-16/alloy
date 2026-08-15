@@ -25,6 +25,7 @@ import {
     resolveIdentityFieldEditControl,
     type IdentityFieldEditControl,
 } from "@/lib/adminV2/runtime/focusPanel/identity/resolveIdentityFieldEditControl";
+import { hasOpenTransientPopup } from "@/lib/adminV2/runtime/focusPanel/escapeLayerOwnership";
 import { formatFocusPanelDate } from "@/lib/adminV2/runtime/focusPanel/focusPanelDateDisplay";
 import { normalizeDob } from "@/lib/identity/normalizeDob";
 
@@ -444,6 +445,25 @@ export default function IdentityFieldValue({
             data-identity-editable={cell.editable ? "true" : "false"}
             data-identity-linked={cell.linked ? "true" : "false"}
             data-identity-link-destination={cell.linkDestination ?? undefined}
+            // An open inline editor is a dismissible LAYER, and the Focus Panel grid needs to know
+            // so its capture-phase Escape yields instead of collapsing the whole card underneath
+            // the operator. Published rather than inferred from control classes, because the
+            // editor's control differs per field kind (input / date input / AlloySelect).
+            data-identity-editing={inlineEdit?.isEditing ? "true" : undefined}
+            // Escape cancels the edit, whatever control the field kind renders. The text and date
+            // inputs handle it themselves and mark the event handled; a select-backed editor has
+            // no such handler, so without this Escape would reach nothing once the grid yields.
+            onKeyDown={
+                inlineEdit?.isEditing ?
+                    (event) => {
+                        if (event.key !== "Escape" || event.defaultPrevented || inlineEdit.busy) return;
+                        // A select-backed editor's own menu is the inner layer — let it close first.
+                        if (hasOpenTransientPopup(document)) return;
+                        event.preventDefault();
+                        inlineEdit.onCancel();
+                    }
+                :   undefined
+            }
         >
             {showLabel ? (
                 <span className={clsx("identity-field-value__label", eyebrow && "identity-field-value__label--eyebrow")}>
