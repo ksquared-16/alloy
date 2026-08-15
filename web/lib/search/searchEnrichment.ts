@@ -26,9 +26,12 @@ import {
     fetchHostWorkUnitKeys,
     fetchHouseholdCaseHosts,
     fetchStageWorkViewTargets,
-    stageWorkViewCacheKey,
 } from "@/lib/workUnits/hostWorkUnitResolver";
-import { resolveOperationalMemberships } from "@/lib/search/searchOperationalMemberships";
+import {
+    buildSubjectProcessContexts,
+    buildSubjectScheduleContext,
+    type SubjectProcessRow,
+} from "@/lib/context/buildSubjectContexts";
 import { loadFamilyMembershipRows } from "@/lib/search/searchFamilyMembershipRows";
 import {
     LOCATION_DISPLAY_LABEL_SELECT,
@@ -37,10 +40,7 @@ import {
 } from "@/lib/admin/locationDisplayLabel";
 import { searchLocationAllowed, type SearchAccessEnvelope } from "@/lib/search/searchAccessEnvelope";
 import type { SearchContext, SearchRecognition } from "@/lib/search/searchContracts";
-import {
-    resolveProcessDetail,
-    type SearchProcessConfiguration,
-} from "@/lib/search/searchProcessConfiguration";
+import type { SearchProcessConfiguration } from "@/lib/search/searchProcessConfiguration";
 import type { SearchCandidate } from "@/lib/search/searchRetrieval";
 
 /** Schedule assignment statuses that represent a schedule an operator cares about now. */
@@ -249,97 +249,35 @@ export async function enrichSearchCandidates(args: {
         const resolvedHouseholdId =
             c.household_id ?? (c.kind === "person" ? cpByPerson.get(c.id)?.[0]?.customer_id ?? null : null);
 
-        // Process participation — one context per participation, never a subject.
+        // Process participation + schedule — assembled by the ONE shared authority.
+        //
+        // The rows are batched here (Search's query count must stay constant across a candidate
+        // set); the JUDGEMENT is not. `buildSubjectContexts` is the same module the durable record
+        // host calls with its single-subject rows, so the two surfaces cannot disagree about which
+        // contexts a subject is in. @see lib/context/buildSubjectContexts.ts
         const subjectKeys = uniq([c.id, c.person_id]);
-        const seenProcessKeys = new Set<string>();
-        for (const sk of subjectKeys) {
-            for (const row of processBySubject.get(sk) ?? []) {
-                const configured = processConfig.byKey.get(row.process_key);
-                // Configuration can only REMOVE a process from view, never add one.
-                if (configured && !configured.operator_has_access) continue;
-                if (seenProcessKeys.has(row.process_key)) continue;
-                seenProcessKeys.add(row.process_key);
-
-                if (!locationId && row.location_id) locationId = row.location_id;
-
-                contexts.push({
-                    kind: "process",
-                    key: row.process_key,
-                    label: configured?.label ?? row.process_key,
-                    detail: resolveProcessDetail(configured, row.stage_key, row.state),
-                    // The process runs IN a context; that context entity owns the
-                    // authoritative surface. Enrollment: context_type='opportunity'.
-                    destination_entity_type: row.context_type,
-                    destination_entity_id: row.context_id,
-                    // Where that context is WORKED. Read from the host record's own
-                    // queue membership — never from the process key, which names a
-                    // different namespace and resolves to no work unit.
-                    destination_work_unit_key: row.context_id
-                        ? hostWorkUnitKeys.get(row.context_id) ?? null
-                        : null,
-                    // …and where THIS PARTICIPANT is worked. A sibling in the same case can sit in
-                    // a different stage, so the family answer above cannot be right for both.
-                    destination_work_view_id:
-                        row.context_id && row.stage_key
-                            ? stageWorkViewTargets.get(
-                                  stageWorkViewCacheKey(row.context_id, row.stage_key),
-                              ) ?? null
-                            : null,
-                    // EVERY cohort this subject truthfully belongs to — evaluated at its own grain
-                    // through the canonical runtime machinery, never inferred from the stage above.
-                    // Zero queries: the configuration is already loaded and cached, and the row (for
-                    // family grain) was materialized in bulk with the wave.
-                    operational_memberships: configured
-                        ? resolveOperationalMemberships({
-                              process: configured,
-                              subject: {
-                                  grain: c.kind === "child" ? "child" : "family",
-                                  stageKey: row.stage_key,
-                                  row:
-                                      c.kind === "child" || !row.context_id
-                                          ? null
-                                          : familyMembershipRows.get(row.context_id) ?? null,
-                                  // THE ROW IDENTITY, at the grain the lens actually rows at.
-                                  // A child-grain lens selects PARTICIPATIONS, so the participation
-                                  // this membership was evaluated from IS the member — not the
-                                  // durable child (one child, two leads, two rows) and not the case.
-                                  memberRowId: c.kind === "child" ? row.id : row.context_id,
-                              },
-                          }).map((m) => ({
-                              work_view_id: m.workViewId,
-                              label: m.workViewLabel,
-                              row_grain: m.rowGrain,
-                              // The unit that holds the host RECORD. A view commits as a LENS on that
-                              // unit's surface — the live shape is
-                              // `/workspace/work-unit/new-leads?work_view_id=new_work_view_4`.
-                              host_work_unit_key: row.context_id
-                                  ? hostWorkUnitKeys.get(row.context_id) ?? null
-                                  : null,
-                              host_entity_id: row.context_id ?? null,
-                              // Carried SEPARATELY from the host. For a child these differ; for a
-                              // family they coincide — and the runtime is entitled to both.
-                              operational_member_id: m.operationalMemberId,
-                          }))
-                        : null,
-                });
-            }
-        }
+        const built = buildSubjectProcessContexts({
+            grain: c.kind === "child" ? "child" : "family",
+            subjectKeys,
+            processBySubject,
+            processConfig,
+            hostWorkUnitKeys,
+            stageWorkViewTargets,
+            familyMembershipRows,
+            locationId,
+        });
+        contexts.push(...built.contexts);
+        locationId = built.locationId;
 
         // Schedule — child grain only. A household never carries a schedule.
         if (c.kind === "child") {
             const sched = scheduleByChild.get(c.id);
-            if (sched) {
-                if (!locationId && sched.site_location_id) locationId = sched.site_location_id;
-                contexts.push({
-                    kind: "schedule",
-                    key: "schedule",
-                    label: "Schedule",
-                    detail: sched.pattern_label,
-                    secondary: sched.site_location_id
-                        ? locationLabels.get(sched.site_location_id) ?? null
-                        : null,
-                });
-            }
+            if (sched?.site_location_id && !locationId) locationId = sched.site_location_id;
+            const schedule = buildSubjectScheduleContext(
+                sched ?? null,
+                sched?.site_location_id ? locationLabels.get(sched.site_location_id) ?? null : null,
+            );
+            if (schedule) contexts.push(schedule);
         }
 
         // --- recognition ---
@@ -443,23 +381,14 @@ function resolveTypeLabel(
 // Batched readers — each is ONE query over an id set.
 // ---------------------------------------------------------------------------
 
-type ProcessInstanceRow = {
-    /**
-     * `process_instances.id` — the PARTICIPATION.
-     *
-     * For a child-grain Work View this is the row identity the runtime selects on. It is deliberately
-     * not the durable child: one child can hold two participations across two leads, and those are
-     * two different rows.
-     */
-    id: string;
-    subject_id: string;
-    process_key: string;
-    stage_key: string | null;
-    state: string | null;
-    location_id: string | null;
-    context_type: string | null;
-    context_id: string | null;
-};
+/**
+ * The participation row shape, OWNED BY the shared context projection.
+ *
+ * Aliased rather than redeclared: this reader feeds `buildSubjectProcessContexts`, and a local copy
+ * that drifted (a dropped `id`, a renamed `stage_key`) would compile on one side and silently change
+ * which Work View row the destination selects.
+ */
+type ProcessInstanceRow = SubjectProcessRow;
 
 async function fetchProcessInstances(
     supabase: SupabaseClient,

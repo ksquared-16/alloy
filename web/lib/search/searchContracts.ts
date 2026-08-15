@@ -91,119 +91,21 @@ export type SearchRecognition = {
 };
 
 /**
- * Why a context exists — used for ranking and for deciding what to show first.
- * `process` contexts are discovered dynamically from process participation and
- * are labelled from tenant configuration. There is no per-tenant branching.
- */
-export type SearchContextKind = "process" | "schedule" | "relationship" | "placement";
-
-/**
- * One configured Work View this subject ACTUALLY belongs to, and can actually compose in.
+ * Business context — RE-EXPORTED, not defined here.
  *
- * A Work View is an overlapping operational COHORT, not a stage. A subject routinely belongs to
- * several at once — the live case is a family at stage `waitlist` sitting in both `All` and `Tours`,
- * the latter because Tours publishes `has_active_tour` with deliberately NO stage predicate.
+ * These types moved to `@/lib/context/subjectContextTypes` when Roster's durable record host became
+ * a second consumer of the same question ("what business contexts apply to this subject?"). They are
+ * re-exported under their historical Search names so every existing consumer is untouched and there
+ * is exactly ONE definition — a copy would be the second context model the doctrine forbids.
  *
- * Every entry has already passed all four gates in `resolveOperationalMemberships`: correct grain,
- * fully-supported predicate evaluation, operator access, and operational availability. Nothing
- * downstream re-decides eligibility — ranking may reorder these, never extend them.
+ * @see lib/context/subjectContextTypes.ts — the definitions and their reasoning
+ * @see lib/context/buildSubjectContexts.ts — the one assembly authority both consumers call
  */
-export type SearchOperationalMembershipRef = {
-    /** Configured Work View id — identity, never the label, which tenants rename. */
-    work_view_id: string;
-    /** Configured operator-facing label. */
-    label: string;
-    /**
-     * The grain the lens ROWS at, which is the subject the destination actually selects. A child is
-     * never offered a `family` lens: the row there is the case, and selecting it would present a
-     * family row as though it were the child.
-     */
-    row_grain: "child" | "family";
-    /** The Work Unit hosting this view's surface — `work_units.key`, never a process key. */
-    host_work_unit_key: string | null;
-    /** The record whose Focus Panel hosts the subject inside that view. */
-    host_entity_id: string | null;
-    /**
-     * THE WORK VIEW ROW IDENTITY — what the runtime selects on, and what its membership guard matches.
-     *
-     *   child grain    `process_instances.id`   the PARTICIPATION
-     *   family grain   `opportunities.id`       the case
-     *
-     * SEPARATE from `host_entity_id`, and the separation is the point. For a family-grain lens the two
-     * coincide; for a child-grain lens they never do — the evaluated rows are participations while the
-     * Focus Panel still composes against the family case. Collapsing them is what made a truthful
-     * Waitlist destination answer "That record isn't in this Work View": the case was sent as the
-     * subject, and no child row could match it.
-     */
-    operational_member_id: string;
-};
-
-export type SearchContext = {
-    kind: SearchContextKind;
-    /**
-     * Stable machine key for this context.
-     * For `process` this is the configured `process_key` — NOT a hardcoded name.
-     */
-    key: string;
-    /** Operator-facing label, resolved from tenant configuration. e.g. "Annual Registration". */
-    label: string;
-    /** Concise operational state, e.g. "Enrolling", "Needs documents", "Mon / Wed / Fri". */
-    detail?: string | null;
-    /** Optional supporting line, e.g. "Review due Aug 22". */
-    secondary?: string | null;
-    /**
-     * The canonical entity that owns this context's authoritative surface, when one
-     * exists. Destination resolution reads these; it never invents a route.
-     *
-     * A context with no owning surface (today: `schedule`) still ranks and displays —
-     * it simply produces no destination rather than a fabricated link.
-     */
-    destination_entity_type?: string | null;
-    destination_entity_id?: string | null;
-    /**
-     * The Work Unit that actually holds `destination_entity_id` in its queues —
-     * `work_units.key`, read from the host record's own `work_unit_id`.
-     *
-     * This is NOT the process key, and the distinction is load-bearing. A process
-     * (`enrollment`) and a Work Unit (`enrollment_pipeline`) are different objects
-     * in different namespaces: `/workspace/work-unit/:slug` resolves work-unit keys
-     * and Work View slugs, so routing to a process key answers `work_unit_not_found`
-     * and no Focus Panel ever composes.
-     *
-     * Null when the host record belongs to no Work Unit. That is honest — no Work
-     * View's evaluated page contains it, so nothing can host its Focus Panel, and a
-     * destination naming a unit anyway would be a fabricated route.
-     */
-    destination_work_unit_key?: string | null;
-    /**
-     * The configured Work View that holds THIS PARTICIPANT's current stage.
-     *
-     * `destination_work_unit_key` above answers "which unit holds the host RECORD" — and for a case
-     * that is family grain. A child in the same case can sit in a different stage entirely, so the
-     * family answer is wrong for them: a waitlisted child sent to the family's Lead unit lands in a
-     * queue that does not contain them, and nothing composes.
-     *
-     * Resolved by CONFIGURED BINDING (`compat_queue_key` === `primaryQueueKeyForLifecycleStage`),
-     * never by label, so renamed or reordered views cannot move the answer.
-     *
-     * Null when this participation's stage has no stage-bound view. The caller then falls back to
-     * the host record's unit — the family answer is a fallback, never an override.
-     *
-     * ── DEMOTED (see `operational_memberships`) ──
-     * This is a RANKING and compatibility signal, not proof of eligibility. Stage alignment says
-     * where a participant is in the Process; it does not establish which cohorts contain them, and
-     * binding through `compat_queue_key` cannot express a booking-predicated or catch-all lens at
-     * all. The runtime authority declines to read that key as identity for exactly this reason
-     * ("a lane binding assigned by array position"). Eligibility comes from evaluated membership.
-     */
-    destination_work_view_id?: string | null;
-    /**
-     * Every configured Work View this subject truthfully belongs to and can compose in — the
-     * operational destinations Search may offer. Empty means none could be PROVEN, which is a
-     * complete answer: the subject still exposes its entity contexts.
-     */
-    operational_memberships?: SearchOperationalMembershipRef[] | null;
-};
+export type {
+    SubjectContextKind as SearchContextKind,
+    SubjectOperationalMembershipRef as SearchOperationalMembershipRef,
+    SubjectContext as SearchContext,
+} from "@/lib/context/subjectContextTypes";
 
 /**
  * Where an operator can go. Destinations point at AUTHORITATIVE Alloy surfaces.
