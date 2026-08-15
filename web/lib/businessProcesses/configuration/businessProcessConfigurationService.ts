@@ -24,6 +24,7 @@ import {
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { businessProcessPayloadChecksum } from "@/lib/lifecycle/businessProcessPayloadChecksum";
+import { normalizeBusinessProcessPayloadRequirements } from "@/lib/businessProcesses/configuration/normalizePublishedStageRequirements";
 import { invalidateTenantConfigReadCache } from "@/lib/runtime/provisioning/configReadCache";
 
 export const BUSINESS_PROCESS_DOMAIN_KEY = "business_process" as const;
@@ -320,6 +321,18 @@ export async function recordDraftValidation(
  * based on, immutable revision, publication act, audit event, and the runtime projection, all in
  * one transaction. This function's job is to compute the checksum over the canonical serialization
  * and to translate database errors into something an operator surface can act on.
+ *
+ * ## D-97 normalization
+ *
+ * Before the checksum, every stage is made to carry an explicit `requirements_v1` — authored
+ * sections preserved exactly, absent ones materialized from the single legacy projection — so the
+ * revision this publish stores is a SELF-CONTAINED executable artifact. Without it a pinned
+ * instance (D-96) would still have to read live, unversioned department metadata to learn what its
+ * stage requires, and a rollback would restore stages without their requirements.
+ *
+ * The normalized payload is written back to the DRAFT before the RPC runs, because
+ * `publish_business_process_revision_v1` inserts `v_draft.payload` verbatim. Normalizing only in
+ * memory would store the un-normalized payload under a checksum describing the normalized one.
  */
 export async function publishDraft(
     supabase: SupabaseClient,
@@ -331,7 +344,38 @@ export async function publishDraft(
         throw new BusinessProcessDraftInvalidError(draft.validationErrors);
     }
 
-    const checksum = businessProcessPayloadChecksum(draft.payload);
+    const normalized = normalizeBusinessProcessPayloadRequirements({
+        payload: draft.payload,
+        departmentMetadata: await readDepartmentMetadata(supabase, params),
+    });
+
+    if (normalized.changed) {
+        // CAS on the draft-edit token, for the same reason `saveDraft` does: between reading the
+        // draft and the RPC reading it again, a concurrent save could replace the payload — and the
+        // RPC would then store THEIR payload under the checksum computed for OURS. Status and
+        // validation are deliberately left alone: materializing requirements the tenant already had
+        // cannot invalidate a draft that was just validated.
+        const { data: rebased, error: rebaseError } = await supabase
+            .from("business_process_drafts")
+            .update({ payload: normalized.payload })
+            .eq("id", draft.id)
+            .eq("org_id", params.orgId)
+            .eq("draft_revision", draft.draftRevision)
+            .select("id")
+            .maybeSingle();
+        if (rebaseError) throw new Error(rebaseError.message);
+        if (!rebased) {
+            const latest = await readDraft(supabase, params);
+            throw new BusinessProcessDraftEditConflictError(
+                latest?.draftRevision ?? null,
+                draft.draftRevision,
+                "Someone else changed this configuration while it was being published. " +
+                    "Reload to see their changes, then publish again.",
+            );
+        }
+    }
+
+    const checksum = businessProcessPayloadChecksum(normalized.payload);
 
     const { data, error } = await supabase.rpc("publish_business_process_revision_v1", {
         p_org_id: params.orgId,
@@ -394,6 +438,30 @@ export async function latestPublication(
         payloadChecksum: String(row.payload_checksum ?? ""),
         publishedAt: String(row.published_at ?? ""),
     };
+}
+
+/**
+ * The department's live metadata, for D-97 normalization.
+ *
+ * Read here rather than passed in because publish is the only caller that needs it and the legacy
+ * requirement stores live nowhere else. Note this reads the LIVE metadata deliberately: what a
+ * never-authored stage requires TODAY is exactly what the revision being published must capture.
+ */
+async function readDepartmentMetadata(
+    supabase: SupabaseClient,
+    params: { orgId: string; departmentId: string },
+): Promise<Record<string, unknown> | null> {
+    const { data, error } = await supabase
+        .from("departments")
+        .select("metadata")
+        .eq("id", params.departmentId)
+        .eq("org_id", params.orgId)
+        .maybeSingle();
+    if (error) throw new Error(error.message);
+    const metadata = (data as { metadata?: unknown } | null)?.metadata;
+    return metadata != null && typeof metadata === "object" && !Array.isArray(metadata)
+        ? (metadata as Record<string, unknown>)
+        : null;
 }
 
 async function currentPublishedRevisionId(
