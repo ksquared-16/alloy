@@ -120,3 +120,64 @@ genuinely optional all along and had merely been typed as required.
 `provisioningAnswerDestination.ts` is now unblocked: with a nullable lens it can map a contextual
 answer to `{ workUnitId: host, workViewId: null, subjectId: subject.id }` — the edit reverted earlier
 pending this decision.
+
+---
+
+# The checklist is cleared — and what clearing it required
+
+**All 38 errors gone; `Web typecheck` green.** The count was 19 unique errors reported twice, once per
+typecheck graph (production + tests) — worth stating because "38" and "19" are the same list, and a
+future reader diffing counts would otherwise conclude half of them vanished unexplained.
+
+Every fix took the required form. None used a cast, a widened type, optional chaining that hides
+semantics, or a fallback to a default or first Work View.
+
+| File | What it decided |
+|---|---|
+| `provisioning.ts` (K2) | `contextual` admitted as a fourth terminal outcome |
+| `provisioningAnswerDestination.ts` | `{ host, workViewId: null, subjectId }` — the absence recorded |
+| `workUnitSurfaceModelFromSnapshot.ts` | pills rendered with NONE active; no rows; no KPI slots |
+| `ProvisionedWorkUnitSurface.tsx` | narrowed POSITIVELY to the lens-bearing terminals |
+| `useWorkUnitSettlement.ts` | nothing to settle → every region `empty`, never `pending` |
+| `d4Focus` / `d3Attention` | narrowed by terminal; every operational assertion preserved verbatim |
+
+## Two things the checklist did not predict
+
+**1. `terminal !== "error"` was the defect's own idiom.** Six of the seven files asked "is this not an
+error?" and then read `activeWorkView`. That was right only while every non-error terminal happened to
+have a lens. Each is now narrowed positively to `operational | empty`, so a future lens-free terminal
+cannot join the "has a lens" side merely by not being an error.
+
+**2. `rows: []` is ambiguous, and the queue said so out loud.** With no lens the surface model produced
+zero rows and no error — which `queueRegionRenderState` reads as AUTHORITATIVE EMPTY, rendering *"No
+records in this view"* about a view nobody selected. `queue.cohortSelected: false` and a `no-cohort`
+render state separate the two. It deliberately shows no dashed ghost rows: those promise rows that are
+coming, and none are.
+
+Likewise `isOperationallyResolved` requires a `situation`, which a contextual subject truthfully lacks —
+the panel would have painted a permanent spinner over a record that had already arrived. Resolution now
+asks the question that fits how the subject was reached.
+
+# Contextual focus is STATED, end to end
+
+The kernel change worth recording, because the obvious alternative is wrong:
+
+> **Inference from `lens == null` was considered and rejected.** `Lennon → Waitlist` does not name its
+> lens either — no operator focus destination ever has — so inferring contextual focus from a null lens
+> would have made that destination lens-free too and darkened a pill operators depend on. `lens: null`
+> means "no lens was NAMED"; `cohort: "none"` means "no cohort was SELECTED". Both are now expressible.
+
+`AttentionRef.cohort` → `?cohort=none` → `ProvisioningRequest.mode` → the contextual terminal, and back
+through history via the stamped destination's null `workViewId`. The producer decides: Search returns
+`host_work_view_id` only for a view that DEMONSTRABLY holds the subject, so its absence is a statement,
+not a gap. Destinations that resolved a view are untouched.
+
+# Verified
+
+- `Web typecheck` green (both graphs).
+- 24 assertions in `contextualFocusNoDefaultLens.test.ts` — the absence survives encoding, decoding,
+  history restore, cold entry, provisioning, rendering and operator focus.
+- Failing-test FILE LISTS diffed against a detached `origin/staging` worktree across `tests/runtime`,
+  `tests/presentation`, `tests/admin/drawer`: **30 failing files on the branch, 31 on staging, branch is
+  a strict subset.** Zero regressions. One pre-existing failure fixed
+  (`d4SettlementReservedGeometry` #6, whose regex had gone stale against a refactor).
