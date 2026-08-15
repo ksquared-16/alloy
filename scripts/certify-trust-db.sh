@@ -39,6 +39,11 @@ SUITES=(
     # which the BP lineage backfill's collision with the immutability trigger
     # is invisible. It seeds the live tenant's shape first, then migrates.
     "certification/bp-revision-lineage-upgrade/run.sh"
+    # D-94 session-pinned participant Form versions. Replays the real Forms migrations,
+    # then the D-94 migration, and asserts the eight transaction-stability properties —
+    # including the two immutability refusals, which are trigger-made claims and so are
+    # only evidence when a real database refuses the write.
+    "certification/enrollment-session-form-version/run.sh"
 )
 
 if ! command -v docker >/dev/null 2>&1; then

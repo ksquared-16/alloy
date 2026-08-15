@@ -194,6 +194,12 @@ export type PacketSessionItemRow = {
     sequence_index: number;
     status: string;
     form_submission_id: string | null;
+    /**
+     * D-94. The version this participant transacts against, resolved once at session
+     * realization. NULL only on sessions created before D-94, where what was rendered is
+     * not recoverable and must not be fabricated.
+     */
+    resolved_form_definition_version_id?: string | null;
 };
 
 export function shallowMergeSharedValues(
@@ -278,7 +284,7 @@ export async function ensurePacketSessionForPublicLink(
     const loadSessionWithItems = async (sess: PacketSessionRow) => {
         const { data: items } = await supabase
             .from("form_packet_session_items")
-            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
+            .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id")
             .eq("packet_session_id", sess.id)
             .order("sequence_index", { ascending: true });
         return { session: sess, items: (items ?? []) as PacketSessionItemRow[], error: null };
@@ -354,12 +360,48 @@ export async function ensurePacketSessionForPublicLink(
 
     const sess = insertedSess as PacketSessionRow;
 
+    // D-94 — resolve the participant's Form versions ONCE, here, at session realization.
+    //
+    // Configuration floats; an active participant transaction pins. Resolving per step at read
+    // time meant a republish mid-session changed what the parent saw next, and left no record of
+    // which version they actually completed or signed. Each step's version is chosen now and
+    // never re-chosen.
+    //
+    // A definition-level pin still wins where an operator set one: that is the operator saying
+    // "this packet always uses this exact version", which is a stronger statement than "whatever
+    // happened to be published when this parent started".
+    const resolvedVersionByItemId = new Map<string, string>();
+    for (const di of defItems) {
+        const pinned = (di as { pinned_form_definition_version_id?: string | null })
+            .pinned_form_definition_version_id;
+        const envelope = await loadPublishedFormEnvelope(
+            supabase,
+            orgId,
+            di.form_definition_id,
+            pinned ?? null,
+        );
+        // Fail closed. A step with no published version cannot be transacted against, and
+        // creating the session anyway would hand a parent a packet that breaks partway through —
+        // after they had already answered questions.
+        if (!envelope) {
+            return {
+                session: null as never,
+                items: [],
+                error: new Error(
+                    `No published version for packet step form ${di.form_definition_id}; session not created.`,
+                ),
+            };
+        }
+        resolvedVersionByItemId.set(di.id, envelope.formDefinitionVersionId);
+    }
+
     const sessionItemsPayload = defItems.map((di, idx) => ({
         org_id: orgId,
         packet_session_id: sess.id,
         packet_item_id: di.id,
         sequence_index: di.sequence_index,
         status: idx === 0 ? "active" : "pending",
+        resolved_form_definition_version_id: resolvedVersionByItemId.get(di.id) ?? null,
     }));
 
     const { error: siErr } = await supabase.from("form_packet_session_items").insert(sessionItemsPayload);
@@ -369,7 +411,7 @@ export async function ensurePacketSessionForPublicLink(
 
     const { data: loadedItems } = await supabase
         .from("form_packet_session_items")
-        .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id")
+        .select("id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id")
         .eq("packet_session_id", sess.id)
         .order("sequence_index", { ascending: true });
 
@@ -432,8 +474,25 @@ export async function resolveActiveStepEnvelope(
 ): Promise<{ envelope: PublishedFormEnvelope | null; error: Error | null }> {
     const defRow = definitionItems.find((d) => d.id === activeItem.packet_item_id);
     if (!defRow) return { envelope: null, error: new Error("Packet step definition missing") };
+    // D-94 — the session's own resolved version is the authority for an active transaction.
+    //
+    // Precedence, strongest first:
+    //   1. the session item's resolved version  — what THIS parent is transacting against;
+    //   2. the packet definition pin            — pre-D-94 sessions, and explicit operator pins;
+    //   3. latest published                     — pre-D-94 sessions with no pin.
+    //
+    // `followLatestPublished` deliberately does NOT override (1). It exists for operator preview
+    // and packet authoring, where "show me the current form" is the question; honouring it against
+    // a live session would reintroduce exactly the mid-session drift this decision removes.
+    //
+    // Steps 2 and 3 are the compatibility path for sessions created before this column existed,
+    // where the rendered version was never recorded and cannot be recovered.
+    const sessionResolved =
+        (activeItem as { resolved_form_definition_version_id?: string | null })
+            .resolved_form_definition_version_id ?? null;
     const pin =
-        opts?.followLatestPublished ? null : (defRow.pinned_form_definition_version_id as string | null);
+        sessionResolved ??
+        (opts?.followLatestPublished ? null : (defRow.pinned_form_definition_version_id as string | null));
     const env = await loadPublishedFormEnvelope(supabase, orgId, defRow.form_definition_id, pin);
     if (!env) return { envelope: null, error: new Error("No published version for packet step form") };
     return { envelope: env, error: null };
