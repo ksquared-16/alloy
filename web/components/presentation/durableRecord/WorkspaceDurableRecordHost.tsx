@@ -126,7 +126,7 @@ export default function WorkspaceDurableRecordHost({
                  */}
                 <div
                     className="flex min-h-0 flex-1 flex-col"
-                    {...(record ? { inert: "", "aria-hidden": true } : {})}
+                    {...(record ? { inert: true, "aria-hidden": true } : {})}
                     data-durable-record-host-body="true"
                 >
                     {children}

@@ -369,6 +369,17 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
         };
     },
     relationship: () => null,
+    /**
+     * Employment produces no operational destination, and the exhaustive `Record` is what forced
+     * this to be stated rather than forgotten.
+     *
+     * Employment is a STANDING, not a queue position: there is no business process behind it, no
+     * Work View that holds a staff member, and no host case whose Focus Panel would compose them.
+     * The context still ranks and displays — an operator sees "Employment · Lead Teacher · Active" —
+     * and the person's RECORD destination is where they go from there. A destination naming a unit
+     * anyway would be the fabricated route this resolver exists to refuse.
+     */
+    employment: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {

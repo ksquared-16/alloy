@@ -107,6 +107,10 @@ export type {
     SubjectContext as SearchContext,
 } from "@/lib/context/subjectContextTypes";
 
+// …and imported locally too: a re-export publishes the name to consumers, it does not bind it in
+// this module, and `SearchResult.contexts` below still refers to it by that name.
+import type { SubjectContext as SearchContextLocal } from "@/lib/context/subjectContextTypes";
+
 /**
  * Where an operator can go. Destinations point at AUTHORITATIVE Alloy surfaces.
  *
@@ -243,7 +247,7 @@ export type SearchRanking = {
 export type SearchResult = {
     subject: SearchSubject;
     recognition: SearchRecognition;
-    contexts: SearchContext[];
+    contexts: SearchContextLocal[];
     destinations: SearchDestination[];
     ranking: SearchRanking;
 };
