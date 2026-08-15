@@ -82,6 +82,71 @@ async function deliverEmail(
     return { emailId, outcome: (await res.json()).outcome as Record<string, unknown> };
 }
 
+const INBOUND_URL = process.env.CERT_INBOUND_URL || "http://127.0.0.1:8013";
+const TWILIO_AUTH_TOKEN =
+    process.env.CERT_TWILIO_AUTH_TOKEN || "alloy-certification-synthetic-twilio-token";
+const SMS_DESTINATION = process.env.CERT_INBOUND_TO_E164 || "+15550001111";
+/** The SAME seeded person as RESOLVED_SENDER — one party, two channels. */
+const RESOLVED_SENDER_PHONE = "+15550000001";
+
+function twilioSignature(url: string, params: Record<string, string>): string {
+    const payload = Object.keys(params)
+        .sort()
+        .reduce((acc, k) => acc + k + params[k], url);
+    return crypto.createHmac("sha1", TWILIO_AUTH_TOKEN).update(Buffer.from(payload, "utf-8")).digest("base64");
+}
+
+/**
+ * Give the tenant ONE party holding SEVERAL conversations.
+ *
+ * The queue assertions used to depend on whatever the seed happened to contain.
+ * On a pristine tenant that is nothing at all, so "no duplicate hub labels"
+ * passed for the worst possible reason — an empty queue — and the roll-up went
+ * unproved. A certification spec must build the situation it certifies.
+ *
+ * IT MUST BE TWO CHANNELS, and that is a fact about the product rather than a
+ * convenience. An email thread keys on (party, channel, sender address), so a
+ * single correspondent can never open a second EMAIL thread — a second message
+ * from them correlates into the first by endpoint provenance, which is correct.
+ * Several email threads under one family come from several different senders in
+ * that family. The certification tenant seeds no multi-person household, so the
+ * reachable shape of the reported defect here is email + SMS from one person:
+ * two canonical threads, one party, which is exactly what used to render as two
+ * identical-looking rows.
+ *
+ * Both deliveries go through the real ingestion paths — the documented Resend
+ * payload and the SIGNED Twilio webhook — not through fixtures.
+ */
+async function seedMultiThreadHub(page: Page) {
+    const { outcome } = await deliverEmail(page, {
+        from: RESOLVED_SENDER,
+        to: VISIBLE_IDENTITY,
+        subject: `Tour availability ${uid("s")}`,
+        text: "Certification fixture: the email half of one party's conversations.",
+    });
+    // A fixture that silently failed to persist would make every assertion below
+    // vacuous, so its success is asserted rather than assumed.
+    expect(outcome.status, "fixture email persisted").toBe("persisted");
+
+    const url = `${INBOUND_URL}/sms/inbound`;
+    const form: Record<string, string> = {
+        From: RESOLVED_SENDER_PHONE,
+        To: SMS_DESTINATION,
+        Body: "Certification fixture: the SMS half of the same party.",
+        MessageSid: `SMcert${crypto.randomBytes(8).toString("hex")}`,
+        AccountSid: "ACcertification0000000000000000000",
+    };
+    const res = await fetch(url, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "X-Twilio-Signature": twilioSignature(url, form),
+        },
+        body: new URLSearchParams(form).toString(),
+    });
+    expect(res.status, "fixture SMS accepted by the signed webhook").toBeLessThan(400);
+}
+
 async function emailBinding(page: Page) {
     const res = await page.request.get(BINDINGS);
     expect(res.ok(), `GET ${BINDINGS} → ${res.status()}`).toBe(true);
@@ -278,26 +343,42 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
         const total = await rows.count();
         expect(total, "the queue has conversations to open").toBeGreaterThan(0);
 
-        for (let i = 0; i < Math.min(total, 25); i++) {
+        for (let i = 0; i < Math.min(total, 8); i++) {
             await rows.nth(i).click();
 
-            const expand = page.locator("[data-cc-reply-expand]").first();
-            if (await expand.isVisible({ timeout: 4_000 }).catch(() => false)) {
+            // The FIRST attempt waits long enough for a cold Turbopack compile of
+            // the workspace routes; later attempts are cheap because the code is
+            // already warm. A uniform short timeout made this loop skip every row
+            // on a cold server and then report "no composer opened", which reads
+            // as a product defect and is not one.
+            const patience = i === 0 ? 90_000 : 15_000;
+
+            // `:visible` is load-bearing. The view renders a reply control in both
+            // its activity-embed and workspace branches, so a bare `.first()`
+            // resolves to the HIDDEN one, reports not-visible, and the loop
+            // silently concludes no composer exists — a false negative that reads
+            // as a product defect.
+            const expand = page.locator("[data-cc-reply-expand]:visible").first();
+            if (await expand.isVisible({ timeout: patience }).catch(() => false)) {
                 await expand.click();
             }
-            const footer = page.locator("[data-cc-composer-footer]");
-            if (!(await footer.isVisible({ timeout: 4_000 }).catch(() => false))) continue;
+            const footer = page.locator("[data-cc-composer-footer]:visible").first();
+            if (!(await footer.isVisible({ timeout: patience }).catch(() => false))) continue;
 
-            // The composer opens in the conversation's own channel. Compose From
-            // is an EMAIL identity, so select Email when asked to — but never
-            // require it, or a check about the composer becomes a check about
-            // which channel happened to sort first.
+            // The composer opens in the conversation's OWN channel, and a hub's
+            // newest thread may be the SMS one. So SELECT email first, then look
+            // for the From line — waiting for a line that cannot appear until the
+            // channel is switched just burns the budget and then fails.
             if (requireEmail) {
                 const emailTab = page
-                    .locator("[data-cc-composer-channels] button", { hasText: /^Email$/ })
+                    .locator("[data-cc-composer-channels]:visible button", { hasText: "Email" })
                     .first();
-                if (!(await emailTab.isVisible({ timeout: 4_000 }).catch(() => false))) continue;
-                await emailTab.click();
+                if (!(await emailTab.isVisible({ timeout: patience }).catch(() => false))) continue;
+                if ((await emailTab.getAttribute("aria-pressed")) !== "true") await emailTab.click();
+
+                const from = page.locator("[data-cc-compose-from-address]:visible").first();
+                if (!(await from.isVisible({ timeout: 30_000 }).catch(() => false))) continue;
+                return;
             }
             if (await footer.isVisible().catch(() => false)) return;
         }
@@ -309,6 +390,8 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
     }
 
     test("S-3 a reply composer shows NO Subject field", async ({ page }) => {
+        test.setTimeout(600_000);
+        await seedMultiThreadHub(page);
         // Channel-agnostic on purpose: the claim is about the reply lifecycle,
         // not about email, and the SMS composer must not show one either.
         await openComposer(page, false);
@@ -319,6 +402,8 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
     });
 
     test("S-4 Compose shows the identity the parent will see", async ({ page }) => {
+        test.setTimeout(600_000);
+        await seedMultiThreadHub(page);
         await openComposer(page, true);
         const from = page.locator("[data-cc-compose-from-address]");
         await expect(from).toBeVisible({ timeout: 120_000 });
@@ -368,6 +453,7 @@ test.describe("The queue speaks English, not storage", () => {
 
 test.describe("The queue is one row per party", () => {
     test("Q-1 no two hub rows carry the same label", async ({ page }) => {
+        await seedMultiThreadHub(page);
         await openOperatorInbox(page);
         const labels = await page.locator("[data-cc-hub]").evaluateAll((els) =>
             els.map((el) => (el.querySelector("span")?.textContent ?? "").trim())
@@ -381,6 +467,7 @@ test.describe("The queue is one row per party", () => {
     });
 
     test("Q-2 a hub holding several threads still renders ONE row", async ({ page }) => {
+        await seedMultiThreadHub(page);
         await openOperatorInbox(page);
         const rows = page.locator("[data-cc-hub]");
         const counts = await rows.evaluateAll((els) =>
@@ -394,6 +481,7 @@ test.describe("The queue is one row per party", () => {
     });
 
     test("Q-3 unresolved conversations are their own rows, never inside a family", async ({ page }) => {
+        await seedMultiThreadHub(page);
         await openOperatorInbox(page);
         const kinds = await page
             .locator("[data-cc-hub]")
