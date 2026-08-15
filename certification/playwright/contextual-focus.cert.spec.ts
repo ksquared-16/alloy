@@ -343,19 +343,29 @@ test("F — Back from a cohort returns to the record, not to a default lens", as
     await signIn(page);
 
     const found = await findContextualDestination(page);
-    const { destination, subjectId } = found!;
-    await page.goto(
-        `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-            destination.host_entity_id!,
-        )}`,
-    );
+    const { destination } = found!;
+    const unit = destination.host_work_unit_key!;
+    const contextualEntry = `/workspace/work-unit/${unit}?cohort=none&subject_id=${encodeURIComponent(
+        destination.host_entity_id!,
+    )}`;
+
+    await page.goto(contextualEntry);
     await waitForSurface(page);
     await assertContextual(page, "F contextual entry");
 
-    const pill = page.locator("button[data-work-view-id]").first();
-    const chosen = await pill.getAttribute("data-work-view-id");
-    await pill.click();
-    await expect.poll(async () => await selectedPill(page), { timeout: SETTLE }).toBe(chosen);
+    // A REAL ENTRY, not a pill click. K3 projects the address with `replaceState` on purpose — "without
+    // manufacturing history entries the operator did not create" — so an in-page lens switch leaves no
+    // entry to come back FROM, and a Back after one would land on whatever preceded the surface
+    // entirely. The history restore this test exists to prove is the one that runs on `popstate`, and
+    // entries are what produce it.
+    await page.goto(`/workspace/work-unit/${unit}`);
+    await waitForSurface(page);
+    await expect
+        .poll(async () => await selectedPill(page), {
+            timeout: SETTLE,
+            message: "F: the cohort entry never committed a view to come back from",
+        })
+        .not.toBeNull();
 
     await page.goBack();
     await waitForSurface(page);

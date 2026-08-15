@@ -181,3 +181,56 @@ not a gap. Destinations that resolved a view are untouched.
   `tests/presentation`, `tests/admin/drawer`: **30 failing files on the branch, 31 on staging, branch is
   a strict subset.** Zero regressions. One pre-existing failure fixed
   (`d4SettlementReservedGeometry` #6, whose regex had gone stale against a refactor).
+
+---
+
+# Browser certification — 9/9, and the two defects only a browser could find
+
+`certification/playwright/contextual-focus.cert.spec.ts`, against the local cert tenant on
+`CERT_APP_PORT=3016`. A–H all pass. Every contextual assertion requires BOTH halves — no cohort
+claimed AND the Focus Panel composing cells > 0 — because on this surface an *unlit* pill is exactly
+what a failed composition also looks like.
+
+| | proven |
+|---|---|
+| A | a record destination commits `contextual`: no pill, no `work_view_id`, `no-cohort` queue, panel composes |
+| B | reload stays contextual — no default lens |
+| C | choosing a cohort selects it, clears the no-cohort queue, and composes |
+| D | leaving a cohort for a record clears the lens; no stale selection |
+| E | **control** — a child's cohort destination is untouched: pill lit, `cohortSelected=true`, composed |
+| F | Back restores the record, not the host's first view |
+| G | rapid record ⇄ cohort switching never lands mixed |
+| H | a cohort is reachable from the keyboard, not only a pointer |
+
+## Two defects the unit tests could not have caught
+
+**1. The browser asks D1 through a DIFFERENT seam, and it dropped the statement.**
+`provisioningAnswerUrl(target, lens, subject)` carried no cohort. Attention stated contextual focus,
+the URL projected it, the server entry resource read it — and the one request that actually fetches
+the answer asked for the default-lens one. Every case failed on a surface that was correct everywhere
+except where it counted. `cohort` is now part of the cache KEY, not just the request: two answers for
+the same host and subject, one with a cohort and one without, are different answers.
+
+Alongside it, a SECOND place a lens is filled in: `composeProvisioningAnswerForRoute` applies the
+slug's implied view when none was requested. Correct for an operational request; for a contextual one
+it is the original defect by another name.
+
+**2. The pills rendered and did nothing.** `selectWorkView` narrowed the snapshot to
+`operational | empty`, so a contextual surface offered a lens set it could not act on — the resolver
+saw a pill on no strip, could not place it on the current unit, and returned `noop`. Offering the
+choice is worthless if the choice cannot be taken.
+
+Both are the same shape as the original defect: a consumer that assumed a cohort. Neither is visible
+from a type error, because neither is a type — one is a URL and one is a narrowing that stays valid.
+
+## Fixture note
+
+The cert tenant needed `05-sibling-child-participations.sql` applied BEFORE
+`04-child-grain-work-views.sql`: fixture 04 verifies that a waitlist participation exists, and 05 is
+what creates it. Applied directly (both are additive and idempotent); `alloy-certify reset` was never
+run.
+
+## Not proven here
+
+Staging QA (`Kelly → Household`, `Lennon → Waitlist`) stays manual post-merge — this repo holds no
+staging operator credentials.
