@@ -72,6 +72,35 @@ particular these are **unproven in a running product**:
 The DOM hooks for all of it are in place (`data-durable-record-*`, `data-contextual-card-*`,
 `data-records-cohort-*`). What is missing is the run.
 
+### 1b. The native half of the equality proof — BLOCKED BY TENANT CONFIGURATION
+
+Cold entry was never the cause. A diagnostic compared `?subject_id=` cold entry against a manual
+row click; both fail identically, and the runtime states why:
+
+> "This Work View can't be shown until its configuration is fixed. stage "waitlist" offers no
+> reachable primary action — the answer will not claim operational on identity alone"
+
+The lens terminates in a CONFIGURATION error and renders **zero rows**, so cold entry finds no
+subject and the manual click has no row to click. `subject_id` parsing, the provisioning seed and
+the subject-commit seam are never reached. The refusal is correct: the runtime declines to claim a
+surface is operational on identity alone.
+
+Not stage-specific — `tour` gives the identical refusal. The stages *do* carry operating plans in
+`lifecycle_builder_v1`, so the actions are **authored but not reachable**, the state this tenant
+already has on record (a RegisteredAction is unreachable until it is also in
+`capabilityRegistry.ts`).
+
+**Classification: pre-existing tenant/capability configuration.** Not a product defect, not a
+deep-link gap, not a regression — this branch changes nothing on that path. Authoring reachable
+stage actions is Work View / lifecycle configuration and is out of bounds for this sprint.
+
+**Consequence:** the native operational Focus Panel cannot compose for enrollment in this
+certification tenant, so `data-children-card-fingerprint` cannot be read here by ANY route — URL or
+operator interaction. The native half is blocked by tenant state, not by the implementation. The
+durable half passes for the same subject and context against the non-default publication.
+
+Closing this needs a tenant whose enrollment stages have reachable primary actions.
+
 ### 2. Slice 7 — durable Household
 
 Not started — but the STOP CONDITION IS ANSWERED, and it is negative. A durable Household does **not**
