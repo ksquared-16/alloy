@@ -504,10 +504,29 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
 
                 {section === "children" ? (
                     peopleBootstrap ? (
-                        <RecordsChildrenSection
-                            todayYmd={peopleBootstrap.todayYmd}
-                            siteLocationId={siteId || null}
-                        />
+                        /*
+                         * NOT scoped by the workspace's site picker, and that is deliberate.
+                         *
+                         * Passing Roster's `siteId` here looked like a free win — the prop existed
+                         * and Records never had a site to supply. Browser certification showed what
+                         * it actually does: site scope is implemented as "children with an ACTIVE
+                         * `child_placements` row at that site", the picker defaults to the first
+                         * site rather than All, and in the certification tenant NOT ONE of 1500
+                         * children holds an active placement. Children rendered empty, and an empty
+                         * list reads as "this tenant has no children" rather than "you are looking
+                         * at one site's placements".
+                         *
+                         * The deeper reason it was wrong: this section is the DURABLE population —
+                         * a child is here because the household record exists, not because a
+                         * placement is running. Scoping it by today's operating site contradicts
+                         * the section's own doctrine. The header control means "which site's
+                         * operating day", which is Roster and Attendance; it does not mean "which
+                         * children exist".
+                         *
+                         * A site filter FOR Children would be a product decision with its own
+                         * control and its own default — not a side effect of sharing a header.
+                         */
+                        <RecordsChildrenSection todayYmd={peopleBootstrap.todayYmd} />
                     ) : (
                         <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading children…</p>
                     )

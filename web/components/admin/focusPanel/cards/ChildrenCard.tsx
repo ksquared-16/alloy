@@ -68,6 +68,7 @@ import {
     seedChildFocusEditValues,
 } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { usePublishedFocusPanelSummaryDoc } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import { contextualCardConfigurationFingerprint } from "@/lib/adminV2/runtime/focusPanel/contextualCard/resolveContextualChildCard";
 import {
     CHILDREN_FOCUS_GROUP_KEYS,
     childrenDetailFieldKeysFromNestedConfig,
@@ -1089,10 +1090,22 @@ export default function ChildrenCard({
         );
     }
 
+    /**
+     * THE EFFECTIVE CONFIGURATION, MADE OBSERVABLE.
+     *
+     * Derived from `focusRows` — the value this card already resolved and already renders. It adds
+     * no behaviour and decides nothing; it publishes what was decided, so a browser certification
+     * can compare this card's effective configuration against the durable record host's, byte for
+     * byte. Without it the only cross-host evidence available is "both surfaces show child
+     * information", which is exactly the proof the architecture refuses to accept.
+     */
+    const effectiveConfigurationFingerprint = contextualCardConfigurationFingerprint(focusRows);
+
     return (
         <div
             className="alloy-os-household alloy-os-children"
             data-children-card="true"
+            data-children-card-fingerprint={effectiveConfigurationFingerprint}
             data-children-card-perspective={
                 lifecycle === "summary"
                     ? "collapsed"

@@ -76,9 +76,20 @@ describe("the durable population lives beside the operating day, with no People 
         const src = read("components/adminV2/roster/RosterWorkspace.tsx");
         expect(src).toContain("RecordsStaffSection");
         expect(src).toContain("RecordsChildrenSection");
-        // …and Children finally gets the site Roster already knows, which the separate workspace
-        // could never supply because it had no site picker.
-        expect(src).toContain("siteLocationId={siteId");
+        /*
+         * …and Children is NOT scoped by the workspace site picker.
+         *
+         * It was, briefly. Browser certification found that site scope means "children with an
+         * active placement at that site", that the picker defaults to a site rather than All, and
+         * that no child in the certification tenant holds an active placement — so the durable
+         * population rendered empty and read as "this tenant has no children".
+         *
+         * Asserted on the RENDER SITE rather than by counting `siteLocationId` in the file: Roster
+         * and Attendance legitimately take the site, and a whole-file scan would go green the
+         * moment someone reintroduced it for Children.
+         */
+        const childrenMount = src.slice(src.indexOf("<RecordsChildrenSection"));
+        expect(childrenMount.slice(0, childrenMount.indexOf("/>"))).not.toContain("siteLocationId");
     });
 });
 
