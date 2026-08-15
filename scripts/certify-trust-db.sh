@@ -48,6 +48,12 @@ SUITES=(
     # integrity, immutability, cardinality and FK deletion semantics against a real
     # database, since every one of those is a trigger- or index-made claim.
     "certification/enrollment-process-instance-anchor/run.sh"
+    # D-96 process-instance revision pin + D-97 published-revision self-containment.
+    # Replays the whole Business Process publication chain and publishes through the REAL
+    # publish/rollback RPCs, because the claims are about what publishing does. Every pin
+    # invariant is trigger-, index- or FK-made, so each is proven by a write the database
+    # accepts or refuses.
+    "certification/process-instance-revision-pin/run.sh"
 )
 
 if ! command -v docker >/dev/null 2>&1; then

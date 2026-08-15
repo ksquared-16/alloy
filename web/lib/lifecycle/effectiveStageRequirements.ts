@@ -170,6 +170,26 @@ function projectCanonicalToFieldRules(
 }
 
 /**
+ * Canonical field rules for a BUILDER stage key, or null when canonical has not spoken.
+ *
+ * {@link resolveEffectiveStageRequirements} keys by operator stage, which is right for the surfaces
+ * that ask "what does the Enrollment stage require?". A stage of a GOVERNING revision (D-96) has to
+ * be found by its own builder key instead — a process may carry stages an operator vocabulary has no
+ * name for, and those stages still carry requirements after D-97 normalization.
+ *
+ * Null means fall back to the legacy compatibility path; it never means "requires nothing", which is
+ * `{version: 1, requirements: []}` and returns empty rules. Same D-90 distinction, same `!== null`.
+ */
+export function canonicalStageFieldRules(
+    builder: LifecycleBuilderV1 | null | undefined,
+    stageKey: string,
+    processKey?: string,
+): LifecycleStageFieldRules | null {
+    const canonical = canonicalStageRequirements(builder, stageKey, processKey);
+    return canonical === undefined ? null : projectCanonicalToFieldRules(canonical.requirements);
+}
+
+/**
  * The single entry point. Every consumer should call this rather than reading
  * `departments.metadata` requirement keys directly (D-92).
  */

@@ -20,6 +20,7 @@ import {
     primaryWorkIntentProjectionFromStageWork,
 } from "@/lib/lifecycle/projectStageWorkRuntime";
 import { resolvePublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
+import { resolveProcessInstanceConfigurationForStageWork } from "@/lib/process/resolveProcessInstanceConfigurationForStageWork";
 import type { PublishedStageInputsForCurrentWork } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolvePublishedStageInputsForCurrentWork";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
@@ -76,9 +77,27 @@ export async function resolveOpportunityStageWorkSlice(
         processInstanceId: params.processInstanceId,
     });
 
+    // D-96. This is a Class-A read: the configuration that GOVERNS the running journey, not the
+    // configuration that happens to be published right now. `processInstanceId` was already threaded
+    // here for child-grain execution; resolving the pinned revision from it is what stops a family
+    // part-way through Enrollment from being re-judged the moment an operator publishes.
+    //
+    // Unpinned instances resolve exactly as before — `resolveProcessInstanceConfiguration` owns that
+    // branch, and it returns no payload, so the live projection continues to govern.
+    const governing = params.processInstanceId?.trim()
+        ? await resolveProcessInstanceConfigurationForStageWork({
+              supabase: params.supabase,
+              orgId: params.orgId,
+              processInstanceId: params.processInstanceId.trim(),
+              departmentMetadata,
+          })
+        : null;
+
     const published_stage_inputs = resolvePublishedStageInputsForCurrentWork({
         departmentMetadata: departmentMetadata as Record<string, unknown> | null,
         builderStageKey: stageKey,
+        governingBuilderPayload:
+            governing?.source === "pinned_revision" ? governing.payload : null,
     });
 
     return {

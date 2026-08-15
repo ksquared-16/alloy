@@ -7,10 +7,19 @@
 # graphs compile these files but never run them, so a green pull request proved the
 # contract typechecked and nothing about whether it behaved.
 #
-# Deliberately NARROW: named suites, not `tests/lifecycle/`. That directory carries 90
+# Deliberately NARROW: named suites, not `tests/lifecycle/`. That directory carries 89
 # long-standing failures unrelated to this contract, so gating on the whole directory
 # would be red on arrival and would train reviewers to ignore it. Suites are added here
 # as they are made green, not swept in wholesale.
+#
+# D-96/D-97 added two: `publishedStageRequirementsSelfContainment` (the five publication
+# proofs — a published revision answers its own requirements with no department metadata)
+# and `processInstanceRevisionPin` (the pin rides the creating insert; one owner of the
+# pinned-vs-live branch; Class A is governed while Class B still shows current config).
+# Their storage-layer counterparts — immutability, tenant and process identity, FK
+# semantics — are trigger-made claims and live in `Trust DB certification` instead, under
+# `certification/process-instance-revision-pin/`, because only a real database can refuse
+# a write.
 #
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
@@ -46,4 +55,9 @@ jobs:
         working-directory: web
       - name: Run enrollment configuration certification suites
         working-directory: web
-        run: npx vitest run tests/lifecycle/stageRequirementsV1.test.ts tests/lifecycle/enrollmentObjectiveSession.test.ts
+        run: |
+          npx vitest run \
+            tests/lifecycle/stageRequirementsV1.test.ts \
+            tests/lifecycle/enrollmentObjectiveSession.test.ts \
+            tests/lifecycle/publishedStageRequirementsSelfContainment.test.ts \
+            tests/lifecycle/processInstanceRevisionPin.test.ts
