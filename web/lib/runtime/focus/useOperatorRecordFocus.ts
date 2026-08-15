@@ -119,6 +119,15 @@ export type OperatorRecordFocusRequest = {
      * before durable records keeps its exact behaviour without being touched.
      */
     intent?: OperatorRecordFocusIntent;
+    /**
+     * A business context the CALLER would like the durable host to open on — a preference, never a
+     * commitment, and never an operational movement.
+     *
+     * Search sets it when the query named a context ("Lennon assignment"); Roster leaves it unset
+     * and the host resolves its own default. A record must stay correct with no preference at all,
+     * so nothing downstream may require this. `durable_record` only.
+     */
+    preferred_context_key?: string | null;
 };
 
 /** Module-scoped so a repeated gesture on the same record does not re-ask. */
@@ -198,7 +207,8 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
                     // The ASPECT rides the address so a cold load lands on the same card. Absent, the
                     // grain's default composition decides — durable attention never requires an aspect.
                     const cardKey = request.card_focus?.card_key ?? null;
-                    router.push(durableRecordHref(grain, entityId, cardKey));
+                    const contextKey = (request.preferred_context_key ?? "").trim() || null;
+                    router.push(durableRecordHref(grain, entityId, cardKey, contextKey));
                     return true;
                 }
             }

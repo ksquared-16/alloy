@@ -206,16 +206,35 @@ function firstName(displayName: string): string {
 }
 
 /**
- * The subject's own card — what clicking the result focuses.
+ * The subject's own destination — what clicking the RESULT means.
  *
- *   child     → Children card, that child selected
- *   person    → Household card, that person's relationship row selected
- *   household → Household card
+ *   child     → the durable child record
+ *   person    → the durable person record
+ *   household → the Household card on the household's case (no durable household grain yet)
  *   location  → canonical Settings route (a campus has no Focus Panel card)
+ *
+ * ── THIS IS A RECORD INTENT, AND IT NO LONGER CHOOSES A LENS ──
+ *
+ * Until this changed, a child's subject destination carried `host_work_unit_key` and
+ * `host_work_view_id` resolved from `resolveHostWorkViewId` — "the subject's FIRST truthful
+ * membership". Clicking "Lennon Kurzman · Child · Kurzman Family" therefore committed the Waitlist
+ * lens on the family's Work Unit, because Lennon happens to be in it. Nobody asked for Waitlist;
+ * Search picked it, and picked it silently.
+ *
+ * A record destination now names the record and nothing else. Its operational siblings — the
+ * per-membership cohort destinations below — still carry every one of those fields, because those
+ * ARE operational intents and the lens is the point of them.
+ *
+ * ── A HOST IS NO LONGER REQUIRED ──
+ *
+ * The old shape returned null without a host, so a child whose enrollment had completed, or who
+ * never entered one, produced NO subject destination at all — the result rendered and could not be
+ * opened. A durable record needs no case and no queue, which is the whole reason the grain exists.
  */
 export function resolveSubjectDestination(
     subject: SearchSubject,
-    contexts: readonly SearchContext[] = []
+    contexts: readonly SearchContext[] = [],
+    preferredContextKey?: string | null
 ): SearchDestination | null {
     if (subject.kind === "location") {
         return {
@@ -227,40 +246,27 @@ export function resolveSubjectDestination(
         };
     }
 
+    if (subject.kind === "child" || subject.kind === "person") {
+        return {
+            key: "subject",
+            label: `Open ${firstName(subject.display_name)}`,
+            target: "durable_record",
+            // `child` is keyed on `customer_members.id` and `person` on `persons.id` — both are
+            // `SearchSubject.id` by the subject contract, so no host walk is involved.
+            subject_type: subject.kind,
+            subject_id: subject.id,
+            // A preference the QUERY expressed ("Lennon assignment"), never a commitment. The host
+            // must still be correct when it is absent.
+            preferred_context_key: preferredRecordContextKey(contexts, preferredContextKey),
+            primary: true,
+        };
+    }
+
+    // Household. There is no durable household grain yet, so this remains the Household card on the
+    // household's own case — the panel its adults and children are worked in. When a durable
+    // household composition exists this becomes a `durable_record` like the two above.
     const host = resolveHost(subject, contexts);
     if (!host) return null;
-
-    if (subject.kind === "child") {
-        return {
-            key: "subject",
-            label: `Open ${firstName(subject.display_name)}`,
-            target: "focus_panel",
-            card_key: SEARCH_CARD_KEYS.children,
-            item_id: subject.id,
-            host_entity_type: host.type,
-            host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
-            primary: true,
-        };
-    }
-
-    if (subject.kind === "person") {
-        return {
-            key: "subject",
-            label: `Open ${firstName(subject.display_name)}`,
-            target: "focus_panel",
-            card_key: SEARCH_CARD_KEYS.household,
-            item_id: subject.person_id ?? subject.id,
-            host_entity_type: host.type,
-            host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
-            primary: true,
-        };
-    }
-
-    // household
     return {
         key: "subject",
         label: `Open ${subject.display_name}`,
@@ -269,9 +275,26 @@ export function resolveSubjectDestination(
         host_entity_type: host.type,
         host_entity_id: host.id,
         host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
+        host_work_view_id: resolveHostWorkViewId(contexts),
         primary: true,
     };
+}
+
+/**
+ * The context a record destination should PREFER, when the query named one.
+ *
+ * Only a context the subject actually holds may be preferred — a query term that matches no
+ * participation expresses an interest the record cannot honour, and passing it through would make
+ * the host open on a context that is not there.
+ */
+function preferredRecordContextKey(
+    contexts: readonly SearchContext[],
+    promoted?: string | null
+): string | null {
+    const wanted = (promoted ?? "").trim();
+    if (!wanted) return null;
+    const held = contexts.find((c) => c.key === wanted || (wanted === "schedule" && c.kind === "schedule"));
+    return held ? held.key : null;
 }
 
 /** Household context for a subject that belongs to one. */
@@ -376,7 +399,9 @@ export function resolveSearchDestinations(args: {
     const { subject, contexts, promotedKeys } = args;
     const host = resolveHost(subject, contexts);
 
-    const primary = resolveSubjectDestination(subject, contexts);
+    // The query's promoted context rides the RECORD destination as a preference. It does not make
+    // the gesture operational — "Lennon assignment" still means "open Lennon", on Assignment.
+    const primary = resolveSubjectDestination(subject, contexts, promotedKeys[0] ?? null);
     const secondary: SearchDestination[] = [];
 
     for (const context of contexts) {

@@ -44,8 +44,21 @@ export function durableRecordHref(
     subjectType: DurableSubjectType,
     subjectId: string,
     cardKey?: string | null,
+    /**
+     * The business context the host should open on, when the caller expressed a preference.
+     *
+     * Rides the address for the same reason the card does: a cold load must land where the gesture
+     * meant. It is a PREFERENCE — an address naming a context the record does not hold resolves the
+     * default instead of failing, because a stale bookmark must not break a record.
+     */
+    contextKey?: string | null,
 ): string {
     const base = `${DURABLE_RECORD_BASE}/${subjectType}/${encodeURIComponent(subjectId.trim())}`;
+    const params = new URLSearchParams();
     const card = (cardKey ?? "").trim();
-    return card ? `${base}?card=${encodeURIComponent(card)}` : base;
+    if (card) params.set("card", card);
+    const context = (contextKey ?? "").trim();
+    if (context) params.set("context", context);
+    const query = params.toString();
+    return query ? `${base}?${query}` : base;
 }

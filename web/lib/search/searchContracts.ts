@@ -110,8 +110,23 @@ export type {
 /**
  * Where an operator can go. Destinations point at AUTHORITATIVE Alloy surfaces.
  *
- * `focus_panel` — commit a subject and focus a CARD in the existing Focus Panel.
- * `route`       — a canonical Alloy route (campus settings, a configured Work View).
+ * `durable_record` — OPEN THIS RECORD. The subject itself, attended on its own terms, with no
+ *                    queue required and no Work View chosen on the operator's behalf.
+ * `focus_panel`   — commit a subject and focus a CARD in the existing Focus Panel. This is
+ *                    OPERATIONAL WORK: a lens, a host case, and a row inside it.
+ * `route`         — a canonical Alloy route (campus settings, a configured Work View).
+ *
+ * ── WHY `durable_record` HAD TO EXIST ──
+ *
+ * "Show me Lennon" and "Take me to Lennon's Waitlist work" are different operator intents, and until
+ * this target they were the same shape: the subject destination was stamped with
+ * `host_work_unit_key` + `host_work_view_id` resolved from the subject's FIRST truthful membership,
+ * so clicking a person's name silently committed a lens nobody asked for. The card differed; the
+ * operation did not.
+ *
+ * The distinction cannot live in `card_key`, and it cannot be inferred downstream: a record intent
+ * and an operational intent legitimately share a payload, which is exactly why the deduplication key
+ * is the operator context. It has to be DECLARED.
  *
  * `open_drawer` is deliberately gone. It addressed a record but never a card, so
  * "open Lennon" and "open Lennon's enrollment" resolved to the same address and
@@ -122,7 +137,7 @@ export type {
  * A destination NEVER carries mutation intent and never carries a hand-built URL
  * assembled inside a component.
  */
-export type SearchDestinationTargetKind = "focus_panel" | "route";
+export type SearchDestinationTargetKind = "durable_record" | "focus_panel" | "route";
 
 export type SearchDestination = {
     /**
@@ -179,6 +194,24 @@ export type SearchDestination = {
     operational_member_id?: string | null;
     /** Canonical route when `target === "route"`. */
     href?: string | null;
+    /**
+     * The durable subject to open, when `target === "durable_record"`.
+     *
+     * `subject_type` is the record GRAIN (`durableSubjectTypeFor`'s vocabulary), and `subject_id` is
+     * that grain's canonical id — `customer_members.id` for a child, `persons.id` for a person.
+     * NEVER a host, never a participation: a durable destination names the record itself, which is
+     * the whole reason it needs no work unit to be reachable.
+     */
+    subject_type?: string | null;
+    subject_id?: string | null;
+    /**
+     * A context the operator's QUERY named, carried as a preference rather than a commitment.
+     *
+     * "Lennon assignment" says which context to land on; it does not make the gesture operational.
+     * The durable host may honour it when selecting an initial context and must remain correct when
+     * it is absent — a record opened with no preference resolves its own default.
+     */
+    preferred_context_key?: string | null;
     /**
      * True for the destination opened by clicking the subject itself.
      * Exactly one destination per result is primary.
