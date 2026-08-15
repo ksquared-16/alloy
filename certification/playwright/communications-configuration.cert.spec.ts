@@ -99,34 +99,48 @@ test.describe("Organization Communications — the five questions", () => {
     });
 
     test("Q3 and Q4 sending and receiving are separate, visible answers", async ({ page }) => {
+        /*
+         * ASSERTS THE LINK, NOT A FIXED STRING.
+         *
+         * An earlier version expected the literal "Routing setup required". That
+         * is the correct answer only on a tenant where nothing has ever been
+         * received — and this suite runs on both pristine and inherited tenants,
+         * so the literal made a truthful page fail whenever a message had
+         * legitimately arrived.
+         *
+         * What actually needs proving is that the page never disagrees with the
+         * readiness authority, and that `ready` is reachable ONLY through observed
+         * arrival. Both hold in either tenant state, and both are stronger than
+         * the string was.
+         */
+        const { bindings } = await loadBindings(page);
+        const email = bindings.find((b) => b.channel === "email" && b.inbound_address === ACTIVE_EMAIL);
+        expect(email, "the seeded active email binding exists").toBeTruthy();
+
         await page.goto(PAGE);
         await expect(page.getByTestId("communications-email-sending-state")).toHaveText("Ready");
-        /*
-         * EMAIL RECEIVING IS NOT "READY", AND THAT IS THE POINT.
-         *
-         * This assertion used to read "Ready". The certification tenant has an
-         * active email binding with `inbound_address` set and NOTHING has ever
-         * been received through it — no forwarding rule exists at any mail
-         * provider, because there is no mail provider. The page was reporting
-         * "Ready" from the presence of a value in a column.
-         *
-         * A populated address is configuration, not evidence. Receiving is now
-         * answered from observed arrival, so an address that nothing has ever
-         * reached reads as outstanding routing work.
-         */
-        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
-            "Routing setup required"
-        );
-        // And it says so beside the address, so the row cannot be misread as
-        // "Alloy is already collecting that mailbox."
-        await expect(page.getByTestId("organization-communications-page")).toContainText(
-            "Not routed to Alloy"
-        );
+
+        const receiveState = email!.readiness.receive.state;
+        // Configuration is never enough. Whatever the state is, it is NOT "ready"
+        // unless the detail carries evidence of an actual arrival.
+        if (receiveState === "ready") {
+            expect(email!.readiness.receive.detail).toContain("Last inbound verified");
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Ready");
+        } else {
+            expect(receiveState).toBe("routing_setup_required");
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
+                "Routing setup required"
+            );
+            // And it says so beside the address, so the row cannot be misread as
+            // "Alloy is already collecting that mailbox."
+            await expect(page.getByTestId("organization-communications-page")).toContainText("Not routed to Alloy");
+        }
+
         await expect(page.getByTestId("communications-sms-sending-state")).toHaveText("Ready");
-        // SMS is deliberately UNAFFECTED. Its inbound arrives on a signed webhook
-        // at a number the provider owns end to end — no third party holds a rule
-        // that could silently disappear. This is the regression guard on the
-        // live-certified SMS runtime.
+        // SMS is deliberately UNAFFECTED by the email routing model: its inbound
+        // arrives on a signed webhook at a provider-owned number, with no third
+        // party holding a rule that could silently disappear. Regression guard on
+        // the live-certified SMS runtime.
         await expect(page.getByTestId("communications-sms-receiving-state")).toHaveText("Ready");
     });
 
