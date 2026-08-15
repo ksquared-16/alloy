@@ -21,13 +21,32 @@ export function BosWorkspaceScopeSync(props: Props) {
     const departmentId = props.departmentId?.trim() || null;
     const workUnitId = props.workUnitId?.trim() || null;
 
+    /**
+     * Depend on the SETTER, not the whole assistant context.
+     *
+     * `setWorkspaceScope` is a `useCallback([])` and never changes identity. The context VALUE
+     * does — it is memoised over `workspaceScope` among others, so writing the scope produces a
+     * new context object by design.
+     *
+     * Two surfaces mount this at once during a soft navigation: the retained Workspace publishes
+     * `work_unit_id: null` and the Work Unit publishes its id. With the whole context in the
+     * dependency array, each write changed the context identity and re-ran the OTHER surface's
+     * effect, which wrote its own scope back — an infinite update loop that pinned React at
+     * "Maximum update depth exceeded" (~3,300 errors per entry, measured) and left the Work Unit
+     * surface unable to commit at all.
+     *
+     * Selecting the stable setter means each sync re-runs only when ITS OWN scope props change,
+     * so mount order decides the scope exactly as the unmount comment below always intended.
+     */
+    const setWorkspaceScope = assistant?.setWorkspaceScope ?? null;
+
     useEffect(() => {
-        if (!assistant) return;
+        if (!setWorkspaceScope) return;
         if (!departmentId) {
-            assistant.setWorkspaceScope(null);
+            setWorkspaceScope(null);
             return;
         }
-        assistant.setWorkspaceScope({
+        setWorkspaceScope({
             department_id: departmentId,
             department_name: props.departmentName ?? null,
             work_unit_id: workUnitId,
@@ -38,7 +57,7 @@ export function BosWorkspaceScopeSync(props: Props) {
             // the next surface will overwrite.
         };
     }, [
-        assistant,
+        setWorkspaceScope,
         departmentId,
         workUnitId,
         props.departmentName,
