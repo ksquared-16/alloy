@@ -11,7 +11,7 @@ supersedes: []
 Canonical behaviour lives in its owner doc; this file records observed defects, their root
 owner, and what proved them.
 
-**Base:** `origin/staging` @ `b4bc5d682`.
+**Base:** rebased onto `origin/staging` @ `626b83697` (14 Aug, overnight run).
 **Program context:** [`docs/runtime/RUNTIME-V1-CERTIFICATION-SPRINT.md`](../../../runtime/RUNTIME-V1-CERTIFICATION-SPRINT.md)
 is the prior program's canonical tracker. Its Performance row reads 72%, overall ~66%.
 
@@ -198,6 +198,55 @@ Recorded so the mass migration is planned against what the primitive actually do
 | L-2 | **Read-only is not distinct from disabled.** | **Deferred by rule** — all 7 adapter consumers use `disabled` only. |
 | L-3 | **No canonical multi-select.** Audited: 6 enforced files use native `multiple`, and two bespoke implementations exist (`LocationMultiSelect`, `CommsAudienceMultiSelect`) with **no shared owner**. | **Not a single-select blocker.** Registered as its own platform-input gap. Do NOT add multi-select to `AlloySelect` — the interaction and accessibility semantics differ materially. |
 | L-4 | **Typeahead has no visible feedback.** The buffer is invisible; the operator sees only the active option move, exactly like a native select. | Intentional. Revisit only if evidence shows it is insufficient. |
+
+---
+
+## Overnight run — 14 Aug
+
+### R-010 · Workspace → Work Unit navigation was an infinite render loop <span>CLOSED</span>
+
+| Field | Value |
+|---|---|
+| **Surface** | Workspace → any Work Unit |
+| **Interaction** | Every client-side navigation into a Work Unit |
+| **Expected** | The Work Unit surface commits |
+| **Observed** | React pinned at "Maximum update depth exceeded"; the Work Unit surface **never committed at all**. Open → work unit **3305** errors · work-view switch **1414** · Today's Work row **2217**. Only `WS.SURFACE` present, body 269 chars |
+| **Root owner** | `components/presentation/rightRail/BosWorkspaceScopeSync.tsx` |
+| **Root cause** | Two concurrent writers of one global state, coupled by a dependency array. During a soft navigation the retained Workspace publishes `work_unit_id: null` and the live Work Unit publishes its id. The effect depended on the whole assistant CONTEXT, which is memoised over `workspaceScope` — so each write changed the context identity, re-ran the other surface's effect, which wrote its scope back |
+| **Classification** | D / E |
+| **Pre-existing** | **Yes** — reproduced identically on `origin/staging` (3202 vs 3305) by checking staging out into this worktree |
+| **Why it survived** | Direct URL load is clean; it reproduces only on a soft navigation, when both surfaces are mounted |
+| **Fix** | Depend on `setWorkspaceScope` (a stable `useCallback([])`) instead of the context |
+| **After** | **0** loop errors on every gesture; `WU.SURFACE`, `WU.HEADER`, `WU.WORK_VIEW_PILLS`, `WU.QUEUE`, `FP.SURFACE`, `RR.SURFACE` all commit within 3 s where previously none appeared |
+| **Status** | **CLOSED** `a73c12a97` |
+
+### R-011 · Warm tour-schedule entry re-fetched <span>CLOSED</span>
+
+R-005's second instance, closed. `peekWarmTourScheduleForQuery` returns the entry only for the
+window it covers with nothing excluded; reschedule and paged windows still fetch. Certified by
+request counts. **CLOSED** `ae0d9c4e7`.
+
+---
+
+## Open — measured this run, not yet fixed
+
+### D-2 · `queue-row-layout` fetched twice per Work Unit entry
+
+Both requests come from `fetchWorkUnitSurfaceConfigBundle`, but **sequentially**, so the
+in-flight coalescing added in `e53cbaed4` cannot collapse them. The warm path caches its result
+via `putWorkUnitSurfaceConfigCache`; the runtime config effect appears to fetch without
+consulting that cache first. **Class C.** Owner: the runtime config effect. Not guessed at.
+
+### D-3 · `provisioning-answer` ×5 on a work-view switch
+
+`GET /api/admin/work-units/new/provisioning-answer` fires **five** times during one work-view
+switch — the documented 4× speculative sibling prewarm plus the real one, now landing *during*
+a switch. **Class C.** The historical note says the prewarm bought 46 ms record-switch, so it
+must be measured both ways before removal.
+
+### D-4 · `communications/family-workspace` ×2, `metrics/resolve` ×2
+
+Two further repeated paths seen in the same sweep. **Class C**, unowned as yet.
 
 ---
 
