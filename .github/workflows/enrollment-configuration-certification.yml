@@ -46,4 +46,4 @@ jobs:
         working-directory: web
       - name: Run enrollment configuration certification suites
         working-directory: web
-        run: npx vitest run tests/lifecycle/stageRequirementsV1.test.ts
+        run: npx vitest run tests/lifecycle/stageRequirementsV1.test.ts tests/lifecycle/enrollmentObjectiveSession.test.ts

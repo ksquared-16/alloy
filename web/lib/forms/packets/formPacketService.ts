@@ -161,6 +161,8 @@ export type PacketSessionRow = {
     current_sequence_index: number;
     /** Family Packet instance id. When set, recipient links share THIS session. */
     packet_instance_id?: string | null;
+    /** D-95. The Enrollment process_instance this session realizes; NULL for other packets. */
+    process_instance_id?: string | null;
 };
 
 /** Family Packet instance id from link metadata (`packet_instance_id` or `share_group_id`). */
@@ -276,6 +278,12 @@ export async function ensurePacketSessionForPublicLink(
         packetDefinitionId: string;
         linkMetadata: Record<string, unknown>;
         launchFks: LaunchFkStamp;
+        /**
+         * D-95. The Enrollment journey this session realizes. Absent for every existing
+         * caller, which keeps non-Enrollment packet launches byte-identical: the column
+         * stays NULL and the one-current-session constraint does not apply to them.
+         */
+        processInstanceId?: string | null;
     }
 ): Promise<{ session: PacketSessionRow; items: PacketSessionItemRow[]; error: Error | null }> {
     const { orgId, linkId, packetDefinitionId, linkMetadata, launchFks } = input;
@@ -326,6 +334,7 @@ export async function ensurePacketSessionForPublicLink(
             packet_definition_id: packetDefinitionId,
             started_via_public_link_id: linkId,
             status: "in_progress",
+            process_instance_id: input.processInstanceId ?? null,
             launch_context,
             crm_snapshot,
             shared_values: {},
