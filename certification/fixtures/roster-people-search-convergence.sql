@@ -35,6 +35,8 @@ delete from employments where id::text like 'fbc0%';
 delete from persons where id::text like 'fbc0%';
 delete from employment_positions where id::text like 'fbc0%';
 delete from entity_layouts where id::text like 'fbc0%';
+-- The participation this fixture adds to an EXISTING seeded case (see below).
+delete from process_instances where id = 'fbc00000-0000-4000-8000-00000000c007'::uuid;
 
 -- ══ STAFF — Jane, exactly as `staff.add` makes one: Person + Employment, no household, no case ══
 insert into employment_positions (id, org_id, key, label, is_active) values
@@ -168,6 +170,31 @@ insert into schedule_assignments (id, org_id, subject_type, customer_member_id, 
    jsonb_build_object('planning', true))
 on conflict (id) do nothing;
 
+-- ══ THE EQUALITY SUBJECT — an EXISTING seeded case, not a new one ══════════════════════════════
+--
+-- ── WHY THE KURZMAN CASE CANNOT CARRY THE NATIVE HALF ──
+--
+-- Traced through the runtime: rows are read from `resolveProvisioningPopulationWorkUnitId`, which
+-- returns the ACTIVE LENS'S canonical count host (`settlement.queueTotalTarget.hostWorkUnitId`),
+-- NOT the work unit whose surface is open. Giving the fixture its own unit therefore moved the case
+-- OUT of the population the lens actually reads — the shell said `Convergence (cert)` while rows
+-- came from the department's canonical unit. That is correct Work View semantics, not a defect.
+--
+-- Putting it back into `enrollment_pipeline` runs into the other wall: that unit holds 501 cases
+-- against a `PROCESS_POPULATION_CAP` of 500, read with no `ORDER BY`, so membership of a 501st row
+-- is undefined rather than merely unlikely.
+--
+-- So the native half uses a case the tenant ALREADY holds inside that population — seeded, at
+-- `waitlist`, with a child already linked through `opportunity_customer_members`. The only fact it
+-- lacks is the child's PARTICIPATION in the enrollment process, which is exactly the canonical fact
+-- this fixture already creates for Lennon: a child on a waitlisted enrollment case participates in
+-- enrollment. Nothing else about the seeded case is touched.
+insert into process_instances (id, org_id, process_key, subject_type, subject_id, context_type, context_id, state, stage_key) values
+  ('fbc00000-0000-4000-8000-00000000c007'::uuid, :'org'::uuid, 'enrollment', 'child',
+   '00000000-0000-4000-8000-300000000003'::uuid, 'opportunity', '00000000-0000-4000-8000-400000000963'::uuid,
+   'in_process', 'waitlist')
+on conflict (id) do nothing;
+
 -- ══ THE TENANT PUBLICATION — what makes the equality proof non-vacuous ═════════════════════════
 --
 -- `sections: []` is deliberate: the grid falls back to its default composition, so the NATIVE Focus
@@ -232,4 +259,6 @@ union all select 'cases in that unit (must be 1)', count(*)::text from opportuni
 union all select 'lennon waitlist participation', count(*)::text from process_instances where id = 'fbc00000-0000-4000-8000-00000000c004'::uuid
 union all select 'lennon ON the case (OCM)', count(*)::text from opportunity_customer_members where id = 'fbc00000-0000-4000-8000-00000000c006'::uuid
 union all select 'published focus panel summary', count(*)::text from entity_layouts where id = 'fbc00000-0000-4000-8000-00000000c005'::uuid
-union all select 'lennon assignment (2nd context)', count(*)::text from schedule_assignments where id = 'fbc00000-0000-4000-8000-00000000f003'::uuid;
+union all select 'lennon assignment (2nd context)', count(*)::text from schedule_assignments where id = 'fbc00000-0000-4000-8000-00000000f003'::uuid
+union all select 'tatum participation (equality subject)', count(*)::text from process_instances where id = 'fbc00000-0000-4000-8000-00000000c007'::uuid
+union all select 'tatum case in canonical unit', count(*)::text from opportunities where id = '00000000-0000-4000-8000-400000000963'::uuid and work_unit_id = :'enrollment_unit'::uuid;

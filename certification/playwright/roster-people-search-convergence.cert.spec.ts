@@ -36,6 +36,19 @@ const JANE = "fbc00000-0000-4000-8000-00000000a001";
 const KURZMAN_CASE = "fbc00000-0000-4000-8000-00000000c003";
 const PUBLISHED_LAYOUT = "fbc00000-0000-4000-8000-00000000c005";
 
+/**
+ * THE EQUALITY SUBJECT — a child the tenant ALREADY holds inside the lens's population.
+ *
+ * Not Lennon, and the reason is traced rather than assumed: rows come from the active lens's
+ * canonical count host (`resolveProvisioningPopulationWorkUnitId`), not from the work unit whose
+ * surface is open, and that host's population is capped at 500 read with no `ORDER BY`. A
+ * purpose-built case is therefore either outside the population or non-deterministically inside it.
+ * Tatum is a seeded case at `waitlist`, already in that population, already carrying its child
+ * through `opportunity_customer_members`.
+ */
+const TATUM_CHILD = "00000000-0000-4000-8000-300000000003";
+const TATUM_CASE = "00000000-0000-4000-8000-400000000963";
+
 /** Labels that exist ONLY in the published document — never in code, never in a catalogue. */
 const CONFIGURED_LABEL_DOB = "Birthday";
 const CONFIGURED_LABEL_FIRST = "Given name";
@@ -191,44 +204,70 @@ test.describe("C/E — the same effective configured card in both hosts", () => 
     test("the native Waitlist Focus Panel resolves the SAME configuration, byte for byte", async ({
         page,
     }) => {
-        // ── The durable host's answer ──
+        // ── The durable host's answer, for the SAME child ──
         await openRoster(page, "children");
-        await (await findChild(page, "Lennon", LENNON)).click();
+        await (await findChild(page, "Tatum", TATUM_CHILD)).click();
         await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
-        await page.locator('[data-durable-record-context^="enrollment"]').click();
+        /*
+         * The Enrollment chip is clicked only IF the strip is showing.
+         *
+         * The strip renders only when there is a choice, and Tatum holds exactly one context — so
+         * for this subject there is no chip, and the single context is already the selected one.
+         * Requiring the click would make the test depend on how many contexts a subject happens to
+         * have, which is a property of the fixture rather than of the card.
+         */
+        const enrollmentChip = page.locator('[data-durable-record-context^="enrollment"]');
+        if ((await enrollmentChip.count()) > 0) await enrollmentChip.first().click();
         await expect(page.locator(CONTEXTUAL_CARD)).toBeVisible({ timeout: SETTLE });
         const durableFingerprint = await page
             .locator(CONTEXTUAL_CARD)
             .getAttribute("data-contextual-card-fingerprint");
+        const durableLayoutId = await page
+            .locator(CONTEXTUAL_CARD)
+            .getAttribute("data-contextual-card-layout-id");
+        const durableVersion = await page
+            .locator(CONTEXTUAL_CARD)
+            .getAttribute("data-contextual-card-layout-version");
+        // The addressing this host resolved against — asserted, not assumed.
+        await expect(page.locator(CONTEXTUAL_CARD)).toHaveAttribute(
+            "data-contextual-card-business-process",
+            "enrollment",
+        );
+        await expect(page.locator(CONTEXTUAL_CARD)).toHaveAttribute(
+            "data-contextual-card-stage",
+            "waitlist",
+        );
+        await expect(page.locator(CONTEXTUAL_CARD)).toHaveAttribute(
+            "data-contextual-card-nested-surface",
+            "children_surface",
+        );
+        expect(durableLayoutId).toBe(PUBLISHED_LAYOUT);
         expect(durableFingerprint, "durable host resolved a configuration").toBeTruthy();
 
         /*
-         * ── The native operational answer ──
+         * ── The native operational answer, for the SAME child and the same context ──
          *
-         * The fixture's OWN work unit, and the lens named explicitly. Both are traced, not guessed:
-         *
-         *   the UNIT, because the shared `enrollment_pipeline` holds 501 cases against a
-         *   `PROCESS_POPULATION_CAP` of 500 (read with no `ORDER BY`) and a
-         *   `PROVISIONING_ROW_PAGE_CAP` of 100 — a fixture case in there is asserting tenant size,
-         *   not the product;
-         *
-         *   the LENS, because without it the surface commits its default (`New Leads`), which is
-         *   stage-bound and cannot contain a waitlisted child. That is the same wrong-queue failure
-         *   this programme fixed for Search, arriving through a hand-written URL.
+         * The canonical unit and the lens are both named. Without the lens the surface commits
+         * `New Leads`, which is stage-bound and cannot hold a waitlisted case.
          */
         await page.goto(
-            `/workspace/work-unit/rps-convergence-unit?work_view_id=all_work&subject_id=${KURZMAN_CASE}`,
+            `/workspace/work-unit/enrollment-pipeline?work_view_id=all_work&subject_id=${TATUM_CASE}`,
         );
         await page.waitForLoadState("domcontentloaded");
         const nativeCard = page.locator(NATIVE_CHILDREN_CARD);
         await expect(nativeCard).toBeVisible({ timeout: SETTLE });
         const nativeFingerprint = await nativeCard.getAttribute("data-children-card-fingerprint");
 
-        // THE INVARIANT. Not "both rendered" — the same effective configuration.
+        // THE INVARIANT. Not "both rendered" — the same effective configuration, byte for byte.
         expect(nativeFingerprint).toBe(durableFingerprint);
-        // …and non-vacuous: the configuration is the tenant's, which is why the labels are in it.
+        // …and non-vacuous: it is the TENANT's configuration, which is why these labels are in it.
+        // A host that fell back to the platform default could not produce either string.
         expect(nativeFingerprint).toContain(CONFIGURED_LABEL_DOB);
         expect(nativeFingerprint).toContain(CONFIGURED_LABEL_FIRST);
+        // …resolved from the same published document, at the same version.
+        const published = await publishedComposition(page, "enrollment", "waitlist");
+        expect(published.id).toBe(PUBLISHED_LAYOUT);
+        expect(String(published.version)).toBe(durableVersion);
 
         await page.screenshot({ path: path.join(SHOTS, "E-native-focus-panel.png"), fullPage: true });
     });
