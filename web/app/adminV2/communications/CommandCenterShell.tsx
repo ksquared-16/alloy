@@ -386,15 +386,24 @@ export default function CommandCenterShell() {
         [selectedId, loadConversations, refreshOperationalCommunicationsWork]
     );
 
+    /**
+     * Edit ONE person's preference.
+     *
+     * `personId` is a parameter, not the household's primary contact. It used to
+     * be the latter unconditionally, so an edit made beside a secondary
+     * recipient's name silently wrote to the primary — the operator saw a
+     * different person's row change, or worse, did not notice. The canonical
+     * write path is unchanged; only who it is told about is.
+     */
     const runPreferenceChange = useCallback(
-        async (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => {
-            if (!primaryPersonId) return;
+        async (personId: string, field: PreferenceFieldKey, status: "Allowed" | "Blocked") => {
+            if (!personId) return;
             setPreferenceSaving(true);
             try {
                 const res = await fetch("/api/admin/communications/preferences", {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ person_id: primaryPersonId, field, status }),
+                    body: JSON.stringify({ person_id: personId, field, status }),
                 });
                 if (!res.ok) return;
                 await runtime.refreshCurrent();
@@ -402,7 +411,7 @@ export default function CommandCenterShell() {
                 setPreferenceSaving(false);
             }
         },
-        [primaryPersonId, runtime]
+        [runtime]
     );
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
@@ -690,10 +699,10 @@ export default function CommandCenterShell() {
                             onWorkspaceModeChange={runtime.setWorkspaceMode}
                             workspaceModeAvailability={runtime.workspaceModeAvailability}
                             relatedTasks={runtime.vm.relatedTasks ?? []}
-                            preferenceProfile={runtime.vm.consentSummary.preferenceProfile}
                             canEditPreferences={LIVE_WORKSPACE && !!primaryPersonId}
                             preferenceSaving={preferenceSaving}
-                            onPreferenceChange={(field, status) => void runPreferenceChange(field, status)}
+                            onPreferenceChange={(personId, field, status) => void runPreferenceChange(personId, field, status)}
+                            preferenceProfilesByContact={runtime.vm.consentSummary.preferenceProfilesByContact}
                             attentionLabel={conversationAttentionLabel(selected.attention_state)}
                             onTriage={(action) => void runTriage(action)}
                             triageBusy={triageBusy}

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
 import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
-import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
+import RecipientPreferenceAffordance from "@/components/admin/communications/RecipientPreferenceAffordance";
 import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
@@ -159,7 +159,9 @@ export type FamilyCommunicationWorkspaceViewProps = {
     preferenceProfile?: PersonPreferenceProfile;
     canEditPreferences?: boolean;
     preferenceSaving?: boolean;
-    onPreferenceChange?: (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
+    onPreferenceChange?: (personId: string, field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
+    /** Per-person granular profiles, keyed by person id. Never a household roll-up. */
+    preferenceProfilesByContact?: Record<string, PersonPreferenceProfile>;
     attentionLabel?: string | null;
     onTriage?: (action: TriageActionKey) => void;
     triageBusy?: boolean;
@@ -224,7 +226,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const {
         selected, detail, childNames, stageLabel, healthTone, healthDot, healthLabel, recordLinks, onOpenRecordLink,
         showClaim = false, workspaceMode = "email", onWorkspaceModeChange, workspaceModeAvailability,
-        relatedTasks = [], preferenceProfile, canEditPreferences = false, preferenceSaving = false, onPreferenceChange,
+        relatedTasks = [], preferenceProfilesByContact = {}, canEditPreferences = false, preferenceSaving = false, onPreferenceChange,
         attentionLabel, onTriage, triageBusy = false,
         noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
         taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
@@ -357,7 +359,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         window.requestAnimationFrame(() => bodyTextareaRef.current?.focus());
     }, []);
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
-    const resolvedPreferenceProfile = preferenceProfile ?? detail?.preferenceProfile;
     const familyLink = recordLinks?.find((l) => l.type === "customers");
     const contactLink = recordLinks?.find((l) => l.type === "persons");
     const opportunityLink = recordLinks?.find((l) => l.type === "opportunities");
@@ -602,20 +603,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     ))
                                 : null}
                             </div>
-                            {resolvedPreferenceProfile ? (
-                                <div data-cc-ws-section="preferences" className={`mt-2 ${COMMS_UTILITY_CARD_CLASS}`}>
-                                    <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
-                                    <div className="mt-1.5">
-                                        <CommunicationPreferencesEditor
-                                            profile={resolvedPreferenceProfile}
-                                            canEdit={canEditPreferences}
-                                            saving={preferenceSaving}
-                                            onChange={onPreferenceChange}
-                                            compact
-                                        />
-                                    </div>
-                                </div>
-                            ) : null}
+                            {/*
+                              * The always-open "Communication preferences" block
+                              * used to sit here. It showed ONE household profile
+                              * beside several people's names, which is not a
+                              * layout problem but a truthfulness one: preferences
+                              * are Person-owned and two adults may differ. It is
+                              * replaced by an affordance on each recipient's own
+                              * name in the composer, which can say whose answer it
+                              * is. See `RecipientPreferenceAffordance`.
+                              */}
                         </div>
                         {showClaim ? (
                             <button
@@ -993,6 +990,32 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
                     </div>
                 )}
+
+                {/*
+                  * WHO THIS IS GOING TO, AND WHAT THEY HAVE AGREED TO.
+                  *
+                  * One affordance per SELECTED recipient, carrying that person's
+                  * own preferences. This is where the old household-wide block
+                  * went: attached to a name, so it can be truthful about whose
+                  * answer it states. Two recipients with different preferences
+                  * show two different summaries, side by side.
+                  */}
+                {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
+                    <div data-cc-recipient-preferences-row className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
+                        {selectedRecipientRows.map((r) => (
+                            <RecipientPreferenceAffordance
+                                key={r.id}
+                                personId={r.id}
+                                displayName={r.displayName}
+                                profile={preferenceProfilesByContact[r.id] ?? null}
+                                canEdit={canEditPreferences}
+                                saving={preferenceSaving}
+                                onChange={onPreferenceChange}
+                            />
+                        ))}
+                    </div>
+                ) : null}
 
                 {/* Subject belongs to a NEW email only. A reply inherits the
                     conversation's subject on the server, so the field is not
