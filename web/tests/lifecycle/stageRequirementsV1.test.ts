@@ -16,6 +16,7 @@ import {
     parseStageRequirementsV1,
     refuseUnauthorableRequirement,
     serializeStageRequirementsV1,
+    validateFormRequirementReferences,
 } from "@/lib/lifecycle/stageRequirementsV1";
 import {
     canonicalStageRequirements,
@@ -26,6 +27,10 @@ import {
     parseLifecycleBuilderV1,
     serializeLifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    effectiveFieldRulesForDepartment,
+    effectiveRequirementLabelsForDepartment,
+} from "@/lib/lifecycle/enrollmentProcessDepartmentRequirements";
 
 const FORM_ID = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
 
@@ -208,6 +213,111 @@ describe("builder payload round trip", () => {
             form_definition_id: FORM_ID,
             level: "required",
         });
+    });
+});
+
+describe("enrollment consumers read the canonical resolver (D-92)", () => {
+    // These are the two helpers the enrollment form-coverage route and the lifecycle
+    // stage bootstrap call. Proving THEM proves the consumer path, without asserting
+    // through an HTTP handler that would only add Supabase mocking.
+    const LEGACY_META = {
+        lifecycle_progression_requirements_v1: {
+            version: 1,
+            stages: { enrollment: { required_labels: ["Legacy requirement"] } },
+        },
+    };
+
+    function metaWithBuilder(requirements_v1?: unknown) {
+        return { ...LEGACY_META, lifecycle_builder_v1: stagePayload(requirements_v1) };
+    }
+
+    it("legacy-only tenant is unchanged by this slice", () => {
+        expect(effectiveRequirementLabelsForDepartment("enrollment", LEGACY_META).required_labels).toContain(
+            "Legacy requirement",
+        );
+    });
+
+    it("canonical field requirements replace the legacy answer", () => {
+        const { rules } = effectiveFieldRulesForDepartment(
+            "enrollment",
+            metaWithBuilder({
+                version: 1,
+                requirements: [
+                    { requirement_id: "f1", kind: "field", rule_id: "child.dob", level: "required" },
+                ],
+            }),
+        );
+        expect(rules.required_rule_ids).toEqual(["child.dob"]);
+    });
+
+    it("authored-empty canonical suppresses legacy at the consumer", () => {
+        const labels = effectiveRequirementLabelsForDepartment(
+            "enrollment",
+            metaWithBuilder({ version: 1, requirements: [] }),
+        );
+        expect(labels.required_labels).toEqual([]);
+        expect(labels.recommended_labels).toEqual([]);
+    });
+
+    it("absent canonical still yields the legacy answer at the consumer", () => {
+        expect(
+            effectiveRequirementLabelsForDepartment("enrollment", metaWithBuilder()).required_labels,
+        ).toContain("Legacy requirement");
+    });
+
+    it("reports a canonical answer as tenant configuration, not platform default", () => {
+        const { source } = effectiveFieldRulesForDepartment(
+            "enrollment",
+            metaWithBuilder({ version: 1, requirements: [] }),
+        );
+        expect(source).toBe("department");
+    });
+});
+
+describe("form reference validation — follows settled runtime doctrine", () => {
+    const req = {
+        requirement_id: "req-immunization",
+        ref: { kind: "form", form_definition_id: FORM_ID },
+        level: "required",
+    } as const;
+
+    it("accepts a form with a published version", () => {
+        expect(
+            validateFormRequirementReferences([req], [{ id: FORM_ID, has_published_version: true }]),
+        ).toEqual([]);
+    });
+
+    it("refuses a form that does not exist in the org", () => {
+        const refusals = validateFormRequirementReferences([req], []);
+        expect(refusals[0]!.code).toBe("unknown_form");
+    });
+
+    it("refuses a draft-only form, matching published-version resolution", () => {
+        // loadPacketProjection selects status='published' and reports a form with none
+        // as missing, so a draft-only requirement would be permanently unsatisfiable.
+        const refusals = validateFormRequirementReferences(
+            [req],
+            [{ id: FORM_ID, has_published_version: false }],
+        );
+        expect(refusals[0]!.code).toBe("no_published_version");
+    });
+
+    it("ignores non-form requirements", () => {
+        expect(
+            validateFormRequirementReferences(
+                [{ requirement_id: "f1", ref: { kind: "field", rule_id: "child.dob" }, level: "required" }],
+                [],
+            ),
+        ).toEqual([]);
+    });
+
+    it("republishing a form does not change requirement identity", () => {
+        // The requirement holds only the definition id, so a new published version is
+        // picked up with no configuration edit and no re-keying.
+        const before = validateFormRequirementReferences([req], [{ id: FORM_ID, has_published_version: true }]);
+        const after = validateFormRequirementReferences([req], [{ id: FORM_ID, has_published_version: true }]);
+        expect(before).toEqual(after);
+        expect(req.ref.form_definition_id).toBe(FORM_ID);
     });
 });
 

@@ -354,6 +354,73 @@ function refFields(ref: RequirementRefV1): Record<string, string> {
     }
 }
 
+/** One form definition as the authoring gate needs to see it. */
+export type KnownFormDefinition = {
+    readonly id: string;
+    /** Whether the definition has at least one version with status `published`. */
+    readonly has_published_version: boolean;
+};
+
+export type FormReferenceRefusal = {
+    readonly requirement_id: string;
+    readonly form_definition_id: string;
+    readonly code: "unknown_form" | "no_published_version";
+    readonly detail: string;
+};
+
+/**
+ * Validates form references against the definitions Forms actually owns.
+ *
+ * Dependency-injected rather than querying, so the rule stays pure and testable and so
+ * Business Process never grows its own read path into Forms tables.
+ *
+ * Two distinct refusals, because they are different operator problems:
+ *
+ *  - **`unknown_form`** — the id resolves to nothing in this org. Configuration is
+ *    referencing a form that does not exist, which can never be satisfied.
+ *  - **`no_published_version`** — the form exists but has only drafts. This mirrors
+ *    settled runtime doctrine rather than inventing a rule: `loadPacketProjection`
+ *    selects versions `WHERE status = 'published'` and reports a form with none as
+ *    missing. A requirement pointing at a draft-only form would therefore be
+ *    permanently unsatisfiable at runtime, so authoring refuses it up front instead of
+ *    letting an operator discover it through a parent who cannot finish enrolling.
+ *
+ * Note this validates the REFERENCE, not the version. Which published version answers
+ * later is Forms' decision (highest published), and a form republished afterwards keeps
+ * satisfying the same requirement — the requirement holds only the definition id.
+ */
+export function validateFormRequirementReferences(
+    requirements: readonly StageRequirementV1[],
+    knownForms: readonly KnownFormDefinition[],
+): readonly FormReferenceRefusal[] {
+    const byId = new Map(knownForms.map((f) => [f.id, f]));
+    const refusals: FormReferenceRefusal[] = [];
+
+    for (const req of requirements) {
+        if (req.ref.kind !== "form") continue;
+        const form = byId.get(req.ref.form_definition_id);
+        if (!form) {
+            refusals.push({
+                requirement_id: req.requirement_id,
+                form_definition_id: req.ref.form_definition_id,
+                code: "unknown_form",
+                detail: "This form does not exist in this organization, so the requirement can never be satisfied.",
+            });
+            continue;
+        }
+        if (!form.has_published_version) {
+            refusals.push({
+                requirement_id: req.requirement_id,
+                form_definition_id: req.ref.form_definition_id,
+                code: "no_published_version",
+                detail: "This form has no published version. The runtime resolves published versions only, so the requirement would be permanently unsatisfiable.",
+            });
+        }
+    }
+
+    return refusals;
+}
+
 export type RequirementAuthoringRefusal = {
     readonly code: "unsupported_kind" | "missing_reference" | "invalid_level" | "duplicate_id";
     readonly detail: string;

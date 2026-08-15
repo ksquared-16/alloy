@@ -47,7 +47,11 @@ import {
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import type { LifecycleProgressionRequirementRow } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import type { LifecycleBuilderV1 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    LIFECYCLE_BUILDER_METADATA_KEY,
+    parseLifecycleBuilderV1,
+    type LifecycleBuilderV1,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageRequirementV1, StageRequirementsV1 } from "@/lib/lifecycle/stageRequirementsV1";
 
 /**
@@ -174,6 +178,25 @@ export function resolveEffectiveStageRequirements(input: {
             rules: fieldRules.rules,
         },
     };
+}
+
+/**
+ * The department-metadata entry point, and the ONLY place that reads a requirement key
+ * out of `departments.metadata` (D-92).
+ *
+ * Callers hold department metadata already, so they pass that rather than pre-parsing a
+ * builder. Keeping the three key reads — `lifecycle_builder_v1` for canonical and the
+ * two legacy keys beneath — inside one function is what stops a second consumer from
+ * inventing its own precedence.
+ */
+export function resolveEffectiveStageRequirementsForDepartment(
+    stage: LifecycleOperatorStage,
+    departmentMetadata?: Record<string, unknown> | null,
+    processKey?: string,
+): EffectiveStageRequirements {
+    const meta = departmentMetadata ?? null;
+    const builder = meta ? parseLifecycleBuilderV1(meta[LIFECYCLE_BUILDER_METADATA_KEY]) : null;
+    return resolveEffectiveStageRequirements({ stage, builder, departmentMetadata: meta, processKey });
 }
 
 /** Canonical form requirements for a stage, in authored order. */
