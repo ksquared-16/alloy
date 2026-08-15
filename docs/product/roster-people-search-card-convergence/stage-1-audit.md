@@ -1,3 +1,12 @@
+---
+owner: product
+status: canonical
+last_reviewed: 2026-08-15
+sprint: roster-people-search-card-convergence (slot 1)
+base: origin/staging @ 11df0cdce
+supersedes: []
+---
+
 # Stage 1 audit — Roster People + Search + Contextual Card Convergence
 
 Base: `origin/staging` @ `11df0cdce` (PR #434 merged). Read-only audit; no product code changed.
