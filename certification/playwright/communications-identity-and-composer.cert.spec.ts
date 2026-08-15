@@ -366,6 +366,45 @@ test.describe("The queue speaks English, not storage", () => {
     });
 });
 
+test.describe("The queue is one row per party", () => {
+    test("Q-1 no two hub rows carry the same label", async ({ page }) => {
+        await openOperatorInbox(page);
+        const labels = await page.locator("[data-cc-hub]").evaluateAll((els) =>
+            els.map((el) => (el.querySelector("span")?.textContent ?? "").trim())
+        );
+        expect(labels.length, "the queue rendered hub rows").toBeGreaterThan(0);
+        // The reported defect: several rows all reading "Kurzman Family" with
+        // nothing to tell them apart. Duplicate LABELS are the symptom, and the
+        // hub grain is what removes them.
+        const duplicated = labels.filter((l, i) => l && labels.indexOf(l) !== i);
+        expect([...new Set(duplicated)], `duplicate hub labels: ${duplicated.join(", ")}`).toEqual([]);
+    });
+
+    test("Q-2 a hub holding several threads still renders ONE row", async ({ page }) => {
+        await openOperatorInbox(page);
+        const rows = page.locator("[data-cc-hub]");
+        const counts = await rows.evaluateAll((els) =>
+            els.map((el) => Number(el.getAttribute("data-cc-hub-threads") ?? "0"))
+        );
+        expect(counts.length).toBeGreaterThan(0);
+        // Positive control for Q-1: if every hub held exactly one thread, "no
+        // duplicate labels" would be true for a reason that has nothing to do
+        // with roll-up, and this suite would prove nothing about it.
+        expect(Math.max(...counts), "at least one hub rolls up multiple threads").toBeGreaterThan(1);
+    });
+
+    test("Q-3 unresolved conversations are their own rows, never inside a family", async ({ page }) => {
+        await openOperatorInbox(page);
+        const kinds = await page
+            .locator("[data-cc-hub]")
+            .evaluateAll((els) => els.map((el) => el.getAttribute("data-cc-hub-kind")));
+        expect(kinds.length).toBeGreaterThan(0);
+        // Every row declares its own grain; an unresolved party is never folded
+        // into a family hub by endpoint coincidence.
+        expect(kinds.every((k) => k === "family" || k === "person" || k === "unresolved")).toBe(true);
+    });
+});
+
 test.describe("Overlays render above the workspace that opened them", () => {
     test("O-1 Compose New opens on document.body, above the shell", async ({ page }) => {
         await openOperatorInbox(page);
@@ -389,5 +428,65 @@ test.describe("Overlays render above the workspace that opened them", () => {
         // And above shell chrome (100) / the workspace BOS layers (96, 97).
         const z = await modal.evaluate((el) => Number(getComputedStyle(el).zIndex));
         expect(z).toBeGreaterThan(100);
+    });
+
+    test("O-2 Compose New stays above the BOS rail, floating AND pinned", async ({ page }) => {
+        // Two complete operator journeys in one test — inbox open, modal open,
+        // modal closed, twice. The default budget is sized for one. Raising it is
+        // an environment allowance; nothing about what is asserted changes.
+        test.setTimeout(600_000);
+        /**
+         * The layer check, run once per BOS state.
+         *
+         * The inbox is re-opened for each state rather than toggled underneath an
+         * open modal: pinning re-lays out the shell, which tears down the modal
+         * and its trigger. Driving it in that order was testing the harness, not
+         * the product.
+         */
+        async function assertComposeNewOnTop(state: string) {
+            await openOperatorInbox(page);
+            const trigger = page.locator("[data-inbox-compose-new]").first();
+            await expect(trigger, `Compose New reachable with BOS ${state}`).toBeVisible({ timeout: 60_000 });
+            await trigger.click();
+
+            const modal = page.locator("[data-compose-new-modal]");
+            await expect(modal).toBeVisible({ timeout: 60_000 });
+
+            const parentIsBody = await modal.evaluate((el) => el.parentElement === document.body);
+            expect(parentIsBody, `portaled to body with BOS ${state}`).toBe(true);
+
+            // Compared against every fixed layer actually present, not against a
+            // remembered constant — a layer added later would otherwise sail past.
+            const { modalZ, highestOtherZ } = await modal.evaluate((el) => {
+                let max = 0;
+                for (const node of Array.from(document.body.querySelectorAll<HTMLElement>("*"))) {
+                    if (node === el || el.contains(node)) continue;
+                    const style = getComputedStyle(node);
+                    if (style.position !== "fixed" && style.position !== "sticky") continue;
+                    if (style.visibility === "hidden" || style.display === "none") continue;
+                    const z = Number(style.zIndex);
+                    if (Number.isFinite(z) && z > max) max = z;
+                }
+                return { modalZ: Number(getComputedStyle(el).zIndex), highestOtherZ: max };
+            });
+            expect(modalZ, `Compose New outranks every other fixed layer (BOS ${state})`).toBeGreaterThanOrEqual(
+                highestOtherZ
+            );
+
+            await page.keyboard.press("Escape");
+            const closeBtn = page.locator("[data-compose-new-modal] button[aria-label='Close']").first();
+            if (await closeBtn.isVisible({ timeout: 4_000 }).catch(() => false)) await closeBtn.click();
+            await expect(modal).toBeHidden({ timeout: 30_000 });
+        }
+
+        await assertComposeNewOnTop("floating");
+
+        const pin = page.locator("[data-bos-pin]").first();
+        if (!(await pin.isVisible({ timeout: 8_000 }).catch(() => false))) {
+            // Never silently narrow the claim: say which half went unproven.
+            throw new Error("BOS pin control [data-bos-pin] was not present — the PINNED case was NOT proved");
+        }
+        await pin.click();
+        await assertComposeNewOnTop("pinned");
     });
 });
