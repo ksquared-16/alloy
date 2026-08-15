@@ -10,10 +10,22 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-// `vi.mock` is hoisted above every top-level binding, so the spies have to be hoisted with it.
+/**
+ * `vi.mock` is hoisted above every top-level binding, so the spies are hoisted with it.
+ *
+ * Their PARAMETERS are declared rather than left to inference. A zero-argument `vi.fn` infers an
+ * empty parameter tuple, so `mock.calls[0][0]` is `undefined` to the type system — and reaching for
+ * it needs a cast, which would then hide whatever the call actually contained. Declaring the shape
+ * is what lets the assertion below inspect the call honestly.
+ */
 const { patchIdentity, patchMember } = vi.hoisted(() => ({
-    patchIdentity: vi.fn(async () => ({ writeTarget: "customer_member" as const, patch: {} })),
-    patchMember: vi.fn(async () => ({})),
+    patchIdentity: vi.fn(
+        async (_args: { row: { customer_member_id: string; person_id?: string | null } }) => ({
+            writeTarget: "customer_member" as const,
+            patch: {},
+        }),
+    ),
+    patchMember: vi.fn(async (_id: string, _patch: Record<string, unknown>) => ({})),
 }));
 
 vi.mock("@/lib/admin/drawer/inquiryChildFieldEdit", async (importOriginal) => {
@@ -84,7 +96,7 @@ describe("the durable save goes through the canonical authorities", () => {
         expect(result.ok).toBe(true);
         expect(patchIdentity).toHaveBeenCalledTimes(1);
         // …with the child's own row, and NO opportunity anywhere in the call.
-        const call = patchIdentity.mock.calls[0]![0] as { row: { customer_member_id: string } };
+        const call = patchIdentity.mock.calls[0]![0];
         expect(call.row.customer_member_id).toBe("cm-lennon");
         expect(JSON.stringify(call)).not.toContain("opportunit");
     });
