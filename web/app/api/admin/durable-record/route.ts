@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { scopeDimensionsFromAccess, type AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { composeDurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurablePersonSubject";
@@ -13,6 +13,8 @@ import {
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import { encodeDurableRecordModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableRecordModelWire";
 import { resolveAttentionTarget } from "@/lib/workUnits/operatorFocusTarget";
+import { loadSubjectContexts } from "@/lib/context/loadSubjectContexts";
+import { durableRecordContextOptions } from "@/lib/context/durableRecordContextOptions";
 
 /**
  * GET `/api/admin/durable-record?subject_type=person|child&subject_id=…`
@@ -30,6 +32,14 @@ import { resolveAttentionTarget } from "@/lib/workUnits/operatorFocusTarget";
  *
  * The resolution ALSO supplies the optional operational host, which rides onto the model as
  * enrichment (Workstream E) — the composer never looks a case up for itself.
+ *
+ * ── CONTEXTS RIDE ALONG, FROM THE SHARED PROJECTION ──
+ *
+ * The response carries the subject's selectable business contexts so the host can offer them and,
+ * on selection, resolve the SAME published composition the native operational panel resolves. They
+ * come from `lib/context` — the one projection Search also reads — so the two surfaces cannot
+ * disagree about which contexts a subject is in. Enumeration failure is not fatal: the record still
+ * opens on its identity, because a context is enrichment and identity is not.
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -93,7 +103,18 @@ export async function GET(request: NextRequest) {
                 canMutate: false,
                 operationalHost,
             });
-            return NextResponse.json({ ok: true, model: encodeDurableRecordModel(model) });
+            return NextResponse.json({
+                ok: true,
+                model: encodeDurableRecordModel(model),
+                contexts: await contextOptionsFor({
+                    supabase,
+                    orgId: ctx.orgId,
+                    dimensions,
+                    grain: "person",
+                    id: subjectId,
+                    personId: subjectId,
+                }),
+            });
         }
 
         const composed = await composeDurableChildSubject(supabase, ctx.orgId, subjectId, dimensions);
@@ -109,7 +130,18 @@ export async function GET(request: NextRequest) {
             now: new Date(),
             operationalHost,
         });
-        return NextResponse.json({ ok: true, model: encodeDurableRecordModel(model) });
+        return NextResponse.json({
+            ok: true,
+            model: encodeDurableRecordModel(model),
+            contexts: await contextOptionsFor({
+                supabase,
+                orgId: ctx.orgId,
+                dimensions,
+                grain: "child",
+                id: subjectId,
+                personId: composed.subject.personId,
+            }),
+        });
     } catch (e) {
         console.error("[durable-record]", e);
         return NextResponse.json(
@@ -122,3 +154,34 @@ export async function GET(request: NextRequest) {
         );
     }
 }
+
+/**
+ * Selectable contexts, or an empty list.
+ *
+ * Enumeration failure must never cost the operator the RECORD. A context is enrichment: it adds
+ * meaning to a record that already exists on its own terms, and refusing the record because an
+ * enrichment failed would be the queue-scoped mistake this grain removed, in a new place.
+ */
+async function contextOptionsFor(input: {
+    supabase: SupabaseClientForContexts;
+    orgId: string;
+    dimensions: AdminAccessScopeDimensions;
+    grain: "child" | "person";
+    id: string;
+    personId: string | null;
+}) {
+    try {
+        const contexts = await loadSubjectContexts({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            dimensions: input.dimensions,
+            subject: { grain: input.grain, id: input.id, personId: input.personId },
+        });
+        return durableRecordContextOptions(contexts);
+    } catch (e) {
+        console.error("[durable-record] context enumeration failed", e);
+        return [];
+    }
+}
+
+type SupabaseClientForContexts = Parameters<typeof loadSubjectContexts>[0]["supabase"];
