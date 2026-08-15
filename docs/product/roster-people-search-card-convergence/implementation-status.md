@@ -1,6 +1,6 @@
 ---
 owner: product
-status: IN PROGRESS — slices 1–6 + 8 landed; 7, 9 and browser certification open
+status: sprint
 last_reviewed: 2026-08-15
 sprint: roster-people-search-card-convergence (slot 1)
 base: origin/staging @ 11df0cdce
@@ -8,6 +8,8 @@ supersedes: []
 ---
 
 # Implementation status — Roster People + Search + Contextual Card Convergence
+
+**IN PROGRESS — slices 1–6 and 8 landed; 7, 9 and browser certification open.**
 
 PR [#436](https://github.com/ksquared-16/alloy/pull/436), branch
 `agent/claude/1-roster-people-search-card-convergence`, on `origin/staging @ 11df0cdce`.
