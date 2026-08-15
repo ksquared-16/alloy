@@ -15,6 +15,7 @@ import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { stageEnteredAtNowIso } from "@/lib/lifecycle/operationalStateEnteredAt";
 import {
     resolveCurrentEnrollmentBusinessProcessRevision,
+    type EnrollmentBusinessProcessRevision,
     type EnrollmentRevisionPinOutcome,
 } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
 
@@ -191,13 +192,22 @@ export async function createEnrollmentProcessInstance(
     // the org's currently authoritative published Enrollment revision is resolved here.
     const pin =
         args.businessProcessRevisionId !== undefined
-            ? {
+            ? ({
                   revisionId: (args.businessProcessRevisionId ?? "").trim() || null,
-                  outcome: (args.businessProcessRevisionId
+                  departmentId: null,
+                  outcome: args.businessProcessRevisionId
                       ? "pinned"
-                      : "no_published_enrollment_configuration") as EnrollmentRevisionPinOutcome,
-              }
-            : await resolveCurrentEnrollmentBusinessProcessRevision(supabase, args.orgId);
+                      : "no_published_enrollment_configuration",
+                  selector: "none",
+                  candidateDepartmentIds: [],
+              } satisfies EnrollmentBusinessProcessRevision)
+            : await resolveCurrentEnrollmentBusinessProcessRevision(supabase, args.orgId, {
+                  // Gate 0B. The journey's own Opportunity context selects the department
+                  // canonically (Org -> Department -> Work unit -> Record), so a multi-department
+                  // org pins correctly instead of refusing. Absent for a context-free start, which
+                  // then falls back to "exactly one Enrollment department, or refuse".
+                  opportunityId: args.contextId ?? null,
+              });
 
     if (pin.outcome !== "pinned") {
         // Observable, not swallowed. A journey running on live configuration is a governance fact
