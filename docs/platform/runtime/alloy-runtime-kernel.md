@@ -1,7 +1,7 @@
 ---
 owner: runtime
-status: ratified
-last_reviewed: 2026-07-19
+status: canonical
+last_reviewed: 2026-08-14
 supersedes: []
 ---
 
