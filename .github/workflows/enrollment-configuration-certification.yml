@@ -17,13 +17,13 @@
 
 name: Enrollment configuration certification
 
+# UNFILTERED on purpose. A required check that is path-filtered simply does not
+# report on a PR that misses its paths, and a required check with no status blocks
+# that PR forever — so a filtered required check deadlocks every unrelated change.
+# This job is one narrow suite and finishes in well under a minute, so running it on
+# every pull request costs far less than the deadlock it prevents.
 on:
   pull_request:
-    paths:
-      - "web/lib/lifecycle/**"
-      - "web/lib/completion/**"
-      - "web/tests/lifecycle/**"
-      - ".github/workflows/enrollment-configuration-certification.yml"
   push:
     branches: [staging, main]
 
