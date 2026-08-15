@@ -22,11 +22,14 @@
 delete from schedule_assignments where org_id = :'org'::uuid and customer_member_id in
   (select id from customer_members where customer_id::text like 'fbc0%');
 delete from schedule_patterns where id::text like 'fbc0%';
+delete from opportunity_customer_members where org_id = :'org'::uuid and customer_member_id in
+  (select id from customer_members where customer_id::text like 'fbc0%');
 delete from process_instances where org_id = :'org'::uuid and subject_id in
   (select id from customer_members where customer_id::text like 'fbc0%');
 delete from customer_members where customer_id::text like 'fbc0%';
 delete from customer_persons where customer_id::text like 'fbc0%';
 delete from opportunities where id::text like 'fbc0%';
+delete from work_units where id::text like 'fbc0%';
 delete from customers where id::text like 'fbc0%';
 delete from employments where id::text like 'fbc0%';
 delete from persons where id::text like 'fbc0%';
@@ -80,7 +83,32 @@ insert into customer_members (id, org_id, customer_id, display_name, first_name,
    'Wrigley Kurzman', 'Wrigley', 'Kurzman', '2024-02-02', 'child', true, null)
 on conflict (id) do nothing;
 
--- ══ THE OPERATIONAL CONTEXT — one case, in the ACTIVE enrollment unit ══════════════════════════
+-- ══ THE OPERATIONAL CONTEXT — the fixture's OWN work unit ══════════════════════════════════════
+--
+-- ── WHY A DEDICATED UNIT, TRACED RATHER THAN GUESSED ──
+--
+-- The shared `enrollment_pipeline` unit holds 501 opportunities and
+-- `PROCESS_POPULATION_CAP` is 500 — the provisioning population reads
+-- `opportunities WHERE work_unit_id = <unit>` with NO `ORDER BY`, so which 500 come back is
+-- undefined and a 501st fixture case may or may not be among them. Beyond that,
+-- `PROVISIONING_ROW_PAGE_CAP` is 100: a requested subject must also land inside the lens's own
+-- published page. A fixture that depends on either is asserting the tenant's SIZE, which is the
+-- trap this certification has already hit twice.
+--
+-- The seeded tenant offers no alternative: Lennon's participation is the ONLY child
+-- `process_instance` in the whole tenant (1500 children, zero seeded child participations), so
+-- there is no pre-existing legitimately-selectable case to borrow.
+--
+-- So the fixture gets its own unit, exactly as `enrollment-context-convergence.sql` already does
+-- for the same reason. This deforms no Work View semantics — the unit belongs to the SAME
+-- department, so it inherits the same published process, the same stages and the same lenses. It
+-- simply gives this case an operational home small enough to be deterministic.
+insert into work_units (id, org_id, department_id, key, name, is_active)
+select 'fbc00000-0000-4000-8000-00000000c000'::uuid, :'org'::uuid, department_id,
+       'rps_convergence_unit', 'Convergence (cert)', true
+from work_units where id = :'enrollment_unit'::uuid
+on conflict (id) do nothing;
+
 --
 -- A PLAIN INSERT, deliberately. An earlier revision used `INSERT … SELECT` to copy pipeline columns
 -- from a seeded case; no case in this tenant has any (0 of 3000 carry `pipeline_id`), so the SELECT
@@ -89,7 +117,7 @@ on conflict (id) do nothing;
 -- error, which is why the verification block below now counts this row too.
 insert into opportunities (id, org_id, customer_id, name, work_unit_id) values
   ('fbc00000-0000-4000-8000-00000000c003'::uuid, :'org'::uuid, 'fbc00000-0000-4000-8000-00000000d001'::uuid,
-   'Kurzman enrollment', :'enrollment_unit'::uuid)
+   'Kurzman enrollment', 'fbc00000-0000-4000-8000-00000000c000'::uuid)
 on conflict (id) do nothing;
 
 -- Lennon's PARTICIPATION, at `waitlist` — a configured stage of the tenant's enrollment process.
@@ -98,6 +126,21 @@ insert into process_instances (id, org_id, process_key, subject_type, subject_id
   ('fbc00000-0000-4000-8000-00000000c004'::uuid, :'org'::uuid, 'enrollment', 'child',
    'fbc00000-0000-4000-8000-00000000c001'::uuid, 'opportunity', 'fbc00000-0000-4000-8000-00000000c003'::uuid,
    'in_process', 'waitlist')
+on conflict (id) do nothing;
+
+-- ══ THE CASE↔CHILD LINK — the condition the native Children card actually reads ════════════════
+--
+-- Traced, not guessed. The native Focus Panel composed for this case with NO Children card, and the
+-- reason is that `opportunity_customer_members` is what puts a child ON a case. A
+-- `process_instances` row records the PARTICIPATION in a process; the OCM row is the case's own
+-- membership edge, and it is what `_inquiry_children` (and therefore the Children card) is built
+-- from. A real waitlisted child in a real case has both; this fixture had only the first.
+--
+-- This is canonical business truth for a child participating in a case — not a field invented to
+-- satisfy a lens.
+insert into opportunity_customer_members (id, org_id, opportunity_id, customer_member_id, stage_key) values
+  ('fbc00000-0000-4000-8000-00000000c006'::uuid, :'org'::uuid, 'fbc00000-0000-4000-8000-00000000c003'::uuid,
+   'fbc00000-0000-4000-8000-00000000c001'::uuid, 'waitlist')
 on conflict (id) do nothing;
 
 -- ══ A SECOND CONTEXT — so the selector is a genuine CHOICE ═════════════════════════════════════
@@ -183,7 +226,10 @@ union all select 'jane employment', count(*)::text from employments where id = '
 union all select 'kurzman household', count(*)::text from customers where id = 'fbc00000-0000-4000-8000-00000000d001'::uuid
 union all select 'kurzman parent edge', count(*)::text from customer_persons where customer_id = 'fbc00000-0000-4000-8000-00000000d001'::uuid
 union all select 'kurzman children', count(*)::text from customer_members where customer_id = 'fbc00000-0000-4000-8000-00000000d001'::uuid
+union all select 'convergence work unit', count(*)::text from work_units where id = 'fbc00000-0000-4000-8000-00000000c000'::uuid
 union all select 'kurzman case', count(*)::text from opportunities where id = 'fbc00000-0000-4000-8000-00000000c003'::uuid
+union all select 'cases in that unit (must be 1)', count(*)::text from opportunities where work_unit_id = 'fbc00000-0000-4000-8000-00000000c000'::uuid
 union all select 'lennon waitlist participation', count(*)::text from process_instances where id = 'fbc00000-0000-4000-8000-00000000c004'::uuid
+union all select 'lennon ON the case (OCM)', count(*)::text from opportunity_customer_members where id = 'fbc00000-0000-4000-8000-00000000c006'::uuid
 union all select 'published focus panel summary', count(*)::text from entity_layouts where id = 'fbc00000-0000-4000-8000-00000000c005'::uuid
 union all select 'lennon assignment (2nd context)', count(*)::text from schedule_assignments where id = 'fbc00000-0000-4000-8000-00000000f003'::uuid;

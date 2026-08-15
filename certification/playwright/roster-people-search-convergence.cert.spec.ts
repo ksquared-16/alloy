@@ -205,16 +205,19 @@ test.describe("C/E — the same effective configured card in both hosts", () => 
         /*
          * ── The native operational answer ──
          *
-         * The LENS is named explicitly, and that is not a convenience. Without it the surface
-         * commits its default (`New Leads`), and Lennon is at `waitlist` — so the queue does not
-         * contain his case, nothing commits, and no Focus Panel composes. That is the same
-         * wrong-queue failure this programme fixed for Search, arriving through a hand-written URL.
+         * The fixture's OWN work unit, and the lens named explicitly. Both are traced, not guessed:
          *
-         * `all_work` is the tenant's catch-all lens: it publishes no stage predicate, so it holds
-         * every open case in the process including a waitlisted one.
+         *   the UNIT, because the shared `enrollment_pipeline` holds 501 cases against a
+         *   `PROCESS_POPULATION_CAP` of 500 (read with no `ORDER BY`) and a
+         *   `PROVISIONING_ROW_PAGE_CAP` of 100 — a fixture case in there is asserting tenant size,
+         *   not the product;
+         *
+         *   the LENS, because without it the surface commits its default (`New Leads`), which is
+         *   stage-bound and cannot contain a waitlisted child. That is the same wrong-queue failure
+         *   this programme fixed for Search, arriving through a hand-written URL.
          */
         await page.goto(
-            `/workspace/work-unit/enrollment-pipeline?work_view_id=all_work&subject_id=${KURZMAN_CASE}`,
+            `/workspace/work-unit/rps-convergence-unit?work_view_id=all_work&subject_id=${KURZMAN_CASE}`,
         );
         await page.waitForLoadState("domcontentloaded");
         const nativeCard = page.locator(NATIVE_CHILDREN_CARD);
