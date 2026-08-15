@@ -317,13 +317,31 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
         await operational.click();
 
         /*
-         * THE CLAIM: an operational destination goes to WORK.
+         * THE CLAIM: an operational destination goes to WORK — and WORK COMPOSES.
          *
-         * It left the operator on `/workspace` until the listener learned to navigate when the
-         * operator is not already on a work-unit surface — the kernel spans the workspace, so the
-         * movement succeeded and painted nothing, because the root renders no Surface Host.
+         * ── WHY THE URL ASSERTION ALONE WAS NOT ENOUGH, AND HOW IT HID A DEFECT ──
+         *
+         * This scenario used to assert only that the address contained `/work-unit/`, that Roster was
+         * gone and that no durable panel was present. Every one of those is satisfied by a BLANK
+         * PAGE, and a blank page is exactly what the product was doing: the listener pushed the route
+         * from the workspace root, the URL changed, and the Surface Host never mounted. The evidence
+         * screenshot this scenario itself saved showed an empty canvas, and the scenario passed.
+         *
+         * Measured while fixing it: the push never composed a surface (polled to 60s); the attention
+         * movement composed it in ~2.0s at the same address. So the assertion below is the SURFACE,
+         * not the URL — absence can no longer be mistaken for arrival.
          */
         await expect(page).toHaveURL(/\/work-unit\//, { timeout: SETTLE });
+        const surface = page.locator('[data-component="ProvisionedWorkUnitSurface"]');
+        await expect(surface, "the operational destination composed no surface").toBeVisible({
+            timeout: SETTLE,
+        });
+        await expect(surface).toHaveAttribute("data-surface-ready", "true", { timeout: SETTLE });
+        // …on the work unit the destination named, not on whatever the address happened to resolve.
+        await expect(surface).toHaveAttribute("data-shell-target", /.+/);
+        // POSITIVE CONTROL: the surface's own cohort strip rendered, so this is a live operational
+        // surface and not a shell that mounted around an error.
+        await expect(page.locator("button[data-work-view-id]").first()).toBeVisible({ timeout: SETTLE });
         // …and it is WORK, not a record and not Roster.
         await expect(page.locator(ROSTER_SHELL)).toHaveCount(0);
         await expect(page.locator(PANEL_READY)).toHaveCount(0);

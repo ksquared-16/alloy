@@ -198,29 +198,27 @@ describe("Gate A — active-runtime movement is never a route push", () => {
         expect(durableCall).not.toContain("operatorWorkUnitHrefFromKey");
     });
 
-    it("the listener moves on a live surface, and only navigates off one", () => {
+    it("the listener moves, and never pushes — from anywhere in the workspace", () => {
         const src = code("components/adminV2/OperatorFocusAttentionListener.tsx");
         expect(src).toContain("useWorkUnitEntryMovement");
         /*
-         * GATE A, ASSERTED AS THE RULE RATHER THAN AS A BANNED SYMBOL.
+         * GATE A, UNCONDITIONAL — and this assertion was briefly weakened, which is worth recording.
          *
-         * This used to read `expect(src).not.toContain("router.push")`. That proxy was exactly right
-         * while the listener only ever ran on a work-unit surface, and it became wrong when the same
-         * listener had to serve the workspace ROOT: the kernel spans the whole workspace, so a
-         * movement from the root succeeds and paints nothing, because the root renders no Surface
-         * Host. Banning the symbol would have preserved the letter of Gate A and left an operational
-         * Search result stranded on `/workspace`.
+         * It was relaxed to an ORDERING ("the push is reachable only when not already on a work-unit
+         * surface") on the theory that the workspace ROOT renders no Surface Host and therefore needs
+         * a URL. The root does render one: `SurfaceHostProvider` wraps the whole workspace and decides
+         * visibility from committed Focus, not from the pathname.
          *
-         * What Gate A actually forbids is pushing a SEED-ONLY route while a surface is live. So the
-         * assertion is the ordering: the movement is taken whenever the operator is already on a
-         * work-unit surface, and the push is reachable only through the negative branch of that
-         * check. That is strictly stronger than the symbol ban — it pins WHEN, not merely whether.
+         * The browser settled it. From the root, the push changed the URL and the surface NEVER
+         * mounted (polled to 60s, blank); the movement composed the same destination in ~2.0s. So the
+         * symbol ban is not a lucky proxy here — inside this listener it IS the rule, and the ordering
+         * version was strictly weaker, because it permitted the one branch that cannot work.
          */
-        const surfaceCheck = src.indexOf("onWorkUnitSurface");
-        const push = src.indexOf("router.push");
-        expect(surfaceCheck).toBeGreaterThan(-1);
-        expect(push).toBeGreaterThan(surfaceCheck);
-        expect(src).toContain("if (onWorkUnitSurface) {");
+        expect(src).not.toContain("router.push");
+        expect(src).not.toContain("useRouter");
+        // …and no pathname branch either. A listener that asks WHERE IT IS has re-acquired the
+        // distinction that produced the blank surface.
+        expect(src).not.toContain("usePathname");
     });
 });
 
