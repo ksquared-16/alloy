@@ -7,6 +7,7 @@
  * Commercial estimate only — never posts ledger charges.
  */
 
+import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import type { FinancialConfigApiResponse } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigTypes";
 
@@ -64,13 +65,8 @@ export default function AssignmentProposalControls({
         }
         if (!opportunityId) return;
         let cancelled = false;
-        fetch(`/api/admin/financial-config/opportunity/${opportunityId}`, {
-            credentials: "include",
-        })
-            .then(async (res) => {
-                if (!res.ok) return null;
-                return (await res.json()) as FinancialConfigApiResponse;
-            })
+        loadFinancialConfig(opportunityId)
+            .catch(() => null)
             .then((payload) => {
                 if (cancelled || !payload?.enrollments?.length) return;
                 const opts: AssignmentTuitionRateOption[] = [];

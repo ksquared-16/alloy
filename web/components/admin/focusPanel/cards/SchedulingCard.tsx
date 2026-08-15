@@ -1,5 +1,6 @@
 "use client";
 
+import { loadFinancialConfig } from "@/lib/adminV2/runtime/focusPanel/financialConfig/financialConfigResource";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { CalendarDays, Clock, DoorOpen, CalendarRange, Wallet } from "lucide-react";
 
@@ -1474,11 +1475,8 @@ function ScheduleEditor({
     useEffect(() => {
         if (!opportunityId) return;
         let cancelled = false;
-        fetch(`/api/admin/financial-config/opportunity/${opportunityId}`, { credentials: "include" })
-            .then(async (res) => {
-                if (!res.ok) return null;
-                return (await res.json()) as FinancialConfigApiResponse;
-            })
+        loadFinancialConfig(opportunityId)
+            .catch(() => null)
             .then((payload) => {
                 if (cancelled || !payload?.enrollments?.length) return;
                 const childName = child.name.trim().toLowerCase();
