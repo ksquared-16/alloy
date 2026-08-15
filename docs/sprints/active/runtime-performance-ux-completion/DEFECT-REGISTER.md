@@ -252,6 +252,49 @@ Two further repeated paths seen in the same sweep. **Class C**, unowned as yet.
 
 ## Open
 
+### M-1 · METHODOLOGY — most on-mount ×2 duplicates are React StrictMode, not product defects
+
+`reactStrictMode` is unset in `next.config.ts`, so Next defaults it **on**, and StrictMode
+double-invokes effects **in development only**. Measured on `/organization/processes` by
+toggling it:
+
+| StrictMode | Requests | Duplicates |
+|---|--:|--:|
+| on (default dev) | 37 | **8** |
+| off | 30 | **1** |
+
+**Seven of eight "duplicates" do not exist in production.** Any on-mount ×2 must be re-checked
+with StrictMode disabled before it is treated as a defect. This does not retract the fixes
+already made — those were ×22, or caused by an unstable dependency that re-fires on every queue
+re-resolution rather than only on mount, and all reached 1 rather than 2.
+
+### R-012 · Inbox re-fetches comms datasets on every open, and the count GROWS
+
+| Field | Value |
+|---|---|
+| **Surface** | Workspace → Inbox modal |
+| **Observed** | First open: 27 requests, `communications/templates` ×3, `templates?status=active` ×3, `announcements` ×3. **Reopen: ×4 each** |
+| **Classification** | C |
+| **Severity** | Medium — growth across opens is a leak, not StrictMode doubling (which is a flat ×2) |
+| **Status** | **Open — PARALLEL OWNER.** Communications is Slot 3's active sprint; not touched |
+
+### R-013 · Attendance has no launcher on this tenant
+
+| Field | Value |
+|---|---|
+| **Surface** | Workspace shell |
+| **Observed** | No sidebar entry matching Attendance; sidebar exposes Workspace, Inbox, Processing, Work Items only |
+| **Status** | **BLOCKED — surface not reachable on Firefly.** Not a runtime defect; the workspace cannot be certified until the module is enabled for this tenant |
+
+### R-010 · Household `address_line2` read-back — reassigned
+
+Runtime behaviour is isolated and correct: Children round-trips the identical surface, editor and
+save path (edit → PATCH 200 → converge → persist through reload → revert). `address_line2` persists
+to `field_values`, but identity truth is built from `person.primary_address_line2` /
+`person.address_line2` truth keys that are not sourced from it. **DATA MODEL OWNER** — where person
+addresses live is a data-model decision, not a runtime fix.
+
+
 ### R-010 · Waitlist child-grain Focus Panel renders no cards — CONFIGURATION, not runtime
 
 | Field | Value |
