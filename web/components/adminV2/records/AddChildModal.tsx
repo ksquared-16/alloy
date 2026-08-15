@@ -60,12 +60,12 @@ export type AddChildModalProps = {
 type Step = "household" | "details" | "identity" | "preview" | "done";
 
 const INPUT =
-    "w-full rounded border border-admin-border bg-white px-2.5 py-1.5 text-[13px] text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20";
+    "w-full rounded border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[13px] text-alloy-forge focus:border-alloy-juniper focus:outline-none focus:ring-1 focus:ring-alloy-juniper/20";
 const LABEL = "mb-1 block text-[11px] font-medium text-alloy-midnight/55";
 const PRIMARY_BTN =
-    "rounded bg-alloy-blue px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-blue/90 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded bg-[#00A283] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#009276] disabled:cursor-not-allowed disabled:opacity-50";
 const GHOST_BTN =
-    "rounded border border-admin-border px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5";
+    "rounded border border-alloy-stone/25 px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10";
 
 const BAND_COPY: Record<string, string> = {
     confirmed: "Almost certainly the same child",
@@ -288,8 +288,8 @@ export default function AddChildModal({
             data-add-child-modal="true"
             data-add-child-step={step}
         >
-            <div className="w-full max-w-[520px] rounded-lg border border-admin-border bg-white shadow-xl">
-                <header className="flex items-center justify-between border-b border-admin-border px-4 py-3">
+            <div className="w-full max-w-[520px] rounded-lg border border-alloy-stone/25 bg-white shadow-xl">
+                <header className="flex items-center justify-between border-b border-alloy-stone/25 px-4 py-3">
                     <div>
                         <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
                             Children
@@ -345,8 +345,8 @@ export default function AddChildModal({
                                                 onClick={() => setHousehold(h)}
                                                 className={`w-full rounded border px-2.5 py-2 text-left text-[13px] ${
                                                     household?.id === h.id
-                                                        ? "border-alloy-blue bg-alloy-blue/5"
-                                                        : "border-admin-border hover:bg-alloy-midnight/5"
+                                                        ? "border-alloy-juniper bg-alloy-juniper/[0.07]"
+                                                        : "border-alloy-stone/25 hover:bg-alloy-stone/10"
                                                 }`}
                                                 data-add-child-household={h.id}
                                             >
@@ -432,8 +432,8 @@ export default function AddChildModal({
                                                     }}
                                                     className={`w-full rounded border px-2.5 py-2 text-left disabled:cursor-not-allowed disabled:opacity-60 ${
                                                         selected?.record_id === c.record_id
-                                                            ? "border-alloy-blue bg-alloy-blue/5"
-                                                            : "border-admin-border hover:bg-alloy-midnight/5"
+                                                            ? "border-alloy-juniper bg-alloy-juniper/[0.07]"
+                                                            : "border-alloy-stone/25 hover:bg-alloy-stone/10"
                                                     }`}
                                                     data-add-child-candidate={
                                                         c.customer_member_id ?? c.person_id ?? c.record_id
@@ -524,7 +524,7 @@ export default function AddChildModal({
                             {/* The director already chose the family and the child, so the next
                                 question is which enrolment path this sibling takes. Create Lead is
                                 deliberately absent: it answers a question already answered. */}
-                            <div className="border-t border-admin-border pt-3" data-add-child-next="true">
+                            <div className="border-t border-alloy-stone/25 pt-3" data-add-child-next="true">
                                 <p className={LABEL}>What happens next?</p>
                                 <div className="flex flex-wrap gap-2">
                                     <button
@@ -553,7 +553,7 @@ export default function AddChildModal({
                     ) : null}
                 </div>
 
-                <footer className="flex items-center justify-between border-t border-admin-border px-4 py-3">
+                <footer className="flex items-center justify-between border-t border-alloy-stone/25 px-4 py-3">
                     <button
                         type="button"
                         className={GHOST_BTN}

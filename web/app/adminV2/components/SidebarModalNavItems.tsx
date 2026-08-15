@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
 // Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
-import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, CalendarClock, Contact } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, Contact } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -22,7 +22,6 @@ import {
     dispatchAdminV2OpenProcessingModal,
     dispatchAdminV2OpenSchedulingModal,
     dispatchAdminV2OpenRosterModal,
-    dispatchAdminV2OpenRecordsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -254,18 +253,23 @@ export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) 
 }
 
 /**
- * Roster — the operating plan and its actuality mode (Attendance); opens as a
- * workspace modal. Peer of Assignments, not a tab inside it: Assignments owns the
- * durable commitments, Roster answers who is expected where and when given them.
+ * Roster — the operating day AND the people it is made of; opens as a workspace modal.
+ *
+ * Peer of Assignments, not a tab inside it: Assignments owns the durable commitments, Roster answers
+ * who is expected where and when given them — and, since the Records re-home, who those people ARE.
+ *
+ * The ICON is the people mark rather than a calendar. The workspace keeps the name Roster, but its
+ * sections are Roster / Attendance / Staff / Children and a calendar names only the first two. An
+ * operator reaching for "where do I find Lennon" has to recognise this entry in the rail.
  */
 export function SidebarRosterNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Roster — who is expected where and when, and who is actually here"
+            title="Roster — the operating day, and the staff and children it is made of"
             label="Roster"
-            icon={<CalendarClock size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
             active={activeModal === "roster"}
             dataAttr="roster"
@@ -276,27 +280,3 @@ export function SidebarRosterNavItem({ collapsed }: { collapsed: boolean }) {
     );
 }
 
-/**
- * Records — the durable record-management home; opens as a workspace modal.
- *
- * A peer of the operational workspaces rather than a chapter of Organization: Organization
- * configures the business, Records is where an operator finds a human. It is deliberately last in
- * the operational group — you reach for it when the queues are not the answer.
- */
-export function SidebarRecordsNavItem({ collapsed }: { collapsed: boolean }) {
-    const activeModal = useActiveAdminV2WorkspaceModal();
-    return (
-        <SidebarModalNavButton
-            collapsed={collapsed}
-            title="Records — staff and children, whether or not they are in a queue"
-            label="Records"
-            icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
-            active={activeModal === "records"}
-            dataAttr="records"
-            onClick={() => {
-                dispatchAdminV2OpenRecordsModal();
-            }}
-        />
-    );
-}

@@ -32,12 +32,12 @@ export type DirectEnrollModalProps = {
 };
 
 const INPUT =
-    "w-full rounded border border-admin-border bg-white px-2.5 py-1.5 text-[13px] text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20";
+    "w-full rounded border border-alloy-stone/25 bg-white px-2.5 py-1.5 text-[13px] text-alloy-forge focus:border-alloy-juniper focus:outline-none focus:ring-1 focus:ring-alloy-juniper/20";
 const LABEL = "mb-1 block text-[11px] font-medium text-alloy-midnight/55";
 const PRIMARY_BTN =
-    "rounded bg-alloy-blue px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-blue/90 disabled:cursor-not-allowed disabled:opacity-50";
+    "rounded bg-[#00A283] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#009276] disabled:cursor-not-allowed disabled:opacity-50";
 const GHOST_BTN =
-    "rounded border border-admin-border px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5";
+    "rounded border border-alloy-stone/25 px-3 py-1.5 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10";
 
 export default function DirectEnrollModal({
     open,
@@ -164,8 +164,8 @@ export default function DirectEnrollModal({
             className="fixed inset-0 z-[120] flex items-start justify-center bg-alloy-midnight/30 p-6 pt-[10vh]"
             data-direct-enroll-modal="true"
         >
-            <div className="w-full max-w-[520px] rounded-lg border border-admin-border bg-white shadow-xl">
-                <header className="flex items-center justify-between border-b border-admin-border px-4 py-3">
+            <div className="w-full max-w-[520px] rounded-lg border border-alloy-stone/25 bg-white shadow-xl">
+                <header className="flex items-center justify-between border-b border-alloy-stone/25 px-4 py-3">
                     <div>
                         <p className="text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
                             Enrollment
@@ -291,7 +291,7 @@ export default function DirectEnrollModal({
                     </div>
 
                     {previewChanges ? (
-                        <ul className="mt-3 space-y-1 border-t border-admin-border pt-3" data-direct-enroll-preview="true">
+                        <ul className="mt-3 space-y-1 border-t border-alloy-stone/25 pt-3" data-direct-enroll-preview="true">
                             {previewChanges.map((c) => (
                                 <li key={c} className="text-[12px] leading-snug text-alloy-midnight/65">· {c}</li>
                             ))}
@@ -299,7 +299,7 @@ export default function DirectEnrollModal({
                     ) : null}
                 </div>
 
-                <footer className="flex items-center justify-between border-t border-admin-border px-4 py-3">
+                <footer className="flex items-center justify-between border-t border-alloy-stone/25 px-4 py-3">
                     <button
                         type="button"
                         className={GHOST_BTN}

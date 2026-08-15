@@ -32,6 +32,9 @@ import {
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
+import RecordsStaffSection from "@/components/adminV2/records/RecordsStaffSection";
+import RecordsChildrenSection from "@/components/adminV2/records/RecordsChildrenSection";
+import WorkspaceDurableRecordHost from "@/components/presentation/durableRecord/WorkspaceDurableRecordHost";
 import {
     type RosterData,
     type RosterFilterContext,
@@ -80,6 +83,19 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     /** Day-range health, reported up by the day surface for the control band. */
     const [dayHealth, setDayHealth] = useState<RosterHealthCounts | null>(null);
 
+    /**
+     * Positions and the org's SERVICE DATE, for the durable population sections.
+     *
+     * One bootstrap for the workspace, not one per section. Records loaded its own, and two
+     * bootstraps in one workspace is two answers to "what day is it" — a section that read the
+     * browser clock would disagree with the roster rendered beside it. Sites already come from
+     * Roster's own load, so this asks only for what Roster does not already have.
+     */
+    const [peopleBootstrap, setPeopleBootstrap] = useState<{
+        positions: { id: string; key: string | null; label: string }[];
+        todayYmd: string;
+    } | null>(null);
+
     /** Stale-response guard for every site-scoped load. */
     const loadSeq = useRef(0);
     const weekCache = useRef<Map<string, RosterData>>(new Map());
@@ -95,6 +111,41 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         },
         [focusRecord, onClose],
     );
+
+    // ── Durable population bootstrap — loaded once, on first need ────────────
+    //
+    // Deferred until Staff or Children is actually opened: the operating day is what Roster opens
+    // on, and paying for positions + service date on every Roster open would make the common case
+    // slower to serve a section the operator may never visit.
+    const needsPeopleBootstrap = section === "staff" || section === "children";
+    useEffect(() => {
+        if (!needsPeopleBootstrap || peopleBootstrap) return;
+        let alive = true;
+        void (async () => {
+            try {
+                const res = await fetch("/api/admin/records/bootstrap", { credentials: "include" });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    positions?: { id: string; key: string | null; label: string }[];
+                    todayYmd?: string;
+                };
+                if (!alive || !json.ok) return;
+                setPeopleBootstrap({
+                    positions: json.positions ?? [],
+                    todayYmd: json.todayYmd ?? new Date().toISOString().slice(0, 10),
+                });
+            } catch {
+                // The sections still work without positions (they only shape Staff cohorts), and a
+                // failed bootstrap must not leave the operator on a permanent spinner.
+                if (alive) {
+                    setPeopleBootstrap({ positions: [], todayYmd: new Date().toISOString().slice(0, 10) });
+                }
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [needsPeopleBootstrap, peopleBootstrap]);
 
     // ── Deep link ────────────────────────────────────────────────────────────
     const applyDeepLink = useCallback((detail: OpenRosterModalDetail | null) => {
@@ -310,6 +361,13 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                 ) : undefined
             }
         >
+            {/*
+              * The record host wraps the whole body, so opening Lennon layers his record OVER the
+              * section rather than replacing it. Nothing below is unmounted while a record is open,
+              * which is why the cohort, the server-paged offset, the filter and the scroll are still
+              * there on close — a structural property, not something restored afterwards.
+              */}
+            <WorkspaceDurableRecordHost hostKey="roster">
             <WorkspaceSurface tone={section === "roster" ? "canvas" : "stone"} scroll padded>
                 {section === "roster" ? (
                     <RosterSurface
@@ -425,7 +483,37 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         }
                     />
                 ) : null}
+
+                {/*
+                  * The durable population. Recomposed, not rewritten: the same section components,
+                  * the same server-owned cohort projections and the same record gesture Records
+                  * shipped — now with Roster's site actually supplied to Children, which Records
+                  * could never do because it had no site picker.
+                  */}
+                {section === "staff" ? (
+                    peopleBootstrap ? (
+                        <RecordsStaffSection
+                            positions={peopleBootstrap.positions}
+                            sites={(sites ?? []).map((s) => ({ id: s.id, label: s.name }))}
+                            todayYmd={peopleBootstrap.todayYmd}
+                        />
+                    ) : (
+                        <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading staff…</p>
+                    )
+                ) : null}
+
+                {section === "children" ? (
+                    peopleBootstrap ? (
+                        <RecordsChildrenSection
+                            todayYmd={peopleBootstrap.todayYmd}
+                            siteLocationId={siteId || null}
+                        />
+                    ) : (
+                        <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading children…</p>
+                    )
+                ) : null}
             </WorkspaceSurface>
+            </WorkspaceDurableRecordHost>
         </RosterWorkspaceShell>
     );
 }

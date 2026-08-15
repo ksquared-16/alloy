@@ -8,9 +8,9 @@ import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentatio
  * ledger those expectations are derived from. They lived under one noun and
  * answered two different questions.
  *
- * `records` is the durable record-management home: who the people are, independent of whether any
- * queue is currently working them. It is a peer of the operational workspaces, not a chapter of
- * Organization — Organization configures the business, Records is where you find a human.
+ * `roster` also holds the durable population — Staff and Children — as two of its four sections.
+ * They were a separate `records` workspace; that key is gone rather than left inert, because a modal
+ * key nothing can open is a trap for whoever reads this next.
  */
 export type AdminV2WorkspaceModalKey =
     | "inbox"
@@ -19,8 +19,7 @@ export type AdminV2WorkspaceModalKey =
     | "analytics"
     | "processing"
     | "scheduling"
-    | "roster"
-    | "records";
+    | "roster";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;

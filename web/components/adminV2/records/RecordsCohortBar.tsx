@@ -14,6 +14,7 @@
 
 import type { RecordCohort } from "@/lib/adminV2/records/recordCohorts";
 import { cohortCount } from "@/lib/adminV2/records/recordCohorts";
+import { WS_FIELD_SEARCH_CHROME } from "@/components/workspace/workspaceTokens";
 
 export default function RecordsCohortBar<T>({
     cohorts,
@@ -70,9 +71,13 @@ export default function RecordsCohortBar<T>({
                             onClick={() => onCohortChange(cohort.key)}
                             className={[
                                 "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
+                                // Bend Pine is the platform's SELECTION semantic (workspace
+                                // doctrine: pine for action/selection, never decoration). The
+                                // solid midnight chip these used read as a second, darker
+                                // vocabulary beside every other selected thing in the product.
                                 active
-                                    ? "bg-alloy-midnight text-white"
-                                    : "bg-alloy-midnight/5 text-alloy-midnight/70 hover:bg-alloy-midnight/10",
+                                    ? "bg-alloy-juniper/[0.12] text-alloy-juniper"
+                                    : "text-alloy-midnight/65 hover:bg-alloy-stone/[0.06] hover:text-alloy-midnight",
                             ].join(" ")}
                         >
                             {cohort.label}
@@ -95,7 +100,7 @@ export default function RecordsCohortBar<T>({
                     placeholder={filterPlaceholder}
                     aria-label={filterPlaceholder}
                     data-records-filter="true"
-                    className="w-48 rounded border border-admin-border bg-white px-2 py-1 text-[12px] text-alloy-midnight placeholder:text-alloy-midnight/40"
+                    className={`w-48 ${WS_FIELD_SEARCH_CHROME}`}
                 />
                 {trailing}
             </div>

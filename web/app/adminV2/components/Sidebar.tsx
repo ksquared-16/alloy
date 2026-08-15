@@ -36,7 +36,6 @@ import {
     SidebarProcessingNavItem,
     SidebarSchedulingNavItem,
     SidebarRosterNavItem,
-    SidebarRecordsNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -239,11 +238,11 @@ function SidebarNav({
 
     const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
     const schedulingLink = <SidebarSchedulingNavItem collapsed={collapsed} />;
-    // Roster sits next to Assignments: the plan beside the commitments it derives from.
+    // Roster sits next to Assignments: the plan beside the commitments it derives from — and, since
+    // the Records re-home, the durable Staff and Children the plan is made of. There is no separate
+    // Records entry: a director looking for a person and a director looking at a room are the same
+    // director, and the split asked them to decide which they were before they had looked.
     const rosterLink = <SidebarRosterNavItem collapsed={collapsed} />;
-    // Records sits after the operational workspaces: you reach for it when the queues are not the
-    // answer — a durable record, not a work item.
-    const recordsLink = <SidebarRecordsNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -493,7 +492,6 @@ function SidebarNav({
                                 {processingLink}
                                 {schedulingLink}
                                 {rosterLink}
-                                {recordsLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -515,7 +513,6 @@ function SidebarNav({
                                     {processingLink}
                                     {schedulingLink}
                                     {rosterLink}
-                                    {recordsLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}

@@ -133,6 +133,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             ok: true,
             model: encodeDurableRecordModel(model),
+            // The composed child, carried so the CONTEXTUAL card can resolve its configured field
+            // values without a second round trip. It is the same object the model was built from —
+            // not a re-read, which could disagree with the panel rendered beside it.
+            childSubject: composed.subject,
             contexts: await contextOptionsFor({
                 supabase,
                 orgId: ctx.orgId,

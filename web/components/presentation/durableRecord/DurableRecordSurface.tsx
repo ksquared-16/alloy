@@ -29,6 +29,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
+import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
+import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
+import {
+    resolveInitialContextOption,
+    type DurableRecordContextOption,
+} from "@/lib/context/durableRecordContextOptions";
+import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import {
     decodeDurableRecordModel,
     type DurableRecordModelWire,
@@ -38,7 +45,14 @@ import type { DurableSubjectType } from "@/lib/runtime/focus/durableRecordRoute"
 
 type LoadState =
     | { status: "loading" }
-    | { status: "ready"; model: FocusPanelWorkModeModel }
+    | {
+          status: "ready";
+          model: FocusPanelWorkModeModel;
+          /** Selectable business contexts. Empty is ordinary — a record can stand on its own. */
+          contexts: DurableRecordContextOption[];
+          /** The child, when this record is one — the contextual card composes against it. */
+          childSubject: DurableChildSubject | null;
+      }
     | { status: "not_found" }
     | { status: "error"; message: string };
 
@@ -47,12 +61,19 @@ export default function DurableRecordSurface({
     subjectId,
     /** The card the gesture asked to land on (ASPECT). Absent = the grain's default composition. */
     cardKey,
+    /**
+     * The business context the ENTRY would prefer to open on — a preference, never a requirement.
+     * Honoured only when the record actually holds it; absent, the first context wins.
+     */
+    contextKey,
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
     cardKey?: string | null;
+    contextKey?: string | null;
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
+    const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         setState({ status: "loading" });
@@ -66,20 +87,36 @@ export default function DurableRecordSurface({
                 return;
             }
             const json = (await res.json().catch(() => null)) as
-                | { ok?: boolean; model?: DurableRecordModelWire; message?: string }
+                | {
+                      ok?: boolean;
+                      model?: DurableRecordModelWire;
+                      contexts?: DurableRecordContextOption[];
+                      childSubject?: DurableChildSubject | null;
+                      message?: string;
+                  }
                 | null;
             if (!res.ok || !json?.ok || !json.model) {
                 setState({ status: "error", message: json?.message ?? "Could not open this record." });
                 return;
             }
-            setState({ status: "ready", model: decodeDurableRecordModel(json.model) });
+            const contexts = (json.contexts ?? []) as DurableRecordContextOption[];
+            setState({
+                status: "ready",
+                model: decodeDurableRecordModel(json.model),
+                contexts,
+                childSubject: (json.childSubject ?? null) as DurableChildSubject | null,
+            });
+            // The ENTRY's preference decides the initial context, filtered to ones the record
+            // actually holds. With no usable preference the projection's own first option wins —
+            // never a precedence invented in this component.
+            setSelectedContextKey(resolveInitialContextOption(contexts, contextKey)?.key ?? null);
         } catch (e) {
             setState({
                 status: "error",
                 message: e instanceof Error ? e.message : "Could not open this record.",
             });
         }
-    }, [subjectType, subjectId]);
+    }, [subjectType, subjectId, contextKey]);
 
     useEffect(() => {
         void load();
@@ -121,22 +158,49 @@ export default function DurableRecordSurface({
         );
     }
 
+    const selectedContext =
+        state.contexts.find((option) => option.key === selectedContextKey) ?? null;
+
     return (
         <div
-            className="min-h-0 flex-1 overflow-y-auto px-4 py-4"
+            className="flex min-h-0 flex-1 flex-col"
             data-durable-record="ready"
             data-durable-record-subject-type={state.model.subject.type}
             data-durable-record-subject-id={state.model.subject.id}
+            data-durable-record-context-count={state.contexts.length}
         >
-            <OpportunityFocusPanelModeGrid
-                model={state.model}
-                // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable record
-                // composes none of them, so there is nothing to select.
-                onSelectTab={() => {}}
-                requestedCardFocus={
-                    cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
-                }
+            {/* Only when there is a CHOICE. One context is not a decision. */}
+            <DurableRecordContextStrip
+                options={state.contexts}
+                selectedKey={selectedContextKey}
+                onSelect={setSelectedContextKey}
             />
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <OpportunityFocusPanelModeGrid
+                    model={state.model}
+                    // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable record
+                    // composes none of them, so there is nothing to select.
+                    onSelectTab={() => {}}
+                    requestedCardFocus={
+                        cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
+                    }
+                />
+
+                {/*
+                  * The CONFIGURED contextual card, when a context is selected and the record is a
+                  * child. It resolves the tenant's published composition for that context's
+                  * addressing tuple — the same document the native operational panel resolves.
+                  */}
+                {selectedContext && state.childSubject ? (
+                    <div className="mt-3">
+                        <DurableRecordContextualCard
+                            option={selectedContext}
+                            subject={state.childSubject}
+                        />
+                    </div>
+                ) : null}
+            </div>
         </div>
     );
 }

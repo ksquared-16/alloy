@@ -4,8 +4,8 @@
  * `?workspace=…&section=…` → open that workspace modal, once.
  *
  * Workspace modals are shell state, not routes, so a link from outside the shell has had no way to
- * name one. Records needs it: `/organization/staff` must keep working for old bookmarks, and its
- * only honest destination is Records → Staff.
+ * name one. The people surfaces need it: `/organization/staff` must keep working for old bookmarks,
+ * and its only honest destination is Roster → Staff.
  *
  * ── WHY THIS IS EXPLICIT AND NARROW ──
  *
@@ -21,8 +21,8 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
-import { dispatchAdminV2OpenRecordsModal } from "@/lib/adminV2/workspaceModalEvents";
-import { resolveRecordsSection } from "@/app/adminV2/records/recordsSections";
+import { dispatchAdminV2OpenRosterModal } from "@/lib/adminV2/workspaceModalEvents";
+import { resolveRosterSection } from "@/app/adminV2/roster/rosterSections";
 
 export default function WorkspaceModalDeepLink() {
     const params = useSearchParams();
@@ -37,9 +37,14 @@ export default function WorkspaceModalDeepLink() {
         if (!workspace) return;
         consumed.current = true;
 
-        if (workspace === "records") {
-            const section = resolveRecordsSection(params.get("section"));
-            dispatchAdminV2OpenRecordsModal(section ? { section } : undefined);
+        // `records` is kept as an ACCEPTED value, not a live workspace. Staff and Children moved
+        // under Roster, and every link ever written to Records — `/organization/staff`, an operator
+        // bookmark, a stored deep link — has to keep landing on the same two sections. Dropping the
+        // value would turn those into silent no-ops, which is the worst outcome available: the link
+        // still resolves, the page still loads, and nothing opens.
+        if (workspace === "records" || workspace === "roster") {
+            const section = resolveRosterSection(params.get("section"));
+            dispatchAdminV2OpenRosterModal(section ? { section } : undefined);
         }
 
         // ⚠ The strip is DEFERRED, and that is load-bearing.
