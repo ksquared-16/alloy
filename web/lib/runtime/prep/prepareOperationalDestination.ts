@@ -39,10 +39,26 @@ export async function prepareOperationalDestination(
     try {
         const terminal = await kernel.provisioning.prepare(ref);
         const snapshot = terminal?.snapshot;
+        /**
+         * `prewarmRecordWork` loads the OPPORTUNITY record-work VM. On a child-grain work view
+         * `recordOfAttention` is a child PARTICIPATION, not an opportunity, so warming it issued
+         * `GET /api/admin/view-models/drawer/opportunity/<participation-id>` — a 404.
+         *
+         * Observed on Firefly: preparing the Waitlist destination (`subjectGrain.subjectType` =
+         * `child`, two real children) 404'd on entry to views that never open that subject,
+         * including All.
+         *
+         * The answer states its own subject type, so ask it rather than assuming. A child
+         * destination has no opportunity VM to warm — the click prepares live, which is the
+         * documented best-effort contract. Absent subject type keeps the previous behaviour.
+         */
+        const subjectType = snapshot?.subjectGrain?.subjectType;
+        const warmsOpportunityVm = subjectType == null || subjectType === "opportunity";
         if (
             snapshot &&
             snapshot.terminal === "operational" &&
-            snapshot.recordOfAttention?.id
+            snapshot.recordOfAttention?.id &&
+            warmsOpportunityVm
         ) {
             await prewarmRecordWork(String(snapshot.recordOfAttention.id));
         }
