@@ -13,11 +13,24 @@
  *   Failure model: "operational · empty · error. THERE IS NO FOURTH OUTCOME, AND NO NON-OUTCOME."
  *   The deadline: "single, runtime-owned; its only product is `error`" (Art 4.5).
  *
- * SUPERSEDED / CANCELLED ARE NOT OUTCOMES. The Kernel admits exactly three terminal outcomes and
- * says so twice ("no fourth outcome"). A superseded or cancelled preparation is therefore DISPOSED —
- * it never terminates, never reaches K3, and never becomes a stored outcome. Disposal is a reason,
- * not a state in the terminal vocabulary. We model it exactly that way rather than inventing a
- * second vocabulary.
+ * SUPERSEDED / CANCELLED ARE NOT OUTCOMES. A superseded or cancelled preparation is DISPOSED — it
+ * never terminates, never reaches K3, and never becomes a stored outcome. Disposal is a reason, not a
+ * state in the terminal vocabulary. We model it exactly that way rather than inventing a second
+ * vocabulary.
+ *
+ * ── THE OUTCOME VOCABULARY GREW BY ONE, DELIBERATELY ──
+ *
+ * The Kernel doc says "no fourth outcome", and a fourth (`contextual`) is now admitted. That is a
+ * correction of the enumeration, NOT of the rule it was protecting. The rule is "no non-outcome": every
+ * preparation must reach exactly one terminal, so that something can say a preparation is over. That
+ * still holds — `contextual` is a terminal like any other, reached once, committed like any other.
+ *
+ * What the three-outcome enumeration got wrong is that it assumed every destination selects a cohort.
+ * `operational` and `empty` both presuppose a chosen Work View (rows, or a cohort observed to hold
+ * none); `error` says the answer failed. None of them can say "the operator named a record, and chose
+ * no cohort" — so that state had to borrow a lens to be expressible at all, which is precisely how
+ * `Kelly → Household` came to show `New` as selected. Widening the enumeration is what lets the
+ * runtime stop lying; keeping it at three would only push the lie one layer down.
  *
  * K2 does not decide what is visible. K3 Focus commits on these outcomes in D4;
  * "Provisioning never asks to be shown."
@@ -26,8 +39,13 @@ import type { AttentionRef, AttentionMovedEvent, AttentionScope } from "./attent
 import { ATTENTION_SCOPE, supersedes } from "./attention";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 
-/** The three terminal outcomes. There is no fourth. */
-export type PreparationOutcome = "operational" | "empty" | "error";
+/**
+ * The terminal outcomes. There is no NON-outcome — see the header note on why this is four, not three.
+ *
+ * `empty` means a SELECTED cohort holds no rows. `contextual` means no cohort was selected at all, so
+ * there is nothing whose emptiness could be reported. Collapsing the two would re-introduce a lens.
+ */
+export type PreparationOutcome = "operational" | "empty" | "error" | "contextual";
 
 /** Why a preparation was thrown away. NOT an outcome — it never reaches K3. */
 export type DisposalReason = "superseded" | "cancelled";

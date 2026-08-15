@@ -150,8 +150,12 @@ describe("D2 — K1 Attention", () => {
     it("11. Attention contains no fetched or presentation data", () => {
         const o = ownerAt();
         const ref = o.move({ scope: ATTENTION_SCOPE.SUBJECT, subject: "opp-1", source: "pointer" });
+        // `cohort` joined the coordinates: "the operator selected no cohort" is INTENT, exactly like
+        // `lens` and `subject`, and it is here for the same reason they are — nothing else in the
+        // runtime can carry it from the gesture to the answer and back through a reload. It is not
+        // fetched, not presentation, and holds no payload, which is what this test polices.
         expect(Object.keys(ref).sort()).toEqual([
-            "aspect", "destination", "lens", "principal", "scope", "source", "subject", "target", "tenant", "version",
+            "aspect", "cohort", "destination", "lens", "principal", "scope", "source", "subject", "target", "tenant", "version",
         ]);
         for (const forbidden of ["rows", "snapshot", "payload", "data", "layout", "presentation", "ready", "loading"]) {
             expect(ref).not.toHaveProperty(forbidden);
@@ -181,7 +185,7 @@ describe("D2 — K1 Attention", () => {
 
     it("tenant/principal isolation is absolute — attention never supersedes across a boundary", () => {
         const mine: AttentionRef = {
-            tenant: "org-1", principal: "user-1", scope: 0, target: "t", lens: null,
+            tenant: "org-1", principal: "user-1", scope: 0, target: "t", lens: null, cohort: null,
             subject: null, aspect: null, destination: null, source: "pointer", version: 9,
         };
         const theirs: AttentionRef = { ...mine, tenant: "org-2", version: 1 };

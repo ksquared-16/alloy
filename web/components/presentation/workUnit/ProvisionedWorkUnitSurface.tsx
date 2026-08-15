@@ -25,6 +25,7 @@ import { useCommittedFocus } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { OperationalSubjectProvider } from "@/components/presentation/workUnit/OperationalSubjectContext";
 import { CHILD_PRIMARY_ACTION_ABSENCE_COPY } from "@/lib/runtime/provisioning/childPrimaryActionAbsenceCopy";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
+import { hasOperatorSelectedWorkView } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 
 declare global {
     interface Window {
@@ -52,18 +53,29 @@ export function ProvisionedWorkUnitSurface() {
     const committedOp =
         committed?.snapshot.terminal === "operational" ? committed.snapshot : null;
 
+    // The operator NAMED a record and chose no cohort. Not a degraded operational surface: the pill
+    // strip renders with nothing selected, and nothing below may substitute a lens to fill the gap.
+    const committedContextual =
+        committed?.snapshot.terminal === "contextual" ? committed.snapshot : null;
+
+    // The terminals that carry a chosen lens. `terminal !== "error"` USED to mean this, and stopped
+    // meaning it the moment a lens-free terminal existed — `activeWorkView` is not a field of every
+    // non-error answer any more. Narrowed positively so a future terminal cannot silently join the
+    // "has a lens" side by not being an error.
+    const committedWithLens =
+        committed
+        && (committed.snapshot.terminal === "operational" || committed.snapshot.terminal === "empty")
+            ? committed.snapshot
+            : null;
+
     const processKey =
         committed && committed.snapshot.terminal !== "error"
             ? committed.snapshot.businessProcess.key
             : null;
-    const workViewId =
-        committed && committed.snapshot.terminal !== "error"
-            ? committed.snapshot.activeWorkView.id
-            : null;
-    const workViewKey =
-        committed && committed.snapshot.terminal !== "error"
-            ? committed.snapshot.activeWorkView.label.trim().toLowerCase().replace(/\s+/g, "_") || null
-            : null;
+    const workViewId = committedWithLens ? committedWithLens.activeWorkView.id : null;
+    const workViewKey = committedWithLens
+        ? committedWithLens.activeWorkView.label.trim().toLowerCase().replace(/\s+/g, "_") || null
+        : null;
 
     const publishedOverlay = usePublishedQueueRowSlotsOverlay({
         surfaceId: model?.queue.provenance?.surfaceId ?? null,
@@ -201,6 +213,19 @@ export function ProvisionedWorkUnitSurface() {
 
     const snapshot = committed.snapshot;
     const op = snapshot.terminal === "operational" ? snapshot : null;
+    const contextual = snapshot.terminal === "contextual" ? snapshot : null;
+    // Same terminals as `committedWithLens` above, re-narrowed off the local `snapshot` for the render.
+    const withLens =
+        snapshot.terminal === "operational" || snapshot.terminal === "empty" ? snapshot : null;
+    // ONE reading of "did the operator select a cohort", shared by every attribute below. Deriving it
+    // per-attribute is how a surface ends up claiming a lens in one place and denying it in another.
+    //
+    // `null` on an error terminal — genuinely undecidable there, not false. A refusal still renders the
+    // pill strip from its navigation frame and can legitimately show a selected pill, so answering
+    // "false" would contradict what the operator sees. Undecidable is reported by omitting the
+    // attribute, never by guessing a side.
+    const cohortSelected =
+        snapshot.terminal === "error" ? null : hasOperatorSelectedWorkView(snapshot);
     const firstRowKeys = effectiveModel.queue.rows[0]?.rowConfig;
     return (
         <div
@@ -217,12 +242,23 @@ export function ProvisionedWorkUnitSurface() {
             data-surface-instance={committed.surfaceId}
             data-terminal-outcome={committed.outcome}
             data-attention-version={committed.ref.version}
-            data-active-work-view={snapshot.terminal !== "error" ? snapshot.activeWorkView.id : undefined}
-            data-row-grain={snapshot.terminal !== "error" ? snapshot.rowGrain : undefined}
+            // ABSENT, not empty-string: an attribute that is not there cannot be read as a lens whose
+            // id happens to be blank. The same for the three below — a contextual surface has no row
+            // grain (no rows), no Context Frame (it was entered from no Work View), and no panel scope
+            // (scope is a statement about the subject's place in a cohort).
+            data-active-work-view={withLens ? withLens.activeWorkView.id : undefined}
+            data-cohort-selected={cohortSelected === null ? undefined : cohortSelected ? "true" : "false"}
+            data-row-grain={withLens ? withLens.rowGrain : undefined}
             data-record-of-attention={
                 snapshot.terminal === "operational" ? snapshot.recordOfAttention.id : undefined
             }
-            data-context-frame={snapshot.terminal !== "error" ? snapshot.contextFrame.workViewId : undefined}
+            data-contextual-subject={contextual ? contextual.subject.id : undefined}
+            data-contextual-aspect={
+                contextual?.aspect
+                    ? `${contextual.aspect.cardKey}${contextual.aspect.itemId ? `:${contextual.aspect.itemId}` : ""}`
+                    : undefined
+            }
+            data-context-frame={withLens ? withLens.contextFrame.workViewId : undefined}
             data-queue-row-slots-source={publishedOverlay ? "published_overlay_rematch" : "committed_snapshot"}
             data-queue-surface-id={effectiveModel.queue.provenance?.surfaceId ?? undefined}
             data-queue-surface-version={publishedOverlay?.fetchedAt ?? undefined}
@@ -251,9 +287,7 @@ export function ProvisionedWorkUnitSurface() {
             data-queue-row-has-contact-email={
                 firstRowKeys?.contact.fieldKeys?.some((k) => k.includes("email")) ? "true" : "false"
             }
-            data-focus-panel-scope={
-                snapshot.terminal !== "error" ? snapshot.focusPanelScopeState : undefined
-            }
+            data-focus-panel-scope={withLens ? withLens.focusPanelScopeState : undefined}
             data-operational-at-first-sight={committed.outcome === "operational" ? "true" : "false"}
         >
             <div
@@ -261,7 +295,13 @@ export function ProvisionedWorkUnitSurface() {
                 className="motion-surface-enter-forward flex min-h-0 flex-1 flex-col gap-5 lg:flex-row lg:items-stretch"
             >
                 <OperationalSubjectProvider
-                    subjectId={op ? op.recordOfAttention.id : null}
+                    // ONE Focus Panel path. The committed subject is the Record of Attention when a
+                    // cohort was paged, and the NAMED subject when one was not — same panel, same
+                    // provider, no second composition and no fabricated row to hang the person off.
+                    subjectId={op ? op.recordOfAttention.id : contextual ? contextual.subject.id : null}
+                    // How the subject was reached, which is what decides when the panel is resolved.
+                    // A contextual subject has no stage to report, and that is an answer, not a gap.
+                    attentionKind={contextual ? "contextual" : "operational"}
                     identitySeed={identitySeed}
                     situation={
                         op
@@ -307,9 +347,20 @@ export function ProvisionedWorkUnitSurface() {
                     // A — commit-critical subject identity truth (domain-declared bindings; renders identity cards meaningful at commit).
                     subjectIdentityTruth={op ? op.subjectIdentityTruth ?? null : null}
                     // R2 — the subject grain the ANSWER resolved. Threaded from the committed snapshot so
-                    // the panel never infers what the subject is. Taken from `op` only: a non-operational
-                    // terminal has no committed subject to describe.
-                    subjectGrain={op ? op.subjectGrain ?? null : null}
+                    // the panel never infers what the subject is. A contextual answer resolves it too
+                    // (from the subject's entity class rather than a lens's Row Grain), so it is carried
+                    // here as well — the alternative is the panel falling back to "a committed subject
+                    // is an opportunity", which is the assumption this field exists to retire.
+                    subjectGrain={
+                        op
+                            ? op.subjectGrain ?? null
+                            : contextual
+                              ? {
+                                    grain: contextual.subject.grain,
+                                    subjectType: contextual.subject.subjectType,
+                                }
+                              : null
+                    }
                     // A — the published Summary composition for the committed scope: the panel presents
                     // the PUBLISHED composition at commit, not the code default standing in for a fetch.
                     summaryDocSeed={op ? op.focusPanelSummaryDoc ?? null : null}

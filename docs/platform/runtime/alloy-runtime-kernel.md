@@ -1,7 +1,7 @@
 ---
 owner: runtime
-status: ratified
-last_reviewed: 2026-07-19
+status: canonical
+last_reviewed: 2026-08-14
 supersedes: []
 ---
 
@@ -120,6 +120,22 @@ Attention is the kernel's only cause (Art 2.3).
 
 **Owned state.** The current attention (scope + target) and its supersession identity. Nothing else.
 
+> **Cohort selection is part of the intent, and is stated rather than inferred.** Attention carries
+> whether the operator selected a Work View at all — `cohort: "none"` when they named a **record**
+> instead. This is not a second kind of state: it is the same intent the other coordinates carry, and it
+> is here because nothing else can carry it from the gesture to the answer and back through a reload.
+>
+> It cannot be folded into `lens: null`, and the reason is exact. `lens: null` already means *"no lens
+> was NAMED — resolve the configured default"*, which is what nearly every Workspace link, every cold
+> URL without `?work_view_id`, and every Search click has always sent. Reading that same absence as *"no
+> cohort was SELECTED"* would make ordinary destinations contextual by accident and darken pills that
+> operators rely on. Two different intents were sharing one encoding; they are now separate.
+>
+> A **LENS** movement clears it — choosing a cohort is precisely what stops being contextual — and a
+> **SURFACE** movement does not inherit it, because arriving somewhere new must not carry the previous
+> surface's answer about whether a cohort was chosen. It is projected as `?cohort=none` so a reload
+> restores the absence instead of resolving a default.
+
 **Inputs.** Operator expressions. Cold-load hydration (a URL is read *once*, into attention — Art 2.4).
 
 **Outputs.** `attention.moved`. The acknowledgment obligation discharged.
@@ -209,9 +225,20 @@ patches.
   or timing.
 - Settlement begins only after commit and may never gate one.
 
-**Failure model.** Three terminal outcomes, all of them **workable places** (Art OC.4 Law 4):
-`operational` · `empty (authoritatively)` · `error (honestly)`. **There is no fourth outcome, and no
-non-outcome:** a preparation that will not conclude is concluded by the deadline as `error`.
+**Failure model.** Four terminal outcomes, all of them **workable places** (Art OC.4 Law 4):
+`operational` · `empty (authoritatively)` · `error (honestly)` · `contextual (no cohort selected)`.
+**There is no non-outcome:** a preparation that will not conclude is concluded by the deadline as
+`error`.
+
+> **The enumeration was three, and the correction is worth stating.** The rule this clause protects is
+> *no non-outcome* — every preparation reaches exactly one terminal, so that something can say a
+> preparation is over. That is unchanged. What the three-outcome list got wrong is that it assumed every
+> destination selects a cohort: `operational` and `empty` both presuppose a chosen Work View (rows, or a
+> cohort observed to hold none), and `error` says the answer failed. None of them can say *"the operator
+> named a record, and chose no cohort"* — so that state had to borrow a lens to be expressible at all,
+> which is how opening a person landed on the host unit's first Work View with its pill lit. `contextual`
+> is that absence, made serveable. `empty` means a **selected** cohort holds no rows; `contextual` means
+> none was selected, so there is nothing whose emptiness could be reported.
 
 **Recovery model.** The deadline is the recovery: it converts a stall into a truth. It may produce
 `error` and **never** `operational` (Art OC.4 Law 3). Beyond that, Provisioning does not recover — a
@@ -498,8 +525,9 @@ And, on the other axis, **outside the kernel**:
      time may not change what the operator is SHOWN.
 
   ⑤  Preparation terminates                                          [K2]
-     preparation.terminal(operational | empty | error)  ── E2
-     all three are workable places. there is no fourth outcome and no non-outcome.
+     preparation.terminal(operational | empty | error | contextual)  ── E2
+     all four are workable places. there is no non-outcome.
+     contextual = the operator named a RECORD. no cohort was selected, so no pill is lit.
 
   ⑥  The gap closes                                                  [K3]
      focus.committed  ── E3        ← OPERATIONAL COMMIT: focus catches up to attention

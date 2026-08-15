@@ -11,14 +11,21 @@ import { AttentionOwner, ATTENTION_SCOPE, urlFromAttention, type AttentionRef } 
 import { FocusOwner, surfaceIdFor } from "@/lib/runtime/kernel/focus";
 import type { PreparationTerminal, PreparationOutcome } from "@/lib/runtime/kernel/provisioning";
 import type { ProvisioningAnswer } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
+import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 
 const IDENT = { tenant: "org-1", principal: "user-1" };
 
-/** ProvisioningAnswer is a discriminated union; the `error` variant carries neither field. */
-const lensOf = (s: Readonly<ProvisioningAnswer> | undefined) =>
-    s && s.terminal !== "error" ? s.activeWorkView.id : null;
+/**
+ * ProvisioningAnswer is a discriminated union. `error` carries neither field, and `contextual` carries
+ * `activeWorkView: null` with no Context Frame at all — it was entered from no Work View.
+ *
+ * `lensOf` reads the lens through the canonical accessor, so this file cannot develop its own opinion
+ * about what "no lens" means. `frameOf` narrows POSITIVELY to the two terminals that page a cohort
+ * rather than to "not an error" — the latter was right only while every non-error terminal had a lens.
+ */
+const lensOf = (s: Readonly<ProvisioningAnswer> | undefined) => selectedWorkViewId(s);
 const frameOf = (s: Readonly<ProvisioningAnswer> | undefined) =>
-    s && s.terminal !== "error" ? s.contextFrame.workViewId : null;
+    s && (s.terminal === "operational" || s.terminal === "empty") ? s.contextFrame.workViewId : null;
 
 const snapshot = (outcome: PreparationOutcome, lens = "new_leads"): ProvisioningAnswer =>
     ({
@@ -174,8 +181,8 @@ describe("D4 — K3 Focus", () => {
         // Work Unit are the same; only queue truth and the panel composition changed.
         expect(after.snapshot.terminal !== "error" && after.snapshot.businessProcess.key).toBe("enrollment");
         expect(after.snapshot.terminal !== "error" && after.snapshot.workUnit.key).toBe("new_leads");
-        expect(after.snapshot.terminal !== "error" && after.snapshot.activeWorkView.id).toBe("tours");
-        expect(before.snapshot.terminal !== "error" && before.snapshot.activeWorkView.id).toBe("new_leads");
+        expect(lensOf(after.snapshot)).toBe("tours");
+        expect(lensOf(before.snapshot)).toBe("new_leads");
     });
 
     it("15+23. Record of Attention movement preserves lens/process/Context Frame AND the surface identity", () => {
@@ -251,7 +258,7 @@ describe("D4 — K3 Focus", () => {
 
     it("surface identity is keyed by (target, lens) — subject is not part of the visible world's identity", () => {
         const base: AttentionRef = {
-            ...IDENT, scope: 2, target: "new_leads", lens: "new_leads",
+            ...IDENT, scope: 2, target: "new_leads", lens: "new_leads", cohort: null,
             subject: "opp-1", aspect: null, destination: null, source: "pointer", version: 1,
         };
         expect(surfaceIdFor(base)).toBe(surfaceIdFor({ ...base, subject: "opp-2" }));

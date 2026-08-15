@@ -157,7 +157,15 @@ export type WorkUnitSelectedSubjectSource =
     | "retained_out_of_view"
     | "strategy"
     | "first_row"
-    | "empty";
+    | "empty"
+    /**
+     * NO COHORT WAS SELECTED, so this ladder never ran — a contextual surface.
+     *
+     * Distinct from `empty`, which is the settled result of paging a chosen Work View and finding
+     * nothing. Here nothing was paged. The operator's subject is real, but it is carried by the
+     * contextual answer to the Focus Panel; it is not a queue row and has no selected rail to render.
+     */
+    | "no_cohort";
 
 /**
  * The subject a populated Work View resolves to, resolved SYNCHRONOUSLY so the surface never commits

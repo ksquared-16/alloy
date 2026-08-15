@@ -1,0 +1,236 @@
+# Contextual focus — the consumer wiring checklist
+
+Produced by admitting `ContextualFocusAnswer` to the `ProvisioningAnswer` union and letting CI's
+exhaustiveness failures enumerate every consumer. Local `tsc` cannot run on this host, so CI is the
+enumerator — PR #432, run `31849133743`.
+
+**42 errors across 8 files.** Each is a consumer that must explicitly decide what it does when no
+cohort is selected. None may be silenced by widening a type or re-defaulting a lens — that would
+restore the defect.
+
+## Product code
+
+| File | Errors | What it must decide |
+|---|---:|---|
+| `components/presentation/workUnit/ProvisionedWorkUnitSurface.tsx` | 6 | render the surface with **no pill selected**, no queue page; Focus Panel still composes |
+| `lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot.ts` | 5 | build a surface model with `activeWorkView: null` and no rows/rowGrain |
+| `lib/presentation/runtime/useWorkUnitSettlement.ts` | 3 | Settlement has no cohort to count — must not fabricate totals |
+| `lib/runtime/provisioning/provisioningAnswerDestination.ts` | 1 | URL projection carries **no** `work_view_id` |
+| `lib/runtime/kernel/provisioning.ts` | 1 | K2 accepts a contextual answer as a valid prepared state |
+| `lib/runtime/provisioning/contextualFocusAnswer.ts` | 2 | **FIXED** — wrong import path for the grain types |
+
+## Tests
+
+| File | Errors |
+|---|---:|
+| `tests/runtime/d4Focus.test.ts` | 4 |
+| `tests/runtime/d3AttentionToProvisioning.live.test.ts` | 2 |
+
+These assert against `activeWorkView` unconditionally; they need to narrow on the terminal first.
+Their existing assertions must be **preserved**, not relaxed — they are the operational-path
+regression gates.
+
+## The rule while wiring
+
+Every fix must take the form "when there is no selected cohort, do X" — never "assume there is one".
+`hasOperatorSelectedWorkView` is the single predicate for that question; do not re-derive it per
+component.
+
+## Remaining after this checklist is cleared
+
+producer branch in `workUnitProvisioningAnswer.ts` (explicit contextual intent, distinct from
+`work_view_id = null`) → cold entry → kernel attention movement → Search wiring → browser cert →
+merge.
+
+---
+
+# BLOCKER found while clearing the checklist — `DestinationId` cannot express contextual focus
+
+`lib/runtime/graph/destinationId.ts`:
+
+```ts
+export type DestinationId = {
+    workUnitId: string;
+    workViewId: string;          // ← NOT nullable
+    subjectId: string | null;
+    focusMode: FocusMode | null;
+};
+```
+
+`destinationIdFromAnswer` is the canonical map from a provisioning answer to the history/destination
+key. Contextual focus has **no** Work View, so it cannot produce a `DestinationId` as typed. This is
+not a rendering decision that can be made per-consumer — it is the shape of the runtime's destination
+model, and it decides how contextual attention behaves in history and Back navigation.
+
+Two resolutions, and the repository does not settle it:
+
+**Option 1 — `workViewId: string | null`.**
+The honest modelling: a destination that selected no cohort says so. The encoder already carries a
+`NULL_SEGMENT` sentinel ("Sentinel a segment collapses to when its value is `null`"), which suggests
+nullable segments were anticipated. Cost: ripples to every `DestinationId` consumer, and each must be
+checked for the same defect this sprint exists to remove — a null lens quietly re-defaulted on
+restore.
+
+**Option 2 — contextual focus returns `null` (no canonical destination).**
+Smaller blast radius, but it means contextual attention is **not restorable from history**: a Back
+navigation to a contextual state has nothing to key on, and would fall through to whatever the
+surface resolves — very likely the host unit's default view, which is the original defect arriving by
+a different road.
+
+Option 1 looks correct on the evidence (the sentinel exists precisely for this), but it is a change to
+the runtime's canonical destination identity and should be made deliberately, with the full
+typecheck loop available to enumerate its consumers — the same forcing-function method that produced
+this checklist.
+
+**Nothing was changed for this item.** A speculative edit was reverted rather than left on a decision
+that had not been made.
+
+---
+
+# Option 1 landed — and it rippled cleanly
+
+`DestinationId.workViewId` is now `string | null`. **The migration produced no new consumer errors.**
+
+| | errors | files |
+|---|---:|---|
+| after union membership | 42 | 8 |
+| after Option 1 migration | **38** | 7 |
+
+The count went *down* (the grain-import fix), and the file set is unchanged. Nothing outside
+`destinationId.ts` broke on the nullable dimension: the encoder already carried `NULL_SEGMENT`, the
+parser needed only to stop requiring the lens, and `destinationNodeKey` needed the sentinel so a
+lens-free destination gets its own graph node.
+
+That is strong evidence Option 1 was the right call — the destination model absorbed an optional
+cohort dimension without collateral damage, which is what you would expect if the dimension was
+genuinely optional all along and had merely been typed as required.
+
+## Remaining — all contextual-terminal exhaustiveness, none of it destination-model
+
+| File | Errors |
+|---|---:|
+| `ProvisionedWorkUnitSurface.tsx` | 12 |
+| `workUnitSurfaceModelFromSnapshot.ts` | 10 |
+| `useWorkUnitSettlement.ts` | 6 |
+| `d4Focus.test.ts` | 4 |
+| `d3AttentionToProvisioning.live.test.ts` | 2 |
+| `provisioningAnswerDestination.ts` | 2 |
+| `provisioning.ts` (K2) | 2 |
+
+`provisioningAnswerDestination.ts` is now unblocked: with a nullable lens it can map a contextual
+answer to `{ workUnitId: host, workViewId: null, subjectId: subject.id }` — the edit reverted earlier
+pending this decision.
+
+---
+
+# The checklist is cleared — and what clearing it required
+
+**All 38 errors gone; `Web typecheck` green.** The count was 19 unique errors reported twice, once per
+typecheck graph (production + tests) — worth stating because "38" and "19" are the same list, and a
+future reader diffing counts would otherwise conclude half of them vanished unexplained.
+
+Every fix took the required form. None used a cast, a widened type, optional chaining that hides
+semantics, or a fallback to a default or first Work View.
+
+| File | What it decided |
+|---|---|
+| `provisioning.ts` (K2) | `contextual` admitted as a fourth terminal outcome |
+| `provisioningAnswerDestination.ts` | `{ host, workViewId: null, subjectId }` — the absence recorded |
+| `workUnitSurfaceModelFromSnapshot.ts` | pills rendered with NONE active; no rows; no KPI slots |
+| `ProvisionedWorkUnitSurface.tsx` | narrowed POSITIVELY to the lens-bearing terminals |
+| `useWorkUnitSettlement.ts` | nothing to settle → every region `empty`, never `pending` |
+| `d4Focus` / `d3Attention` | narrowed by terminal; every operational assertion preserved verbatim |
+
+## Two things the checklist did not predict
+
+**1. `terminal !== "error"` was the defect's own idiom.** Six of the seven files asked "is this not an
+error?" and then read `activeWorkView`. That was right only while every non-error terminal happened to
+have a lens. Each is now narrowed positively to `operational | empty`, so a future lens-free terminal
+cannot join the "has a lens" side merely by not being an error.
+
+**2. `rows: []` is ambiguous, and the queue said so out loud.** With no lens the surface model produced
+zero rows and no error — which `queueRegionRenderState` reads as AUTHORITATIVE EMPTY, rendering *"No
+records in this view"* about a view nobody selected. `queue.cohortSelected: false` and a `no-cohort`
+render state separate the two. It deliberately shows no dashed ghost rows: those promise rows that are
+coming, and none are.
+
+Likewise `isOperationallyResolved` requires a `situation`, which a contextual subject truthfully lacks —
+the panel would have painted a permanent spinner over a record that had already arrived. Resolution now
+asks the question that fits how the subject was reached.
+
+# Contextual focus is STATED, end to end
+
+The kernel change worth recording, because the obvious alternative is wrong:
+
+> **Inference from `lens == null` was considered and rejected.** `Lennon → Waitlist` does not name its
+> lens either — no operator focus destination ever has — so inferring contextual focus from a null lens
+> would have made that destination lens-free too and darkened a pill operators depend on. `lens: null`
+> means "no lens was NAMED"; `cohort: "none"` means "no cohort was SELECTED". Both are now expressible.
+
+`AttentionRef.cohort` → `?cohort=none` → `ProvisioningRequest.mode` → the contextual terminal, and back
+through history via the stamped destination's null `workViewId`. The producer decides: Search returns
+`host_work_view_id` only for a view that DEMONSTRABLY holds the subject, so its absence is a statement,
+not a gap. Destinations that resolved a view are untouched.
+
+# Verified
+
+- `Web typecheck` green (both graphs).
+- 24 assertions in `contextualFocusNoDefaultLens.test.ts` — the absence survives encoding, decoding,
+  history restore, cold entry, provisioning, rendering and operator focus.
+- Failing-test FILE LISTS diffed against a detached `origin/staging` worktree across `tests/runtime`,
+  `tests/presentation`, `tests/admin/drawer`: **30 failing files on the branch, 31 on staging, branch is
+  a strict subset.** Zero regressions. One pre-existing failure fixed
+  (`d4SettlementReservedGeometry` #6, whose regex had gone stale against a refactor).
+
+---
+
+# Browser certification — 9/9, and the two defects only a browser could find
+
+`certification/playwright/contextual-focus.cert.spec.ts`, against the local cert tenant on
+`CERT_APP_PORT=3016`. A–H all pass. Every contextual assertion requires BOTH halves — no cohort
+claimed AND the Focus Panel composing cells > 0 — because on this surface an *unlit* pill is exactly
+what a failed composition also looks like.
+
+| | proven |
+|---|---|
+| A | a record destination commits `contextual`: no pill, no `work_view_id`, `no-cohort` queue, panel composes |
+| B | reload stays contextual — no default lens |
+| C | choosing a cohort selects it, clears the no-cohort queue, and composes |
+| D | leaving a cohort for a record clears the lens; no stale selection |
+| E | **control** — a child's cohort destination is untouched: pill lit, `cohortSelected=true`, composed |
+| F | Back restores the record, not the host's first view |
+| G | rapid record ⇄ cohort switching never lands mixed |
+| H | a cohort is reachable from the keyboard, not only a pointer |
+
+## Two defects the unit tests could not have caught
+
+**1. The browser asks D1 through a DIFFERENT seam, and it dropped the statement.**
+`provisioningAnswerUrl(target, lens, subject)` carried no cohort. Attention stated contextual focus,
+the URL projected it, the server entry resource read it — and the one request that actually fetches
+the answer asked for the default-lens one. Every case failed on a surface that was correct everywhere
+except where it counted. `cohort` is now part of the cache KEY, not just the request: two answers for
+the same host and subject, one with a cohort and one without, are different answers.
+
+Alongside it, a SECOND place a lens is filled in: `composeProvisioningAnswerForRoute` applies the
+slug's implied view when none was requested. Correct for an operational request; for a contextual one
+it is the original defect by another name.
+
+**2. The pills rendered and did nothing.** `selectWorkView` narrowed the snapshot to
+`operational | empty`, so a contextual surface offered a lens set it could not act on — the resolver
+saw a pill on no strip, could not place it on the current unit, and returned `noop`. Offering the
+choice is worthless if the choice cannot be taken.
+
+Both are the same shape as the original defect: a consumer that assumed a cohort. Neither is visible
+from a type error, because neither is a type — one is a URL and one is a narrowing that stays valid.
+
+## Fixture note
+
+The cert tenant needed `05-sibling-child-participations.sql` applied BEFORE
+`04-child-grain-work-views.sql`: fixture 04 verifies that a waitlist participation exists, and 05 is
+what creates it. Applied directly (both are additive and idempotent); `alloy-certify reset` was never
+run.
+
+## Not proven here
+
+Staging QA (`Kelly → Household`, `Lennon → Waitlist`) stays manual post-merge — this repo holds no
+staging operator credentials.

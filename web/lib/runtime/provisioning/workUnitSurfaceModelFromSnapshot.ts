@@ -146,7 +146,9 @@ function lensSetInDeclaredOrder(lensSet: readonly LensSetEntry[]): LensSetEntry[
 
 /**
  * The committed world → the canonical Work Unit model.
- * Total function: every terminal (`operational` | `empty` | `error`) yields ONE coherent surface.
+ * Total function: every terminal (`operational` | `empty` | `error` | `contextual`) yields ONE
+ * coherent surface. `contextual` is the one that selected no cohort, and its branch is where the
+ * runtime stops pretending otherwise — see it below.
  */
 export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): WorkUnitSurfaceModel {
     // ── HONEST ERROR (U-O7) — one coherent error surface. Never a false-empty, and never partial
@@ -198,6 +200,69 @@ export function workUnitSurfaceModelFromSnapshot(snapshot: ProvisioningAnswer): 
             departmentId: null,
             workUnitId: snapshot.workUnit?.id ?? null,
             ready: true, // committed: an honest error IS a workable place, not a pending state
+            readiness: READY_ALL,
+        };
+    }
+
+    // ── CONTEXTUAL (no cohort selected) — the operator named a RECORD, not a Work View.
+    //
+    //    Everything below this branch is derived from a chosen lens: the published presentation, the
+    //    rows, the selected subject "source", the actions projection. A contextual answer carries none
+    //    of them, and must not borrow them. The surface it produces is therefore small on purpose:
+    //
+    //      pills   rendered, NONE active — the choice is offered, not pre-made. `isActive` is
+    //              hard-coded `false` rather than compared against something, because there is nothing
+    //              to compare against and a comparison is where a default would eventually creep in.
+    //      queue   `cohortSelected: false`. Not `rows: []` alone — that reads as "this view is empty"
+    //              and QueueRegion would say so about a view nobody selected.
+    //      header  the HOST's name. True (it is the hosting unit) and not a lens claim.
+    //      KPIs    none. KPI slots are a published composition of the lens's presentation; there is no
+    //              presentation here, and reserving slots would promise Settlement values that will
+    //              never come.
+    //      actions the right rail stays empty; `departmentId` still comes from the host unit, which is
+    //              real and is what the command rail scopes against.
+    if (snapshot.terminal === "contextual") {
+        return {
+            header: {
+                title: snapshot.workUnit.name,
+                subtitle: null,
+                identityIcon: null,
+                identityAccent: null,
+                kpis: [],
+            },
+            workViews: lensSetInDeclaredOrder(snapshot.lensSet).map((l): WorkViewLinkModel => ({
+                id: l.id,
+                label: l.label,
+                // NOTHING is selected. See `hasOperatorSelectedWorkView` — one reading of that question.
+                isActive: false,
+                count: null,
+                href: null,
+                attentionCount: null,
+                overdueCount: null,
+                primaryGrainCount: null,
+                supportingGrainCount: null,
+            })),
+            queue: {
+                rows: [],
+                totalCount: null,
+                loading: false,
+                // No error: nothing failed. The absence of a cohort is not a fault.
+                error: null,
+                cohortSelected: false,
+                rowConfig: EMPTY_ROW_SLOTS,
+            },
+            // The absence, carried verbatim. No consumer may read this as "resolve the default".
+            activeWorkViewId: null,
+            // NOT the contextual subject. These two fields are QUEUE-ROW selection — the selected rail
+            // and the row-neighbour prewarm — and there are no rows. The operator's subject is real and
+            // reaches the Focus Panel from the answer itself (`ProvisionedWorkUnitSurface`), which is
+            // the one path that does not have to pretend a person is an opportunity row.
+            selectedRecordId: null,
+            selectedSubject: { selectedRecordId: null, source: "no_cohort" },
+            rightRailActions: [],
+            departmentId: snapshot.workUnit.departmentId,
+            workUnitId: snapshot.workUnit.id,
+            ready: true,
             readiness: READY_ALL,
         };
     }

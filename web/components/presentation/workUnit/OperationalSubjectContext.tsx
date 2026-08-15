@@ -32,6 +32,19 @@ export type OperationalSubject = {
     /** Record of Attention — the committed subject, from the frozen snapshot. Null = none committed. */
     subjectId: string | null;
     /**
+     * HOW the operator arrived at this subject — and therefore what "resolved" means for it.
+     *
+     * `operational`  chosen from an evaluated cohort. The subject has a stage, and the panel's
+     *                Situation → Decision → Action is the whole point of it being open.
+     * `contextual`   NAMED. No cohort was selected, so there is no stage context to assert. The record
+     *                still composes; what is absent is the operational framing, not the record.
+     *
+     * This exists because {@link isOperationallyResolved} requires a `situation`, and a contextual
+     * subject truthfully has none — leaving the panel to report itself permanently unresolved and paint
+     * a spinner over a record that had in fact arrived. Absence of a stage is not absence of a subject.
+     */
+    attentionKind: "operational" | "contextual";
+    /**
      * Record of Truth entity type for the committed subject.
      *
      * R2: read from the answer's resolved `subjectGrain`, never inferred. This was
@@ -132,7 +145,7 @@ export type OperationalSubject = {
 };
 
 const EMPTY: OperationalSubject = {
-    subjectId: null, entityType: null, subjectGrain: null, identitySeed: null, situation: null,
+    subjectId: null, attentionKind: "operational", entityType: null, subjectGrain: null, identitySeed: null, situation: null,
     decision: null, action: null, actionAbsence: null,
     stageWorkRuntime: null, publishedStageInputs: null, workIntentRuntime: null, subjectIdentityTruth: null,
     summaryDocSeed: null,
@@ -142,6 +155,7 @@ const Ctx = createContext<OperationalSubject>(EMPTY);
 /** Fed from the committed model — never from the drawer, never resolved locally. */
 export function OperationalSubjectProvider({
     subjectId,
+    attentionKind = "operational",
     identitySeed,
     situation,
     decision,
@@ -156,6 +170,8 @@ export function OperationalSubjectProvider({
     children,
 }: {
     subjectId: string | null;
+    /** See {@link OperationalSubject.attentionKind}. Omitted = operational, as every caller was. */
+    attentionKind?: OperationalSubject["attentionKind"];
     subjectGrain?: { grain: OperationalGrain; subjectType: OperationalSubjectType } | null;
     identitySeed?: OpportunityDrawerQueuePreviewSeed | null;
     situation?: OperationalSubject["situation"];
@@ -172,6 +188,7 @@ export function OperationalSubjectProvider({
     const value = useMemo<OperationalSubject>(
         () => ({
             subjectId,
+            attentionKind,
             // R2: the answer decides what the subject IS. `subjectGrain` is absent only on paths that
             // predate the answer carrying it (enriched/drawer-VM producer, fixtures), where the historical
             // family shape is the compatible reading — never a grain guess for a child answer, which
@@ -189,7 +206,7 @@ export function OperationalSubjectProvider({
             subjectIdentityTruth: subjectIdentityTruth ?? null,
             summaryDocSeed: summaryDocSeed ?? null,
         }),
-        [subjectId, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
+        [subjectId, attentionKind, subjectGrain, identitySeed, situation, decision, action, actionAbsence, stageWorkRuntime, publishedStageInputs, workIntentRuntime, subjectIdentityTruth, summaryDocSeed],
     );
     return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -200,6 +217,13 @@ export function OperationalSubjectProvider({
  * Settlement fetch: Detail/History arriving later must never make the operator's panel "unresolved".
  */
 export function isOperationallyResolved(s: OperationalSubject): boolean {
+    // CONTEXTUAL ATTENTION IS RESOLVED WHEN THE SUBJECT IS PRESENT — there is no further question.
+    //
+    // Situation → Decision → Action describes a subject's position in a COHORT, and no cohort was
+    // selected here. Requiring a `situation` would report the panel unresolved forever and paint a
+    // spinner over a subject that had already arrived — the same failure the clause below fixed for
+    // children, one grain over. Having no stage is not the same as not having arrived.
+    if (s.attentionKind === "contextual") return s.subjectId != null;
     // Resolution is that the ACTION QUESTION HAS BEEN ANSWERED — not that the answer was "yes".
     // Requiring `action != null` outright made "this stage configures no action for a child", a fully
     // resolved and perfectly ordinary state, render as a permanent loading spinner. The family path is

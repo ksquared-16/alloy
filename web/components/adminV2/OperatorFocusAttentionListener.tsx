@@ -48,8 +48,8 @@ export default function OperatorFocusAttentionListener() {
             // over the case's unit, which answers at family grain: siblings in one case sit in
             // different stages, so the family answer cannot be right for both. Falls back to the
             // case unit when the stage has no configured view — a fallback, never an override.
-            const hostSlug =
-                (detail?.host_work_view_id ?? "").trim() || (detail?.host_work_unit_key ?? "").trim();
+            const viewSlug = (detail?.host_work_view_id ?? "").trim();
+            const hostSlug = viewSlug || (detail?.host_work_unit_key ?? "").trim();
             const hostId = (detail?.entity_id ?? "").trim();
             // Nothing holds this record: there is no operational surface to move to, and inventing
             // one would commit the operator to a queue the record is not in.
@@ -62,6 +62,26 @@ export default function OperatorFocusAttentionListener() {
             // because there the case IS the evaluated row.
             const memberId = (detail?.operational_member_id ?? "").trim() || hostId;
 
+            // ── NO COHORT HOLDS THEM, AND THAT IS STATED ────────────────────────────────────────
+            //
+            // `host_work_view_id` is the Work View that DEMONSTRABLY contains this subject: the
+            // producer resolves it from real memberships and returns null when there are none. Its
+            // absence is therefore not a gap to paper over — it is the producer saying "no cohort
+            // holds them; here is only their host."
+            //
+            // Both branches used to collapse into the slug, and the surface then resolved that host's
+            // default lens. That is why `Kelly → Household` shows `New` as selected: not a cohort she
+            // is in, just the first one configured on the unit her household's case happens to sit on.
+            // Stating the absence lands on the record with no pill lit, which is what was asked for.
+            //
+            // Destinations that DID resolve a view are untouched: All / Tours / Waitlist still address
+            // a Work View by slug, byte for byte as before.
+            const cohort = viewSlug ? null : ("none" as const);
+            // Contextual attention selects the HOST RECORD. `operational_member_id` is a Work View ROW
+            // identity — a participation, for a child-grain lens — and no Work View was selected here,
+            // so using it would name a row of a cohort nobody chose.
+            const subjectId = cohort === "none" ? hostId : memberId;
+
             // The href is the destination's honest address; the adapter parses the attention it
             // expresses. The selected row rides along so the surface commits the record the operator
             // asked for rather than the lens's default subject, and the card + item ride along as
@@ -69,8 +89,9 @@ export default function OperatorFocusAttentionListener() {
             move(
                 operatorWorkUnitHrefFromKey(hostSlug),
                 null,
-                memberId,
+                subjectId,
                 formatCardFocusAspect(detail.card_focus ?? null),
+                { cohort },
             );
         };
 

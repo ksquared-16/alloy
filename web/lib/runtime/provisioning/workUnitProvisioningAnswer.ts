@@ -48,6 +48,8 @@ import type { WorkViewConfigV1Stored } from "@/lib/lifecycle/workViewsConfigV1";
 import { lensStageKeys } from "@/lib/lifecycle/lensStageKeys";
 import { familyStageDestinationOperability } from "@/lib/runtime/provisioning/workViewDestinationOperability";
 import { resolveTargetedWorkViewMember } from "@/lib/runtime/provisioning/targetedWorkViewMember";
+// Type-only: erased at build time, so the reverse reference does NOT create an import cycle.
+import type { ContextualFocusAnswer } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import {
     loadSettlementLocators,
     resolveProvisioningPopulationWorkUnitId,
@@ -114,6 +116,10 @@ import {
     type OperationalSubjectType,
 } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/types";
+import {
+    composeContextualFocusAnswer,
+    contextualSubjectGrainFromEntityType,
+} from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { loadChildGrainMembersForLens } from "@/lib/runtime/provisioning/childGrainMembership";
 import {
@@ -403,7 +409,24 @@ export type ProvisioningAnswer =
               activeWorkView: { id: string; label: string };
           } | null;
           timings: ProvisioningTimings;
-      };
+      }
+    /**
+     * CONTEXTUAL FOCUS — the operator named a RECORD, not a cohort.
+     *
+     * A distinct terminal rather than an `operational` answer with nullable fields, because every one
+     * of `activeWorkView` / `rowGrain` / `rows` / `recordOfAttention` / `contextFrame` would have to
+     * become optional to express it — and each `?` is a place a consumer can forget to check and
+     * silently fall back to a default lens. That fallback IS the defect: today
+     * `findWorkViewById(...) ?? firstVisibleWorkView(...)` makes "no lens requested" identical to
+     * "the first lens", which is why `Kelly → Household` shows `New` as selected.
+     *
+     * Nothing here failed. The operator asked for a person and got a person.
+     *
+     * The shape is owned by `contextualFocusAnswer.ts` and is proven independently there; this
+     * membership is what forces every consumer to decide, via exhaustiveness, what it renders when no
+     * cohort is selected.
+     */
+    | ContextualFocusAnswer;
 
 export type ProvisioningErrorCode =
     | "unauthorized"
@@ -474,6 +497,26 @@ export type ProvisioningRequest = {
     /** Attention is an INPUT, never derived from the route inside this resource (K1 owns intent). */
     requestedWorkViewId?: string | null;
     requestedSubjectId?: string | null;
+    /**
+     * WHAT THE OPERATOR ASKED FOR — a cohort, or a record.
+     *
+     * `contextual_focus` is stated EXPLICITLY and is never inferred from `requestedWorkViewId == null`.
+     * That absence already has a meaning here — "no lens named, resolve the configured default" — and
+     * it is the meaning every cold entry and every Workspace link relies on. Overloading it would make
+     * "open this Work Unit" and "open this record" the same request, which is the defect restated: the
+     * runtime could not tell them apart, so it answered both with the first Work View.
+     *
+     * Omitted = `operational`. Every existing caller keeps its exact behaviour.
+     */
+    mode?: "operational" | "contextual_focus";
+    /**
+     * Contextual only — the entity CLASS of `requestedSubjectId`, as the producer named it. Resolved
+     * into the panel's subject grain by `contextualSubjectGrainFromEntityType`; a class with no Focus
+     * Panel representation is refused rather than composed as a family.
+     */
+    requestedSubjectEntityType?: string | null;
+    /** Contextual only — the card + row inside the panel (the kernel's ASPECT). */
+    requestedAspect?: { cardKey: string; itemId: string | null } | null;
 };
 
 /**
@@ -692,7 +735,98 @@ export async function composeWorkUnitProvisioningAnswer(
     const stages = activeStagesForProcess(process);
     const workViews = savedWorkViewsFromDepartmentMetadata(deptRow?.metadata);
 
+    const lensSet: LensSetEntry[] = workViews.map((v, i) => ({
+        id: v.id,
+        label: v.label,
+        displayOrder: v.display_order ?? i,
+    }));
+
+    // ── CONTEXTUAL FOCUS — resolved HERE, before any lens resolution. ────────────────────────────
+    //
+    //    The position of this branch is the whole point. One line below, `findWorkViewById(...) ??
+    //    firstVisibleWorkView(...)` turns "no lens named" into "the first lens", and every field after
+    //    it is derived from that choice. A contextual request that fell through to it could not be
+    //    rescued afterwards — by then the answer would already be about a cohort, and un-choosing a
+    //    lens downstream is exactly the kind of after-the-fact correction that leaves a lit pill
+    //    somewhere. So it never reaches it.
+    //
+    //    The lens set IS carried: the operator must still be able to pick a cohort next. Offering the
+    //    choice is not making it.
+    //
+    //    No membership check. A contextual answer selects a HOST RECORD, not a cohort member, so
+    //    `subject_unavailable` — which asks "is this row in this lens?" — has no question to ask. That
+    //    is also why nothing here consults the capped population: asking whether the subject appears in
+    //    a page of ≤N rows would answer membership by pagination, and there is no membership to answer.
+    if (req.mode === "contextual_focus") {
+        timings.configuration_ms = now() - tCfg;
+        const subjectId = (req.requestedSubjectId ?? "").trim();
+        if (!subjectId) {
+            return fail(
+                "subject_unavailable",
+                "contextual focus was requested without a subject",
+                workUnit,
+                null,
+            );
+        }
+        // THE SUBJECT'S CLASS — declared by the producer when it knows, VERIFIED otherwise.
+        //
+        // A Work Unit hosts opportunities: `opportunities.work_unit_id = <this unit>` is its entire
+        // population. So a contextual subject on this host is an opportunity — a fact about the host,
+        // not a fallback. It is still confirmed by an EXACT single-row read rather than assumed, so an
+        // id that is not one refuses instead of composing someone else's panel as a family.
+        //
+        // Exact-id, org-scoped. Deliberately NOT scoped to `work_unit_id`: that would be a membership
+        // question, and a contextual answer selects a host record rather than a cohort member.
+        let entityType = (req.requestedSubjectEntityType ?? "").trim();
+        if (!entityType) {
+            const tSubject = now();
+            const probe = await req.supabase
+                .from("opportunities")
+                .select("id")
+                .eq("org_id", req.orgId)
+                .eq("id", subjectId)
+                .maybeSingle();
+            timings.records_ms = now() - tSubject;
+            if (probe.error) {
+                return fail("records_unavailable", `contextual subject lookup failed: ${probe.error.message}`, workUnit, null);
+            }
+            if (!probe.data) {
+                return fail("subject_unavailable", `no record "${subjectId}" in this tenant`, workUnit, null);
+            }
+            entityType = "opportunity";
+        }
+        const grain = contextualSubjectGrainFromEntityType(entityType);
+        if (!grain.ok) {
+            return fail("grain_unsupported", grain.reason, workUnit, null);
+        }
+        const contextual = composeContextualFocusAnswer({
+            orgId: req.orgId,
+            workUnit,
+            businessProcess: { key: process.key, name: process.name },
+            lensSet,
+            // The record the panel composes against. For a family case this is the same record as the
+            // subject — the case IS what the operator named — and the two fields stay separate because
+            // at child grain they are not (PR #429: the participation is the subject, the case is the
+            // host).
+            recordOfTruth: { entityType, id: subjectId },
+            subject: { id: subjectId, grain: grain.grain, subjectType: grain.subjectType },
+            aspect: req.requestedAspect ?? null,
+            startedAt: t0,
+            now,
+        });
+        if (!contextual.ok) {
+            // The composer refuses rather than degrades; its refusal is a configuration-class problem
+            // with the request, not a missing record.
+            return fail("subject_unavailable", contextual.reason, workUnit, null);
+        }
+        return contextual.answer;
+    }
+
     // U-P2: active lens. Attention is an input (K1 owns intent); the route never derives it here.
+    //
+    // The `?? firstVisibleWorkView` fallback below is CORRECT for an operational request — "open this
+    // Work Unit" genuinely means "show me its default cohort". What it must never see is a request
+    // that named a record, which is why contextual focus is answered above and never arrives here.
     const activeView =
         findWorkViewById(workViews, req.requestedWorkViewId) ?? firstVisibleWorkView(workViews);
     timings.configuration_ms = now() - tCfg;
@@ -700,12 +834,6 @@ export async function composeWorkUnitProvisioningAnswer(
         // No lens at all is not an error — it is an honest, nameable scope state.
         return fail("no_active_view", "no Work View is configured for this Business Process", workUnit);
     }
-
-    const lensSet: LensSetEntry[] = workViews.map((v, i) => ({
-        id: v.id,
-        label: v.label,
-        displayOrder: v.display_order ?? i,
-    }));
     const contextFrame = { workViewId: activeView.id, workViewLabel: activeView.label };
     /**
      * From here on, a refusal can still tell the operator where else to go. Every `fail(...)` below

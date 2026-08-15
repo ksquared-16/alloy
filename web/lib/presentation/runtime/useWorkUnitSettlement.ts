@@ -78,10 +78,22 @@ const EMPTY_COUNTS = new Map<string, number | null>();
 
 /** Resolve the deferred values for a committed Work Unit surface. Null snapshot → nothing to settle. */
 export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): WorkUnitSettlement {
-    // `error` carries no reserved regions to fill; operational/empty do.
-    const operational = snapshot && snapshot.terminal !== "error" ? snapshot : null;
-    const workUnitId = operational?.workUnit.id ?? null;
-    const locators = operational?.settlement ?? null;
+    // Only `operational` and `empty` carry reserved regions to fill.
+    //
+    // `error` never resolved them. `contextual` has NOTHING TO SETTLE — every region here is a property
+    // of a chosen cohort: KPI values come from the lens's published header composition, pill counts and
+    // the queue total count a cohort's rows, and all three arrive via `settlement` locators the
+    // contextual answer does not carry. Settling anything for it would mean picking a lens to count.
+    const settleable =
+        snapshot && (snapshot.terminal === "operational" || snapshot.terminal === "empty")
+            ? snapshot
+            : null;
+    // A contextual surface HAS a host work unit; that is hosting truth and stays true. What it has no
+    // claim to is a settled value. `nothingToSettle` keeps the regions from reporting `pending` — a
+    // promise that something is still coming, when nothing ever will be.
+    const nothingToSettle = snapshot?.terminal === "contextual";
+    const workUnitId = settleable?.workUnit.id ?? (snapshot?.terminal === "contextual" ? snapshot.workUnit.id : null);
+    const locators = settleable?.settlement ?? null;
 
     const siteFilter = useWorkspaceSiteFilter();
     const siteId = siteFilter?.selectedSiteId ?? null;
@@ -92,14 +104,14 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
     // as the resolved KPI keys are the same the array reference is reused — so the settlement effect
     // does not churn and the metrics request is issued once per key set (not once per commit cycle).
     const kpiKeySig = useMemo(() => {
-        if (!operational) return "";
+        if (!settleable) return "";
         const seen = new Set<string>();
-        for (const slot of operational.presentation.header.kpiSlots) {
+        for (const slot of settleable.presentation.header.kpiSlots) {
             const k = slot.sourceKey?.trim();
             if (k && isKnownOipMetricKey(k)) seen.add(k);
         }
         return [...seen].sort().join("|");
-    }, [operational]);
+    }, [settleable]);
     const kpiKeys = useMemo<OipMetricKey[]>(
         () => (kpiKeySig ? (kpiKeySig.split("|") as OipMetricKey[]) : []),
         [kpiKeySig],
@@ -168,6 +180,11 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
 
     // ── Honest per-region states. Pending and error are visually quiet (reserved geometry). ──
     const regions = useMemo<WorkUnitSettlement["regions"]>(() => {
+        // NOTHING TO SETTLE is a settled state, not a pending one. `empty` across the board, so the
+        // surface never renders a reserved slot waiting on a value that no cohort will ever produce.
+        if (nothingToSettle) {
+            return { kpi: "empty", counts: "empty", queueTotal: "empty", rightRail: "empty" };
+        }
         const locatorsResolved = !!locators && locators.status === "resolved";
         // When locators are absent the snapshot has none yet (pending); when present but `unavailable`,
         // that region genuinely cannot settle (error) — but the surface stays operational regardless.
@@ -205,7 +222,7 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
                     : "empty";
 
         return { kpi, counts, queueTotal, rightRail };
-    }, [locators, kpiKeys.length, kpiValues, kpiSettled, targets.length, totalsState.settled, rightRailForSurface]);
+    }, [nothingToSettle, locators, kpiKeys.length, kpiValues, kpiSettled, targets.length, totalsState.settled, rightRailForSurface]);
 
     return {
         kpiValues,

@@ -21,18 +21,23 @@ export default function ProvisioningAnswerSeed({
     target,
     lens = null,
     subject = null,
+    cohort = null,
+    aspect = null,
     answer,
     producer = "unlabelled",
 }: {
     target: string;
     lens?: string | null;
     subject?: string | null;
+    /** `"none"` = no cohort selected. Part of the cache identity — see `provisioningAnswerUrl`. */
+    cohort?: "none" | null;
+    aspect?: string | null;
     answer: ProvisioningAnswer | null;
     /** TEMPORARY (producer search): which render site mounted this seed. Diagnostic only. */
     producer?: string;
 }) {
     useMemo(() => {
-        seedProvisioningForRoute({ target, lens, subject }, answer, undefined, producer);
-    }, [target, lens, subject, answer, producer]);
+        seedProvisioningForRoute({ target, lens, subject, cohort, aspect }, answer, undefined, producer);
+    }, [target, lens, subject, cohort, aspect, answer, producer]);
     return null;
 }
