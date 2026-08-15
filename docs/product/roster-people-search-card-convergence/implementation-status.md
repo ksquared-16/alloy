@@ -74,14 +74,33 @@ The DOM hooks for all of it are in place (`data-durable-record-*`, `data-context
 
 ### 2. Slice 7 — durable Household
 
-Not started. The audit established the seam precisely and it is unchanged:
-`customers` + `customer_persons` + `customer_members` is already the family model, so no second one
-is needed — but `buildHouseholdCardEvidence` reads CASE-shaped truth (`_opportunity_persons`,
-inquiry children). A durable household composer must produce equivalent truth from the canonical
-household edges or the card composes empty.
+Not started — but the STOP CONDITION IS ANSWERED, and it is negative. A durable Household does **not**
+require copying case-only truth, and does not need a second family model.
 
-`resolveSubjectDestination` still sends a household result to its case, with a comment marking the
-spot where it becomes a `durable_record` once the grain exists.
+The evidence is in `buildOpportunityFamilyContactRows`
+(`lib/admin/drawer/opportunityFamilyContactsOrdering.ts:82`). It reads two sources, not one:
+
+- `_opportunity_persons` — case-scoped, and merely the FIRST source
+- `_customer_persons` — the canonical household edge, filtered by `customer_id`, producing complete
+  contact rows (`person_id`, `role_type`, `name`, `phone`, `email`, `photo_url`) with no case
+  involved at all
+
+The second branch is self-sufficient. Its own comment already anticipates the durable case — "a
+household guardian arriving via `_customer_persons` while shell `_opportunity_persons` is frozen" —
+so a composer that supplies only the household edge yields real contacts, not an empty card.
+
+The one place to be careful is CHILDREN. `record._inquiry_children` is OCM-shaped, and a household's
+children are `customer_members` (which `childCohortQuery` already projects per household). The
+composer must supply them from `customer_members` and NOT shape them into `_inquiry_children` —
+shaping household truth into a case-shaped key is precisely the copying the stop condition forbids,
+and it is avoidable rather than inherent.
+
+So Slice 7 is unblocked. What it needs, in order:
+`composeDurableHouseholdSubject` → `"household"` added to `DurableSubjectType` /
+`OperationalSubjectType` / `KNOWN_GRAINS` → a `grains` declaration on the existing `household` card
+(it carries none, so it is case-only by the silence rule) → the household branch of
+`resolveSubjectDestination` becomes a `durable_record` like child and person, at the spot already
+marked in that file.
 
 ### 3. Slice 9 — Employment editing
 
