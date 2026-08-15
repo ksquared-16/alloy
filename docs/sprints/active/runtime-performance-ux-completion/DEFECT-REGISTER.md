@@ -252,6 +252,41 @@ Two further repeated paths seen in the same sweep. **Class C**, unowned as yet.
 
 ## Open
 
+## Command → Destination runtime (new certification category)
+
+Matrix built from what Firefly actually renders on the What's Next card of the family subject
+`d097e1a8-…`, not from assumed command names.
+
+| Class | Command | Available on Firefly? |
+|---|---|---|
+| Communications | **Message** | Yes — certified below |
+| Forms | **Send form** | Yes — not yet exercised |
+| Tours | **Tour ▾** (menu) | Yes — not yet exercised |
+| Placement / Assignment | — | **No representative rendered** |
+| Stage / Work / Outcome | — | **No representative rendered.** "Current work · Review waitlist position" is text, not a command |
+
+### R-014 · A command destination commits in place with no way back
+
+| Field | Value |
+|---|---|
+| **Surface** | Focus Panel → What's Next → **Message** |
+| **Expected** | Cancelling/closing the destination returns to the same place |
+| **Observed** | The composer replaces the command set in place. `Message` and `Send form` launchers both disappear, body text shrinks 1883 → 1635, and **no dismiss control exists in the card**. All 18 buttons enumerated after open: New, Email, SMS, Kelly Kurzman, Add, Add another email, CC/BCC, Bold, Italic, Underline, Bulleted list, Insert link, Insert, Emoji, Attach, Templates, Send, Send later — **no Close, Cancel, Back or ✕** |
+| **Classification** | J / E |
+| **Severity** | High — the operator's only escape is browser navigation or re-selecting the row |
+| **Status** | **Open — PARALLEL OWNER.** The composer is Communications-owned; adding the dismiss affordance there would collide with Slot 3. The *grammar* (every command destination must be dismissable) is shared runtime and Slot 5 should own it once Slot 3 lands |
+
+**What IS certified on this transition**, with StrictMode disabled so the counts are production-shaped:
+
+- **Immediate acknowledgement:** composer present at **+56 ms**, needing **zero** requests.
+- **Context already present:** recipient resolves to *Kelly Kurzman* on open — no wait for enrichment.
+- **Context preserved:** subject, selected row `d097e1a8-…` and URL all unchanged.
+- **Duplicate-free:** 3 requests, 0 duplicates. Under StrictMode this read as 5 requests / 2 duplicates
+  (`participant-decisions` and `family-close`) — both artifacts, per M-1. No fix was made.
+- **Content shrinks before replacement** (1883 → 1635) — the destination replaces rather than adds,
+  which is the "content disappearing" pattern; recorded with R-014 since they share a cause.
+
+
 ### M-1 · METHODOLOGY — most on-mount ×2 duplicates are React StrictMode, not product defects
 
 `reactStrictMode` is unset in `next.config.ts`, so Next defaults it **on**, and StrictMode
