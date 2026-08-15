@@ -69,6 +69,7 @@ function prewarmSubjectDestination(target: string, lens: string | null, subjectI
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
+import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
 
 /** The surface has nothing to render until K3 commits. There is no third state. */
@@ -173,12 +174,24 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             if (!id) return;
             // Read Focus at click time — do not trust a stale React closure for settlement/lensSet.
             const rawSnap = kernel.getFocus().current?.snapshot ?? focus.current?.snapshot ?? null;
+            // THE HOST AND ITS LENS SET, from any terminal that resolved them — contextual included.
+            //
+            // Narrowing this to operational|empty left a contextual surface with `views: []` and no
+            // host, so the resolver saw a pill that was not on any strip, could not place it on the
+            // current unit, and returned `noop`: the pills rendered, and clicking them did NOTHING.
+            // A contextual answer carries its lens set precisely so the operator can still choose a
+            // cohort — offering the choice is worthless if the choice cannot be taken.
+            const hosted = rawSnap && rawSnap.terminal !== "error" ? rawSnap : null;
+            // SETTLEMENT is the part contextual genuinely does not have: count locators belong to a
+            // chosen cohort. Kept separate rather than folded in, so the absence stays visible.
             const snap =
-                rawSnap && (rawSnap.terminal === "operational" || rawSnap.terminal === "empty")
-                    ? rawSnap
+                hosted && (hosted.terminal === "operational" || hosted.terminal === "empty")
+                    ? hosted
                     : null;
-            const currentWorkUnitId = snap?.workUnit.id ?? null;
-            const currentWorkViewId = snap?.activeWorkView.id ?? kernel.attention.get()?.lens ?? null;
+            const currentWorkUnitId = hosted?.workUnit.id ?? null;
+            // `null` on a contextual surface — there is no lens to be leaving, which is also what
+            // stops the resolver treating the first click as a no-op re-selection of itself.
+            const currentWorkViewId = selectedWorkViewId(hosted) ?? kernel.attention.get()?.lens ?? null;
             const locators = snap?.settlement ?? null;
             const canonicalLocationByViewId = new Map<string, WorkViewCanonicalLocation>();
             if (locators?.status === "resolved") {
@@ -190,7 +203,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                     });
                 }
             }
-            const views = (snap?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
+            const views = (hosted?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
                 id: lens.id,
                 label: lens.label,
             }));
@@ -275,9 +288,12 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             const id = workViewId.trim();
             if (!id) return;
             const rawSnap = kernel.getFocus().current?.snapshot ?? focus.current?.snapshot ?? null;
+            // Same reading as the click below it — a warm keyed differently from the movement it is
+            // warming is a wasted fetch, and on a contextual surface an empty lens set warms nothing.
+            const hosted = rawSnap && rawSnap.terminal !== "error" ? rawSnap : null;
             const snap =
-                rawSnap && (rawSnap.terminal === "operational" || rawSnap.terminal === "empty")
-                    ? rawSnap
+                hosted && (hosted.terminal === "operational" || hosted.terminal === "empty")
+                    ? hosted
                     : null;
             const locators = snap?.settlement ?? null;
             const canonicalLocationByViewId = new Map<string, WorkViewCanonicalLocation>();
@@ -290,7 +306,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                     });
                 }
             }
-            const views = (snap?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
+            const views = (hosted?.lensSet ?? []).map((lens: { id: string; label: string }) => ({
                 id: lens.id,
                 label: lens.label,
             }));
@@ -302,7 +318,7 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             const action = resolveSelectWorkViewAction({
                 workViewId: id,
                 currentWorkViewId: current.lens,
-                currentWorkUnitId: snap?.workUnit.id ?? null,
+                currentWorkUnitId: hosted?.workUnit.id ?? null,
                 canonicalLocationByViewId,
                 targetInputs,
                 surfaceLensIds: views.map((v) => v.id),
@@ -324,6 +340,11 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
                 ...current,
                 lens: id,
                 scope: ATTENTION_SCOPE.LENS,
+                // CHOOSING A LENS ENDS CONTEXTUAL FOCUS, and the warm must be keyed the way the real
+                // movement will be. Spreading `current` from a contextual surface would carry
+                // `cohort: "none"` alongside a named lens — a key that describes nothing, warming an
+                // answer the click can never consume.
+                cohort: null,
                 subject: null,
                 aspect: null,
                 destination: current.destination
