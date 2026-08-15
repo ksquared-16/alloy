@@ -316,29 +316,22 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
         expect(operationalKey, "an operational destination is offered").toMatch(/^(process|work_view):/);
         await operational.click();
 
-        // THE CLAIM, in the order it can be observed: no Roster hop, and no durable record host —
-        // an operational destination goes to work, not to a record. Captured BEFORE the strictest
-        // assertion so the evidence exists whichever way that one lands.
+        /*
+         * THE CLAIM: an operational destination goes to WORK.
+         *
+         * It left the operator on `/workspace` until the listener learned to navigate when the
+         * operator is not already on a work-unit surface — the kernel spans the workspace, so the
+         * movement succeeded and painted nothing, because the root renders no Surface Host.
+         */
+        await expect(page).toHaveURL(/\/work-unit\//, { timeout: SETTLE });
+        // …and it is WORK, not a record and not Roster.
         await expect(page.locator(ROSTER_SHELL)).toHaveCount(0);
         await expect(page.locator(PANEL_READY)).toHaveCount(0);
+        // The subject the operator asked for rides the address, so the surface commits it rather
+        // than the lens's default.
+        expect(new URL(page.url()).searchParams.get("subject_id")).toBeTruthy();
+
         await page.screenshot({ path: path.join(SHOTS, "I-search-operational.png"), fullPage: true });
-
-
-        /*
-         * WHAT THIS SCENARIO DOES NOT PROVE, AND WHY IT SAYS SO.
-         *
-         * The native Focus Panel composing after an operational search click is NOT asserted here.
-         * Observed behaviour from the workspace ROOT is that the movement does not occur — and that
-         * path is untouched by this sprint: `dispatchOperatorFocusSelection` and
-         * `OperatorFocusAttentionListener` are byte-identical to `origin/staging` (the only diff in
-         * this control is the durable branch added ABOVE the operational one).
-         *
-         * Asserting it here would attribute a pre-existing gap to this change, and deleting the
-         * scenario would hide it. So the sprint's own claim — record intent and operational intent
-         * are different, and an operational destination goes to work rather than to a record or to
-         * Roster — is asserted, and the composition step is reported as an open item instead of
-         * being quietly folded into a green run.
-         */
     });
 });
 

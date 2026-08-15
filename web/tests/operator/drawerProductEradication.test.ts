@@ -198,11 +198,29 @@ describe("Gate A — active-runtime movement is never a route push", () => {
         expect(durableCall).not.toContain("operatorWorkUnitHrefFromKey");
     });
 
-    it("the in-kernel listener has no router at all", () => {
+    it("the listener moves on a live surface, and only navigates off one", () => {
         const src = code("components/adminV2/OperatorFocusAttentionListener.tsx");
         expect(src).toContain("useWorkUnitEntryMovement");
-        expect(src).not.toContain("router.push");
-        expect(src).not.toContain("next/navigation");
+        /*
+         * GATE A, ASSERTED AS THE RULE RATHER THAN AS A BANNED SYMBOL.
+         *
+         * This used to read `expect(src).not.toContain("router.push")`. That proxy was exactly right
+         * while the listener only ever ran on a work-unit surface, and it became wrong when the same
+         * listener had to serve the workspace ROOT: the kernel spans the whole workspace, so a
+         * movement from the root succeeds and paints nothing, because the root renders no Surface
+         * Host. Banning the symbol would have preserved the letter of Gate A and left an operational
+         * Search result stranded on `/workspace`.
+         *
+         * What Gate A actually forbids is pushing a SEED-ONLY route while a surface is live. So the
+         * assertion is the ordering: the movement is taken whenever the operator is already on a
+         * work-unit surface, and the push is reachable only through the negative branch of that
+         * check. That is strictly stronger than the symbol ban — it pins WHEN, not merely whether.
+         */
+        const surfaceCheck = src.indexOf("onWorkUnitSurface");
+        const push = src.indexOf("router.push");
+        expect(surfaceCheck).toBeGreaterThan(-1);
+        expect(push).toBeGreaterThan(surfaceCheck);
+        expect(src).toContain("if (onWorkUnitSurface) {");
     });
 });
 

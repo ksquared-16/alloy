@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import { formatCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
@@ -30,6 +31,18 @@ import {
  * `useWorkUnitEntryGesture` — "an entry point that is not wired to K1 is not merely un-migrated; it
  * is broken."
  *
+ * ── …AND WHY THERE IS NEVERTHELESS A PUSH BELOW ──
+ *
+ * All of the above holds WHILE A KERNEL EXISTS. It does not on the workspace ROOT, where this
+ * listener is mounted but the kernel is not — the kernel comes with the work-unit surface. There,
+ * `move()` returns false and the gesture used to end in silence: dispatched, received, nothing
+ * moved, operator left where they stood.
+ *
+ * The kernel spans the whole workspace, so a movement from the ROOT succeeds and paints nothing —
+ * the root renders no Surface Host. The push below therefore runs only when the operator is NOT
+ * already on a work-unit surface, which is the only situation where a URL is both permitted (Art
+ * 2.4, cold load) and necessary. On a work-unit surface the movement is unchanged.
+ *
  * ── CARD AND ITEM FOCUS RIDE THE SAME MOVEMENT ──
  *
  * They are carried as the ASPECT — the kernel's own scope for "finer than the Operational Subject" —
@@ -40,6 +53,8 @@ import {
  */
 export default function OperatorFocusAttentionListener() {
     const move = useWorkUnitEntryMovement();
+    const router = useRouter();
+    const pathname = usePathname();
 
     useEffect(() => {
         const onSelect = (ev: Event) => {
@@ -86,18 +101,44 @@ export default function OperatorFocusAttentionListener() {
             // expresses. The selected row rides along so the surface commits the record the operator
             // asked for rather than the lens's default subject, and the card + item ride along as
             // the ASPECT — the kernel's own name for "finer than the subject".
-            move(
-                operatorWorkUnitHrefFromKey(hostSlug),
-                null,
-                subjectId,
-                formatCardFocusAspect(detail.card_focus ?? null),
-                { cohort },
-            );
+            const href = operatorWorkUnitHrefFromKey(hostSlug);
+            const aspect = formatCardFocusAspect(detail.card_focus ?? null);
+
+            /*
+             * ── A MOVEMENT NEEDS A SURFACE TO MOVE ON ────────────────────────────────────────────
+             *
+             * The kernel is mounted across the whole workspace, so attention moves happily from the
+             * workspace ROOT — and nothing appears, because the root renders no work-unit Surface
+             * Host. The movement is real and invisible: dispatched, applied, and with nowhere to
+             * paint. That is what left an operational Search result sitting on `/workspace`.
+             *
+             * So the branch is on WHERE THE OPERATOR IS, not on whether the kernel exists:
+             *
+             *   already on a work-unit surface → MOVE. The route is seed-only and a push there
+             *                                    renders nothing (Gate A) — unchanged, byte for byte.
+             *   anywhere else in the workspace → NAVIGATE. Cold load is the one moment a URL may
+             *                                    establish attention (Art 2.4), and it is the only
+             *                                    way to reach the surface that can render it.
+             *
+             * Every axis rides the address because the page segment already parses all of them —
+             * `subject_id`, `work_view_id`, `cohort`, `aspect` — so the cold answer composes the same
+             * attention the movement expresses. No new contract, no new parameter.
+             */
+            const onWorkUnitSurface = (pathname ?? "").includes("/work-unit/");
+            if (onWorkUnitSurface) {
+                move(href, null, subjectId, aspect, { cohort });
+                return;
+            }
+
+            const params = new URLSearchParams({ subject_id: subjectId });
+            if (aspect) params.set("aspect", aspect);
+            if (cohort === "none") params.set("cohort", "none");
+            router.push(`${href}${href.includes("?") ? "&" : "?"}${params.toString()}`);
         };
 
         window.addEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
         return () => window.removeEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);
-    }, [move]);
+    }, [move, router, pathname]);
 
     return null;
 }
