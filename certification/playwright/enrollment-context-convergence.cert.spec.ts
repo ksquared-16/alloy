@@ -191,6 +191,9 @@ test.describe("B — sibling of a household whose only episode is CLOSED", () =>
         const child = await childNamed(request, name);
         expect(child?.customerMemberId).toBeTruthy();
 
+        // The row must be ON SCREEN before its action can be clicked: page 1 is bounded and this
+        // sibling sorts well beyond it among ~1500 children.
+        expect(await rowStateFor(page, name)).toBe("none");
         await page.locator(`[data-child-start-enrollment="${child!.customerMemberId}"]`).click();
         await expect(page.locator("[data-child-flash]")).toBeVisible({ timeout: SETTLE });
         // The flash names the absence explicitly: nothing was invented to hold the journey.
@@ -207,6 +210,7 @@ test.describe("B — sibling of a household whose only episode is CLOSED", () =>
         const child = await childNamed(request, name);
         expect(child?.participationState).toBe("in_process");
 
+        expect(await rowStateFor(page, name)).toBe("in_process");
         // The row no longer offers the action at all — the surface refuses before the index has to.
         await expect(
             page.locator(`[data-child-start-enrollment="${child!.customerMemberId}"]`)
@@ -241,6 +245,7 @@ test.describe("the context resolver follows operational truth, not row order", (
         const name = `${SIB.both.first} ${SIB.both.last}`;
         const child = await childNamed(request, name);
 
+        expect(await rowStateFor(page, name)).toBe("none");
         await page.locator(`[data-child-start-enrollment="${child!.customerMemberId}"]`).click();
         await expect(page.locator("[data-child-flash]")).toBeVisible({ timeout: SETTLE });
         // The CLOSED episode of this household has the higher id, so "newest row" would have
@@ -264,6 +269,7 @@ test.describe("C — Direct Enroll materialises durable care", () => {
         const child = await childNamed(request, name);
         expect(child?.participationState ?? null).toBeNull();
 
+        expect(await rowStateFor(page, name)).toBe("none");
         await page.locator(`[data-child-enroll-directly="${child!.customerMemberId}"]`).click();
         await expect(page.locator("[data-direct-enroll-modal]")).toBeVisible({ timeout: SETTLE });
 
@@ -300,13 +306,20 @@ test.describe("C — Direct Enroll materialises durable care", () => {
         await openChildren(page);
         const name = `${SIB.direct.first} ${SIB.direct.last}`;
 
-        await page.locator('[data-records-cohort="enrolled"]').click();
         await page.locator("[data-records-filter]").fill(name);
-        await expect(page.locator(CHILDREN_LIST)).toContainText(name, { timeout: SETTLE });
+        await page.locator('[data-records-cohort="enrolled"]').click();
+        const enrolledRow = page.locator(`${CHILDREN_LIST} [data-child-row]`, { hasText: name });
+        await expect(enrolledRow).toHaveCount(1, { timeout: SETTLE });
 
         // …and NOT in the journey cohort: no journey was run.
+        //
+        // Absence is asserted on the ROW, not on the list's text. An empty cohort renders no list
+        // element at all, so `not.toContainText` on the list waits for something that will never
+        // exist and fails on timeout — reporting a product defect where there is none.
         await page.locator('[data-records-cohort="in_process"]').click();
-        await expect(page.locator(CHILDREN_LIST)).not.toContainText(name, { timeout: SETTLE });
+        await expect(
+            page.locator(`${CHILDREN_LIST} [data-child-row]`, { hasText: name })
+        ).toHaveCount(0, { timeout: SETTLE });
 
         await page.screenshot({ path: path.join(SHOTS, "09-direct-enrolled-cohort.png"), fullPage: true });
     });
@@ -324,6 +337,7 @@ test.describe("D — Direct Enroll refuses to half-enroll a child", () => {
         const name = `${SIB.blocked.first} ${SIB.blocked.last}`;
         const child = await childNamed(request, name);
 
+        expect(await rowStateFor(page, name)).toBe("none");
         await page.locator(`[data-child-enroll-directly="${child!.customerMemberId}"]`).click();
         await expect(page.locator("[data-direct-enroll-modal]")).toBeVisible({ timeout: SETTLE });
 
