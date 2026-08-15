@@ -187,8 +187,8 @@ export default function RecordsChildrenSection({
     }, [buildUrl, nextOffset, loadingMore]);
 
     /**
-     * Start the governed journey. No extra input: the command resolves its own context, joining the
-     * household's live episode when there is one and running context-free when there is not.
+     * Start the governed journey. No extra input: the COMMAND resolves its own context — Records
+     * states intent and reads back the outcome, exactly as it does for every record gesture.
      */
     const startEnrollment = useCallback(
         async (customerMemberId: string, childName: string) => {
@@ -216,10 +216,13 @@ export default function RecordsChildrenSection({
                     throw new Error(json.error?.message ?? "Could not start enrollment");
                 }
                 const detail = json.data?.execution_result ?? {};
+                // Records states the OUTCOME the server reported and never names the acquisition
+                // record itself: this surface does not think in those terms, and a guard test
+                // holds that boundary. "On its own" is the operator-meaningful half anyway.
                 setFlash(
                     detail.context_outcome === "joined_live_episode"
                         ? `Enrollment started for ${childName}, inside the family's current enrolment.`
-                        : `Enrollment started for ${childName}. No opportunity was created.`,
+                        : `Enrollment started for ${childName}, on its own — nothing else was created.`,
                 );
                 setReloadToken((n) => n + 1);
             } catch (e) {

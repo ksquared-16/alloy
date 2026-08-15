@@ -196,8 +196,10 @@ test.describe("B — sibling of a household whose only episode is CLOSED", () =>
         expect(await rowStateFor(page, name)).toBe("none");
         await page.locator(`[data-child-start-enrollment="${child!.customerMemberId}"]`).click();
         await expect(page.locator("[data-child-flash]")).toBeVisible({ timeout: SETTLE });
-        // The flash names the absence explicitly: nothing was invented to hold the journey.
-        await expect(page.locator("[data-child-flash]")).toContainText(/no opportunity was created/i);
+        // The flash names the absence: the journey stands on its own, with nothing invented to
+        // hold it. Records says so WITHOUT naming the acquisition record — that vocabulary belongs
+        // to the command, and a guard test keeps it out of this surface.
+        await expect(page.locator("[data-child-flash]")).toContainText(/on its own/i);
 
         expect(await rowStateFor(page, name)).toBe("in_process");
 
