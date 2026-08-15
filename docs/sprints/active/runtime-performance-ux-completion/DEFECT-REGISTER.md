@@ -274,7 +274,34 @@ Matrix built from what Firefly actually renders on the What's Next card of the f
 | **Observed** | The composer replaces the command set in place. `Message` and `Send form` launchers both disappear, body text shrinks 1883 → 1635, and **no dismiss control exists in the card**. All 18 buttons enumerated after open: New, Email, SMS, Kelly Kurzman, Add, Add another email, CC/BCC, Bold, Italic, Underline, Bulleted list, Insert link, Insert, Emoji, Attach, Templates, Send, Send later — **no Close, Cancel, Back or ✕** |
 | **Classification** | J / E |
 | **Severity** | High — the operator's only escape is browser navigation or re-selecting the row |
-| **Status** | **Open — PARALLEL OWNER.** The composer is Communications-owned; adding the dismiss affordance there would collide with Slot 3. The *grammar* (every command destination must be dismissable) is shared runtime and Slot 5 should own it once Slot 3 lands |
+| **Status** | **CLOSED** `5efa5db64` — and the PARALLEL OWNER classification was **wrong**, see below |
+
+**The reclassification.** R-014 was filed against Message and assumed Communications-owned. It is not.
+Message, Send form and every Tour ▾ item resolve to **one** slot — `activePanelAction` in
+`CurrentWorkCard` — and **one** replace point, `hasPanel` in `CurrentWorkFocusedSurface`, which fully
+unmounts the launcher row. The surface then suppressed its own reason/close topbar in exactly that
+state, so opening any command left the operator with no return control **and** no close control.
+
+`closeActionPanel` — the setter that clears the destination *without* collapsing the card — had
+existed since the panel slot was written and was reachable from **no UI control**; every visible exit
+was bound to `closeWorkspace`, which costs the whole Focus Panel. Outcome mode already had the right
+grammar ("← Back to actions"); the commands never inherited it.
+
+Note the reference cards already had it too — Children and Household both publish
+`data-identity-disclosure-back` ("← Back to panel"), and Escape restores them exactly. The platform
+had the grammar. Only the command destinations were missing it, which is why fixing the shared host
+once was the whole job. **No Communications internals were touched, so no Slot 3 collision.**
+
+**Certified after the fix** (Firefly, family `d097e1a8-…`, StrictMode off, writes blocked):
+
+| Command | Destination commits | Back control | Launchers restored | Card survived | Context kept | Requests |
+|---|---|---|---|---|---|---|
+| Message | yes | yes | 3 of 3 | yes | row + URL | 0 dup |
+| Send form | yes | yes | 3 of 3 | yes | row + URL | 0 dup |
+| Tour ▾ → Send Tour Invitation | menu +121 ms, panel +117 ms | yes | 3 of 3 | yes | row + URL | 3 req, 0 dup |
+
+0 render loops on every gesture. The only console errors were the probe's own aborted
+`POST /api/admin/actions/execute` — no invitation, form or message was actually sent.
 
 **What IS certified on this transition**, with StrictMode disabled so the counts are production-shaped:
 
@@ -286,6 +313,43 @@ Matrix built from what Firefly actually renders on the What's Next card of the f
 - **Content shrinks before replacement** (1883 → 1635) — the destination replaces rather than adds,
   which is the "content disappearing" pattern; recorded with R-014 since they share a cause.
 
+
+### R-015 · One Escape collapsed three layers at once <span>CLOSED</span>
+
+| Field | Value |
+|---|---|
+| **Surface** | Focus Panel → any reference card → inline field edit → select menu |
+| **Interaction** | Pressing Escape with a menu open |
+| **Expected** | Escape dismisses the innermost open layer only |
+| **Observed** | With an `AlloySelect` menu, an inline field editor and the expanded Children card all open, **one** Escape closed all three: `menu 1→0, editing 2→0, cardExpanded true→false`. The operator who opens a dropdown and changes their mind loses the whole card and re-navigates |
+| **Classification** | E / I / J |
+| **Severity** | Medium — no data loss, but it punishes an ordinary change of mind |
+| **Shared vs local** | Shared — three owners, all shared |
+| **Status** | **CLOSED** `3fa2cdabb` |
+
+**Three causes, three owners.**
+
+1. `OpportunityFocusPanelModeGrid` registers its Escape handler in the **capture** phase on `window`
+   and calls `stopImmediatePropagation`. Capture was chosen deliberately — to beat the record
+   drawer's ESC-to-close, an *outer* layer — but capture on `window` is the earliest listener in the
+   document, so it also beat every *inner* layer. It now yields when one is open.
+2. `IdentityFieldValue` published no "editing" marker, and handled Escape on the text/date inputs
+   only — so a **select-backed** editor (the child's Program field) had no Escape handler at all.
+   It now publishes `data-identity-editing` and cancels on Escape for every field kind.
+3. `AlloySelect` moved DOM focus **into** the list and never gave it back, so closing the menu
+   dropped focus to `<body>`. That loses the keyboard operator's place outright — Tab restarts from
+   the top of the document — and it also defeated the focus-scoped test in (1).
+
+**Why the yield is a predicate, not another listener.** Ordering cannot be relied on: React attaches
+to the app root, a *descendant* of `document`, so a bubbling Escape reaches the editor's React
+handler **before** `AlloySelect`'s document-level listener. The outer layer therefore asks whether an
+inner one is open (`lib/adminV2/runtime/focusPanel/escapeLayerOwnership.ts`) rather than waiting to be
+told. One owner for the selector list, so a new transient primitive registers in one place.
+
+**After**, same gesture: `#1` menu closes, focus returns to the trigger, edit and card intact ·
+`#2` edit cancels, card intact · `#3` card collapses. Locked by
+`tests/focusPanel/escapeLayerOwnership.test.ts` and the 5 behavioural focus tests in
+`tests/workspace/alloySelectFocusRestore.test.tsx`.
 
 ### M-1 · METHODOLOGY — most on-mount ×2 duplicates are React StrictMode, not product defects
 
@@ -302,6 +366,12 @@ toggling it:
 with StrictMode disabled before it is treated as a defect. This does not retract the fixes
 already made — those were ×22, or caused by an unstable dependency that re-fires on every queue
 re-resolution rather than only on mount, and all reached 1 rather than 2.
+
+**The toggle is now `ALLOY_DEV_STRICT_MODE=0`** (`4cdcca746`), set on the measuring server only.
+Unset leaves the key absent from `next.config.ts`, so Next's own default (on) applies and the
+committed configuration is unchanged — the "restore it afterwards" step, whose only failure mode was
+shipping StrictMode disabled, is gone. Re-verified against this control: **36 requests, 1 duplicate
+path**, and that one is the known-legitimate different-intent `lifecycle-catalog` pair.
 
 ### R-012 · Inbox re-fetches comms datasets on every open, and the count GROWS
 
@@ -454,6 +524,88 @@ the editor refactor this slice was bounded away from. **Registered as R-009.**
 separately from the activation bundle, so a read gesture cannot carry stale field values.
 That changes the endpoint contract and its server handler — the Business Process editor
 refactor this investigation was explicitly bounded away from. It needs its own slice.
+
+---
+
+## Certified clean — 15 Aug, StrictMode off, writes blocked
+
+Recorded so these are not re-audited. Counted evidence only (requests, duplicates, render passes,
+presence/absence); the millisecond figures are **dev-build shape**, admissible as "did the click
+acknowledge at all", never as product latency.
+
+### Focus Panel card movement — clean
+
+| Gesture | Ack | Requests | Dup | False empty | Panel height | Context |
+|---|--:|--:|--:|:--:|---|---|
+| Children expand | 42 ms | 1 | 0 | no | 854 px constant | row + URL kept |
+| Children return | 34 ms | 2 | 0 | no | 854 px constant | kept |
+| Child drill-in (Lennon) | 31 ms | 1 | 0 | no | 854 px constant | kept |
+| Child return | 19 ms | 1 | 0 | no | 854 px constant | kept |
+| Household expand | 100 ms | 1 | 0 | no | 854 px constant | kept |
+| Household return | 20 ms | 2 | 0 | no | 854 px constant | kept |
+
+**No layout jump anywhere** — the expanded and collapsed cells measure identically (household 327 px,
+children 386 px), so elevation changes content without moving the grid. Both cards return via
+`← Back to panel` **and** Escape, and Escape restores the prior state exactly.
+
+### Field edit + dropdown — closes R-106 / R-107
+
+`Edit Program` on the child surface, the representative capability transition available on this
+tenant (see the Assignment row below):
+
+- **Control visible at 10 ms, 0 requests** — the edit reveal costs nothing.
+- **Options visible at 111 ms, 0 requests** — and it is `AlloySelect`, not a raw `<select>`
+  (`alloyTriggers 1 / rawSelects 0`), with the configured option set resolved: Infant, Toddler,
+  Preschool, Pre-K, Kindergarten, School Age. R-108's OS-popup root cause is absent here.
+- Cell height constant at 386 px through the whole edit lifecycle.
+
+### Processing and Work Items — deeper interaction, clean
+
+Beyond the already-certified launch. Every gesture acknowledged in **5–43 ms** with **0 duplicate
+requests, 0 render loops, 0 console errors**, and the dialog height was constant at 922 px throughout —
+no remount, no blank swap, no layout jump.
+
+| | Gestures certified |
+|---|---|
+| Work Items | open · section Queue ↔ Overview · row (Conduct Tour) · close · warm reopen · close |
+| Processing | open · section Queue ↔ Overview · lane Incoming ↔ Completed · row (create_lead) · close |
+
+Section and lane switches mostly cost **0 requests** (Work Items Overview 11 ms/0 req; Processing
+lanes 5–6 ms/0 req) — selection commits against already-resolved data rather than refetching.
+
+**Two first-pass readings were probe artifacts and are retracted, not findings:** "0 rows on this
+tenant" (rows render as buttons, not `<tr>`, so the selector matched nothing) and a Processing
+"false-empty" (did not reproduce; zero empty-state phrases matched on re-run).
+
+**Work Items row → detail:** clicking a specific work row lands on the generic Queue browser
+(folders/views/sources) rather than that work item. Return is available (`Close`, Escape), so this is
+not an R-014 dead end — but whether a row should resolve to its own work item is a **product
+decision**, recorded rather than changed.
+
+### Assignment / Placement — still no command on this tenant
+
+The brief expected Assignment under the Children card. It is not there. The child surface exposes
+identity fields only — First name, Last name, Date of birth, Gender, **Program**, Allergies, Medical
+Notes, Special Instructions — with no assignment/placement capability among any of its controls.
+Placement is expressed as the editable **Program** field, so that field's edit path was certified
+above as the representative transition. The register's original "no representative rendered" stands.
+**CONFIG OWNER**, unchanged.
+
+### Organization / Settings movement — counted evidence only
+
+`/organization` → surfaces, access, data-model, processes, then a warm revisit: **0 duplicate
+requests and 0 render loops on every move**. No timing is quoted: this is a dev build, where a first
+visit pays Turbopack compile-on-demand, and the runbook forbids treating a dev number as a product
+number.
+
+One structural observation that is *not* load-sensitive: **the main region drops below 200 characters
+during the route change on 4 of 5 pages, including on a warm revisit of an already-compiled route.**
+Compile cost cannot be the whole explanation for the warm case. Whether the shell should survive an
+Organization route change is a real question, but quantifying it needs the production build.
+**ENVIRONMENT BLOCKER**, same gate as cold/warm timing.
+
+There is also no `/organization/locations` link in the current navigation, so that page was not
+reachable by movement from `/organization`.
 
 ---
 
