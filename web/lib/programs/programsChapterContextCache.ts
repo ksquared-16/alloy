@@ -3,6 +3,8 @@
  * Inflight reuse + short TTL so Continuity soft-nav feels like Locations.
  */
 
+import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
+
 export const PROGRAMS_CHAPTER_CONTEXT_TTL_MS = 60_000;
 
 export type ProgramsChapterContextSnapshot = {
@@ -40,7 +42,11 @@ export function isProgramsChapterContextFresh(
 async function fetchNetwork(orgId: string): Promise<ProgramsChapterContextSnapshot> {
     const [locRes, catRes, productsRes, catsRes, revRes, cadenceRes] = await Promise.all([
         fetch("/api/admin/locations", { credentials: "include" }),
-        fetch("/api/admin/location-program-categories?include_inactive=true", { credentials: "include" }),
+        // Through the shared loader, not a raw fetch: the placement cascade requests this same
+        // URL on every organization page and the two were duplicating it.
+        fetchLocationProgramCategories(undefined, { includeInactive: true })
+            .then((rows) => ({ ok: true, json: async () => ({ categories: rows }) }) as unknown as Response)
+            .catch(() => ({ ok: false, json: async () => ({}) }) as unknown as Response),
         fetch("/api/admin/commercial/products", { credentials: "include" }),
         fetch("/api/admin/commercial/categories?include_inactive=true", { credentials: "include" }),
         fetch("/api/admin/commercial/revenue-categories", { credentials: "include" }),
