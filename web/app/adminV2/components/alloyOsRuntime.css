@@ -6618,6 +6618,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   justify-content: space-between;
   gap: 12px;
 }
+/* Capability mode: the destination is the primary content and owns the remaining height, so the
+   topbar shrinks to the one row it must keep — return to the launchers, and close the card. */
+.alloy-os-currentwork__focused-topbar[data-work-topbar-mode="panel"] {
+  align-items: center;
+  min-height: 24px;
+}
 .alloy-os-currentwork__focused-close {
   flex-shrink: 0;
   border: 0;
