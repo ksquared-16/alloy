@@ -13,6 +13,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { stageEnteredAtNowIso } from "@/lib/lifecycle/operationalStateEnteredAt";
+import {
+    resolveCurrentEnrollmentBusinessProcessRevision,
+    type EnrollmentRevisionPinOutcome,
+} from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
 
 export const PROCESS_INSTANCES_TABLE = "process_instances" as const;
 
@@ -112,6 +116,16 @@ export function buildEnrollmentProcessInstanceInsert(args: {
     participation?: EnrollmentParticipationMetadata;
     /** Provenance. Defaults to `create_lead`, this helper's original and still-largest caller. */
     source?: string;
+    /**
+     * D-96. The immutable Business Process revision that governs this journey, resolved by
+     * {@link createEnrollmentProcessInstance} and included in THIS insert.
+     *
+     * Part of the row rather than a follow-up UPDATE on purpose: between an insert and a patch the
+     * instance would exist unpinned, and anything reading it in that window would resolve live
+     * configuration — the exact drift the pin removes. The database also refuses the repoint, so a
+     * create-then-patch design would be racing a trigger built to stop it.
+     */
+    businessProcessRevisionId?: string | null;
 }): Record<string, unknown> {
     const metadata: Record<string, unknown> = { source: args.source ?? "create_lead" };
     for (const [k, v] of Object.entries(args.participation ?? {})) {
@@ -119,6 +133,7 @@ export function buildEnrollmentProcessInstanceInsert(args: {
     }
     const stageKey = args.stageKey ?? null;
     const contextId = (args.contextId ?? "").trim() || null;
+    const revisionId = (args.businessProcessRevisionId ?? "").trim() || null;
     return {
         org_id: args.orgId,
         process_key: ENROLLMENT_PROCESS_KEY,
@@ -129,6 +144,9 @@ export function buildEnrollmentProcessInstanceInsert(args: {
         // Only stamp entry when the instance starts with an explicit stage membership.
         ...(stageKey ? { stage_entered_at: stageEnteredAtNowIso() } : {}),
         state: args.state ?? null,
+        // Omitted rather than sent as null when unresolved, so the column stays absent from the
+        // upsert's SET list and a re-run can never clear a pin the database already refuses to clear.
+        ...(revisionId ? { business_process_revision_id: revisionId } : {}),
         metadata,
     };
 }
@@ -145,16 +163,64 @@ export function buildEnrollmentProcessInstanceInsert(args: {
  *     `ux_process_instances_open_context_free`. PostgREST cannot name a partial index as an
  *     `onConflict` target, so the open journey is looked up first and a lost race is recovered
  *     from the unique violation rather than pretended away.
+ *
+ * ── D-96: THE GOVERNING REVISION IS PINNED IN THIS INSERT ──
+ *
+ * This is the sole production creator of an Enrollment journey, so it is the only place the pin has
+ * to be applied — Start Enrollment, Create Lead child persistence and the Processing identity ports
+ * all inherit it without passing anything. The revision id is resolved BEFORE the insert and rides
+ * the same statement; there is deliberately no create-then-patch, because an instance that exists
+ * unpinned for even one statement resolves live configuration in that window.
+ *
+ * When no revision can be resolved the instance is still created — a tenant that has never published
+ * an Enrollment configuration has nothing to pin, and refusing to start their journeys would be a
+ * far worse failure. It is never SILENT: the result carries `revisionPinOutcome` naming why.
  */
 export async function createEnrollmentProcessInstance(
     supabase: SupabaseClient,
     args: Parameters<typeof buildEnrollmentProcessInstanceInsert>[0],
-): Promise<{ id: string | null; error?: string; reused?: boolean }> {
-    const row = buildEnrollmentProcessInstanceInsert(args);
+): Promise<{
+    id: string | null;
+    error?: string;
+    reused?: boolean;
+    /** D-96. Always reported, so "created unpinned" can never pass unnoticed. */
+    revisionPinOutcome?: EnrollmentRevisionPinOutcome;
+    businessProcessRevisionId?: string | null;
+}> {
+    // An explicit id from the caller wins — the certification harness pins deliberately — otherwise
+    // the org's currently authoritative published Enrollment revision is resolved here.
+    const pin =
+        args.businessProcessRevisionId !== undefined
+            ? {
+                  revisionId: (args.businessProcessRevisionId ?? "").trim() || null,
+                  outcome: (args.businessProcessRevisionId
+                      ? "pinned"
+                      : "no_published_enrollment_configuration") as EnrollmentRevisionPinOutcome,
+              }
+            : await resolveCurrentEnrollmentBusinessProcessRevision(supabase, args.orgId);
+
+    if (pin.outcome !== "pinned") {
+        // Observable, not swallowed. A journey running on live configuration is a governance fact
+        // an operator may have to explain later, so it is stated at the moment it happens.
+        console.warn(
+            `[D-96] enrollment process instance created WITHOUT a governing revision pin (org=${args.orgId}, subject=${args.subjectId}, reason=${pin.outcome})`,
+        );
+    }
+
+    const row = buildEnrollmentProcessInstanceInsert({
+        ...args,
+        businessProcessRevisionId: pin.revisionId,
+    });
     const contextId = (args.contextId ?? "").trim() || null;
+    const pinResult = {
+        revisionPinOutcome: pin.outcome,
+        businessProcessRevisionId: pin.revisionId,
+    };
 
     if (!contextId) {
         const existing = await findOpenContextFreeEnrollmentInstance(supabase, args.orgId, args.subjectId);
+        // A reused journey keeps ITS OWN pin. Re-reporting the freshly resolved one would claim a
+        // governance fact that is not true of that instance.
         if (existing) return { id: existing, reused: true };
 
         const { data, error } = await supabase
@@ -174,7 +240,7 @@ export async function createEnrollmentProcessInstance(
             }
             return { id: null, error: error.message };
         }
-        return { id: data ? String((data as { id: string }).id) : null };
+        return { id: data ? String((data as { id: string }).id) : null, ...pinResult };
     }
 
     const { data, error } = await supabase
@@ -183,7 +249,9 @@ export async function createEnrollmentProcessInstance(
         .select("id")
         .maybeSingle();
     if (error) return { id: null, error: error.message };
-    return { id: data ? String((data as { id: string }).id) : null };
+    // `ignoreDuplicates` means a conflict returns no row: nothing was created, so nothing was
+    // pinned, and the existing instance keeps the revision it started under.
+    return data ? { id: String((data as { id: string }).id), ...pinResult } : { id: null };
 }
 
 /**

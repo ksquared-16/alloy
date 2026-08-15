@@ -46,7 +46,10 @@ import {
     effectiveLifecycleProgressionRequirementsForStage,
 } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import type { LifecycleProgressionRequirementRow } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import {
+    deriveObjectLabelsFromFieldRules,
+    type LifecycleStageFieldRules,
+} from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import {
     LIFECYCLE_BUILDER_METADATA_KEY,
     parseLifecycleBuilderV1,
@@ -115,6 +118,38 @@ export function canonicalStageRequirements(
     return undefined;
 }
 
+/**
+ * Operator-facing label rows, derived DOWN from the canonical field rules.
+ *
+ * NOT a merge (D-91): the input is `projectCanonicalToFieldRules`' output, so every label here
+ * originates in a canonical row and a legacy row can never reach it. This is the symmetric
+ * completion of the rule projection that was already here. Reporting no labels at all was harmless
+ * while canonical authoring was rare; under D-97 publishing MATERIALIZES legacy requirements into
+ * canonical, so without this every surface that reads requirement labels would silently go blank
+ * the first time a tenant published.
+ *
+ * `deriveObjectLabelsFromFieldRules` is the platform's own rule -> label mapping, and it is already
+ * what `buildLifecycleFieldRulesOverridePatch` persists when an operator saves stage field rules —
+ * so a materialized stage reports exactly the labels a builder-configured stage already reports,
+ * alias rows included.
+ */
+function projectCanonicalToLabelRows(rules: LifecycleStageFieldRules): {
+    required: LifecycleProgressionRequirementRow[];
+    recommended: LifecycleProgressionRequirementRow[];
+} {
+    const derived = deriveObjectLabelsFromFieldRules(
+        rules.required_rule_ids,
+        rules.recommended_rule_ids,
+    );
+    return {
+        required: derived.required_labels.map((label) => ({ label, kind: "required" as const })),
+        recommended: derived.recommended_labels.map((label) => ({
+            label,
+            kind: "recommended" as const,
+        })),
+    };
+}
+
 /** Field-kind rule ids, split by level, for the legacy-shaped projection. */
 function projectCanonicalToFieldRules(
     requirements: readonly StageRequirementV1[],
@@ -135,6 +170,26 @@ function projectCanonicalToFieldRules(
 }
 
 /**
+ * Canonical field rules for a BUILDER stage key, or null when canonical has not spoken.
+ *
+ * {@link resolveEffectiveStageRequirements} keys by operator stage, which is right for the surfaces
+ * that ask "what does the Enrollment stage require?". A stage of a GOVERNING revision (D-96) has to
+ * be found by its own builder key instead — a process may carry stages an operator vocabulary has no
+ * name for, and those stages still carry requirements after D-97 normalization.
+ *
+ * Null means fall back to the legacy compatibility path; it never means "requires nothing", which is
+ * `{version: 1, requirements: []}` and returns empty rules. Same D-90 distinction, same `!== null`.
+ */
+export function canonicalStageFieldRules(
+    builder: LifecycleBuilderV1 | null | undefined,
+    stageKey: string,
+    processKey?: string,
+): LifecycleStageFieldRules | null {
+    const canonical = canonicalStageRequirements(builder, stageKey, processKey);
+    return canonical === undefined ? null : projectCanonicalToFieldRules(canonical.requirements);
+}
+
+/**
  * The single entry point. Every consumer should call this rather than reading
  * `departments.metadata` requirement keys directly (D-92).
  */
@@ -148,13 +203,15 @@ export function resolveEffectiveStageRequirements(input: {
 
     // D-90 / D-91: presence is authority and it is total. No merge, no length check.
     if (canonical !== undefined) {
+        const rules = projectCanonicalToFieldRules(canonical.requirements);
+        const labels = projectCanonicalToLabelRows(rules);
         return {
             source: "business_process",
             requirements: canonical.requirements,
             legacy: {
-                required: [],
-                recommended: [],
-                rules: projectCanonicalToFieldRules(canonical.requirements),
+                required: labels.required,
+                recommended: labels.recommended,
+                rules,
             },
         };
     }
