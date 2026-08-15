@@ -14,7 +14,7 @@ import {
     formatTourSlotWindowRangeLabel,
     tourSlotWindowBoundsUtc,
 } from "@/lib/tours/availability/tourSlotWindowPagination";
-import { peekWarmTourSchedule } from "@/lib/tours/tourScheduleWarmCache";
+import { peekWarmTourSchedule, peekWarmTourScheduleForQuery } from "@/lib/tours/tourScheduleWarmCache";
 
 /** Furthest page (0-based) — ~1 year of 14-day windows without unbounded queries. */
 const MAX_RANGE_PAGE_INDEX = 26;
@@ -76,6 +76,25 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
             qs.set("exclude_booking_id", primaryBooking.id);
         }
         const slotsUrl = `/api/admin/tours/slots?${qs.toString()}`;
+
+        // R-005. The warm cache already holds this exact query on the common path (schedule
+        // mode, page 0, nothing excluded), so re-issuing it was a guaranteed duplicate of both
+        // the slots read and the approval-rules read. Ask the cache whether its entry covers
+        // THIS query rather than assuming; a reschedule excludes a booking and paging moves the
+        // window, and both are genuinely different queries that still fetch.
+        const warmForThisQuery = peekWarmTourScheduleForQuery(opportunityId, locationId, {
+            windowFrom,
+            windowTo,
+            excludeBookingId: mode === "reschedule" ? primaryBooking?.id ?? null : null,
+        });
+        if (warmForThisQuery) {
+            slotsRef.current = warmForThisQuery.slots;
+            setSlots(warmForThisQuery.slots);
+            setRulesById(warmForThisQuery.rulesById);
+            setSlotsLoading(false);
+            return;
+        }
+
         try {
             const slotsRes = await fetch(slotsUrl, { credentials: "include" });
             if (gen !== loadGeneration.current) return;
