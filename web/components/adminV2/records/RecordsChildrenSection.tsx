@@ -32,7 +32,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AddChildModal from "@/components/adminV2/records/AddChildModal";
+import DirectEnrollModal from "@/components/adminV2/records/DirectEnrollModal";
+import { ENROLLMENT_START_ACTION_KEY } from "@/lib/adminV2/actions/definitions/enrollmentActions";
+import { childNextActions } from "@/lib/adminV2/records/childNextActions";
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
+import {
+    CHILD_RECORD_STATE_LABEL,
+    type ChildRecordState,
+} from "@/lib/adminV2/records/childEnrollmentState";
 import { buildChildCohorts } from "@/lib/adminV2/records/recordCohorts";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 
@@ -44,7 +51,12 @@ export type ChildEntry = {
     householdId: string | null;
     householdName: string | null;
     isActive: boolean;
-    participationState: "in_process" | "enrolled" | "closed" | null;
+    /**
+     * Imported, never redeclared. A local copy of this union silently discarded a state the route
+     * was already serialising once before — the row rendered the raw key while the surface looked
+     * fine. @see web/lib/adminV2/records/childEnrollmentState.ts
+     */
+    participationState: ChildRecordState;
     participationStageKey: string | null;
     siteLocationId: string | null;
     siteLocationLabel: string | null;
@@ -52,12 +64,6 @@ export type ChildEntry = {
 
 /** The child identity card key — the aspect a child gesture names. */
 const CHILD_IDENTITY_CARD = "child_identity";
-
-const PARTICIPATION_LABEL: Record<string, string> = {
-    in_process: "In process",
-    enrolled: "Enrolled",
-    closed: "Closed",
-};
 
 function ageLabel(dob: string | null, todayYmd: string): string | null {
     if (!dob) return null;
@@ -99,6 +105,10 @@ export default function RecordsChildrenSection({
     const [flash, setFlash] = useState<string | null>(null);
     /** Bumped after a write so the cohort is re-asked rather than spliced client-side. */
     const [reloadToken, setReloadToken] = useState(0);
+    /** The child a direct enrollment is being collected for, if any. */
+    const [directEnroll, setDirectEnroll] = useState<{ id: string; name: string } | null>(null);
+    /** The child Add Child just created, so the follow-on paths can name them. */
+    const [lastAdded, setLastAdded] = useState<{ id: string; name: string } | null>(null);
 
     const focusRecord = useOperatorRecordFocus();
     const cohorts = useMemo(() => buildChildCohorts(), []);
@@ -175,6 +185,52 @@ export default function RecordsChildrenSection({
             setLoadingMore(false);
         }
     }, [buildUrl, nextOffset, loadingMore]);
+
+    /**
+     * Start the governed journey. No extra input: the COMMAND resolves its own context — Records
+     * states intent and reads back the outcome, exactly as it does for every record gesture.
+     */
+    const startEnrollment = useCallback(
+        async (customerMemberId: string, childName: string) => {
+            setFlash(null);
+            setError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        action_key: ENROLLMENT_START_ACTION_KEY,
+                        entity_type: "child",
+                        entity_id: customerMemberId,
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: {},
+                    }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    data?: { execution_result?: Record<string, unknown> };
+                    error?: { message?: string };
+                };
+                if (!res.ok || json.ok === false) {
+                    throw new Error(json.error?.message ?? "Could not start enrollment");
+                }
+                const detail = json.data?.execution_result ?? {};
+                // Records states the OUTCOME the server reported and never names the acquisition
+                // record itself: this surface does not think in those terms, and a guard test
+                // holds that boundary. "On its own" is the operator-meaningful half anyway.
+                setFlash(
+                    detail.context_outcome === "joined_live_episode"
+                        ? `Enrollment started for ${childName}, inside the family's current enrolment.`
+                        : `Enrollment started for ${childName}, on its own — nothing else was created.`,
+                );
+                setReloadToken((n) => n + 1);
+            } catch (e) {
+                setError(e instanceof Error ? e.message : "Could not start enrollment");
+            }
+        },
+        [],
+    );
 
     const visible = children ?? [];
     /**
@@ -259,6 +315,9 @@ export default function RecordsChildrenSection({
                     >
                         {visible.map((c) => {
                             const age = ageLabel(c.dateOfBirth, todayYmd);
+                            // Offered from the child's OWN state, so a row never invites an action
+                            // the command would then refuse. @see childNextActions.ts
+                            const next = childNextActions(c.participationState);
                             return (
                                 <li key={c.customerMemberId}>
                                     <button
@@ -284,14 +343,47 @@ export default function RecordsChildrenSection({
                                                 data-child-state={c.participationState ?? "none"}
                                             >
                                                 {c.participationState
-                                                    ? (PARTICIPATION_LABEL[c.participationState] ??
-                                                      c.participationState)
+                                                    ? CHILD_RECORD_STATE_LABEL[c.participationState]
                                                     : c.isActive
                                                       ? "On record"
                                                       : "Inactive"}
                                             </span>
                                         </span>
                                     </button>
+                                    {next.actions.length > 0 ? (
+                                        <div
+                                            className="flex flex-wrap gap-2 px-3 pb-2.5"
+                                            data-child-next-actions={c.customerMemberId}
+                                        >
+                                            {next.actions.includes("start_enrollment") ? (
+                                                <button
+                                                    type="button"
+                                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5"
+                                                    onClick={() =>
+                                                        void startEnrollment(c.customerMemberId, c.displayName)
+                                                    }
+                                                    data-child-start-enrollment={c.customerMemberId}
+                                                >
+                                                    Start enrollment
+                                                </button>
+                                            ) : null}
+                                            {next.actions.includes("enroll_directly") ? (
+                                                <button
+                                                    type="button"
+                                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5"
+                                                    onClick={() =>
+                                                        setDirectEnroll({
+                                                            id: c.customerMemberId,
+                                                            name: c.displayName,
+                                                        })
+                                                    }
+                                                    data-child-enroll-directly={c.customerMemberId}
+                                                >
+                                                    Enroll directly
+                                                </button>
+                                            ) : null}
+                                        </div>
+                                    ) : null}
                                 </li>
                             );
                         })}
@@ -327,11 +419,33 @@ export default function RecordsChildrenSection({
                               ? `${r.displayName} was linked from an existing person — no duplicate identity.`
                               : `${r.displayName} was added. No enrollment was started.`
                     );
+                    setLastAdded({ id: r.customerMemberId, name: r.displayName });
                     setReloadToken((n) => n + 1);
                 }}
                 onOpenRecord={(customerMemberId) => {
                     setAddOpen(false);
                     openChild(customerMemberId);
+                }}
+                onStartEnrollment={(customerMemberId) => {
+                    setAddOpen(false);
+                    void startEnrollment(customerMemberId, lastAdded?.name ?? "This child");
+                }}
+                onEnrollDirectly={(customerMemberId) => {
+                    setAddOpen(false);
+                    setDirectEnroll({ id: customerMemberId, name: lastAdded?.name ?? "this child" });
+                }}
+            />
+
+            <DirectEnrollModal
+                open={directEnroll != null}
+                customerMemberId={directEnroll?.id ?? ""}
+                childName={directEnroll?.name ?? "this child"}
+                todayYmd={todayYmd}
+                onClose={() => setDirectEnroll(null)}
+                onEnrolled={({ childName }) => {
+                    setDirectEnroll(null);
+                    setFlash(`${childName} is enrolled. No enrollment process was created.`);
+                    setReloadToken((n) => n + 1);
                 }}
             />
         </div>

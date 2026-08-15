@@ -10,6 +10,10 @@ import {
     resolveSearchAccessEnvelope,
 } from "@/lib/search/searchAccessEnvelope";
 import {
+    deriveChildRecordState,
+    type ChildRecordState,
+} from "@/lib/adminV2/records/childEnrollmentState";
+import {
     isChildCohortKey,
     queryChildCohortPage,
     type ChildCohortKey,
@@ -53,8 +57,12 @@ export type RecordsChildEntry = {
     householdId: string | null;
     householdName: string | null;
     isActive: boolean;
-    /** Canonical participation, when the platform holds any. Null = no process, which is a state. */
-    participationState: "in_process" | "enrolled" | "closed" | null;
+    /**
+     * The record's enrollment state, from BOTH governed participation and the durable care
+     * relationship. Null = "on record", a complete answer rather than a gap.
+     * @see web/lib/adminV2/records/childEnrollmentState.ts
+     */
+    participationState: ChildRecordState;
     participationStageKey: string | null;
     /** Committed site, when placement truth exists. Never inferred from a stale opportunity. */
     siteLocationId: string | null;
@@ -183,7 +191,7 @@ export async function GET(request: NextRequest) {
         const householdIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))] as string[];
         const memberIds = rows.map((r) => r.id);
 
-        const [householdsRes, participationRes, placementsRes] = await Promise.all([
+        const [householdsRes, participationRes, placementsRes, agreementsRes] = await Promise.all([
             householdIds.length > 0
                 ? supabase.from("customers").select("id, name").eq("org_id", ctx.orgId).in("id", householdIds)
                 : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
@@ -203,6 +211,13 @@ export async function GET(request: NextRequest) {
                 .eq("org_id", ctx.orgId)
                 .eq("status", "active")
                 .in("customer_member_id", memberIds),
+            // The durable care relationship. A directly enrolled child has one of these and NO
+            // process instance, so reading participation alone would call them "on record".
+            supabase
+                .from("child_enrollment_agreements")
+                .select("customer_member_id, status")
+                .eq("org_id", ctx.orgId)
+                .in("customer_member_id", memberIds),
         ]);
 
         const householdNameById = new Map(
@@ -210,6 +225,9 @@ export async function GET(request: NextRequest) {
         );
 
         const participationByMember = new Map<string, { state: string | null; stage_key: string | null }>();
+        // ALL states per member, not just the first: state derivation weighs them together, and a
+        // child can carry both a closed journey and a running one.
+        const processStatesByMember = new Map<string, string[]>();
         for (const p of (participationRes.data ?? []) as {
             subject_id: string;
             state: string | null;
@@ -218,6 +236,23 @@ export async function GET(request: NextRequest) {
             if (!participationByMember.has(p.subject_id)) {
                 participationByMember.set(p.subject_id, { state: p.state, stage_key: p.stage_key });
             }
+            processStatesByMember.set(p.subject_id, [
+                ...(processStatesByMember.get(p.subject_id) ?? []),
+                p.state ?? "",
+            ]);
+        }
+
+        const agreementStatusesByMember = new Map<string, string[]>();
+        for (const a of (agreementsRes.data ?? []) as {
+            customer_member_id: string | null;
+            status: string | null;
+        }[]) {
+            const id = (a.customer_member_id ?? "").trim();
+            if (!id) continue;
+            agreementStatusesByMember.set(id, [
+                ...(agreementStatusesByMember.get(id) ?? []),
+                a.status ?? "",
+            ]);
         }
 
         const siteByMember = new Map<string, string>();
@@ -257,7 +292,10 @@ export async function GET(request: NextRequest) {
                 householdId: r.customer_id,
                 householdName: r.customer_id ? (householdNameById.get(r.customer_id) ?? null) : null,
                 isActive: r.is_active !== false,
-                participationState: participationStateFrom(participation?.state ?? null),
+                participationState: deriveChildRecordState({
+                    agreementStatuses: agreementStatusesByMember.get(r.id) ?? [],
+                    processStates: processStatesByMember.get(r.id) ?? [],
+                }),
                 participationStageKey: participation?.stage_key ?? null,
                 siteLocationId: siteId,
                 siteLocationLabel: siteId ? (siteLabelById.get(siteId) ?? null) : null,
@@ -285,19 +323,4 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         );
     }
-}
-
-/**
- * `process_instances.state` → the record's participation state.
- *
- * Unknown states map to `in_process` rather than null: a running process the platform does not have
- * a word for is still participation, and calling it "no process" would hide a child from the cohort
- * that describes them. Null is reserved for genuinely absent participation.
- */
-function participationStateFrom(state: string | null): RecordsChildEntry["participationState"] {
-    const v = (state ?? "").trim().toLowerCase();
-    if (!v) return null;
-    if (v === "completed" || v === "enrolled") return "enrolled";
-    if (v === "closed" || v === "cancelled" || v === "withdrawn") return "closed";
-    return "in_process";
 }

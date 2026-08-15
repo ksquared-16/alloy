@@ -38,10 +38,14 @@ export function isChildCohortKey(v: string): v is ChildCohortKey {
     return (CHILD_COHORT_KEYS as readonly string[]).includes(v);
 }
 
-/** `process_instances.state` values that mean the child's participation has produced enrollment. */
-const ENROLLED_STATES = ["completed", "enrolled"];
-/** …and the ones that mean it ended without enrolling. Anything else running is `in_process`. */
-const CLOSED_STATES = ["closed", "cancelled", "withdrawn"];
+/**
+ * State meaning lives in ONE place, shared with the row projection, so a cohort tab and the rows
+ * inside it cannot disagree about the same child. @see childEnrollmentState.ts
+ */
+import {
+    deriveChildRecordState,
+    isEnrolledCohortState,
+} from "@/lib/adminV2/records/childEnrollmentState";
 
 export type ChildCohortQueryInput = {
     supabase: SupabaseClient;
@@ -66,7 +70,13 @@ export type ChildCohortPage = {
     nextOffset: number | null;
 };
 
-/** Member ids whose participation puts them in this cohort. Null = participation is not a filter. */
+/**
+ * Member ids whose ENROLLMENT STATE puts them in this cohort. Null = state is not a filter.
+ *
+ * Reads BOTH sources of enrollment truth. A directly enrolled child has a durable care
+ * relationship and NO process instance, so a query over `process_instances` alone would have left
+ * them out of Enrolled and listed them among children with nothing running at all.
+ */
 async function participationMemberIds(
     supabase: SupabaseClient,
     orgId: string,
@@ -74,24 +84,45 @@ async function participationMemberIds(
 ): Promise<string[] | null> {
     if (cohort !== "enrolled" && cohort !== "in_process") return null;
 
-    const { data, error } = await supabase
-        .from("process_instances")
-        .select("subject_id, state")
-        .eq("org_id", orgId)
-        .eq("subject_type", "child");
-    if (error) throw new Error(error.message);
+    const [processRes, agreementRes] = await Promise.all([
+        supabase
+            .from("process_instances")
+            .select("subject_id, state")
+            .eq("org_id", orgId)
+            .eq("subject_type", "child"),
+        supabase
+            .from("child_enrollment_agreements")
+            .select("customer_member_id, status")
+            .eq("org_id", orgId),
+    ]);
+    if (processRes.error) throw new Error(processRes.error.message);
+    if (agreementRes.error) throw new Error(agreementRes.error.message);
 
-    const ids = new Set<string>();
-    for (const row of (data ?? []) as { subject_id: string | null; state: string | null }[]) {
+    const processStates = new Map<string, string[]>();
+    for (const row of (processRes.data ?? []) as { subject_id: string | null; state: string | null }[]) {
         const id = (row.subject_id ?? "").trim();
         if (!id) continue;
-        const state = (row.state ?? "").trim().toLowerCase();
-        if (!state) continue;
-        const enrolled = ENROLLED_STATES.includes(state);
-        const closed = CLOSED_STATES.includes(state);
-        // Anything running that is neither enrolled nor closed is in process — an unknown state is
-        // still participation, and calling it "no process" would hide the child from its cohort.
-        if (cohort === "enrolled" ? enrolled : !enrolled && !closed) ids.add(id);
+        processStates.set(id, [...(processStates.get(id) ?? []), row.state ?? ""]);
+    }
+
+    const agreementStatuses = new Map<string, string[]>();
+    for (const row of (agreementRes.data ?? []) as {
+        customer_member_id: string | null;
+        status: string | null;
+    }[]) {
+        const id = (row.customer_member_id ?? "").trim();
+        if (!id) continue;
+        agreementStatuses.set(id, [...(agreementStatuses.get(id) ?? []), row.status ?? ""]);
+    }
+
+    const ids = new Set<string>();
+    for (const id of new Set([...processStates.keys(), ...agreementStatuses.keys()])) {
+        const state = deriveChildRecordState({
+            agreementStatuses: agreementStatuses.get(id) ?? [],
+            processStates: processStates.get(id) ?? [],
+        });
+        const qualifies = cohort === "enrolled" ? isEnrolledCohortState(state) : state === "in_process";
+        if (qualifies) ids.add(id);
     }
     return [...ids];
 }

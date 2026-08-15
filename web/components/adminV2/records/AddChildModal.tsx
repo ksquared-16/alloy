@@ -52,6 +52,9 @@ export type AddChildModalProps = {
     onCreated: (result: AddChildResultSummary) => void;
     /** Opening the durable record for the child that was just added. */
     onOpenRecord: (customerMemberId: string) => void;
+    /** The two legitimate follow-on paths. Neither runs automatically. */
+    onStartEnrollment: (customerMemberId: string) => void;
+    onEnrollDirectly: (customerMemberId: string) => void;
 };
 
 type Step = "household" | "details" | "identity" | "preview" | "done";
@@ -78,7 +81,14 @@ function isSelectable(c: Candidate): boolean {
     return Boolean(c.customer_member_id || c.person_id);
 }
 
-export default function AddChildModal({ open, onClose, onCreated, onOpenRecord }: AddChildModalProps) {
+export default function AddChildModal({
+    open,
+    onClose,
+    onCreated,
+    onOpenRecord,
+    onStartEnrollment,
+    onEnrollDirectly,
+}: AddChildModalProps) {
     const [step, setStep] = useState<Step>("household");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -508,8 +518,37 @@ export default function AddChildModal({ open, onClose, onCreated, onOpenRecord }
                                       : `${result.displayName} is now on this household.`}
                             </p>
                             <p className="text-[11px] leading-snug text-alloy-midnight/50">
-                                No enrollment was started. Enrollment is a separate action.
+                                No enrollment was started — adding a child never starts one.
                             </p>
+
+                            {/* The director already chose the family and the child, so the next
+                                question is which enrolment path this sibling takes. Create Lead is
+                                deliberately absent: it answers a question already answered. */}
+                            <div className="border-t border-admin-border pt-3" data-add-child-next="true">
+                                <p className={LABEL}>What happens next?</p>
+                                <div className="flex flex-wrap gap-2">
+                                    <button
+                                        type="button"
+                                        className={GHOST_BTN}
+                                        onClick={() => onStartEnrollment(result.customerMemberId)}
+                                        data-add-child-start-enrollment="true"
+                                    >
+                                        Start enrollment
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={GHOST_BTN}
+                                        onClick={() => onEnrollDirectly(result.customerMemberId)}
+                                        data-add-child-enroll-directly="true"
+                                    >
+                                        Enroll directly
+                                    </button>
+                                </div>
+                                <p className="mt-2 text-[11px] leading-snug text-alloy-midnight/50">
+                                    Start enrollment runs the configured process. Enroll directly
+                                    records the placement and schedule without it.
+                                </p>
+                            </div>
                         </div>
                     ) : null}
                 </div>

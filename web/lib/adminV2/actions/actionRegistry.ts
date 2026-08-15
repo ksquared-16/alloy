@@ -28,6 +28,10 @@ import { sendTourInvitationAction } from "@/lib/adminV2/actions/definitions/send
 import { staffAddAction } from "@/lib/adminV2/actions/definitions/staffAddAction";
 import { childAddAction } from "@/lib/adminV2/actions/definitions/childAddAction";
 import {
+    enrollmentDirectAction,
+    enrollmentStartAction,
+} from "@/lib/adminV2/actions/definitions/enrollmentActions";
+import {
     employmentEndAction,
     employmentUpdateAction,
 } from "@/lib/adminV2/actions/definitions/employmentEndAction";
@@ -51,6 +55,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     assignmentChangeRoomAction,
     staffAddAction,
     childAddAction,
+    enrollmentStartAction,
+    enrollmentDirectAction,
     employmentUpdateAction,
     employmentEndAction,
     staffPresenceRecordAction,

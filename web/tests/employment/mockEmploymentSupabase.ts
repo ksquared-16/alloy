@@ -105,6 +105,12 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
             filters.push((r) => r[col] === val);
             return api;
         };
+        // `.is(col, null)` is how PostgREST asks for NULL — `.eq` cannot express it, and a
+        // context-free process instance is found no other way.
+        api.is = (col: string, val: unknown) => {
+            filters.push((r) => (val === null ? r[col] == null : r[col] === val));
+            return api;
+        };
         api.in = (col: string, vals: unknown[]) => {
             filters.push((r) => vals.includes(r[col]));
             return api;
@@ -131,6 +137,22 @@ export function createEmploymentMock(seed?: EmploymentMockStore): EmploymentMock
         api.order = () => api;
         api.limit = () => api;
         api.insert = (payload: Row) => {
+            pending = { op: "insert", payload };
+            return api;
+        };
+        // `.upsert` with `ignoreDuplicates` returns the EXISTING row rather than writing a
+        // second one, which is what makes the caller idempotent.
+        api.upsert = (payload: Row, opts?: { onConflict?: string; ignoreDuplicates?: boolean }) => {
+            const cols = (opts?.onConflict ?? "").split(",").map((c) => c.trim()).filter(Boolean);
+            const existing =
+                cols.length > 0
+                    ? table(name).find((r) => cols.every((c) => r[c] === payload[c]))
+                    : undefined;
+            if (existing) {
+                pending = null;
+                rows = () => [clone(existing)];
+                return api;
+            }
             pending = { op: "insert", payload };
             return api;
         };
