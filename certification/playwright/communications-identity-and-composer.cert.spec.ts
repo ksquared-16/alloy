@@ -393,7 +393,22 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
                     .locator("[data-cc-composer-channels]:visible button", { hasText: "Email" })
                     .first();
                 if (!(await becomesVisible(emailTab, patience))) continue;
-                if ((await emailTab.getAttribute("aria-pressed")) !== "true") await emailTab.click();
+                // A control can be "visible" and still be unusable. The channel
+                // strip once collapsed to EIGHT PIXELS tall — visible, enabled,
+                // correct aria state, and impossible to click. Asserting a real
+                // hit target is what caught that, and what keeps it caught.
+                const box = await emailTab.boundingBox();
+                expect(box?.height ?? 0, "the Email tab is a real hit target").toBeGreaterThan(16);
+                if ((await emailTab.getAttribute("aria-pressed")) !== "true") {
+                    await emailTab.click();
+                    // Switching channel switches the SELECTED THREAD — a hub's
+                    // email and SMS conversations are different canonical threads
+                    // — and selecting a thread collapses the reply composer back
+                    // behind its explicit Reply, by design. So it has to be
+                    // re-expanded before the From line can exist.
+                    const reExpand = page.locator("[data-cc-reply-expand]:visible").first();
+                    if (await becomesVisible(reExpand, 20_000)) await reExpand.click();
+                }
 
                 const from = page.locator("[data-cc-compose-from-address]:visible").first();
                 if (!(await becomesVisible(from, 30_000))) continue;

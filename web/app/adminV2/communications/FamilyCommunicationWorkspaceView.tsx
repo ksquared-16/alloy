@@ -736,7 +736,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     : "px-4 py-3"
             }`}
         >
-                <div data-cc-composer-channels className={`inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
+                {/* `shrink-0` is load-bearing. This strip is a flex child of a
+                    `flex-col` composer column, so without it the browser squeezes
+                    it to make room for whatever else the column holds. Adding the
+                    From line and the recipient-preferences row below collapsed it
+                    to EIGHT PIXELS: still "visible" to a test, still reporting the
+                    right aria state, and completely unclickable — an operator
+                    could not switch the composer from SMS to Email at all. */}
+                <div data-cc-composer-channels className={`inline-flex w-fit shrink-0 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
                     {renderModeTab("email", "Email")}
                     {renderModeTab("sms", "SMS")}
                     {!isActivityEmbed ? renderModeTab("note", "Notes") : null}
@@ -760,7 +767,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 {workspaceMode === "email" && sendingIdentity ? (
                     <div
                         data-cc-compose-from="true"
-                        className="mt-2 flex flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
+                        className="mt-2 flex shrink-0 flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
                     >
                         <span className="font-medium text-alloy-midnight/45">From</span>
                         {sendingIdentity.displayName ? (
@@ -1001,7 +1008,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                   * show two different summaries, side by side.
                   */}
                 {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
-                    <div data-cc-recipient-preferences-row className="mt-2 flex flex-wrap items-center gap-1.5">
+                    <div data-cc-recipient-preferences-row className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
                         <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
                         {selectedRecipientRows.map((r) => (
                             <RecipientPreferenceAffordance
