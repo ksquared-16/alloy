@@ -252,6 +252,62 @@ Two further repeated paths seen in the same sweep. **Class C**, unowned as yet.
 
 ## Open
 
+### R-010 · Waitlist child-grain Focus Panel renders no cards — CONFIGURATION, not runtime
+
+| Field | Value |
+|---|---|
+| **Surface** | Work Unit → Waitlist work view (`new_work_view_4`) → Focus Panel |
+| **Interaction** | Selecting either real Firefly waitlist child |
+| **Expected** | A child subject at a child-grain stage opens a useful Focus Panel |
+| **Observed** | `cards=0`, `cells=1`, `not-applicable=1`; header renders correctly ("Lennon Kurzman · Waitlist · Tour Scheduled · North Campus") |
+| **Root owner** | **Tenant configuration**, not the runtime |
+| **Classification** | K |
+| **Severity** | High (operator-facing) but **not a Slot 5 fix** |
+| **Status** | **Open — CORRECTNESS/CONFIG OWNER** |
+
+**The runtime is correct.** The provisioning answer for `new_work_view_4` resolves
+`rowGrain: "child"`, `subjectGrain: {grain: "child", subjectType: "child"}`,
+`terminal: "operational"`, and 2 real rows — *Wrigley Kurzman* (`9ab36f48-…`) and
+*Lennon Kurzman* (`93722453-…`) — each carrying full row context. Grain resolution,
+subject identity and terminal are all right.
+
+**The configuration is empty.** `GET /api/admin/entity-layouts/focus-panel-summary?workViewId=new_work_view_4&stageKey=waitlist`
+returns a published doc (version 131) with:
+
+```
+surface:  "drawer"        ← drawer-era document
+groups:   []              ← EMPTY
+blocks:   []              ← EMPTY
+nested:   ["children_surface", "household_surface"]
+```
+
+There is no card content to render, so the panel renders the one nested "Child" cell, which
+resolves not-applicable. This is the runtime faithfully presenting an unauthored composition.
+
+**Contrast — the family path is authored and works.** The All view (`new_work_view_6`,
+`rowGrain: family`, `subjectGrain: case/opportunity`, row `d097e1a8-…` "Kurzman Family")
+renders 4 cards, 4 cells, `holding=0`, `na=0`.
+
+**Why Slot 5 is not fixing it.** Authoring a Focus Panel composition is tenant configuration,
+and publishing replaces the projection — a one-way door. Inventing a Waitlist-specific parallel
+composition in the runtime is explicitly forbidden and would hide the real gap.
+
+**Recommended:** author the child-grain Waitlist composition through canonical Surfaces. Note the
+existing doc is `surface: "drawer"`, so this is also deletion/convergence debt.
+
+### R-011 · Sibling work-view prewarm fetches answers for views that are empty
+
+| Field | Value |
+|---|---|
+| **Surface** | Work Unit entry (any view) |
+| **Expected** | Speculative prewarm buys a faster view switch |
+| **Observed** | Sitting on Waitlist, the page fetched provisioning answers for **New, Tours, Registration, Active Pipeline and All** — 5 sibling answers. **Four returned `terminal: "empty"` with zero rows**; only All had a row |
+| **Root owner** | `useCommittedWorkUnitSurfaceRuntime` sibling prewarm (idle-gated) |
+| **Classification** | C |
+| **Severity** | Medium |
+| **Status** | **Open** — the prewarm is idle-scheduled so it does not compete with first paint, but on this tenant it warms mostly-empty views. Needs a with/without switch-latency comparison on a quiet host before changing the policy; that is the D-3 experiment and it is timing-dependent |
+
+
 ### R-005 · Second instance of the warm-cache bypass
 
 | Field | Value |

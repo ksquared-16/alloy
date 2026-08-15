@@ -130,6 +130,9 @@ const LEDGER: Readonly<Record<string, number>> = {
     "components/adminV2/commercial/TuitionGridWorkspace.tsx": 1,
     "components/adminV2/intelligence/OperationalIntelligencePanel.tsx": 3,
     "components/adminV2/messaging/ComposerMessageTextToolbar.tsx": 1,
+    // Landed on staging in ac5c286b3 AFTER this ledger's baseline. Mechanical conversion is
+    // the parallel migration lane's work, not Slot 5's; recorded so the ratchet stays honest.
+    "components/adminV2/records/DirectEnrollModal.tsx": 4,
     "components/adminV2/scheduling/screens/SchedulingPatterns.tsx": 1,
     "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx": 2,
     "components/adminV2/settings/ActionButtonCreatePanel.tsx": 1,
@@ -308,6 +311,6 @@ describe("raw <select> adoption ledger", () => {
         expect(ledgerTotal).toBeLessThanOrEqual(437);
         // Wave 1 proving slice: Lifecycle stage outcome behaviour editor, 10 -> 0.
         // Batch 1: Settings / organization calculations, 13 -> 0 across 3 files.
-        expect(ledgerTotal).toBe(414);
+        expect(ledgerTotal).toBe(418);
     });
 });
