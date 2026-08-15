@@ -26,9 +26,17 @@
  * Assignment and Employment have no business process, so there is no published composition to
  * resolve for them. The card states that plainly instead of approximating one. Inventing a card for
  * a context that has none is the failure mode this whole slice exists to avoid.
+ *
+ * ── EDITING GOES THROUGH THE DOMAIN'S OWN AUTHORITY ──
+ *
+ * A field is editable here when the CONFIGURATION says it is editable AND the value's canonical home
+ * is the child record. Enrollment projections satisfy the first and not the second: they live on a
+ * participation row, and a durable host writing one would create participation as a side effect of
+ * an edit. They render, configured and in order, without an edit affordance — a truthful card, not
+ * a degraded one.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import type { DurableRecordContextOption } from "@/lib/context/durableRecordContextOptions";
 import {
@@ -36,6 +44,10 @@ import {
     resolveContextualChildCard,
 } from "@/lib/adminV2/runtime/focusPanel/contextualCard/resolveContextualChildCard";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import {
+    saveContextualChildField,
+    writeTargetForField,
+} from "@/lib/adminV2/runtime/focusPanel/contextualCard/saveContextualChildField";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 type Resolved = {
@@ -78,11 +90,34 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
 export default function DurableRecordContextualCard({
     option,
     subject,
+    onSaved,
 }: {
     option: DurableRecordContextOption;
     subject: DurableChildSubject;
+    /** Fired after a successful write so the list underneath can refresh this row. */
+    onSaved?: () => void;
 }) {
     const [resolved, setResolved] = useState<Resolved | null>(null);
+    /** Values written in this session, so the card shows the saved fact without a re-fetch. */
+    const [overrides, setOverrides] = useState<Record<string, string | null>>({});
+    const [editing, setEditing] = useState<string | null>(null);
+    const [draft, setDraft] = useState("");
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const commit = useCallback(
+        async (fieldKey: string, value: string) => {
+            setEditing(null);
+            setSaveError(null);
+            const result = await saveContextualChildField({ subject, fieldKey, value });
+            if (!result.ok) {
+                setSaveError(result.error);
+                return;
+            }
+            setOverrides((prev) => ({ ...prev, [fieldKey]: value.trim() || null }));
+            onSaved?.();
+        },
+        [subject, onSaved],
+    );
 
     useEffect(() => {
         if (!option.resolvesConfiguredSurface) {
@@ -166,29 +201,76 @@ export default function DurableRecordContextualCard({
                 <span className="text-[11px] text-alloy-midnight/45">{option.label}</span>
             </div>
 
+            {saveError ? (
+                <p
+                    className="mx-3 mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11.5px] text-red-700"
+                    data-contextual-card-save-error="true"
+                >
+                    {saveError}
+                </p>
+            ) : null}
+
             {card.rows.length === 0 ? (
                 <p className="px-3 py-4 text-[12px] text-alloy-midnight/50">
                     No fields are configured on the Child card for this context.
                 </p>
             ) : (
                 <dl className="grid grid-cols-2 gap-x-4 gap-y-2 px-3 py-3">
-                    {card.rows.map((row) => (
-                        <div
-                            key={row.fieldKey}
-                            className={row.layoutWidth === "full" ? "col-span-2" : undefined}
-                            data-contextual-card-field={row.fieldKey}
-                            data-contextual-card-field-editable={row.editable ? "true" : "false"}
-                        >
-                            <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                {row.label}
-                            </dt>
-                            <dd className="text-[12.5px] text-alloy-midnight">
-                                {row.value ?? (
-                                    <span className="text-alloy-midnight/35">Not set</span>
-                                )}
-                            </dd>
-                        </div>
-                    ))}
+                    {card.rows.map((row) => {
+                        const value =
+                            row.fieldKey in overrides ? overrides[row.fieldKey] ?? null : row.value;
+                        // Configured as editable AND canonically owned by the child record.
+                        const canEditHere =
+                            row.editable && writeTargetForField(row.fieldKey) === "child_record";
+                        const isEditing = editing === row.fieldKey;
+
+                        return (
+                            <div
+                                key={row.fieldKey}
+                                className={row.layoutWidth === "full" ? "col-span-2" : undefined}
+                                data-contextual-card-field={row.fieldKey}
+                                data-contextual-card-field-editable={row.editable ? "true" : "false"}
+                                data-contextual-card-field-writable={canEditHere ? "true" : "false"}
+                            >
+                                <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                    {row.label}
+                                </dt>
+                                <dd className="text-[12.5px] text-alloy-midnight">
+                                    {isEditing ? (
+                                        <input
+                                            autoFocus
+                                            value={draft}
+                                            onChange={(e) => setDraft(e.target.value)}
+                                            onBlur={() => void commit(row.fieldKey, draft)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === "Enter") void commit(row.fieldKey, draft);
+                                                if (e.key === "Escape") setEditing(null);
+                                            }}
+                                            aria-label={row.label}
+                                            data-contextual-card-input={row.fieldKey}
+                                            className="w-full rounded border border-alloy-juniper/50 bg-white px-1.5 py-0.5 text-[12.5px] text-alloy-midnight outline-none"
+                                        />
+                                    ) : canEditHere ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDraft(value ?? "");
+                                                setEditing(row.fieldKey);
+                                            }}
+                                            data-contextual-card-edit={row.fieldKey}
+                                            className="w-full rounded px-1 py-0.5 text-left hover:bg-alloy-stone/[0.08]"
+                                        >
+                                            {value ?? <span className="text-alloy-midnight/35">Not set</span>}
+                                        </button>
+                                    ) : (
+                                        <span className="px-1">
+                                            {value ?? <span className="text-alloy-midnight/35">Not set</span>}
+                                        </span>
+                                    )}
+                                </dd>
+                            </div>
+                        );
+                    })}
                 </dl>
             )}
         </div>

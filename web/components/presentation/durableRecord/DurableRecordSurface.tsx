@@ -66,11 +66,14 @@ export default function DurableRecordSurface({
      * Honoured only when the record actually holds it; absent, the first context wins.
      */
     contextKey,
+    /** Called after a successful write, so the list underneath can refresh exactly that row. */
+    onRecordChanged,
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
     cardKey?: string | null;
     contextKey?: string | null;
+    onRecordChanged?: () => void;
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
     const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
@@ -197,6 +200,7 @@ export default function DurableRecordSurface({
                         <DurableRecordContextualCard
                             option={selectedContext}
                             subject={state.childSubject}
+                            onSaved={onRecordChanged}
                         />
                     </div>
                 ) : null}

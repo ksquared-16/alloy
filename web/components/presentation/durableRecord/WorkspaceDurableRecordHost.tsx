@@ -59,11 +59,9 @@ export default function WorkspaceDurableRecordHost({
      * A ref rather than state: it must not re-render the host (which would re-render the workspace
      * body underneath for no reason), and it is read exactly once, at close.
      *
-     * Nothing sets it to `true` yet — the durable host renders configured cards but does not write
-     * through them. The flag and the listeners that read it are here because the CONTRACT is what
-     * decides whether a list re-queries, and deciding that later by inferring it from the close is
-     * the guess this exists to prevent. The edit slice sets it; until then every close is honestly
-     * reported as "nothing changed".
+     * Set by a successful write on the contextual card. The list underneath reads it on close, so a
+     * record that was only LOOKED at costs no re-query and one that was EDITED cannot leave a stale
+     * row behind — a distinction the listener could not make by inferring it from the close.
      */
     const changedRef = useRef(false);
     const nonceRef = useRef(0);
@@ -82,6 +80,10 @@ export default function WorkspaceDurableRecordHost({
         }),
         [],
     );
+
+    const onRecordChanged = useCallback(() => {
+        changedRef.current = true;
+    }, []);
 
     const close = useCallback(() => {
         setRecord((current) => {
@@ -164,6 +166,7 @@ export default function WorkspaceDurableRecordHost({
                                 subjectId={record.subjectId}
                                 cardKey={record.cardKey ?? null}
                                 contextKey={record.contextKey ?? null}
+                                onRecordChanged={onRecordChanged}
                             />
                         </div>
                     </div>
