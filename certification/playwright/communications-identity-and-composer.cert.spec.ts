@@ -82,6 +82,25 @@ async function deliverEmail(
     return { emailId, outcome: (await res.json()).outcome as Record<string, unknown> };
 }
 
+/**
+ * Wait for a locator to become visible, and report whether it did.
+ *
+ * `locator.isVisible()` DOES NOT AUTO-WAIT — it is an immediate snapshot, and the
+ * `{ timeout }` it accepts is ignored. Every probe below was therefore checking a
+ * still-rendering page and getting `false` instantly, which made a loop written to
+ * be patient exit in milliseconds and report that no composer existed. The
+ * failure looked like a product defect and was a harness bug.
+ *
+ * `waitFor` is the auto-waiting form. Kept as one helper so the mistake cannot be
+ * reintroduced one call at a time.
+ */
+async function becomesVisible(locator: ReturnType<Page["locator"]>, timeout: number): Promise<boolean> {
+    return locator
+        .waitFor({ state: "visible", timeout })
+        .then(() => true)
+        .catch(() => false);
+}
+
 const INBOUND_URL = process.env.CERT_INBOUND_URL || "http://127.0.0.1:8013";
 const TWILIO_AUTH_TOKEN =
     process.env.CERT_TWILIO_AUTH_TOKEN || "alloy-certification-synthetic-twilio-token";
@@ -359,11 +378,11 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
             // silently concludes no composer exists — a false negative that reads
             // as a product defect.
             const expand = page.locator("[data-cc-reply-expand]:visible").first();
-            if (await expand.isVisible({ timeout: patience }).catch(() => false)) {
+            if (await becomesVisible(expand, patience)) {
                 await expand.click();
             }
             const footer = page.locator("[data-cc-composer-footer]:visible").first();
-            if (!(await footer.isVisible({ timeout: patience }).catch(() => false))) continue;
+            if (!(await becomesVisible(footer, patience))) continue;
 
             // The composer opens in the conversation's OWN channel, and a hub's
             // newest thread may be the SMS one. So SELECT email first, then look
@@ -373,11 +392,11 @@ test.describe("Email Subject — authored once, inherited thereafter", () => {
                 const emailTab = page
                     .locator("[data-cc-composer-channels]:visible button", { hasText: "Email" })
                     .first();
-                if (!(await emailTab.isVisible({ timeout: patience }).catch(() => false))) continue;
+                if (!(await becomesVisible(emailTab, patience))) continue;
                 if ((await emailTab.getAttribute("aria-pressed")) !== "true") await emailTab.click();
 
                 const from = page.locator("[data-cc-compose-from-address]:visible").first();
-                if (!(await from.isVisible({ timeout: 30_000 }).catch(() => false))) continue;
+                if (!(await becomesVisible(from, 30_000))) continue;
                 return;
             }
             if (await footer.isVisible().catch(() => false)) return;
@@ -549,7 +568,7 @@ test.describe("Overlays render above the workspace that opened them", () => {
         // Closes normally, by keyboard and by control.
         await page.keyboard.press("Escape");
         const closeBtn = page.locator("[data-compose-new-modal] button[aria-label='Close']").first();
-        if (await closeBtn.isVisible({ timeout: 4_000 }).catch(() => false)) await closeBtn.click();
+        if (await becomesVisible(closeBtn, 4_000)) await closeBtn.click();
         await expect(modal).toBeHidden({ timeout: 30_000 });
     });
 
