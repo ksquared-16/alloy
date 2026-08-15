@@ -110,6 +110,11 @@ const CHILD_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
     buildPublishedLayoutFromGrid(focusPanelSummaryGridForGrain("child")),
 );
 
+const HOUSEHOLD_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
+    focusPanelDefaultCompositionForGrain("household"),
+    buildPublishedLayoutFromGrid(focusPanelSummaryGridForGrain("household")),
+);
+
 /**
  * A child selected from an operational lens, where a settled family opportunity is the Record of
  * Truth. Its own singleton, built by the same encoder from its own composition — see
@@ -136,6 +141,8 @@ export function focusPanelSummaryDefaultDocForGrain(
             return PERSON_DEFAULT_DOC;
         case "child":
             return context?.familySettlement ? CHILD_WITH_FAMILY_DEFAULT_DOC : CHILD_DEFAULT_DOC;
+        case "household":
+            return HOUSEHOLD_DEFAULT_DOC;
         case "opportunity":
             return FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
     }

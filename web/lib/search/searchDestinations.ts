@@ -262,20 +262,30 @@ export function resolveSubjectDestination(
         };
     }
 
-    // Household. There is no durable household grain yet, so this remains the Household card on the
-    // household's own case — the panel its adults and children are worked in. When a durable
-    // household composition exists this becomes a `durable_record` like the two above.
-    const host = resolveHost(subject, contexts);
-    if (!host) return null;
+    /*
+     * Household — now a DURABLE RECORD, like the two above.
+     *
+     * This used to be "the Household card on the household's own case", with the note that it would
+     * become a `durable_record` once a household composition existed. It exists
+     * (`composeDurableHouseholdSubject`), so this is that flip — and it fixes a defect, not only a
+     * shape. The old branch called `resolveHost`, which falls through to the household's CASE, and
+     * returned null when there wasn't one. A family whose enrollment had completed, or who never had
+     * one, therefore produced NO subject destination at all: the result rendered in Search and could
+     * not be opened. That is the same sentence already written above for children, and it has the
+     * same answer — a durable record needs no case and no queue.
+     *
+     * The household's own case is still reachable; it is simply no longer what "open this family"
+     * means. Its operational siblings below carry it.
+     */
     return {
         key: "subject",
         label: `Open ${subject.display_name}`,
-        target: "focus_panel",
-        card_key: SEARCH_CARD_KEYS.household,
-        host_entity_type: host.type,
-        host_entity_id: host.id,
-        host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-        host_work_view_id: resolveHostWorkViewId(contexts),
+        target: "durable_record",
+        subject_type: "household",
+        // `SearchSubject.id` for a household subject is `customers.id` by the subject contract — the
+        // same id `composeDurableHouseholdSubject` reads. No host walk is involved.
+        subject_id: subject.id,
+        preferred_context_key: preferredRecordContextKey(contexts, preferredContextKey),
         primary: true,
     };
 }

@@ -70,7 +70,7 @@ import {
 export type AttentionIntent = "operational" | "durable_record";
 
 /** The grains a durable subject can take. Matches `OperationalSubjectType` at the panel. */
-export type AttentionSubjectType = "opportunity" | "person" | "child";
+export type AttentionSubjectType = "opportunity" | "person" | "child" | "household";
 
 /**
  * The record the operator pointed at, as a durable identity.
@@ -224,6 +224,28 @@ async function personExistsInOrg(
     return Boolean((data ?? [])[0]);
 }
 
+/**
+ * Does this `customers` row exist in this org?
+ *
+ * The household's ONLY precondition, exactly as for a person. It replaces the previous test — "does
+ * an active Work Unit hold a case for this household" — which made a queue the existence authority
+ * for a family.
+ */
+async function householdExistsInOrg(
+    supabase: SupabaseClient,
+    orgId: string,
+    householdId: string
+): Promise<boolean> {
+    const { data, error } = await supabase
+        .from("customers")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("id", householdId)
+        .limit(1);
+    if (error) throw new Error(error.message);
+    return Boolean((data ?? [])[0]);
+}
+
 /** The member row behind a `child` subject — its own id is the enrollment subject key. */
 async function loadChildMember(
     supabase: SupabaseClient,
@@ -346,11 +368,25 @@ export async function resolveAttentionTarget(args: {
         };
     }
 
-    // ── HOUSEHOLD — never a subject of its own; it resolves to its case ──────────────
+    // ── HOUSEHOLD — a subject of its own; its case is context ────────────────────────
     //
-    // Unchanged from the original behaviour deliberately. A household IS the case grain (the Household
-    // card already lives on the case panel), so promoting it to a durable subject would create a second
-    // surface for the same thing.
+    // This arm used to answer with the household's CASE (`type: "opportunity"`) and to return null
+    // when no active unit held one. The reasoning was that "a household IS the case grain, so
+    // promoting it to a durable subject would create a second surface for the same thing." Both
+    // halves turned out to be wrong, and the second half was a real defect:
+    //
+    //   • A case is ONE ENROLLMENT'S view of a family. The family is `customers` +
+    //     `customer_persons` + `customer_members`, it can carry several cases or none, and it
+    //     outlives all of them. Answering with a case picks one of those views and calls it the
+    //     family.
+    //   • Returning null without a host made an ACTIVE QUEUE the existence authority for a
+    //     household — precisely the mistake this resolver's own header records having removed for
+    //     every other grain. A family whose enrollment completed could not be opened at all.
+    //
+    // So the household is now its own subject and the case rides along as `operational_host`, which
+    // is the same shape every other durable grain already uses. `resolveOperatorFocusTarget` reads
+    // ONLY `operational_host`, so every operational caller keeps its exact previous answer — null
+    // when no unit holds the case, the host when one does.
     if (
         entityType === "customers"
         || entityType === "customer"
@@ -358,11 +394,10 @@ export async function resolveAttentionTarget(args: {
         || entityType === "household"
     ) {
         if (envelope.restricted && !allowed(envelope.allowedCustomerIds, id)) return null;
-        const host = await operationalHostForHousehold(supabase, orgId, id);
-        if (!host) return null;
+        if (!(await householdExistsInOrg(supabase, orgId, id))) return null;
         return {
-            subject: { type: "opportunity", id: host.host_entity_id, person_id: null, household_id: id },
-            operational_host: host,
+            subject: { type: "household", id, person_id: null, household_id: id },
+            operational_host: await operationalHostForHousehold(supabase, orgId, id),
         };
     }
 

@@ -7,8 +7,10 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { composeDurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurablePersonSubject";
 import { composeDurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildSubject";
+import { composeDurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableHouseholdSubject";
 import {
     focusPanelWorkModeModelFromDurableChild,
+    focusPanelWorkModeModelFromDurableHousehold,
     focusPanelWorkModeModelFromDurablePerson,
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import { encodeDurableRecordModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableRecordModelWire";
@@ -57,12 +59,15 @@ export async function GET(request: NextRequest) {
     const subjectType = (searchParams.get("subject_type") ?? "").trim().toLowerCase();
     const subjectId = (searchParams.get("subject_id") ?? "").trim();
 
-    if (!subjectId || (subjectType !== "person" && subjectType !== "child")) {
+    if (
+        !subjectId
+        || (subjectType !== "person" && subjectType !== "child" && subjectType !== "household")
+    ) {
         return NextResponse.json(
             {
                 ok: false,
                 error: "SUBJECT_REQUIRED",
-                message: "subject_type must be person|child and subject_id is required.",
+                message: "subject_type must be person|child|household and subject_id is required.",
             },
             { status: 400 }
         );
@@ -76,7 +81,10 @@ export async function GET(request: NextRequest) {
             supabase,
             orgId: ctx.orgId,
             dimensions: scopeDimensionsFromAccess(access),
-            entityType: subjectType === "person" ? "persons" : "customer_members",
+            entityType:
+                subjectType === "person" ? "persons"
+                : subjectType === "household" ? "customers"
+                : "customer_members",
             entityId: subjectId,
         });
         if (!resolution) {
@@ -114,6 +122,28 @@ export async function GET(request: NextRequest) {
                     id: subjectId,
                     personId: subjectId,
                 }),
+            });
+        }
+
+        if (subjectType === "household") {
+            const composed = await composeDurableHouseholdSubject(supabase, ctx.orgId, subjectId);
+            if (!composed.ok) {
+                return NextResponse.json({ ok: false, error: "NOT_FOUND" }, { status: 404 });
+            }
+            const model = focusPanelWorkModeModelFromDurableHousehold({
+                mode: "summary",
+                subject: composed.subject,
+                canMutate: false,
+                operationalHost,
+            });
+            return NextResponse.json({
+                ok: true,
+                model: encodeDurableRecordModel(model),
+                // NO contexts. `loadSubjectContexts` reads `process_instances` by SUBJECT, and a
+                // household is never a process subject — only its children are. Asking would return
+                // an empty list that reads as "this family is in nothing", which is a claim, whereas
+                // omitting the key says the question does not apply at this grain.
+                contexts: [],
             });
         }
 

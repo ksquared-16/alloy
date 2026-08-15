@@ -62,7 +62,22 @@ export function deriveChildIdentityCard(
         { label: "Name", value: subject.label },
         { label: "Date of birth", value: dob },
         { label: "Age", value: age },
-        { label: "Household", value: subject.householdName },
+        {
+            label: "Household",
+            value: subject.householdName,
+            /*
+             * The family, as a RECORD rather than as a printed name.
+             *
+             * `customer_members.customer_id` IS the durable household's id, so this reference needs
+             * no lookup and no case: it is the same edge that made the household name available on
+             * this card in the first place. A child with no household (the column is nullable)
+             * carries no reference and the row stays plain text — the honest outcome, rather than a
+             * control that opens nothing.
+             */
+            record: subject.householdId
+                ? { subject_type: "household", subject_id: subject.householdId }
+                : null,
+        },
     ];
 
     return {

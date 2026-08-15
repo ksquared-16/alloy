@@ -74,7 +74,25 @@ export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<Car
  */
 export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
-    { key: "household", title: "Household", ownsOperationalTruth: true },
+    /**
+     * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
+     * durable Household surface exist at all. Silence would have left it case-only by the
+     * `DEFAULT_CARD_GRAINS` rule, so `deriveHouseholdFocusPanelCards` would compose nothing and the
+     * record would open empty. That is the silence rule working, not a bug to route around.
+     *
+     * It clears the truthfulness bar at both grains for the same reason Employment does:
+     * `buildOpportunityFamilyContactRows` already answers "who is this family, and how do we reach
+     * them" from `customer_persons` alone, with no case involved. Same card, same renderer, same
+     * model builder — only the producer of the record differs.
+     */
+    { key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"] },
+    /**
+     * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads `_inquiry_children`
+     * — one enrollment's projection of a family's children — while a durable household knows its
+     * children through `customer_members`, a wider and differently-shaped set. Declaring the grain
+     * without a builder that reads the canonical edge would render enrollment framing for children
+     * that have no enrollment. See `deriveHouseholdFocusPanelCards`.
+     */
     { key: "children", title: "Children", ownsOperationalTruth: true },
     /**
      * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.

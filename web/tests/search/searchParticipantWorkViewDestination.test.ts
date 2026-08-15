@@ -161,11 +161,23 @@ describe("a participant's destination carries their own Work View", () => {
             household_case_work_unit_key: FAMILY_UNIT,
         };
 
-        // A household still resolves operationally — there is no durable household grain yet — so
-        // its subject destination remains the Household card on its own case.
+        /*
+         * The CLAIM of this scenario is unchanged and is now held more strongly.
+         *
+         * It asserted that a household resolves to `focus_panel` on its case with a NULL work view —
+         * "does not borrow a child's view" proven by the view being absent. A household is now a
+         * durable record, so there is no lens field to leave null: the destination names the family
+         * and nothing operational at all, which cannot borrow a child's view because it carries no
+         * view, no unit and no host.
+         *
+         * The case remains reachable — its operational siblings still carry `FAMILY_UNIT` — it is
+         * simply no longer what "open this family" means.
+         */
         const primary = resolve(household, [])[0];
-        expect(primary.target).toBe("focus_panel");
-        expect(primary.host_work_unit_key).toBe(FAMILY_UNIT);
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("household");
+        expect(primary.subject_id).toBe(HOUSEHOLD);
         expect(primary.host_work_view_id ?? null).toBeNull();
+        expect(primary.host_work_unit_key ?? null).toBeNull();
     });
 });

@@ -13,6 +13,7 @@ import { join } from "node:path";
 
 import {
     DURABLE_RECORD_BASE,
+    durableRecordEntityType,
     durableRecordHref,
     durableSubjectTypeFor,
     isDurableSubjectType,
@@ -33,12 +34,33 @@ describe("the durable address has one builder and one vocabulary", () => {
         expect(durableSubjectTypeFor("person")).toBe("person");
         expect(durableSubjectTypeFor("customer_members")).toBe("child");
         expect(durableSubjectTypeFor("child")).toBe("child");
+        expect(durableSubjectTypeFor("customers")).toBe("household");
+        expect(durableSubjectTypeFor("household")).toBe("household");
     });
 
     it("an opportunity has NO durable grain — it has an operational home", () => {
         expect(durableSubjectTypeFor("opportunities")).toBeNull();
         expect(durableSubjectTypeFor("opportunity")).toBeNull();
-        expect(durableSubjectTypeFor("customers")).toBeNull();
+        /*
+         * `customers` WAS ASSERTED NULL HERE, on the line below the opportunity — and the two were
+         * never the same statement.
+         *
+         * A case has an operational home, so a durable case would route around the queue it belongs
+         * to. That reasoning is intact, which is why the two lines above stay. A household is not a
+         * case: it is `customers` + `customer_persons` + `customer_members`, it may carry several
+         * cases or none, and it outlives all of them. Resolving it through a case made an ACTIVE
+         * QUEUE the existence authority for a family — so a family whose enrollment had completed
+         * produced no subject destination at all and could not be opened.
+         */
+    });
+
+    /** A grain → the table name the attention resolver speaks. Total over the union, by construction. */
+    it("maps every durable grain onto its canonical table", () => {
+        expect(durableRecordEntityType("person")).toBe("persons");
+        expect(durableRecordEntityType("child")).toBe("customer_members");
+        // The arm a two-way ternary silently got wrong: a household sent as `persons` finds nothing
+        // and 404s a record that plainly exists.
+        expect(durableRecordEntityType("household")).toBe("customers");
     });
 
     it("builds the canonical address, with the aspect riding it", () => {

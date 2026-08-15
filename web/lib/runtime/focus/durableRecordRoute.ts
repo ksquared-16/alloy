@@ -18,13 +18,13 @@
  */
 
 /** The grains that have a durable destination today. Mirrors the composers that exist. */
-export type DurableSubjectType = "person" | "child";
+export type DurableSubjectType = "person" | "child" | "household";
 
 export const DURABLE_RECORD_BASE = "/workspace/record" as const;
 
 export function isDurableSubjectType(value: string): value is DurableSubjectType {
     const v = value.trim().toLowerCase();
-    return v === "person" || v === "child";
+    return v === "person" || v === "child" || v === "household";
 }
 
 /**
@@ -32,12 +32,42 @@ export function isDurableSubjectType(value: string): value is DurableSubjectType
  *
  * `opportunity` returns null on purpose: a case HAS an operational home, and sending it to a durable
  * surface would route around the queue it belongs to.
+ *
+ * `customers` maps to `household`, and that is NOT the same statement in reverse. A household is not
+ * a case that happens to lack a queue — it is a different record, canonical in `customers` +
+ * `customer_persons` + `customer_members`, and it outlives every enrollment a family ever has.
  */
 export function durableSubjectTypeFor(subjectType: string): DurableSubjectType | null {
     const v = subjectType.trim().toLowerCase();
     if (v === "person" || v === "persons") return "person";
     if (v === "child" || v === "customer_members") return "child";
+    if (v === "household" || v === "households" || v === "customer" || v === "customers") {
+        return "household";
+    }
     return null;
+}
+
+/**
+ * The inverse of {@link durableSubjectTypeFor}: a durable grain → the table name the attention
+ * resolver speaks.
+ *
+ * It exists because the mapping was a two-way ternary at the call site
+ * (`subjectType === "child" ? "customer_members" : "persons"`), which is a shape that silently
+ * MISROUTES rather than failing the moment a third grain appears: a household would have been sent
+ * to the resolver as a person id, found nothing, and produced a 404 on a record that plainly exists.
+ * A total switch over the union makes a fourth grain a build error instead.
+ */
+export function durableRecordEntityType(
+    subjectType: DurableSubjectType,
+): "persons" | "customer_members" | "customers" {
+    switch (subjectType) {
+        case "person":
+            return "persons";
+        case "child":
+            return "customer_members";
+        case "household":
+            return "customers";
+    }
 }
 
 export function durableRecordHref(

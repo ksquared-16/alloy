@@ -34,6 +34,8 @@ const SETTLE = 180_000;
 const LENNON = "fbc00000-0000-4000-8000-00000000c001";
 const JANE = "fbc00000-0000-4000-8000-00000000a001";
 const KURZMAN_CASE = "fbc00000-0000-4000-8000-00000000c003";
+/** The `customers` row — the durable FAMILY, which is not the case above and outlives it. */
+const KURZMAN_HOUSEHOLD = "fbc00000-0000-4000-8000-00000000d001";
 const PUBLISHED_LAYOUT = "fbc00000-0000-4000-8000-00000000c005";
 
 /**
@@ -350,6 +352,141 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
         expect(new URL(page.url()).searchParams.get("subject_id")).toBeTruthy();
 
         await page.screenshot({ path: path.join(SHOTS, "I-search-operational.png"), fullPage: true });
+    });
+});
+
+// ═══ L/M — the durable HOUSEHOLD, reached two ways ═══════════════════════════════════════════
+//
+// The requirement is an equality, not two independent openings:
+//
+//     Roster → Children → Lennon → Household → Kurzman Family
+//     Search → Kurzman Family
+//
+// must open the SAME durable Household composition. So both scenarios read the subject the surface
+// committed and the contacts it rendered, and M compares them against L's.
+test.describe("L/M — Roster → Lennon → Household, and Search → Kurzman Family", () => {
+    /** What the durable Household surface actually composed — subject identity and its people. */
+    async function householdComposition(page: Page) {
+        return page.evaluate(() => {
+            const panel = document.querySelector('[data-durable-record="ready"]');
+            const card = document.querySelector('[data-universal-card-key="household"]');
+            return {
+                subjectType: panel?.getAttribute("data-durable-record-subject-type") ?? null,
+                subjectId: panel?.getAttribute("data-durable-record-subject-id") ?? null,
+                householdCard: Boolean(card),
+                cardText: (card?.textContent ?? "").replace(/\s+/g, " ").trim(),
+            };
+        });
+    }
+
+    test("the Household row on Lennon's record OPENS the family", async ({ page }) => {
+        await openRoster(page, "children");
+        await (await findChild(page, "Lennon", LENNON)).click();
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+        await expect(page.locator(PANEL_READY)).toHaveAttribute("data-durable-record-subject-id", LENNON);
+
+        /*
+         * POSITIVE CONTROL, and the point of the scenario.
+         *
+         * "Household — Kurzman Family" was a printed string on the child identity card. An operator
+         * who wanted the family had to retype a name the surface was already showing. It is now a
+         * record reference, so it is a control — and the assertion is that the control EXISTS before
+         * it is clicked, because a click on a missing element fails with a locator error that reads
+         * like a timing problem rather than like a missing affordance.
+         */
+        const householdRow = page.locator('[data-profile-field-record="household"]');
+        await expect(householdRow, "the Household row is not an operator gesture").toBeVisible({
+            timeout: SETTLE,
+        });
+        await expect(householdRow).toHaveText(/Kurzman/);
+        await householdRow.click();
+
+        // The SAME host, now holding the family. Roster is still mounted underneath — a record
+        // gesture inside a record must not unmount the workspace any more than the first one did.
+        await expect(page.locator(PANEL_READY)).toHaveAttribute(
+            "data-durable-record-subject-type",
+            "household",
+            { timeout: SETTLE },
+        );
+        await expect(page.locator(ROSTER_SHELL)).toHaveCount(1);
+
+        const composed = await householdComposition(page);
+        expect(composed.subjectId, "the household subject is the family's own id").toBe(KURZMAN_HOUSEHOLD);
+        // POSITIVE CONTROL: the CONFIGURED Household card composed, with real people in it. Both
+        // matter — an empty Household card is a claim, and this one must name the adults that
+        // `customer_persons` holds.
+        expect(composed.householdCard, "no Household card composed").toBe(true);
+        expect(composed.cardText).toMatch(/Kurzman/);
+
+        await page.screenshot({ path: path.join(SHOTS, "L-child-to-household.png"), fullPage: true });
+
+        // …and it is the CANONICAL family model underneath, not a case projection. The composition
+        // endpoint answers for a household with no case at all.
+        const api = await page.evaluate(async (id) => {
+            const res = await fetch(
+                `/api/admin/durable-record?subject_type=household&subject_id=${id}`,
+                { credentials: "include" },
+            );
+            const json = await res.json();
+            return {
+                ok: json?.ok ?? false,
+                subject: json?.model?.subject ?? null,
+                cards: (json?.model?.cardModels ?? []).map((e: [string, unknown]) => e[0]),
+            };
+        }, KURZMAN_HOUSEHOLD);
+        expect(api.ok).toBe(true);
+        expect(api.subject).toEqual({
+            type: "household",
+            id: KURZMAN_HOUSEHOLD,
+            label: "Kurzman Family",
+        });
+        expect(api.cards).toContain("household");
+        // The `children` card is NOT offered at this grain — it reads `_inquiry_children`, which is
+        // one enrollment's projection. Asserted so a later widening has to be deliberate.
+        expect(api.cards).not.toContain("children");
+    });
+
+    test("Search opens the SAME durable household, byte for byte", async ({ page }) => {
+        // L's answer, re-read here so the two are compared rather than each merely asserted.
+        await page.goto(`/workspace/record/household/${KURZMAN_HOUSEHOLD}`);
+        await page.waitForLoadState("domcontentloaded");
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+        const direct = await householdComposition(page);
+        /*
+         * NON-VACUITY, BEFORE ANY COMPARISON.
+         *
+         * The equality below compares composed card text. Two surfaces that both render NOTHING
+         * satisfy it perfectly — and that is not hypothetical: on the first run of this scenario both
+         * sides were empty, because the grain's composition switch was non-exhaustive and returned a
+         * grid with no areas. The comparison passed and proved nothing. So the reference side must be
+         * shown to be real before it is used as one.
+         */
+        expect(direct.householdCard, "the reference household composed no card").toBe(true);
+        expect(direct.cardText).toMatch(/Kurzman/);
+
+        await page.goto("/workspace");
+        await page.waitForLoadState("domcontentloaded");
+        const box = page.locator(SEARCH_INPUT).first();
+        await box.click();
+        await box.fill("Kurzman Family");
+        await page.waitForTimeout(1500);
+
+        // POSITIVE CONTROL: retrieval found the family before anything is clicked.
+        const row = page.locator(SEARCH_RESULT).first();
+        await expect(row, "Search must find the Kurzman Family").toBeVisible({ timeout: SETTLE });
+        await row.click();
+
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+        const fromSearch = await householdComposition(page);
+
+        // THE EQUALITY. Not "both opened something" — the same subject and the same composed card.
+        expect(fromSearch.subjectType).toBe("household");
+        expect(fromSearch.subjectId).toBe(direct.subjectId);
+        expect(fromSearch.cardText).toBe(direct.cardText);
+        // …and clicking a FAMILY committed no lens, exactly as clicking a child does not.
+        expect(page.url()).not.toContain("work_view_id");
+
+        await page.screenshot({ path: path.join(SHOTS, "M-search-household.png"), fullPage: true });
     });
 });
 

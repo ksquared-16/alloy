@@ -14,6 +14,10 @@ import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import {
+    durableRecordEntityType,
+    durableSubjectTypeFor,
+} from "@/lib/runtime/focus/durableRecordRoute";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
@@ -280,10 +284,15 @@ export default function GlobalSearchBox() {
                 const subjectType = (destination.subject_type ?? "").trim();
                 const subjectId = (destination.subject_id ?? "").trim();
                 if (!subjectType || !subjectId) return;
+                // A grain this build does not recognise is not a destination. Reading it through the
+                // default arm of a ternary is exactly what would have sent a household to the
+                // attention resolver as a PERSON id — a 404 on a record that plainly exists.
+                const grain = durableSubjectTypeFor(subjectType);
+                if (!grain) return;
                 dismiss();
                 void focusRecord({
                     // The adapter speaks table names; the destination speaks grains.
-                    entity_type: subjectType === "child" ? "customer_members" : "persons",
+                    entity_type: durableRecordEntityType(grain),
                     entity_id: subjectId,
                     intent: "durable_record",
                     preferred_context_key: destination.preferred_context_key ?? null,

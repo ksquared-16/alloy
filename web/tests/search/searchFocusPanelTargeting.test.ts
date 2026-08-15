@@ -129,10 +129,27 @@ describe("Search targets Focus Panel cards, never the drawer", () => {
         expect(resolve(child, [enrollment])[0].preferred_context_key ?? null).toBeNull();
     });
 
-    it("household → Household card with no item", () => {
+    it("household → the durable household record, on the household's own id", () => {
         const household: SearchSubject = { kind: "household", id: CUST, display_name: "Kurzman Family", household_id: CUST };
         const primary = resolve(household, [])[0];
-        expect(primary.card_key).toBe("household");
+        /*
+         * This asserted `card_key === "household"` — the Household CARD on the household's case.
+         *
+         * Clicking a family is a RECORD intent, exactly as clicking a child or a person is. The old
+         * shape resolved it through `resolveHost`, which falls through to the case and returned
+         * NOTHING when there wasn't one, so a family whose enrollment had completed rendered in
+         * Search and could not be opened at all.
+         *
+         * Note that this subject carries no `household_case_entity_id` and no work unit, and a
+         * destination is produced anyway. That is the change in one line: identity decides that a
+         * record can be opened, not queue membership.
+         */
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("household");
+        expect(primary.subject_id).toBe(CUST);
+        // A record intent chooses no lens and elevates no card.
+        expect(primary.host_work_view_id ?? null).toBeNull();
+        expect(primary.card_key ?? null).toBeNull();
         expect(primary.item_id ?? null).toBeNull();
     });
 

@@ -208,9 +208,29 @@ describe("card applicability is declared per card, not switched centrally", () =
 
     it("an undeclared card is case-only — silence never widens applicability", () => {
         expect(DEFAULT_CARD_GRAINS).toEqual(["opportunity"]);
-        expect(cardGrains("household")).toEqual(["opportunity"]);
-        expect(cardAppliesToGrain("household", "person")).toBe(false);
+        /*
+         * `children` is the honest witness for this rule now that `household` carries a declaration
+         * of its own — and it stays undeclared deliberately, not by oversight.
+         * `buildChildrenCardModel` reads `_inquiry_children`, which is ONE ENROLLMENT'S projection of
+         * a family's children; a durable household knows its children through `customer_members`, a
+         * wider and differently-shaped set. Declaring the grain without a builder that reads the
+         * canonical edge would put enrollment framing on children who have no enrollment.
+         */
+        expect(cardGrains("children")).toEqual(["opportunity"]);
+        expect(cardAppliesToGrain("children", "household")).toBe(false);
         expect(cardAppliesToGrain("children", "person")).toBe(false);
+        // …and a declaration widens a card only to the grains it NAMES, never to every grain: the
+        // Household card is declared for `household`, and is still not a person card.
+        expect(cardAppliesToGrain("household", "person")).toBe(false);
+    });
+
+    it("Household is declared for the case AND the durable family", () => {
+        // The second card to carry a grain declaration, and the reason the durable Household surface
+        // composes at all: silence would have left it case-only, `deriveHouseholdFocusPanelCards`
+        // would have built nothing, and the record would have opened empty.
+        expect(cardGrains("household")).toEqual(["opportunity", "household"]);
+        expect(cardAppliesToGrain("household", "household")).toBe(true);
+        expect(cardAppliesToGrain("household", "opportunity")).toBe(true);
     });
 
     it("the person grain selects only Employment out of the whole catalog", () => {

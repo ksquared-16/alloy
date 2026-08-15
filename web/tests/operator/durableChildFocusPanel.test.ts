@@ -195,7 +195,15 @@ describe("1. closed / completed enrollment", () => {
             { label: "Name", value: "Ada Okafor" },
             { label: "Date of birth", value: "Mar 9, 2022" },
             { label: "Age", value: "4 yr 5 mo" },
-            { label: "Household", value: "Okafor Household" },
+            // The Household row NAMES A RECORD, so it is an operator gesture rather than a printed
+            // string — this is the `child → Household → the family` leg at its origin. The reference
+            // is the member row's own `customer_id`, the same edge that already supplied the
+            // household NAME on this card, so nothing extra is read and nothing is inferred.
+            {
+                label: "Household",
+                value: "Okafor Household",
+                record: { subject_type: "household", subject_id: "household-1" },
+            },
         ]);
     });
 });

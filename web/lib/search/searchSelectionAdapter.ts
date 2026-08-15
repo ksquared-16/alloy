@@ -110,6 +110,17 @@ export function searchSelectionFromResult(result: SearchResult): SearchSelection
                     entityType = "persons";
                     entityId = childPersonId;
                 }
+            } else if (subjectType === "household") {
+                // A household maps CLEANLY, unlike a child: `customers` is already in this
+                // vocabulary and `subject_id` is already `customers.id`.
+                //
+                // This arm is the regression the comment above records, arriving a third time. When
+                // the household's primary destination flipped from `focus_panel` to
+                // `durable_record`, its host went with it — so a picker that understood only the two
+                // earlier durable grains would have dropped EVERY household result, silently, as an
+                // empty list rather than an error.
+                entityType = "customers";
+                entityId = subjectId;
             }
         }
     }

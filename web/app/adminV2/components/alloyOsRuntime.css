@@ -2492,6 +2492,28 @@ html[data-alloy-os-runtime="on"]
   font-style: normal;
 }
 
+/* A profile value that names another RECORD. It inherits every type property from the plain value it
+   replaces, so the row reads identically at rest — the affordance is the underline and the hover,
+   not a differently-shaped cell. */
+.alloy-os-ucard__profile-value-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 30%, transparent);
+  text-underline-offset: 2px;
+}
+
+.alloy-os-ucard__profile-value-link:hover,
+.alloy-os-ucard__profile-value-link:focus-visible {
+  color: var(--alloy-os-teal, #0f766e);
+  text-decoration-color: currentColor;
+}
+
 .alloy-os-ucard__collection {
   display: flex;
   flex-direction: column;
