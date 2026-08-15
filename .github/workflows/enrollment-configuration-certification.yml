@@ -1,0 +1,49 @@
+# Enrollment configuration certification.
+#
+# The canonical business-process requirement contract (Enrollment Phase 1, D-88..D-92)
+# had no CI job that EXECUTED it. `Trust Adoption certification` globs
+# tests/trust|metrics|ai|scripts|processing|pos/commit, and `P1 certification gates`
+# runs tests/operationalExpectations/ — neither covers tests/lifecycle. The TypeScript
+# graphs compile these files but never run them, so a green pull request proved the
+# contract typechecked and nothing about whether it behaved.
+#
+# Deliberately NARROW: named suites, not `tests/lifecycle/`. That directory carries 90
+# long-standing failures unrelated to this contract, so gating on the whole directory
+# would be red on arrival and would train reviewers to ignore it. Suites are added here
+# as they are made green, not swept in wholesale.
+#
+# NOTE: this job is not a REQUIRED check until it is added to branch protection, which
+# is a repository setting rather than something this file can assert.
+
+name: Enrollment configuration certification
+
+on:
+  pull_request:
+    paths:
+      - "web/lib/lifecycle/**"
+      - "web/lib/completion/**"
+      - "web/tests/lifecycle/**"
+      - ".github/workflows/enrollment-configuration-certification.yml"
+  push:
+    branches: [staging, main]
+
+concurrency:
+  group: enrollment-config-cert-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  run:
+    name: Enrollment configuration certification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - name: Run enrollment configuration certification suites
+        working-directory: web
+        run: npx vitest run tests/lifecycle/stageRequirementsV1.test.ts

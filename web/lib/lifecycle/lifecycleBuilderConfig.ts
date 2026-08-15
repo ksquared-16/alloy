@@ -27,6 +27,11 @@ import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentSta
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import { parseStageActionCatalogV1, type StageActionCatalogV1 } from "@/lib/lifecycle/stageActionCatalogV1";
 import {
+    parseStageRequirementsV1,
+    serializeStageRequirementsV1,
+    type StageRequirementsV1,
+} from "@/lib/lifecycle/stageRequirementsV1";
+import {
     emptyProcessCommandSetV1,
     parseProcessCommandSetV1OrNull,
     type BusinessProcessCommandSetV1,
@@ -84,6 +89,7 @@ const STAGE_OWNED_KEYS = [
     "stage_operating_plan_v1",
     "perspectives_v1",
     "action_catalog_v1",
+    "requirements_v1",
     "grain",
     "purpose",
     "parent_stage_key",
@@ -112,6 +118,15 @@ export type LifecycleBuilderStageRecord = {
     perspectives_v1?: PerspectiveConfigV1Stored[];
     /** Configured candidate actions and recommendation levels for this stage (BPEP Builder). */
     action_catalog_v1?: StageActionCatalogV1;
+    /**
+     * Canonical requirements of this stage (D-88).
+     *
+     * Presence is authority. An authored section — even an EMPTY one — means Business
+     * Process has spoken for this stage, and the legacy `departments.metadata`
+     * compatibility projection must not answer (D-90). Absence means requirements were
+     * never authored canonically, and only then may legacy answer.
+     */
+    requirements_v1?: StageRequirementsV1;
     /** V2 Builder — grain determines the queue row subject entity. */
     grain?: StageGrain;
     /** V2 Builder — freeform operator-authored stage purpose. */
@@ -223,6 +238,10 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
             const perspectives = parsePerspectivesV1(sr.perspectives_v1);
             const actionCatalog = parseStageActionCatalogV1(sr.action_catalog_v1);
+            // `null` (absent/unreadable) and an empty section are NOT interchangeable
+            // here — see D-90. The assignment below is therefore conditioned on `!== null`
+            // rather than on truthiness or on `requirements.length`.
+            const requirements = parseStageRequirementsV1(sr.requirements_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
             stages.push(withUnknownFields({
                 id: sid,
@@ -237,6 +256,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
                 ...(perspectives ? { perspectives_v1: perspectives } : {}),
                 ...(actionCatalog ? { action_catalog_v1: actionCatalog } : {}),
+                ...(requirements !== null ? { requirements_v1: requirements } : {}),
                 ...(parseStageGrain(sr.grain) ? { grain: parseStageGrain(sr.grain) } : {}),
                 ...(typeof sr.purpose === "string" && sr.purpose.trim() ? { purpose: sr.purpose.trim() } : {}),
                 ...(typeof sr.parent_stage_key === "string" && sr.parent_stage_key ? { parent_stage_key: sr.parent_stage_key } : {}),
@@ -296,7 +316,20 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
  */
 export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<string, unknown> {
     const processes = config.processes.map((process) => {
-        const stages = process.stages.map((stage) => serializeWithUnknownFields(stage));
+        const stages = process.stages.map((stage) => {
+            const out = serializeWithUnknownFields(stage);
+            // `requirements_v1` is the one stage section whose in-memory shape differs
+            // from its wire shape: parsing lifts the reference into a discriminated
+            // `ref`, so passing the parsed object straight through would emit rows the
+            // parser cannot read back. Serializing explicitly keeps the round trip
+            // lossless. The check is `!== undefined`, never truthiness, so an authored-
+            // EMPTY section survives — losing it would silently revert a stage from
+            // canonical authority back to the legacy projection (D-90).
+            if (stage.requirements_v1 !== undefined) {
+                out.requirements_v1 = serializeStageRequirementsV1(stage.requirements_v1);
+            }
+            return out;
+        });
         const serialized: Record<string, unknown> = { ...serializeWithUnknownFields(process), stages };
         // Work views carry their own residue and are nested one level deeper than the walk above.
         if (process.work_views_v1) {
