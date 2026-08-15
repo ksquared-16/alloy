@@ -355,6 +355,124 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
     });
 });
 
+// ═══ N — the operator's actual EDIT journey, end to end ══════════════════════════════════════
+//
+// Open → choose a context → edit a canonical field → save → the card refreshes → close → land back
+// on the SAME Roster the operator set up → and read the new value through a different entry.
+//
+// The whole scenario is one claim: an edit through the durable host is a real write to canonical
+// truth, and making it costs the operator nothing they had arranged.
+test.describe("N — Roster → Lennon → edit → save → close → back", () => {
+    /** Everything about the Roster an operator would be annoyed to lose. */
+    async function rosterState(page: Page) {
+        return page.evaluate(() => {
+            const shell = document.querySelector('[data-adminv2-roster-workspace="true"]');
+            const filter = document.querySelector('[data-records-filter="true"]') as HTMLInputElement | null;
+            return {
+                section: shell?.getAttribute("data-roster-section") ?? null,
+                filter: filter?.value ?? null,
+                cohort:
+                    document
+                        .querySelector('[data-records-cohort-active="true"]')
+                        ?.getAttribute("data-records-cohort") ?? null,
+                site: document.querySelector("[data-roster-site]")?.getAttribute("data-roster-site") ?? null,
+            };
+        });
+    }
+
+    /** The Birthday value the contextual card is currently showing. */
+    const dobValue = (page: Page) =>
+        page.locator('[data-contextual-card-field="child.date_of_birth"] dd').innerText();
+
+    test("an edit reaches canonical truth, and costs the operator nothing", async ({ page }) => {
+        await openRoster(page, "children");
+        const lennon = await findChild(page, "Lennon", LENNON);
+        // The arrangement to be preserved, captured BEFORE anything opens.
+        const before = await rosterState(page);
+        expect(before.section, "the section did not settle on Children").toBe("children");
+        expect(before.filter, "the operator's filter is not in the DOM").toBe("Lennon");
+
+        await lennon.click();
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+        await page.locator('[data-durable-record-context^="enrollment"]').click();
+        const card = page.locator(CONTEXTUAL_CARD);
+        await expect(card).toBeVisible({ timeout: SETTLE });
+
+        /*
+         * BIRTHDAY, AND THE FIXTURE PUBLISHES `editable` FOR THE NAME TOO — yet only this one is.
+         *
+         * That asymmetry is asserted below rather than worked around, because it is a real platform
+         * boundary the browser surfaced: a row is offered for edit only when
+         * `isChildFocusFieldSaveSupported` holds, which requires a MUTATION BINDING, while the card's
+         * own write gate (`writeTargetForField`) falls back to the broader inline-identity path. The
+         * DOB has a binding whose value key is the one `isEnrollmentOcmMutationValueKey` excludes;
+         * name parts have none. So `saveContextualChildField` could write a first name that the
+         * configured card can never offer.
+         *
+         * The new value TOGGLES between two known dates rather than being generated, so this is
+         * idempotent on a shared tenant: a re-run flips it back instead of accumulating, and no row
+         * count changes.
+         */
+        await expect(
+            page.locator('[data-contextual-card-field="child.date_of_birth"]'),
+        ).toHaveAttribute("data-contextual-card-field-writable", "true");
+        // The same policy, the narrower gate — recorded so a later widening has to be deliberate.
+        await expect(
+            page.locator('[data-contextual-card-field="child.first_name"]'),
+        ).toHaveAttribute("data-contextual-card-field-editable", "false");
+        // …and a field the fixture does NOT name stays read-only: the policy widens only what it names.
+        await expect(
+            page.locator('[data-contextual-card-field="child.allergies"]'),
+        ).toHaveAttribute("data-contextual-card-field-editable", "false");
+
+        const original = (await dobValue(page)).trim();
+        const next = original.includes("2021-03-04") ? "2021-03-05" : "2021-03-04";
+
+        await page.locator('[data-contextual-card-edit="child.date_of_birth"]').click();
+        const input = page.locator('[data-contextual-card-input="child.date_of_birth"]');
+        await expect(input).toBeVisible({ timeout: SETTLE });
+        await input.fill(next);
+        await input.press("Enter");
+
+        // SAVED, not merely typed. A refusal renders its own reason, so the absence of that element
+        // is asserted rather than inferred from the value having changed optimistically.
+        await expect(page.locator("[data-contextual-card-save-error]")).toHaveCount(0);
+        await expect
+            .poll(async () => (await dobValue(page)).trim(), { timeout: SETTLE })
+            .toContain(next);
+
+        await page.screenshot({ path: path.join(SHOTS, "N1-edit-saved.png"), fullPage: true });
+
+        // ── CLOSE, AND LAND WHERE THE OPERATOR WAS ──
+        await page.locator('[data-durable-record-close="true"]').click();
+        await expect(page.locator(PANEL_READY)).toHaveCount(0, { timeout: SETTLE });
+
+        const after = await rosterState(page);
+        // Not "Roster is visible" — the same arrangement, field by field. A shell that remounted at
+        // its defaults would still be visible, and that is the failure this asserts against.
+        expect(after).toEqual(before);
+        // …and the row is still there, without re-typing the filter.
+        await expect(page.locator(`[data-child-member="${LENNON}"]`)).toBeVisible({ timeout: SETTLE });
+        expect(new URL(page.url()).pathname).toBe("/workspace");
+
+        await page.screenshot({ path: path.join(SHOTS, "N2-returned-to-roster.png"), fullPage: true });
+
+        // ── THE SAME CHILD, THROUGH A DIFFERENT DOOR ──
+        //
+        // This is what makes it a WRITE rather than a local state change: a different entry, a fresh
+        // composition, reading the same canonical row.
+        await page.goto(`/workspace/record/child/${LENNON}`);
+        await page.waitForLoadState("domcontentloaded");
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+        const chip = page.locator('[data-durable-record-context^="enrollment"]');
+        if ((await chip.count()) > 0) await chip.first().click();
+        await expect(page.locator(CONTEXTUAL_CARD)).toBeVisible({ timeout: SETTLE });
+        expect((await dobValue(page)).trim()).toContain(next);
+
+        await page.screenshot({ path: path.join(SHOTS, "N3-same-value-elsewhere.png"), fullPage: true });
+    });
+});
+
 // ═══ L/M — the durable HOUSEHOLD, reached two ways ═══════════════════════════════════════════
 //
 // The requirement is an equality, not two independent openings:

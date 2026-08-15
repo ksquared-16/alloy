@@ -235,6 +235,42 @@ insert into entity_layouts (id, org_id, entity_type, surface, layout_key, name, 
                 'child.date_of_birth', 'Birthday',
                 'child.first_name', 'Given name'
               ),
+              -- ── EDITABILITY IS CONFIGURED, AND WAS THE MISSING HALF OF THE EDIT JOURNEY ──
+              --
+              -- `childrenFocusRowsFromNestedConfig` derives a row's editability as
+              -- `displayed && isChildFocusFieldSaveSupported(ref) && fieldIsSaveable(visibility)`,
+              -- and `fieldIsSaveable` is true ONLY for the literal policy `editable`. Without
+              -- `fieldPolicies` every field resolves read-only, so the contextual card rendered each
+              -- configured row as a `<span>` and the operator had nothing to click. The browser is
+              -- what surfaced it — all nine rows reported `editable="false"`, including the two this
+              -- fixture publishes by name — and it is worth naming because the edit path itself was
+              -- already built and unit-proven. Nothing was broken; nothing was configured.
+              --
+              -- BOTH fields are declared and only ONE of them becomes editable, which is a platform
+              -- fact rather than a fixture mistake — it is left in because it is the finding:
+              --
+              --   `child.date_of_birth` → editable. Its mutation binding maps to the value key `dob`,
+              --      the single key `isEnrollmentOcmMutationValueKey` EXCLUDES, so it is owned by the
+              --      child record and a case-free host may write it.
+              --   `child.first_name`    → still read-only, with the identical policy.
+              --
+              -- The two gates disagree, and the row builder's is the narrower one. A row is editable
+              -- only when `isChildFocusFieldSaveSupported` says so, and that resolves to
+              -- `isIdentityFieldSaveSupported`, which requires a MUTATION BINDING. The contextual
+              -- card's own write gate (`writeTargetForField`) falls back to
+              -- `isIdentityFieldInlineSaveSupported`, which is broader and does include name parts.
+              -- So `saveContextualChildField` would happily write `child.first_name` — the configured
+              -- card can never offer it, because the row is never marked editable in the first place.
+              -- A capability that exists and is unreachable, which this repository has recorded before
+              -- in another form ("a RegisteredAction is unreachable until it is also in
+              -- `capabilityRegistry.ts`").
+              --
+              -- `child.allergies` is deliberately left out of the policy: it is selected and displayed,
+              -- so it is the in-fixture control that a policy widens only the fields it NAMES.
+              'fieldPolicies', jsonb_build_object(
+                'child.date_of_birth', 'editable',
+                'child.first_name', 'editable'
+              ),
               'displayOptions', '{}'::jsonb
             )
           )
@@ -245,7 +281,23 @@ insert into entity_layouts (id, org_id, entity_type, surface, layout_key, name, 
   '{}'::jsonb,
   now()
 )
-on conflict (id) do nothing;
+/*
+ * UPSERT, not `do nothing` — and the difference is the whole reason this fixture can be edited.
+ *
+ * Every other row here is preceded by a DELETE of the `fbc0%` prefix, so a re-run rebuilds it. This
+ * layout row is NOT in those deletes (it is the tenant's published composition, not fixture data
+ * hanging off a household), so with `do nothing` the FIRST run's document was permanent: adding
+ * `fieldPolicies` above changed the file and changed nothing in the tenant, silently, and the edit
+ * journey would have gone on failing against a document that no longer matched its own fixture.
+ *
+ * A fixture that cannot converge the tenant onto what it declares is not idempotent — it is merely
+ * insert-once, which is indistinguishable from idempotent until the day you change it.
+ */
+on conflict (id) do update set
+  doc = excluded.doc,
+  name = excluded.name,
+  status = excluded.status,
+  published_at = excluded.published_at;
 
 -- ── Verification: what a run should see before the browser starts.
 select 'jane (staff person)' as fixture, count(*)::text as n from persons where id = 'fbc00000-0000-4000-8000-00000000a001'::uuid
