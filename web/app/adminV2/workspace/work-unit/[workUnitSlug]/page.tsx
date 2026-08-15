@@ -36,6 +36,11 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
     const [{ workUnitSlug }, sp] = await Promise.all([params, searchParams]);
     const requestedSubjectId = one(sp.subject_id);
     const requestedWorkViewId = one(sp.work_view_id);
+    // CONTEXTUAL FOCUS, read strictly. The server seed must compose the SAME answer the client seam
+    // would ask for, or the seed is registered under one identity and consumed under another — the
+    // operator sees the default-lens answer first and the truthful one only after a second fetch.
+    const cohort = one(sp.cohort) === "none" ? ("none" as const) : null;
+    const aspect = cohort === "none" ? one(sp.aspect) : null;
 
     // The SAME tenant-authorized server path the HTTP seam uses. The subject id is a pass-through to
     // the composer, which validates it against the org-scoped evaluated page and — since the Subject
@@ -46,6 +51,8 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
         rawSlug: workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId,
+        cohort,
+        aspect,
     })
         .then((r) => (r.ok && r.answer.terminal !== "error" ? r.answer : null))
         .catch(() => null);
@@ -55,8 +62,10 @@ export default async function OperatorWorkUnitSlugPage({ params, searchParams }:
             target={workUnitSlug}
             lens={requestedWorkViewId}
             subject={requestedSubjectId}
+            cohort={cohort}
+            aspect={aspect}
             answer={answer ? toRscPlainJson(answer) : null}
-            producer={`page(subject=${requestedSubjectId ?? "null"})`}
+            producer={`page(subject=${requestedSubjectId ?? "null"},cohort=${cohort ?? "null"})`}
         />
     );
 }

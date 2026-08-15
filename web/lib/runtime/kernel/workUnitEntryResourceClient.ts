@@ -20,7 +20,10 @@ import { logCurrentWorkInit } from "@/lib/adminV2/runtime/diagnostics/currentWor
 
 export function workUnitEntryResourceClient(): EntryResource {
     return async (ref: AttentionRef, _signal: AbortSignal): Promise<ProvisioningAnswer> => {
-        const url = provisioningAnswerUrl(ref.target, ref.lens, ref.subject);
+        // The whole cause, including whether a cohort was selected at all. Dropping `cohort` here was
+        // enough on its own to defeat contextual focus end to end: attention stated it, the URL carried
+        // it, and this seam quietly asked for the default-lens answer instead.
+        const url = provisioningAnswerUrl(ref.target, ref.lens, ref.subject, ref.cohort, ref.aspect);
 
         // Blank-time removal: if operator intent (hover/focus) warmed this exact answer, K2's single
         // round-trip resolves from the warm cache — the click commits immediately. A warm miss or a

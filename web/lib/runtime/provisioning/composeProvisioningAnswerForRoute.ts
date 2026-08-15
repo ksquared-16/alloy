@@ -19,6 +19,7 @@ import {
     type ProvisioningAnswer,
 } from "@/lib/runtime/provisioning/workUnitProvisioningAnswer";
 import { resolveWorkUnitRouteIdentity } from "@/lib/admin/resolveWorkUnitRouteIdentity";
+import { parseCardFocusAspect } from "@/lib/runtime/kernel/attentionCardFocus";
 
 export type RouteProvisioningResult =
     | { ok: true; answer: ProvisioningAnswer }
@@ -32,6 +33,13 @@ export async function composeProvisioningAnswerForRoute(input: {
     rawSlug: string;
     requestedWorkViewId: string | null;
     requestedSubjectId: string | null;
+    /**
+     * `"none"` — the operator selected NO cohort. Carried from `?cohort=none`, which is how attention
+     * projects contextual focus so it survives a reload.
+     */
+    cohort?: "none" | null;
+    /** The kernel's ASPECT (`card:…|item:…`), for a contextual answer's card + row. */
+    aspect?: string | null;
 }): Promise<RouteProvisioningResult> {
     // U-P1 — one authorization + one scope resolve for the entire answer. The slug→identity resolution
     // is request-memoized (Phase 3 dedup): the work-unit layout's route-meta seed and this provisioning
@@ -45,15 +53,21 @@ export async function composeProvisioningAnswerForRoute(input: {
     // Same precedence (work_unit_key → work_view → queue_lane_key) the API route and seed route use.
     // An explicit lens on the URL (K1's intent) always wins over the slug's implied view.
     // not_found / ambiguous / unresolved → fall through with the raw slug; the composer emits the honest error.
+    const contextual = input.cohort === "none";
     let workUnitSlug = input.rawSlug;
     let requestedWorkViewId = input.requestedWorkViewId;
     if (resolution && resolution.status === "resolved") {
         workUnitSlug = resolution.match.workUnitKey;
-        if (!requestedWorkViewId && resolution.match.initialWorkViewId) {
+        // THE SLUG'S IMPLIED VIEW IS A SECOND PLACE A LENS GETS FILLED IN — and the one that would
+        // have quietly defeated contextual focus. When the operator selected no cohort there is
+        // nothing for the slug to imply on their behalf: they addressed a HOST, and the view the slug
+        // happens to open by default is exactly the `New` this whole change exists to stop claiming.
+        if (!requestedWorkViewId && !contextual && resolution.match.initialWorkViewId) {
             requestedWorkViewId = resolution.match.initialWorkViewId;
         }
     }
 
+    const aspect = contextual ? parseCardFocusAspect(input.aspect ?? null) : null;
     const answer = await composeWorkUnitProvisioningAnswer({
         supabase,
         orgId: gate.orgId,
@@ -61,6 +75,8 @@ export async function composeProvisioningAnswerForRoute(input: {
         workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId: input.requestedSubjectId,
+        mode: contextual ? "contextual_focus" : "operational",
+        requestedAspect: aspect ? { cardKey: aspect.card_key, itemId: aspect.item_id } : null,
     });
 
     return { ok: true, answer };

@@ -32,10 +32,18 @@ export function provisioningAnswerUrl(
     target: string,
     lens?: string | null,
     subject?: string | null,
+    cohort?: "none" | null,
+    aspect?: string | null,
 ): string {
     const q = new URLSearchParams();
     if (lens) q.set("work_view_id", lens);
     if (subject) q.set("subject_id", subject);
+    // CONTEXTUAL FOCUS IS PART OF THE KEY, not just of the request. Two answers for the same host and
+    // subject — one that selected a cohort and one that selected none — are DIFFERENT answers, and a
+    // shared key would let a warm operational answer serve a contextual entry (or the reverse). The
+    // aspect rides along for the same reason: it is what the contextual answer composes its card from.
+    if (cohort === "none") q.set("cohort", "none");
+    if (cohort === "none" && aspect) q.set("aspect", aspect);
     const qs = q.toString();
     return `/api/admin/work-units/${encodeURIComponent(target)}/provisioning-answer${qs ? `?${qs}` : ""}`;
 }
@@ -50,11 +58,17 @@ function isFresh(entry: Entry, now: number): boolean {
  */
 export function prefetchWorkUnitProvisioning(
     target: string,
-    opts: { lens?: string | null; subject?: string | null; now?: number } = {},
+    opts: {
+        lens?: string | null;
+        subject?: string | null;
+        cohort?: "none" | null;
+        aspect?: string | null;
+        now?: number;
+    } = {},
 ): Promise<ProvisioningAnswer> | null {
     const slug = target.trim();
     if (!slug || typeof window === "undefined") return null;
-    const url = provisioningAnswerUrl(slug, opts.lens, opts.subject);
+    const url = provisioningAnswerUrl(slug, opts.lens, opts.subject, opts.cohort, opts.aspect);
     const now = opts.now ?? Date.now();
     const existing = cache.get(url);
     if (existing && isFresh(existing, now)) {
@@ -157,7 +171,14 @@ function traceSeedEvent(
 }
 
 /** A route's attention identity — the coordinates the kernel keys its cache on. */
-export type ProvisioningRouteIdentity = { target: string; lens?: string | null; subject?: string | null };
+export type ProvisioningRouteIdentity = {
+    target: string;
+    lens?: string | null;
+    subject?: string | null;
+    /** `"none"` = the operator selected no cohort. Part of the identity, not a decoration on it. */
+    cohort?: "none" | null;
+    aspect?: string | null;
+};
 
 /**
  * THE CANONICAL SERVER→KERNEL PRELOAD SEAM for the provisioning cache (RA-1).
@@ -175,7 +196,12 @@ export function seedProvisioningForRoute(
     producer: string = "unlabelled",
 ): void {
     if (!route.target) return;
-    seedProvisioning(provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null), answer, now, producer);
+    seedProvisioning(
+        provisioningAnswerUrl(route.target, route.lens ?? null, route.subject ?? null, route.cohort ?? null, route.aspect ?? null),
+        answer,
+        now,
+        producer,
+    );
 }
 
 export type ProvisioningFetchResult =

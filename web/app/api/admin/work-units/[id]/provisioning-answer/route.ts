@@ -35,6 +35,10 @@ export async function GET(
         rawSlug,
         requestedWorkViewId: url.get("work_view_id"),
         requestedSubjectId: url.get("subject_id"),
+        // Read STRICTLY — only the exact token. Any other value, stale or malformed, is "nothing was
+        // stated", which is the pre-existing behaviour: resolve the configured default lens.
+        cohort: url.get("cohort") === "none" ? "none" : null,
+        aspect: url.get("aspect"),
     });
     if (!result.ok) return adminRouteGateFailureResponse(result.gate);
 

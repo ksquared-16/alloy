@@ -58,7 +58,8 @@ type Destination = {
     label: string;
     host_work_view_id: string | null;
     host_work_unit_key: string | null;
-    entity_id: string | null;
+    /** The record whose Focus Panel composes — the HOST, not the search subject. */
+    host_entity_id: string | null;
     item_id: string | null;
 };
 type Result = { subject: Record<string, unknown> | null; destinations: Destination[] };
@@ -78,7 +79,7 @@ async function searchDestinations(page: Page, query: string): Promise<Result[]> 
                 label: String(d.label ?? ""),
                 host_work_view_id: (d.host_work_view_id as string) ?? null,
                 host_work_unit_key: (d.host_work_unit_key as string) ?? null,
-                entity_id: (d.entity_id as string) ?? null,
+                host_entity_id: (d.host_entity_id as string) ?? null,
                 item_id: (d.item_id as string) ?? null,
             })),
         }));
@@ -98,7 +99,10 @@ async function findContextualDestination(
     for (const query of CONTEXTUAL_QUERIES) {
         for (const result of await searchDestinations(page, query)) {
             const hit = result.destinations.find(
-                (d) => !!(d.host_work_unit_key ?? "").trim() && !(d.host_work_view_id ?? "").trim(),
+                (d) =>
+                    !!(d.host_work_unit_key ?? "").trim()
+                    && !!(d.host_entity_id ?? "").trim()
+                    && !(d.host_work_view_id ?? "").trim(),
             );
             if (hit) {
                 return { query, subjectId: String(result.subject?.id ?? ""), destination: hit };
@@ -212,11 +216,11 @@ test("A — a record destination commits contextually: no pill, no queue, a comp
     // Entering exactly as the operator focus listener does for a cohort-less destination.
     await page.goto(
         `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-            destination.entity_id || subjectId,
+            destination.host_entity_id!,
         )}`,
     );
     await waitForSurface(page);
-    await assertContextual(page, "A cold contextual entry", destination.entity_id || subjectId);
+    await assertContextual(page, "A cold contextual entry", destination.host_entity_id!);
 });
 
 test("B — a reload stays contextual and does not resolve a default lens", async ({ page }) => {
@@ -226,7 +230,7 @@ test("B — a reload stays contextual and does not resolve a default lens", asyn
     const found = await findContextualDestination(page);
     const { destination, subjectId } = found!;
     const entry = `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-        destination.entity_id || subjectId,
+        destination.host_entity_id!,
     )}`;
 
     await page.goto(entry);
@@ -248,7 +252,7 @@ test("C — choosing a cohort from a contextual surface selects it and composes"
     const { destination, subjectId } = found!;
     await page.goto(
         `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-            destination.entity_id || subjectId,
+            destination.host_entity_id!,
         )}`,
     );
     await waitForSurface(page);
@@ -290,7 +294,7 @@ test("D — leaving a cohort for a record clears the lens rather than keeping a 
 
     await page.goto(
         `/workspace/work-unit/${unit}?cohort=none&subject_id=${encodeURIComponent(
-            destination.entity_id || subjectId,
+            destination.host_entity_id!,
         )}`,
     );
     await waitForSurface(page);
@@ -342,7 +346,7 @@ test("F — Back from a cohort returns to the record, not to a default lens", as
     const { destination, subjectId } = found!;
     await page.goto(
         `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-            destination.entity_id || subjectId,
+            destination.host_entity_id!,
         )}`,
     );
     await waitForSurface(page);
@@ -368,7 +372,7 @@ test("G — rapid switching between a record and a cohort never lands mixed", as
     const { destination, subjectId } = found!;
     const unit = destination.host_work_unit_key!;
     const contextualEntry = `/workspace/work-unit/${unit}?cohort=none&subject_id=${encodeURIComponent(
-        destination.entity_id || subjectId,
+        destination.host_entity_id!,
     )}`;
 
     await page.goto(contextualEntry);
@@ -400,7 +404,7 @@ test("H — the cohorts are reachable by keyboard from a contextual surface", as
     const { destination, subjectId } = found!;
     await page.goto(
         `/workspace/work-unit/${destination.host_work_unit_key}?cohort=none&subject_id=${encodeURIComponent(
-            destination.entity_id || subjectId,
+            destination.host_entity_id!,
         )}`,
     );
     await waitForSurface(page);
