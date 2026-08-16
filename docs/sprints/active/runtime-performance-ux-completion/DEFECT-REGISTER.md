@@ -152,11 +152,66 @@ against a child subject — refusing them is the deliberate, correct behaviour t
 enforce. What it must do is *complete* the adaptation it already begins: a child subject on the lens
 path needs the same card producers the subject-first path already has.
 
-**FIX NOW — SLOT 5, next slice.** Bridge the durable-subject child derivation into the lens path so
-a child-grain row composes `child_identity` (and whatever further child cards the composition grows).
-The data is present — the Waitlist rows carry full row context, and the Children card already renders
-per-child identity from the same opportunity VM. **No tenant configuration change is required, and
-none should be requested.**
+### R-017 — bridge SHIPPED; composition width is the remaining question
+
+**Producer bridge — CLOSED `921076268`.** `overlayChildMissionOntoSettledFocusModel` — the canonical
+lens-path child overlay, whose header already owns this concern ("Record of Attention = child.
+Record of Truth / Settlement = family opportunity") — now derives `child_identity` by **reusing**
+`deriveChildIdentityCard`. One child card, two entry paths; no second implementation. The subject is
+assembled from what the lens already carries, with `dob` read from the focused child's own row in the
+settled family collection, matched on `customer_member_id`.
+
+Browser-certified on both real Firefly children, writes blocked:
+
+| Child | Header | Card | Cards | not_applicable |
+|---|---|---|--:|---|
+| Wrigley | Wrigley Kurzman · Waitlist · Tour Scheduled · North Campus | DOB Mar 15 2026, 5 mo | 1 | none |
+| Lennon | Lennon Kurzman · Waitlist · Tour Scheduled · North Campus | DOB Apr 2 2024, 2 yr 4 mo | 1 | none |
+
+Subject switches per row, latest-click-wins holds, 0 render loops, panel height constant 854 px. The
+console errors were the probe's own blocked `stage-membership-ack` POSTs. **No producer-absent
+`not_applicable` remains.**
+
+*(A first run appeared to show both rows resolving to Lennon. That was a probe artifact — the only
+button inside a waitlist row is `Adjust`, so clicking `row.querySelector("button")` hit the placement
+control instead of selecting the row. Clicking the row itself switches the subject correctly.)*
+
+**The composition IS too narrow — it fails the product target.** The panel now renders exactly one
+card. Header, stage, location and child identity are right, but What's Next / commands / Children /
+Household / Tour / Forms / Communications are all absent, so the child panel is not the same
+operating experience as the family panel.
+
+**Why this is not a one-line widening.** The person composition states the governing rule, and it
+applies equally to child:
+
+> "Growing this list is a per-card decision that must be earned **twice**: the card declares the
+> grain in the registry (it has canonical truth for it), AND it is placed here (it belongs on the
+> default surface). Either without the other is inert, which is the intended friction."
+
+Today `focusPanelCardRegistry` declares `child_identity` for `child` **only**; `current_work`,
+`household`, `children` and `billing_preview` are case-only, and `cardAppliesToGrain` is total — an
+undeclared card is not applicable to any grain. So widening means deciding, per card, whether it has
+canonical truth for a CHILD subject. Two are not obvious: `children` on a child subject would present
+siblings, and `billing_preview` is a family-scoped concept.
+
+**The safe shape, when it is taken up.** A child on the LENS has family settlement (the overlay
+preserves it deliberately); a durable child opened subject-first does not. So the distinction is
+per-PATH, not per-grain:
+
+- keep `FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION` (durable, subject-first) at `child_identity` only —
+  the guard and the sparse-truthful-panel doctrine stay intact;
+- add a child-with-family-settlement composition selected only where settlement exists
+  (`model.source !== "durable_subject"`), carrying `child_identity` plus each family card that has
+  *earned* the child grain in the registry;
+- author its geometry in the 12-column area vocabulary, and **never give a card all 12 columns** —
+  the case composition records that a full-width card forces `planPublishedLayout` to fall back from
+  `lanes` to `grid` for the whole panel.
+
+**Explicitly NOT the answer:** applying the family published doc to child subjects, or relaxing
+`isCaseGrain`. Both reintroduce the failure the guard exists to prevent — household/children on a
+subject that has neither.
+
+**No tenant configuration change is required, and none is requested.**
 Canonical behaviour lives in its owner doc; this file records observed defects, their root
 owner, and what proved them.
 
