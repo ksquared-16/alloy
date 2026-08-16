@@ -79,4 +79,5 @@ jobs:
             tests/lifecycle/processInstanceRevisionPin.test.ts \
             tests/lifecycle/enrollmentParticipantProgress.test.ts \
             tests/lifecycle/enrollmentInformationNeeds.test.ts \
-            tests/lifecycle/participantEnrollmentRuntime.test.ts
+            tests/lifecycle/participantEnrollmentRuntime.test.ts \
+            tests/lifecycle/participantConversationAdmission.test.ts
