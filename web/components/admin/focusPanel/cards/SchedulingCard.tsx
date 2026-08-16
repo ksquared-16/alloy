@@ -53,6 +53,17 @@ type Props = {
     receded?: boolean;
     coordination?: FocusPanelCoordination;
     composerPreview?: { perspective?: "expanded" };
+    /**
+     * Fired after a canonical assignment mutation has succeeded AND this card has re-read its own
+     * data. It means "authoritative assignment truth changed" — nothing scheduling-specific, and
+     * deliberately NOT a payload: a host that needs to know WHAT changed should re-read, not trust a
+     * diff this card assembled.
+     *
+     * Optional because the case panel does not need it — its own settlement already recomposes. The
+     * durable record host does: it wires this to the generic `onSaved` contract, which marks the
+     * record changed so the surface underneath reloads on close.
+     */
+    onMutated?: () => void;
 };
 
 // ── Alloy design tokens (Midnight / Slate / Pine / Gold / Ember) ─────────────
@@ -325,7 +336,7 @@ function listAssignments(p: ChildProj | null): ProjAssignment[] {
  * (ScheduleRegions): Detail renders values, Edit transforms the same regions into
  * controls in place. The card never edits inline.
  */
-export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview }: Props) {
+export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview, onMutated }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
     const children: SchedChild[] = useMemo(
         () =>
@@ -473,6 +484,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                             setActiveChildId(null);
                             coordination?.back?.();
                         }}
+                        onMutated={onMutated}
                     />
                 ) : children.length === 0 ? (
                     <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
@@ -592,6 +604,7 @@ function ScheduleWorkSurface({
     reloadChild,
     coordination,
     onBack,
+    onMutated,
 }: {
     child: SchedChild;
     opportunityId: string | null;
@@ -601,6 +614,8 @@ function ScheduleWorkSurface({
     reloadChild: () => Promise<ChildProj | null>;
     coordination?: FocusPanelCoordination;
     onBack: () => void;
+    /** See {@link Props.onMutated}. */
+    onMutated?: () => void;
 }) {
     const [proj, setProj] = useState<ChildProj | null>(projection);
     const existing = existingView(proj);
@@ -680,6 +695,15 @@ function ScheduleWorkSurface({
         setActiveAssignmentId(null);
         setEditingAssignmentId(null);
         setPendingTypeId(null);
+        /*
+         * CANONICAL TRUTH CHANGED — tell whoever is hosting this card.
+         *
+         * Everything above re-reads the card's OWN data, which is why an assignment edit looked
+         * correct here while the surface underneath went on showing the old commitment: the card
+         * healed itself and told nobody. Announced LAST, after the reload, so a host that re-reads
+         * on this signal cannot observe a state the card has not caught up to yet.
+         */
+        onMutated?.();
     };
 
     const beginCreateAssignment = () => {

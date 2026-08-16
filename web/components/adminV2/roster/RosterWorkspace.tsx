@@ -45,6 +45,10 @@ import {
 import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import {
+    DURABLE_RECORD_CLOSED_EVENT,
+    type DurableRecordClosedDetail,
+} from "@/lib/runtime/focus/DurableRecordHostContext";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
     ROSTER_WORKSPACE_DEEPLINK_KEY,
@@ -338,6 +342,28 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         weekCache.current.clear();
         void loadWeek(siteId, week?.weekStart ?? "");
     }, [siteId, loadWeek, week?.weekStart]);
+
+    /*
+     * ── AN EDITED COMMITMENT RELOADS THE PROJECTION ──
+     *
+     * The durable host announces a close with `changed`, and Staff/Children already listen for their
+     * own rows. Roster listens for the same signal because an assignment write changes something it
+     * PROJECTS rather than something it lists: who is expected where, and the ledger the Assignments
+     * lens reads.
+     *
+     * `changed` is respected, not ignored — a record that was only looked at must not cost a
+     * re-query. And Roster RE-READS rather than patching a row it already has: an optimistic edit
+     * here would be a second answer about a commitment whose authority is the ledger.
+     */
+    useEffect(() => {
+        const onClosed = (ev: Event) => {
+            const detail = (ev as CustomEvent<DurableRecordClosedDetail>).detail;
+            if (!detail?.changed) return;
+            reloadAssignments();
+        };
+        window.addEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+        return () => window.removeEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+    }, [reloadAssignments]);
 
     /*
      * The ledger's bulk commands for the Assignments lens.

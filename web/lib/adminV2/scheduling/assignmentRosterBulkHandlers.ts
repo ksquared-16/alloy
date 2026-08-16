@@ -98,6 +98,12 @@ export function buildAssignmentRosterBulkHandlers(
             // Only rows the PREVIEW judged ready. The preview is the eligibility authority;
             // re-deciding it here would be a second opinion the operator never saw.
             for (const row of preview.filter((p) => p.status === "ready")) {
+                // A row that cannot name its subject is not a row to execute. `customerMemberId` is
+                // nullable on the preview shape, and the inline version this replaced posted it into
+                // an untyped JSON body — so a null went to the action as `entity_id: null` and was
+                // refused server-side rather than skipped here. CI's typecheck found it the moment
+                // the call went through a typed helper.
+                if (!row.customerMemberId) continue;
                 await execute("assignment.create", "child", row.customerMemberId, row.payload);
             }
             onRefresh();
@@ -107,6 +113,10 @@ export function buildAssignmentRosterBulkHandlers(
             // A room change is a NEW effective-dated assignment, not an edit — which is why this
             // posts `assignment.create` like the one above. The dating is what supersedes the prior
             // room, and that is the ledger's own mechanism.
+            //
+            // No null guard here, unlike the handler above: these rows declare
+            // `customerMemberId: string`, so a guard would be dead code implying a case the type
+            // says cannot happen.
             for (const row of rows) {
                 await execute("assignment.create", "child", row.customerMemberId, row.payload);
             }

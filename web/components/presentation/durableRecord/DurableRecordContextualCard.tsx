@@ -232,7 +232,15 @@ export default function DurableRecordContextualCard({
                 data-contextual-card-commitments={String(projection?.current?.assignments?.length ?? 0)}
                 data-contextual-card-proposed={String(projection?.proposed?.assignments?.length ?? 0)}
             >
-                <SchedulingCard model={deriveChildSchedulingCard()} context={operationalContext} />
+                <SchedulingCard
+                    model={deriveChildSchedulingCard()}
+                    context={operationalContext}
+                    // The SAME generic contract a configured-field edit uses. An assignment write and
+                    // a name edit are both "this record's canonical truth changed", and the host has
+                    // one way of hearing that — so the surface underneath reloads on close either way,
+                    // with no scheduling-specific channel.
+                    onMutated={onSaved}
+                />
             </div>
         );
     }
