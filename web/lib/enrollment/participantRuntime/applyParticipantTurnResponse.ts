@@ -1,0 +1,147 @@
+/**
+ * Apply one participant response, then ALWAYS recompute the objective (Phase 3).
+ *
+ * The full turn cycle, with the platform holding every decision:
+ *
+ * ```
+ *   deterministic turn  ->  interpretation (deterministic, or provider-assisted)
+ *     ->  StructuredCandidate      (the only shape a provider may return)
+ *     ->  deterministic validation (a model's output is not truth)
+ *     ->  existing command path    (D-99 confirmation, or the shared-value write)
+ *     ->  RECOMPUTE the objective  (the platform decides what changed)
+ * ```
+ *
+ * ## Recomputation is not optional
+ *
+ * Whether the need disappeared, whether another remains, whether Form prefill changed, whether a
+ * Form became ready for review, whether Enrollment is complete — all of that is decided by
+ * re-deriving the deterministic objective, never by the conversation layer asserting it. That is
+ * what stops a chat turn from ever becoming a lifecycle authority.
+ *
+ * ## No conversation memory
+ *
+ * Durable state is the process, the session, its shared values, the D-99 confirmation evidence, the
+ * Forms and submissions, and the deterministic progress. This function writes to exactly two of
+ * those — through the paths that already own them — and reads everything else fresh.
+ */
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
+import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
+import {
+    resolveParticipantEnrollmentObjective,
+    type ParticipantEnrollmentObjective,
+} from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import type { FormField } from "@/lib/forms/schema";
+import type {
+    CandidateDisposition,
+    StructuredCandidate,
+} from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+
+export type ApplyTurnResult =
+    | {
+          readonly ok: true;
+          readonly disposition: CandidateDisposition;
+          /** The objective AFTER recomputation. The platform's verdict on what changed. */
+          readonly objective: ParticipantEnrollmentObjective;
+      }
+    | { readonly ok: false; readonly refusal: { readonly code: string; readonly detail: string } };
+
+/**
+ * Apply a candidate to the CURRENT turn of the objective.
+ *
+ * The objective is resolved fresh rather than trusted from the client: a turn the participant is
+ * answering must be the turn the platform currently believes is next, or a stale tab could confirm a
+ * value that has since changed.
+ */
+export async function applyParticipantTurnResponse(
+    supabase: SupabaseClient,
+    input: {
+        orgId: string;
+        processInstanceId: string;
+        candidate: StructuredCandidate;
+        /** The authored control for the current need, for type validation. */
+        field?: FormField | null;
+        /** Injected so the write stays deterministic and testable. */
+        nowIso: string;
+        canonicalValues?: Readonly<Record<string, unknown>>;
+    },
+): Promise<ApplyTurnResult> {
+    const before = await resolveParticipantEnrollmentObjective(supabase, {
+        orgId: input.orgId,
+        processInstanceId: input.processInstanceId,
+        canonicalValues: input.canonicalValues,
+    });
+    if (!before.ok) return before;
+
+    const turn = before.value.next_turn;
+    const disposition = disposeParticipantCandidate({
+        turn,
+        candidate: input.candidate,
+        field: input.field ?? null,
+    });
+
+    const sessionId = before.value.session_id;
+    const needKey = turn.need?.identity.key ?? null;
+    const sharedKey = turn.need?.identity.shared_value_key ?? null;
+
+    if (sessionId && needKey && disposition.action !== "no_change" && disposition.action !== "refused") {
+        const { data: sessionRow, error: readError } = await supabase
+            .from("form_packet_sessions")
+            .select("shared_values, metadata")
+            .eq("id", sessionId)
+            .eq("org_id", input.orgId)
+            .maybeSingle();
+        if (readError) {
+            return { ok: false, refusal: { code: "read_failed", detail: readError.message } };
+        }
+        const row = (sessionRow ?? {}) as {
+            shared_values?: Record<string, unknown> | null;
+            metadata?: Record<string, unknown> | null;
+        };
+
+        if (disposition.action === "confirm_value") {
+            // D-99, bound to the exact value. No canonical record is touched.
+            const metadata = buildEnrollmentNeedConfirmationPatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                confirmedValue: disposition.value,
+                confirmedAtIso: input.nowIso,
+            });
+            if (metadata) {
+                const { error } = await supabase
+                    .from("form_packet_sessions")
+                    .update({ metadata })
+                    .eq("id", sessionId)
+                    .eq("org_id", input.orgId);
+                if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+            }
+        }
+
+        if (disposition.action === "write_shared_value" && sharedKey) {
+            // The EXISTING packet shared-value path. One write reaches every occurrence through the
+            // settled prefill merge — there is no per-Form fan-out to keep in step.
+            const shared_values = shallowMergeSharedValues((row.shared_values ?? {}) as Record<string, unknown>, {
+                [sharedKey]: disposition.value,
+            });
+            const { error } = await supabase
+                .from("form_packet_sessions")
+                .update({ shared_values })
+                .eq("id", sessionId)
+                .eq("org_id", input.orgId);
+            if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+        }
+    }
+
+    // ALWAYS recompute. The platform, not the conversation, decides what changed.
+    const after = await resolveParticipantEnrollmentObjective(supabase, {
+        orgId: input.orgId,
+        processInstanceId: input.processInstanceId,
+        canonicalValues: input.canonicalValues,
+    });
+    if (!after.ok) return after;
+
+    return { ok: true, disposition, objective: after.value };
+}

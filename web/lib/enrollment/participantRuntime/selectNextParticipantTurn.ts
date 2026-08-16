@@ -1,0 +1,123 @@
+/**
+ * THE one owner of "what should the participant resolve next?" (Phase 3).
+ *
+ * Pure. **Never calls a provider.** The same deterministic state always selects the same next
+ * objective, which is what makes the conversation resumable, auditable and testable — and what makes
+ * the provider optional rather than load-bearing.
+ *
+ * ## D-100 — known values are confirmed once
+ *
+ * A known participant fact contributing to the active objective requires ONE confirmation for this
+ * Enrollment session, unless D-99 already records a confirmation of that exact value. So
+ * `known_requires_confirmation` is a turn, `confirmed` is not, and a corrected value re-opens the
+ * turn automatically because the D-99 fingerprint no longer matches.
+ *
+ * Signatures, consents, acknowledgments and every other recipient-scoped or artifact-specific
+ * control are excluded from ordinary confirmation by construction: Slice 2.4 already gives them
+ * `artifact_specific` state and a null shared key, so they can never reach a confirm turn. They are
+ * handed to the Form that owns them via `complete_artifact`.
+ */
+
+import type {
+    EnrollmentInformationNeed,
+    EnrollmentInformationNeeds,
+} from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
+import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+
+/**
+ * Deterministic wording — the FALLBACK that always exists.
+ *
+ * Plain and functional on purpose. A provider may render something warmer for the same turn, but
+ * this is what ships when the provider is disabled, unavailable, timing out or refused, and
+ * Enrollment must never depend on model uptime.
+ *
+ * The label comes from the authored Form control, so it is the operator's own wording rather than
+ * anything generated.
+ */
+export function deterministicPrompt(need: EnrollmentInformationNeed): string {
+    const label = need.occurrences[0]?.label?.trim() || need.identity.canonical_key || "this detail";
+    if (need.state === "known_requires_confirmation") {
+        return `We have ${label} as ${formatValue(need.current_value)}. Is that correct?`;
+    }
+    return `What is ${label}?`;
+}
+
+function formatValue(value: unknown): string {
+    if (value === null || value === undefined) return "(not set)";
+    if (typeof value === "string") return value;
+    return JSON.stringify(value);
+}
+
+/**
+ * Order needs are asked in.
+ *
+ * Confirmations first, then collections, each in the projection's own authored order. Confirming
+ * what is already known is cheaper for the parent than typing something new, and clearing those
+ * turns first makes the remaining list shorter and more honest. Within a group the order is the
+ * projection's — never sorted by anything that changes as the participant progresses, or the queue
+ * would reshuffle underneath them.
+ */
+const TURN_PRIORITY: Record<string, number> = {
+    known_requires_confirmation: 0,
+    missing: 1,
+};
+
+export type NextParticipantTurnInput = {
+    readonly needs: EnrollmentInformationNeeds;
+    readonly progress: EnrollmentParticipantProgress;
+};
+
+/**
+ * Select the next turn.
+ *
+ * Precedence, and each step is a platform decision the model never participates in:
+ *
+ *  1. a shared semantic fact still needing confirmation or collection;
+ *  2. otherwise, an outstanding Form requirement whose artifact-specific content remains —
+ *     handed to the Form, because conversation handles SHARED information and exact Forms remain
+ *     the authoritative artifacts;
+ *  3. otherwise `complete`.
+ *
+ * Step 2 deliberately does not try to conversationally replace Form controls. That preserves the
+ * long-term architecture: shared facts collected efficiently, artifacts still authoritative.
+ */
+export function selectNextParticipantTurn(input: NextParticipantTurnInput): ParticipantTurn {
+    const actionable = input.needs.needs
+        .filter((need) => need.requires_participant_action)
+        .sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
+
+    const next = actionable[0];
+    if (next) {
+        return {
+            kind: next.state === "known_requires_confirmation" ? "confirm_known_value" : "collect_missing_value",
+            need: next,
+            prompt: deterministicPrompt(next),
+            proposed_value: next.state === "known_requires_confirmation" ? next.current_value : null,
+            resolves_occurrences: next.occurrence_count,
+        };
+    }
+
+    // Every shared fact is settled. What remains is artifact work the Form owns — signatures,
+    // recipient-scoped content, anything a conversation must not answer on the parent's behalf.
+    const outstandingForm = input.progress.requirements.find(
+        (r) => r.kind === "form" && r.status === "outstanding",
+    );
+    if (outstandingForm) {
+        return {
+            kind: "complete_artifact",
+            need: null,
+            prompt: "Your details are saved. Please review and complete the remaining form.",
+            proposed_value: null,
+            resolves_occurrences: 0,
+        };
+    }
+
+    return {
+        kind: "complete",
+        need: null,
+        prompt: "Everything we need is complete.",
+        proposed_value: null,
+        resolves_occurrences: 0,
+    };
+}
