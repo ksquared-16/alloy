@@ -74,19 +74,37 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
-    const parsed = parseLifecycleActivationV1(body);
-    if (!parsed) {
-        return NextResponse.json({ error: "Invalid activation payload" }, { status: 400 });
-    }
-
-    const activation: LifecycleActivationV1 = {
-        ...parsed,
-        updated_at: new Date().toISOString(),
-    };
-
     try {
         const row = await loadDepartment(ctx.orgId, departmentId);
         if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        /**
+         * PATCH means PATCH: a key absent from the body leaves the persisted value alone.
+         *
+         * This handler used to parse the body alone and write the result wholesale, so the verb
+         * said "partial" while the semantics were "replace". That obliged every caller to rebuild
+         * the entire bundle from component state, and the client duly defaulted
+         * `action_definition_id` to null and `action_placement_ids` to [] on every call — so
+         * renaming the lifecycle silently cleared both, and any field whose state had not resolved
+         * yet was persisted as whatever the client happened to hold (R-009).
+         *
+         * Merging the body's PRESENT keys over the persisted bundle makes absence mean "unchanged",
+         * while an explicit `null` still clears — which is what callers clearing a work unit send.
+         * Validation is unchanged: the merged object is parsed as a complete bundle, so a first
+         * save with no persisted activation behaves exactly as it did before.
+         */
+        const existing = lifecycleActivationFromMetadata(row.metadata);
+        const merged = existing ? { ...existing, ...body } : body;
+
+        const parsed = parseLifecycleActivationV1(merged);
+        if (!parsed) {
+            return NextResponse.json({ error: "Invalid activation payload" }, { status: 400 });
+        }
+
+        const activation: LifecycleActivationV1 = {
+            ...parsed,
+            updated_at: new Date().toISOString(),
+        };
 
         const metadata =
             row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
