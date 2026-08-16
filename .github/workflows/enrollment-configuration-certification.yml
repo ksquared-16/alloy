@@ -31,6 +31,12 @@
 # subject + `packetFieldPlan`'s canonical key, with D-99 session confirmation bound to the
 # value it was made about.
 #
+# Phase 3 added `participantEnrollmentRuntime` — the conversational loop. It carries the
+# primary acceptance proof (one complete conversation, provider-free) and the AI-boundary
+# controls: a structured candidate cannot name a field, command or requirement; an
+# unreadable candidate fails closed to `unresolved`; an invalid value is refused and
+# mutates nothing.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -72,4 +78,5 @@ jobs:
             tests/lifecycle/publishedStageRequirementsSelfContainment.test.ts \
             tests/lifecycle/processInstanceRevisionPin.test.ts \
             tests/lifecycle/enrollmentParticipantProgress.test.ts \
-            tests/lifecycle/enrollmentInformationNeeds.test.ts
+            tests/lifecycle/enrollmentInformationNeeds.test.ts \
+            tests/lifecycle/participantEnrollmentRuntime.test.ts
