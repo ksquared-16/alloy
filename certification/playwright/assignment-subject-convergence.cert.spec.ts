@@ -63,6 +63,19 @@ const ROOM_B_ID = "00000000-0000-4000-8000-000000000013";
  * nor this slice's concern; it is simply not the state a room-change proof can observe.
  */
 const EFFECTIVE_FROM = "2026-06-01";
+
+/**
+ * Scenario 8's own room and date, because the scenarios share one tenant serially.
+ *
+ * Superseding is effective-dated: the prior row is closed the day BEFORE the new one starts. Running
+ * scenario 8 with scenario 7's date would try to close a row starting 2026-06-01 on 2026-05-31, and
+ * the database refuses — `schedule_assignments_end_after_start`, correctly. A later date is valid
+ * whether scenario 8 runs after 7 or on its own against a fresh fixture, which is what a serial
+ * proving journey needs.
+ */
+const ROOM_C = "Infant Room A";
+const ROOM_C_ID = "00000000-0000-4000-8000-000000000012";
+const EFFECTIVE_FROM_LATER = "2026-07-01";
 const ROOM_CHILD = "Preschool Room A";
 
 /** Configured Assignment Categories — labels that exist ONLY in the fixture, never in code. */
@@ -459,7 +472,7 @@ test.describe("7 — the Roster re-reads canonical truth", () => {
 });
 
 /** Change the open assignment's room, through the card's own editor and its canonical action. */
-async function changeRoomTo(page: Page, roomId: string, roomName: string) {
+async function changeRoomTo(page: Page, roomId: string, roomName: string, effectiveFrom: string = EFFECTIVE_FROM) {
     await expect(page.locator(LIST_SURFACE)).toBeVisible({ timeout: SETTLE });
     await page.locator("[data-assignment-row]").first().click();
     await expect(page.locator('[data-assignment-surface="detail"]')).toBeVisible({ timeout: SETTLE });
@@ -481,7 +494,7 @@ async function changeRoomTo(page: Page, roomId: string, roomName: string) {
     await page.locator("[data-pattern-shortcut='true']").first().click();
     await expect(page.locator("[data-pattern-list='true']")).toBeVisible({ timeout: SETTLE });
     await page.locator("[data-pattern-option]").first().click();
-    await page.locator('input[type="date"]').first().fill(EFFECTIVE_FROM);
+    await page.locator('input[type="date"]').first().fill(effectiveFrom);
 
     const commit = page.locator("[data-schedule-commit='true']").first();
     await expect(commit, "the form must be complete enough to save").toBeEnabled({ timeout: SETTLE });
@@ -572,7 +585,7 @@ test.describe("8 — state preservation", () => {
         // A real open → MUTATE → close, not just an open-and-close: preservation is only interesting
         // across a write, because a write is what makes the surface underneath reload.
         await openJaneFromStaff(page);
-        await changeRoomTo(page, ROOM_B_ID, ROOM_B);
+        await changeRoomTo(page, ROOM_C_ID, ROOM_C, EFFECTIVE_FROM_LATER);
         await page.keyboard.press("Escape");
         await expect(page.locator(OVERLAY)).toHaveCount(0, { timeout: SETTLE });
 
