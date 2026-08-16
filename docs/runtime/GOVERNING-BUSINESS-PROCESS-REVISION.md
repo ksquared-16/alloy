@@ -123,6 +123,35 @@ Resolution refuses to guess. Zero published Enrollment configurations, or two de
 each publishing one, produce an explicit outcome and a warning rather than a silent NULL or
 an arbitrary pick — the pin is immutable, so a wrong guess would be unfixable.
 
+## D-98 — multi-department Enrollment selection
+
+Where a journey can name exactly one canonical department through existing context, that department
+is used. `Org → Department → Work unit → Record` is schema-enforced —
+`opportunities.work_unit_id` is a real FK and `work_units.department_id` is `NOT NULL` — so a
+journey with an Opportunity context already carries the answer.
+
+Where an org has several valid Enrollment departments and **no** canonical context selects one,
+**Start Enrollment must require an explicit department selection before the process instance is
+created.** The selected department is then input to the ordinary creation path, which resolves and
+atomically pins the published revision under D-96.
+
+Forbidden, explicitly:
+
+- choosing the first department;
+- an implicit org-wide default;
+- creating the instance with a NULL pin;
+- deferring the ambiguity until after the transaction has started.
+
+This is configuration/context selection at process START. It is not lifecycle authority in the
+packet or session, and nothing about it belongs to the participant runtime.
+
+Historical and context-free instances remain compatibility behaviour. New multi-department
+Enrollment starts must not be ambiguous.
+
+*Status: the resolver refuses to pin in the ambiguous case, which is the required behaviour. The
+Start Enrollment surface does not yet collect the selection — no current tenant is multi-department,
+and Slice 2.3 did not reach that surface.*
+
 ## Known narrowing
 
 A legacy display-only requirement label that maps to no catalog rule id cannot be
