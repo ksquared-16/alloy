@@ -591,21 +591,97 @@ Placement is expressed as the editable **Program** field, so that field's edit p
 above as the representative transition. The register's original "no representative rendered" stands.
 **CONFIG OWNER**, unchanged.
 
-### Organization / Settings movement — counted evidence only
+### Organization / Settings movement — RETRACTED and re-measured
 
-`/organization` → surfaces, access, data-model, processes, then a warm revisit: **0 duplicate
-requests and 0 render loops on every move**. No timing is quoted: this is a dev build, where a first
-visit pays Turbopack compile-on-demand, and the runbook forbids treating a dev number as a product
-number.
+**The first reading was wrong and is withdrawn.** It reported the main region blanking on 4 of 5
+pages "including on a warm revisit", from a probe that sampled at 200 ms and flagged any main region
+under 200 characters. Re-measured at 60 ms sampling with the loading fallback identified by its own
+`data-testid`, separating a cold first visit from a warm revisit:
 
-One structural observation that is *not* load-sensitive: **the main region drops below 200 characters
-during the route change on 4 of 5 pages, including on a warm revisit of an already-compiled route.**
-Compile cost cannot be the whole explanation for the warm case. Whether the shell should survive an
-Organization route change is a real question, but quantifying it needs the production build.
-**ENVIRONMENT BLOCKER**, same gate as cold/warm timing.
+| Pass | Fallback samples | Main region | Shell |
+|---|--:|---|---|
+| Cold — surfaces | 17 | 2748 → **21** → 800 | kept |
+| Cold — access | 1 | 800 → **19** → 691 | kept |
+| Cold — processes | 0 | 691 → 196 → 651 | kept |
+| Cold — data-model | 0 | 651 → 1018 (no dip) | kept |
+| **Warm — all four** | **0** | direct swap, no dip below the destination's own size | kept |
 
-There is also no `/organization/locations` link in the current navigation, so that page was not
-reachable by movement from `/organization`.
+**Warm navigation never blanks.** The trace shows the prior page held at full size until the URL
+changes and the destination's content is present in the same step. The navigation shell survived
+every move, cold and warm.
+
+**The cold blank is `app/adminV2/settings/loading.tsx`** — a Next segment `loading.tsx` that applies
+to every settings subpage lacking its own. It renders a deliberately structure-neutral reserve (a
+title bar and three pulse bars, no text), which is why the *text* length collapses to ~20 characters
+while the region is visually reserved, not empty. Its own comment records why it is structure-neutral:
+painting the hub's tile grid there morphed page structure on entry, which the doctrine forbids.
+
+**This is doctrine-conformant, not a defect.** `docs/system/adminv2-runtime-performance-doctrine.md`
+forbids "clearing valid current data before replacement data is ready" and "section-owned above-fold
+skeletons replacing composed content" — both scoped to **warm** navigation, which is exactly where
+this shows a clean direct swap. Its cold rule is the opposite: a reserve *only* when there is nothing
+valid to hold ("skeleton only when `loading && !hasRows`"). A cold cross-route move has no valid
+content for the destination, so a neutral reserve is the specified behaviour. **No fix made, because
+there is no defect to fix.**
+
+**What is structurally true and remains open:** there is **no navigation pending affordance anywhere
+in the settings tree** — `useLinkStatus`, `useTransition` and `isPending` appear zero times under
+`components/adminV2` and `app/adminV2/settings`. Between the click and the route commit nothing at
+all changes. The *window* is dominated by Turbopack compile in dev (URL change at 443–4008 ms), so
+whether it is perceptible in production is unmeasured, and adding a progress affordance on dev
+evidence would be adding decorative waiting against the doctrine. **ENVIRONMENT BLOCKER** — it is one
+production measurement, not an investigation.
+
+One further observation, not attributable on a dev build: `/organization/processes` settles its
+content in three visible steps (263 → 196 → 651) on warm as well as cold navigation — the
+"shell-first, body-later assembly" shape. Dev cannot separate lazy-chunk compilation from product
+waves, so this is recorded, not diagnosed.
+
+`/organization/locations` **is** linked (from the Organization hub, conditional on locations
+existing); the earlier "no link" note was an artifact of probing after navigating away from the hub.
+
+### Journey A — continuous walk, workspace to save
+
+Walked as an operator would, one session, no direct URLs after entry:
+`/workspace` → Work Unit (All) → Work View Waitlist → back to All → queue row → Focus Panel →
+Children card → back → Send form → back → Children → Edit Program → dropdown.
+
+| Step | Ack | Requests | Verdict |
+|---|--:|--:|---|
+| workspace → work-unit | — | 39 | cold dev entry; 3 loaders, dup subject to M-1 |
+| work-view → Waitlist | 112 ms | 4 | clean (0 cards — the known unauthored Waitlist composition) |
+| work-view → All | 198 ms | 3 | clean, 4 cards restored |
+| queue row → Focus Panel | — | 8 | clean |
+| Children expand | 51 ms | 2 | clean |
+| ← Back to panel | 49 ms | 3 | clean |
+| Send form | 92 ms | 4 | clean; dup subject to M-1 |
+| ← Back to actions | 51 ms | 4 | clean; dup subject to M-1 |
+| Children expand (2nd) | 68 ms | 2 | clean |
+| Edit Program | 15 ms | 0 | clean |
+| dropdown open | 107 ms | 0 | clean, focus lands on the option |
+
+**The Focus Panel boundary measured 854 px at every single sample across the whole journey** — no
+layout jump anywhere in the walk. **0 render loops.** No dead click, no blank surface, no stale
+content, no broken return context. The duplicate flags are **not** defects: this run was on the
+default server with StrictMode **on**, so M-1 applies, and the same transitions read 0 duplicates
+when measured with StrictMode off.
+
+**Save — partially certified, and it is not "ambiguous".** Two findings, neither a defect:
+
+1. The child's Program field has **no Save button by design.** `autoCommitOnPick` is scoped to
+   `placement_select` and any `fieldRef` containing `program`, so picking an option commits it and
+   the only inline control is Cancel. Documented in the component.
+2. Re-selecting the **same** value issued **no network write at all** — the no-op is correctly
+   skipped. So the save *path* did not actually run, and this does not certify a real save.
+
+A save acknowledgement affordance does exist and **is wired**: `IdentityFieldGrid` tracks
+`justSavedFieldRef` on a timer and passes `savedFlash` per field, which `IdentityFieldValue` renders.
+Unlike `closeActionPanel` (R-014) this one is reachable.
+
+**Not certified:** that the flash actually paints on a real save. Proving it requires a genuine
+durable write to Firefly child data — and Firefly is the enrollment certification tenant another slot
+is actively using, so changing a child's placement was not something to do unilaterally.
+**Needs Kelly's authorization, or a disposable subject.** It is the single remaining gap in Journey A.
 
 ---
 
