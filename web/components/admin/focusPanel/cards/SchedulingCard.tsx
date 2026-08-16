@@ -432,11 +432,26 @@ export default function SchedulingCard({ model, context, receded = false, coordi
         }));
     }, [evidence, context.truth]);
     const subjectKind: "child" | "staff" = subjects[0]?.kind ?? "child";
-    const opportunityId = resolveFocusPanelMutationOpportunityId({
-        subjectId: context.subject.id,
-        grain: context.grain,
-        truth: context.truth as Record<string, unknown>,
-    });
+    /*
+     * THE CASE THIS CARD IS ACTING INSIDE, or none.
+     *
+     * A staff member has none, and the resolver cannot say so: it ends
+     * `return subjectId`, so asking it about a person grain hands back Jane's `persons.id` AS an
+     * opportunity id. Nothing rejects that — it is a well-formed uuid — and the consequences are all
+     * silent and all child-shaped: a tuition selector rendered on a staff assignment, a rate-options
+     * fetch issued against a non-existent opportunity, a quote persisted onto one.
+     *
+     * The resolver is not wrong; it was written for grains that always have a case. The question
+     * simply does not apply to a staff subject, so it is not asked.
+     */
+    const opportunityId =
+        subjectKind === "staff"
+            ? null
+            : resolveFocusPanelMutationOpportunityId({
+                  subjectId: context.subject.id,
+                  grain: context.grain,
+                  truth: context.truth as Record<string, unknown>,
+              });
 
     // Prebuilt projection: composed server-side into context.truth by the Focus Panel
     // first-paint runtime (like Household), so the card reveals WITH the panel and opens
@@ -2473,7 +2488,10 @@ function Thinking({ label }: { label: string }) {
     );
 }
 function ErrorNote({ message }: { message: string }) {
-    return <div style={{ fontSize: 12, color: "#b42318", background: "#fef3f2", border: "1px solid #fecdca", borderRadius: 8, padding: "8px 10px" }}>{message}</div>;
+    // Addressable so a failing save reports WHY. Without it a certification that cannot find the
+    // list surface afterwards times out blind, and "the button did nothing" is the least useful
+    // description of a refused write that the operator will also be reading.
+    return <div data-schedule-error="true" style={{ fontSize: 12, color: "#b42318", background: "#fef3f2", border: "1px solid #fecdca", borderRadius: 8, padding: "8px 10px" }}>{message}</div>;
 }
 function AlloyCheck({ checked, onChange, ...rest }: { checked: boolean; onChange: (v: boolean) => void } & Record<string, unknown>) {
     return (

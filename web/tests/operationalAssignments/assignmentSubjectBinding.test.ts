@@ -99,8 +99,40 @@ describe("child payloads are unchanged by generalization", () => {
         // The regression this pins: a child WITH a linked person is the common case, and addressing
         // them by `persons.id` would reach an action that accepts the id and writes another subject.
         expect(assignmentActionBinding(committedChild)).toStrictEqual({
-            entityType: "child",
-            entityId: MEMBER_ID,
+            entity_type: "child",
+            entity_id: MEMBER_ID,
+        });
+    });
+
+    /**
+     * THE WHOLE REQUEST BODY, not just the payload — and this test exists because its absence cost a
+     * browser certification run.
+     *
+     * The binding originally returned `{ entityType, entityId }`. Every call site spread it into the
+     * execute body, TypeScript was satisfied, the child payload assertions above all passed, and the
+     * route rejected every single dispatch with "action_key, entity_type, and entity_id are
+     * required" — for children as much as for staff.
+     *
+     * Pinning the anchor payload alone could never have caught that: the defect was in the envelope,
+     * which no test looked at. So the assembled body is pinned here, keys and all.
+     */
+    it("the assembled execute body carries the route's own field names", () => {
+        const body = {
+            action_key: "assignment.archive",
+            ...assignmentActionBinding(committedChild),
+            payload: { assignment_id: "assignment-1" },
+        };
+        expect(Object.keys(body).sort()).toEqual([
+            "action_key",
+            "entity_id",
+            "entity_type",
+            "payload",
+        ]);
+        expect(body).toStrictEqual({
+            action_key: "assignment.archive",
+            entity_type: "child",
+            entity_id: MEMBER_ID,
+            payload: { assignment_id: "assignment-1" },
         });
     });
 
@@ -144,8 +176,8 @@ describe("child payloads are unchanged by generalization", () => {
 describe("staff binds to canonical staff identifiers", () => {
     it("addresses the PERSON, and never carries a member id", () => {
         expect(assignmentActionBinding(staff)).toStrictEqual({
-            entityType: "person",
-            entityId: PERSON_ID,
+            entity_type: "person",
+            entity_id: PERSON_ID,
         });
         expect(assignmentAnchorPayload(staff)).not.toHaveProperty("customer_member_id");
     });

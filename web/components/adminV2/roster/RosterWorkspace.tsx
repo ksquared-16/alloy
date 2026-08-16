@@ -108,8 +108,24 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         todayYmd: string;
     } | null>(null);
 
-    /** Stale-response guard for every site-scoped load. */
+    /** Stale-response guard for the WEEK load. */
     const loadSeq = useRef(0);
+    /**
+     * Stale-response guard for the ASSIGNMENT LEDGER load — its own counter, deliberately.
+     *
+     * These were one shared counter, and sharing it silently broke the refresh seam. The ledger
+     * reload captured `loadSeq`, issued its fetch, and then called `loadWeek`, which increments
+     * `loadSeq` — so by the time the ledger response arrived the sequence had moved and the result
+     * was discarded as stale. It was not stale; it was the only fresh data in the request.
+     *
+     * The effect is that an assignment edit wrote correctly, announced itself correctly, and the
+     * Assignments lens went on showing the old room — indistinguishable from a broken write, and
+     * invisible to any test that asserted on the action's response rather than on the projection.
+     *
+     * A stale-response guard belongs to ONE request stream. Two independent loads sharing one
+     * counter means either can cancel the other, and which one wins is a race.
+     */
+    const assignSeq = useRef(0);
     const weekCache = useRef<Map<string, RosterData>>(new Map());
 
     const focusRecord = useOperatorRecordFocus();
@@ -282,10 +298,10 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         setWeek(null);
         setSubjects(null);
         void loadWeek(siteId, "");
-        const seq = loadSeq.current;
+        const seq = ++assignSeq.current;
         void schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`).then(
             (res) => {
-                if (seq !== loadSeq.current) return;
+                if (seq !== assignSeq.current) return;
                 setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
             },
         );
@@ -332,10 +348,10 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
      */
     const reloadAssignments = useCallback(() => {
         if (!siteId) return;
-        const seq = loadSeq.current;
+        const seq = ++assignSeq.current;
         void schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`).then(
             (res) => {
-                if (seq !== loadSeq.current) return;
+                if (seq !== assignSeq.current) return;
                 setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
             },
         );

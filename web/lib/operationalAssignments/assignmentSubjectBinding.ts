@@ -26,12 +26,21 @@
 
 import type { OperationalAssignmentSubject } from "@/lib/operationalAssignments/operationalAssignmentService";
 
-/** The entity an action invocation addresses for a given subject. */
+/**
+ * The entity an action invocation addresses, in the WIRE's own vocabulary.
+ *
+ * Snake_case deliberately: this object is spread directly into the `/api/admin/actions/execute`
+ * body alongside `action_key`, so it is the request's fields rather than a model of them. An earlier
+ * revision used camelCase and read well, and the route answered "action_key, entity_type, and
+ * entity_id are required" for every subject including children — a shape that type-checks, spreads
+ * cleanly, and is rejected at runtime. Naming these what the wire names them removes the translation
+ * step where that mismatch could live.
+ */
 export type AssignmentActionBinding = {
-    /** `invocation.entityType` — the vocabulary `supportedEntityTypes` is declared in. */
-    entityType: "child" | "person";
-    /** `invocation.entityId` — the child's member row, or the staff person. */
-    entityId: string;
+    /** The vocabulary `supportedEntityTypes` is declared in. */
+    entity_type: "child" | "person";
+    /** The child's member row, or the staff person. */
+    entity_id: string;
 };
 
 /**
@@ -44,9 +53,9 @@ export type AssignmentActionBinding = {
  */
 export function assignmentActionBinding(subject: OperationalAssignmentSubject): AssignmentActionBinding {
     if (subject.type === "staff") {
-        return { entityType: "person", entityId: (subject.personId ?? "").trim() };
+        return { entity_type: "person", entity_id: (subject.personId ?? "").trim() };
     }
-    return { entityType: "child", entityId: (subject.customerMemberId ?? "").trim() };
+    return { entity_type: "child", entity_id: (subject.customerMemberId ?? "").trim() };
 }
 
 /**

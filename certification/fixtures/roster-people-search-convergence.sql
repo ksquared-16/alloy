@@ -19,8 +19,17 @@
 \set enrollment_unit '00000000-0000-4000-8000-000000000031'
 
 -- ── Remove what previous runs of THIS certification created, innermost first.
+--
+-- Jane's STAFF assignment needs a delete of its own: it carries `customer_member_id IS NULL` by
+-- construction, so the member-scoped delete below cannot see it. A self-cleaning fixture that
+-- silently misses one class of row is not self-cleaning — it accumulates, and the accumulation is
+-- invisible until a count assertion starts drifting. Person-prefixed rather than id-prefixed so it
+-- also collects rows the BROWSER created during a previous run's mutation proofs.
+delete from schedule_assignments where org_id = :'org'::uuid and subject_type = 'staff'
+  and subject_person_id in (select id from persons where id::text like 'fbc0%');
 delete from schedule_assignments where org_id = :'org'::uuid and customer_member_id in
   (select id from customer_members where customer_id::text like 'fbc0%');
+delete from operational_assignment_types where id::text like 'fbc0%';
 delete from schedule_patterns where id::text like 'fbc0%';
 delete from opportunity_customer_members where org_id = :'org'::uuid and customer_member_id in
   (select id from customer_members where customer_id::text like 'fbc0%');
@@ -145,6 +154,44 @@ insert into opportunity_customer_members (id, org_id, opportunity_id, customer_m
    'fbc00000-0000-4000-8000-00000000c001'::uuid, 'waitlist')
 on conflict (id) do nothing;
 
+-- ══ ASSIGNMENT CATEGORIES — tenant configuration, because the tenant has NONE ══════════════════
+--
+-- ── THIS IS A FINDING, NOT A CONVENIENCE ──
+--
+-- `operational_assignment_types` is EMPTY in the seeded cert tenant: zero rows, for either subject.
+-- Certifying "the picker shows the configured assignment types" against that state would have
+-- proven only that an empty list renders as an empty state — which the card does correctly, and
+-- which a card that ignored the types owner entirely would also pass. So the categories are
+-- configured here, exactly as a tenant configures them through Studio, and the assertion becomes
+-- falsifiable: the picker must show THESE labels, which exist nowhere in code.
+--
+-- ── `subject_types` IS THE AUTHORITY ON WHO MAY HOLD A CATEGORY ──
+--
+-- Not a filter the card invents. The column is checked by the DB trigger
+-- (`Assignment type must belong to the organization and support the subject type`) and read by
+-- `loadOrgAssignmentTypes({ subjectType })`, so it is enforced at both ends. The three rows below
+-- are deliberately asymmetric so that asymmetry is OBSERVABLE:
+--
+--   Before Care     child only   — must NOT appear when the subject is Jane
+--   Classroom Cover staff only   — must NOT appear when the subject is Lennon
+--   Enrichment      both         — the control that proves the filter is a filter, not a blanket
+--
+-- A card that ignored `subject_types` would show all three to both subjects and pass any assertion
+-- that merely counted "some categories are listed".
+insert into operational_assignment_types
+  (id, org_id, key, label, subject_types, sort_order, is_active, default_behavior) values
+  ('fbc00000-0000-4000-8000-000000009001'::uuid, :'org'::uuid, 'rps_before_care', 'Before Care (cert)',
+   ARRAY['child']::text[], 10, true, '{}'::jsonb),
+  ('fbc00000-0000-4000-8000-000000009002'::uuid, :'org'::uuid, 'rps_classroom_cover', 'Classroom Cover (cert)',
+   ARRAY['staff']::text[], 20, true, '{}'::jsonb),
+  ('fbc00000-0000-4000-8000-000000009003'::uuid, :'org'::uuid, 'rps_enrichment', 'Enrichment (cert)',
+   ARRAY['child','staff']::text[], 30, true, '{}'::jsonb)
+on conflict (id) do update set
+  label = excluded.label,
+  subject_types = excluded.subject_types,
+  sort_order = excluded.sort_order,
+  is_active = excluded.is_active;
+
 -- ══ A SECOND CONTEXT — so the selector is a genuine CHOICE ═════════════════════════════════════
 --
 -- The context strip renders only when there is something to choose between: one context is not a
@@ -164,11 +211,70 @@ on conflict (id) do nothing;
 -- child has no agreement yet. Planning (`proposed`) requires only the child and the site — which is
 -- precisely what a waitlisted child's intended schedule is. `planned` counts as live, so the
 -- context resolves.
-insert into schedule_assignments (id, org_id, subject_type, customer_member_id, site_location_id, schedule_pattern_id, start_date, status, assignment_kind, commitment_kind, is_primary, source_key, metadata) values
+--
+-- It carries a ROOM and a CATEGORY so the CHILD half of the assignment acceptance is as substantive
+-- as the staff half. Without them the card renders "Untitled type" and no room — truthful for a row
+-- with neither, but it leaves the child scenario asserting less than the staff one, and an
+-- asymmetric acceptance is how a convergence claim quietly becomes a claim about one subject.
+--
+-- The category is the CHILD-ONLY one, which also makes it the control for the picker assertions:
+-- it must appear for Lennon and must not appear for Jane.
+insert into schedule_assignments (id, org_id, subject_type, customer_member_id, site_location_id, room_location_id, schedule_pattern_id, operational_assignment_type_id, start_date, status, assignment_kind, commitment_kind, is_primary, source_key, metadata) values
   ('fbc00000-0000-4000-8000-00000000f003'::uuid, :'org'::uuid, 'child', 'fbc00000-0000-4000-8000-00000000c001'::uuid,
-   :'riverside'::uuid, 'fbc00000-0000-4000-8000-00000000f002'::uuid, '2026-01-05', 'planned', 'base', 'proposed', false, 'certification',
+   :'riverside'::uuid, '00000000-0000-4000-8000-000000000014'::uuid,
+   'fbc00000-0000-4000-8000-00000000f002'::uuid, 'fbc00000-0000-4000-8000-000000009001'::uuid,
+   '2026-01-05', 'planned', 'base', 'proposed', false, 'certification',
    jsonb_build_object('planning', true))
-on conflict (id) do nothing;
+on conflict (id) do update set
+  room_location_id = excluded.room_location_id,
+  operational_assignment_type_id = excluded.operational_assignment_type_id;
+
+-- ══ JANE'S STAFF ASSIGNMENT — real staff grain, and nothing borrowed from a child ══════════════
+--
+-- ── WHAT MAKES THIS "REAL STAFF GRAIN" ──
+--
+--   subject_type       'staff'
+--   subject_person_id  Jane's `persons.id`
+--   customer_member_id NULL — explicitly, because the whole point is that she is not a member
+--
+-- No `customer_members` row is created for Jane, and none may be. A staff member given a member row
+-- would make every child-shaped read in the product accidentally correct about her, and the
+-- certification would then be proving that the disguise holds rather than that the generalization
+-- is real.
+--
+-- ── COMMITTED, BECAUSE THE SERVICE SAYS SO ──
+--
+-- Not a choice this fixture makes: `resolveSubjectSite` returns `commitmentKind: "committed"` for
+-- every staff subject unconditionally, so a proposed staff row is a state the write path cannot
+-- produce. Seeding one would create a row the product can read and never write — the kind of
+-- fixture-only state that makes a passing certification meaningless.
+--
+-- ── ELIGIBILITY IS EMPLOYMENT, AND THE DATE IS PART OF IT ──
+--
+-- The consistency trigger requires canonical employment covering the assignment's start date
+-- (`person_is_employed_on`), NOT `persons.is_employee` — that column is a waitlist household
+-- priority flag and is NULL for everyone here. Jane's employment starts 2026-01-05, so the
+-- assignment starts on or after it. An earlier start date would be rejected by the database, which
+-- is the correct behaviour and a poor way to discover it.
+--
+-- It carries a ROOM (Infant Room A) because the load-bearing refresh proof changes the room and
+-- asserts the Roster re-read shows the new one. A room-less assignment has no observable fact to
+-- change.
+insert into schedule_assignments
+  (id, org_id, subject_type, subject_person_id, customer_member_id, site_location_id, room_location_id,
+   schedule_pattern_id, operational_assignment_type_id, start_date, status, assignment_kind,
+   commitment_kind, is_primary, source_key, metadata) values
+  ('fbc00000-0000-4000-8000-000000009010'::uuid, :'org'::uuid, 'staff',
+   'fbc00000-0000-4000-8000-00000000a001'::uuid, null,
+   :'riverside'::uuid, '00000000-0000-4000-8000-000000000012'::uuid,
+   'fbc00000-0000-4000-8000-00000000f002'::uuid, 'fbc00000-0000-4000-8000-000000009002'::uuid,
+   '2026-02-02', 'active', 'base', 'committed', false, 'certification', '{}'::jsonb)
+on conflict (id) do update set
+  room_location_id = excluded.room_location_id,
+  operational_assignment_type_id = excluded.operational_assignment_type_id,
+  start_date = excluded.start_date,
+  status = excluded.status,
+  end_date = null;
 
 -- ══ THE EQUALITY SUBJECT — an EXISTING seeded case, not a new one ══════════════════════════════
 --
@@ -312,5 +418,20 @@ union all select 'lennon waitlist participation', count(*)::text from process_in
 union all select 'lennon ON the case (OCM)', count(*)::text from opportunity_customer_members where id = 'fbc00000-0000-4000-8000-00000000c006'::uuid
 union all select 'published focus panel summary', count(*)::text from entity_layouts where id = 'fbc00000-0000-4000-8000-00000000c005'::uuid
 union all select 'lennon assignment (2nd context)', count(*)::text from schedule_assignments where id = 'fbc00000-0000-4000-8000-00000000f003'::uuid
+union all select 'assignment categories (must be 3)', count(*)::text from operational_assignment_types where id::text like 'fbc0%'
+union all select '  … admitting staff (must be 2)', count(*)::text from operational_assignment_types where id::text like 'fbc0%' and 'staff' = any(subject_types)
+union all select 'jane staff assignment', count(*)::text from schedule_assignments where id = 'fbc00000-0000-4000-8000-000000009010'::uuid
+-- The invariant that makes it STAFF grain rather than a child in disguise. If a future edit ever
+-- gives Jane a member row, this reads 0 and the fixture says so before the browser does.
+union all select '  … member_id NULL + person set (must be 1)', count(*)::text from schedule_assignments
+  where id = 'fbc00000-0000-4000-8000-000000009010'::uuid and customer_member_id is null
+    and subject_person_id = 'fbc00000-0000-4000-8000-00000000a001'::uuid and subject_type = 'staff'
+union all select 'jane has NO member row (must be 0)', count(*)::text from customer_members
+  where org_id = :'org'::uuid and person_id = 'fbc00000-0000-4000-8000-00000000a001'::uuid
+-- Staff rows the browser created in a previous run and the deletes did not reclaim. Anything above
+-- 1 means the fixture is accumulating rather than restoring.
+union all select 'total jane staff rows (must be 1)', count(*)::text from schedule_assignments
+  where org_id = :'org'::uuid and subject_type = 'staff'
+    and subject_person_id = 'fbc00000-0000-4000-8000-00000000a001'::uuid
 union all select 'tatum participation (equality subject)', count(*)::text from process_instances where id = 'fbc00000-0000-4000-8000-00000000c007'::uuid
 union all select 'tatum case in canonical unit', count(*)::text from opportunities where id = '00000000-0000-4000-8000-400000000963'::uuid and work_unit_id = :'enrollment_unit'::uuid;
