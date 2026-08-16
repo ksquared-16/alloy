@@ -168,23 +168,50 @@ async function resolvePersonNames(
     return { names, imageUrls };
 }
 
-async function resolveMemberPersonIds(
+/**
+ * The member rows behind child assignments — their person link AND their own name.
+ *
+ * ── THE CHILD IS THE MEMBER ROW ──
+ *
+ * This read already existed and threw the name away, taking only `person_id`. Every child subject
+ * was then named through `persons`, so a child whose `customer_members.person_id` is NULL — ordinary,
+ * the column is nullable and a child can exist with no `persons` row at all — displayed as "Unnamed
+ * child" in EVERY consumer of this projection, while `customer_members.display_name` sat NOT NULL
+ * one column away in a row this function was already fetching.
+ *
+ * That is the defect class `durableChildSubjectModel` already records: keying a child on `person_id`
+ * silently reframes the question as "this person" and loses every child who is not one.
+ */
+async function resolveMemberIdentities(
     supabase: SupabaseClient,
     orgId: string,
     memberIds: string[]
-): Promise<Map<string, string>> {
-    const map = new Map<string, string>();
+): Promise<{ personIdByMember: Map<string, string>; nameByMember: Map<string, string> }> {
+    const personIdByMember = new Map<string, string>();
+    const nameByMember = new Map<string, string>();
     const distinct = [...new Set(memberIds.filter(Boolean))];
-    if (distinct.length === 0) return map;
+    if (distinct.length === 0) return { personIdByMember, nameByMember };
     const { data } = await supabase
         .from("customer_members")
-        .select("id, person_id")
+        .select("id, person_id, display_name, first_name, last_name")
         .eq("org_id", orgId)
         .in("id", distinct);
-    for (const row of (data ?? []) as { id: string; person_id: string | null }[]) {
-        if (row.person_id) map.set(row.id, row.person_id);
+    for (const row of (data ?? []) as {
+        id: string;
+        person_id: string | null;
+        display_name: string | null;
+        first_name: string | null;
+        last_name: string | null;
+    }[]) {
+        if (row.person_id) personIdByMember.set(row.id, row.person_id);
+        // `display_name` is NOT NULL in the schema, so the name parts are a defence against
+        // whitespace rather than a genuine second source.
+        const name =
+            (row.display_name ?? "").trim()
+            || [row.first_name ?? "", row.last_name ?? ""].map((s) => s.trim()).filter(Boolean).join(" ");
+        if (name) nameByMember.set(row.id, name);
     }
-    return map;
+    return { personIdByMember, nameByMember };
 }
 
 async function resolveLocationLabels(
@@ -372,7 +399,8 @@ export async function buildAssignmentRosterReadModel(
                 .filter((id): id is string => Boolean(id))
         ),
     ];
-    const memberPersonIds = await resolveMemberPersonIds(supabase, orgId, memberIds);
+    const { personIdByMember: memberPersonIds, nameByMember: memberNames } =
+        await resolveMemberIdentities(supabase, orgId, memberIds);
     const staffPersonIds = [
         ...new Set(
             rows
@@ -442,7 +470,20 @@ export async function buildAssignmentRosterReadModel(
                     : null) ?? agreementByMember.get(memberId) ?? null;
             subjectKey = agreement ? agreementSubjectKey(agreement.id) : memberSubjectKey(memberId);
             personId = agreement?.person_id ?? memberPersonIds.get(memberId) ?? null;
-            subjectName = (personId && nameByPersonId.get(personId)) || "Unnamed child";
+            /*
+             * THE MEMBER ROW FIRST — it is the child's canonical identity, and it is the one source
+             * that is always there. The person name remains as enrichment for a member row whose own
+             * name is somehow blank; "Unnamed child" now means the data is genuinely wrong rather
+             * than merely un-linked.
+             *
+             * Precedence matches `composeDurableChildSubject`, deliberately: the membership is what
+             * an operator maintains for a child, so the two surfaces cannot name the same child
+             * differently.
+             */
+            subjectName =
+                memberNames.get(memberId)
+                || (personId && nameByPersonId.get(personId))
+                || "Unnamed child";
             customerMemberId = memberId;
             enrollmentAgreementId = agreement?.id ?? null;
         }

@@ -32,6 +32,7 @@ import {
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
 import { buildAssignmentRosterBulkHandlers } from "@/lib/adminV2/scheduling/assignmentRosterBulkHandlers";
+import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import RecordsStaffSection from "@/components/adminV2/records/RecordsStaffSection";
 import RecordsChildrenSection from "@/components/adminV2/records/RecordsChildrenSection";
@@ -46,7 +47,6 @@ import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
-    dispatchAdminV2OpenSchedulingModal,
     ROSTER_WORKSPACE_DEEPLINK_KEY,
     type OpenRosterModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
@@ -66,6 +66,13 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
 
     const [sites, setSites] = useState<RosterSite[] | null>(null);
     const [siteId, setSiteId] = useState<string>("");
+    /**
+     * The org's configured Assignment Categories, for the Assignments lens' Bulk Assign picker.
+     *
+     * ORG-scoped, not site-scoped, so it is loaded once rather than per site — which is also why it
+     * is not folded into the site effect below. Authored in Studio; this is only a read.
+     */
+    const [assignmentTypes, setAssignmentTypes] = useState<OrgAssignmentTypeOption[] | null>(null);
     /**
      * Once the operator picks a site, no late bootstrap response may move them.
      * The same hazard the day roster had: a slower response arriving after a
@@ -112,6 +119,29 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         },
         [focusRecord, onClose],
     );
+
+    /*
+     * Assignment Categories — loaded ONCE, on first need.
+     *
+     * Deferred until the Assignments lens is actually opened, for the same reason the people
+     * bootstrap is deferred: Roster opens on the operating day, and paying for the org's category
+     * catalogue on every Roster open would make the common case slower to serve a lens the operator
+     * may never select.
+     *
+     * The endpoint is `?view=assignment_types` — the same one the Assignments workspace calls, which
+     * resolves `loadOrgAssignmentTypes`. There is no Roster-specific list and no second config owner.
+     */
+    useEffect(() => {
+        if (lens !== "assignments" || assignmentTypes) return;
+        let alive = true;
+        void schedApi("?view=assignment_types").then((r) => {
+            if (!alive) return;
+            setAssignmentTypes((r?.assignmentTypes as OrgAssignmentTypeOption[]) ?? []);
+        });
+        return () => {
+            alive = false;
+        };
+    }, [lens, assignmentTypes]);
 
     // ── Durable population bootstrap — loaded once, on first need ────────────
     //
@@ -320,10 +350,11 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         () =>
             buildAssignmentRosterBulkHandlers({
                 subjects: subjects ?? [],
-                // Bulk ASSIGN's type picker needs the org's assignment types. Roster does not load
-                // them, so that one mode is unavailable here rather than offered against an empty
-                // list — an empty picker reads as "this org has no types", which is a claim.
-                assignmentTypes: [],
+                // The org's configured Assignment Categories, from `?view=assignment_types` — the
+                // SAME endpoint and the same `loadOrgAssignmentTypes` owner the Assignments
+                // workspace reads. Studio remains where they are authored; this is a read of that
+                // configuration, never a Roster-local list.
+                assignmentTypes: assignmentTypes ?? [],
                 siteId,
                 onRefresh: reloadAssignments,
                 // Single-subject create belongs to the child's own record, not to a second modal in
@@ -338,7 +369,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                     });
                 },
             }),
-        [subjects, siteId, reloadAssignments, focusRecord],
+        [subjects, assignmentTypes, siteId, reloadAssignments, focusRecord],
     );
 
     /**
@@ -452,19 +483,31 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                             setSection("attendance");
                         }}
                         onManageAssignment={(subject) => {
-                            // Roster writes nothing. The authoritative surface is
-                            // Assignments, in its own workspace, opened at this subject.
-                            dispatchAdminV2OpenSchedulingModal({
-                                mode: "work",
-                                workView: "assignments",
-                                siteLocationId: siteId || null,
-                                focusSubject:
-                                    subject.subjectType === "staff"
-                                        ? { personId: subject.personId }
-                                        : {
-                                              customerMemberId: subject.customerMemberId,
-                                              enrollmentAgreementId: subject.enrollmentAgreementId,
-                                          },
+                            /*
+                             * ── THE HANDOFF THAT LEFT OPERATIONS, REMOVED ──
+                             *
+                             * This dispatched `adminv2:open-scheduling-modal` and took the operator
+                             * to a different workspace to change a commitment — costing them the
+                             * lens, the site, the date and the filter they had set up, and making
+                             * "Assignments" a destination again.
+                             *
+                             * It now opens the subject's own durable record OVER Roster, with the
+                             * Schedule context preferred, so the canonical `scheduling` card is what
+                             * they land on. Same six RegisteredActions, same card; the difference is
+                             * that Roster stays mounted underneath and is still there on close.
+                             *
+                             * `focusRecord`, NOT `focusRecordAndYield`: yielding closes this
+                             * workspace, which is right when the destination REPLACES Roster and
+                             * exactly wrong here, where the record opens on top of it.
+                             */
+                            const isStaff = subject.subjectType === "staff";
+                            const entityId = isStaff ? subject.personId : subject.customerMemberId;
+                            if (!entityId) return;
+                            void focusRecord({
+                                entity_type: isStaff ? "persons" : "customer_members",
+                                entity_id: entityId,
+                                intent: "durable_record",
+                                preferred_context_key: "schedule",
                             });
                         }}
                         onOpenChild={(child) => {
