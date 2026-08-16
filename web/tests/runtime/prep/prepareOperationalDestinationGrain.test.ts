@@ -2,7 +2,9 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-const prewarm = vi.fn(async () => {});
+// Declares the id parameter so the mock's signature matches the call on the next line. Vitest does
+// not typecheck, so an untyped 0-arg mock passes here and only fails under `typecheck:tests`.
+const prewarm = vi.fn(async (_id: string) => {});
 vi.mock("@/lib/presentation/runtime/useRecordWorkRuntime", () => ({
     prewarmRecordWork: (id: string) => prewarm(id),
 }));

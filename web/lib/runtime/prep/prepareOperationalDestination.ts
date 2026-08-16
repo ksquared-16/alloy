@@ -52,15 +52,16 @@ export async function prepareOperationalDestination(
          * destination has no opportunity VM to warm — the click prepares live, which is the
          * documented best-effort contract. Absent subject type keeps the previous behaviour.
          */
-        const subjectType = snapshot?.subjectGrain?.subjectType;
-        const warmsOpportunityVm = subjectType == null || subjectType === "opportunity";
-        if (
-            snapshot &&
-            snapshot.terminal === "operational" &&
-            snapshot.recordOfAttention?.id &&
-            warmsOpportunityVm
-        ) {
-            await prewarmRecordWork(String(snapshot.recordOfAttention.id));
+        if (snapshot && snapshot.terminal === "operational" && snapshot.recordOfAttention?.id) {
+            // `subjectGrain` belongs to the OPERATIONAL arm of the answer union — the contextual
+            // arm names its subject as `subject.subjectType` and carries no `subjectGrain` — so
+            // the read has to sit inside this narrow. Prewarm only ever applied to the operational
+            // arm, so nothing about the behaviour changes.
+            const subjectType = snapshot.subjectGrain?.subjectType;
+            const warmsOpportunityVm = subjectType == null || subjectType === "opportunity";
+            if (warmsOpportunityVm) {
+                await prewarmRecordWork(String(snapshot.recordOfAttention.id));
+            }
         }
     } catch {
         /* preparation is best-effort — a miss just means the click prepares live */
