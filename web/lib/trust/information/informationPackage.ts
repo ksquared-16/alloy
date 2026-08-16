@@ -311,6 +311,14 @@ export type EligibleReasoningInputV1 = {
     readonly transformations: readonly TransformationRecord[];
     readonly text_minimizations: readonly TextMinimizationRecord[];
     /**
+     * D-101. Classes the policy admitted WITHOUT deterministic minimization.
+     *
+     * Travels with the governed input so the evidence survives the whole path: the runtime forwards
+     * this artifact rather than re-running privacy, so a field that stopped here would be missing
+     * from exactly the packages that needed it most.
+     */
+    readonly acknowledged_unminimized_classes: readonly TextMinimizationClass[];
+    /**
      * What known-participant redaction removed. Empty when the policy required
      * no participant redaction; a present record with `replaced_count: 0` means
      * the pass ran and the roster matched nothing, which is a different fact.
@@ -400,6 +408,7 @@ export function buildEligibleReasoningInput(input: {
             pii_mode: context.pii_mode,
             transformations: context.transformations,
             text_minimizations: context.text_minimizations,
+            acknowledged_unminimized_classes: context.acknowledged_unminimized_classes,
             participant_redactions: context.participant_redactions,
             redaction_steps: context.redaction_steps,
             provenance: input.package.provenance,

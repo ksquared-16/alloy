@@ -147,7 +147,7 @@ describe("P14-NC-2 — treating threshold zero as calibrated trust would be caug
         // The real evaluator never reads confidence; its vector is unchanged by it.
         const common = {
             decisionClass: cls,
-            context: { transformed: {}, knowledge: [], redaction_steps: [], classes_present: [], pii_mode: "strict" as const, transformations: [], text_minimizations: [], participant_redactions: [] },
+            context: { transformed: {}, knowledge: [], redaction_steps: [], classes_present: [], pii_mode: "strict" as const, transformations: [], text_minimizations: [], participant_redactions: [], acknowledged_unminimized_classes: [] },
             validation: { policy_key: "p", policy_version: "1", results: [], passed: true },
             strategyKind: "deterministic",
         };

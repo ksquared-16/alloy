@@ -62,6 +62,28 @@ export type PrivacyPolicyV1 = {
      * see {@link redactKnownParticipants}.
      */
     readonly requires_participant_redaction?: boolean;
+    /**
+     * D-101. Classes this policy KNOWS it cannot deterministically minimize, declared so the
+     * evidence can say so truthfully.
+     *
+     * ## Why this is not a bypass
+     *
+     * `required_text_minimizers` refuses an unsupported class, and that stays exactly as it was —
+     * a policy claiming a transformation the platform cannot perform is still refused. This field
+     * makes a different, narrower statement: *this policy admits text that may contain these
+     * classes, no transformation is claimed for them, and the evidence records that.*
+     *
+     * The distinction matters because the alternative is worse. A policy that simply OMITS
+     * `required_text_minimizers` also admits the text unminimized — but records nothing, so the
+     * package looks clean and the gap is invisible. Declaring it makes the omission auditable.
+     *
+     * Opt-in per policy, like every other field here. Absent means absent: no existing policy
+     * changes behaviour, and arbitrary application prose keeps refusing under its own policy.
+     *
+     * A class may never appear in BOTH this list and `required_text_minimizers` — that would claim
+     * a transformation and disclaim it at once, and the transform refuses.
+     */
+    readonly acknowledged_unminimized_classes?: readonly TextMinimizationClass[];
 };
 
 /**
@@ -122,6 +144,18 @@ export type ReasoningContextV1 = {
      * Empty when the policy requires no participant redaction.
      */
     readonly participant_redactions: readonly ParticipantRedactionRecord[];
+    /**
+     * D-101. Classes the policy admitted WITHOUT deterministic minimization, declared up front.
+     *
+     * The honest counterpart to {@link text_minimizations}. That list says what was removed; this
+     * one says what the platform cannot remove and did not pretend to. A reader can tell an admitted
+     * class from a transformed one without reading the engine, which is the whole point — evidence
+     * that only reported successes would make an unminimized admission look identical to a clean one.
+     *
+     * Empty for every policy that does not declare it, which is every policy but the participant
+     * conversation one.
+     */
+    readonly acknowledged_unminimized_classes: readonly TextMinimizationClass[];
 };
 
 export type KnowledgeReference = {
@@ -132,6 +166,7 @@ export type KnowledgeReference = {
 
 export type PrivacyTransformRefusal =
     | "PRIVACY_PROHIBITED_CLASS"
+    | "PRIVACY_CONTRADICTORY_MINIMIZATION_DECLARATION"
     | PrivacyTransformRefusalCode
     | TextMinimizationRefusalCode
     | ParticipantRedactionRefusalCode;
@@ -190,6 +225,23 @@ export function transformForReasoning(input: {
             ok: false,
             refusal_code: minimizerCheck.refusal_code,
             detail: `Privacy policy ${input.policy.key}: ${minimizerCheck.detail}`,
+            transformations: [],
+        };
+    }
+
+    // D-101. A class cannot be both transformed and acknowledged-untransformed. Allowing it would
+    // let evidence claim a redaction ran and disclaim it in the same package, which is worse than
+    // either statement alone.
+    const acknowledgedUnminimized = input.policy.acknowledged_unminimized_classes ?? [];
+    const contradictory = acknowledgedUnminimized.filter((c) => requestedMinimizers.includes(c));
+    if (contradictory.length > 0) {
+        return {
+            ok: false,
+            refusal_code: "PRIVACY_CONTRADICTORY_MINIMIZATION_DECLARATION",
+            detail:
+                `Privacy policy ${input.policy.key} declares class(es) ${[...new Set(contradictory)].sort().join(", ")} ` +
+                `as both required_text_minimizers and acknowledged_unminimized_classes. A policy may claim a ` +
+                `transformation or disclaim it, never both.`,
             transformations: [],
         };
     }
@@ -355,6 +407,9 @@ export function transformForReasoning(input: {
             transformed: redacted,
             knowledge: input.knowledge,
             redaction_steps: steps,
+            // D-101. Declared, sorted, and reported whether or not any text was present — the
+            // policy's admission is a property of the POLICY, not of which message arrived.
+            acknowledged_unminimized_classes: [...acknowledgedUnminimized].sort(),
             classes_present: input.classification.classes_present,
             pii_mode: input.policy.pii_mode,
             transformations,

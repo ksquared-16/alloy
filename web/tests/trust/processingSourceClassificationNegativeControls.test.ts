@@ -275,6 +275,7 @@ describe("NC-5 — provider identity added to the recommendation would be caught
                 transformations: [],
                 text_minimizations: [],
                 participant_redactions: [],
+                acknowledged_unminimized_classes: [],
             },
             nowIso: FIXED_NOW,
         }) as { ok: true; proposal: { recommendation: Record<string, unknown> } };
