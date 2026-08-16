@@ -26,6 +26,11 @@
 # pinned revision, satisfaction from Forms-owned submission evidence only, and a requirement
 # the packet fails to realize kept in the denominator rather than silently dropped.
 #
+# Slice 2.4 added `enrollmentInformationNeeds` — the ask-once invariant. One canonical fact
+# appearing on fifteen required Form controls is ONE participant need, deduped by scope +
+# subject + `packetFieldPlan`'s canonical key, with D-99 session confirmation bound to the
+# value it was made about.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -66,4 +71,5 @@ jobs:
             tests/lifecycle/enrollmentObjectiveSession.test.ts \
             tests/lifecycle/publishedStageRequirementsSelfContainment.test.ts \
             tests/lifecycle/processInstanceRevisionPin.test.ts \
-            tests/lifecycle/enrollmentParticipantProgress.test.ts
+            tests/lifecycle/enrollmentParticipantProgress.test.ts \
+            tests/lifecycle/enrollmentInformationNeeds.test.ts
