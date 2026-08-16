@@ -178,6 +178,10 @@ export function buildSubjectScheduleContext(
         label: "Schedule",
         detail: schedule.pattern_label,
         secondary: locationLabel,
+        // The site the commitment is AT. Every canonical scheduling read is site-scoped, and this
+        // row is where the site is stated — so the Schedule card composes against the same site the
+        // chip describes, instead of re-deriving one and eventually disagreeing with it.
+        site_location_id: schedule.site_location_id ?? null,
     };
 }
 

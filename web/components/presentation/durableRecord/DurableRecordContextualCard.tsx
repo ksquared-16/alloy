@@ -36,8 +36,14 @@
  * a degraded one.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
+import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
+import { deriveChildSchedulingCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildSchedulingCard";
+import { buildDurableChildOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
+import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import type { DurableRecordContextOption } from "@/lib/context/durableRecordContextOptions";
 import {
     contextualCardConfigurationFingerprint,
@@ -90,10 +96,16 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
 export default function DurableRecordContextualCard({
     option,
     subject,
+    schedulingProjection,
     onSaved,
 }: {
     option: DurableRecordContextOption;
     subject: DurableChildSubject;
+    /**
+     * Canonical assignment facts for a `canonical_operational` context, composed server-side. Null
+     * when the subject holds no commitment — which is a state, not a failure.
+     */
+    schedulingProjection?: SchedulingProjectionFirstPaint | null;
     /** Fired after a successful write so the list underneath can refresh this row. */
     onSaved?: () => void;
 }) {
@@ -103,6 +115,54 @@ export default function DurableRecordContextualCard({
     const [editing, setEditing] = useState<string | null>(null);
     const [draft, setDraft] = useState("");
     const [saveError, setSaveError] = useState<string | null>(null);
+
+    /** This child's canonical commitment facts, keyed as the card expects to find them. */
+    const projection = useMemo(
+        () => schedulingProjection?.byMemberId?.[subject.memberId] ?? null,
+        [schedulingProjection, subject.memberId],
+    );
+
+    /*
+     * The context the canonical card reads, built by the SAME producer the durable panel uses — so
+     * the card sees one child, one grain and one truth bag, exactly as it would on a case.
+     *
+     * `_scheduling_projection` is attached here rather than in the composer because it belongs to
+     * the SELECTED CONTEXT, not to the child's identity: a child record with no Schedule context
+     * selected has no business carrying assignment facts in its truth.
+     *
+     * `canMutate` is true because this card's whole purpose is invoking canonical assignment
+     * actions; each of those re-authorizes on execution, as it does from the case panel.
+     */
+    const operationalContext = useMemo(() => {
+        const base = buildDurableChildOperationalContext(subject, true, null);
+        return {
+            ...base,
+            truth: {
+                ...subject.truth,
+                _scheduling_projection: schedulingProjection ?? null,
+                /*
+                 * THE SUBJECT, AS THE COLLECTION'S ONE MEMBER.
+                 *
+                 * The card iterates a child collection because on a case it renders a family's
+                 * roster. Here the roster has exactly one member and it is the record itself — the
+                 * same degenerate-case reasoning `personEmploymentSignal` already uses for a durable
+                 * person's Employment.
+                 *
+                 * Under `_durable_child_rows`, never `_inquiry_children`: there is no inquiry, and
+                 * borrowing the case's key would tell the next reader that there is one.
+                 */
+                [DURABLE_CHILD_ROWS_KEY]: [
+                    {
+                        id: subject.memberId,
+                        customer_member_id: subject.memberId,
+                        person_id: subject.personId,
+                        display_name: subject.label,
+                        dob: subject.dateOfBirth,
+                    },
+                ],
+            },
+        };
+    }, [subject, schedulingProjection]);
 
     const commit = useCallback(
         async (fieldKey: string, value: string) => {
@@ -120,7 +180,7 @@ export default function DurableRecordContextualCard({
     );
 
     useEffect(() => {
-        if (!option.resolvesConfiguredSurface) {
+        if (option.surface !== "published_composition") {
             setResolved({ doc: null, layoutId: null, version: null });
             return;
         }
@@ -140,10 +200,44 @@ export default function DurableRecordContextualCard({
         option.workViewId,
         option.stageKey,
         option.statusKey,
-        option.resolvesConfiguredSurface,
+        option.surface,
     ]);
 
-    if (!option.resolvesConfiguredSurface) {
+    /*
+     * ── A DURABLE OPERATIONAL RELATIONSHIP RENDERS THE PLATFORM'S OWN CARD ──
+     *
+     * Not a published composition — there is no business process behind a commitment, and inventing
+     * one so a card could resolve is exactly what this branch exists to avoid. The `scheduling` card
+     * is the platform's canonical surface for assignments: it already renders committed and proposed
+     * rows with their effective dating, and it already executes all six canonical assignment
+     * capabilities. It is mounted UNCHANGED here, against the same `context.truth` contract the case
+     * panel gives it, so the two hosts cannot drift into two assignment experiences.
+     *
+     * The registry is the gate (`cardAppliesToGrain`), not this component: a card reaches the child
+     * grain because someone declared that it can.
+     */
+    if (option.surface === "canonical_operational") {
+        if (!cardAppliesToGrain("scheduling", "child")) return null;
+        return (
+            <div
+                className="rounded-lg border border-alloy-stone/22 bg-white"
+                data-contextual-card="operational"
+                data-contextual-card-context={option.key}
+                data-contextual-card-kind={option.kind}
+                data-contextual-card-canonical-card="scheduling"
+                data-contextual-card-site={option.siteLocationId ?? ""}
+                // Committed and proposed counted SEPARATELY. A child whose only assignment is
+                // proposed has zero commitments and is not unassigned, and one number could not say
+                // both — which is the distinction `commitmentKind` exists to preserve.
+                data-contextual-card-commitments={String(projection?.current?.assignments?.length ?? 0)}
+                data-contextual-card-proposed={String(projection?.proposed?.assignments?.length ?? 0)}
+            >
+                <SchedulingCard model={deriveChildSchedulingCard()} context={operationalContext} />
+            </div>
+        );
+    }
+
+    if (option.surface === "none") {
         return (
             <div
                 className="rounded-lg border border-alloy-stone/22 bg-white p-3"
@@ -155,9 +249,9 @@ export default function DurableRecordContextualCard({
                     {option.detail ?? "No detail recorded."}
                 </p>
                 <p className="mt-2 max-w-[60ch] text-[11.5px] text-alloy-midnight/45">
-                    This context has no configured card. It is not part of a business process, so
-                    there is no published composition to show — the record&rsquo;s own information is
-                    above.
+                    This context has no card yet. It is not part of a business process, so there is
+                    no published composition to show, and the platform has no canonical card for it —
+                    the record&rsquo;s own information is above.
                 </p>
             </div>
         );

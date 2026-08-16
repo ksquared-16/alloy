@@ -36,6 +36,7 @@ import {
     type DurableRecordContextOption,
 } from "@/lib/context/durableRecordContextOptions";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import {
     decodeDurableRecordModel,
     type DurableRecordModelWire,
@@ -52,6 +53,11 @@ type LoadState =
           contexts: DurableRecordContextOption[];
           /** The child, when this record is one — the contextual card composes against it. */
           childSubject: DurableChildSubject | null;
+          /**
+           * Canonical assignment facts for a `canonical_operational` context, composed with the
+           * record so the Schedule card reveals WITH the panel rather than opening its own gate.
+           */
+          schedulingProjection: SchedulingProjectionFirstPaint | null;
       }
     | { status: "not_found" }
     | { status: "error"; message: string };
@@ -95,6 +101,7 @@ export default function DurableRecordSurface({
                       model?: DurableRecordModelWire;
                       contexts?: DurableRecordContextOption[];
                       childSubject?: DurableChildSubject | null;
+                      schedulingProjection?: SchedulingProjectionFirstPaint | null;
                       message?: string;
                   }
                 | null;
@@ -108,6 +115,8 @@ export default function DurableRecordSurface({
                 model: decodeDurableRecordModel(json.model),
                 contexts,
                 childSubject: (json.childSubject ?? null) as DurableChildSubject | null,
+                schedulingProjection:
+                    (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
             });
             // The ENTRY's preference decides the initial context, filtered to ones the record
             // actually holds. With no usable preference the projection's own first option wins —
@@ -191,15 +200,19 @@ export default function DurableRecordSurface({
                 />
 
                 {/*
-                  * The CONFIGURED contextual card, when a context is selected and the record is a
-                  * child. It resolves the tenant's published composition for that context's
-                  * addressing tuple — the same document the native operational panel resolves.
+                  * The contextual card for the selected context, when the record is a child.
+                  *
+                  * It renders one of three things, and the OPTION says which: the tenant's PUBLISHED
+                  * composition for a process context (the same document the native operational panel
+                  * resolves), the platform's CANONICAL card for a durable operational relationship
+                  * such as Schedule, or an honest statement that this context has neither yet.
                   */}
                 {selectedContext && state.childSubject ? (
                     <div className="mt-3">
                         <DurableRecordContextualCard
                             option={selectedContext}
                             subject={state.childSubject}
+                            schedulingProjection={state.schedulingProjection}
                             onSaved={onRecordChanged}
                         />
                     </div>

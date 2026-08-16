@@ -17,15 +17,49 @@
  * host passes to `FocusPanelSummaryDocProvider`, which is what makes "same subject + same context ⇒
  * same effective configured card" a mechanical consequence rather than an aspiration.
  *
- * ── AN OPTION SAYS WHETHER IT CAN RESOLVE A CONFIGURED SURFACE ──
+ * ── AN OPTION SAYS WHICH KIND OF SURFACE IT RESOLVES, AND THERE ARE THREE ──
  *
- * `resolvesConfiguredSurface` is false for a context with no business process — Schedule/Assignment
- * and Employment today. That is not a defect to paper over: those contexts have no published
- * composition to resolve, so the host falls back to identity information and SAYS SO. Inventing a
- * card for them would be the "approximate a Child card" failure the architecture forbids.
+ * This was a boolean, and the boolean was hiding a real distinction. It asked "can this option
+ * resolve a PUBLISHED composition?", so everything that could not — Schedule/Assignment, Employment
+ * — collapsed into one answer: nothing to show. Those are not the same kind of nothing.
+ *
+ *   published_composition  a business process context. The tenant's published Focus Panel doc,
+ *                          resolved against the addressing tuple. The configured Child card.
+ *   canonical_operational  a DURABLE OPERATIONAL RELATIONSHIP — schedule / placement. There is no
+ *                          business process and there must not be one: an assignment is a
+ *                          commitment, not a stage in a lifecycle. The platform already owns a
+ *                          canonical card for it (`scheduling`), so the surface IS that card,
+ *                          composed from canonical assignment truth.
+ *   none                   genuinely nothing to render yet. Employment sits here until it has a card.
+ *
+ * The middle value is the point of this change. Making Schedule resolve a published composition
+ * would have meant inventing a `schedule` business process key — a process in the ledger that no
+ * runtime ever advances, existing purely so a card could resolve. That is the "approximate a Child
+ * card" failure wearing a new costume. A durable operational relationship gets the card the platform
+ * already has for it, or it gets nothing.
  */
 
 import type { SubjectContext, SubjectContextKind } from "@/lib/context/subjectContextTypes";
+
+/**
+ * What kind of surface an option resolves. See the module docblock — these are not degrees of one
+ * thing, they are different questions with different owners.
+ */
+export type DurableContextSurface = "published_composition" | "canonical_operational" | "none";
+
+/**
+ * The context kinds that are DURABLE OPERATIONAL RELATIONSHIPS with a canonical platform card.
+ *
+ * `schedule` and `placement` are one relationship read two ways — the child's live commitment — and
+ * the `scheduling` card renders both. Declared as data rather than as a condition so that adding a
+ * relationship is a list entry, and so the whole set is stated in one place.
+ *
+ * `employment` is deliberately ABSENT. It is equally durable and equally operational, and it has no
+ * card that composes it AS A COMMITMENT (the Employment card is a person-grain identity card).
+ * Listing it here without one would produce a region that asserts a relationship and then shows
+ * nothing about it — which is worse than the honest `none` it gets instead.
+ */
+const CANONICAL_OPERATIONAL_KINDS: readonly SubjectContextKind[] = ["schedule", "placement"];
 
 export type DurableRecordContextOption = {
     /** Stable selection key. Unique within a subject; safe in a URL. */
@@ -47,12 +81,17 @@ export type DurableRecordContextOption = {
     /** The case whose record the configured composition is about, when there is one. */
     hostEntityId: string | null;
     /**
-     * Whether a published contextual composition can be resolved for this option.
-     *
-     * False is an honest answer, not a gap to fill locally: the host renders the record's identity
-     * and states that this context has no configured surface.
+     * The site a `canonical_operational` option is scoped to. Null for every other surface — a
+     * published composition is addressed by process, not by site.
      */
-    resolvesConfiguredSurface: boolean;
+    siteLocationId: string | null;
+    /**
+     * WHICH KIND of surface this option resolves. See {@link DurableContextSurface}.
+     *
+     * `none` is an honest answer, not a gap to fill locally: the host renders the record's identity
+     * and states that this context has no surface yet.
+     */
+    surface: DurableContextSurface;
 };
 
 /**
@@ -74,13 +113,21 @@ export function durableRecordContextOptions(
                 kind: context.kind,
                 label: context.label,
                 detail: context.detail ?? null,
-                // No business process ⇒ nothing to resolve a published composition against.
+                /*
+                 * NO BUSINESS PROCESS, AND NONE IS INVENTED. The addressing tuple stays null for a
+                 * durable operational relationship — that is what it MEANS for the relationship to
+                 * be durable. A canonical card composes it from assignment truth instead; nothing
+                 * is resolved against a published doc, so there is no tuple to carry.
+                 */
                 businessProcessKey: null,
                 workViewId: null,
                 stageKey: null,
                 statusKey: null,
                 hostEntityId: context.destination_entity_id ?? null,
-                resolvesConfiguredSurface: false,
+                siteLocationId: context.site_location_id ?? null,
+                surface: CANONICAL_OPERATIONAL_KINDS.includes(context.kind)
+                    ? "canonical_operational"
+                    : "none",
             });
             continue;
         }
@@ -100,7 +147,8 @@ export function durableRecordContextOptions(
                     stageKey: context.stage_key ?? null,
                     statusKey: null,
                     hostEntityId: membership.host_entity_id ?? context.destination_entity_id ?? null,
-                    resolvesConfiguredSurface: true,
+                    siteLocationId: null,
+                    surface: "published_composition",
                 });
             }
             continue;
@@ -120,7 +168,8 @@ export function durableRecordContextOptions(
             stageKey: context.stage_key ?? null,
             statusKey: null,
             hostEntityId: context.destination_entity_id ?? null,
-            resolvesConfiguredSurface: true,
+            siteLocationId: null,
+            surface: "published_composition",
         });
     }
 

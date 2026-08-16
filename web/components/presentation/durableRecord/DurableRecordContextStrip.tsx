@@ -46,11 +46,19 @@ export default function DurableRecordContextStrip({
                         onClick={() => onSelect(option.key)}
                         data-durable-record-context={option.key}
                         data-durable-record-context-active={active ? "true" : "false"}
-                        // Whether this context can resolve a configured surface is exposed rather
-                        // than hidden: it is why the body below differs between them.
+                        /*
+                         * WHICH SURFACE this context resolves is exposed rather than hidden: it is
+                         * why the body below differs between them.
+                         *
+                         * `-configured` keeps its exact previous meaning — "a published composition
+                         * resolves here" — because certification and operators already read it that
+                         * way, and a durable operational context is NOT configured in that sense: no
+                         * tenant published it. `-surface` carries the finer three-way answer beside it.
+                         */
                         data-durable-record-context-configured={
-                            option.resolvesConfiguredSurface ? "true" : "false"
+                            option.surface === "published_composition" ? "true" : "false"
                         }
+                        data-durable-record-context-surface={option.surface}
                         className={[
                             "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
                             active

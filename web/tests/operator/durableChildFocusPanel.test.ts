@@ -323,7 +323,32 @@ describe("the grain contract holds across all three subjects", () => {
         // It mentions children; it answers "who are this family's children", which is a different
         // question and would make a child's record a list containing itself.
         expect(cardAppliesToGrain("children", "child")).toBe(false);
-        expect(cardKeysForGrain("child")).toEqual(["child_identity"]);
+        expect(cardKeysForGrain("child")).toEqual(["child_identity", "scheduling"]);
+    });
+
+    it("APPLICABLE to a grain is not the same as PLACED in that grain's composition", () => {
+        /*
+         * `scheduling` is declared for `child` — a commitment is a fact about the child, and the
+         * card executes every canonical assignment action against a `customer_members.id`. But it is
+         * NOT in the child's default composition, and that gap is deliberate rather than an
+         * oversight to reconcile.
+         *
+         * The grid composes a record's IDENTITY. Assignments are a durable operational RELATIONSHIP,
+         * and the operator reaches them by selecting the Schedule context — so the card renders in
+         * the contextual region. Placing it in the grid as well would show one child two assignment
+         * surfaces on one screen.
+         *
+         * The two concerns are separate authorities and they are supposed to be able to differ:
+         * `cardAppliesToGrain` answers "may this card compose for this subject", and the composition
+         * answers "what does this surface lay out by default".
+         */
+        expect(cardAppliesToGrain("scheduling", "child")).toBe(true);
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).not.toContain(
+            "scheduling",
+        );
+        // The composition is what the grid lays out, so this is the assertion that keeps the card
+        // off the identity surface. `deriveChildFocusPanelCards` building only `child_identity` is
+        // covered by the composition scenarios above.
     });
 
     it("each grain gets its own default composition", () => {

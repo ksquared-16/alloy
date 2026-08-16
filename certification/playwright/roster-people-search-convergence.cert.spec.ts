@@ -355,6 +355,72 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
     });
 });
 
+// ═══ O — the Schedule context renders the CANONICAL assignment card ══════════════════════════
+//
+// `Operations → Roster → Lennon → Schedule` must show canonical commitment truth and offer the
+// canonical assignment actions — without a `schedule` business process existing anywhere.
+test.describe("O — Roster → Lennon → Schedule", () => {
+    test("a durable operational context renders the platform's own assignment card", async ({ page }) => {
+        await openRoster(page, "children");
+        await (await findChild(page, "Lennon", LENNON)).click();
+        await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
+
+        /*
+         * THE THREE-WAY SURFACE, ASSERTED ON THE STRIP.
+         *
+         * Enrollment resolves a published composition; Schedule resolves the platform's canonical
+         * card. Both are real surfaces and they are NOT the same kind — which is the whole reason
+         * the boolean became a ternary. `-configured` keeps its old meaning ("a tenant published
+         * this"), so Schedule is deliberately `false` there and NOT unconfigured.
+         */
+        const enrollment = page.locator('[data-durable-record-context^="enrollment"]');
+        await expect(enrollment).toHaveAttribute(
+            "data-durable-record-context-surface",
+            "published_composition",
+        );
+        const schedule = page.locator('[data-durable-record-context^="schedule"]');
+        await expect(schedule, "Lennon holds no Schedule context").toHaveCount(1);
+        await expect(schedule).toHaveAttribute(
+            "data-durable-record-context-surface",
+            "canonical_operational",
+        );
+        await expect(schedule).toHaveAttribute("data-durable-record-context-configured", "false");
+
+        await schedule.click();
+
+        const card = page.locator('[data-contextual-card="operational"]');
+        await expect(card, "the Schedule context composed no card").toBeVisible({ timeout: SETTLE });
+        // It is the PLATFORM'S card, named — not a second assignments view built for this host.
+        await expect(card).toHaveAttribute("data-contextual-card-canonical-card", "scheduling");
+        await expect(card).toHaveAttribute("data-contextual-card-kind", "schedule");
+        // …composed against the site the COMMITMENT states, not one this host chose.
+        await expect(card).toHaveAttribute("data-contextual-card-site", /.+/);
+
+        /*
+         * POSITIVE CONTROL: the canonical card actually mounted and rendered THIS CHILD.
+         *
+         * The first run of this scenario passed every attribute above while the card rendered "No
+         * children to assign" — it mounted, and it had no rows, because the collection it iterates
+         * was empty. Attributes on the wrapper cannot see that; the child's name can.
+         */
+        const canonical = page.locator('[data-universal-card-key="scheduling"]');
+        await expect(canonical).toHaveCount(1);
+        await expect(canonical).toContainText("Lennon");
+        // …and the commitment is described at the right grain: committed and proposed are counted
+        // separately, so a proposed-only child does not read as unassigned.
+        const committed = Number((await card.getAttribute("data-contextual-card-commitments")) ?? "-1");
+        const proposed = Number((await card.getAttribute("data-contextual-card-proposed")) ?? "-1");
+        expect(committed).toBeGreaterThanOrEqual(0);
+        expect(committed + proposed, "the fixture's assignment reached the card").toBeGreaterThan(0);
+
+        // NO FABRICATED PROCESS. A durable operational context addresses no business process, and
+        // this is the assertion that keeps someone from making one to simplify resolution.
+        await expect(card).not.toHaveAttribute("data-contextual-card-business-process", /.+/);
+
+        await page.screenshot({ path: path.join(SHOTS, "O-schedule-context.png"), fullPage: true });
+    });
+});
+
 // ═══ N — the operator's actual EDIT journey, end to end ══════════════════════════════════════
 //
 // Open → choose a context → edit a canonical field → save → the card refreshes → close → land back

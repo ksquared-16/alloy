@@ -8,6 +8,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { composeDurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurablePersonSubject";
 import { composeDurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildSubject";
 import { composeDurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableHouseholdSubject";
+import { composeDurableChildScheduling } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildScheduling";
 import {
     focusPanelWorkModeModelFromDurableChild,
     focusPanelWorkModeModelFromDurableHousehold,
@@ -160,6 +161,42 @@ export async function GET(request: NextRequest) {
             now: new Date(),
             operationalHost,
         });
+        const contexts = await contextOptionsFor({
+            supabase,
+            orgId: ctx.orgId,
+            dimensions,
+            grain: "child",
+            id: subjectId,
+            personId: composed.subject.personId,
+        });
+
+        /*
+         * THE SCHEDULE CONTEXT'S FACTS, composed here rather than fetched by the card.
+         *
+         * Same first-paint doctrine the opportunity host follows: the Scheduling card reveals WITH
+         * the record instead of opening a loading gate on mount. It is composed only when the
+         * subject actually HAS that context — the option carries the site, so no site means no
+         * commitment and there is nothing to compose.
+         *
+         * A failure here costs the Schedule card, never the record. The other contexts and the
+         * child's identity are unaffected, which is the same rule context enumeration follows above.
+         */
+        const scheduleContext = contexts.find(
+            (option) => option.surface === "canonical_operational" && option.siteLocationId,
+        );
+        const schedulingProjection = scheduleContext?.siteLocationId
+            ? await composeDurableChildScheduling({
+                  supabase,
+                  orgId: ctx.orgId,
+                  memberId: subjectId,
+                  subjectName: composed.subject.label,
+                  siteLocationId: scheduleContext.siteLocationId,
+              }).catch((e) => {
+                  console.error("[durable-record] scheduling composition failed", e);
+                  return null;
+              })
+            : null;
+
         return NextResponse.json({
             ok: true,
             model: encodeDurableRecordModel(model),
@@ -167,14 +204,8 @@ export async function GET(request: NextRequest) {
             // values without a second round trip. It is the same object the model was built from —
             // not a re-read, which could disagree with the panel rendered beside it.
             childSubject: composed.subject,
-            contexts: await contextOptionsFor({
-                supabase,
-                orgId: ctx.orgId,
-                dimensions,
-                grain: "child",
-                id: subjectId,
-                personId: composed.subject.personId,
-            }),
+            contexts,
+            schedulingProjection,
         });
     } catch (e) {
         console.error("[durable-record]", e);

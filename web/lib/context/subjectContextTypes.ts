@@ -150,4 +150,16 @@ export type SubjectContext = {
      * complete answer: the subject still exposes its entity contexts.
      */
     operational_memberships?: SubjectOperationalMembershipRef[] | null;
+    /**
+     * THE SITE this context is operationally scoped to — `schedule` / `placement` only.
+     *
+     * A commitment is always at a site, and every canonical scheduling read is site-scoped:
+     * operating days, patterns, rooms, and the projection itself. It is carried here because it is a
+     * FACT OF THIS CONTEXT, taken from the same `schedule_assignments` row the context is built
+     * from. Re-deriving it downstream would be a second answer to "which site is this child
+     * scheduled at", and the context chip and the card would eventually disagree about it.
+     *
+     * Null on every other kind. A process context's site, where it has one, belongs to its case.
+     */
+    site_location_id?: string | null;
 };

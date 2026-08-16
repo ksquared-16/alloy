@@ -47,12 +47,17 @@ export type SchedulingProjectionFirstPaint = {
 };
 
 /**
- * Resolve the opportunity site's label + scheduling config ONCE (shared across all
- * children). The scheduling config (operating days, schedule types) lives on
+ * Resolve a site's label + scheduling config ONCE (shared across all children on the
+ * opportunity). The scheduling config (operating days, schedule types) lives on
  * `locations.metadata.location_scheduling_v1` and has no runtime API, so we read it
  * here and hand it to the editor via first-paint.
+ *
+ * EXPORTED because the durable child host composes the same bag for one child with no
+ * opportunity in sight (`composeDurableChildScheduling`). The site is a site either way, and two
+ * readers of `location_scheduling_v1` would be two answers to "what days does this site operate" —
+ * which is exactly the kind of duplication the convergence audit forbids.
  */
-async function resolveSiteConfig(
+export async function resolveSiteConfig(
     supabase: SupabaseClient,
     orgId: string,
     siteLocationId: string,

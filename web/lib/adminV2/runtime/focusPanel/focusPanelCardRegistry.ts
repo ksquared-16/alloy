@@ -121,8 +121,20 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_mission", title: "Current Mission" },
     { key: "timeline", title: "Timeline" },
     { key: "notes", title: "Notes" },
-    // Truth-owning card with no reserved-cell title (renders its own): declared for the lifecycle concern.
-    { key: "scheduling", ownsOperationalTruth: true },
+    /**
+     * Truth-owning card with no reserved-cell title (it renders its own).
+     *
+     * Declared for `child` as well as the case, because a commitment is a fact about the CHILD. The
+     * card was always child-shaped inside — it renders per-child assignment rows and executes every
+     * canonical assignment action against a `customer_members.id` — and the case grain was only ever
+     * the surface that happened to host it.
+     *
+     * This is the declaration that lets `Operations → Roster → Lennon → Schedule` render the SAME
+     * card the case panel renders, rather than a second assignments view. It reaches the child grain
+     * as a durable OPERATIONAL context (`canonical_operational`), not through a published
+     * composition — there is no `schedule` business process and there must not be one.
+     */
+    { key: "scheduling", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
 ];
 
 const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(
