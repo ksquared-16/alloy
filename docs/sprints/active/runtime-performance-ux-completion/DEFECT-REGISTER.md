@@ -16,6 +16,83 @@ supersedes: []
 > failure. No dev millisecond anywhere in this register is offered as a product performance number.
 
 **Status:** Active working register for the Slot 5 sprint. **Evidence, not doctrine.**
+
+---
+
+## THE AUTHORITATIVE OUTSTANDING-WORK LEDGER (16 Aug 2026)
+
+One trustworthy list. Everything previously open appears here with a current disposition; anything
+not listed is closed and stays closed.
+
+**ID hygiene first.** The register reused two IDs for different defects. Disambiguated below and
+used consistently from here on:
+
+| Was | Now | Defect |
+|---|---|---|
+| R-010 (a) | **R-010** | Workspace → Work Unit render loop — CLOSED `a73c12a97` |
+| R-010 (b) | **R-016** | Household `address_line2` read-back |
+| R-010 (c) | **R-017** | Waitlist child-grain Focus Panel renders no cards |
+| R-011 (a) | **R-011** | Warm tour-schedule re-fetch — CLOSED `ae0d9c4e7` |
+| R-011 (b) | **R-018** | Sibling work-view prewarm warms empty views |
+
+| ID | Issue | Current evidence | Actual owner | Slot 5 fix now? | Required action | Closure proof |
+|---|---|---|---|:--:|---|---|
+| **R-005** | Tour slot panel re-fetches what the warm cache holds | Panel re-fetches 2 of 3 cached endpoints; reschedule mode adds `exclude_booking_id` so the cache key does not cover the variant | Runtime (Slot 5) | **No — timing phase** | Fold into the cache only after a with/without switch-latency A/B; the saving is latency, and latency is unmeasurable here | ENVIRONMENT / TIMING PHASE |
+| **R-008** | Stage navigation marks the editor dirty | Reproduced: clean at boot, `unsaved` from the first stage SWITCH, 0 durable requests, never clears | Runtime (Slot 5) | **DONE** | Fixed — dirty compared a normalized draft against an un-normalized saved plan | **CLOSED** `5e6e4bb65` |
+| **R-009** | Activation save rebuilds the whole bundle | `action_definition_id` defaulted to `null` and `action_placement_ids` to `[]` on EVERY call — renaming the lifecycle cleared both | Runtime (Slot 5) | **DONE** | Fixed — endpoint now merges present keys; client sends identity + changes only | **CLOSED** `d3129889a` |
+| **R-012** | Inbox comms datasets refetch, count GROWS per open | 27 requests first open; `templates` ×3 → ×4 on reopen. Growth is not StrictMode (that is a flat ×2) | **Communications (Slot 3)** | No | Hand off with evidence; do not refactor a parallel-owned product | EXTERNAL OWNER |
+| **R-013** | Attendance has no launcher on Firefly | Sidebar exposes Workspace, Inbox, Processing, Work Items only | **Config / module enablement** | No | Enable the module for this tenant; nothing to certify until then | EXTERNAL OWNER |
+| **R-014** | Command destination with no way back | Shared `activePanelAction`; `closeActionPanel` wired to nothing | Runtime (Slot 5) | **DONE** | Shared return grammar in the host | **CLOSED** `5efa5db64` |
+| **R-015** | One Escape collapsed three layers | menu 1→0, editing 2→0, elevated true→false on one keypress | Runtime (Slot 5) | **DONE** | Shared yield predicate + editor marker + focus restore | **CLOSED** `3fa2cdabb` |
+| **R-016** | Household `address_line2` read-back | **Re-diagnosed — not a data-model problem.** `field_values` on entity_type `person` IS canonical; the write was correct. One read composition (`buildAddressLine`) picked line 1, city, state and postal and never picked line 2 | Runtime (Slot 5) | **DONE** | Fixed — line 2 now participates in the composed address | **CLOSED** `625108322` |
+| **R-017** | Waitlist child-grain renders no cards | **Re-diagnosed — the earlier "unauthored, groups: [], blocks: []" reading was wrong.** See below | **Tenant config (Surfaces)** | No | Publish a work-view-scoped variant | **NEEDS KELLY — TENANT CONFIG PUBLISH** |
+| **R-018** | Sibling prewarm warms empty views | 5 sibling answers fetched; 4 returned `terminal: "empty"` | Runtime (Slot 5) | **No — timing phase** | Prewarm is idle-gated; removing it costs switch latency. Same A/B as D-3 | ENVIRONMENT / TIMING PHASE |
+| **D-2** | `queue-row-layout` ×2 per Work Unit entry | Both from `fetchWorkUnitSurfaceConfigBundle`, sequential so in-flight coalescing cannot collapse them | Runtime (Slot 5) | **No — timing phase** | Consult `putWorkUnitSurfaceConfigCache` before the runtime config effect fetches; verify against warm-path latency | ENVIRONMENT / TIMING PHASE |
+| **D-3** | `provisioning-answer` ×5 on a work-view switch | 4× documented speculative sibling prewarm + the real one, landing during a switch | Runtime (Slot 5) | **No — timing phase** | Same experiment as R-018; historical note says the prewarm bought 46 ms, so it must be measured both ways | ENVIRONMENT / TIMING PHASE |
+| **D-4** | `family-workspace` ×2, `metrics/resolve` ×2 | Seen in one sweep; **never re-checked with StrictMode off** | Runtime (Slot 5) | **No** | Re-observe under M-1 before treating as real; an on-mount ×2 is an artifact until proven otherwise | **OBSOLETE / SUPERSEDED** pending an M-1 re-check in the timing phase |
+| **Cold/warm timing** | No production performance budget exists | `next build` exit 144 SIGTERM; swap 10.8G/12.3G, 3 competing dev servers | Runtime (Slot 5) | **No — tonight** | Qualify host → build → baseline → fix dominant phase → remeasure | ENVIRONMENT / TIMING PHASE |
+
+**Nothing else is open.** R-001/002/003/004/006/007/010/011 are closed with commits recorded below;
+the input-platform programme is closed; the select-primitive limitations L-1…L-4 are deferred by
+rule with the reasons stated.
+
+---
+
+## R-017 · Waitlist child-grain composition — the real diagnosis
+
+The earlier entry said "`groups: []`, `blocks: []` — genuinely unpublished tenant configuration".
+**That reading was wrong**: it inspected top-level `doc.groups` / `doc.blocks`, which this document
+shape never populates. The content lives under `doc.metadata`.
+
+| Question | Answer |
+|---|---|
+| Which canonical Surface should it use? | `focus_panel_summary` — and it already resolves it |
+| What does the configuration actually contain? | `nestedSurfaces.children_surface` **13 groups / 43 field placements**, `household_surface` **10 groups / 55 placements**, plus a `focusPanelLayout` composing 4 cards: `current_work`, `billing_preview`, `children`, `household` |
+| Why is version 131 "empty"? | **It is not empty.** Measuring the wrong path made it look empty |
+| Genuinely unpublished tenant config? | **No** — it is published and fully authored |
+| Is the runtime resolving an obsolete drawer-era surface? | The doc carries `surface: "drawer"`, but the SAME doc drives the working family panel, so the tag is convergence debt, **not the cause** |
+| Wrong surface reference on the Work View / stage? | **No** — verified byte-identical |
+| A newer composition not being selected? | **No** — one doc, and it is selected |
+| Cards filtered by grain/applicability rather than absent config? | **Yes. This is the mechanism.** |
+| Does the config UI expose the right place to fix it? | Yes — the endpoint already passes `workViewId` / `stageKey` / `businessProcessKey` into `resolveSurfaceVariant`, so a scoped variant is authorable through canonical Surfaces |
+| Would fixing Firefly need a one-way publish? | **Yes** — hence not done |
+
+**The decisive evidence.** Requesting the summary for the Waitlist child-grain view
+(`new_work_view_4`) and for the family All view (`new_work_view_6`) returns the **same published
+record** — id `34eccd11-1f19-4ecc-9274-56cebe94611c`, version 131, and the documents compare
+**byte-identical**. Firefly has published only org-global (wildcard) variants, and
+`resolveSurfaceVariant` documents that behaviour: "all wildcards → highest version wins".
+
+So both grains receive one family-grain composition. Its four cards are family/case concepts, and
+the runtime declines to render them against a child subject — `cards=0`, one nested cell resolving
+not-applicable. **The runtime is behaving correctly**; it is refusing to present a family
+composition for a child.
+
+**Proposed change — NEEDS KELLY — TENANT CONFIG PUBLISH.** Publish a **work-view-scoped**
+`focus_panel_summary` variant for `new_work_view_4` / stage `waitlist` whose `focusPanelLayout`
+composes child-applicable cards, leaving the existing org-global family variant untouched as the
+wildcard fallback. No platform change is required — scoping is already supported. Publishing
+replaces the projection and is a one-way door, so it is not done without approval.
 Canonical behaviour lives in its owner doc; this file records observed defects, their root
 owner, and what proved them.
 
