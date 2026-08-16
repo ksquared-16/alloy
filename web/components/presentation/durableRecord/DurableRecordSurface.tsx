@@ -53,6 +53,8 @@ type LoadState =
           contexts: DurableRecordContextOption[];
           /** The child, when this record is one — the contextual card composes against it. */
           childSubject: DurableChildSubject | null;
+          /** The person, when this record is one. Carries only identity; commitments ride below. */
+          personSubject: { personId: string; label: string } | null;
           /**
            * Canonical assignment facts for a `canonical_operational` context, composed with the
            * record so the Schedule card reveals WITH the panel rather than opening its own gate.
@@ -101,6 +103,7 @@ export default function DurableRecordSurface({
                       model?: DurableRecordModelWire;
                       contexts?: DurableRecordContextOption[];
                       childSubject?: DurableChildSubject | null;
+                      personSubject?: { personId?: string; label?: string } | null;
                       schedulingProjection?: SchedulingProjectionFirstPaint | null;
                       message?: string;
                   }
@@ -110,11 +113,16 @@ export default function DurableRecordSurface({
                 return;
             }
             const contexts = (json.contexts ?? []) as DurableRecordContextOption[];
+            const person = json.personSubject ?? null;
             setState({
                 status: "ready",
                 model: decodeDurableRecordModel(json.model),
                 contexts,
                 childSubject: (json.childSubject ?? null) as DurableChildSubject | null,
+                personSubject:
+                    person?.personId
+                        ? { personId: person.personId, label: person.label?.trim() || "Staff member" }
+                        : null,
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
             });
@@ -207,11 +215,22 @@ export default function DurableRecordSurface({
                   * resolves), the platform's CANONICAL card for a durable operational relationship
                   * such as Schedule, or an honest statement that this context has neither yet.
                   */}
-                {selectedContext && state.childSubject ? (
+                {selectedContext && (state.childSubject || state.personSubject) ? (
                     <div className="mt-3">
                         <DurableRecordContextualCard
                             option={selectedContext}
-                            subject={state.childSubject}
+                            // The record is one subject or the other, decided by which the composer
+                            // returned. Child is checked first only because it is the older path;
+                            // the route never returns both.
+                            subject={
+                                state.childSubject
+                                    ? { kind: "child", child: state.childSubject }
+                                    : {
+                                          kind: "staff",
+                                          personId: state.personSubject!.personId,
+                                          label: state.personSubject!.label,
+                                      }
+                            }
                             schedulingProjection={state.schedulingProjection}
                             onSaved={onRecordChanged}
                         />

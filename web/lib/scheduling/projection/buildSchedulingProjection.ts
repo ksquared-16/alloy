@@ -700,6 +700,143 @@ export async function loadSchedulingProjectionForChild(
     return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
 }
 
+export type LoadStaffSchedulingProjectionParams = {
+    /** `persons.id` — a staff subject's identity of record. */
+    personId: string;
+    siteLocationId: string;
+    todayYmd: string;
+    computedAt: string;
+    subjectName: string;
+    /** Pre-resolved site label, as for the child loader. Absent → resolved locally. */
+    siteName?: string | null;
+};
+
+/**
+ * Thin I/O: load canonical rows for one STAFF subject + delegate to the SAME pure stitch.
+ *
+ * ── WHAT IT DELIBERATELY DOES NOT DO ──
+ *
+ * No enrollment agreement, no `child_placements`, and no participation draft. Those are not
+ * omissions to be filled in later — they are child concepts:
+ *
+ *   · an agreement is the commercial instrument behind a child's commitment, and a staff member's
+ *     commitment rests on EMPLOYMENT, which `assertStaffPersonEligibleForAssignment` already
+ *     answers at write time;
+ *   · a placement is a child's room occupancy record;
+ *   · a proposed draft lives on an enrollment participation, and `resolveSubjectSite` returns
+ *     `commitmentKind: "committed"` for every staff subject — a staff assignment is never proposed,
+ *     so there is no draft state to project.
+ *
+ * Reading them anyway would return empty results that read as "this staff member has no agreement",
+ * which is a claim about a relationship that does not exist rather than an absence of data.
+ *
+ * Everything that IS shared — bucketing, effective dating, room/program label resolution, pattern
+ * and type stitching — runs through `buildChildScheduling` unchanged, because that logic was never
+ * about children. If a staff schedule ever bucketed differently from a child's, the operating day
+ * would be assembled from two disagreeing definitions of "current".
+ */
+export async function loadSchedulingProjectionForStaff(
+    supabase: SupabaseClient,
+    orgId: string,
+    params: LoadStaffSchedulingProjectionParams
+): Promise<SchedulingProjection> {
+    const { personId, siteLocationId, todayYmd, computedAt } = params;
+
+    const siteName =
+        params.siteName !== undefined ? params.siteName : await resolveLocationLabel(supabase, orgId, siteLocationId);
+
+    const roomLabelCache = new Map<string, string | null>();
+    const programLabelCache = new Map<string, string | null>();
+    async function roomLabel(id: string | null): Promise<string | null> {
+        if (!id) return null;
+        if (!roomLabelCache.has(id)) roomLabelCache.set(id, await resolveLocationLabel(supabase, orgId, id));
+        return roomLabelCache.get(id) ?? null;
+    }
+    async function programLabel(id: string | null): Promise<string | null> {
+        if (!id) return null;
+        if (!programLabelCache.has(id)) programLabelCache.set(id, await resolveProgramLabel(supabase, orgId, id));
+        return programLabelCache.get(id) ?? null;
+    }
+
+    // `subject_type` is carried EXPLICITLY alongside the person filter. A child with a linked person
+    // would otherwise match this query, and the result would be a plausible wrong schedule.
+    const assignmentRows = await listScheduleAssignments(supabase, orgId, {
+        subjectPersonId: personId,
+        subjectType: "staff",
+    });
+
+    const patterns = await loadPatterns(
+        supabase,
+        orgId,
+        assignmentRows.map((a) => a.schedule_pattern_id)
+    );
+    const assignmentTypes = await loadAssignmentTypes(
+        supabase,
+        orgId,
+        assignmentRows
+            .map((a) => a.operational_assignment_type_id)
+            .filter((id): id is string => Boolean(id))
+    );
+
+    const assignments: AssignmentInput[] = [];
+    for (const row of assignmentRows) {
+        const pattern = patterns.get(row.schedule_pattern_id) ?? null;
+        const hours = readPatternDefaultHours(
+            (pattern?.metadata ?? null) as Record<string, unknown> | null
+        );
+        // Assignment-owned room only. There is no placement fallback for staff, because a placement
+        // is a child's occupancy record — a staff row states its own room or it has none.
+        const roomId = row.room_location_id ?? null;
+        const programId = row.program_category_id ?? null;
+        const room: AssignmentRoom = {
+            id: roomId,
+            name: await roomLabel(roomId),
+            program: await programLabel(programId),
+        };
+        const type =
+            (row.operational_assignment_type_id
+                ? assignmentTypes.get(row.operational_assignment_type_id)
+                : null) ?? EMPTY_TYPE;
+        assignments.push({
+            row,
+            weekdays: pattern?.weekdays ?? [],
+            patternResolved: pattern != null,
+            patternLabel: pattern?.label?.trim() || null,
+            arriveTime: hours?.arrive ?? null,
+            departTime: hours?.depart ?? null,
+            room,
+            assignmentType: type,
+        });
+    }
+
+    const subject: ChildSchedulingSubject = {
+        // The staff subject's identity of record is the PERSON. Carrying a member id here — even a
+        // null one — would invite a consumer to address a staff write by the wrong column.
+        id: personId,
+        name: params.subjectName,
+        // A staff member's program is the one their assignment names, if any. Never inferred from a
+        // placement: they do not have one.
+        program: await programLabel(assignmentRows.find((r) => r.program_category_id)?.program_category_id ?? null),
+        ageGroup: null,
+        siteId: siteLocationId,
+        siteName,
+    };
+
+    const staffScheduling: ChildScheduling = {
+        ...buildChildScheduling({
+            subject,
+            agreementStatus: null,
+            enrollmentAgreementId: null,
+            assignments,
+            asOf: todayYmd,
+        }),
+        subjectType: "staff",
+    };
+
+    const projection = buildSchedulingProjectionForChild(staffScheduling, todayYmd, computedAt);
+    return { ...projection, subject: { type: "staff", id: personId, name: params.subjectName } };
+}
+
 /** Re-export for callers that only have an agreement id. */
 export async function agreementStatusById(
     supabase: SupabaseClient,

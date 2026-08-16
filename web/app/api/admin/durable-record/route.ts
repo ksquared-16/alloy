@@ -9,6 +9,7 @@ import { composeDurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/du
 import { composeDurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildSubject";
 import { composeDurableHouseholdSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableHouseholdSubject";
 import { composeDurableChildScheduling } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableChildScheduling";
+import { composeDurableStaffScheduling } from "@/lib/adminV2/runtime/focusPanel/durableSubject/composeDurableStaffScheduling";
 import {
     focusPanelWorkModeModelFromDurableChild,
     focusPanelWorkModeModelFromDurableHousehold,
@@ -112,17 +113,51 @@ export async function GET(request: NextRequest) {
                 canMutate: false,
                 operationalHost,
             });
+            const personContexts = await contextOptionsFor({
+                supabase,
+                orgId: ctx.orgId,
+                dimensions,
+                grain: "person",
+                id: subjectId,
+                personId: subjectId,
+            });
+
+            /*
+             * THE STAFF MEMBER'S SCHEDULE CONTEXT, composed exactly as the child's is below.
+             *
+             * Same rule, same shape, same failure policy: composed only when the subject actually
+             * HAS the context (the option carries the site, so no site means no commitment), and a
+             * failure here costs the Schedule card rather than the record.
+             *
+             * A staff member reaches this through `loadSubjectContexts`, which reads
+             * `schedule_assignments` by `subject_person_id` + `subject_type='staff'` — the same
+             * shared table the child path reads by member. One table, one context projection, two
+             * subjects.
+             */
+            const staffScheduleContext = personContexts.find(
+                (option) => option.surface === "canonical_operational" && option.siteLocationId,
+            );
+            const staffSchedulingProjection = staffScheduleContext?.siteLocationId
+                ? await composeDurableStaffScheduling({
+                      supabase,
+                      orgId: ctx.orgId,
+                      personId: subjectId,
+                      subjectName: composed.subject.label,
+                      siteLocationId: staffScheduleContext.siteLocationId,
+                  }).catch((e) => {
+                      console.error("[durable-record] staff scheduling composition failed", e);
+                      return null;
+                  })
+                : null;
+
             return NextResponse.json({
                 ok: true,
                 model: encodeDurableRecordModel(model),
-                contexts: await contextOptionsFor({
-                    supabase,
-                    orgId: ctx.orgId,
-                    dimensions,
-                    grain: "person",
-                    id: subjectId,
-                    personId: subjectId,
-                }),
+                contexts: personContexts,
+                // The composed person, carried so the contextual card can name its subject without a
+                // second round trip — the same object the model was built from.
+                personSubject: composed.subject,
+                schedulingProjection: staffSchedulingProjection,
             });
         }
 

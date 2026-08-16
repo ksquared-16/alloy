@@ -155,6 +155,17 @@ export type SchedulingCalculationMeta = {
 
 export type ChildScheduling = {
     child: ChildSchedulingSubject;
+    /**
+     * Which kind of subject `child` above describes. Absent means `child`, so every existing
+     * producer and consumer keeps its current meaning without a migration.
+     *
+     * The field name `child` records the first subject this carrier served, not a constraint:
+     * `schedule_assignments` was extended in place so staff and children share one scheduling
+     * engine, and the projection follows the table. Renaming the carrier across every consumer
+     * would be churn unrelated to reading a staff commitment, so the discriminator is added instead
+     * — and consumers that must tell the difference read THIS, never the shape of the id.
+     */
+    subjectType?: "child" | "staff";
     status: ChildSchedulingStatus;
     /** Present when an operational enrollment agreement exists for this child+site. */
     enrollmentAgreementId?: string | null;
@@ -173,7 +184,7 @@ export type ChildScheduling = {
 };
 
 export type SchedulingProjectionSubject = {
-    type: "household" | "child";
+    type: "household" | "child" | "staff";
     id: string;
     name: string;
 };

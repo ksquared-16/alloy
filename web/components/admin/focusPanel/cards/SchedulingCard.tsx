@@ -40,6 +40,13 @@ import {
     programCategoryIdForRoom,
     resolveProgramOnRoomChange,
 } from "@/lib/operationalAssignments/assignmentProgramRoomResolution";
+import {
+    assignmentActionBinding,
+    assignmentAnchorPayload,
+    assignmentSubjectApplicability,
+} from "@/lib/operationalAssignments/assignmentSubjectBinding";
+import type { OperationalAssignmentSubject } from "@/lib/operationalAssignments/operationalAssignmentService";
+import { readDurableStaffSchedulingSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
@@ -115,7 +122,7 @@ type ProjView = {
     assignments: ProjAssignment[];
 };
 type ChildStatus = "scheduled" | "proposed" | "needs-placement" | "upcoming-only" | "ended";
-type ChildProj = {
+type SubjectProj = {
     child: { id: string; name: string; program: string | null; siteId: string | null; siteName: string | null };
     status: ChildStatus;
     enrollmentAgreementId?: string | null;
@@ -149,7 +156,27 @@ type PlacementOption = {
     programCategoryId?: string | null;
 };
 type Pattern = { id: string; label: string; weekdays: number[]; scheduleTypeKey: string; defaultHours: DailyHours | null; defaultOpenEnded: boolean };
-type SchedChild = { id: string; personId: string | null; name: string; imageUrl: string | null; dobAge: string | null };
+/**
+ * ONE SUBJECT this card can render and act on.
+ *
+ * `kind` is carried explicitly rather than inferred from which id is populated. A child WITH a
+ * linked person populates both, so inferring would produce a plausible wrong answer instead of an
+ * error — the same reason `loadSubjectContexts` and `listScheduleAssignments` carry `subject_type`.
+ *
+ * `id` is the subject's identity of record and the ONE id used to key the projection, address the
+ * action and label the DOM: `customer_members.id` for a child, `persons.id` for staff.
+ *
+ * `dobAge` is child enrichment. It is null for staff — not because staff have no age, but because a
+ * staff member's age is not an operational fact this card is entitled to state.
+ */
+type SchedSubject = {
+    kind: "child" | "staff";
+    id: string;
+    personId: string | null;
+    name: string;
+    imageUrl: string | null;
+    dobAge: string | null;
+};
 
 const WEEKDAYS = [
     { i: 1, l: "M" },
@@ -205,7 +232,7 @@ async function executeAssignmentAction(body: Record<string, unknown>): Promise<v
 function publishScheduleProjectionToFocusPanel(args: {
     opportunityId: string | null;
     memberId: string;
-    fresh: ChildProj | null;
+    fresh: SubjectProj | null;
     truth: Record<string, unknown>;
     clearInquiryScheduleDraft: boolean;
 }): void {
@@ -258,21 +285,45 @@ function publishScheduleProjectionToFocusPanel(args: {
     });
 }
 
-/** Shared create payload — proposed when no agreement, committed when agreement exists. */
-function childAssignmentCreatePayload(
-    child: SchedChild,
-    proj: ChildProj | null,
+/**
+ * THE CANONICAL SUBJECT this card is currently acting on.
+ *
+ * Derived, never stored: the subject's identity comes from the collection row and its commitment
+ * facts come from the projection, so there is no third place where "who is this about" could drift
+ * from what the card is rendering.
+ *
+ * A child resolves to an agreement when it has one (committed) and to member+site when it does not
+ * (proposed). A staff member resolves to person+site and nothing else — there is no agreement to
+ * carry, and `resolveSubjectSite` returns `commitmentKind: "committed"` for them regardless.
+ */
+function operationalSubjectFor(
+    subject: SchedSubject,
+    proj: SubjectProj | null
+): OperationalAssignmentSubject {
+    const siteId = (proj?.child.siteId ?? "").trim() || null;
+    if (subject.kind === "staff") {
+        return { type: "staff", personId: subject.id, siteLocationId: siteId ?? "" };
+    }
+    return {
+        type: "child",
+        enrollmentAgreementId: (proj?.enrollmentAgreementId ?? "").trim() || null,
+        customerMemberId: subject.id,
+        siteLocationId: siteId,
+    };
+}
+
+/**
+ * Shared create payload — the canonical anchor for whichever subject, plus the caller's fields.
+ *
+ * This replaced nine inlined `subject_type: "child"` literals. The child output is pinned
+ * byte-for-byte by `assignmentSubjectBinding.test.ts`, because the risk in generalizing was never
+ * that staff would fail loudly — it was that child would change quietly.
+ */
+function assignmentCreatePayload(
+    subject: OperationalAssignmentSubject,
     extra: Record<string, unknown>
 ): Record<string, unknown> {
-    const agreementId = (proj?.enrollmentAgreementId ?? "").trim();
-    const siteId = (proj?.child.siteId ?? "").trim();
-    return {
-        subject_type: "child",
-        enrollment_agreement_id: agreementId || undefined,
-        customer_member_id: child.id,
-        site_location_id: siteId || undefined,
-        ...extra,
-    };
+    return { ...assignmentAnchorPayload(subject), ...extra };
 }
 
 // ── Derived schedule state (business meaning leads) ──────────────────────────
@@ -287,7 +338,7 @@ const TONE_BG: Record<StateTone, string> = {
 };
 
 /** State treatment from the projection's already-resolved status — never recomputed here. */
-function deriveScheduleState(p: ChildProj | null): ScheduleState {
+function deriveScheduleState(p: SubjectProj | null): ScheduleState {
     if (!p) return { label: "—", tone: "muted", sub: null };
     switch (p.status) {
         case "scheduled":
@@ -306,26 +357,32 @@ function deriveScheduleState(p: ChildProj | null): ScheduleState {
 }
 
 /** Compact status for the summary rows. */
-function summaryStatus(p: ChildProj): { label: string; color: string } {
+function summaryStatus(p: SubjectProj): { label: string; color: string } {
     const s = deriveScheduleState(p);
     if (p.status === "proposed" && p.proposed?.effectiveFrom) return { label: "Proposed", color: TONE_COLOR[s.tone] };
     return { label: s.label, color: TONE_COLOR[s.tone] };
 }
-function existingView(p: ChildProj | null): ProjView | null {
+function existingView(p: SubjectProj | null): ProjView | null {
     return p?.current ?? p?.proposed ?? null;
 }
 
-/** Plural list: committed + proposed planning rows (proposed never replaces committed). */
-function listAssignments(p: ChildProj | null): ProjAssignment[] {
-    const committed = p?.current?.assignments ?? [];
-    const proposed = p?.proposed?.assignments ?? [];
-    if (committed.length === 0) return proposed.filter((a) => a.subjectType !== "staff");
-    if (proposed.length === 0) return committed.filter((a) => a.subjectType !== "staff");
+/**
+ * Plural list: committed + proposed planning rows (proposed never replaces committed).
+ *
+ * The rows are filtered to the SUBJECT'S OWN KIND. That filter used to be the constant
+ * `subjectType !== "staff"` — correct while every subject was a child, and the exact line that made
+ * a staff member's assignments invisible on a card that was otherwise ready to render them. It is
+ * still a filter and not a removal, because `schedule_assignments` is shared: a projection that ever
+ * carried both kinds must not show one subject the other's commitments.
+ */
+function listAssignments(p: SubjectProj | null, kind: "child" | "staff"): ProjAssignment[] {
+    const mine = (a: ProjAssignment) => (a.subjectType ?? "child") === kind;
+    const committed = (p?.current?.assignments ?? []).filter(mine);
+    const proposed = (p?.proposed?.assignments ?? []).filter(mine);
+    if (committed.length === 0) return proposed;
+    if (proposed.length === 0) return committed;
     const seen = new Set(committed.map((a) => a.id));
-    return [
-        ...committed.filter((a) => a.subjectType !== "staff"),
-        ...proposed.filter((a) => a.subjectType !== "staff" && !seen.has(a.id)),
-    ];
+    return [...committed, ...proposed.filter((a) => !seen.has(a.id))];
 }
 
 /**
@@ -338,17 +395,43 @@ function listAssignments(p: ChildProj | null): ProjAssignment[] {
  */
 export default function SchedulingCard({ model, context, receded = false, coordination, composerPreview, onMutated }: Props) {
     const evidence = useMemo(() => buildChildrenCardEvidence(context), [context]);
-    const children: SchedChild[] = useMemo(
-        () =>
-            evidence.children.map((c) => ({
-                id: c.customerMemberId ?? c.id,
-                personId: c.personId ?? null,
-                name: c.name,
-                imageUrl: c.imageUrl ?? null,
-                dobAge: c.dobAge ?? null,
-            })),
-        [evidence]
-    );
+    /*
+     * THE SUBJECTS THIS CARD IS ABOUT — a family's children, or one staff member.
+     *
+     * A host declares which by writing ONE of the two truth keys, so there is no precedence to get
+     * wrong and no state in which both apply. Staff is checked first only because it is the
+     * narrower claim; a host that holds a staff member never writes child rows.
+     *
+     * Jane is NOT mapped through the child evidence with her enrollment fields nulled. That would
+     * render identically today and would tell every later reader — a roster count, an age policy, a
+     * tuition projection — that a staff member is a child.
+     */
+    const subjects: SchedSubject[] = useMemo(() => {
+        const staff = readDurableStaffSchedulingSubject(context.truth as Record<string, unknown>);
+        if (staff) {
+            return [
+                {
+                    kind: "staff" as const,
+                    id: staff.personId,
+                    personId: staff.personId,
+                    name: staff.name,
+                    imageUrl: staff.imageUrl,
+                    // Not "unknown" — inapplicable. A staff member's age is not an operational fact
+                    // this card is entitled to state.
+                    dobAge: null,
+                },
+            ];
+        }
+        return evidence.children.map((c) => ({
+            kind: "child" as const,
+            id: c.customerMemberId ?? c.id,
+            personId: c.personId ?? null,
+            name: c.name,
+            imageUrl: c.imageUrl ?? null,
+            dobAge: c.dobAge ?? null,
+        }));
+    }, [evidence, context.truth]);
+    const subjectKind: "child" | "staff" = subjects[0]?.kind ?? "child";
     const opportunityId = resolveFocusPanelMutationOpportunityId({
         subjectId: context.subject.id,
         grain: context.grain,
@@ -360,7 +443,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     // a child's Detail instantly — no per-child fetch, no self-managed loading gate.
     const prebuilt = useMemo(() => {
         const bag = (context.truth as Record<string, unknown>)?._scheduling_projection;
-        const byMember = (bag && typeof bag === "object" ? (bag as { byMemberId?: Record<string, ChildProj> }).byMemberId : null) ?? {};
+        const byMember = (bag && typeof bag === "object" ? (bag as { byMemberId?: Record<string, SubjectProj> }).byMemberId : null) ?? {};
         return byMember;
     }, [context.truth]);
 
@@ -392,16 +475,31 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     }, [context.truth]);
 
     // Local overrides after a save (the prebuilt context does not re-compose on its own).
-    const [overrides, setOverrides] = useState<Record<string, ChildProj>>({});
+    const [overrides, setOverrides] = useState<Record<string, SubjectProj>>({});
     const projById = useMemo(() => ({ ...prebuilt, ...overrides }), [prebuilt, overrides]);
 
-    const reloadChild = useCallback(
-        async (id: string, name: string): Promise<ChildProj | null> => {
-            const r = await schedApi(
-                `?view=projection&customer_member_id=${encodeURIComponent(id)}&subject_name=${encodeURIComponent(name)}${opportunityId ? `&opportunity_id=${encodeURIComponent(opportunityId)}` : ""}`
-            );
-            const p = (r.projection?.children?.[0] as ChildProj | undefined) ?? null;
-            if (p) setOverrides((prev) => ({ ...prev, [id]: p }));
+    /**
+     * Re-read ONE subject's canonical commitment facts after a write.
+     *
+     * The identifier column is the subject's own — `customer_member_id` for a child,
+     * `subject_person_id` for staff — and the site is sent explicitly for staff because a staff
+     * member has no opportunity for the route to resolve one from. The response shape is the same
+     * projection either way, so the override map and every consumer below stay subject-agnostic.
+     */
+    const reloadSubject = useCallback(
+        async (subject: SchedSubject, siteLocationId: string | null): Promise<SubjectProj | null> => {
+            const params = new URLSearchParams({ view: "projection", subject_name: subject.name });
+            if (subject.kind === "staff") {
+                params.set("subject_type", "staff");
+                params.set("subject_person_id", subject.id);
+                if (siteLocationId) params.set("site_location_id", siteLocationId);
+            } else {
+                params.set("customer_member_id", subject.id);
+                if (opportunityId) params.set("opportunity_id", opportunityId);
+            }
+            const r = await schedApi(`?${params.toString()}`);
+            const p = (r.projection?.children?.[0] as SubjectProj | undefined) ?? null;
+            if (p) setOverrides((prev) => ({ ...prev, [subject.id]: p }));
             return p;
         },
         [opportunityId]
@@ -409,10 +507,23 @@ export default function SchedulingCard({ model, context, receded = false, coordi
 
     const [activeChildId, setActiveChildId] = useState<string | null>(null);
     useEffect(() => {
-        if (composerPreview?.perspective === "expanded" && children[0]) setActiveChildId(children[0].id);
-    }, [composerPreview, children]);
+        if (composerPreview?.perspective === "expanded" && subjects[0]) setActiveChildId(subjects[0].id);
+    }, [composerPreview, subjects]);
 
-    // Card Link / Linked field handoff — open this child's Schedule Detail.
+    /*
+     * A SINGLE SUBJECT OPENS DIRECTLY.
+     *
+     * A family roster is a list to choose from; one staff member is not a choice. Landing an
+     * operator on a one-row list they must then click is a step that exists only because the card
+     * once always had a family. Applied by COUNT, not by kind, so a single-child durable record
+     * behaves the same way — the rule is "one subject is not a decision", the same rule the context
+     * strip already follows.
+     */
+    useEffect(() => {
+        if (subjects.length === 1) setActiveChildId((prev) => prev ?? subjects[0]!.id);
+    }, [subjects]);
+
+    // Card Link / Linked field handoff — open this subject's Schedule Detail.
     const request = coordination?.request;
     const requestNonce = request?.card === "scheduling" ? request.nonce : null;
     useEffect(() => {
@@ -423,14 +534,14 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             return;
         }
         const match =
-            children.find((c) => c.id === focus)
-            ?? children.find((c) => c.personId === focus)
+            subjects.find((c) => c.id === focus)
+            ?? subjects.find((c) => c.personId === focus)
             ?? null;
         setActiveChildId(match?.id ?? focus);
         // eslint-disable-next-line react-hooks/exhaustive-deps -- nonce gates re-apply
-    }, [requestNonce, children]);
+    }, [requestNonce, subjects]);
 
-    const activeChild = children.find((c) => c.id === activeChildId) ?? null;
+    const activeChild = subjects.find((c) => c.id === activeChildId) ?? null;
     // While the Linked host elevates Scheduling, keep reporting focused even before
     // the request effect resolves activeChildId (avoids a mount-time "base" flash).
     const hostElevated = coordination?.activeDepth?.card === "scheduling";
@@ -441,12 +552,20 @@ export default function SchedulingCard({ model, context, receded = false, coordi
     );
     useDismissSignal(coordination, "scheduling", () => setActiveChildId(null));
 
+    /*
+     * The card's own sentence about its subjects. Staff phrasing is not "1 child" with a different
+     * noun bolted on: a staff card never reaches the plural branch, because a person is one person.
+     */
     const insight =
-        children.length === 0
-            ? "No children to assign"
-            : children.length === 1
-              ? "1 child"
-              : `${children.length} children`;
+        subjectKind === "staff"
+            ? subjects.length === 0
+                ? "No staff member to assign"
+                : "Staff assignments"
+            : subjects.length === 0
+              ? "No children to assign"
+              : subjects.length === 1
+                ? "1 child"
+                : `${subjects.length} children`;
 
     return (
         <UniversalCard
@@ -454,7 +573,7 @@ export default function SchedulingCard({ model, context, receded = false, coordi
             // When a child is active the work surface leads with its own avatar identity
             // header, so the redundant "Schedule · <name>" heading is suppressed.
             insight={activeChild ? "" : insight}
-            supportingInsight={activeChild ? null : children.length > 0 ? "Room · Days · Effective · Time" : null}
+            supportingInsight={activeChild ? null : subjects.length > 0 ? "Room · Days · Effective · Time" : null}
             iconName={model.iconName}
             tier={model.tier}
             archetype={model.archetype}
@@ -470,7 +589,11 @@ export default function SchedulingCard({ model, context, receded = false, coordi
               Requirements checklist and separate Generate Quote chrome were removed:
               tuition/$ lives on the assignment itself (quote on the opportunity during enrollment).
             */}
-            <div data-scheduling-card="true" data-assignments-card="true">
+            <div
+                data-scheduling-card="true"
+                data-assignments-card="true"
+                data-scheduling-subject-kind={subjectKind}
+            >
                 {activeChild ? (
                     <ScheduleWorkSurface
                         child={activeChild}
@@ -478,7 +601,9 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         projection={projById[activeChild.id] ?? null}
                         config={schedConfig}
                         truth={context.truth as Record<string, unknown>}
-                        reloadChild={() => reloadChild(activeChild.id, activeChild.name)}
+                        reloadChild={() =>
+                            reloadSubject(activeChild, projById[activeChild.id]?.child.siteId ?? null)
+                        }
                         coordination={coordination}
                         onBack={() => {
                             setActiveChildId(null);
@@ -486,11 +611,15 @@ export default function SchedulingCard({ model, context, receded = false, coordi
                         }}
                         onMutated={onMutated}
                     />
-                ) : children.length === 0 ? (
-                    <p style={{ fontSize: 12.5, color: T.muted }}>Link children to add assignments.</p>
+                ) : subjects.length === 0 ? (
+                    <p style={{ fontSize: 12.5, color: T.muted }}>
+                        {subjectKind === "staff"
+                            ? "This staff member has no schedule context."
+                            : "Link children to add assignments."}
+                    </p>
                 ) : (
                     <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
-                        {children.map((child) => {
+                        {subjects.map((child) => {
                             const proj = projById[child.id];
                             const chrome = proj ? summaryStatus(proj) : { label: "…", color: T.muted };
                             const assignmentModel = buildAssignmentCardModelForChild({
@@ -606,18 +735,18 @@ function ScheduleWorkSurface({
     onBack,
     onMutated,
 }: {
-    child: SchedChild;
+    child: SchedSubject;
     opportunityId: string | null;
-    projection: ChildProj | null;
+    projection: SubjectProj | null;
     config: SchedConfig;
     truth: Record<string, unknown>;
-    reloadChild: () => Promise<ChildProj | null>;
+    reloadChild: () => Promise<SubjectProj | null>;
     coordination?: FocusPanelCoordination;
     onBack: () => void;
     /** See {@link Props.onMutated}. */
     onMutated?: () => void;
 }) {
-    const [proj, setProj] = useState<ChildProj | null>(projection);
+    const [proj, setProj] = useState<SubjectProj | null>(projection);
     const existing = existingView(proj);
     const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
     const [activeAssignmentId, setActiveAssignmentId] = useState<string | null>(null);
@@ -629,7 +758,22 @@ function ScheduleWorkSurface({
     /** Persist Assignments day filter across singular detail drill-in. */
     const [listDayFilter, setListDayFilter] = useState<number | null>(null);
 
-    const currentAssignments: ProjAssignment[] = useMemo(() => listAssignments(proj), [proj]);
+    const currentAssignments: ProjAssignment[] = useMemo(
+        () => listAssignments(proj, child.kind),
+        [proj, child.kind]
+    );
+
+    /*
+     * THE ONE PLACE THIS SURFACE DECIDES WHO IT IS ACTING ON.
+     *
+     * Every action dispatch below reads `subject`, `binding` and `applicability` — never
+     * `child.kind` directly, and never a `subject_type` literal. That is the whole generalization:
+     * the surface asks "who, and what may they do", and the answer arrives already reconciled with
+     * what the write service will accept.
+     */
+    const subject = useMemo(() => operationalSubjectFor(child, proj), [child, proj]);
+    const binding = useMemo(() => assignmentActionBinding(subject), [subject]);
+    const applicability = useMemo(() => assignmentSubjectApplicability(subject), [subject]);
 
     const activeAssignment =
         currentAssignments.find((a) => a.id === activeAssignmentId) ?? null;
@@ -684,13 +828,24 @@ function ScheduleWorkSurface({
     const onSaved = async (opts?: { clearInquiryScheduleDraft?: boolean }) => {
         const fresh = await reloadChild();
         setProj(fresh);
-        publishScheduleProjectionToFocusPanel({
-            opportunityId,
-            memberId: child.id,
-            fresh,
-            truth,
-            clearInquiryScheduleDraft: Boolean(opts?.clearInquiryScheduleDraft),
-        });
+        /*
+         * Republish into the CASE's Focus Panel truth — child only, and not by exclusion.
+         *
+         * This bag is keyed by member id and sits beside `_inquiry_children`; both are facts about
+         * an opportunity's family roster. A staff member has neither, so the call is skipped rather
+         * than made with a person id that no reader of that bag could interpret. The function
+         * already no-ops without an opportunity, but relying on that would make the skip incidental
+         * instead of stated.
+         */
+        if (child.kind === "child") {
+            publishScheduleProjectionToFocusPanel({
+                opportunityId,
+                memberId: child.id,
+                fresh,
+                truth,
+                clearInquiryScheduleDraft: Boolean(opts?.clearInquiryScheduleDraft),
+            });
+        }
         setMode("detail");
         setActiveAssignmentId(null);
         setEditingAssignmentId(null);
@@ -709,14 +864,22 @@ function ScheduleWorkSurface({
     const beginCreateAssignment = () => {
         setActionError(null);
         setEditingAssignmentId(null);
-        if (currentAssignments.length === 0) {
-            // First commitment uses the schedule create path (primary home).
-            setPendingTypeId(null);
+        setPendingTypeId(null);
+        /*
+         * The FIRST commitment used the schedule-create path unconditionally, because that path
+         * establishes a child's primary operational home. It is not subject-general: the route
+         * behind it (`POST /api/admin/scheduling`) reads `customer_member_id` and refuses without
+         * one, and `createOperationalAssignment` refuses `is_primary` for any non-child subject.
+         *
+         * So staff always goes through the type picker into `assignment.create` — the registered
+         * action that already accepts a staff subject — including for their first assignment. That
+         * is not a lesser path; it is the canonical one for a subject with no primary-home concept.
+         */
+        if (currentAssignments.length === 0 && applicability.canUseChildSchedulePath) {
             setMode("create");
             return;
         }
-        // Always open the type picker — empty state deep-links to Studio Types (no seed/migrate dead end).
-        setPendingTypeId(null);
+        // Type picker — empty state deep-links to Studio Types (no seed/migrate dead end).
         setMode("pick-type");
     };
 
@@ -778,17 +941,23 @@ function ScheduleWorkSurface({
                         setMode("pick-type");
                     }}
                     onSetPrimary={
-                        activeAssignment.isPrimary
+                        // Valid for BOTH subjects: `setPrimaryOperationalAssignment` resolves a staff
+                        // subject explicitly and refuses a promote target belonging to another person.
+                        activeAssignment.isPrimary || !applicability.canSetPrimary
                             ? undefined
                             : () =>
                                   runAction({
                                       action_key: "assignment.set_primary",
-                                      entity_type: "child",
-                                      entity_id: child.id,
+                                      ...binding,
                                       payload: {
-                                          subject_type: "child",
-                                          ...childAssignmentCreatePayload(child, proj, {}),
-                                          enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                          ...assignmentAnchorPayload(subject),
+                                          // Kept as `?? ""` — an EMPTY STRING, not undefined — because
+                                          // that is what the child path has always sent and the action
+                                          // distinguishes them. Omitted entirely for staff, who have
+                                          // no agreement to name.
+                                          ...(applicability.hasEnrollmentAgreement
+                                              ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
+                                              : {}),
                                           effective_date: activeAssignment.effectiveFrom,
                                           promote_assignment_id: activeAssignment.id,
                                           subject_label: child.name,
@@ -800,9 +969,8 @@ function ScheduleWorkSurface({
                             ? () =>
                                   runAction({
                                       action_key: "assignment.create",
-                                      entity_type: "child",
-                                      entity_id: child.id,
-                                      payload: childAssignmentCreatePayload(child, proj, {
+                                      ...binding,
+                                      payload: assignmentCreatePayload(subject, {
                                           schedule_pattern_id: activeAssignment.patternId,
                                           start_date: activeAssignment.effectiveFrom,
                                           room_location_id: activeAssignment.room.id,
@@ -820,8 +988,7 @@ function ScheduleWorkSurface({
                             : () =>
                                   runAction({
                                       action_key: "assignment.archive",
-                                      entity_type: "child",
-                                      entity_id: child.id,
+                                      ...binding,
                                       payload: { assignment_id: activeAssignment.id },
                                   })
                     }
@@ -836,13 +1003,18 @@ function ScheduleWorkSurface({
                             : undefined
                     }
                     onPromote={
+                        // CHILD ONLY, and doubly so: `assignment.promote_proposed` declares
+                        // `supportedEntityTypes: ["child"]`, and a staff assignment is never proposed
+                        // in the first place — `resolveSubjectSite` commits every staff subject. The
+                        // `commitmentKind` test below is therefore already false for staff; the
+                        // applicability gate states the rule rather than relying on that coincidence.
+                        applicability.canPromoteProposed &&
                         activeAssignment.commitmentKind === "proposed" &&
                         (proj?.enrollmentAgreementId ?? "").trim()
                             ? () =>
                                   runAction({
                                       action_key: "assignment.promote_proposed",
-                                      entity_type: "child",
-                                      entity_id: child.id,
+                                      ...binding,
                                       payload: {
                                           assignment_id: activeAssignment.id,
                                           enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
@@ -851,6 +1023,7 @@ function ScheduleWorkSurface({
                             : undefined
                     }
                     promoteBlockedReason={
+                        applicability.canPromoteProposed &&
                         activeAssignment.commitmentKind === "proposed" &&
                         !(proj?.enrollmentAgreementId ?? "").trim()
                             ? "This Assignment can only become active after enrollment is completed."
@@ -874,8 +1047,7 @@ function ScheduleWorkSurface({
                         const ok = await runAction(
                             {
                                 action_key: "assignment.delete_proposed",
-                                entity_type: "child",
-                                entity_id: child.id,
+                                ...binding,
                                 payload: { assignment_id: activeAssignment.id },
                             },
                             { clearInquiryScheduleDraft: true },
@@ -933,15 +1105,15 @@ function ScheduleWorkSurface({
                         },
                         onSetPrimary: (id) => {
                             const a = currentAssignments.find((row) => row.id === id);
-                            if (!a || a.isPrimary) return;
+                            if (!a || a.isPrimary || !applicability.canSetPrimary) return;
                             void runAction({
                                 action_key: "assignment.set_primary",
-                                entity_type: "child",
-                                entity_id: child.id,
+                                ...binding,
                                 payload: {
-                                    ...childAssignmentCreatePayload(child, proj, {}),
-                                    subject_type: "child",
-                                    enrollment_agreement_id: proj?.enrollmentAgreementId ?? "",
+                                    ...assignmentAnchorPayload(subject),
+                                    ...(applicability.hasEnrollmentAgreement
+                                        ? { enrollment_agreement_id: proj?.enrollmentAgreementId ?? "" }
+                                        : {}),
                                     effective_date: a.effectiveFrom,
                                     promote_assignment_id: a.id,
                                     subject_label: child.name,
@@ -953,9 +1125,8 @@ function ScheduleWorkSurface({
                             if (!a?.assignmentType.id) return;
                             void runAction({
                                 action_key: "assignment.create",
-                                entity_type: "child",
-                                entity_id: child.id,
-                                payload: childAssignmentCreatePayload(child, proj, {
+                                ...binding,
+                                payload: assignmentCreatePayload(subject, {
                                     schedule_pattern_id: a.patternId,
                                     start_date: a.effectiveFrom,
                                     room_location_id: a.room.id,
@@ -971,8 +1142,7 @@ function ScheduleWorkSurface({
                             if (!a || a.isPrimary) return;
                             void runAction({
                                 action_key: "assignment.archive",
-                                entity_type: "child",
-                                entity_id: child.id,
+                                ...binding,
                                 payload: { assignment_id: a.id },
                             });
                         },
@@ -1062,9 +1232,8 @@ function ScheduleWorkSurface({
                     }
                     await executeAssignmentAction({
                         action_key: "assignment.create",
-                        entity_type: "child",
-                        entity_id: child.id,
-                        payload: childAssignmentCreatePayload(child, proj, {
+                        ...binding,
+                        payload: assignmentCreatePayload(subject, {
                             schedule_pattern_id: payload.schedule_pattern_id,
                             start_date: payload.start_date,
                             room_location_id: payload.room_location_id,
@@ -1173,7 +1342,7 @@ function AssignmentTypePicker({
 
 // ── Shared region composition (identity · state · days · hours · site+room ·
 //    effective · billing). ONE layout; Detail and Edit fill the same slots. ────
-function IdentityHeader({ child, state }: { child: SchedChild; state: ScheduleState }) {
+function IdentityHeader({ child, state }: { child: SchedSubject; state: ScheduleState }) {
     return (
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <CardAvatar name={child.name} imageUrl={child.imageUrl} size={38} recordId={child.id} />
@@ -1306,7 +1475,7 @@ function ScheduleRegions({
     surface,
     tuitionSelect,
 }: {
-    child: SchedChild;
+    child: SchedSubject;
     state: ScheduleState;
     days: ReactNode;
     hours: ReactNode;
@@ -1368,8 +1537,8 @@ function AssignmentListSurface({
     dayFilter,
     onDayFilterChange,
 }: {
-    child: SchedChild;
-    proj: ChildProj | null;
+    child: SchedSubject;
+    proj: SubjectProj | null;
     assignments: ProjAssignment[];
     onCreate: () => void;
     onOpenAssignment: (id: string) => void;
@@ -1427,9 +1596,9 @@ function ScheduleEditor({
     onSaved,
     onCreateSecondary,
 }: {
-    child: SchedChild;
+    child: SchedSubject;
     opportunityId: string | null;
-    proj: ChildProj | null;
+    proj: SubjectProj | null;
     config: SchedConfig;
     truth?: Record<string, unknown> | null;
     existing: ProjView | null;
@@ -1548,9 +1717,16 @@ function ScheduleEditor({
         void ensurePatterns();
     }
 
-    // Background: billing preview once a schedule type is known (patches the tuition line).
+    /*
+     * Background: billing preview once a schedule type is known (patches the tuition line).
+     *
+     * CHILD ONLY, and this is the clearest case of child-only ENRICHMENT staying child-only. Tuition
+     * is what a family pays for a child's place; a staff member's assignment has no tuition, and the
+     * route's parameter is literally `customer_member_id`. Asking for a staff member would either
+     * fail or — worse — resolve against some other member and show an operator a number.
+     */
     useEffect(() => {
-        if (!siteId || !scheduleType) return;
+        if (!siteId || !scheduleType || child.kind !== "child") return;
         let cancelled = false;
         (async () => {
             const bill = await schedApi(
@@ -1561,7 +1737,7 @@ function ScheduleEditor({
         return () => {
             cancelled = true;
         };
-    }, [siteId, scheduleType, start, child.id]);
+    }, [siteId, scheduleType, start, child.id, child.kind]);
 
     function toggleDay(i: number) {
         // Cannot add a day the site is not open (operating days); removal is always allowed.
@@ -1613,7 +1789,9 @@ function ScheduleEditor({
         (!roomRequired || Boolean(roomId));
 
     async function persistAssignmentQuote(): Promise<void> {
-        if (!opportunityId) return;
+        // Child enrichment, on a case. A tuition quote is a commercial fact about a family's
+        // enrollment; a staff assignment produces none, and there is no opportunity to hang one on.
+        if (!opportunityId || child.kind !== "child") return;
         const lockedOfferingId = offeringId.trim();
         // Require an explicit lock-in — never persist via silent auto-match.
         if (!lockedOfferingId) return;
@@ -1660,6 +1838,19 @@ function ScheduleEditor({
                     /* schedule write succeeded — quote is opportunistic on opportunity */
                 });
                 await onSaved();
+                return;
+            }
+            /*
+             * THE CHILD PRIMARY-HOME PATH.
+             *
+             * Reached only when `createAsSecondary` is false, which `beginCreateAssignment` now
+             * allows solely for a child (`canUseChildSchedulePath`). The guard is restated here
+             * rather than trusted from a caller two functions away, because the failure it prevents
+             * is silent: this route reads `customer_member_id`, and a staff subject would send its
+             * PERSON id in that field — an id the route would accept the shape of.
+             */
+            if (child.kind !== "child") {
+                setError("A staff assignment is created from an Assignment Category, not the primary schedule.");
                 return;
             }
             const times = {

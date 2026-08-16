@@ -41,7 +41,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
-import { deriveChildSchedulingCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildSchedulingCard";
+import { DURABLE_STAFF_SUBJECT_KEY } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { deriveSchedulingCardModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveSchedulingCardModel";
 import { buildDurableChildOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import type { DurableRecordContextOption } from "@/lib/context/durableRecordContextOptions";
@@ -93,6 +95,19 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
     }
 }
 
+/**
+ * The record this card is about.
+ *
+ * A discriminated union, not an optional-field bag, because the two subjects genuinely differ in
+ * what can be said about them. A child has configured fields, a household, a date of birth and an
+ * enrollment; a staff member has an assignment and an employment. Modelling staff as "a child with
+ * nulls" would let the configured-field branch run against a person and render an empty card that
+ * asserts a composition applies when none does.
+ */
+export type DurableContextualSubject =
+    | { kind: "child"; child: DurableChildSubject }
+    | { kind: "staff"; personId: string; label: string; imageUrl?: string | null };
+
 export default function DurableRecordContextualCard({
     option,
     subject,
@@ -100,7 +115,7 @@ export default function DurableRecordContextualCard({
     onSaved,
 }: {
     option: DurableRecordContextOption;
-    subject: DurableChildSubject;
+    subject: DurableContextualSubject;
     /**
      * Canonical assignment facts for a `canonical_operational` context, composed server-side. Null
      * when the subject holds no commitment — which is a state, not a failure.
@@ -116,29 +131,60 @@ export default function DurableRecordContextualCard({
     const [draft, setDraft] = useState("");
     const [saveError, setSaveError] = useState<string | null>(null);
 
-    /** This child's canonical commitment facts, keyed as the card expects to find them. */
+    const childSubject = subject.kind === "child" ? subject.child : null;
+    /** The subject's identity of record — member id for a child, person id for staff. */
+    const subjectId = subject.kind === "child" ? subject.child.memberId : subject.personId;
+
+    /** This subject's canonical commitment facts, keyed as the card expects to find them. */
     const projection = useMemo(
-        () => schedulingProjection?.byMemberId?.[subject.memberId] ?? null,
-        [schedulingProjection, subject.memberId],
+        () => schedulingProjection?.byMemberId?.[subjectId] ?? null,
+        [schedulingProjection, subjectId],
     );
 
     /*
      * The context the canonical card reads, built by the SAME producer the durable panel uses — so
-     * the card sees one child, one grain and one truth bag, exactly as it would on a case.
+     * the card sees one subject, one grain and one truth bag, exactly as it would on a case.
      *
      * `_scheduling_projection` is attached here rather than in the composer because it belongs to
-     * the SELECTED CONTEXT, not to the child's identity: a child record with no Schedule context
+     * the SELECTED CONTEXT, not to the subject's identity: a record with no Schedule context
      * selected has no business carrying assignment facts in its truth.
      *
      * `canMutate` is true because this card's whole purpose is invoking canonical assignment
      * actions; each of those re-authorizes on execution, as it does from the case panel.
      */
     const operationalContext = useMemo(() => {
-        const base = buildDurableChildOperationalContext(subject, true, null);
+        if (!childSubject) {
+            /*
+             * A STAFF SUBJECT, STATED AS ONE.
+             *
+             * Jane is not written into `_durable_child_rows` with her enrollment fields nulled. That
+             * would render identically today and would tell every later reader — a roster count, an
+             * age policy, a tuition projection — that a staff member is a child. She goes under her
+             * own key, and the card reads `kind: "staff"` from it.
+             *
+             * The context grain is `person`, which is what the registry declares `scheduling` for.
+             */
+            const staff = subject as Extract<DurableContextualSubject, { kind: "staff" }>;
+            return {
+                grain: "person" as const,
+                subject: { type: "person" as const, id: staff.personId, label: staff.label },
+                canMutate: true,
+                truth: {
+                    _person_name: staff.label,
+                    _scheduling_projection: schedulingProjection ?? null,
+                    [DURABLE_STAFF_SUBJECT_KEY]: {
+                        personId: staff.personId,
+                        name: staff.label,
+                        imageUrl: staff.imageUrl ?? null,
+                    },
+                },
+            } as unknown as OperationalContext;
+        }
+        const base = buildDurableChildOperationalContext(childSubject, true, null);
         return {
             ...base,
             truth: {
-                ...subject.truth,
+                ...childSubject.truth,
                 _scheduling_projection: schedulingProjection ?? null,
                 /*
                  * THE SUBJECT, AS THE COLLECTION'S ONE MEMBER.
@@ -153,22 +199,25 @@ export default function DurableRecordContextualCard({
                  */
                 [DURABLE_CHILD_ROWS_KEY]: [
                     {
-                        id: subject.memberId,
-                        customer_member_id: subject.memberId,
-                        person_id: subject.personId,
-                        display_name: subject.label,
-                        dob: subject.dateOfBirth,
+                        id: childSubject.memberId,
+                        customer_member_id: childSubject.memberId,
+                        person_id: childSubject.personId,
+                        display_name: childSubject.label,
+                        dob: childSubject.dateOfBirth,
                     },
                 ],
             },
         };
-    }, [subject, schedulingProjection]);
+    }, [subject, childSubject, schedulingProjection]);
 
     const commit = useCallback(
         async (fieldKey: string, value: string) => {
             setEditing(null);
             setSaveError(null);
-            const result = await saveContextualChildField({ subject, fieldKey, value });
+            // Only reachable from the configured-field branch, which renders for a child only. The
+            // guard makes that a type fact rather than a reading of the control flow above.
+            if (!childSubject) return;
+            const result = await saveContextualChildField({ subject: childSubject, fieldKey, value });
             if (!result.ok) {
                 setSaveError(result.error);
                 return;
@@ -176,7 +225,7 @@ export default function DurableRecordContextualCard({
             setOverrides((prev) => ({ ...prev, [fieldKey]: value.trim() || null }));
             onSaved?.();
         },
-        [subject, onSaved],
+        [childSubject, onSaved],
     );
 
     useEffect(() => {
@@ -213,11 +262,14 @@ export default function DurableRecordContextualCard({
      * capabilities. It is mounted UNCHANGED here, against the same `context.truth` contract the case
      * panel gives it, so the two hosts cannot drift into two assignment experiences.
      *
-     * The registry is the gate (`cardAppliesToGrain`), not this component: a card reaches the child
-     * grain because someone declared that it can.
+     * The registry is the gate (`cardAppliesToGrain`), not this component: a card reaches a grain
+     * because someone declared that it can. The grain asked about is the SUBJECT'S — a staff member
+     * is a `person`, and if that declaration were ever withdrawn this branch would go quiet rather
+     * than render a card the registry does not admit.
      */
     if (option.surface === "canonical_operational") {
-        if (!cardAppliesToGrain("scheduling", "child")) return null;
+        const grain = subject.kind === "child" ? "child" : "person";
+        if (!cardAppliesToGrain("scheduling", grain)) return null;
         return (
             <div
                 className="rounded-lg border border-alloy-stone/22 bg-white"
@@ -225,6 +277,7 @@ export default function DurableRecordContextualCard({
                 data-contextual-card-context={option.key}
                 data-contextual-card-kind={option.kind}
                 data-contextual-card-canonical-card="scheduling"
+                data-contextual-card-subject-kind={subject.kind}
                 data-contextual-card-site={option.siteLocationId ?? ""}
                 // Committed and proposed counted SEPARATELY. A child whose only assignment is
                 // proposed has zero commitments and is not unassigned, and one number could not say
@@ -233,7 +286,7 @@ export default function DurableRecordContextualCard({
                 data-contextual-card-proposed={String(projection?.proposed?.assignments?.length ?? 0)}
             >
                 <SchedulingCard
-                    model={deriveChildSchedulingCard()}
+                    model={deriveSchedulingCardModel()}
                     context={operationalContext}
                     // The SAME generic contract a configured-field edit uses. An assignment write and
                     // a name edit are both "this record's canonical truth changed", and the host has
@@ -276,7 +329,31 @@ export default function DurableRecordContextualCard({
         );
     }
 
-    const card = resolveContextualChildCard(resolved.doc, subject, {
+    /*
+     * The remaining branch is the CHILD card of a published composition, and it needs a child.
+     *
+     * A staff member reaching here means the context resolved to a published composition that
+     * addresses the Child card — a real configuration state, not an error, and one this component
+     * must not answer by rendering a Child card full of blanks about a person.
+     */
+    if (!childSubject) {
+        return (
+            <div
+                className="rounded-lg border border-alloy-stone/22 bg-white p-3"
+                data-contextual-card="unsupported-subject"
+                data-contextual-card-context={option.key}
+                data-contextual-card-subject-kind={subject.kind}
+            >
+                <p className="text-[12.5px] font-medium text-alloy-midnight/75">{option.label}</p>
+                <p className="mt-1 max-w-[60ch] text-[12px] text-alloy-midnight/55">
+                    This context&rsquo;s configured card describes a child. It has nothing to say
+                    about a staff member, so it is not shown here.
+                </p>
+            </div>
+        );
+    }
+
+    const card = resolveContextualChildCard(resolved.doc, childSubject, {
         fromPublishedDoc: resolved.doc != null,
     });
     const fingerprint = contextualCardConfigurationFingerprint(card.rows);

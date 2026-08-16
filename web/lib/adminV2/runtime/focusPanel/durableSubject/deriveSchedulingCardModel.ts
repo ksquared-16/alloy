@@ -1,14 +1,22 @@
 /**
- * The `scheduling` card MODEL at child grain.
+ * The `scheduling` card MODEL on a durable host — for ANY subject the card admits.
  *
- * This is a MODEL, not a card. The card is `SchedulingCard.tsx`, unchanged and shared with the case
- * panel: same renderer, same canonical assignment actions, same `context.truth._scheduling_projection`
- * contract. Nothing about assignments is decided here.
+ * This is a MODEL, not a card. The card is `SchedulingCard.tsx`, shared with the case panel: same
+ * renderer, same canonical assignment actions, same `context.truth._scheduling_projection` contract.
+ * Nothing about assignments is decided here.
+ *
+ * ── IT TAKES NO SUBJECT, AND THAT IS THE POINT ──
+ *
+ * Nothing in this model varies by subject: title, icon, archetype and tier come from the platform
+ * helpers keyed by CARD, and the insight is composed by the card from its own evidence. A child-grain
+ * and a person-grain Assignments card are the same model because they are the same card. If this
+ * function ever needed a subject parameter, that would be the signal that the two hosts had begun
+ * drifting into two assignment experiences.
  *
  * ── IT SUPPLIES ONLY WHAT THE CARD ACTUALLY READS ──
  *
- * `SchedulingCard` composes its OWN insight from the child evidence — "1 child" / "3 children" /
- * "No children to assign" — and never reads `model.insight` or `model.secondaryInsight`. It reads
+ * `SchedulingCard` composes its OWN insight from its subject evidence — "1 child" / "3 children" /
+ * "Staff assignments" — and never reads `model.insight` or `model.secondaryInsight`. It reads
  * `title`, `iconName`, `tier`, `archetype`, `statusChip` and `statusTone`.
  *
  * A first version of this module computed a careful child-grain insight ("2 assignments",
@@ -27,7 +35,7 @@ import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system
 import { system5IconForCard } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
-export function deriveChildSchedulingCard(): FocusPanelCardModel {
+export function deriveSchedulingCardModel(): FocusPanelCardModel {
     return {
         key: "scheduling",
         archetype: system5ArchetypeForCard("scheduling"),

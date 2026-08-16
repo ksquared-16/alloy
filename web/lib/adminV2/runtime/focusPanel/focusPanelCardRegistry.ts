@@ -133,8 +133,19 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * card the case panel renders, rather than a second assignments view. It reaches the child grain
      * as a durable OPERATIONAL context (`canonical_operational`), not through a published
      * composition — there is no `schedule` business process and there must not be one.
+     *
+     * ── AND `person`, BECAUSE A COMMITMENT IS NOT A CHILD CONCEPT ──
+     *
+     * `schedule_assignments` was extended in place so children and staff would not acquire competing
+     * scheduling engines, and every canonical assignment action already declares `person` among its
+     * supported entity types. The card was the only layer still assuming a child, and generalizing
+     * it around `OperationalAssignmentSubject` is what makes this third grain honest rather than
+     * aspirational: `Roster → Staff → Jane → Schedule` renders THIS card, not a staff copy of it.
+     *
+     * The grain concern remains the gate. A card reaches the person grain because it is declared
+     * here — never because a component decided it could.
      */
-    { key: "scheduling", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    { key: "scheduling", ownsOperationalTruth: true, grains: ["opportunity", "child", "person"] },
 ];
 
 const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(

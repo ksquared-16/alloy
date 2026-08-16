@@ -9,7 +9,10 @@ import {
 } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { detectUnplacedChildren } from "@/lib/scheduling/problems/detectUnplaced";
 import { generatePlacementOptions } from "@/lib/scheduling/options/generatePlacementOptions";
-import { loadSchedulingProjectionForChild } from "@/lib/scheduling/projection/buildSchedulingProjection";
+import {
+    loadSchedulingProjectionForChild,
+    loadSchedulingProjectionForStaff,
+} from "@/lib/scheduling/projection/buildSchedulingProjection";
 import { getOperationalAgreementForMemberSite } from "@/lib/childcareOperational/enrollmentAgreementService";
 import { composeCommercialExport } from "@/lib/commercial/execution/export";
 import { evaluate } from "@/lib/commercial/execution/evaluate/evaluate";
@@ -530,6 +533,37 @@ export async function GET(request: NextRequest) {
         }
 
         if (view === "projection") {
+            /*
+             * A STAFF SUBJECT reads its own commitments, by its own identifier.
+             *
+             * `subject_type` is required rather than inferred from which id arrived: a child with a
+             * linked person could supply either, and inferring would answer the wrong question
+             * plausibly. The site must be explicit too — a staff member has no opportunity for the
+             * child branch below to resolve one from.
+             */
+            if (param(request, "subject_type") === "staff") {
+                const personId = param(request, "subject_person_id");
+                const siteLocationId = param(request, "site_location_id");
+                if (!personId || !siteLocationId) {
+                    return NextResponse.json(
+                        {
+                            error: "subject_person_id and site_location_id are required for a staff subject",
+                            code: "invalid_input",
+                        },
+                        { status: 400 }
+                    );
+                }
+                const staffTodayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, ctx.orgId);
+                const projection = await loadSchedulingProjectionForStaff(supabase, ctx.orgId, {
+                    personId,
+                    siteLocationId,
+                    todayYmd: staffTodayYmd,
+                    computedAt: `${staffTodayYmd}T00:00:00.000Z`,
+                    subjectName: param(request, "subject_name") || "Staff member",
+                });
+                return NextResponse.json({ view, projection });
+            }
+
             const customerMemberId = param(request, "customer_member_id");
             const subjectName = param(request, "subject_name") || "Child";
             // Site comes from the operational subject: an explicit site_location_id, else
