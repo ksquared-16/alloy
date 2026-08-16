@@ -45,7 +45,7 @@ used consistently from here on:
 | **R-014** | Command destination with no way back | Shared `activePanelAction`; `closeActionPanel` wired to nothing | Runtime (Slot 5) | **DONE** | Shared return grammar in the host | **CLOSED** `5efa5db64` |
 | **R-015** | One Escape collapsed three layers | menu 1→0, editing 2→0, elevated true→false on one keypress | Runtime (Slot 5) | **DONE** | Shared yield predicate + editor marker + focus restore | **CLOSED** `3fa2cdabb` |
 | **R-016** | Household `address_line2` read-back | **Re-diagnosed — not a data-model problem.** `field_values` on entity_type `person` IS canonical; the write was correct. One read composition (`buildAddressLine`) picked line 1, city, state and postal and never picked line 2 | Runtime (Slot 5) | **DONE** | Fixed — line 2 now participates in the composed address | **CLOSED** `625108322` |
-| **R-017** | Waitlist child-grain renders no cards | **Re-diagnosed — the earlier "unauthored, groups: [], blocks: []" reading was wrong.** See below | **Tenant config (Surfaces)** | No | Publish a work-view-scoped variant | **NEEDS KELLY — TENANT CONFIG PUBLISH** |
+| **R-017** | Waitlist child-grain renders no cards | **Re-diagnosed TWICE. Both earlier readings were wrong.** The runtime already adapts composition by grain; the card DERIVATION does not. See below | Runtime (Slot 5) | **Yes — next slice** | Give the lens path a `child_identity` model producer | **FIX NOW — SLOT 5** (scoped below, not started) |
 | **R-018** | Sibling prewarm warms empty views | 5 sibling answers fetched; 4 returned `terminal: "empty"` | Runtime (Slot 5) | **No — timing phase** | Prewarm is idle-gated; removing it costs switch latency. Same A/B as D-3 | ENVIRONMENT / TIMING PHASE |
 | **D-2** | `queue-row-layout` ×2 per Work Unit entry | Both from `fetchWorkUnitSurfaceConfigBundle`, sequential so in-flight coalescing cannot collapse them | Runtime (Slot 5) | **No — timing phase** | Consult `putWorkUnitSurfaceConfigCache` before the runtime config effect fetches; verify against warm-path latency | ENVIRONMENT / TIMING PHASE |
 | **D-3** | `provisioning-answer` ×5 on a work-view switch | 4× documented speculative sibling prewarm + the real one, landing during a switch | Runtime (Slot 5) | **No — timing phase** | Same experiment as R-018; historical note says the prewarm bought 46 ms, so it must be measured both ways | ENVIRONMENT / TIMING PHASE |
@@ -88,11 +88,130 @@ the runtime declines to render them against a child subject — `cards=0`, one n
 not-applicable. **The runtime is behaving correctly**; it is refusing to present a family
 composition for a child.
 
-**Proposed change — NEEDS KELLY — TENANT CONFIG PUBLISH.** Publish a **work-view-scoped**
-`focus_panel_summary` variant for `new_work_view_4` / stage `waitlist` whose `focusPanelLayout`
-composes child-applicable cards, leaving the existing org-global family variant untouched as the
-wildcard fallback. No platform change is required — scoping is already supported. Publishing
-replaces the projection and is a one-way door, so it is not done without approval.
+### R-017 — REOPENED, and the config recommendation is WITHDRAWN
+
+The proposal above ("publish a work-view-scoped child-grain variant") was **wrong about the canonical
+model**, and would not have worked. Retained above only so the reasoning that produced it is visible.
+
+**Separate surface configuration is NOT the intended model — the code says so twice.**
+
+1. **The published doc is deliberately case-only.** `OpportunityFocusPanelModeGrid` resolves the
+   subject grain and gates on it:
+
+   ```ts
+   const isCaseGrain = subjectGrain === "opportunity";
+   const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain);
+   const activeDoc = isSummary
+       ? (isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefaultDocForGrain(subjectGrain)
+       : null;
+   ```
+
+   Its comment calls the guard load-bearing and explains why: `entity_layouts` addresses the Summary
+   row by `entity_type="opportunities"`, so the published doc is *by definition* the enrollment
+   composition. Applying it to a non-case subject "would put `current_work` / `household` /
+   `children` on a staff member — i.e. a tenant who had ever opened the Surface Builder would
+   silently break every non-case surface, while a tenant who had not would see the correct sparse
+   panel. Two tenants, two behaviours, no error."
+
+   **A child subject therefore never consults the publication at all.** Publishing a scoped variant
+   would have changed nothing, and the change I proposed could not have been read.
+
+2. **A tenant cannot publish a non-case variant even if they wanted to.**
+   `buildFocusPanelSummaryDefaultDoc` records the constraint: the addressing key is "⚠ STILL
+   `opportunities` … a code-owned default never touches that table, so a person-grain default
+   composes fine — **but a tenant cannot PUBLISH one until the addressing is widened.** Recorded in
+   `DURABLE-RECORD-ATTENTION.md`; deliberately not solved in this slice."
+
+**The canonical model is runtime adaptation by subject grain, and half of it already works.**
+`focusPanelDefaultCompositionForGrain` returns a real per-grain composition —
+`person` → person composition, `child` → `FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION`, `opportunity` →
+the enrollment composition **by reference**, so the case surface is identical rather than merely
+equivalent. On the Waitlist lens the runtime correctly selects the CHILD composition.
+
+**So why is the panel still empty? The two halves disagree.**
+
+| Half | Grain-aware? |
+|---|---|
+| **Composition** — which cards the panel should show | ✅ yes, `focusPanelSummaryDefaultDocForGrain(subjectGrain)` |
+| **Card derivation** — which models actually exist | ❌ no |
+
+The child composition contains exactly one card, `child_identity`. Grepping every producer of that
+key: it is derived **only** in `durableSubject/deriveChildFocusPanelCards.ts`, which
+`subjectGrain.ts` documents as the path that "arrives subject-first and never through a lens"
+(the Records workspace). The lens path derives cards through
+`deriveOpportunityFocusPanelCards` / `focusPanelWorkModeModelFromDrawerVm`, and **neither mentions
+`child_identity`**. A composed card with no model resolves `visible: false`, which the readiness
+contract turns into `not_applicable`.
+
+That is exactly the observed signature — `cards=0, cells=1, not-applicable=1` — and it is now
+explained rather than described: **one cell, correctly composed for the child grain, with no producer
+able to fill it on this path.**
+
+**Answering the question directly:** the runtime should *not* start rendering family-oriented cards
+against a child subject — refusing them is the deliberate, correct behaviour that guard exists to
+enforce. What it must do is *complete* the adaptation it already begins: a child subject on the lens
+path needs the same card producers the subject-first path already has.
+
+### R-017 — bridge SHIPPED; composition width is the remaining question
+
+**Producer bridge — CLOSED `921076268`.** `overlayChildMissionOntoSettledFocusModel` — the canonical
+lens-path child overlay, whose header already owns this concern ("Record of Attention = child.
+Record of Truth / Settlement = family opportunity") — now derives `child_identity` by **reusing**
+`deriveChildIdentityCard`. One child card, two entry paths; no second implementation. The subject is
+assembled from what the lens already carries, with `dob` read from the focused child's own row in the
+settled family collection, matched on `customer_member_id`.
+
+Browser-certified on both real Firefly children, writes blocked:
+
+| Child | Header | Card | Cards | not_applicable |
+|---|---|---|--:|---|
+| Wrigley | Wrigley Kurzman · Waitlist · Tour Scheduled · North Campus | DOB Mar 15 2026, 5 mo | 1 | none |
+| Lennon | Lennon Kurzman · Waitlist · Tour Scheduled · North Campus | DOB Apr 2 2024, 2 yr 4 mo | 1 | none |
+
+Subject switches per row, latest-click-wins holds, 0 render loops, panel height constant 854 px. The
+console errors were the probe's own blocked `stage-membership-ack` POSTs. **No producer-absent
+`not_applicable` remains.**
+
+*(A first run appeared to show both rows resolving to Lennon. That was a probe artifact — the only
+button inside a waitlist row is `Adjust`, so clicking `row.querySelector("button")` hit the placement
+control instead of selecting the row. Clicking the row itself switches the subject correctly.)*
+
+**The composition IS too narrow — it fails the product target.** The panel now renders exactly one
+card. Header, stage, location and child identity are right, but What's Next / commands / Children /
+Household / Tour / Forms / Communications are all absent, so the child panel is not the same
+operating experience as the family panel.
+
+**Why this is not a one-line widening.** The person composition states the governing rule, and it
+applies equally to child:
+
+> "Growing this list is a per-card decision that must be earned **twice**: the card declares the
+> grain in the registry (it has canonical truth for it), AND it is placed here (it belongs on the
+> default surface). Either without the other is inert, which is the intended friction."
+
+Today `focusPanelCardRegistry` declares `child_identity` for `child` **only**; `current_work`,
+`household`, `children` and `billing_preview` are case-only, and `cardAppliesToGrain` is total — an
+undeclared card is not applicable to any grain. So widening means deciding, per card, whether it has
+canonical truth for a CHILD subject. Two are not obvious: `children` on a child subject would present
+siblings, and `billing_preview` is a family-scoped concept.
+
+**The safe shape, when it is taken up.** A child on the LENS has family settlement (the overlay
+preserves it deliberately); a durable child opened subject-first does not. So the distinction is
+per-PATH, not per-grain:
+
+- keep `FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION` (durable, subject-first) at `child_identity` only —
+  the guard and the sparse-truthful-panel doctrine stay intact;
+- add a child-with-family-settlement composition selected only where settlement exists
+  (`model.source !== "durable_subject"`), carrying `child_identity` plus each family card that has
+  *earned* the child grain in the registry;
+- author its geometry in the 12-column area vocabulary, and **never give a card all 12 columns** —
+  the case composition records that a full-width card forces `planPublishedLayout` to fall back from
+  `lanes` to `grid` for the whole panel.
+
+**Explicitly NOT the answer:** applying the family published doc to child subjects, or relaxing
+`isCaseGrain`. Both reintroduce the failure the guard exists to prevent — household/children on a
+subject that has neither.
+
+**No tenant configuration change is required, and none is requested.**
 Canonical behaviour lives in its owner doc; this file records observed defects, their root
 owner, and what proved them.
 
