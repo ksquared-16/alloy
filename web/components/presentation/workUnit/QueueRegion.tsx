@@ -214,18 +214,31 @@ export function QueueRegion({
     }, [workViewId]);
     const facets = useMemo(() => deriveQueueRowFilterFacets(queue.rows), [queue.rows]);
     const visibleRows = useMemo(() => applyQueueRowFilters(queue.rows, filters), [queue.rows, filters]);
+    /**
+     * The occurrence keys this hydration is actually about, as a STRING.
+     *
+     * The effect below depended on `queue.rows`, whose identity changes on every queue
+     * re-resolution even when the rows are identical — so the ack was re-fetched with a
+     * byte-identical `keys` query. Measured on Firefly: twice per Work Unit entry on both the
+     * All and Waitlist views. Depending on the derived key string means it re-runs when the KEYS
+     * change, which is the only thing that can change the answer.
+     */
+    const ackOccurrenceKeys = useMemo(() => {
+        if (!orgId || !principalUserId) return "";
+        return queue.rows
+            .map((row) => occurrenceKeyFromQueueRowContext(row.context, principalUserId, orgId))
+            .filter((k): k is string => Boolean(k))
+            .join(",");
+    }, [queue.rows, principalUserId, orgId]);
+
     // Hydrate personal seen for visible occurrence keys (stale refresh cannot revive cleared dots).
     useEffect(() => {
-        if (!orgId || !principalUserId || !queue.rows.length) return;
-        const keys = queue.rows
-            .map((row) => occurrenceKeyFromQueueRowContext(row.context, principalUserId, orgId))
-            .filter((k): k is string => Boolean(k));
-        if (!keys.length) return;
+        if (!ackOccurrenceKeys) return;
         let cancelled = false;
         void (async () => {
             try {
                 const res = await fetch(
-                    `/api/admin/queues/stage-membership-ack?keys=${encodeURIComponent(keys.join(","))}`,
+                    `/api/admin/queues/stage-membership-ack?keys=${encodeURIComponent(ackOccurrenceKeys)}`,
                 );
                 if (!res.ok || cancelled) return;
                 const body = (await res.json()) as { occurrence_keys?: string[] };
@@ -239,7 +252,7 @@ export function QueueRegion({
         return () => {
             cancelled = true;
         };
-    }, [orgId, principalUserId, queue.rows]);
+    }, [ackOccurrenceKeys]);
     const holdActive = queue.loading && queue.rows.length > 0;
     const rowsForList = queueRowsForListDuringHold({
         queueRows: queue.rows,

@@ -1,4 +1,5 @@
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 export const WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL = "/api/admin/location-program-categories";
 
@@ -37,7 +38,19 @@ function mapCategoryRow(r: Record<string, unknown>): LocationProgramCategoryRow 
     };
 }
 
-/** Fetch all org location program categories (admin API). */
+/**
+ * Program categories are org configuration and unchanged within an interaction, so concurrent
+ * callers share one request through the workspace's ESTABLISHED dedupe primitive — the same one
+ * the sibling locations call in `useInquiryChildPlacementCascade` already uses. No new cache.
+ *
+ * Without it every mounted placement-cascade instance fetched independently: one Household
+ * drill-in on Firefly issued `GET /api/admin/location-program-categories?include_inactive=true`
+ * **22 times**, byte-identical, because that surface renders many identity fields and several
+ * resolve placement options.
+ */
+const PROGRAM_CATEGORIES_TTL_MS = 30_000;
+
+/** Fetch all org location program categories (admin API). Deduped per URL. */
 export async function fetchLocationProgramCategories(
     init?: RequestInit,
     params?: { locationId?: string | null; includeInactive?: boolean }
@@ -49,7 +62,8 @@ export async function fetchLocationProgramCategories(
     const qs = search.toString();
     const url = qs ? `${WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL}?${qs}` : WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL;
 
-    const res = await fetch(url, { credentials: "include", ...init });
+    const res = await dedupeAdminFetchWithTtl(url, { credentials: "include", ...init }, PROGRAM_CATEGORIES_TTL_MS);
+
     const json = (await res.json().catch(() => ({}))) as {
         categories?: Array<Record<string, unknown>>;
         error?: string;

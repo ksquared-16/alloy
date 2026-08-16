@@ -86,7 +86,21 @@ export function useOptionSetSelectOptions(setKeys: readonly (string | null | und
             cancelled = true;
             setLoading(false);
         };
-    }, [keysSignature, normalizedKeys]);
+        /**
+         * `keysSignature` ONLY — deliberately not `normalizedKeys`.
+         *
+         * Callers pass an inline array: `IdentityFieldValue` builds
+         * `editControl.kind === "select" && isEditing ? [optionSetKey] : []` during render, so
+         * `setKeys` is a new reference every render and the `useMemo` above cannot hold. Listing
+         * `normalizedKeys` here re-ran this effect on every render, and the effect setStates —
+         * an unconditional render loop. Opening one Household identity field editor produced
+         * 549 "Maximum update depth exceeded" errors, and another 372 while typing.
+         *
+         * The signature is the string join of those same keys, so it changes exactly when the
+         * keys change and never when only their array identity does.
+         */
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- keysSignature is normalizedKeys by value
+    }, [keysSignature]);
 
     return { optionsBySetKey, loading };
 }

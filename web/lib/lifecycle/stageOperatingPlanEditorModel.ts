@@ -126,16 +126,33 @@ export function stageOperatingPlanDraftToPersisted(
     return parseStageOperatingPlanV1(plan);
 }
 
+/**
+ * Has the OPERATOR changed anything, relative to the saved plan as this editor represents it?
+ *
+ * Both sides go through the same persist pipeline. Comparing a normalized draft against a merely
+ * parsed `saved` made every persist-time convergence rule read as an operator edit: persist
+ * "ensures exactly one primary flag when any work items exist"
+ * (`normalizeOperatingPlanDraftForPersist`), so a published plan whose work templates carry no
+ * explicit `primary` — Firefly's Decision stage is one — gained `primary: true` on load and the
+ * editor reported `Unsaved changes` with Save enabled, on pure navigation, with zero requests
+ * behind it, and never cleared (R-008).
+ *
+ * That also made the offered Save actively harmful: pressing it would persist a `primary` the
+ * operator never chose.
+ *
+ * Normalizing both sides keeps genuine edits detectable and generalizes to any future
+ * normalization rule, rather than special-casing `primary`.
+ */
 export function stageOperatingPlanDraftDirty(
     saved: StageOperatingPlanV1 | null | undefined,
     draft: StageOperatingPlanEditorDraft,
     stageKey: string,
 ): boolean {
-    const persisted = stageOperatingPlanDraftToPersisted(draft, stageKey, ENROLLMENT_PROCESS_KEY, {
-        validate: false,
-    });
-    const savedNorm = saved ? parseStageOperatingPlanV1(saved) : null;
-    return JSON.stringify(persisted) !== JSON.stringify(savedNorm);
+    const toPersisted = (d: StageOperatingPlanEditorDraft) =>
+        stageOperatingPlanDraftToPersisted(d, stageKey, ENROLLMENT_PROCESS_KEY, { validate: false });
+    const persisted = toPersisted(draft);
+    const baseline = toPersisted(stageOperatingPlanDraftFromSaved(saved, stageKey));
+    return JSON.stringify(persisted) !== JSON.stringify(baseline);
 }
 
 export function newWorkTemplateDraft(index: number): StageWorkTemplateV1 {

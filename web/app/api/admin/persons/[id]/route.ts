@@ -180,7 +180,38 @@ export async function PATCH(
         }
     }
 
-    await upsertFieldValuesFromBody(supabase, ctx.orgId, "person", id, body, PERSON_FIELD_VALUES_EXCLUDED_KEYS);
+    const fieldValueOutcome = await upsertFieldValuesFromBody(
+        supabase,
+        ctx.orgId,
+        "person",
+        id,
+        body,
+        PERSON_FIELD_VALUES_EXCLUDED_KEYS
+    );
+
+    /**
+     * A SAVE THAT PERSISTS NOTHING MUST NOT REPORT SUCCESS.
+     *
+     * `address_line2` is not a persons column and has no `field_definitions` row for `person`, so
+     * the column whitelist above ignored it and the field-values upsert skipped it. The route
+     * still returned 200 with the unchanged row, the Focus Panel took that as success and showed
+     * the new value, and the edit was gone on reload — a silent data loss the operator could only
+     * discover by re-opening the record. Certified on Firefly's Household surface.
+     *
+     * This refuses only the case where the body asked for changes and NONE of them could land.
+     * A body that writes something plus carries an unknown key still succeeds, so callers that
+     * send incidental extra keys are unaffected.
+     */
+    if (Object.keys(personUpdates).length === 0 && fieldValueOutcome.written.length === 0 && fieldValueOutcome.skipped.length > 0) {
+        return NextResponse.json(
+            {
+                error:
+                    `No writable field in this request. Unknown for a person: ${fieldValueOutcome.skipped.join(", ")}.`,
+                unwritable_fields: fieldValueOutcome.skipped,
+            },
+            { status: 400 }
+        );
+    }
 
     const { data: updated } = await supabase
         .from("persons")

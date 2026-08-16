@@ -240,13 +240,21 @@ function buildAddressLine(record: Record<string, unknown>): string | null {
         return null;
     };
     const line1 = pick("person.primary_address_line1", "person.address_line1");
+    /**
+     * Line 2 is part of the address. It was the ONLY component this composition omitted, so a
+     * value the operator had just saved — through the same editor, into the same canonical store
+     * (`field_values` on entity_type `person`; there are no address columns on a persons table) —
+     * was written and persisted and then simply never read back here. To the operator that is
+     * indistinguishable from the save not sticking (R-016).
+     */
+    const line2 = pick("person.primary_address_line2", "person.address_line2");
     const city = pick("person.primary_address_city", "person.city");
     const state = pick("person.primary_address_state", "person.state");
     const postal = pick("person.primary_address_postal_code", "person.postal_code");
 
     const cityState = [city, state].filter(Boolean).join(", ");
     const tail = [cityState || null, postal].filter(Boolean).join(" ");
-    const parts = [line1, tail || null].filter(Boolean);
+    const parts = [line1, line2, tail || null].filter(Boolean);
     return parts.length > 0 ? parts.join(" · ") : null;
 }
 

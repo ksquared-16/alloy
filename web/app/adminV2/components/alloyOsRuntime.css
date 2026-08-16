@@ -6618,6 +6618,12 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   justify-content: space-between;
   gap: 12px;
 }
+/* Capability mode: the destination is the primary content and owns the remaining height, so the
+   topbar shrinks to the one row it must keep — return to the launchers, and close the card. */
+.alloy-os-currentwork__focused-topbar[data-work-topbar-mode="panel"] {
+  align-items: center;
+  min-height: 24px;
+}
 .alloy-os-currentwork__focused-close {
   flex-shrink: 0;
   border: 0;
@@ -8864,88 +8870,21 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 }
 
 .adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option:hover,
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option--active,
 .adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option--selected {
   background: rgba(0, 162, 131, 0.1) !important;
   color: var(--alloy-os-bend-pine, #00a283) !important;
 }
 
-/* AlloySelect custom listbox — white menu (native <option> ignores CSS on macOS). */
-.alloy-select {
-  position: relative;
-  min-width: 0;
-  width: 100%;
+/* This override outranks the primitive's own rule, so it has to carry the keyboard
+   marker too — otherwise arrowing the site filter shows no Alloy highlight at all. */
+.adminv2-shell-header [data-adminv2-site-filter] .alloy-select__option--active {
+  box-shadow: inset 2px 0 0 var(--alloy-os-bend-pine, #00a283);
 }
 
-.alloy-select__trigger {
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 6px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-}
-
-.alloy-select__value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.alloy-select__value--placeholder {
-  color: var(--alloy-os-text-tertiary, #9ca3af);
-}
-
-.alloy-select__chevron {
-  flex: 0 0 auto;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--alloy-os-text-secondary, #6b7280);
-}
-
-.alloy-select__list {
-  position: absolute;
-  z-index: 40;
-  top: calc(100% + 2px);
-  left: 0;
-  right: 0;
-  /* Match the trigger width. A 320px max-width fought min-width:100% on full-row
-     Program fields (skinny menu under a wide trigger). */
-  width: auto;
-  min-width: 100%;
-  max-width: none;
-  margin: 0;
-  padding: 4px 0;
-  list-style: none;
-  max-height: 220px;
-  overflow-y: auto;
-  background: #fff;
-  border: 1px solid var(--alloy-os-border, #e5e7eb);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(24, 39, 58, 0.12);
-  box-sizing: border-box;
-}
-
-.alloy-select__option {
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1.3;
-  color: var(--alloy-os-text-primary, #17211c);
-  cursor: pointer;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.alloy-select__option:hover {
-  background: rgba(0, 162, 131, 0.08);
-}
-
-.alloy-select__option--selected {
-  background: rgba(0, 162, 131, 0.12);
-  font-weight: 600;
-}
+/* AlloySelect base rules now live with the primitive: components/workspace/alloySelect.css
+   (imported by AlloySelect.tsx so it presents correctly on every surface, not only here).
+   Surface-specific overrides — e.g. the top-nav site filter above — stay with their surface. */
 
 .identity-field-value__inline-actions {
   display: inline-flex;

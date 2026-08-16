@@ -151,6 +151,32 @@ export function peekWarmTourSchedule(
     return entry!.value;
 }
 
+/**
+ * Does the warm entry already hold the EXACT slots query the panel is about to issue?
+ *
+ * The panel peeked this cache to paint synchronously and then re-fetched slots and approval
+ * rules unconditionally — the same duplicate shape the form-delivery surface had. It could not
+ * simply reuse the warm value, because its query is not always the warmed one: a reschedule
+ * adds `exclude_booking_id`, and paging past page 0 moves the window.
+ *
+ * So the cache answers that question instead of the panel guessing. The warm entry is usable
+ * only for the window it actually covers, and only when nothing is excluded; anything else is a
+ * genuinely different query and must be fetched.
+ */
+export function peekWarmTourScheduleForQuery(
+    opportunityId: string | null | undefined,
+    locationId: string | null | undefined,
+    query: { windowFrom: Date; windowTo: Date; excludeBookingId?: string | null },
+    now: number = Date.now(),
+): WarmTourSchedule | null {
+    const warm = peekWarmTourSchedule(opportunityId, locationId, now);
+    if (!warm) return null;
+    if (query.excludeBookingId) return null;
+    if (warm.windowFromIso !== query.windowFrom.toISOString()) return null;
+    if (warm.windowToIso !== query.windowTo.toISOString()) return null;
+    return warm;
+}
+
 /** Invalidate the warm entry after a booking mutation so the next open re-verifies. */
 export function invalidateWarmTourSchedule(opportunityId: string, locationId: string): void {
     cache.delete(keyFor(opportunityId, locationId));

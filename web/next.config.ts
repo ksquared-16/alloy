@@ -45,6 +45,13 @@ const nextConfig: NextConfig = {
    */
   ...(process.env.ALLOY_PROD_CERT_DIST ? { distDir: ".next-prodcert" } : {}),
   /**
+   * Duplicate-request certification lever. React StrictMode double-invokes effects in DEV ONLY, so an
+   * on-mount ×2 request is an artifact until it is re-observed with StrictMode off (defect register M-1).
+   * Set `ALLOY_DEV_STRICT_MODE=0` on the measuring server only. Unset → key absent → Next's own default
+   * (on), so committed behaviour is unchanged and no manual restore step can be forgotten.
+   */
+  ...(process.env.ALLOY_DEV_STRICT_MODE === "0" ? { reactStrictMode: false } : {}),
+  /**
    * Next 16 blocks cross-origin `/_next/*` in dev. Operators often open 127.0.0.1 while
    * NEXT_PUBLIC_APP_URL is localhost (or the reverse) — allow both so assets can load.
    */

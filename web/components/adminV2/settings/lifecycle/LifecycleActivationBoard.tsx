@@ -640,23 +640,43 @@ export default function LifecycleActivationBoard({
         ): Promise<boolean> => {
             const dept = opts?.runtimeDepartmentId ?? runtimeDepartmentId;
             if (!dept) return false;
-            const body: LifecycleActivationV1 = {
+            /**
+             * Send IDENTITY plus only what this caller actually changed.
+             *
+             * The endpoint now treats an absent key as "unchanged" (see its PATCH handler), so a
+             * sibling the operator did not touch keeps its persisted value instead of being
+             * overwritten by whatever this component happens to hold. Previously every call
+             * rebuilt the whole bundle and two fields were reset unconditionally —
+             * `action_definition_id` to null, `action_placement_ids` to [] — so an unrelated edit
+             * such as renaming the lifecycle silently cleared both (R-009).
+             *
+             * Identity still travels on every call: a first save has no persisted bundle to merge
+             * over, and `parseLifecycleActivationV1` rejects a payload without `process_id` /
+             * `stage_key`. A caller that means "clear" passes an explicit `null`, and that still
+             * clears, because the key is present.
+             */
+            const body: Partial<LifecycleActivationV1> = {
                 version: 1,
-                lifecycle_name: patch.lifecycle_name ?? lifecycleName,
                 primary_entity: "opportunity",
                 primary_record_label: PRIMARY_RECORD_LABEL,
                 process_id: patch.process_id ?? processId,
                 stage_key: patch.stage_key ?? stageKey,
                 stage_label: patch.stage_label ?? stageLabel,
-                work_unit_id: patch.work_unit_id !== undefined ? patch.work_unit_id : workUnitId,
-                work_unit_name: patch.work_unit_name !== undefined ? patch.work_unit_name : workUnitName,
-                status_keys: patch.status_keys ?? statusKeys,
-                status_labels: patch.status_labels ?? statusDisplayLabels,
-                action_definition_id:
-                    patch.action_definition_id !== undefined ? patch.action_definition_id : null,
-                action_placement_ids: patch.action_placement_ids ?? [],
-                activation_owned: patch.activation_owned ?? activationOwned,
-                completed_steps: patch.completed_steps ?? 6,
+                lifecycle_name: patch.lifecycle_name ?? lifecycleName,
+                ...(patch.work_unit_id !== undefined ? { work_unit_id: patch.work_unit_id } : {}),
+                ...(patch.work_unit_name !== undefined ? { work_unit_name: patch.work_unit_name } : {}),
+                ...(patch.status_keys !== undefined ? { status_keys: patch.status_keys } : {}),
+                ...(patch.status_labels !== undefined ? { status_labels: patch.status_labels } : {}),
+                ...(patch.action_definition_id !== undefined
+                    ? { action_definition_id: patch.action_definition_id }
+                    : {}),
+                ...(patch.action_placement_ids !== undefined
+                    ? { action_placement_ids: patch.action_placement_ids }
+                    : {}),
+                ...(patch.activation_owned !== undefined
+                    ? { activation_owned: patch.activation_owned }
+                    : {}),
+                ...(patch.completed_steps !== undefined ? { completed_steps: patch.completed_steps } : {}),
                 updated_at: new Date().toISOString(),
             };
             const res = await fetch(
@@ -672,18 +692,9 @@ export default function LifecycleActivationBoard({
             if (!res.ok) throw new Error(j.error ?? "Failed to save activation bundle");
             return true;
         },
-        [
-            runtimeDepartmentId,
-            lifecycleName,
-            processId,
-            stageKey,
-            stageLabel,
-            workUnitId,
-            workUnitName,
-            statusKeys,
-            statusDisplayLabels,
-            activationOwned,
-        ]
+        // Only identity is read from component state now; the sibling values are no longer
+        // reconstructed here, so depending on them would just churn this callback's identity.
+        [runtimeDepartmentId, lifecycleName, processId, stageKey, stageLabel]
     );
 
     const saveStageStatuses = useCallback(async (keysToSave?: readonly string[]): Promise<boolean> => {
@@ -1417,9 +1428,21 @@ export default function LifecycleActivationBoard({
                     }
                 }
             }
-            void saveActivation({ stage_key: stage.key, stage_label: stage.label });
+            // NO durable write here, deliberately.
+            //
+            // This used to end `void saveActivation({ stage_key, stage_label })`, so selecting a
+            // stage to LOOK at it PATCHed the activation bundle and wrote departments.metadata.
+            // `activation.stage_key` is not editor position — the runtime reads it as a binding
+            // (builderOwnedLifecycleRuntime, lifecycleWorkUnitQueueValidation,
+            // lifecycleRuntimeBinding, validateLifecycleActivationRuntime), so browsing the stage
+            // list silently repointed which stage the activation targets.
+            //
+            // Selection is local: the flushSync above owns it and `stageKeyRef` carries it. The
+            // explicit save paths (saveStageUnified, saveStageStatuses) persist `stage_key` when
+            // the operator actually commits a change to that stage, so restore-on-load now
+            // reflects the last stage genuinely configured rather than the last one browsed.
         },
-        [statusesPayload, syncStatusKeysFromPayload, saveActivation, loadStatusStages]
+        [statusesPayload, syncStatusKeysFromPayload, loadStatusStages]
     );
 
     const renameLifecycle = useCallback(

@@ -4,6 +4,7 @@
  * Builder V3 — Population / Equivalency / Compare composer.
  */
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import { useMemo } from "react";
 import {
     compilePivotBuilderDraft,
@@ -24,6 +25,12 @@ const OPERATORS: PivotOperatorLabel[] = [
     "Maximum of",
     "Use first available value",
 ];
+
+/** Fixed vocabulary — the two things a pivot can count. */
+const VALUE_MODE_OPTIONS = [
+    { value: "catalog_input", label: "An approved fact" },
+    { value: "equivalent_count", label: "Children in a population" },
+] as const;
 
 export type PopulationOption = { versionId: string; label: string };
 export type WeightingOption = { versionId: string; label: string };
@@ -110,126 +117,109 @@ export default function OrgCalcPivotBuilder({
 
                 <label className="block space-y-1">
                     <span className="config-typo-field-label">Count</span>
-                    <select
-                        className="config-runtime-input"
+                    <AlloySelect
+                        triggerClassName="config-runtime-input"
                         disabled={disabled}
+                        allowEmpty={false}
                         value={draft.valueMode}
-                        onChange={(e) => {
-                            const mode = e.target.value as PivotBuilderDraft["valueMode"];
+                        options={VALUE_MODE_OPTIONS}
+                        aria-label="Count"
+                        testId="pivot-value-mode"
+                        onChange={(next) => {
+                            const mode = next as PivotBuilderDraft["valueMode"];
                             onChange({
                                 ...draft,
                                 valueMode: mode,
                                 asPercentage: mode === "equivalent_count" ? draft.asPercentage : draft.asPercentage,
                             });
                         }}
-                        data-testid="pivot-value-mode"
-                    >
-                        <option value="catalog_input">An approved fact</option>
-                        <option value="equivalent_count">Children in a population</option>
-                    </select>
+                    />
                 </label>
 
                 {draft.valueMode === "equivalent_count" ?
                     <>
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">Population</span>
-                            <select
-                                className="config-runtime-input"
+                            <AlloySelect
+                                triggerClassName="config-runtime-input"
                                 disabled={disabled}
+                                placeholder="Select population…"
                                 value={draft.populationVersionId ?? ""}
-                                onChange={(e) =>
-                                    onChange({ ...draft, populationVersionId: e.target.value || null })
+                                options={populations.map((p) => ({ value: p.versionId, label: p.label }))}
+                                aria-label="Population"
+                                testId="pivot-population-version"
+                                onChange={(next) =>
+                                    onChange({ ...draft, populationVersionId: next || null })
                                 }
-                                data-testid="pivot-population-version"
-                            >
-                                <option value="">Select population…</option>
-                                {populations.map((p) => (
-                                    <option key={p.versionId} value={p.versionId}>
-                                        {p.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </label>
                         <label className="block space-y-1">
                             <span className="config-typo-field-label">How should they count?</span>
-                            <select
-                                className="config-runtime-input"
+                            <AlloySelect
+                                triggerClassName="config-runtime-input"
                                 disabled={disabled}
+                                placeholder="How should they count…"
                                 value={draft.weightingVersionId ?? ""}
-                                onChange={(e) =>
-                                    onChange({ ...draft, weightingVersionId: e.target.value || null })
+                                options={weightings.map((w) => ({ value: w.versionId, label: w.label }))}
+                                aria-label="How should they count?"
+                                testId="pivot-weighting-version"
+                                onChange={(next) =>
+                                    onChange({ ...draft, weightingVersionId: next || null })
                                 }
-                                data-testid="pivot-weighting-version"
-                            >
-                                <option value="">How should they count…</option>
-                                {weightings.map((w) => (
-                                    <option key={w.versionId} value={w.versionId}>
-                                        {w.label}
-                                    </option>
-                                ))}
-                            </select>
+                            />
                         </label>
                     </>
                 :   <label className="block space-y-1">
                         <span className="config-typo-field-label">Value</span>
-                        <select
-                            className="config-runtime-input"
+                        <AlloySelect
+                            triggerClassName="config-runtime-input"
                             disabled={disabled}
+                            allowEmpty={false}
+                            placeholder="No approved facts available"
                             value={draft.valueRef ?? ""}
-                            onChange={(e) =>
-                                onChange({ ...draft, valueRef: e.target.value as ApprovedInputRef })
+                            options={choices.map((c) => ({ value: c.ref, label: c.label }))}
+                            aria-label="Value"
+                            testId="pivot-value-ref"
+                            onChange={(next) =>
+                                onChange({ ...draft, valueRef: next as ApprovedInputRef })
                             }
-                            data-testid="pivot-value-ref"
-                        >
-                            {choices.map((c) => (
-                                <option key={c.ref} value={c.ref}>
-                                    {c.label}
-                                </option>
-                            ))}
-                        </select>
+                        />
                     </label>
                 }
 
                 <label className="block space-y-1">
                     <span className="config-typo-field-label">Then</span>
-                    <select
-                        className="config-runtime-input"
+                    <AlloySelect
+                        triggerClassName="config-runtime-input"
                         disabled={disabled}
+                        allowEmpty={false}
                         value={draft.operator}
-                        onChange={(e) =>
-                            onChange({ ...draft, operator: e.target.value as PivotOperatorLabel })
+                        options={OPERATORS.map((op) => ({ value: op, label: op }))}
+                        aria-label="Then"
+                        testId="pivot-operator"
+                        onChange={(next) =>
+                            onChange({ ...draft, operator: next as PivotOperatorLabel })
                         }
-                        data-testid="pivot-operator"
-                    >
-                        {OPERATORS.map((op) => (
-                            <option key={op} value={op}>
-                                {op}
-                            </option>
-                        ))}
-                    </select>
+                    />
                 </label>
 
                 <label className="block space-y-1">
                     <span className="config-typo-field-label">Compare against</span>
-                    <select
-                        className="config-runtime-input"
+                    <AlloySelect
+                        triggerClassName="config-runtime-input"
                         disabled={disabled}
+                        placeholder="No comparison"
                         value={draft.compareRef ?? ""}
-                        onChange={(e) =>
+                        options={choices.map((c) => ({ value: c.ref, label: c.label }))}
+                        aria-label="Compare against"
+                        testId="pivot-compare-ref"
+                        onChange={(next) =>
                             onChange({
                                 ...draft,
-                                compareRef: (e.target.value || null) as ApprovedInputRef | null,
+                                compareRef: (next || null) as ApprovedInputRef | null,
                             })
                         }
-                        data-testid="pivot-compare-ref"
-                    >
-                        <option value="">No comparison</option>
-                        {choices.map((c) => (
-                            <option key={c.ref} value={c.ref}>
-                                {c.label}
-                            </option>
-                        ))}
-                    </select>
+                    />
                 </label>
 
                 <label className="flex items-center gap-2 text-sm">

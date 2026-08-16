@@ -22,13 +22,27 @@ import { homedir } from "os";
 import { join } from "path";
 import fs from "fs";
 
-const STORAGE = join(homedir(), ".local/state/alloy-dev/auth/slot3/storage-state.json");
-const BASE = "http://127.0.0.1:3013";
-const SUBJECT = "b29921ca-b4d2-4cf4-b26c-2b9bd7263d78";
+/**
+ * PINNING. These were hardcoded to slot 3 / port 3013 / one tenant record, so running the
+ * harness from any other slot measured the wrong server — or a 404, which still produces a
+ * complete and entirely plausible timing profile. They are env-driven now, and the runbook
+ * requires loading both URLs by hand before trusting a run.
+ */
+const SLOT = process.env.PE3_SLOT ?? "5";
+const PORT = process.env.PE3_PORT ?? String(3010 + Number(SLOT));
+const STORAGE = process.env.PE3_STORAGE ?? join(homedir(), `.local/state/alloy-dev/auth/slot${SLOT}/storage-state.json`);
+const BASE = process.env.PE3_BASE ?? `http://127.0.0.1:${PORT}`;
+const SUBJECT = process.env.PE3_SUBJECT ?? "";
+const SLUG = process.env.PE3_SLUG ?? "all";
 const URLS = {
-  deeplink: `${BASE}/workspace/work-unit/lifecycle_wu_lead?subject_id=${SUBJECT}`,
-  bare: `${BASE}/workspace/work-unit/lifecycle_wu_lead`,
+  deeplink: SUBJECT
+    ? `${BASE}/workspace/work-unit/${SLUG}?subject_id=${SUBJECT}`
+    : `${BASE}/workspace/work-unit/${SLUG}`,
+  bare: `${BASE}/workspace/work-unit/${SLUG}`,
 };
+if (!SUBJECT && (process.argv[3] ?? "deeplink") === "deeplink") {
+  console.warn("PE3 WARNING: no PE3_SUBJECT set — the 'deeplink' cell is measuring the BARE path.");
+}
 
 const mode = process.argv[2] ?? "warmproc";
 const variant = process.argv[3] ?? "deeplink";
@@ -52,6 +66,7 @@ await page.addInitScript(() => {
   };
   let lastCount = -1;
   let lastReserved = -1;
+  const cards0 = () => document.querySelectorAll("[data-card-role]").length;
   const check = () => {
     if (document.querySelector("[data-alloy-os-runtime]")) stamp("runtime_root");
     if (document.querySelector("[data-runtime-label='WU.SURFACE']")) stamp("wu_surface");
@@ -61,17 +76,31 @@ await page.addInitScript(() => {
     const inline = document.querySelector("[data-inline-focus-panel]");
     if (inline?.getAttribute("data-inline-focus-panel-resolved") === "true") stamp("fp_resolved");
 
-    // the authoritative cell-usable signal (prod): a cell is RESERVED once it is truthfully usable,
-    // and carries data-focus-panel-cell-preparing while it is not.
+    // CORRECTED 2026-08-14. The previous reading of these attributes was inverted and would
+    // have reported the opposite of what it claimed:
+    //
+    //   * `ReservedFocusPanelCell` is the HOLD component. It renders only while a cell is NOT
+    //     yet filled, and stamps `data-focus-panel-cell-reserved="true"` then — so "reserved"
+    //     means "placeholder holding space", not "usable". The old code treated the arrival of
+    //     placeholders as the arrival of content.
+    //   * `data-focus-panel-cell-preparing` carries the card's typeKey (e.g. "household"),
+    //     never the literal "true", so the old `[...='true']` selector always matched ZERO.
+    //
+    // Together those made `all_cells_reserved` fire only while EVERY cell was still a
+    // placeholder — i.e. it stamped "all cells reserved" at the moment nothing was usable.
+    //
+    // `data-focus-panel-cell-not-applicable` did not exist when this harness was written; a
+    // cell carrying it has RESOLVED as empty for this record and is settled, not pending.
     const cells = document.querySelectorAll("[data-focus-panel-grid-cell]");
-    const reserved = document.querySelectorAll("[data-focus-panel-cell-reserved='true']");
-    const preparing = document.querySelectorAll("[data-focus-panel-cell-preparing='true']");
-    if (reserved.length !== lastReserved) {
-      lastReserved = reserved.length;
-      if (reserved.length > 0) stamp(`cells_reserved_${reserved.length}`, { cells: cells.length, preparing: preparing.length });
+    const holding = document.querySelectorAll("[data-focus-panel-cell-reserved='true']");
+    const notApplicable = document.querySelectorAll("[data-focus-panel-cell-not-applicable='true']");
+    if (holding.length !== lastReserved) {
+      lastReserved = holding.length;
+      if (holding.length > 0) stamp(`cells_holding_${holding.length}`, { cells: cells.length });
     }
-    if (cells.length > 0 && preparing.length === 0 && reserved.length >= cells.length)
-      stamp("all_cells_reserved", { cells: cells.length });
+    // Usable = at least one card present and NO cell still holding.
+    if (cards0() > 0 && holding.length === 0)
+      stamp("all_cells_usable", { cells: cells.length, notApplicable: notApplicable.length });
 
     const cards = document.querySelectorAll("[data-card-role]");
     if (cards.length !== lastCount) {

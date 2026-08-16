@@ -7,22 +7,27 @@ cd "$(dirname "$0")/.."
 export PATH="/Users/Kelly/.nvm/versions/node/v22.21.1/bin:$PATH"
 
 MODE="${1:-cold}"; VARIANT="${2:-deeplink}"; LABEL="${3:-${MODE}-${VARIANT}}"
+
+# Slot-pinned by env (was hardcoded to 3013 — see pe3ColdLoadHarness.mjs).
+PE3_SLOT="${PE3_SLOT:-5}"
+PE3_PORT="${PE3_PORT:-$((3010 + PE3_SLOT))}"
+export PE3_SLOT PE3_PORT
 LOG=/tmp/pe3/server-$LABEL.log
 mkdir -p /tmp/pe3
 
 if [ "$MODE" = "cold" ]; then
-  lsof -ti tcp:3013 | xargs kill -9 2>/dev/null
-  for i in $(seq 1 40); do lsof -ti tcp:3013 >/dev/null 2>&1 || break; sleep 0.25; done
-  if lsof -ti tcp:3013 >/dev/null 2>&1; then echo "FATAL: port 3013 still held"; exit 1; fi
+  lsof -ti tcp:"$PE3_PORT" | xargs kill -9 2>/dev/null
+  for i in $(seq 1 40); do lsof -ti tcp:"$PE3_PORT" >/dev/null 2>&1 || break; sleep 0.25; done
+  if lsof -ti tcp:"$PE3_PORT" >/dev/null 2>&1; then echo "FATAL: port $PE3_PORT still held"; exit 1; fi
 
   set -a; . ./.env.local.agent; . /Users/Kelly/Alloy/web/.env.local; set +a
   SPAWN_MS=$(node -e 'console.log(Date.now())')
-  PORT=3013 ./node_modules/.bin/next start -p 3013 >"$LOG" 2>&1 &
+  PORT="$PE3_PORT" ./node_modules/.bin/next start -p "$PE3_PORT" >"$LOG" 2>&1 &
   SRV=$!
   # wait for the port to ACCEPT (TCP only — issuing HTTP here would pre-warm the route)
   LISTEN_MS=""
   for i in $(seq 1 400); do
-    if node -e 'const n=require("net");const s=n.connect(3013,"127.0.0.1");s.on("connect",()=>{s.destroy();process.exit(0)});s.on("error",()=>process.exit(1));' 2>/dev/null; then
+    if node -e 'const n=require("net");const s=n.connect(Number(process.env.PE3_PORT),"127.0.0.1");s.on("connect",()=>{s.destroy();process.exit(0)});s.on("error",()=>process.exit(1));' 2>/dev/null; then
       LISTEN_MS=$(node -e 'console.log(Date.now())'); break
     fi
     sleep 0.1

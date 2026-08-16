@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { AlloySelect } from "@/components/workspace/AlloySelect";
 import type { StageOutcomeRuleV1, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeTransitionOption } from "@/lib/lifecycle/resolveStageOutcomeTransitionOptions";
 import {
@@ -39,6 +40,13 @@ type Props = {
     onRulesChange: (rules: StageOutcomeRuleV1[]) => void;
 };
 
+/** Fixed vocabulary — the three ways a follow-up can be timed against its anchor. */
+const SCHEDULE_MODE_OPTIONS = [
+    { value: "immediate", label: "Immediately" },
+    { value: "before", label: "Before" },
+    { value: "after", label: "After" },
+] as const;
+
 function ScheduleTimingControls({
     policy,
     onChange,
@@ -53,22 +61,21 @@ function ScheduleTimingControls({
 
     return (
         <div className="flex flex-wrap items-center gap-1" data-testid={testIdPrefix}>
-            <select
+            <AlloySelect
                 value={timing.mode}
                 aria-label="Schedule timing"
-                onChange={(event) =>
+                allowEmpty={false}
+                density="compact"
+                className="w-auto"
+                options={SCHEDULE_MODE_OPTIONS}
+                onChange={(next) =>
                     applyTiming({
                         ...timing,
-                        mode: event.target.value as ScheduleTimingUi["mode"],
-                        offset_value: event.target.value === "immediate" ? 0 : Math.max(1, timing.offset_value || 1),
+                        mode: next as ScheduleTimingUi["mode"],
+                        offset_value: next === "immediate" ? 0 : Math.max(1, timing.offset_value || 1),
                     })
                 }
-                className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
-            >
-                <option value="immediate">Immediately</option>
-                <option value="before">Before</option>
-                <option value="after">After</option>
-            </select>
+            />
             {timing.mode !== "immediate" ?
                 <>
                     <input
@@ -84,36 +91,40 @@ function ScheduleTimingControls({
                             })
                         }
                     />
-                    <select
+                    <AlloySelect
                         value={timing.offset_unit}
                         aria-label="Schedule offset unit"
-                        onChange={(event) =>
+                        allowEmpty={false}
+                        density="compact"
+                        className="w-auto"
+                        options={FOLLOW_UP_OFFSET_UNIT_OPTIONS.map((unit) => ({
+                            value: unit.value,
+                            label: unit.label,
+                        }))}
+                        onChange={(next) =>
                             applyTiming({
                                 ...timing,
-                                offset_unit: event.target.value as ScheduleTimingUi["offset_unit"],
+                                offset_unit: next as ScheduleTimingUi["offset_unit"],
                             })
                         }
-                        className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
-                    >
-                        {FOLLOW_UP_OFFSET_UNIT_OPTIONS.map((unit) => (
-                            <option key={unit.value} value={unit.value}>{unit.label}</option>
-                        ))}
-                    </select>
-                    <select
+                    />
+                    <AlloySelect
                         value={timing.anchor}
                         aria-label="Schedule anchor"
-                        onChange={(event) =>
+                        allowEmpty={false}
+                        density="compact"
+                        className="w-auto"
+                        options={FOLLOW_UP_DUE_ANCHOR_OPTIONS.map((anchor) => ({
+                            value: anchor.value,
+                            label: anchor.label,
+                        }))}
+                        onChange={(next) =>
                             applyTiming({
                                 ...timing,
-                                anchor: event.target.value as ScheduleTimingUi["anchor"],
+                                anchor: next as ScheduleTimingUi["anchor"],
                             })
                         }
-                        className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
-                    >
-                        {FOLLOW_UP_DUE_ANCHOR_OPTIONS.map((anchor) => (
-                            <option key={anchor.value} value={anchor.value}>{anchor.label}</option>
-                        ))}
-                    </select>
+                    />
                 </>
             :   null}
             <span className="text-[0.6875rem] text-alloy-midnight/45">{formatScheduleTimingSummary(policy)}</span>
@@ -282,76 +293,81 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                     >
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[0.6875rem] text-alloy-midnight/70">Why it closed</span>
-                            <select
-                                className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                            <AlloySelect
                                 value={draft.case_status?.close_reason_key ?? ""}
                                 aria-label="Close reason"
-                                data-testid={`stage-outcome-close-reason-${outcomeKey}`}
-                                onChange={(event) => applyClose({ close_reason_key: event.target.value })}
-                            >
-                                <option value="">Select a reason…</option>
-                                {CASE_CLOSE_REASONS.map((reason) => (
-                                    <option key={reason.key} value={reason.key}>{reason.label}</option>
-                                ))}
-                            </select>
+                                placeholder="Select a reason…"
+                                density="compact"
+                                className="w-auto"
+                                testId={`stage-outcome-close-reason-${outcomeKey}`}
+                                options={CASE_CLOSE_REASONS.map((reason) => ({
+                                    value: reason.key,
+                                    label: reason.label,
+                                }))}
+                                onChange={(next) => applyClose({ close_reason_key: next })}
+                            />
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[0.6875rem] text-alloy-midnight/70">Case becomes</span>
-                            <select
-                                className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                            <AlloySelect
                                 value={draft.case_status?.status_key ?? defaultClosedStatusKey}
                                 aria-label="Closed case status"
-                                data-testid={`stage-outcome-close-status-${outcomeKey}`}
-                                onChange={(event) => applyClose({ status_key: event.target.value })}
-                            >
-                                {(closedStatusOptions ?? []).map((status) => (
-                                    <option key={status.status_key} value={status.status_key}>
-                                        {status.status_label}
-                                    </option>
-                                ))}
-                            </select>
+                                // Required: a closing outcome always lands the case on a status.
+                                allowEmpty={false}
+                                // Resolved by the parent from `status_definitions`; until it does,
+                                // the trigger reads this rather than an empty control.
+                                placeholder="No closed statuses configured"
+                                density="compact"
+                                className="w-auto"
+                                testId={`stage-outcome-close-status-${outcomeKey}`}
+                                options={(closedStatusOptions ?? []).map((status) => ({
+                                    value: status.status_key,
+                                    label: status.status_label,
+                                }))}
+                                onChange={(next) => applyClose({ status_key: next })}
+                            />
                         </div>
 
                         <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-[0.6875rem] text-alloy-midnight/70">Record comes to rest in</span>
                             {availableTransitions.length ? (
-                                <select
-                                    className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                <AlloySelect
                                     value={draft.transition_ref ?? ""}
                                     aria-label="Closing destination"
-                                    data-testid={`stage-outcome-close-destination-${outcomeKey}`}
-                                    onChange={(event) =>
+                                    // The empty entry is a real destination here ("stay put"),
+                                    // not a prompt — so it keeps its authored label.
+                                    placeholder={`${stageLabel} (no move)`}
+                                    density="compact"
+                                    className="w-auto"
+                                    testId={`stage-outcome-close-destination-${outcomeKey}`}
+                                    options={availableTransitions.map((transition) => ({
+                                        value: transition.transition_ref,
+                                        label: transition.label,
+                                    }))}
+                                    onChange={(next) =>
                                         apply({
                                             ...draft,
-                                            movement: event.target.value
-                                                ? "move_through_transition"
-                                                : "stay_in_stage",
-                                            transition_ref: event.target.value || undefined,
+                                            movement: next ? "move_through_transition" : "stay_in_stage",
+                                            transition_ref: next || undefined,
                                         })
                                     }
-                                >
-                                    <option value="">{stageLabel} (no move)</option>
-                                    {availableTransitions.map((transition) => (
-                                        <option key={transition.transition_ref} value={transition.transition_ref}>
-                                            {transition.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             ) : needsFirstTransition ? (
                                 <>
-                                    <select
-                                        className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                                    <AlloySelect
                                         value={newDestinationKey}
                                         aria-label="Closing destination stage"
-                                        data-testid={`stage-outcome-close-new-destination-${outcomeKey}`}
-                                        onChange={(event) => setNewDestinationKey(event.target.value)}
-                                    >
-                                        <option value="">Select stage…</option>
-                                        {(transitionDestinations ?? []).map((stage) => (
-                                            <option key={stage.key} value={stage.key}>{stage.label}</option>
-                                        ))}
-                                    </select>
+                                        placeholder="Select stage…"
+                                        density="compact"
+                                        className="w-auto"
+                                        testId={`stage-outcome-close-new-destination-${outcomeKey}`}
+                                        options={(transitionDestinations ?? []).map((stage) => ({
+                                            value: stage.key,
+                                            label: stage.label,
+                                        }))}
+                                        onChange={setNewDestinationKey}
+                                    />
                                     <button
                                         type="button"
                                         className="rounded-md bg-alloy-pine px-2 py-1 text-[0.6875rem] font-medium text-white disabled:opacity-40"
@@ -384,19 +400,19 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                 ) : null}
 
                 {mode === "move" && availableTransitions.length ?
-                    <select
-                        className="ml-2 rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                    <AlloySelect
                         value={draft.transition_ref ?? ""}
-                        onChange={(event) => apply({ ...draft, transition_ref: event.target.value || undefined })}
-                        data-testid={`stage-outcome-transition-${outcomeKey}`}
-                    >
-                        <option value="">Select transition…</option>
-                        {availableTransitions.map((transition) => (
-                            <option key={transition.transition_ref} value={transition.transition_ref}>
-                                {transition.label}
-                            </option>
-                        ))}
-                    </select>
+                        aria-label="Outcome transition"
+                        placeholder="Select transition…"
+                        density="compact"
+                        className="ml-2 w-auto"
+                        testId={`stage-outcome-transition-${outcomeKey}`}
+                        options={availableTransitions.map((transition) => ({
+                            value: transition.transition_ref,
+                            label: transition.label,
+                        }))}
+                        onChange={(next) => apply({ ...draft, transition_ref: next || undefined })}
+                    />
                 :   null}
 
                 {/*
@@ -412,20 +428,19 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                         data-testid={`stage-outcome-create-transition-${outcomeKey}`}
                     >
                         <span className="text-[0.6875rem] text-alloy-midnight/70">Moves to</span>
-                        <select
-                            className="rounded-md border border-alloy-forge/15 bg-white px-2 py-1 text-[0.6875rem]"
+                        <AlloySelect
                             value={newDestinationKey}
                             aria-label={`Destination stage for ${stageLabel}`}
-                            data-testid={`stage-outcome-new-transition-destination-${outcomeKey}`}
-                            onChange={(event) => setNewDestinationKey(event.target.value)}
-                        >
-                            <option value="">Select stage…</option>
-                            {(transitionDestinations ?? []).map((stage) => (
-                                <option key={stage.key} value={stage.key}>
-                                    {stage.label}
-                                </option>
-                            ))}
-                        </select>
+                            placeholder="Select stage…"
+                            density="compact"
+                            className="w-auto"
+                            testId={`stage-outcome-new-transition-destination-${outcomeKey}`}
+                            options={(transitionDestinations ?? []).map((stage) => ({
+                                value: stage.key,
+                                label: stage.label,
+                            }))}
+                            onChange={setNewDestinationKey}
+                        />
                         <button
                             type="button"
                             className="rounded-md bg-alloy-pine px-2 py-1 text-[0.6875rem] font-medium text-white disabled:opacity-40"
@@ -480,20 +495,22 @@ export default function LifecycleStageOutcomeBehaviorEditor({
                 {draft.follow_up_work.map((followUp, index) => (
                     <div key={index} className="space-y-1 rounded-md bg-alloy-midnight/[0.025] p-1.5">
                         <div className="flex flex-wrap items-center gap-1">
-                            <select
+                            <AlloySelect
                                 value={followUp.template_key}
-                                onChange={(event) => {
+                                aria-label="Follow-up work template"
+                                placeholder="Select Work Template…"
+                                density="compact"
+                                className="w-auto"
+                                options={workTemplates.map((work) => ({
+                                    value: work.template_key,
+                                    label: work.label,
+                                }))}
+                                onChange={(value) => {
                                     const next = [...draft.follow_up_work];
-                                    next[index] = { ...followUp, template_key: event.target.value };
+                                    next[index] = { ...followUp, template_key: value };
                                     apply({ ...draft, follow_up_work: next });
                                 }}
-                                className="rounded-md border border-alloy-forge/15 bg-white px-1 py-0.5 text-[0.6875rem]"
-                            >
-                                <option value="">Select Work Template…</option>
-                                {workTemplates.map((work) => (
-                                    <option key={work.template_key} value={work.template_key}>{work.label}</option>
-                                ))}
-                            </select>
+                            />
                             <button
                                 type="button"
                                 className="text-[0.6875rem] text-red-700"

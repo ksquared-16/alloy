@@ -548,6 +548,11 @@ export default function CurrentWorkCard({
             }}
             onConfirmOutcome={handleConfirmOutcome}
             onClose={closeWorkspace}
+            // R-014: return to the launcher list without collapsing the card. `closeActionPanel`
+            // has existed since the panel slot was written and was reachable from no UI control —
+            // every visible exit was bound to `closeWorkspace`, so leaving a command destination
+            // always cost the operator the whole Focus Panel context.
+            onDismissPanel={closeActionPanel}
             actionPanel={
                 activePanelAction ?
                     <CurrentWorkActionPanel

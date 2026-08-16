@@ -56,6 +56,12 @@ type Props = {
     onCancelOutcome: () => void;
     onConfirmOutcome: () => void;
     onClose: () => void;
+    /**
+     * Return from an open command destination to the launcher list WITHOUT collapsing the card.
+     * Distinct from `onClose`, which dismisses the whole elevated surface — the two were the same
+     * gesture until R-014, which is why every command destination was a dead end.
+     */
+    onDismissPanel?: () => void;
     actionPanel: React.ReactNode;
     /**
      * Per-child paths for a template configuring `participant_decisions`.
@@ -85,6 +91,7 @@ export default function CurrentWorkFocusedSurface({
     onCancelOutcome,
     onConfirmOutcome,
     onClose,
+    onDismissPanel,
     actionPanel,
     participantDecisions,
 }: Props) {
@@ -147,26 +154,39 @@ export default function CurrentWorkFocusedSurface({
             role="group"
             aria-label="What's Next"
         >
-            {/* In capability mode the compact context is the UniversalCard header (obligation +
-                status); we drop the reason/close topbar so the capability gets the full height and
-                its own footer stays visible. The topbar returns in default/outcome mode. */}
-            {hasPanel ?
-                null
-            :   <div className="alloy-os-currentwork__focused-topbar">
-                    {reason ?
-                        <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
-                    :   <span />}
+            {/* The topbar is the card's only always-present exit, so it renders in EVERY mode.
+                In capability mode it collapses to a single compact row and trades the reason for
+                the return control: a command destination replaces the launcher row entirely, so
+                without this the operator's only escape is the backdrop or browser navigation
+                (defect register R-014). Message, Send form and every Tour ▾ item resolve to the
+                same `activePanelAction` slot, so ONE control here is the return grammar for all of
+                them — the same "← Back to actions" wording outcome mode already uses. */}
+            <div
+                className="alloy-os-currentwork__focused-topbar"
+                data-work-topbar-mode={hasPanel ? "panel" : "default"}
+            >
+                {hasPanel && onDismissPanel ?
                     <button
                         type="button"
-                        className="alloy-os-currentwork__focused-close"
-                        onClick={onClose}
-                        data-work-action="close-focused"
-                        aria-label="Close"
+                        className="alloy-os-currentwork__focused-back"
+                        data-work-action="back-to-actions"
+                        onClick={onDismissPanel}
                     >
-                        ✕
+                        ← Back to actions
                     </button>
-                </div>
-            }
+                : reason ?
+                    <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
+                :   <span />}
+                <button
+                    type="button"
+                    className="alloy-os-currentwork__focused-close"
+                    onClick={onClose}
+                    data-work-action="close-focused"
+                    aria-label="Close"
+                >
+                    ✕
+                </button>
+            </div>
 
             {/* Not while a capability panel owns the surface — that panel is the primary content and
                 fills the remaining height. */}

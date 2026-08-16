@@ -16,7 +16,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { peekWarmFormDelivery } from "@/lib/adminV2/runtime/focusPanel/currentWork/formDeliveryWarmCache";
+import {
+    invalidateWarmFormDelivery,
+    loadFormDelivery,
+    peekWarmFormDelivery,
+} from "@/lib/adminV2/runtime/focusPanel/currentWork/formDeliveryWarmCache";
 
 type Props = {
     opportunityId: string;
@@ -53,36 +57,22 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
     useEffect(() => {
         let live = true;
         (async () => {
-            // Only show the loading gate when there is nothing warm to show yet; otherwise verify silently.
+            // Only show the loading gate when there is nothing warm to show yet.
             if (!peekWarmFormDelivery(opportunityId)) setLoading(true);
             setLoadError(null);
             try {
-                const [formsRes, recRes, subjRes] = await Promise.all([
-                    fetch("/api/admin/forms", { credentials: "include" }),
-                    fetch(`/api/admin/communications/drawer-recipients?entity_type=opportunities&entity_id=${encodeURIComponent(opportunityId)}`, { credentials: "include" }),
-                    fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/delivery-subjects`, { credentials: "include" }),
-                ]);
-                // /api/admin/forms answers { data: FormRow[] } (an array directly under `data`).
-                // Reading `forms` / `data.forms` here always missed, so a tenant with published
-                // forms saw "No active forms are configured" — the runtime hid valid config.
-                type FormRow = { id: string; name: string; is_active?: boolean };
-                const formsJ = (await formsRes.json().catch(() => ({}))) as {
-                    forms?: FormRow[];
-                    data?: FormRow[] | { forms?: FormRow[] };
-                };
-                const recJ = (await recRes.json().catch(() => ({}))) as { recipients?: RecipientOption[] };
-                const subjJ = (await subjRes.json().catch(() => ({}))) as { subjects?: SubjectOption[]; data?: { subjects?: SubjectOption[] } };
-                if (!live) return;
-                const rawForms: FormRow[] =
-                    formsJ.forms
-                    ?? (Array.isArray(formsJ.data) ? formsJ.data : formsJ.data?.forms)
-                    ?? [];
-                const formList = rawForms.filter((f) => f.is_active !== false).map((f) => ({ id: f.id, name: f.name }));
-                setForms(formList);
-                setRecipients(recJ.recipients ?? []);
-                setSubjects(subjJ.subjects ?? subjJ.data?.subjects ?? []);
-                if (formList.length === 1) setFormId(formList[0]!.id);
-                const suggested = (recJ.recipients ?? []).filter((r) => r.email);
+                // One seam. A completed warm resolves from cache with no request; an open that
+                // races an in-flight warm joins that promise rather than issuing its own three.
+                // This surface used to re-run all three fetches unconditionally, in a copy of
+                // the cache's own fetch functions — which is how the parsing bug below had to
+                // be found and fixed twice.
+                const value = await loadFormDelivery(opportunityId);
+                if (!live || !value) return;
+                setForms(value.forms);
+                setRecipients(value.recipients);
+                setSubjects(value.subjects);
+                if (value.forms.length === 1) setFormId(value.forms[0]!.id);
+                const suggested = value.recipients.filter((r) => r.email);
                 if (suggested.length > 0) setSelectedRecipients(new Set([suggested[0]!.person_id]));
             } catch (e) {
                 if (live) setLoadError(e instanceof Error ? e.message : String(e));
@@ -171,6 +161,12 @@ export default function FormDeliverySurface({ opportunityId, onClose, onComplete
             } else {
                 setDoneNote(`Form sent to ${sent} recipient${sent === 1 ? "" : "s"}.`);
             }
+
+            // A delivery changes what the next open should show, so retire the warm entry.
+            // The cache has always offered this and nothing called it — which was survivable
+            // only because the surface re-fetched unconditionally. Now that an open inside the
+            // TTL is served from cache, the invalidation is what keeps it honest.
+            invalidateWarmFormDelivery(opportunityId);
 
             // Recompose whenever real canonical work happened (a link mint or any successful send).
             if (typeof window !== "undefined" && (channel === "link" || sent > 0)) {
