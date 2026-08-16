@@ -9,9 +9,38 @@
 
 import type { FocusPanelCommitCriticalInput } from "@/lib/adminV2/runtime/focusPanel/focusPanelCommitCriticalInput";
 import { buildCurrentWorkCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
+import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import { mergeSubjectIdentityTruthOntoSettled } from "@/lib/adminV2/runtime/focusPanel/mergeSubjectIdentityTruthOntoSettled";
 import type { FocusPanelWorkModeModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+
+function trimOrNull(value: unknown): string | null {
+    const text = value != null ? String(value).trim() : "";
+    return text || null;
+}
+
+/**
+ * The focused child's own row inside the family's settled children collection, matched on the
+ * member id — the identity of record for a child. It carries facts the child bindings do not,
+ * notably `dob`.
+ */
+function inquiryChildRow(
+    truth: Record<string, unknown>,
+    memberId: string | null,
+): Record<string, unknown> | null {
+    if (!memberId) return null;
+    const rows = truth._inquiry_children;
+    if (!Array.isArray(rows)) return null;
+    return (
+        (rows as unknown[]).find(
+            (row): row is Record<string, unknown> =>
+                Boolean(row)
+                && typeof row === "object"
+                && trimOrNull((row as Record<string, unknown>).customer_member_id) === memberId,
+        ) ?? null
+    );
+}
 
 export function overlayChildMissionOntoSettledFocusModel(
     settled: FocusPanelWorkModeModel,
@@ -42,6 +71,38 @@ export function overlayChildMissionOntoSettledFocusModel(
         (typeof commitCritical.subjectIdentityTruth?.["child.display_name"] === "string"
             ? String(commitCritical.subjectIdentityTruth["child.display_name"]).trim()
             : null) || settled.title;
+
+    /**
+     * `child_identity` — the card the CHILD composition asks for, produced on the lens path.
+     *
+     * The grid composes a non-case subject from `focusPanelSummaryDefaultDocForGrain`, and the child
+     * composition's one card is `child_identity`. That key was only ever derived on the
+     * subject-first durable path (`deriveChildFocusPanelCards`), which "arrives subject-first and
+     * never through a lens". So on a child-grain Work View the cell composed correctly and had no
+     * producer, resolving `visible: false` → `not_applicable`: an authored cell reading as
+     * inapplicable purely because nothing could fill it (R-017).
+     *
+     * The same derivation is reused rather than reimplemented — one child card, two entry paths.
+     * The subject is assembled from what the lens already carries: the child bindings for identity,
+     * and the focused child's own row in the settled family collection for `dob`, which the
+     * bindings do not include. A missing DOB is a state the card states honestly, not a failure.
+     */
+    const childMemberId = trimOrNull(commitCritical.subjectIdentityTruth?.["child.customer_member_id"]);
+    const childRow = inquiryChildRow(settled.context.truth, childMemberId);
+    const childSubject: DurableChildSubject = {
+        memberId: childMemberId ?? commitCritical.subjectId,
+        // Enrichment on the durable path, and not carried by the lens. Null is ordinary, not an error.
+        personId: null,
+        householdId: null,
+        label: subjectLabel,
+        dateOfBirth: trimOrNull(childRow?.dob),
+        householdName: trimOrNull(commitCritical.subjectIdentityTruth?.["child.family_name"]),
+        // A lens row exists because the child is in an operating cohort.
+        isActive: true,
+        truth: settled.context.truth,
+    };
+    cardModels.set("child_identity", deriveChildIdentityCard(childSubject, new Date()));
+    cardReadiness.set("child_identity", "ready");
 
     const commands: ResolvedActionForClient[] = commitCritical.primaryAction
         ? [
