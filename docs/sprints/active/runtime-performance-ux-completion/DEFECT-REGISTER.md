@@ -7,6 +7,14 @@ supersedes: []
 
 # Runtime Performance + UX Completion — defect register
 
+> **Closeout, 16 Aug 2026.** Runtime behaviour and interaction certification is complete to the
+> extent possible on this host. **Hard production performance budgets remain blocked on a qualified
+> build/measurement host.** Final attempt this date: load 3.09 (falling) and CPU idle 77% both passed
+> the runbook gate, but **swap held at 10.8 GB of 12.3 GB (88%) with 3 competing dev servers**, and
+> `next build` — isolated via `ALLOY_PROD_CERT_DIST` so it could not clobber the running dev server —
+> died with **exit 144 (SIGTERM)** at "Creating an optimized production build". Same documented
+> failure. No dev millisecond anywhere in this register is offered as a product performance number.
+
 **Status:** Active working register for the Slot 5 sprint. **Evidence, not doctrine.**
 Canonical behaviour lives in its owner doc; this file records observed defects, their root
 owner, and what proved them.
@@ -678,10 +686,30 @@ A save acknowledgement affordance does exist and **is wired**: `IdentityFieldGri
 `justSavedFieldRef` on a timer and passes `savedFlash` per field, which `IdentityFieldValue` renders.
 Unlike `closeActionPanel` (R-014) this one is reachable.
 
-**Not certified:** that the flash actually paints on a real save. Proving it requires a genuine
-durable write to Firefly child data — and Firefly is the enrollment certification tenant another slot
-is actively using, so changing a child's placement was not something to do unilaterally.
-**Needs Kelly's authorization, or a disposable subject.** It is the single remaining gap in Journey A.
+### Save acknowledgement — CERTIFIED (authorized reversible write, 16 Aug)
+
+Closed with one authorized, fully reverted round trip on `child.special_instructions` — a free-text
+profile note on Lennon Kurzman. Not lifecycle, waitlist, tour, assignment/placement or enrollment
+outcome. Original value captured and restored exactly.
+
+| Step | Observed |
+|---|---|
+| Edit → change → Save | `✓ Saved` paints at **105 ms**; edit closes in the same frame; flash clears at 1852 ms leaving the committed value |
+| Reload | `slot5-save-cert` — **persisted** |
+| Restore → Save | `✓ Saved` at **106 ms**, converges to `—` |
+| Reload | `—` — **original restored exactly** |
+
+**0 render loops. Cell height constant at 386 px through both round trips.** The 3 console errors
+were the probe's own aborted `POST /api/admin/actions/execute`. Exactly two writes reached the
+server — the intended set and restore — and every other write stayed blocked.
+
+**The write endpoint is `PATCH /api/admin/customer-members/{id}`**: the child *is* the customer-member
+row. A first attempt failed because the probe's own allow-list did not include that path; nothing was
+written on that pass.
+
+**No false success.** On that blocked pass the UI did **not** claim success — it stayed in the edit
+state with Save/Cancel still present, and the value never converged. `savedFlash` paints only behind
+a write that actually completed.
 
 ---
 
