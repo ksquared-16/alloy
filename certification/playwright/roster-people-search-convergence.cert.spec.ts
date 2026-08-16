@@ -355,6 +355,72 @@ test.describe("H/I — Search: record intent vs operational intent", () => {
     });
 });
 
+// ═══ P — the Assignments LENS inside Roster ══════════════════════════════════════════════════
+//
+// "Assignments" stops being a workspace and becomes a way of looking at Roster's own subject matter.
+// The claim is not that a list appears — it is that the list IS the ledger, unduplicated.
+test.describe("P — Roster → Assignments lens", () => {
+    test("the lens renders the canonical ledger, and offers its bulk commands", async ({ page }) => {
+        await openRoster(page, "roster");
+
+        // The lens is reachable at the DEFAULT range. Staff is week-only by an older decision;
+        // a commitment is not a property of the day, so hiding Assignments on Day would make the
+        // operator change range to reach something the range does not govern.
+        const option = page.locator('[data-roster-lens-option="assignments"]');
+        await expect(option, "the Assignments lens is not offered").toBeVisible({ timeout: SETTLE });
+        await option.click();
+
+        const lens = page.locator('[data-roster-assignments-lens="true"]');
+        await expect(lens).toBeVisible({ timeout: SETTLE });
+        await expect(page.locator('[data-assignment-roster="true"], [data-assignment-roster-empty="true"]'))
+            .toHaveCount(1);
+
+        /*
+         * THE POINT: the lens shows THE LEDGER, not a second one.
+         *
+         * Asserted as an equality against the same `?view=assignment_roster` endpoint the Assignments
+         * workspace reads, for the site Roster currently has selected — rather than against a row
+         * count, which would be asserting the tenant's data instead of the product. It is also the
+         * assertion that fails the day someone gives this lens its own query.
+         *
+         * This matters here specifically: the cert tenant holds ONE assignment and it is at
+         * Riverside, while Roster opens on Lakeside. An empty lens is the CORRECT answer for
+         * Lakeside, and a test that demanded rows would have "failed" on a faithful product.
+         */
+        /*
+         * The site resolves asynchronously, and the lens can be opened before it lands — so this
+         * WAITS rather than reading once. That is not a test convenience: an assignment ledger with
+         * no site is not a question the endpoint can answer (`site_location_id is required`), and the
+         * operator sees the same settle.
+         */
+        await expect
+            .poll(
+                async () => (await lens.getAttribute("data-roster-assignments-site")) || "",
+                { timeout: SETTLE },
+            )
+            .not.toBe("");
+        const siteId = await lens.getAttribute("data-roster-assignments-site");
+        const ledger = await page.evaluate(async (id) => {
+            const res = await fetch(
+                `/api/admin/scheduling?view=assignment_roster&site_location_id=${encodeURIComponent(id)}`,
+                { credentials: "include" },
+            ).then((r) => r.json());
+            return { site: id, subjects: ((res?.subjects ?? []) as unknown[]).length };
+        }, siteId!);
+
+        const rendered = await page.locator("[data-assignment-roster-subject]").count();
+        expect(rendered, `lens rows must equal the ledger's subjects for site ${ledger.site}`).toBe(
+            ledger.subjects,
+        );
+
+        // …and the lens is a LENS, not a fifth section: the four Work sections are unchanged.
+        await expect(page.locator(SECTION_TABS)).toHaveCount(4);
+        await expect(page.locator(SECTIONS)).not.toContainText("Assignments");
+
+        await page.screenshot({ path: path.join(SHOTS, "P-assignments-lens.png"), fullPage: true });
+    });
+});
+
 // ═══ O — the Schedule context renders the CANONICAL assignment card ══════════════════════════
 //
 // `Operations → Roster → Lennon → Schedule` must show canonical commitment truth and offer the

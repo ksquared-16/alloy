@@ -31,6 +31,7 @@ import {
 } from "@/app/adminV2/roster/rosterSections";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
+import { buildAssignmentRosterBulkHandlers } from "@/lib/adminV2/scheduling/assignmentRosterBulkHandlers";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
 import RecordsStaffSection from "@/components/adminV2/records/RecordsStaffSection";
 import RecordsChildrenSection from "@/components/adminV2/records/RecordsChildrenSection";
@@ -289,6 +290,58 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     );
 
     /**
+     * Re-read the commitments this workspace already loads, after one changes.
+     *
+     * The WEEK is invalidated too, and that is the point of Roster being a projection of commitments
+     * rather than a plan of its own: change an assignment and who is expected where changes with it.
+     * A lens that refreshed only its own list would leave the Rooms board asserting the old plan.
+     */
+    const reloadAssignments = useCallback(() => {
+        if (!siteId) return;
+        const seq = loadSeq.current;
+        void schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`).then(
+            (res) => {
+                if (seq !== loadSeq.current) return;
+                setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
+            },
+        );
+        weekCache.current.clear();
+        void loadWeek(siteId, week?.weekStart ?? "");
+    }, [siteId, loadWeek, week?.weekStart]);
+
+    /*
+     * The ledger's bulk commands for the Assignments lens.
+     *
+     * Built by the SAME factory the Assignments workspace uses — one wiring, one set of canonical
+     * action keys, one grain guard. Roster supplies its own refresh because it owns its own reads;
+     * nothing about what the commands DO is decided here.
+     */
+    const assignmentBulk = useMemo(
+        () =>
+            buildAssignmentRosterBulkHandlers({
+                subjects: subjects ?? [],
+                // Bulk ASSIGN's type picker needs the org's assignment types. Roster does not load
+                // them, so that one mode is unavailable here rather than offered against an empty
+                // list — an empty picker reads as "this org has no types", which is a claim.
+                assignmentTypes: [],
+                siteId,
+                onRefresh: reloadAssignments,
+                // Single-subject create belongs to the child's own record, not to a second modal in
+                // the lens: the operator opens the child and uses the canonical Schedule card, which
+                // is the same surface every other single-assignment gesture now reaches.
+                onCreateForChild: (customerMemberId) => {
+                    void focusRecord({
+                        entity_type: "customer_members",
+                        entity_id: customerMemberId,
+                        intent: "durable_record",
+                        preferred_context_key: "schedule",
+                    });
+                },
+            }),
+        [subjects, siteId, reloadAssignments, focusRecord],
+    );
+
+    /**
      * Operational health for the control band — the day's counts when showing a
      * day, the week's when showing a week. A room the platform could not evaluate
      * is counted as unknown, never folded into a healthy number.
@@ -379,6 +432,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         siteName={siteName}
                         weekData={week}
                         assignmentSubjects={subjects ?? []}
+                        assignmentBulk={assignmentBulk}
                         loadingWeek={loadingWeek}
                         focusRoomId={focusRoomId}
                         filter={filterContext}

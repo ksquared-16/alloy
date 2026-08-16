@@ -31,6 +31,7 @@ import { type RosterData } from "@/components/adminV2/scheduling/screens/Schedul
 import AssignmentRosterPanel, {
     type AssignmentRosterSubject,
 } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
+import { buildAssignmentRosterBulkHandlers } from "@/lib/adminV2/scheduling/assignmentRosterBulkHandlers";
 import SchedulingStudio, { type StudioCalculation } from "@/components/adminV2/scheduling/screens/SchedulingStudio";
 import type { AssignmentTypeAdminRecord } from "@/lib/operationalAssignments/assignmentTypeService";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
@@ -863,83 +864,13 @@ export default function SchedulingWorkspace({ onClose }: { onClose?: () => void 
                         siteName={siteName}
                         focusSubject={assignmentFocus}
                         initialBulkMode={rosterBulkIntent}
-                        bulk={{
-                            onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
-                            onBulkArchive: async (assignmentIds) => {
-                                for (const assignment_id of assignmentIds) {
-                                    await fetch("/api/admin/actions/execute", {
-                                        method: "POST",
-                                        headers: { "content-type": "application/json" },
-                                        body: JSON.stringify({
-                                            action_key: "assignment.archive",
-                                            entity_type: "assignment",
-                                            entity_id: assignment_id,
-                                            payload: { assignment_id },
-                                        }),
-                                    });
-                                }
-                                refreshAfterMutation();
-                            },
-                            onBulkMakePrimary: async (rows) => {
-                                for (const row of rows) {
-                                    // Primary is a child concept; a staff subject has no
-                                    // enrollment agreement and must not reach this command.
-                                    const subject = (assignmentRoster ?? []).find(
-                                        (s) => s.subjectKey === row.subjectKey
-                                    );
-                                    const agreementId = subject?.enrollmentAgreementId;
-                                    if (!agreementId || subject?.subjectType === "staff") continue;
-                                    await fetch("/api/admin/actions/execute", {
-                                        method: "POST",
-                                        headers: { "content-type": "application/json" },
-                                        body: JSON.stringify({
-                                            action_key: "assignment.set_primary",
-                                            entity_type: "child",
-                                            entity_id: agreementId,
-                                            payload: {
-                                                subject_type: "child",
-                                                enrollment_agreement_id: agreementId,
-                                                effective_date: row.effectiveFrom,
-                                                promote_assignment_id: row.assignmentId,
-                                            },
-                                        }),
-                                    });
-                                }
-                                refreshAfterMutation();
-                            },
-                            onBulkAssignment: async (_subjects, preview) => {
-                                for (const row of preview.filter((p) => p.status === "ready")) {
-                                    await fetch("/api/admin/actions/execute", {
-                                        method: "POST",
-                                        headers: { "content-type": "application/json" },
-                                        body: JSON.stringify({
-                                            action_key: "assignment.create",
-                                            entity_type: "child",
-                                            entity_id: row.customerMemberId,
-                                            payload: row.payload,
-                                        }),
-                                    });
-                                }
-                                refreshAfterMutation();
-                            },
-                            onBulkRoomChange: async (rows) => {
-                                for (const row of rows) {
-                                    await fetch("/api/admin/actions/execute", {
-                                        method: "POST",
-                                        headers: { "content-type": "application/json" },
-                                        body: JSON.stringify({
-                                            action_key: "assignment.create",
-                                            entity_type: "child",
-                                            entity_id: row.customerMemberId,
-                                            payload: row.payload,
-                                        }),
-                                    });
-                                }
-                                refreshAfterMutation();
-                            },
+                        bulk={buildAssignmentRosterBulkHandlers({
+                            subjects: assignmentRoster ?? [],
                             assignmentTypes: pickerAssignmentTypes ?? [],
                             siteId,
-                        }}
+                            onRefresh: refreshAfterMutation,
+                            onCreateForChild: (customerMemberId) => openCreateAssignment(customerMemberId),
+                        })}
                     />
                 ) : null}
 
