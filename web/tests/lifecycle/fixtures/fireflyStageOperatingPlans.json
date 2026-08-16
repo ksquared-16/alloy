@@ -1,0 +1,888 @@
+{
+ "enrolled": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "enrolled",
+  "journey_segment": "child",
+  "work_templates": [],
+  "outcomes": [
+   {
+    "outcome_key": "acknowledged",
+    "label": "Acknowledged",
+    "successful": true,
+    "completes_work": true
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "noop",
+    "when_outcome_key": "acknowledged",
+    "targets": [
+     {
+      "kind": "no_movement"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [],
+  "purpose": "Post-enrollment follow-up."
+ },
+ "lead": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "lead",
+  "journey_segment": "family",
+  "outgoing_transitions": [
+   {
+    "transition_ref": "lead_to_tour",
+    "source_stage_key": "lead",
+    "target_stage_key": "tour",
+    "label": "Move to Tour",
+    "available": true
+   }
+  ],
+  "work_templates": [
+   {
+    "template_key": "contact_family",
+    "label": "Contact Family",
+    "required": true,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "description": "Reach the family, understand their needs, and determine the next step.",
+    "work_definition_key": "contact_family",
+    "primary": true,
+    "completion_policy": {
+     "min_attempts": 3,
+     "max_attempts": 3,
+     "window_days": 7,
+     "repeat_until_outcome": true,
+     "repeat_due_days": 2,
+     "sufficient_command_results": [
+      {
+       "capability": "schedule_tour",
+       "result": "confirmed",
+       "satisfies_outcome_key": "tour_scheduled"
+      }
+     ]
+    },
+    "execution_mode": "direct_action",
+    "primary_action": {
+     "action_ref": "quick_message",
+     "override_label": "Contact Family"
+    },
+    "helpful_actions": [
+     {
+      "action_ref": "schedule_tour"
+     },
+     {
+      "action_ref": "send_tour_invitation"
+     },
+     {
+      "action_ref": "move_to_waitlist"
+     },
+     {
+      "action_ref": "add_child"
+     }
+    ],
+    "alternate_paths": [
+     {
+      "transition_ref": "move_to_stage:waitlist"
+     },
+     {
+      "transition_ref": "move_to_stage:tour"
+     },
+     {
+      "action_ref": "close_lead"
+     }
+    ],
+    "outcome_refs": [
+     {
+      "outcome_ref": "reached_qualified"
+     },
+     {
+      "outcome_ref": "left_message"
+     },
+     {
+      "outcome_ref": "awaiting_response"
+     },
+     {
+      "outcome_ref": "unable_to_reach"
+     },
+     {
+      "outcome_ref": "contact_closed_lost"
+     }
+    ]
+   }
+  ],
+  "outcomes": [
+   {
+    "outcome_key": "reached_qualified",
+    "label": "Reached / Qualified",
+    "work_template_key": "contact_family",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "left_message",
+    "label": "Left Message",
+    "work_template_key": "contact_family"
+   },
+   {
+    "outcome_key": "awaiting_response",
+    "label": "Awaiting Response",
+    "work_template_key": "contact_family"
+   },
+   {
+    "outcome_key": "unable_to_reach",
+    "label": "Unable To Reach",
+    "work_template_key": "contact_family"
+   },
+   {
+    "outcome_key": "contact_closed_lost",
+    "label": "Closed Lost",
+    "work_template_key": "contact_family"
+   },
+   {
+    "outcome_key": "tour_scheduled",
+    "label": "Tour Scheduled",
+    "successful": true,
+    "completes_work": true
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "reached_move",
+    "when_outcome_key": "reached_qualified",
+    "targets": [
+     {
+      "kind": "update_family_case_status",
+      "status_key": "open"
+     },
+     {
+      "kind": "mark_stage_work_complete"
+     }
+    ]
+   },
+   {
+    "rule_key": "left_message_repeat",
+    "when_outcome_key": "left_message",
+    "targets": [
+     {
+      "kind": "reopen_work",
+      "template_key": "contact_family",
+      "due_days": 2
+     }
+    ]
+   },
+   {
+    "rule_key": "awaiting_attention",
+    "when_outcome_key": "awaiting_response",
+    "targets": [
+     {
+      "kind": "no_movement"
+     },
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Awaiting family response",
+      "wait_bucket": "waiting_on_family"
+     }
+    ]
+   },
+   {
+    "rule_key": "unable_repeat",
+    "when_outcome_key": "unable_to_reach",
+    "targets": [
+     {
+      "kind": "reopen_work",
+      "template_key": "contact_family",
+      "due_days": 2
+     }
+    ],
+    "when_attempt_count_lt": 3
+   },
+   {
+    "rule_key": "unable_attention",
+    "when_outcome_key": "unable_to_reach",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Unable to reach after 3 attempts",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "when_attempt_count_gte": 3
+   },
+   {
+    "rule_key": "tour_scheduled_to_tour",
+    "when_outcome_key": "tour_scheduled",
+    "targets": [
+     {
+      "kind": "move_to_stage",
+      "transition_ref": "lead_to_tour"
+     }
+    ]
+   },
+   {
+    "rule_key": "domain_tour_booking_scheduled_to_tour",
+    "when_domain_signal": {
+     "domain": "tour_booking",
+     "signal": "scheduled"
+    },
+    "targets": [
+     {
+      "kind": "move_to_stage",
+      "transition_ref": "lead_to_tour"
+     }
+    ]
+   },
+   {
+    "rule_key": "contact_closed_lost",
+    "when_outcome_key": "contact_closed_lost",
+    "targets": [
+     {
+      "kind": "no_movement"
+     },
+     {
+      "kind": "update_family_case_status",
+      "status_key": "closed",
+      "close_reason_key": "lost"
+     },
+     {
+      "kind": "mark_stage_work_complete"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [
+   {
+    "rule_key": "review_lead_overdue",
+    "kind": "work_overdue",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Review Lead overdue after 1 day",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "label": "Review Lead overdue",
+    "severity": "medium",
+    "threshold": 1,
+    "threshold_duration": {
+     "offset_value": 1,
+     "offset_unit": "days"
+    },
+    "template_key": "review_lead"
+   },
+   {
+    "rule_key": "first_contact_overdue",
+    "kind": "work_overdue",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "First contact overdue after 1 day",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "label": "First contact overdue",
+    "severity": "medium",
+    "threshold": 1,
+    "threshold_duration": {
+     "offset_value": 1,
+     "offset_unit": "days"
+    },
+    "template_key": "contact_family"
+   },
+   {
+    "rule_key": "contact_attempts_window",
+    "kind": "no_contact_attempt",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Fewer than 3 contact attempts after 7 days",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "label": "Contact Family fewer than 3 attempts after 7 days",
+    "severity": "high",
+    "threshold": 3,
+    "template_key": "contact_family"
+   },
+   {
+    "rule_key": "stage_age_7d",
+    "kind": "stage_age_exceeded",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Lead stage aging beyond 7 days",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "label": "Stage age > 7 days",
+    "severity": "medium",
+    "threshold": 7,
+    "threshold_duration": {
+     "offset_value": 7,
+     "offset_unit": "days"
+    }
+   },
+   {
+    "rule_key": "missing_required_fields",
+    "kind": "missing_requirements",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Missing required Lead stage fields",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ],
+    "label": "Missing required fields",
+    "severity": "medium"
+   }
+  ],
+  "purpose": "Review inbound lead and reach the family."
+ },
+ "tour": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "tour",
+  "journey_segment": "family",
+  "outgoing_transitions": [
+   {
+    "transition_ref": "tour_transition_2",
+    "source_stage_key": "tour",
+    "target_stage_key": "decision",
+    "label": "Move to Decision",
+    "available": true
+   }
+  ],
+  "work_templates": [
+   {
+    "template_key": "work_1",
+    "label": "Schedule Tour",
+    "required": false,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "work_definition_key": "manual_ad_hoc",
+    "primary_action": {
+     "action_ref": "schedule_tour"
+    },
+    "helpful_actions": [
+     {
+      "action_ref": "quick_message"
+     }
+    ],
+    "outcome_refs": [
+     {
+      "outcome_ref": "outcome_1"
+     },
+     {
+      "outcome_ref": "outcome_2"
+     }
+    ]
+   },
+   {
+    "template_key": "work_2",
+    "label": "Confirm Tour",
+    "required": false,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "work_definition_key": "manual_ad_hoc",
+    "execution_mode": "outcome_led",
+    "outcome_refs": [
+     {
+      "outcome_ref": "outcome_6"
+     }
+    ]
+   },
+   {
+    "template_key": "work_3",
+    "label": "Conduct Tour",
+    "required": false,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "work_definition_key": "manual_ad_hoc",
+    "primary": true,
+    "execution_mode": "outcome_led",
+    "outcome_refs": [
+     {
+      "outcome_ref": "outcome_7"
+     },
+     {
+      "outcome_ref": "outcome_8"
+     }
+    ]
+   }
+  ],
+  "outcomes": [
+   {
+    "outcome_key": "outcome_1",
+    "label": "Tour Scheduled",
+    "work_template_key": "work_1",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "outcome_2",
+    "label": "Awaiting Family Response",
+    "work_template_key": "work_1"
+   },
+   {
+    "outcome_key": "outcome_3",
+    "label": "Family Declined Tour",
+    "work_template_key": "work_1",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "outcome_4",
+    "label": "Move to Waitlist",
+    "work_template_key": "work_1",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "outcome_5",
+    "label": "Closed Lost",
+    "work_template_key": "work_1",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "outcome_6",
+    "label": "Tour Confirmed",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "outcome_7",
+    "label": "Tour Completed — Interested"
+   },
+   {
+    "outcome_key": "outcome_8",
+    "label": "Tour Completed — Needs Follow-up"
+   },
+   {
+    "outcome_key": "outcome_9",
+    "label": "Tour Rescheduled"
+   },
+   {
+    "outcome_key": "outcome_10",
+    "label": "No Show"
+   },
+   {
+    "outcome_key": "outcome_11",
+    "label": "Tour Cancelled",
+    "successful": true,
+    "completes_work": true
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "outcome_1_automation_1",
+    "when_outcome_key": "outcome_1",
+    "targets": [
+     {
+      "kind": "no_movement"
+     }
+    ]
+   },
+   {
+    "rule_key": "outcome_2_automation_2",
+    "when_outcome_key": "outcome_2",
+    "targets": [
+     {
+      "kind": "no_movement"
+     }
+    ]
+   },
+   {
+    "rule_key": "outcome_7_behavior",
+    "when_outcome_key": "outcome_7",
+    "targets": [
+     {
+      "kind": "move_to_stage",
+      "transition_ref": "tour_transition_2"
+     }
+    ]
+   },
+   {
+    "rule_key": "outcome_11_behavior",
+    "when_outcome_key": "outcome_11",
+    "targets": [
+     {
+      "kind": "no_movement"
+     }
+    ]
+   },
+   {
+    "rule_key": "outcome_10_behavior",
+    "when_outcome_key": "outcome_10",
+    "targets": [
+     {
+      "kind": "no_movement"
+     },
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Family no show.",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ]
+   },
+   {
+    "rule_key": "outcome_8_behavior",
+    "when_outcome_key": "outcome_8",
+    "targets": [
+     {
+      "kind": "move_to_stage",
+      "transition_ref": "tour_transition_2"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [],
+  "purpose": "Book and conduct tours of the facility with interested families."
+ },
+ "decision": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "decision",
+  "journey_segment": "family",
+  "work_templates": [
+   {
+    "template_key": "review_child_paths",
+    "label": "Review each child's path",
+    "required": true,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 2
+    },
+    "owner_strategy": "record_owner",
+    "completion_policy": {
+     "requires_all_participants_resolved": true
+    },
+    "participant_decisions": [
+     {
+      "decision_key": "child_waitlist",
+      "action_ref": "waitlist_child",
+      "subject_grain": "child",
+      "targets": [
+       {
+        "kind": "update_child_enrollment_status",
+        "disposition_key": "waitlisted"
+       },
+       {
+        "kind": "move_to_stage",
+        "stage_key": "waitlist"
+       }
+      ],
+      "label": "Waitlist"
+     },
+     {
+      "decision_key": "child_begin_enrolling",
+      "action_ref": "enroll_child",
+      "subject_grain": "child",
+      "targets": [
+       {
+        "kind": "update_child_enrollment_status",
+        "disposition_key": "enrolling"
+       },
+       {
+        "kind": "move_to_stage",
+        "stage_key": "enrolling"
+       }
+      ],
+      "label": "Begin Enrolling"
+     },
+     {
+      "decision_key": "child_not_enrolling",
+      "action_ref": "update_child_enrollment_status",
+      "subject_grain": "child",
+      "targets": [
+       {
+        "kind": "update_child_enrollment_status",
+        "disposition_key": "not_enrolling"
+       }
+      ],
+      "label": "Not Enrolling",
+      "required_inputs": [
+       {
+        "key": "close_reason_key",
+        "label": "Reason",
+        "type": "select",
+        "required": true,
+        "options": [
+         {
+          "value": "chose_another_provider",
+          "label": "Chose another provider"
+         },
+         {
+          "value": "no_capacity",
+          "label": "No suitable capacity"
+         },
+         {
+          "value": "schedule_mismatch",
+          "label": "Schedule did not fit"
+         },
+         {
+          "value": "cost",
+          "label": "Cost"
+         },
+         {
+          "value": "no_longer_needed",
+          "label": "No longer needs care"
+         }
+        ],
+        "binds_to_target_field": "close_reason_key"
+       }
+      ]
+     }
+    ]
+   }
+  ],
+  "outcomes": [
+   {
+    "outcome_key": "paths_chosen",
+    "label": "Child paths chosen",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "needs_follow_up",
+    "label": "Needs follow-up"
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "paths_chosen_complete",
+    "when_outcome_key": "paths_chosen",
+    "targets": [
+     {
+      "kind": "mark_stage_work_complete"
+     }
+    ]
+   },
+   {
+    "rule_key": "follow_up_attention",
+    "when_outcome_key": "needs_follow_up",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Decision follow-up required",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [],
+  "purpose": "Choose each child's enrollment path after the family tour."
+ },
+ "waitlist": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "waitlist",
+  "journey_segment": "child",
+  "work_templates": [
+   {
+    "template_key": "review_waitlist_position",
+    "label": "Review waitlist position",
+    "required": false,
+    "due_policy": {
+     "kind": "same_day"
+    },
+    "owner_strategy": "record_owner",
+    "primary": true,
+    "helpful_actions": [
+     {
+      "action_ref": "send_tour_invitation"
+     },
+     {
+      "action_ref": "schedule_tour"
+     },
+     {
+      "action_ref": "quick_message"
+     },
+     {
+      "action_ref": "send_form"
+     }
+    ]
+   },
+   {
+    "template_key": "offer_spot",
+    "label": "Offer spot",
+    "required": false,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "helpful_actions": [
+     {
+      "action_ref": "send_form"
+     }
+    ]
+   }
+  ],
+  "outcomes": [
+   {
+    "outcome_key": "spot_offered",
+    "label": "Spot offered",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "candidate_paused",
+    "label": "Candidate paused"
+   },
+   {
+    "outcome_key": "no_response",
+    "label": "No response to offer"
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "offer_to_enrolling",
+    "when_outcome_key": "spot_offered",
+    "targets": [
+     {
+      "kind": "update_child_enrollment_status",
+      "disposition_key": "offer_pending"
+     },
+     {
+      "kind": "mark_stage_work_complete"
+     }
+    ]
+   },
+   {
+    "rule_key": "pause_candidate",
+    "when_outcome_key": "candidate_paused",
+    "targets": [
+     {
+      "kind": "update_candidate_status",
+      "candidate_status": "paused"
+     }
+    ]
+   },
+   {
+    "rule_key": "no_response_attention",
+    "when_outcome_key": "no_response",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "No response to waitlist offer",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [],
+  "purpose": "Manage waitlist candidates and spot offers."
+ },
+ "enrolling": {
+  "version": 1,
+  "lifecycle_key": "enrollment",
+  "stage_key": "enrolling",
+  "journey_segment": "child",
+  "outgoing_transitions": [
+   {
+    "transition_ref": "enrolling_to_enrolled",
+    "source_stage_key": "enrolling",
+    "target_stage_key": "enrolled",
+    "label": "Move to Enrolled",
+    "available": true
+   }
+  ],
+  "work_templates": [
+   {
+    "template_key": "send_enrollment_packet",
+    "label": "Send enrollment packet",
+    "required": true,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 1
+    },
+    "owner_strategy": "record_owner",
+    "primary": true
+   },
+   {
+    "template_key": "confirm_start_date",
+    "label": "Confirm start date",
+    "required": true,
+    "due_policy": {
+     "kind": "offset_days",
+     "days": 3
+    },
+    "owner_strategy": "record_owner"
+   }
+  ],
+  "outcomes": [
+   {
+    "outcome_key": "enrollment_complete",
+    "label": "Enrollment complete",
+    "successful": true,
+    "completes_work": true
+   },
+   {
+    "outcome_key": "packet_pending",
+    "label": "Packet still pending"
+   },
+   {
+    "outcome_key": "family_withdrew",
+    "label": "Family withdrew"
+   }
+  ],
+  "outcome_rules": [
+   {
+    "rule_key": "complete_to_enrolled",
+    "when_outcome_key": "enrollment_complete",
+    "targets": [
+     {
+      "kind": "update_child_enrollment_status",
+      "disposition_key": "enrolled"
+     },
+     {
+      "kind": "move_to_stage",
+      "transition_ref": "enrolling_to_enrolled"
+     },
+     {
+      "kind": "mark_stage_work_complete"
+     }
+    ]
+   },
+   {
+    "rule_key": "packet_attention",
+    "when_outcome_key": "packet_pending",
+    "targets": [
+     {
+      "kind": "create_needs_attention",
+      "attention_reason": "Enrollment packet incomplete",
+      "wait_bucket": "waiting_on_staff"
+     }
+    ]
+   },
+   {
+    "rule_key": "withdrew",
+    "when_outcome_key": "family_withdrew",
+    "targets": [
+     {
+      "kind": "update_child_enrollment_status",
+      "disposition_key": "family_withdrew"
+     }
+    ]
+   }
+  ],
+  "attention_rules": [],
+  "purpose": "Complete enrollment paperwork and confirm start."
+ }
+}
