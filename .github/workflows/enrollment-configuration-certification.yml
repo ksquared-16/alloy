@@ -21,6 +21,11 @@
 # `certification/process-instance-revision-pin/`, because only a real database can refuse
 # a write.
 #
+# Slice 2.3 added `enrollmentParticipantProgress` — the eighteen required proofs that a
+# participant's outstanding Enrollment requirements are deterministic: requirements from the
+# pinned revision, satisfaction from Forms-owned submission evidence only, and a requirement
+# the packet fails to realize kept in the denominator rather than silently dropped.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -60,4 +65,5 @@ jobs:
             tests/lifecycle/stageRequirementsV1.test.ts \
             tests/lifecycle/enrollmentObjectiveSession.test.ts \
             tests/lifecycle/publishedStageRequirementsSelfContainment.test.ts \
-            tests/lifecycle/processInstanceRevisionPin.test.ts
+            tests/lifecycle/processInstanceRevisionPin.test.ts \
+            tests/lifecycle/enrollmentParticipantProgress.test.ts

@@ -98,13 +98,17 @@ function configuresEnrollment(payload: unknown): boolean {
 /**
  * The department a journey's Opportunity context belongs to.
  *
+ * Exported because the D-96 COMPATIBILITY path needs the same answer: a historical unpinned
+ * instance has no revision, so its live configuration has to be found somehow, and the only
+ * canonical route is this one. Re-deriving it there would be a second selector.
+ *
  * `Org -> Department -> Work unit -> Record`, walked upward. Two indexed point reads, memoised
  * under the `wu:` prefix that `invalidateTenantConfigReadCache` already clears.
  *
  * Null is a real answer, not an error: an Opportunity created before work-unit assignment, or one
  * never assigned, genuinely has no department. The caller falls through rather than guessing.
  */
-async function departmentForOpportunityContext(
+export async function departmentForOpportunityContext(
     supabase: SupabaseClient,
     orgId: string,
     opportunityId: string,
