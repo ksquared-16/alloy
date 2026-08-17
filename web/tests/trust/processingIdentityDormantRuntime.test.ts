@@ -143,6 +143,9 @@ describe("P14-A — the third class composes", () => {
             "attention_suggestion_enrichment",
             "attention_suggestion_enrichment_provider_backed",
             "processing_source_classification",
+            // V1.1: participant conversational interpretation. Provider-backed only — the
+            // deterministic interpreter never leaves the process and needs no governed class.
+            "participant_conversation_interpretation_provider_backed",
             "processing_identity_subject_resolution",
         ]);
     });

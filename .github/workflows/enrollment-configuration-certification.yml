@@ -80,4 +80,5 @@ jobs:
             tests/lifecycle/enrollmentParticipantProgress.test.ts \
             tests/lifecycle/enrollmentInformationNeeds.test.ts \
             tests/lifecycle/participantEnrollmentRuntime.test.ts \
-            tests/lifecycle/participantConversationAdmission.test.ts
+            tests/lifecycle/participantConversationAdmission.test.ts \
+            tests/lifecycle/participantGovernedInterpretation.test.ts

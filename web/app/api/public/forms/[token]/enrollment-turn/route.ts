@@ -23,6 +23,9 @@ import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolv
 import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
+import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
+import { participantProviderReasoningPermitted } from "@/lib/enrollment/participantRuntime/participantProviderAuthorization";
+import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 
 function plaintextToken(raw: string): string {
@@ -63,11 +66,43 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
     if (!current.ok) return publicErr(current.refusal.detail, 409, { code: current.refusal.code });
 
-    const candidate = interpretParticipantResponseDeterministically({
+    const text = typeof body.text === "string" ? body.text : null;
+
+    // Deterministic FIRST. A value typed into the control, or an unambiguous "yes", needs no model
+    // and must never wait on one.
+    let candidate = interpretParticipantResponseDeterministically({
         turn: current.value.next_turn,
-        text: typeof body.text === "string" ? body.text : null,
+        text,
         directValue: body.value,
     });
+
+    // Governed assistance is ADDITIVE, and only where the deterministic path could not read the
+    // answer. Every gate — affirmative permission, D-101 turn eligibility, the Information Package,
+    // D-101/D-102 privacy — is enforced inside the consumer, and any failure returns a null
+    // candidate so the deterministic result below stands. The participant is never blocked on it.
+    //
+    // The client supplied WORDS. The turn, the need, the semantic key and the command target are all
+    // resolved server-side from the objective — the browser never names the field being answered.
+    if (candidate.kind === "clarification_needed" && text) {
+        const governed = await interpretParticipantResponseViaTrust({
+            org_id: access.value.orgId,
+            turn: current.value.next_turn,
+            response_text: text,
+            field: null,
+            correlation_id: `participant-turn:${access.value.sessionId}`,
+            // The participant acts through a public link, so there is no operator identity to name
+            // and none is invented. `system` with a null actor id is the honest description.
+            initiating_actor: { actor_type: "system", actor_id: null },
+            channel: "participant",
+            provider_reasoning_permitted: await participantProviderReasoningPermitted(
+                supabase,
+                access.value.orgId,
+            ),
+            nowIso: new Date().toISOString(),
+            repository: createSupabaseTrustRepository(),
+        });
+        if (governed.candidate) candidate = governed.candidate;
+    }
 
     const applied = await applyParticipantTurnResponse(supabase, {
         orgId: access.value.orgId,
