@@ -1056,3 +1056,54 @@ forbids. The next session should start there, with restore scripted before the u
 is nullable and the durable child model insists a child may exist with no person row. Whether any
 current Firefly/production flow actually produces an avatar-capable personless child is unproven —
 resolve that before treating it as a gap. **PRODUCT / DATA MODEL DECISION** if it is real.
+
+### R-019 · LIVE FAILURE FOUND — and the 3B "no avatars exist" claim is RETRACTED
+
+**Correction first.** Phase 3B concluded "neither child has an avatar, so initials are correct".
+**That was wrong.** It inferred absence from two surfaces that render nothing. Querying the record
+directly disproves it.
+
+`GET /api/admin/entity/opportunities/d097e1a8-…` returns, for BOTH children:
+
+| Child | `person_id` | `resolved_photo_url` | `photo_url` |
+|---|---|---|---|
+| Lennon Kurzman | `794b4bfe-…` | **populated** — signed URL to `…-IMG_1438.jpeg` | null |
+| Wrigley Kurzman | `c256182e-…` | **populated** — signed URL to `…-IMG_5380.jpeg` | null |
+
+So **both children have a canonical Person AND a durable avatar already**. No upload was needed, and
+none was performed — the round trip's premise was already satisfied by real Firefly data, so **no
+test imagery was created and nothing needed restoring.**
+
+**The failure, live.** In the Waitlist lens nothing renders an avatar at all:
+
+```
+queue rows      9ab36f48 imgs=0 ("W")   93722453 imgs=0 ("L")
+children card   imgs=0        scheduling imgs=0        household imgs=0
+whole page      1 img total
+```
+
+**First projection where `resolved_photo_url` disappears — identified.** The Waitlist lens is seeded
+by the provisioning answer, and that payload carries **no `resolved_photo_url` at any depth**
+(measured directly: `hasResolved: false`; the only photo-ish keys are the `showAvatar` /
+`useProfilePhotos` display options). `workUnitProvisioningAnswer` assembles `_inquiry_children` from
+enriched children / household children / subject metadata and **never runs the photo projection**,
+while the two paths that do resolve correctly:
+
+- `QueueService` → `projectResolvedProfilePhotosOntoInquiryChildrenRows` (guarded on `documentActor?.ok`)
+- `opportunityEntityRecord` → `projectResolvedProfilePhotosOntoRows`
+
+The read adapter is NOT at fault: `resolveIdentityPhotoUrlFromRaw` returns `resolved_photo_url`
+outright ("resolver output wins — its provenance is known"). It is reading rows that never received
+the key.
+
+**The fix, not yet applied:** project resolved photos onto `_inquiry_children` inside
+`workUnitProvisioningAnswer`, exactly as `QueueService` already does — same helper, same actor guard.
+One owner, no new resolver, cache or store. `req.supabase` and `req.orgId` are already in scope
+there; the document actor is the piece to thread through.
+
+**Also worth stating:** the signed URLs carry `exp - iat = 300s`. Any fix must resolve per request
+rather than caching the URL, which is what the batch projection already does.
+
+**Personless children — closed as NOT a current gap.** Both real Firefly enrollment children have a
+canonical `person_id`, so the avatar-capable path has a Person in the flow that matters here. No
+second avatar owner is warranted.
