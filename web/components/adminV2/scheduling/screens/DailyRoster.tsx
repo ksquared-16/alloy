@@ -12,7 +12,16 @@
  * that green would be a lie the operator cannot see through. Short uses the
  * existing attention treatment.
  *
- * This is expectation, not attendance. Nothing here records who actually arrived.
+ * ── EXPECTED AND ACTUAL, TOGETHER ──
+ *
+ * This surface used to answer only "who should be here?". It still records nothing — Attendance
+ * remains the authoring surface — but it now SHOWS the actual operating state beside the expected
+ * one, because "what is happening today?" is the question Operations opens on and expectation alone
+ * cannot answer it.
+ *
+ * Every actual number is read from the canonical combined projection. Nothing here recomputes a
+ * ratio, and `actualRequiredStaff` in particular is demand derived from the children ACTUALLY
+ * present — never the expected count, and never scheduled staff standing in for present staff.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,9 +41,14 @@ import {
     attentionSentence,
     compareByAttentionThenName,
 } from "@/components/adminV2/scheduling/rosterOrdering";
+import type {
+    CombinedRosterReadModel,
+    RosterCell as CombinedRosterCell,
+} from "@/lib/roster/buildCombinedRoster";
 
 type StaffingSufficiency = "sufficient" | "short" | "unknown" | "idle";
 
+/** Kept only for the props this surface still exposes to its host. */
 type RosterChild = {
     subjectType: "child";
     customerMemberId: string;
@@ -55,33 +69,21 @@ type RosterStaff = {
     roomName: string | null;
 };
 
-type RosterCell = {
-    roomLocationId: string;
-    roomName: string;
-    date: string;
-    children: RosterChild[];
-    staff: RosterStaff[];
-    expectedChildCount: number;
-    scheduledStaffCount: number;
-    requiredStaff: number | null;
-    staffingSufficiency: StaffingSufficiency;
-    staffingReason: "evaluated" | "no_ratio_configuration";
-};
-
-type RosterModel = {
-    siteLocationId: string;
-    date: string;
-    cells: RosterCell[];
-    staffingSufficiency: StaffingSufficiency;
-    totals: {
-        expectedChildren: number;
-        scheduledStaff: number;
-        requiredStaff: number | null;
-        roomsShort: number;
-        roomsUnknown: number;
-    };
-    unroomedStaff: RosterStaff[];
-};
+/*
+ * ── THE CELL AND MODEL COME FROM THE CANONICAL PROJECTION, NOT A LOCAL COPY ──
+ *
+ * These were re-declared here, narrowed, and the narrowing silently DROPPED every actual-operating
+ * field `/api/admin/roster` was already sending: `actualChildrenPresent`, `actualStaffPresent`,
+ * `actualRequiredStaff`, `actualStaffingSufficiency`, `unscheduledStaffPresent`, and the per-subject
+ * `actual` state. The surface answered "who should be here?" not because the truth was missing but
+ * because its own type could not see it.
+ *
+ * Importing the read model makes that class of drift impossible: a field added to the projection is
+ * visible here immediately, and a field removed is a compile error rather than a quietly empty card.
+ * `import type` is erased at build time, so this pulls in no server code.
+ */
+type RosterCell = CombinedRosterCell;
+type RosterModel = CombinedRosterReadModel;
 
 export type DailyRosterProps = {
     siteLocationId: string;
@@ -117,6 +119,10 @@ export type DailyRosterProps = {
         roomsUnknown: number;
         expectedChildren: number;
         scheduledStaff: number;
+        /** ACTUAL operating truth — the day band leads with these. */
+        roomsActuallyShort: number;
+        childrenPresent: number;
+        staffPresent: number;
     } | null) => void;
     onOpenChild?: (subject: RosterChild) => void;
     onOpenStaff?: (subject: RosterStaff) => void;
@@ -319,6 +325,10 @@ export default function DailyRoster({
             ).length,
             expectedChildren: model.totals.expectedChildren,
             scheduledStaff: model.totals.scheduledStaff,
+            // Straight from the canonical totals — nothing is counted again here.
+            roomsActuallyShort: model.totals.roomsActuallyShort,
+            childrenPresent: model.totals.actualChildrenPresent,
+            staffPresent: model.totals.actualStaffPresent,
         });
         // `isOperating` is a pure local helper; `model` is the only real input.
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -424,41 +434,107 @@ export default function DailyRoster({
                                     </span>
                                 </div>
 
-                                <dl className="mt-3 grid grid-cols-3 gap-2">
-                                    <div>
-                                        <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                            Children
-                                        </dt>
-                                        <dd
-                                            className="text-[16px] font-semibold text-alloy-midnight"
+                                {/*
+                                  * EXPECTED beside HERE NOW — the comparison IS the card.
+                                  *
+                                  * Three rows, two columns, one heading pair. A spreadsheet of six
+                                  * separate stats would carry the same numbers and make the operator
+                                  * do the subtraction; the whole reason this surface exists is that
+                                  * "12 expected" and "9 here" mean something together that neither
+                                  * means alone.
+                                  *
+                                  * Required appears TWICE on purpose. Planned demand comes from the
+                                  * children expected; actual demand comes from the children present.
+                                  * They are different questions with different answers, and showing
+                                  * one number would silently pick a side.
+                                  */}
+                                <div className="mt-3" data-roster-room-compare="true">
+                                    <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-3">
+                                        <span />
+                                        <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                            Expected
+                                        </span>
+                                        <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                            Here now
+                                        </span>
+
+                                        <span className="text-[11.5px] text-alloy-midnight/60">Children</span>
+                                        <span
+                                            className="text-right text-[15px] font-semibold tabular-nums text-alloy-midnight"
                                             data-roster-children-count={cell.expectedChildCount}
                                         >
                                             {cell.expectedChildCount}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                            Staff
-                                        </dt>
-                                        <dd
-                                            className="text-[16px] font-semibold text-alloy-midnight"
+                                        </span>
+                                        <span
+                                            className="text-right text-[15px] font-semibold tabular-nums text-alloy-midnight"
+                                            data-roster-children-present={cell.actualChildrenPresent}
+                                        >
+                                            {cell.actualChildrenPresent}
+                                        </span>
+
+                                        <span className="text-[11.5px] text-alloy-midnight/60">Staff</span>
+                                        <span
+                                            className="text-right text-[15px] font-semibold tabular-nums text-alloy-midnight"
                                             data-roster-staff-count={cell.scheduledStaffCount}
                                         >
                                             {cell.scheduledStaffCount}
-                                        </dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                            Required
-                                        </dt>
-                                        <dd
-                                            className="text-[16px] font-semibold text-alloy-midnight"
+                                        </span>
+                                        <span
+                                            className="text-right text-[15px] font-semibold tabular-nums text-alloy-midnight"
+                                            data-roster-staff-present={cell.actualStaffPresent}
+                                        >
+                                            {cell.actualStaffPresent}
+                                        </span>
+
+                                        <span className="text-[11.5px] text-alloy-midnight/60">Required</span>
+                                        <span
+                                            className="text-right text-[13px] font-medium tabular-nums text-alloy-midnight/70"
                                             data-roster-required={cell.requiredStaff ?? "unknown"}
                                         >
                                             {cell.requiredStaff ?? "—"}
-                                        </dd>
+                                        </span>
+                                        <span
+                                            className="text-right text-[13px] font-medium tabular-nums text-alloy-midnight/70"
+                                            data-roster-required-actual={cell.actualRequiredStaff ?? "unknown"}
+                                        >
+                                            {cell.actualRequiredStaff ?? "—"}
+                                        </span>
                                     </div>
-                                </dl>
+
+                                    {/*
+                                      * TWO VERDICTS, NEVER ONE.
+                                      *
+                                      * A room can be planned-sufficient and actually short at the
+                                      * same instant — that is the entire reason the actual verdict
+                                      * exists, and collapsing them into a single chip would hide the
+                                      * only state an operator has to act on right now. Both come
+                                      * from the canonical projection; neither is re-derived here.
+                                      */}
+                                    <div className="mt-2.5 grid grid-cols-2 gap-2 border-t border-alloy-stone/15 pt-2.5">
+                                        <div>
+                                            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                                Planned staffing
+                                            </p>
+                                            <span
+                                                className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.staffingSufficiency)}`}
+                                                data-roster-planned-state={cell.staffingSufficiency}
+                                            >
+                                                {staffingVerdictLabel(cell.staffingSufficiency)}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                                Actual staffing
+                                            </p>
+                                            <span
+                                                className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.actualStaffingSufficiency)}`}
+                                                data-roster-actual-state={cell.actualStaffingSufficiency}
+                                            >
+                                                {staffingVerdictLabel(cell.actualStaffingSufficiency)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 <div className="mt-3 flex flex-wrap items-center gap-3">
                                     <button
