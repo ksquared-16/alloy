@@ -15,20 +15,30 @@
 import { describe, expect, it } from "vitest";
 
 import { startEnrollment } from "@/lib/records/startEnrollmentService";
+import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import { launchParticipantEnrollment } from "@/lib/enrollment/participantLaunch/launchParticipantEnrollment";
 import {
     planRequirementDerivedPacket,
     requirementDerivedPacketKey,
 } from "@/lib/enrollment/participantLaunch/requirementDerivedPacket";
 import {
-    resolveDeclaredProcessEntryStage,
+    resolveProcessEntryStage,
     resolveEffectiveStageKey,
 } from "@/lib/lifecycle/processEntryStage";
 import {
+    entryIntentFromProcessInstanceMetadata,
+    isProcessEntryIntent,
+} from "@/lib/lifecycle/processEntryPointsV1";
+import {
+    PUBLISH_ENTRY_INTENT_UNKNOWN,
     PUBLISH_ENTRY_STAGE_UNRESOLVABLE,
     validateBusinessProcessForPublish,
 } from "@/lib/businessProcesses/configuration/businessProcessPublishValidation";
-import { parseLifecycleBuilderV1 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    parseLifecycleBuilderV1,
+    serializeLifecycleBuilderV1,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
@@ -54,11 +64,16 @@ function formRequirement(id: string, formDefinitionId: string) {
 }
 
 function revisionPayload(opts: {
-    entryStageKey?: string | null;
+    /** `null` authors no entry points at all. Otherwise the intent → stage map, verbatim. */
+    entryPoints?: Record<string, string> | null;
     requirements?: unknown[] | null;
     stageKeys?: string[];
 } = {}) {
-    const stageKeys = opts.stageKeys ?? ["enrolling", "enrolled"];
+    const stageKeys = opts.stageKeys ?? ["lead", "enrolling", "enrolled"];
+    const entryPoints =
+        opts.entryPoints === null
+            ? null
+            : (opts.entryPoints ?? { create_lead: "lead", enrollment_start: "enrolling" });
     return {
         version: 1,
         active_process_id: "proc-1",
@@ -70,14 +85,14 @@ function revisionPayload(opts: {
                 primary_entity: "opportunity",
                 sort_order: 0,
                 is_active: true,
-                ...(opts.entryStageKey === null ? {} : { entry_stage_key: opts.entryStageKey ?? "enrolling" }),
+                ...(entryPoints ? { entry_points_v1: { version: 1, by_intent: entryPoints } } : {}),
                 stages: stageKeys.map((key, i) => ({
                     id: `stage-${key}`,
                     key,
                     label: key,
                     sort_order: i,
                     is_active: true,
-                    ...(i === 0 && opts.requirements !== null
+                    ...(key === "enrolling" && opts.requirements !== null
                         ? {
                               requirements_v1: {
                                   version: 1,
@@ -283,54 +298,184 @@ async function startWithConfig(payload: unknown) {
 // 1–2. Entry stage
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("B1a — canonical entry stage", () => {
-    it("1. resolves deterministically from the declaration, and only from it", () => {
-        const builder = parseLifecycleBuilderV1(revisionPayload({ entryStageKey: "enrolling" }))!;
-        const process = builder.processes[0];
+describe("D-103 — entry intent resolves the entry stage", () => {
+    const built = () => parseLifecycleBuilderV1(revisionPayload())!.processes[0];
 
-        const resolved = resolveDeclaredProcessEntryStage(process);
-        expect(resolved.ok && resolved.stageKey).toBe("enrolling");
+    it("1 + 2. create_lead resolves lead, enrollment_start resolves enrolling", () => {
+        const process = built();
 
-        // Not the first stage by any ordering — the declaration names the second one and wins.
-        const reordered = parseLifecycleBuilderV1(
-            revisionPayload({ entryStageKey: "enrolled", stageKeys: ["enrolling", "enrolled"] }),
-        )!;
-        const second = resolveDeclaredProcessEntryStage(reordered.processes[0]);
-        expect(second.ok && second.stageKey).toBe("enrolled");
+        expect(resolveProcessEntryStage(process, "create_lead")).toMatchObject({
+            ok: true,
+            stageKey: "lead",
+        });
+        expect(resolveProcessEntryStage(process, "enrollment_start")).toMatchObject({
+            ok: true,
+            stageKey: "enrolling",
+        });
 
-        // A persisted stage is where the journey actually is, so it always wins over the entry.
-        expect(resolveEffectiveStageKey({ persistedStageKey: "enrolled", process })).toBe("enrolled");
-        expect(resolveEffectiveStageKey({ persistedStageKey: null, process })).toBe("enrolling");
+        // The intent comes from the journey's own provenance, which the insert helper has always
+        // written — `enrollment_start` is Start Enrollment's existing literal, not a new name.
+        expect(entryIntentFromProcessInstanceMetadata({ source: "enrollment_start" })).toBe("enrollment_start");
+        expect(entryIntentFromProcessInstanceMetadata({ source: "create_lead" })).toBe("create_lead");
     });
 
-    it("2. refuses an ambiguous or malformed entry-stage configuration", () => {
-        // Undeclared is NOT a default — it is an unanswered question, and nothing is guessed.
-        const undeclared = parseLifecycleBuilderV1(revisionPayload({ entryStageKey: null }))!;
-        const none = resolveDeclaredProcessEntryStage(undeclared.processes[0]);
-        expect(none.ok).toBe(false);
-        expect(!none.ok && none.reason).toBe("not_declared");
-        expect(resolveEffectiveStageKey({ persistedStageKey: null, process: undeclared.processes[0] })).toBeNull();
+    it("3 + 4. neither intent can inherit the other's stage", () => {
+        // Only Create Lead is mapped. A Start Enrollment journey resolves NOTHING rather than
+        // falling through to `lead` — that fallthrough is precisely what a process-global scalar did.
+        const leadOnly = parseLifecycleBuilderV1(
+            revisionPayload({ entryPoints: { create_lead: "lead" } }),
+        )!.processes[0];
+        const startUnmapped = resolveProcessEntryStage(leadOnly, "enrollment_start");
+        expect(startUnmapped.ok).toBe(false);
+        expect(!startUnmapped.ok && startUnmapped.reason).toBe("intent_not_mapped");
+        expect(
+            resolveEffectiveStageKey({
+                persistedStageKey: null,
+                process: leadOnly,
+                intent: "enrollment_start",
+            }),
+        ).toBeNull();
 
-        // Declared but naming no active stage: publication refuses, because the revision is
-        // immutable and every journey pinned to it would begin nowhere.
-        const dangling = revisionPayload({ entryStageKey: "no_such_stage" });
-        const validated = validateBusinessProcessForPublish(dangling);
-        const finding = validated.errors.find((e) => e.code === PUBLISH_ENTRY_STAGE_UNRESOLVABLE);
+        // And the reverse: Start Enrollment mapped alone must not hand `enrolling` to Create Lead.
+        const startOnly = parseLifecycleBuilderV1(
+            revisionPayload({ entryPoints: { enrollment_start: "enrolling" } }),
+        )!.processes[0];
+        const leadUnmapped = resolveProcessEntryStage(startOnly, "create_lead");
+        expect(!leadUnmapped.ok && leadUnmapped.reason).toBe("intent_not_mapped");
+
+        // With both mapped, each keeps its own — no bleed in either direction.
+        const both = built();
+        expect(
+            resolveEffectiveStageKey({ persistedStageKey: null, process: both, intent: "create_lead" }),
+        ).toBe("lead");
+        expect(
+            resolveEffectiveStageKey({ persistedStageKey: null, process: both, intent: "enrollment_start" }),
+        ).toBe("enrolling");
+
+        // A persisted stage still wins for both — it is where the journey actually is.
+        expect(
+            resolveEffectiveStageKey({ persistedStageKey: "enrolled", process: both, intent: "create_lead" }),
+        ).toBe("enrolled");
+    });
+
+    it("5. an unknown initiation intent fails closed, at publish and at runtime", () => {
+        // Publish REFUSES an authored intent the platform cannot supply. The parser drops the key,
+        // so without this check a typo would silently become "that intent is not configured".
+        const typo = revisionPayload({ entryPoints: { create_lead: "lead", start_enrolment: "enrolling" } });
+        const finding = validateBusinessProcessForPublish(typo).errors.find(
+            (e) => e.code === PUBLISH_ENTRY_INTENT_UNKNOWN,
+        );
+        expect(finding, "publish must refuse an unknown entry intent").toBeTruthy();
+        expect(finding?.detail).toMatchObject({ authored_intent: "start_enrolment" });
+
+        // At runtime an unreadable provenance falls to the platform default rather than to a stage:
+        // `create_lead` is what the insert helper itself writes when no creator names a source.
+        expect(entryIntentFromProcessInstanceMetadata({ source: "who_knows" })).toBe("create_lead");
+        expect(entryIntentFromProcessInstanceMetadata(null)).toBe("create_lead");
+        expect(isProcessEntryIntent("start_enrolment")).toBe(false);
+    });
+
+    it("6. a mapping to a missing or inactive stage refuses publication", () => {
+        const dangling = revisionPayload({
+            entryPoints: { create_lead: "lead", enrollment_start: "no_such_stage" },
+        });
+        const finding = validateBusinessProcessForPublish(dangling).errors.find(
+            (e) => e.code === PUBLISH_ENTRY_STAGE_UNRESOLVABLE,
+        );
         expect(finding, "publish must refuse an unresolvable entry stage").toBeTruthy();
-        expect(finding?.detail).toMatchObject({ declared_entry_stage_key: "no_such_stage" });
+        expect(finding?.detail).toMatchObject({
+            entry_intent: "enrollment_start",
+            declared_entry_stage_key: "no_such_stage",
+        });
 
         // A deactivated stage is not an entry point either.
-        const deactivated = parseLifecycleBuilderV1(revisionPayload({ entryStageKey: "enrolling" }))!;
-        deactivated.processes[0].stages[0].is_active = false;
-        const off = resolveDeclaredProcessEntryStage(deactivated.processes[0]);
+        const deactivated = parseLifecycleBuilderV1(revisionPayload())!.processes[0];
+        const enrolling = deactivated.stages.find((s) => s.key === "enrolling")!;
+        enrolling.is_active = false;
+        const off = resolveProcessEntryStage(deactivated, "enrollment_start");
         expect(!off.ok && off.reason).toBe("declared_stage_missing");
 
-        // And a well-formed declaration publishes cleanly.
+        // A well-formed map publishes cleanly.
+        const clean = validateBusinessProcessForPublish(revisionPayload()).errors;
+        expect(clean.some((e) => e.code === PUBLISH_ENTRY_STAGE_UNRESOLVABLE)).toBe(false);
+        expect(clean.some((e) => e.code === PUBLISH_ENTRY_INTENT_UNKNOWN)).toBe(false);
+    });
+
+    it("unauthored entry points are an unanswered question, not a default", () => {
+        const undeclared = parseLifecycleBuilderV1(revisionPayload({ entryPoints: null }))!.processes[0];
+        const none = resolveProcessEntryStage(undeclared, "enrollment_start");
+        expect(!none.ok && none.reason).toBe("not_declared");
+        // And publication does not block it — every revision published before D-103 is in this state.
         expect(
-            validateBusinessProcessForPublish(revisionPayload({ entryStageKey: "enrolling" })).errors.some(
-                (e) => e.code === PUBLISH_ENTRY_STAGE_UNRESOLVABLE,
+            validateBusinessProcessForPublish(revisionPayload({ entryPoints: null })).errors.some((e) =>
+                e.code === PUBLISH_ENTRY_STAGE_UNRESOLVABLE || e.code === PUBLISH_ENTRY_INTENT_UNKNOWN,
             ),
         ).toBe(false);
+    });
+
+    it("duplicate intent definitions are structurally impossible, and survive a round trip", () => {
+        // `by_intent` is object-keyed, so one intent cannot be mapped twice — the last write wins at
+        // JSON parse time and no tie-break rule is ever needed.
+        const payload = revisionPayload();
+        const parsed = parseLifecycleBuilderV1(payload)!;
+        expect(Object.keys(parsed.processes[0].entry_points_v1!.by_intent).sort()).toEqual([
+            "create_lead",
+            "enrollment_start",
+        ]);
+
+        // 7 + 8. The mapping is part of the payload, so a published revision carries it immutably and
+        // a rollback — which republishes a prior payload forward — restores exactly what it held.
+        const roundTripped = parseLifecycleBuilderV1(serializeLifecycleBuilderV1(parsed))!;
+        expect(roundTripped.processes[0].entry_points_v1).toEqual(parsed.processes[0].entry_points_v1);
+    });
+});
+
+describe("D-103 — Create Lead is not dragged into the Start Enrollment stage", () => {
+    it("a create_lead journey resolves `lead` at runtime, where no participant packet lives", async () => {
+        __clearConfigReadCacheForTests();
+        const db = makeDb(revisionPayload());
+        const supabase = client(db);
+
+        // Exactly what Create Lead child persistence does: the same canonical creator, its own
+        // provenance, and no stage — the family track decides position later.
+        const created = await createEnrollmentProcessInstance(supabase, {
+            orgId: ORG,
+            subjectId: CHILD,
+            stageKey: null,
+            state: null,
+            source: "create_lead",
+        });
+        expect(created.error, created.error ?? "").toBeUndefined();
+
+        const instance = db.process_instances.find((r) => r.id === created.id)!;
+        expect((instance.metadata as { source?: string }).source).toBe("create_lead");
+        expect(instance.stage_key ?? null).toBeNull();
+
+        const progress = await resolveEnrollmentParticipantProgress(supabase, {
+            orgId: ORG,
+            processInstanceId: String(created.id),
+        });
+        expect(progress.ok, progress.ok ? "" : progress.refusal.detail).toBe(true);
+        if (!progress.ok) return;
+
+        // THE REGRESSION. Under the process-global scalar this journey resolved `enrolling` and
+        // would have projected the participant Form requirement at the top of the acquisition
+        // funnel. It resolves `lead`, which requires no Forms, so it projects none.
+        expect(progress.value.stage_key).toBe("lead");
+        expect(progress.value.requirements).toEqual([]);
+    });
+
+    it("a Start Enrollment journey in the same tenant still resolves `enrolling`", async () => {
+        const { db, result } = await startWithConfig(revisionPayload());
+        const instance = db.process_instances.find((r) => r.id === result.processInstanceId)!;
+        expect((instance.metadata as { source?: string }).source).toBe("enrollment_start");
+
+        expect(result.participantLaunch.realized).toBe(true);
+        if (!result.participantLaunch.realized) return;
+        // 9. and its packet was realized from that stage's requirements.
+        expect(result.participantLaunch.value.stageKey).toBe("enrolling");
+        expect(db.form_packet_items).toHaveLength(1);
+        expect(db.form_packet_items[0].form_definition_id).toBe(FORM_A);
     });
 });
 

@@ -1,8 +1,12 @@
-# The canonical entry stage of a Business Process (B1a)
+# The canonical entry stage of a Business Process (B1a → D-103)
 
 Where a journey **begins**. Business Process configuration owns it, it is declared rather than
 inferred, and it rides the published revision so a running journey's entry stage cannot move
 underneath it.
+
+**D-103 supersedes the shape.** B1a declared one stage per process, `entry_stage_key`. That collapsed
+two legitimate initiations of the same Enrollment process, and configuration now maps entry
+**intents** to stages. The scalar is gone, not deprecated — see "The declaration" below.
 
 ## Why it had to be added
 
@@ -35,11 +39,43 @@ declaration exists to prevent.
 
 ## The declaration
 
-`LifecycleBuilderProcessRecord.entry_stage_key?: string` — one optional scalar on the process.
+```jsonc
+"entry_points_v1": {
+  "version": 1,
+  "by_intent": {
+    "create_lead": "lead",
+    "enrollment_start": "enrolling"
+  }
+}
+```
 
-A per-stage `is_entry` boolean was rejected: two stages could carry it, and the model would then need
-a tie-break rule — an ambiguity invented by the schema rather than by the operator. A single scalar
-makes ambiguity structurally impossible.
+`LifecycleBuilderProcessRecord.entry_points_v1?: ProcessEntryPointsV1`.
+
+**Why per intent.** One process has more than one legitimate initiation. Create Lead begins an
+acquisition episode; Start Enrollment begins paperwork for a child who already exists in Records.
+A process-global scalar has to pick one, and whichever it picks is wrong for the other — a Records
+child dropped at the top of the acquisition funnel, or a lead that has not decided anything sitting
+in enrolment paperwork.
+
+The split of authority is the point: **the initiating action may say why a process is being
+initiated; it may not say where the journey starts.** The published revision owns that.
+
+**The intent vocabulary already existed.** `process_instances.metadata.source` has recorded these
+values since long before this decision — `buildEnrollmentProcessInstanceInsert` writes `create_lead`
+by default, and Start Enrollment passes `enrollment_start`. So the runtime reads the intent a journey
+was *created with* rather than being told one, no column is added, and journeys created before D-103
+are already labelled. `enrollment_start` is this repository's name for what the decision text called
+`start_enrollment` — same semantic, existing literal, no duplicate vocabulary.
+
+**Why a map, not a list.** `by_intent` is object-keyed, so two definitions of one intent are
+structurally impossible and no tie-break rule is ever needed. A list of `{intent, stage_key}` rows
+would have needed one. It also matches the `by_rule_id` / `by_stage_key` shape the builder's other
+versioned sub-configs use.
+
+**The scalar was removed, not deprecated.** `entry_stage_key` shipped days earlier and had no
+authored production usage anywhere — no tenant, seed, template or migration wrote it. Keeping it
+would have left two authorities answering one question, so it was migrated before Firefly authored
+against it. There is no precedence rule to document because there is nothing to precede.
 
 **Absence is unauthored, not a default.** `resolveDeclaredProcessEntryStage` returns
 `not_declared` and consumers refuse; nothing falls back to a plausible stage. This is the posture
@@ -49,8 +85,9 @@ makes ambiguity structurally impossible.
 | --- | --- |
 | revision-contained | it is a field of the builder payload, which publication snapshots whole (D-97) |
 | immutable once published | `business_process_revisions` is immutable by trigger |
-| validated at publish | `PUBLISH_ENTRY_STAGE_UNRESOLVABLE` — a declared key must name an **active** stage |
-| unambiguous | one scalar per process |
+| validated at publish | `PUBLISH_ENTRY_STAGE_UNRESOLVABLE` — every mapped key must name an **active** stage; `PUBLISH_ENTRY_INTENT_UNKNOWN` — every authored intent must be one the platform can supply |
+| unambiguous | object-keyed map; one intent cannot be mapped twice |
+| rollback-safe | the mapping is part of the payload, and rollback republishes a prior payload forward |
 | owned by BP Configuration | declared in the builder; the participant runtime only reads it |
 
 Validation is blocking, and blocking at publish specifically: a revision is immutable, so a journey
@@ -76,7 +113,8 @@ appears in. That is a change to lifecycle meaning made for the convenience of a 
 Instead the participant runtime resolves the **effective** stage:
 
 ```
-effective stage = process_instances.stage_key ?? declared entry_stage_key ?? none
+intent         = process_instances.metadata.source        (create_lead | enrollment_start)
+effective stage = process_instances.stage_key ?? entry_points_v1.by_intent[intent] ?? none
 ```
 
 `resolveEffectiveStageKey` is the single owner. A persisted stage always wins, because it is where
@@ -84,8 +122,23 @@ the journey actually is. Both `resolveEnrollmentParticipantProgress` and the par
 through it, so an unmoved journey projects the requirements that genuinely govern it instead of
 projecting nothing until an operator happens to move the child.
 
+## Not a competing authority: `resolveCreateLeadEntryStageKey`
+
+That function also produces a field called `entry_stage_key`, and it is a different subject: the
+stage whose **work unit** a new lead's Opportunity is routed to, with its status key. Its consumers —
+`resolveCreateLeadEntryDepartment` and `lifecycleRuntimeBinding` — read `work_unit_id`, `status_key`
+and `activation` and drop the stage entirely. Nothing in production reads it. It is queue routing for
+an Opportunity, not where a child's process instance begins, so it was left alone rather than folded
+into an entry-point model it does not belong to.
+
 ## Evidence
 
-`tests/lifecycle/startEnrollmentParticipantLaunch.test.ts` — deterministic resolution, a declared key
-that names no active stage refusing at publish, a deactivated stage refusing, absence resolving to
-nothing rather than to a guess, and a persisted stage overriding the declaration.
+`tests/lifecycle/startEnrollmentParticipantLaunch.test.ts` — `create_lead → lead` and
+`enrollment_start → enrolling`; neither intent inheriting the other's stage in either direction; an
+unknown authored intent refusing at publish and an unreadable runtime intent falling to the platform
+default; a mapping to a missing or deactivated stage refusing publication; unauthored entry points
+resolving to nothing rather than a guess while still publishing cleanly; duplicate definitions being
+structurally impossible; the mapping surviving a serialize/parse round trip, which is what makes it
+immutable in a revision and restorable by rollback; and the Create Lead regression — a `create_lead`
+journey resolving `lead` and projecting no participant Form requirement, while a Start Enrollment
+journey in the same tenant resolves `enrolling` and realizes its packet.
