@@ -304,6 +304,13 @@ export function childQueueRowContext(params: {
                 : `${Math.floor(ageMonths / 12)}y${ageMonths % 12 ? `${ageMonths % 12}m` : ""}`
             : null;
 
+    // Resolved by `attachChildGrainAvatar` over the whole row set. Absent stays absent: the
+    // presentation falls back to initials rather than rendering an empty avatar.
+    const avatarImageUrl =
+        typeof (row as { avatarImageUrl?: unknown }).avatarImageUrl === "string"
+            ? (row as { avatarImageUrl?: string }).avatarImageUrl!.trim() || null
+            : null;
+
     const operational_state = buildOperationalStateQueueContext({
         orgId: "",
         grain: "child",
@@ -326,6 +333,9 @@ export function childQueueRowContext(params: {
             stage_key: row.stageKey ?? null,
             date_of_birth: dobIso,
             age_label: ageLabel,
+            // Same property the OCM builder emits, so the child-grain queue presentation needs no
+            // change — one child identity fact, not a parallel queue-only avatar field.
+            ...(avatarImageUrl ? { image_url: avatarImageUrl } : {}),
         },
         row_stage: params.stageLabel,
         // Machine stage key for variant match input (labels alone cannot match authored stage_key rules).

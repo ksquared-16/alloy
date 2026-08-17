@@ -1148,3 +1148,44 @@ rather than data-starved.
 **Unchanged and still true:** one canonical owner (`persons.metadata.profile_photo_document_id`),
 one read adapter (`resolveIdentityPhotoUrl`), one batched injector, no N+1, and both children have a
 canonical `person_id`. No Firefly data was written at any point in this investigation.
+
+### R-019 · Queue avatar — the ownership contradiction resolved, owner proven
+
+**There are TWO child-grain queue row-context builders, and only one resolves the avatar.**
+
+| Builder | Used by | Sets `image_url`? |
+|---|---|---|
+| `buildChildGrainQueueRowContext` (OCM-vintage) | **QueueService**, via `attachQueueRowContextToItems` | **Yes** — `resolveIdentityPhotoUrlFromRaw(activeInquiryRaw)` → `row_subject.image_url` |
+| `childQueueRowContext` (`childGrainSurfaceComposition.ts:318`) | **the provisioning answer / Work View projection** | **No** — `row_subject` is built with `subject_type`, `subject_id`, `display_name`, `stage_key`, `date_of_birth`, `age_label` and nothing else |
+
+That is the whole contradiction. Both earlier statements were true of different code paths:
+QueueService *does* own a profile-photo projection, and the Waitlist rows *do* come from the
+provisioning answer — which uses the other builder. `attachQueueRowContextToItems` has exactly one
+consumer, `QueueService`, so the Work View path never reaches the builder that resolves photos.
+
+**Measured on the live answer** (`new_work_view_4`): 2 rows, `context` present on each,
+`hasImageUrl: false`, `hasResolvedPhoto: false`, `hasInquiryChildren: false`. So the fact is not
+dropped late — **it is never produced** on this path.
+
+**Why this is not a one-line addition.** `ChildProvisioningRow` carries `subjectId`
+(`customer_members.id`), `stageKey`, `statusKey`, `title`, `updatedAt` — and **no `person_id`**.
+Profile photos are Person-owned, so resolving them here needs a member → person lookup before the
+batched photo projection can run. That shape already exists in this module family:
+`attachChildGrainInquiryProgramFallback` does `.select("id, person_id, dob")` on
+`customer_members` and then batches a `persons` read — an `attachChildGrainAvatar` step alongside it
+is the natural home, keeping ONE batched resolution over the row set rather than per row.
+
+**The fix, specified, not implemented:**
+1. thread a `DocumentActor` into `ProvisioningRequest` (via `documentActorFromAdminGate(gate)` in
+   `composeProvisioningAnswerForRoute`, exactly as the drawer VM fix now does);
+2. add one batched attach: member ids → `person_id` → `projectResolvedProfilePhotosOntoRows`,
+   guarded on `actor?.ok`, keyed by `person_id`;
+3. carry the resolved URL onto `row_subject.image_url` in `childQueueRowContext`, matching the
+   property the OCM builder already emits so the renderer needs no change.
+
+Nothing persisted, no queue-specific store, no per-row request, initials remain the fallback when
+no photo resolves or the actor is denied.
+
+**Scope note:** the earlier "do not touch `workUnitProvisioningAnswer`" instruction was scoped to the
+Focus Panel Children defect — which was correctly solved at the drawer VM. This queue defect is a
+different owner and does legitimately live on that path.

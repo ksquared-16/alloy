@@ -13,6 +13,7 @@ import "server-only";
  * through so the composer returns the same honest terminal error.
  */
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { type AdminRouteGateFailure } from "@/lib/admin/adminRouteGate";
 import {
     composeWorkUnitProvisioningAnswer,
@@ -72,6 +73,10 @@ export async function composeProvisioningAnswerForRoute(input: {
         supabase,
         orgId: gate.orgId,
         currentUserId: gate.userId ?? null,
+        // Child-grain queue rows carry a Person-owned avatar, minted per actor per request and never
+        // persisted. Without the actor the rows reach the queue with no image and fall back to
+        // initials for children who do have a photo (R-019).
+        documentActor: documentActorFromAdminGate(gate),
         workUnitSlug,
         requestedWorkViewId,
         requestedSubjectId: input.requestedSubjectId,
