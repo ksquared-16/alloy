@@ -20,6 +20,7 @@ import {
     attachOpportunityHouseholdCustomerPersonsForDrawer,
     buildOpportunityDrawerVisiblePayload,
 } from "@/lib/admin/opportunityEntityRecord";
+import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/resolveWorkUnitQueueDefinitionForDrawer";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { OPPORTUNITY_CANONICAL_ADMIN_SELECT } from "@/lib/fields/canonicalEntitySelectColumns";
@@ -133,7 +134,11 @@ export async function resolveSharedCanonicalDeps(
         supabase,
         orgId,
         oppRow as Record<string, unknown>,
-        { hintDepartmentId: ctxDept }
+        // Profile photos are DOCUMENTS, minted per actor per request (~300s) and never persisted.
+        // Without the actor this payload reaches the Focus Panel with `_inquiry_children` carrying no
+        // `resolved_photo_url`, so every child avatar placement falls back to initials while the same
+        // children resolve correctly through the entity-record path (R-019).
+        { hintDepartmentId: ctxDept, documentActor: documentActorFromAdminGate(gate) }
     );
     phases_ms.visible_entity_ms = Date.now() - tVisible0;
     // Bubble the visible-payload sub-phases so the dominant first-useful cost is measurable in the
