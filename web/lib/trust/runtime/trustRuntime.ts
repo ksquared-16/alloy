@@ -308,6 +308,7 @@ export async function executeDecisionContract(input: TrustRuntimeInput): Promise
             participant_redactions: eligible.participant_redactions,
             // D-101 evidence forwarded with the governed input, not recomputed.
             acknowledged_unminimized_classes: eligible.acknowledged_unminimized_classes ?? [],
+            acknowledged_untransformed_classes: eligible.acknowledged_untransformed_classes ?? [],
         };
     } else {
         const classification = classifyElements(

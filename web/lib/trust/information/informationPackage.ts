@@ -318,6 +318,8 @@ export type EligibleReasoningInputV1 = {
      * from exactly the packages that needed it most.
      */
     readonly acknowledged_unminimized_classes: readonly TextMinimizationClass[];
+    /** D-102. Classes admitted without their normally required transformation. */
+    readonly acknowledged_untransformed_classes: readonly InformationClass[];
     /**
      * What known-participant redaction removed. Empty when the policy required
      * no participant redaction; a present record with `replaced_count: 0` means
@@ -409,6 +411,7 @@ export function buildEligibleReasoningInput(input: {
             transformations: context.transformations,
             text_minimizations: context.text_minimizations,
             acknowledged_unminimized_classes: context.acknowledged_unminimized_classes,
+            acknowledged_untransformed_classes: context.acknowledged_untransformed_classes,
             participant_redactions: context.participant_redactions,
             redaction_steps: context.redaction_steps,
             provenance: input.package.provenance,

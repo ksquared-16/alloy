@@ -81,6 +81,19 @@ export const PARTICIPANT_CONVERSATION_ADMISSION_V1: PrivacyPolicyV1 = {
     required_text_minimizers: ["email", "phone"],
     // Admitted without transformation, and SAID so.
     acknowledged_unminimized_classes: ["person_name", "street_address", "health_information"],
+    /**
+     * D-102. `identity` maps to `tokenize`, and tokenization requires a token vault that does not
+     * exist — so dispatch refuses every identity element, correctly, for every generic policy.
+     *
+     * This policy admits it anyway, and SAYS so. A participant confirming their own child's date of
+     * birth is identity data by any honest classification, and relabelling it `operational` to slip
+     * past the dispatch would be precisely the false claim this platform refuses everywhere else.
+     *
+     * The narrowness lives above this object: the capability admits only the current deterministic
+     * turn's minimal facts, only for a need on the D-101 eligibility allow-list. The acknowledgment
+     * alone is deliberately NOT sufficient.
+     */
+    acknowledged_untransformed_classes: ["identity"],
 };
 
 export const PROCESSING_SOURCE_MINIMIZATION_V1: PrivacyPolicyV1 = {
