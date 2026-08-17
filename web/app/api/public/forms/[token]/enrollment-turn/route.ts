@@ -99,7 +99,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 access.value.orgId,
             ),
             nowIso: new Date().toISOString(),
-            repository: createSupabaseTrustRepository(supabase),
+            repository: createSupabaseTrustRepository(),
         });
         if (governed.candidate) candidate = governed.candidate;
     }
