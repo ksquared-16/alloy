@@ -21,6 +21,18 @@
  * context-free, which the schema has always permitted. A completed 2025 enrolment is never reopened
  * to give a 2026 sibling somewhere to live.
  * @see enrollmentContextResolver.ts
+ *
+ * ── B1: STARTING ALSO REALIZES THE PARTICIPANT OBJECTIVE ──
+ *
+ * Starting Enrollment now creates (or resumes) the participant session and access link that realize
+ * the journey, derived from the governing revision's Form requirements. Public links are an access
+ * mechanism; this service stays the lifecycle authority.
+ *
+ * The realization is ADDITIVE and never fatal. A tenant whose Enrollment stage requires no Forms, or
+ * whose journey is unpinned, still gets a legitimately started journey — it simply has no participant
+ * packet yet, and `participantLaunch` names why in a code rather than throwing. Refusing to start a
+ * journey because there is nothing to send a parent would be this service enforcing a Forms
+ * precondition on a lifecycle transaction.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -28,6 +40,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
 import { RecordCreationError } from "@/lib/records/recordCreationErrors";
+import {
+    launchParticipantEnrollment,
+    type ParticipantLaunchValue,
+} from "@/lib/enrollment/participantLaunch/launchParticipantEnrollment";
 
 export type StartEnrollmentInput = {
     orgId: string;
@@ -49,6 +65,15 @@ export type StartEnrollmentResult = {
     contextOutcome: "joined_live_episode" | "context_free";
     /** True when an open journey already existed and was returned instead of a second one. */
     reused: boolean;
+    /**
+     * The participant objective this start realized, or the reason it realized none.
+     *
+     * Always present, never thrown: "the journey started and there is nothing to send yet" is a real
+     * and legitimate outcome, and reporting it as a code beats reporting it as a failure to start.
+     */
+    participantLaunch:
+        | { realized: true; value: ParticipantLaunchValue }
+        | { realized: false; code: string; detail: string };
 };
 
 type ChildRow = { id: string; customer_id: string | null; display_name: string | null };
@@ -105,6 +130,13 @@ export async function startEnrollment(
         throw new RecordCreationError("db_error", "Could not start the enrollment process");
     }
 
+    const launched = await launchParticipantEnrollment(supabase, {
+        orgId,
+        processInstanceId: created.id,
+        customerId,
+        opportunityId,
+    });
+
     return {
         processInstanceId: created.id,
         customerMemberId,
@@ -112,5 +144,8 @@ export async function startEnrollment(
         opportunityId,
         contextOutcome: opportunityId ? "joined_live_episode" : "context_free",
         reused: created.reused === true,
+        participantLaunch: launched.ok
+            ? { realized: true, value: launched.value }
+            : { realized: false, code: launched.refusal.code, detail: launched.refusal.detail },
     };
 }

@@ -41,6 +41,14 @@ export const PUBLISH_EMPTY_PROCESS = "process_has_no_stages" as const;
 export const PUBLISH_COMMAND_SET_INCOMPLETE = "process_command_set_incomplete" as const;
 /** An operating-contract finding, surfaced under its own contract code in `detail.contract_code`. */
 export const PUBLISH_OPERATING_CONTRACT = "stage_operating_contract" as const;
+/**
+ * `entry_stage_key` names a stage this process does not have, or has deactivated (B1a).
+ *
+ * Blocking, and blocking HERE, because a published revision is immutable: a journey pinned to a
+ * revision whose declared entry stage does not resolve can never be repaired by editing the
+ * configuration — only by republishing, which leaves the already-pinned journeys behind.
+ */
+export const PUBLISH_ENTRY_STAGE_UNRESOLVABLE = "process_entry_stage_unresolvable" as const;
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -166,6 +174,30 @@ export function validateParsedBusinessProcessForPublish(
                 code: PUBLISH_EMPTY_PROCESS,
                 message: `Process “${process.name}” has no active stages.`,
                 path: `processes[${process.key}]`,
+            });
+        }
+
+        /**
+         * B1a — a DECLARED entry stage must resolve.
+         *
+         * Absence is not checked: it means the tenant has not authored one, which every existing
+         * published revision is, and refusing those would block publication for a question they
+         * were never asked. Consumers refuse on absence instead, where the refusal is nameable.
+         */
+        const declaredEntry = (process.entry_stage_key ?? "").trim();
+        if (declaredEntry && !activeStages.some((s) => s.key === declaredEntry)) {
+            errors.push({
+                code: PUBLISH_ENTRY_STAGE_UNRESOLVABLE,
+                stage_key: declaredEntry,
+                path: `processes[${process.key}].entry_stage_key`,
+                message:
+                    `Process “${process.name}” starts journeys in stage “${declaredEntry}”, which is ` +
+                    `not an active stage of this process. Every journey published under this ` +
+                    `revision would begin nowhere.`,
+                detail: {
+                    declared_entry_stage_key: declaredEntry,
+                    active_stages: activeStages.map((s) => s.key),
+                },
             });
         }
 
