@@ -31,6 +31,7 @@ import {
     focusPanelDefaultCompositionForGrain,
     focusPanelSummaryDefaultGrid,
     focusPanelSummaryGridForGrain,
+    type SummaryCompositionContext,
     type SummaryCompositionEntry,
 } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
@@ -110,18 +111,31 @@ const CHILD_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
 );
 
 /**
+ * A child selected from an operational lens, where a settled family opportunity is the Record of
+ * Truth. Its own singleton, built by the same encoder from its own composition — see
+ * `FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION` for why context, not grain, decides this.
+ */
+const CHILD_WITH_FAMILY_DEFAULT_DOC: LayoutDoc = encodeCompositionAsDoc(
+    focusPanelDefaultCompositionForGrain("child", { familySettlement: true }),
+    buildPublishedLayoutFromGrid(focusPanelSummaryGridForGrain("child", { familySettlement: true })),
+);
+
+/**
  * The code-owned default doc for a subject grain.
  *
  * `opportunity` returns {@link FOCUS_PANEL_SUMMARY_DEFAULT_DOC} — the SAME object reference the case
  * surface has always used, so the enrollment panel is identical, not merely equivalent. Every other
  * grain gets its own singleton, built by the same encoder from its own composition.
  */
-export function focusPanelSummaryDefaultDocForGrain(grain: OperationalSubjectType): LayoutDoc {
+export function focusPanelSummaryDefaultDocForGrain(
+    grain: OperationalSubjectType,
+    context?: SummaryCompositionContext,
+): LayoutDoc {
     switch (grain) {
         case "person":
             return PERSON_DEFAULT_DOC;
         case "child":
-            return CHILD_DEFAULT_DOC;
+            return context?.familySettlement ? CHILD_WITH_FAMILY_DEFAULT_DOC : CHILD_DEFAULT_DOC;
         case "opportunity":
             return FOCUS_PANEL_SUMMARY_DEFAULT_DOC;
     }

@@ -176,20 +176,119 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
 ];
 
 /**
- * The default composition for a subject grain.
+ * CHILD ATTENTION WITH FAMILY SETTLEMENT — a child selected from an operational lens.
+ *
+ * The distinction this composition exists for is **context, not grain**. Two subjects are both
+ * `child`, and they are not the same situation:
+ *
+ *   durable child                 opened subject-first, no Opportunity, no lens. Nothing family-
+ *                                 scoped is authoritative, so the sparse composition above is right.
+ *   child attention + settlement  selected from an Enrollment lens. `overlayChildMissionOntoSettled-
+ *                                 FocusModel` states the contract: "Record of Attention = child.
+ *                                 Record of Truth / Settlement = family opportunity." The family
+ *                                 opportunity IS settled and its card models ARE authoritative.
+ *
+ * So this composition reuses the settled family VM's own card models rather than re-deriving them,
+ * and the overlay scopes What's Next to the focused child's Mission. Nothing here widens
+ * `cardAppliesToGrain`: that predicate gates the DURABLE derivations, and widening it would hand
+ * family cards to a standalone child, a staff member or a person — the failure the grain guard
+ * exists to prevent.
+ *
+ * Card-by-card, why each earns its place for a child seen through a family lens:
+ *
+ *   current_work     the focused child's Waitlist/stage Mission — the overlay already replaces the
+ *                    family's Current Work with it, and it carries the certified command grammar
+ *                    (Message / Send form / Tour), so Tour, Forms and Communications arrive with it.
+ *   child_identity   who the operator is looking at. Derived through the SAME child derivation the
+ *                    durable path uses.
+ *   children         kept, with the focused child active; siblings are supporting context. A child
+ *                    subject is a reason to scope this card, never to remove it.
+ *   household        family/relationship context, and honestly family-scoped — it does not claim to
+ *                    be child-owned.
+ *   billing_preview  family-scoped contextual information, placed last and compact precisely
+ *                    because it is not child-owned. Its priority differs from Current Work.
+ *
+ * Layout mirrors the case surface: What's Next holds the left column full height; identity then
+ * children stack on the right; household and billing close on a shared bottom row. No card spans
+ * all 12 columns — that forces `planPublishedLayout` from `lanes` to `grid` for the whole panel.
+ */
+export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    {
+        key: "current_work",
+        tier: "work",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 7 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+    {
+        key: "child_identity",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+    {
+        key: "children",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 4 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+    {
+        key: "household",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
+    {
+        key: "billing_preview",
+        tier: "context",
+        visibility: "visible",
+        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
+    { key: "tour_summary", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
+    { key: "communications", tier: "reference", visibility: "linked", encodedSpan: 1, encodedDensity: "standard" },
+    { key: "milestones", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
+];
+
+/**
+ * Where the subject is, not merely what it is.
+ *
+ * `familySettlement` says a settled family opportunity is the Record of Truth behind this subject.
+ * It is the difference between the two child situations above, and it is deliberately NOT a grain:
+ * making it one would have re-litigated `cardAppliesToGrain` and leaked family cards to every child.
+ */
+export type SummaryCompositionContext = {
+    /** A settled family opportunity backs this subject (lens path), rather than subject-first. */
+    familySettlement?: boolean;
+};
+
+/**
+ * The default composition for a subject grain, in its context.
  *
  * `opportunity` returns the case composition BY REFERENCE — the same array object, not a copy — so
  * the existing enrollment surface is not merely equivalent but identical, and no regression can hide
- * in a re-derivation.
+ * in a re-derivation. `person` never consults context: a staff member has no family settlement to
+ * have, and answering otherwise is exactly how household/children would land on a staff record.
  */
 export function focusPanelDefaultCompositionForGrain(
-    grain: OperationalSubjectType
+    grain: OperationalSubjectType,
+    context?: SummaryCompositionContext,
 ): readonly SummaryCompositionEntry[] {
     switch (grain) {
         case "person":
             return FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION;
         case "child":
-            return FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION;
+            return context?.familySettlement
+                ? FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION
+                : FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION;
         case "opportunity":
             return FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION;
     }
@@ -209,6 +308,9 @@ export function focusPanelSummaryDefaultGrid(): FocusPanelGridLayout {
 }
 
 /** The 12-column grid for a subject grain's default composition. */
-export function focusPanelSummaryGridForGrain(grain: OperationalSubjectType): FocusPanelGridLayout {
-    return gridFromComposition(focusPanelDefaultCompositionForGrain(grain));
+export function focusPanelSummaryGridForGrain(
+    grain: OperationalSubjectType,
+    context?: SummaryCompositionContext,
+): FocusPanelGridLayout {
+    return gridFromComposition(focusPanelDefaultCompositionForGrain(grain, context));
 }
