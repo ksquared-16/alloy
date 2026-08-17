@@ -1107,3 +1107,44 @@ rather than caching the URL, which is what the batch projection already does.
 **Personless children — closed as NOT a current gap.** Both real Firefly enrollment children have a
 canonical `person_id`, so the avatar-capable path has a Person in the flow that matters here. No
 second avatar owner is warranted.
+
+### R-019 · The provisioning-answer fix was the WRONG OWNER — attempted, disproven, reverted
+
+The accepted diagnosis said `workUnitProvisioningAnswer` builds `_inquiry_children` without running
+the photo projection. I implemented exactly that — threaded `documentActorFromAdminGate(gate)`
+through `composeProvisioningAnswerForRoute` into the request, and batched
+`projectResolvedProfilePhotosOntoRows` over the assembled children.
+
+**It changed nothing, because the premise was wrong.** Querying the answer directly:
+
+```
+GET /api/admin/work-units/waitlist/provisioning-answer?workViewId=new_work_view_4
+  hasInquiryChildren : false
+  personIds          : []
+  hasResolved        : false
+```
+
+**The provisioning answer carries no `_inquiry_children` for this lens at all**, so there was nothing
+to project onto — `inquiryChildrenSource` is null and the new code is a no-op. It was reverted rather
+than merged: dead code in a commit-critical path, immediately before a timing phase, is worse than
+no code. (The 2 failing `d1ProvisioningAnswer` tests were confirmed **pre-existing** by reverting and
+re-running — they fail identically without the change, on `process_instances` / `tour_bookings`.)
+
+**What this tells us, and where to look next.** The Focus Panel's children data on the Waitlist lens
+does **not** come from the provisioning answer. It comes from the opportunity entity record — and
+that record **already carries `resolved_photo_url`** for both children (measured directly). So the
+fact is present in the data the panel consumes, and the break is **downstream of the projection**:
+either in how the Focus Panel merges that record into `context.truth`, or in the avatar presentation
+gate on the Children roster row.
+
+**Do not re-run the projection hypothesis.** The next session should start from the browser, not the
+server: with both children holding a populated `resolved_photo_url` in the opportunity record,
+determine whether `buildChildrenCardEvidence` receives rows carrying that key (log `imageUrl` at
+`buildChildrenCardEvidence:402`), and whether `ChildSummaryRow` / `IdentityRecordSummary` renders an
+`<img>` at all in the roster state — the roster showed **zero** `<img>` elements while the drilled-in
+composer state does offer "Add photo", which suggests the roster avatar may be presentation-gated
+rather than data-starved.
+
+**Unchanged and still true:** one canonical owner (`persons.metadata.profile_photo_document_id`),
+one read adapter (`resolveIdentityPhotoUrl`), one batched injector, no N+1, and both children have a
+canonical `person_id`. No Firefly data was written at any point in this investigation.
