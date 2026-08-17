@@ -28,7 +28,10 @@ import {
     type ChildCohortRecord,
     type StaffCohortRecord,
 } from "@/lib/adminV2/records/recordCohorts";
-import { resolveRosterSection, ROSTER_SECTION_TABS } from "@/app/adminV2/roster/rosterSections";
+import {
+    resolveOperationsWorkSection as resolveRosterSection,
+    OPERATIONS_WORK_TABS as ROSTER_SECTION_TABS,
+} from "@/app/adminV2/operations/operationsSections";
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 const TODAY = "2026-08-14";

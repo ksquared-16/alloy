@@ -3,14 +3,18 @@ import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentatio
 /**
  * Shell-level modals owned by AdminV2 workspace chrome (mutually exclusive).
  *
- * `roster` is the operating plan — who is expected where and when — and its
- * actuality mode, Attendance. `scheduling` is Assignments: the durable commitment
- * ledger those expectations are derived from. They lived under one noun and
- * answered two different questions.
+ * `operations` is the operating day and its configuration: Roster, Attendance, Staff and Children
+ * under WORK, and Assignment Categories, Patterns and Validation under STUDIO.
  *
- * `roster` also holds the durable population — Staff and Children — as two of its four sections.
- * They were a separate `records` workspace; that key is gone rather than left inert, because a modal
- * key nothing can open is a trap for whoever reads this next.
+ * It absorbed three keys. `roster` was the operating plan, `records` the durable population, and
+ * `scheduling` the commitment ledger plus its configuration — three doors that made an operator
+ * declare in advance which question they were about to ask about the same day and the same people.
+ *
+ * None of the three survives here, and that is the point: a modal key is the workspace's identity,
+ * so keeping `roster` as the internal key "for convenience" would teach every later reader that the
+ * workspace IS Roster. Old callers reach Operations through the dispatchers in
+ * `workspaceModalEvents`, which forward by NAME — a compatibility layer with no state of its own,
+ * rather than a second key that could drift out of sync with this one.
  */
 export type AdminV2WorkspaceModalKey =
     | "inbox"
@@ -18,8 +22,7 @@ export type AdminV2WorkspaceModalKey =
     | "quick_message"
     | "analytics"
     | "processing"
-    | "scheduling"
-    | "roster";
+    | "operations";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;

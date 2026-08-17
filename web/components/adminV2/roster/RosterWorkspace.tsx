@@ -23,12 +23,18 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import RosterWorkspaceShell, { type RosterSite } from "@/app/adminV2/roster/RosterWorkspaceShell";
+import OperationsWorkspaceShell, {
+    type OperationsSite as RosterSite,
+} from "@/app/adminV2/operations/OperationsWorkspaceShell";
+import OperationsStudio from "@/components/adminV2/operations/OperationsStudio";
 import RosterKpiStrip, { type RosterHealthCounts } from "@/app/adminV2/roster/RosterKpiStrip";
 import {
-    resolveRosterSection,
-    type RosterSection,
-} from "@/app/adminV2/roster/rosterSections";
+    resolveOperationsStudioSection,
+    resolveOperationsWorkSection as resolveRosterSection,
+    type OperationsMode,
+    type OperationsStudioSection,
+    type OperationsWorkSection as RosterSection,
+} from "@/app/adminV2/operations/operationsSections";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
 import { buildAssignmentRosterBulkHandlers } from "@/lib/adminV2/scheduling/assignmentRosterBulkHandlers";
@@ -54,7 +60,7 @@ import {
     ROSTER_WORKSPACE_DEEPLINK_KEY,
     type OpenRosterModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
-import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
+import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
 
 async function schedApi(path: string): Promise<any> {
     const res = await fetch(`/api/admin/scheduling${path}`, {
@@ -64,6 +70,16 @@ async function schedApi(path: string): Promise<any> {
 }
 
 export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
+    /**
+     * WORK or STUDIO — running the operating day, or configuring what it is made of.
+     *
+     * Defaults to Work every time the workspace opens. Studio is where an operator goes
+     * deliberately and rarely; remembering it across opens would land someone on a configuration
+     * screen when they came to look at the day.
+     */
+    const [mode, setMode] = useState<OperationsMode>("work");
+    const [studioSection, setStudioSection] =
+        useState<Exclude<OperationsStudioSection, "templates">>("types");
     const [section, setSection] = useState<RosterSection>("roster");
     const [range, setRange] = useState<RosterRange>("day");
     const [lens, setLens] = useState<RosterLens>("rooms");
@@ -199,8 +215,28 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     }, [needsPeopleBootstrap, peopleBootstrap]);
 
     // ── Deep link ────────────────────────────────────────────────────────────
+    /**
+     * Every link ever written to Roster, Records or Assignments arrives here.
+     *
+     * A STUDIO destination is checked first and returns, because Studio and Work are mutually
+     * exclusive placements: a link naming `types` wants Assignment Categories, and also applying a
+     * work section for it would leave the workspace in Studio while a Work tab reads as selected.
+     */
     const applyDeepLink = useCallback((detail: OpenRosterModalDetail | null) => {
         if (!detail) return;
+        // Site first — it applies to both modes, and a Studio link carrying one means "configure
+        // THIS site's patterns".
+        if (detail.siteLocationId) {
+            siteChosenRef.current = true;
+            setSiteId(detail.siteLocationId);
+        }
+        const studio = resolveOperationsStudioSection(detail.studioSection ?? null);
+        if (studio) {
+            setMode("studio");
+            setStudioSection(studio);
+            return;
+        }
+        setMode("work");
         const resolved = resolveRosterSection(detail.section);
         if (resolved) setSection(resolved);
         if (detail.range) setRange(detail.range);
@@ -210,10 +246,6 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             setAttendanceRoomId(detail.roomLocationId);
         }
         if (detail.filter) setRosterFilter(detail.filter as RosterFilterKind);
-        if (detail.siteLocationId) {
-            siteChosenRef.current = true;
-            setSiteId(detail.siteLocationId);
-        }
     }, []);
 
     useEffect(() => {
@@ -464,15 +496,30 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     }, [rosterFilter, week]);
 
     return (
-        <RosterWorkspaceShell
-            section={section}
-            onSectionChange={(next) => {
+        <OperationsWorkspaceShell
+            mode={mode}
+            /*
+             * SWITCHING MODE CHANGES NOTHING ELSE.
+             *
+             * `mode` is the only state a Work ↔ Studio switch touches: site, date, week, Roster lens,
+             * focused room, filter, and every section's own cohort/offset/scroll all live in state
+             * that stays mounted. Studio renders BESIDE Work rather than replacing this component,
+             * so returning from Studio returns to the operating day exactly as it was left.
+             *
+             * That is a structural property, not a restore step — there is no snapshot to take and
+             * nothing to put back, which is why there is no code here doing either.
+             */
+            onModeChange={setMode}
+            workSection={section}
+            studioSection={studioSection}
+            onWorkSectionChange={(next) => {
                 setSection(next);
                 if (next !== "roster") {
                     setFocusRoomId(undefined);
                     setRosterFilter(null);
                 }
             }}
+            onStudioSectionChange={setStudioSection}
             sites={sites}
             siteId={siteId}
             onSiteChange={(next) => {
@@ -482,7 +529,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             siteName={siteName}
             onClose={onClose}
             metricsColumn={
-                section === "roster" ? (
+                mode === "work" && section === "roster" ? (
                     <RosterKpiStrip counts={healthCounts} range={range} loading={loadingWeek && !healthCounts} />
                 ) : undefined
             }
@@ -494,8 +541,28 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
               * there on close — a structural property, not something restored afterwards.
               */}
             <WorkspaceDurableRecordHost hostKey="roster">
-            <WorkspaceSurface tone={section === "roster" ? "canvas" : "stone"} scroll padded>
-                {section === "roster" ? (
+            <WorkspaceSurface
+                tone={mode === "work" && section === "roster" ? "canvas" : "stone"}
+                scroll
+                padded
+            >
+                {/*
+                  * STUDIO — configuration, beside the operating day rather than instead of it.
+                  *
+                  * Rendered inside the SAME surface and the same record host, so entering Studio does
+                  * not unmount Work. That is what makes returning free: there is no state to restore
+                  * because none was ever torn down.
+                  */}
+                {mode === "studio" ? (
+                    <OperationsStudio
+                        view={studioSection}
+                        siteId={siteId}
+                        siteName={siteName}
+                        sites={(sites ?? []).map((s) => ({ id: s.id, name: s.name }))}
+                    />
+                ) : null}
+
+                {mode === "work" && section === "roster" ? (
                     <RosterSurface
                         range={range}
                         onRangeChange={setRange}
@@ -586,7 +653,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                     />
                 ) : null}
 
-                {section === "attendance" ? (
+                {mode === "work" && section === "attendance" ? (
                     <AttendanceWorkspace
                         siteLocationId={siteId}
                         siteName={siteName}
@@ -629,7 +696,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                   * shipped — now with Roster's site actually supplied to Children, which Records
                   * could never do because it had no site picker.
                   */}
-                {section === "staff" ? (
+                {mode === "work" && section === "staff" ? (
                     peopleBootstrap ? (
                         <RecordsStaffSection
                             positions={peopleBootstrap.positions}
@@ -641,7 +708,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                     )
                 ) : null}
 
-                {section === "children" ? (
+                {mode === "work" && section === "children" ? (
                     peopleBootstrap ? (
                         /*
                          * NOT scoped by the workspace's site picker, and that is deliberate.
@@ -672,6 +739,6 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                 ) : null}
             </WorkspaceSurface>
             </WorkspaceDurableRecordHost>
-        </RosterWorkspaceShell>
+        </OperationsWorkspaceShell>
     );
 }

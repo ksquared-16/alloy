@@ -1184,9 +1184,19 @@ function ScheduleWorkSurface({
                         setMode("create");
                     }}
                     onConfigureTypes={() => {
-                        void import("@/lib/adminV2/workspaceModalEvents").then(({ dispatchAdminV2OpenSchedulingModal }) => {
-                            dispatchAdminV2OpenSchedulingModal({ mode: "studio", studioView: "types" });
-                        });
+                        /*
+                         * Configuration lives in OPERATIONS → STUDIO → Assignment Categories.
+                         *
+                         * This opened the Assignments workspace, which is no longer a destination.
+                         * It is the one handoff that legitimately LEAVES the record — authoring
+                         * categories is configuration, not the operator's current work — and it now
+                         * lands in the same workspace their operating day is already in.
+                         */
+                        void import("@/lib/adminV2/workspaceModalEvents").then(
+                            ({ dispatchAdminV2OpenOperationsModal }) => {
+                                dispatchAdminV2OpenOperationsModal({ studioSection: "types" });
+                            },
+                        );
                     }}
                 />
             </div>

@@ -11,7 +11,7 @@ import { CalendarClock, FunctionSquare, Layers, ShieldCheck, Sparkles, Wand2 } f
 
 import WorkspaceCard from "@/components/workspace/WorkspaceCard";
 import { WS_EYEBROW } from "@/components/workspace/workspaceTokens";
-import type { SchedulingStudioView } from "@/app/adminV2/scheduling/schedulingSections";
+import type { OperationsStudioSection as SchedulingStudioView } from "@/app/adminV2/operations/operationsSections";
 import { presentCalculation, presentFamily } from "@/app/adminV2/scheduling/calculationPresentation";
 import SchedulingPatterns, {
     type StudioPattern,

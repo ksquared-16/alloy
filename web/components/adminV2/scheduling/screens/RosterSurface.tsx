@@ -33,7 +33,7 @@ import SchedulingRoster, {
     type RosterData,
     type RosterFilterContext,
 } from "@/components/adminV2/scheduling/screens/SchedulingRoster";
-import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
+import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
 
 /**
  * Rooms is the operating view. Staff answers "where is Jane this week" — a pivot

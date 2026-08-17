@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
-// Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
-import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, Contact } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, Contact } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -20,8 +19,7 @@ import {
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
     dispatchAdminV2OpenProcessingModal,
-    dispatchAdminV2OpenSchedulingModal,
-    dispatchAdminV2OpenRosterModal,
+    dispatchAdminV2OpenOperationsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -233,50 +231,32 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
         />
     );
 }
-/** Assignments — operational placement command center; opens as a workspace modal. */
-export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
-    const activeModal = useActiveAdminV2WorkspaceModal();
-    return (
-        <SidebarModalNavButton
-            collapsed={collapsed}
-            title="Assignments — rooms, types, and operational placement"
-            label="Assignments"
-            icon={<CalendarRange size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
-            active={activeModal === "scheduling"}
-            dataAttr="scheduling"
-            onClick={() => {
-                dispatchAdminV2OpenSchedulingModal();
-            }}
-        />
-    );
-}
-
 /**
- * Roster — the operating day AND the people it is made of; opens as a workspace modal.
+ * OPERATIONS — the operating day, the people it is made of, and its configuration.
  *
- * Peer of Assignments, not a tab inside it: Assignments owns the durable commitments, Roster answers
- * who is expected where and when given them — and, since the Records re-home, who those people ARE.
+ * One rail entry where there were three. Roster answered "who is expected where", Records answered
+ * "who are these people", and Assignments answered "what commitments is that derived from, and how
+ * are they configured" — three doors onto the same day, which made an operator declare in advance
+ * which question they were about to ask. They are now WORK and STUDIO inside one workspace.
  *
- * The ICON is the people mark rather than a calendar. The workspace keeps the name Roster, but its
- * sections are Roster / Attendance / Staff / Children and a calendar names only the first two. An
- * operator reaching for "where do I find Lennon" has to recognise this entry in the rail.
+ * The ICON stays the people mark rather than a calendar. The name is broader now, but what an
+ * operator is reaching for is unchanged — "where do I find Lennon", "is Toddler A short" — and the
+ * mark they already learned to find in the rail should keep pointing at it.
  */
-export function SidebarRosterNavItem({ collapsed }: { collapsed: boolean }) {
+export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Roster — the operating day, and the staff and children it is made of"
-            label="Roster"
+            title="Operations — the operating day, the people it is made of, and its configuration"
+            label="Operations"
             icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
-            active={activeModal === "roster"}
-            dataAttr="roster"
+            active={activeModal === "operations"}
+            dataAttr="operations"
             onClick={() => {
-                dispatchAdminV2OpenRosterModal();
+                dispatchAdminV2OpenOperationsModal();
             }}
         />
     );
 }
-

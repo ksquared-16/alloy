@@ -83,7 +83,15 @@ const CATEGORY_CHILD_ONLY = "Before Care (cert)";
 const CATEGORY_STAFF_ONLY = "Classroom Cover (cert)";
 const CATEGORY_BOTH = "Enrichment (cert)";
 
-const ROSTER_NAV = '[data-adminv2-sidebar-modal-nav="roster"]';
+/**
+ * The rail entry is OPERATIONS now — Roster is one of its four WORK sections.
+ *
+ * The shell attribute below is deliberately still the Roster-era one: `OperationsWorkspaceShell`
+ * publishes it as an alias beside `data-adminv2-operations-workspace`, precisely so the assignment
+ * acceptance did not have to change its assertions in the same run that re-parented the workspace.
+ * Only the DOOR moved, which is the one thing this file had to relearn.
+ */
+const ROSTER_NAV = '[data-adminv2-sidebar-modal-nav="operations"]';
 const ROSTER_SHELL = '[data-adminv2-roster-workspace="true"]';
 const SECTIONS = '[data-workspace-mode-sections="roster"]';
 const SECTION_TABS = `${SECTIONS} button`;

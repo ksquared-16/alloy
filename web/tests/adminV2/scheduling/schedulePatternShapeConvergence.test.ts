@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapRawPattern } from "@/components/adminV2/scheduling/SchedulingWorkspace";
+import { mapRawPattern } from "@/components/adminV2/operations/OperationsStudio";
 import type { SchedulePatternRow } from "@/lib/childcareOperational/enrollmentOperationalTypes";
 
 /**

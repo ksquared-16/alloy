@@ -22,7 +22,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { dispatchAdminV2OpenRosterModal } from "@/lib/adminV2/workspaceModalEvents";
-import { resolveRosterSection } from "@/app/adminV2/roster/rosterSections";
+import { resolveOperationsWorkSection as resolveRosterSection } from "@/app/adminV2/operations/operationsSections";
 
 export default function WorkspaceModalDeepLink() {
     const params = useSearchParams();

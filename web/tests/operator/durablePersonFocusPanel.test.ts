@@ -233,10 +233,26 @@ describe("card applicability is declared per card, not switched centrally", () =
         expect(cardAppliesToGrain("household", "opportunity")).toBe(true);
     });
 
-    it("the person grain selects only Employment out of the whole catalog", () => {
-        expect(cardKeysForGrain("person")).toEqual(["employment"]);
+    /**
+     * The person grain selects TWO cards, and the second one arrived by declaration.
+     *
+     * This asserted `["employment"]` for as long as a person had exactly one canonical truth to
+     * show. `scheduling` joined it when the Assignments card was generalized around
+     * `OperationalAssignmentSubject`: `schedule_assignments` was extended in place so children and
+     * staff would not acquire competing scheduling engines, and every canonical assignment action
+     * already declared `person` among its supported entity types — the CARD was the last layer
+     * still assuming a child.
+     *
+     * The assertion is updated rather than loosened. An exact list is what makes an accidental
+     * widening visible, and this test earned its keep by failing the moment the grain changed.
+     */
+    it("the person grain selects Employment and Assignments out of the whole catalog", () => {
+        expect(cardKeysForGrain("person")).toEqual(["employment", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
+        // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
+        // a household's is not.
+        expect(cardAppliesToGrain("scheduling", "household")).toBe(false);
     });
 
     it("every card that was case-grain is still case-grain — only child-grain cards are excluded", () => {

@@ -155,41 +155,68 @@ describe("Alloy Operational Workspace Doctrine V2", () => {
     });
 
     /**
-     * Roster is the fifth operational workspace. It must be indistinguishable in
-     * chrome from Communications / Processing / Work Items / Assignments — the
-     * operator learns the grammar once. This asserts the structural contract, not
-     * the appearance: same modal shell, same `WorkspaceShell`, same canonical
-     * header inputs, same data-attribute markers, same sidebar nav primitive.
+     * Operations is the fifth operational workspace, and the one that absorbed three.
+     *
+     * It must be indistinguishable in chrome from Communications / Processing / Work Items — the
+     * operator learns the grammar once. This asserts the STRUCTURAL contract, not the appearance:
+     * same modal shell, same `WorkspaceShell`, same canonical header inputs, same data-attribute
+     * markers, same sidebar nav primitive, and the same Work | Studio mode rail the retired
+     * Assignments workspace proved.
      */
-    it("Roster mirrors the operational workspace grammar", () => {
-        const shell = read("app/adminV2/roster/RosterWorkspaceShell.tsx");
+    it("Operations mirrors the operational workspace grammar", () => {
+        const shell = read("app/adminV2/operations/OperationsWorkspaceShell.tsx");
         expect(shell).toContain('from "@/components/workspace/WorkspaceShell"');
         // Canonical header inputs, and the site picker uses the shared control.
         expect(shell).toContain("titleId");
-        expect(shell).toContain('title: "Roster"');
+        expect(shell).toContain('title: "Operations"');
         expect(shell).toContain("AlloySelect");
         expect(shell).toContain('aria-label="Site"');
-        // Section tabs + the control-band health column, like every peer.
-        expect(shell).toContain("sectionTabs={ROSTER_SECTION_TABS}");
+        // Work | Studio — the EXISTING grammar, not a new shell primitive.
+        expect(shell).toContain("modes={OPERATIONS_MODES}");
+        expect(shell).toContain("OPERATIONS_WORK_TABS");
+        expect(shell).toContain("OPERATIONS_STUDIO_TABS");
         expect(shell).toContain("metricsColumn={metricsColumn}");
-        expect(shell).toContain('navDataAttr="roster"');
-        expect(shell).toContain('sectionsDataAttr="roster"');
-        expect(shell).toContain('dataTestId="roster-workspace-shell"');
+        expect(shell).toContain('navDataAttr="operations"');
+        expect(shell).toContain('dataTestId="operations-workspace-shell"');
 
         // Mounted as a center-workspace modal in the shared BOS modal shell.
-        const modal = read("app/adminV2/components/RosterModal.tsx");
+        const modal = read("app/adminV2/components/OperationsModal.tsx");
         expect(modal).toContain("AdminV2WorkspaceBosModalShell");
-        expect(modal).toContain('ariaLabelledBy="roster-workspace-title"');
+        expect(modal).toContain('ariaLabelledBy="operations-workspace-title"');
 
         // Health lives in the control band and uses the shared band component —
-        // never a Roster-local metric layout, and never in the body.
+        // never an Operations-local metric layout, and never in the body.
         const kpi = read("app/adminV2/roster/RosterKpiStrip.tsx");
         expect(kpi).toContain("WorkspaceOperationalHealth");
 
         // Sidebar entry uses the same nav primitive as the other four.
         const nav = read("app/adminV2/components/SidebarModalNavItems.tsx");
-        expect(nav).toContain("SidebarRosterNavItem");
-        expect(nav).toContain('dataAttr="roster"');
+        expect(nav).toContain("SidebarOperationsNavItem");
+        expect(nav).toContain('dataAttr="operations"');
+    });
+
+    /**
+     * ONE product placement, and no hidden duplicate.
+     *
+     * Roster, Records and Assignments were three top-level entries onto one operating day. The
+     * convergence is only real if their shells are GONE rather than merely unlinked — an unreachable
+     * workspace that still compiles is a second implementation waiting to be re-linked.
+     */
+    it("no standalone Assignments / Roster / Records workspace remains", () => {
+        for (const rel of [
+            "app/adminV2/components/SchedulingModal.tsx",
+            "app/adminV2/components/RosterModal.tsx",
+            "app/adminV2/scheduling/SchedulingWorkspaceShell.tsx",
+            "app/adminV2/roster/RosterWorkspaceShell.tsx",
+            "components/adminV2/scheduling/SchedulingWorkspace.tsx",
+        ]) {
+            expect(() => read(rel), `${rel} must be deleted, not merely unlinked`).toThrow();
+        }
+        const sidebar = read("app/adminV2/components/Sidebar.tsx");
+        expect(sidebar).not.toContain("SidebarSchedulingNavItem");
+        expect(sidebar).not.toContain("SidebarRosterNavItem");
+        expect(sidebar).not.toContain("SidebarRecordsNavItem");
+        expect(sidebar).toContain("SidebarOperationsNavItem");
     });
 
     /**
