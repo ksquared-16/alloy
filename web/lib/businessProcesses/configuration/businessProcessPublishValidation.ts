@@ -31,6 +31,10 @@ import {
 import { validateProcessExecutionGraph } from "@/lib/businessProcesses/configuration/executionGraphValidation";
 import { validateProcessCommandSetsForPublish } from "@/lib/lifecycle/validateProcessCommandSetsForPublish";
 import { validateStageOperatingPlanOperatingContract } from "@/lib/lifecycle/validateStageOperatingPlanOperatingContract";
+import {
+    isProcessEntryIntent,
+    PROCESS_ENTRY_INTENTS,
+} from "@/lib/lifecycle/processEntryPointsV1";
 
 export const PUBLISH_UNREADABLE_PAYLOAD = "configuration_unreadable" as const;
 export const PUBLISH_DANGLING_REFERENCE = "dangling_stage_reference" as const;
@@ -42,13 +46,21 @@ export const PUBLISH_COMMAND_SET_INCOMPLETE = "process_command_set_incomplete" a
 /** An operating-contract finding, surfaced under its own contract code in `detail.contract_code`. */
 export const PUBLISH_OPERATING_CONTRACT = "stage_operating_contract" as const;
 /**
- * `entry_stage_key` names a stage this process does not have, or has deactivated (B1a).
+ * An `entry_points_v1` mapping names a stage this process does not have, or has deactivated (D-103).
  *
  * Blocking, and blocking HERE, because a published revision is immutable: a journey pinned to a
- * revision whose declared entry stage does not resolve can never be repaired by editing the
- * configuration — only by republishing, which leaves the already-pinned journeys behind.
+ * revision whose entry stage does not resolve can never be repaired by editing the configuration —
+ * only by republishing, which leaves the already-pinned journeys behind.
  */
 export const PUBLISH_ENTRY_STAGE_UNRESOLVABLE = "process_entry_stage_unresolvable" as const;
+/**
+ * `entry_points_v1.by_intent` carries a key the platform does not know as an initiation intent.
+ *
+ * Blocking rather than ignored. The parser drops unknown keys, so an authored typo would otherwise
+ * become "that intent is not configured" — which reads as a deliberate choice and fails silently at
+ * the moment a real journey starts.
+ */
+export const PUBLISH_ENTRY_INTENT_UNKNOWN = "process_entry_intent_unknown" as const;
 
 export type PublishValidationResult = {
     /** Publication is refused while this is non-empty. */
@@ -178,23 +190,49 @@ export function validateParsedBusinessProcessForPublish(
         }
 
         /**
-         * B1a — a DECLARED entry stage must resolve.
+         * D-103 — every configured entry intent must be known, and must name an active stage.
          *
-         * Absence is not checked: it means the tenant has not authored one, which every existing
-         * published revision is, and refusing those would block publication for a question they
-         * were never asked. Consumers refuse on absence instead, where the refusal is nameable.
+         * Absence is not checked: it means the tenant has not authored entry points, which every
+         * existing published revision is, and refusing those would block publication for a question
+         * they were never asked. Consumers refuse on absence instead, where the refusal is nameable.
+         *
+         * The UNKNOWN-intent check reads the RAW payload deliberately. The parser drops keys it does
+         * not recognise, so by the time the typed record exists the typo is gone — and a typo that
+         * merely disappears becomes "that intent is not configured", which reads as a choice and
+         * fails at the moment a real journey starts instead of at publish.
          */
-        const declaredEntry = (process.entry_stage_key ?? "").trim();
-        if (declaredEntry && !activeStages.some((s) => s.key === declaredEntry)) {
+        const rawEntryPoints = isRecord(rawProcess) ? rawProcess.entry_points_v1 : null;
+        const rawByIntent =
+            isRecord(rawEntryPoints) && isRecord(rawEntryPoints.by_intent)
+                ? (rawEntryPoints.by_intent as Record<string, unknown>)
+                : null;
+        for (const authoredIntent of Object.keys(rawByIntent ?? {})) {
+            if (isProcessEntryIntent(authoredIntent)) continue;
+            errors.push({
+                code: PUBLISH_ENTRY_INTENT_UNKNOWN,
+                path: `processes[${process.key}].entry_points_v1.by_intent.${authoredIntent}`,
+                message:
+                    `Process “${process.name}” maps an entry point for “${authoredIntent}”, which is ` +
+                    `not an initiation this platform can supply. No journey would ever match it.`,
+                detail: {
+                    authored_intent: authoredIntent,
+                    known_intents: [...PROCESS_ENTRY_INTENTS],
+                },
+            });
+        }
+
+        for (const [intent, declaredEntry] of Object.entries(process.entry_points_v1?.by_intent ?? {})) {
+            if (!declaredEntry || activeStages.some((s) => s.key === declaredEntry)) continue;
             errors.push({
                 code: PUBLISH_ENTRY_STAGE_UNRESOLVABLE,
                 stage_key: declaredEntry,
-                path: `processes[${process.key}].entry_stage_key`,
+                path: `processes[${process.key}].entry_points_v1.by_intent.${intent}`,
                 message:
-                    `Process “${process.name}” starts journeys in stage “${declaredEntry}”, which is ` +
-                    `not an active stage of this process. Every journey published under this ` +
-                    `revision would begin nowhere.`,
+                    `Process “${process.name}” starts “${intent}” journeys in stage “${declaredEntry}”, ` +
+                    `which is not an active stage of this process. Every such journey published under ` +
+                    `this revision would begin nowhere.`,
                 detail: {
+                    entry_intent: intent,
                     declared_entry_stage_key: declaredEntry,
                     active_stages: activeStages.map((s) => s.key),
                 },

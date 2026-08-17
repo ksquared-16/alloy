@@ -58,6 +58,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { resolveEffectiveStageKey } from "@/lib/lifecycle/processEntryStage";
+import { entryIntentFromProcessInstanceMetadata } from "@/lib/lifecycle/processEntryPointsV1";
 import { activeLifecycleProcess } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     ensureRequirementDerivedPacketDefinition,
@@ -106,6 +107,7 @@ type InstanceRow = {
     context_type: string | null;
     context_id: string | null;
     subject_id: string | null;
+    metadata: unknown;
     business_process_revision_id: string | null;
 };
 
@@ -123,7 +125,7 @@ export async function launchParticipantEnrollment(
 
     const { data, error } = await supabase
         .from("process_instances")
-        .select("id, process_key, stage_key, context_type, context_id, subject_id, business_process_revision_id")
+        .select("id, process_key, stage_key, context_type, context_id, subject_id, metadata, business_process_revision_id")
         .eq("org_id", orgId)
         .eq("id", processInstanceId)
         .maybeSingle();
@@ -173,6 +175,10 @@ export async function launchParticipantEnrollment(
     const stageKey = resolveEffectiveStageKey({
         persistedStageKey: instance.stage_key,
         process,
+        // D-103. Read from the journey's own provenance, never passed in: Start Enrollment already
+        // recorded `enrollment_start` when it created the instance, and letting this function accept
+        // an intent would let a caller choose a stage by choosing an intent.
+        intent: entryIntentFromProcessInstanceMetadata(instance.metadata),
     });
     if (!stageKey) {
         return {
@@ -181,7 +187,8 @@ export async function launchParticipantEnrollment(
                 code: "no_effective_stage",
                 detail:
                     "This journey has not been moved to a stage and its Business Process declares no " +
-                    "entry stage, so there is no stage whose requirements could be realized.",
+                    "entry point for the way it was started, so there is no stage whose requirements " +
+                    "could be realized.",
             },
         };
     }

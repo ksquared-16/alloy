@@ -27,6 +27,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequirements";
 import { resolveEffectiveStageKey } from "@/lib/lifecycle/processEntryStage";
+import { entryIntentFromProcessInstanceMetadata } from "@/lib/lifecycle/processEntryPointsV1";
 import { resolveCurrentEnrollmentSession } from "@/lib/pos/packet/enrollmentObjectiveSession";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { departmentForOpportunityContext } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
@@ -48,6 +49,8 @@ type ProcessInstanceRow = {
     context_type: string | null;
     context_id: string | null;
     stage_key: string | null;
+    /** Provenance. Carries the D-103 entry intent this journey was created with. */
+    metadata: unknown;
     business_process_revision_id: string | null;
 };
 
@@ -135,7 +138,7 @@ export async function resolveEnrollmentParticipantProgress(
 ): Promise<EnrollmentParticipantProgressResult> {
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
-        .select("id, org_id, process_key, context_type, context_id, stage_key, business_process_revision_id")
+        .select("id, org_id, process_key, context_type, context_id, stage_key, metadata, business_process_revision_id")
         .eq("id", input.processInstanceId)
         .eq("org_id", input.orgId)
         .maybeSingle();
@@ -185,6 +188,10 @@ export async function resolveEnrollmentParticipantProgress(
     const stageKey = resolveEffectiveStageKey({
         persistedStageKey: instance.stage_key,
         process: configuration.builder?.processes.find((p) => p.key === instance.process_key) ?? null,
+        // D-103: the intent the journey was CREATED with, read from the provenance the insert helper
+        // has always written. Never supplied by a caller — a reader that could choose the intent
+        // could choose the stage, which is exactly the authority the decision moved to configuration.
+        intent: entryIntentFromProcessInstanceMetadata((instance as { metadata?: unknown }).metadata),
     });
     // D-90 presence-is-authority, unchanged: an authored-empty section means the stage requires
     // nothing and yields a total of 0. An ABSENT section means the governing artifact says nothing

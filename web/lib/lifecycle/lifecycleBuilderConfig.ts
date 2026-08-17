@@ -39,6 +39,11 @@ import {
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
 import {
+    parseProcessEntryPointsV1,
+    serializeProcessEntryPointsV1,
+    type ProcessEntryPointsV1,
+} from "@/lib/lifecycle/processEntryPointsV1";
+import {
     parseStageGrain,
     parseSubjectResolutionStrategy,
     type StageGrain,
@@ -73,7 +78,7 @@ const PROCESS_OWNED_KEYS = [
     "manual_status_transition_policy_v1",
     "work_views_v1",
     "participation_v1",
-    "entry_stage_key",
+    "entry_points_v1",
     "stages",
 ] as const;
 
@@ -166,26 +171,26 @@ export type LifecycleBuilderProcessRecord = {
     /** Operator-authored Participation definition — the engine reads its contract (Process Builder). */
     participation_v1?: ParticipationConfigV1;
     /**
-     * The stage a journey of this process begins in — DECLARED, never inferred (B1a).
+     * Where a journey begins, per initiation INTENT — declared, never inferred (D-103).
      *
-     * Business Process configuration owns this. It exists because nothing else in the model answers
-     * the question: stage `sort_order` is presentation order, `tracks_v1` orders tracks, and the
-     * transition graph cannot answer either — in Firefly's own published revision three active
-     * stages have no incoming edge (`lead`, `waitlist`, `enrolling`), because a stage reachable only
-     * by a split rule or by an operator movement looks exactly like a starting stage from the graph.
-     * Deriving from any of those would silently pick a stage nobody chose.
+     * Business Process configuration owns this. Nothing else in the model answers the question:
+     * `sort_order` is presentation order, `tracks_v1` orders tracks, and the transition graph cannot
+     * answer either — in Firefly's own published revision three active stages have no incoming edge
+     * (`lead`, `waitlist`, `enrolling`), because a stage reachable only by a split rule or by an
+     * operator movement looks exactly like a starting stage from the graph.
      *
-     * A single scalar rather than a per-stage `is_entry` flag, so ambiguity is structurally
-     * impossible: two stages cannot both claim entry.
+     * Keyed by intent rather than a single scalar because one process has more than one legitimate
+     * initiation: Create Lead begins an acquisition episode, Start Enrollment begins paperwork for a
+     * child who already exists. The initiating action supplies the intent; this says where it starts.
      *
-     * Absent means UNAUTHORED, which is not a default — consumers must refuse rather than guess, the
-     * same posture `requirements_v1` takes for D-90. Publication validates that a declared key names
-     * an active stage of this process, and a published revision is immutable, so a running journey's
-     * entry stage cannot move underneath it.
+     * Absent means UNAUTHORED, which is not a default — consumers refuse rather than guess, the same
+     * posture `requirements_v1` takes for D-90. Publication validates every mapped intent, and a
+     * published revision is immutable, so a running journey's entry stage cannot move underneath it.
      *
+     * @see lib/lifecycle/processEntryPointsV1.ts — the vocabulary and parser
      * @see lib/lifecycle/processEntryStage.ts — the one resolver
      */
-    entry_stage_key?: string;
+    entry_points_v1?: ProcessEntryPointsV1;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -293,13 +298,10 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
         const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
-        // Read as authored. Whether the key names a real active stage is a PUBLISH question, not a
-        // parse one: silently dropping an unresolvable key here would turn a configuration error
-        // into "no entry stage authored", which is a different and much quieter failure.
-        const entry_stage_key =
-            typeof row.entry_stage_key === "string" && row.entry_stage_key.trim()
-                ? row.entry_stage_key.trim()
-                : undefined;
+        // Read as authored. Whether a mapped key names a real active stage is a PUBLISH question,
+        // not a parse one: silently dropping an unresolvable mapping here would turn a configuration
+        // error into "no entry point authored", a different and much quieter failure.
+        const entry_points_v1 = parseProcessEntryPointsV1(row.entry_points_v1) ?? undefined;
         processes.push(withUnknownFields({
             id,
             key,
@@ -312,7 +314,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),
             ...(participation ? { participation_v1: participation } : {}),
-            ...(entry_stage_key ? { entry_stage_key } : {}),
+            ...(entry_points_v1 ? { entry_points_v1 } : {}),
             stages,
         }, captureUnknownFields(row, PROCESS_OWNED_KEYS)));
     }
@@ -361,6 +363,12 @@ export function serializeLifecycleBuilderV1(config: LifecycleBuilderV1): Record<
             return out;
         });
         const serialized: Record<string, unknown> = { ...serializeWithUnknownFields(process), stages };
+        // Serialized explicitly for the same reason `requirements_v1` is: the parsed section is a
+        // narrowed reconstruction, so emitting it verbatim would eventually put something on the
+        // wire the parser cannot read back. `!== undefined` so an authored-but-empty map survives.
+        if (process.entry_points_v1 !== undefined) {
+            serialized.entry_points_v1 = serializeProcessEntryPointsV1(process.entry_points_v1);
+        }
         // Work views carry their own residue and are nested one level deeper than the walk above.
         if (process.work_views_v1) {
             serialized.work_views_v1 = process.work_views_v1.map((view) =>
