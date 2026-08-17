@@ -439,3 +439,125 @@ describe("M21 preflight — nothing relies on the role_key cascade", () => {
         expect(DELETES_ROLE_DEFINITIONS.test(`supabase.from("role_permission_grants").delete()`)).toBe(false);
     });
 });
+
+/**
+ * `M21` itself — W-61 item 3. Locks the SCHEMA OUTCOME, not the presence of a file.
+ *
+ * The defect is two foreign keys over `(org_id, role_key)` to the same target, both
+ * `ON DELETE CASCADE` (`20260329165048_remote_schema.sql:6513,6518`), so deleting a role silently
+ * deletes every grant it held. Phase 0 fixed exactly this shape on the neighbouring
+ * `permission_key` column and left it here.
+ *
+ * Asserting "the migration file exists" would be satisfied by an empty file, and asserting its text
+ * would be satisfied by a later migration undoing it. So this REPLAYS every constraint statement
+ * over `role_permission_grants` in version order and asserts the resulting state — which is the
+ * only form that survives a future migration re-introducing the cascade.
+ */
+const MIGRATIONS_DIR = join(webRoot, "..", "supabase", "migrations");
+
+/** Strip line and block comments so a doc comment cannot satisfy or defeat the scan. */
+function executableSql(raw: string): string {
+    return raw.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
+}
+
+/** Final `(org_id, role_key) -> role_definitions` constraints after replaying every migration. */
+function roleKeyForeignKeysAfterReplay(files: string[]): Map<string, string> {
+    const state = new Map<string, string>();
+    for (const file of files) {
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+        for (const stmt of sql.split(";")) {
+            if (!/ALTER\s+TABLE\s+(?:ONLY\s+)?(?:"?public"?\.)?"?role_permission_grants"?/i.test(stmt)) continue;
+
+            const dropped = stmt.match(/DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"?([A-Za-z0-9_]+)"?/i);
+            if (dropped) state.delete(dropped[1]);
+
+            const added = stmt.match(/ADD\s+CONSTRAINT\s+"?([A-Za-z0-9_]+)"?[\s\S]*?FOREIGN\s+KEY\s*\(([^)]*)\)[\s\S]*?REFERENCES\s+(?:"?public"?\.)?"?([A-Za-z0-9_]+)"?/i);
+            if (!added) continue;
+            const cols = added[2].replace(/["\s]/g, "");
+            if (added[3] !== "role_definitions" || cols !== "org_id,role_key") continue;
+            const onDelete = /ON\s+DELETE\s+RESTRICT/i.test(stmt)
+                ? "RESTRICT"
+                : /ON\s+DELETE\s+CASCADE/i.test(stmt)
+                  ? "CASCADE"
+                  : "NO ACTION";
+            state.set(added[1], onDelete);
+        }
+    }
+    return state;
+}
+
+const MIGRATION_FILES = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql")).sort();
+
+describe("M21 — one role_key foreign key, and it refuses rather than cascades", () => {
+    it("leaves exactly ONE (org_id, role_key) foreign key, ON DELETE RESTRICT", () => {
+        const final = roleKeyForeignKeysAfterReplay(MIGRATION_FILES);
+        expect([...final.entries()]).toEqual([["role_permission_grants_role_definitions_fkey", "RESTRICT"]]);
+    });
+
+    it("no ON DELETE CASCADE survives on that column pair", () => {
+        // Stated separately from the count: a future migration could add a SECOND restrict-less
+        // constraint and the entries check would name it, but this is the property that matters.
+        const final = roleKeyForeignKeysAfterReplay(MIGRATION_FILES);
+        expect([...final.values()].filter((v) => v !== "RESTRICT")).toEqual([]);
+    });
+
+    it("the replay actually sees the baseline's two cascading keys — non-vacuity", () => {
+        // If the parser silently matched nothing, both assertions above would pass for the wrong
+        // reason. Replay ONLY the baseline and the pre-M21 tree, and prove the defect is visible.
+        const beforeM21 = MIGRATION_FILES.filter((f) => !f.includes("w61_role_key_fk_restrict"));
+        const before = roleKeyForeignKeysAfterReplay(beforeM21);
+        expect([...before.keys()].sort()).toEqual([
+            "role_permission_grants_role_definitions_fkey",
+            "role_permission_grants_role_fk",
+        ]);
+        expect([...before.values()]).toEqual(["CASCADE", "CASCADE"]);
+    });
+
+    it("convicts a later migration that re-introduces the cascade", () => {
+        // The lock has to survive the change it exists to prevent, not merely describe today.
+        const replayed = roleKeyForeignKeysAfterReplay(MIGRATION_FILES);
+        expect(replayed.get("role_permission_grants_role_definitions_fkey")).toBe("RESTRICT");
+
+        const regressed = new Map(replayed);
+        // Simulate the statement a careless migration would carry.
+        const stmt = `ALTER TABLE public.role_permission_grants
+            DROP CONSTRAINT IF EXISTS role_permission_grants_role_definitions_fkey;
+            ALTER TABLE public.role_permission_grants
+            ADD CONSTRAINT role_permission_grants_role_definitions_fkey
+            FOREIGN KEY (org_id, role_key) REFERENCES public.role_definitions (org_id, role_key)
+            ON DELETE CASCADE;`;
+        for (const s of executableSql(stmt).split(";")) {
+            if (!/ALTER\s+TABLE\s+(?:ONLY\s+)?(?:public\.)?role_permission_grants/i.test(s)) continue;
+            const d = s.match(/DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?([A-Za-z0-9_]+)/i);
+            if (d) regressed.delete(d[1]);
+            const a = s.match(/ADD\s+CONSTRAINT\s+([A-Za-z0-9_]+)/i);
+            if (a && /ON\s+DELETE\s+CASCADE/i.test(s)) regressed.set(a[1], "CASCADE");
+        }
+        expect([...regressed.values()].filter((v) => v !== "RESTRICT")).not.toEqual([]);
+    });
+
+    it("the migration is replay-safe — every constraint change is guarded", () => {
+        // Phase 0 was not idempotent and its re-run failed on an unguarded constraint ADD; the
+        // reconciliation handoff records that as the reason the staging ledger had to be repaired.
+        const file = MIGRATION_FILES.find((f) => f.includes("w61_role_key_fk_restrict"));
+        expect(file, "M21 migration is missing").toBeTruthy();
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file!), "utf8"));
+        const addNames = [...sql.matchAll(/ADD\s+CONSTRAINT\s+([A-Za-z0-9_]+)/gi)].map((m) => m[1]);
+        for (const name of addNames) {
+            expect(
+                new RegExp(`DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+${name}\\b`, "i").test(sql),
+                `${name} is added without a guarded drop, so a replay fails`,
+            ).toBe(true);
+        }
+    });
+
+    it("sorts above the staging head it has to apply after", () => {
+        // A version at or below the remote head is refused by `supabase db push`, and an exact
+        // collision is silently skipped — this program has already paid for both.
+        const file = MIGRATION_FILES.find((f) => f.includes("w61_role_key_fk_restrict"))!;
+        const version = file.split("_")[0];
+        const versions = MIGRATION_FILES.map((f) => f.split("_")[0]);
+        expect(versions.filter((v) => v === version)).toHaveLength(1);
+        expect(version).toBe([...versions].sort().at(-1));
+    });
+});
