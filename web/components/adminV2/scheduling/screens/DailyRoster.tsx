@@ -97,7 +97,6 @@ export type DailyRosterProps = {
     serverToday: string | null;
     onServerToday: (ymd: string) => void;
     /** Roster's Day/Week control, rendered into this surface's toolbar by its host. */
-    rangeControl?: React.ReactNode;
     /**
      * Hand this room off to Attendance — expectation to actuality, same site, same
      * room. Attendance is a TODAY-ONLY surface (it has no date control at all), so
@@ -226,7 +225,6 @@ export default function DailyRoster({
     onDateChange,
     serverToday,
     onServerToday,
-    rangeControl,
     onOpenAttendance,
     onManageAssignment,
     onHealth,
@@ -355,52 +353,13 @@ export default function DailyRoster({
                             {headline ? ` · ${headline}` : ""}
                         </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                        {rangeControl}
-                        <button
-                            type="button"
-                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-40"
-                            disabled={!date}
-                            onClick={() => date && setDate(shiftYmd(date, -1))}
-                            data-roster-prev-day="true"
-                            aria-label="Previous day"
-                        >
-                            ‹
-                        </button>
-                        <span className="inline-flex items-center gap-1.5 rounded border border-alloy-stone/25 px-2 py-1">
-                            <CalendarDays className="h-3.5 w-3.5 text-alloy-midnight/45" aria-hidden />
-                            <input
-                                type="date"
-                                value={date ?? ""}
-                                onChange={(e) => setDate(e.target.value || null)}
-                                className="bg-transparent text-[12px] text-alloy-midnight outline-none"
-                                aria-label="Roster date"
-                                data-roster-date="true"
-                            />
-                        </span>
-                        <button
-                            type="button"
-                            className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] text-alloy-midnight/70 hover:bg-alloy-stone/10 disabled:opacity-40"
-                            disabled={!date}
-                            onClick={() => date && setDate(shiftYmd(date, 1))}
-                            data-roster-next-day="true"
-                            aria-label="Next day"
-                        >
-                            ›
-                        </button>
-                        {/* Getting back to today took a date-picker round trip. The
-                            org's today, never the browser's. */}
-                        {serverToday && date !== serverToday ? (
-                            <button
-                                type="button"
-                                className="rounded border border-alloy-stone/25 px-2 py-1 text-[12px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
-                                onClick={() => setDate(serverToday)}
-                                data-roster-today="true"
-                            >
-                                Today
-                            </button>
-                        ) : null}
-                    </div>
+                    {/*
+                      * The day anchor moved to `RosterControlBand`.
+                      *
+                      * It lived here, inside this header, which is why the date controls sat in a
+                      * different place on Day than the week picker did on Week. A surface that owns
+                      * its own anchor cannot share a toolbar with the surfaces beside it.
+                      */}
                 </header>
 
                 {error ? (

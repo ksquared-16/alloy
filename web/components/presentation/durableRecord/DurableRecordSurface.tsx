@@ -281,6 +281,18 @@ export default function DurableRecordSurface({
                                             onClick={() => setSelectedContextKey(option.key)}
                                             data-record-context-choice={option.key}
                                             data-record-context-kind={option.kind}
+                                            /*
+                                             * THE SAME ADDRESS THE STRIP USES.
+                                             *
+                                             * The chooser IS the context selector now; the strip is
+                                             * what a record shows once one is chosen. Carrying the
+                                             * strip's attribute here means a caller that addresses
+                                             * "the Schedule context of this record" keeps working
+                                             * whichever selector is on screen — so changing how an
+                                             * operator picks a context does not ripple through every
+                                             * certification that only cared which context was picked.
+                                             */
+                                            data-durable-record-context={option.key}
                                             className="flex w-full items-center justify-between gap-3 rounded-lg border border-alloy-stone/22 bg-white px-3 py-2.5 text-left hover:border-alloy-bend-pine/40 hover:bg-alloy-bend-pine/[0.04]"
                                         >
                                             <span className="min-w-0">

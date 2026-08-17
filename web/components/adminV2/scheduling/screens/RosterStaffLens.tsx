@@ -85,15 +85,11 @@ export default function RosterStaffLens({
     data,
     loading,
     siteName,
-    lensControl,
-    rangeControl,
     onOpenStaff,
 }: {
     data: RosterData | null;
     loading: boolean;
     siteName: string;
-    lensControl?: React.ReactNode;
-    rangeControl?: React.ReactNode;
     onOpenStaff?: (subject: RosterStaffLensSubject) => void;
 }) {
     const rows = useMemo(() => buildRows(data), [data]);
@@ -101,9 +97,8 @@ export default function RosterStaffLens({
 
     return (
         <div className="flex min-h-0 flex-1 flex-col gap-3" data-roster-staff-lens="true">
+            {/* Range and lens moved to `RosterControlBand` — see that module. */}
             <div className="flex flex-wrap items-center gap-2">
-                {rangeControl}
-                {lensControl}
                 <p className="ml-auto text-[11px] text-alloy-slate">
                     {rows.length > 0
                         ? `${rows.length} ${rows.length === 1 ? "person" : "people"} scheduled · ${siteName}`

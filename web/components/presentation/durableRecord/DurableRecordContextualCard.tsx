@@ -142,8 +142,17 @@ export default function DurableRecordContextualCard({
     const [saveError, setSaveError] = useState<string | null>(null);
 
     const childSubject = subject.kind === "child" ? subject.child : null;
-    /** The subject's identity of record — member id for a child, person id for staff. */
-    const subjectId = subject.kind === "child" ? subject.child.memberId : subject.personId;
+    /*
+     * The subject's identity of record — member id for a child, person id for staff.
+     *
+     * This read `subject.personId` while the staff variant was `{ personId, label }`. Widening that
+     * variant to carry the whole composed person left the expression reading `undefined`, so the
+     * scheduling projection lookup below missed and Jane's Schedule card reported ZERO commitments
+     * against a row that plainly existed. Nothing objected: the property simply stopped being there,
+     * and `undefined` is a legal index into a record.
+     */
+    const subjectId =
+        subject.kind === "child" ? subject.child.memberId : subject.person.personId;
 
     /** This subject's canonical commitment facts, keyed as the card expects to find them. */
     const projection = useMemo(

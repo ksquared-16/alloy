@@ -22,6 +22,7 @@ import { useCallback, useState } from "react";
 
 import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
+import RosterControlBand from "@/components/adminV2/scheduling/screens/RosterControlBand";
 import RosterStaffLens, {
     type RosterStaffLensSubject,
 } from "@/components/adminV2/scheduling/screens/RosterStaffLens";
@@ -93,87 +94,14 @@ export type RosterSurfaceProps = {
     onDayHealth?: Parameters<typeof DailyRoster>[0]["onHealth"];
 };
 
-/**
- * The lenses offered at a given range.
+/*
+ * Range and lens controls, and the valid-combination matrix, live in `RosterControlBand`.
  *
- * STAFF is week-only, and that predates this control: "a single day's staff list is already on the
- * Rooms cards". ASSIGNMENTS is offered at both, because a commitment is not a property of the day —
- * hiding it on Day would make the operator change range to reach something the range does not
- * govern.
+ * They were declared here and rendered in four different places by four different children. Moving
+ * them out is the point of the slice: one owner, one position, one statement of which combinations
+ * are real — and `lensesForRange` in particular is gone rather than relocated, because returning a
+ * shorter list on Day is what made the Staff pill physically disappear and the row re-flow.
  */
-function lensesForRange(range: RosterRange): readonly RosterLens[] {
-    return range === "week" ? (["rooms", "staff", "assignments"] as const) : (["rooms", "assignments"] as const);
-}
-
-function LensControl({
-    lens,
-    range,
-    onLensChange,
-}: {
-    lens: RosterLens;
-    range: RosterRange;
-    onLensChange: (lens: RosterLens) => void;
-}) {
-    return (
-        <div
-            className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25"
-            data-roster-lens={lens}
-        >
-            {lensesForRange(range).map((key, i) => (
-                <button
-                    key={key}
-                    type="button"
-                    className={[
-                        "px-3 py-1.5 text-[11.5px] font-semibold capitalize",
-                        i > 0 ? "border-l border-alloy-stone/25" : "",
-                        lens === key
-                            ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
-                            : "text-alloy-slate hover:bg-alloy-stone/[0.06]",
-                    ].join(" ")}
-                    onClick={() => onLensChange(key)}
-                    data-roster-lens-option={key}
-                    aria-pressed={lens === key}
-                >
-                    {key}
-                </button>
-            ))}
-        </div>
-    );
-}
-
-function RangeControl({
-    range,
-    onRangeChange,
-}: {
-    range: RosterRange;
-    onRangeChange: (range: RosterRange) => void;
-}) {
-    return (
-        <div
-            className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25"
-            data-roster-range={range}
-        >
-            {(["day", "week"] as const).map((key, i) => (
-                <button
-                    key={key}
-                    type="button"
-                    className={[
-                        "px-3 py-1.5 text-[11.5px] font-semibold capitalize",
-                        i > 0 ? "border-l border-alloy-stone/25" : "",
-                        range === key
-                            ? "bg-alloy-bend-pine/10 text-alloy-bend-pine"
-                            : "text-alloy-slate hover:bg-alloy-stone/[0.06]",
-                    ].join(" ")}
-                    onClick={() => onRangeChange(key)}
-                    data-roster-range-option={key}
-                    aria-pressed={range === key}
-                >
-                    {key}
-                </button>
-            ))}
-        </div>
-    );
-}
 
 export default function RosterSurface({
     range,
@@ -238,29 +166,55 @@ export default function RosterSurface({
         [range, day, serverToday, weekData, onRangeChange, onSelectWeek],
     );
 
-    const control = useCallback(
-        () => <RangeControl range={range} onRangeChange={changeRange} />,
-        [range, changeRange],
+    /*
+     * ── ONE BAND, ABOVE EVERYTHING ──
+     *
+     * Rendered once, in the same container, in every range × lens state. Children below receive
+     * selected state and data only; not one of them decides where a control sits, and none renders
+     * a date or week picker of its own. That is the whole of UX-3: the operator's target stops
+     * moving because of something they did somewhere else.
+     */
+    const band = (
+        <RosterControlBand
+            range={range}
+            onRangeChange={changeRange}
+            lens={lens}
+            onLensChange={onLensChange}
+            /*
+             * The day the surface is ACTUALLY showing.
+             *
+             * `day` is null until the operator moves it; the day surface falls back to the org's
+             * today internally. While the anchor lived inside that surface the distinction never
+             * surfaced, but a shared band reading raw `day` renders an EMPTY date on first open —
+             * a control that does not say where you are. The band shows the effective day, and
+             * `setDay` still records only a deliberate change.
+             */
+            day={day ?? serverToday}
+            onDayChange={setDay}
+            serverToday={serverToday}
+            weekStart={weekData?.weekStart ?? null}
+            weekLabel={weekData?.weekLabel ?? null}
+            weekChangePending={weekChangePending}
+            onWeekChange={onWeekChange}
+            onSelectWeek={onSelectWeek}
+        />
     );
-
-    const lensControl = <LensControl lens={lens} range={range} onLensChange={onLensChange} />;
 
     /*
      * ── THE COMMITMENT LENS ──
      *
      * Checked FIRST, and ahead of every range branch, because it is the one lens that does not read
      * the operating day: an assignment exists whether or not today expects it, so a Day/Week split
-     * would be asking a question the ledger has no answer to. The range control is still rendered so
-     * the operator can leave the lens without hunting for it.
+     * would be asking a question the ledger has no answer to.
      *
      * `assignmentSubjects` is the array this surface ALREADY receives for the Rooms lens — the same
-     * `?view=assignment_roster` projection the Assignments workspace reads. No second fetch, no
+     * `?view=assignment_roster` projection the Assignments workspace read. No second fetch, no
      * second shape, and nothing here re-derives a commitment.
      */
-    if (lens === "assignments") {
-        return (
+    const body =
+        lens === "assignments" ? (
             <div
-                className="flex min-h-0 flex-1 flex-col gap-3"
+                className="flex min-h-0 flex-1 flex-col"
                 data-roster-assignments-lens="true"
                 // The site these commitments belong to. Published because "the lens shows the
                 // ledger" is only checkable against the SAME site — and an empty lens is the correct
@@ -268,10 +222,6 @@ export default function RosterSurface({
                 // from a broken one.
                 data-roster-assignments-site={siteLocationId}
             >
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                    {control()}
-                    {lensControl}
-                </div>
                 <AssignmentRosterPanel
                     subjects={assignmentSubjects}
                     loading={loadingWeek}
@@ -279,24 +229,14 @@ export default function RosterSurface({
                     bulk={assignmentBulk}
                 />
             </div>
-        );
-    }
-
-    if (range === "week" && lens === "staff") {
-        return (
+        ) : range === "week" && lens === "staff" ? (
             <RosterStaffLens
                 data={weekData}
                 loading={loadingWeek}
                 siteName={siteName}
-                rangeControl={control()}
-                lensControl={lensControl}
                 onOpenStaff={onOpenStaffSubject}
             />
-        );
-    }
-
-    if (range === "week") {
-        return (
+        ) : range === "week" ? (
             <SchedulingRoster
                 data={weekData}
                 assignmentSubjects={assignmentSubjects}
@@ -311,35 +251,27 @@ export default function RosterSurface({
                 onSelectWeek={onSelectWeek}
                 weekChangePending={weekChangePending}
                 lastWeekLoadMs={lastWeekLoadMs}
-                rangeControl={
-                    <>
-                        {control()}
-                        {lensControl}
-                    </>
-                }
+            />
+        ) : (
+            <DailyRoster
+                siteLocationId={siteLocationId}
+                siteName={siteName}
+                date={day}
+                onDateChange={setDay}
+                serverToday={serverToday}
+                onServerToday={setServerToday}
+                onOpenAttendance={onOpenAttendance}
+                onManageAssignment={onManageAssignment}
+                onHealth={onDayHealth}
+                onOpenChild={onOpenChild}
+                onOpenStaff={onOpenStaff}
             />
         );
-    }
 
     return (
-        <DailyRoster
-            siteLocationId={siteLocationId}
-            siteName={siteName}
-            date={day}
-            onDateChange={setDay}
-            serverToday={serverToday}
-            onServerToday={setServerToday}
-            rangeControl={
-                <>
-                    {control()}
-                    {lensControl}
-                </>
-            }
-            onOpenAttendance={onOpenAttendance}
-            onManageAssignment={onManageAssignment}
-            onHealth={onDayHealth}
-            onOpenChild={onOpenChild}
-            onOpenStaff={onOpenStaff}
-        />
+        <div className="flex min-h-0 flex-1 flex-col gap-3" data-roster-surface="true">
+            {band}
+            {body}
+        </div>
     );
 }
