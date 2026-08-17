@@ -30,6 +30,8 @@ import {
 } from "@/lib/admin/locationDisplayLabel";
 import {
     buildSubjectEmploymentContext,
+    buildSubjectHouseholdContext,
+    buildSubjectIdentityContext,
     buildSubjectProcessContexts,
     buildSubjectScheduleContext,
     type SubjectProcessRow,
@@ -149,7 +151,56 @@ export async function loadSubjectContexts(
     const employmentContext = buildSubjectEmploymentContext(employment, subjectId);
     if (employmentContext) contexts.push(employmentContext);
 
+    /*
+     * THE RECORD ITSELF, AND ITS FAMILY.
+     *
+     * Both are emitted HERE rather than assembled by whichever host happens to need them, for the
+     * reason this module's own docblock gives: two fetch strategies, one authority. A host that
+     * synthesized "Child" and "Household" in its UI would be a second answer to "what is going on
+     * with this subject" — and the two would drift with nothing reporting an error.
+     *
+     * Search does not currently offer either, and that is a placement decision, not a different
+     * truth: it reads the same producer and may simply rank them out. What it must never do is
+     * disagree about whether Lennon HAS a household.
+     */
+    const identity = buildSubjectIdentityContext(
+        subject.grain === "child" ? "child" : "person",
+        "Child",
+    );
+    if (identity) contexts.push(identity);
+
+    if (subject.grain === "child") {
+        const household = await fetchChildHousehold(supabase, orgId, subjectId);
+        const householdContext = buildSubjectHouseholdContext(household?.id, household?.name);
+        if (householdContext) contexts.push(householdContext);
+    }
+
     return contexts;
+}
+
+/**
+ * The child's household — one narrow read, in keeping with this module's single-subject contract.
+ *
+ * `customer_members.customer_id` IS the durable household's id, so this needs no case and no join
+ * beyond the family's own name. The column is NULLABLE: a child with no family is a real state, and
+ * the builder turns that into no option rather than an option that opens nothing.
+ */
+async function fetchChildHousehold(
+    supabase: SupabaseClient,
+    orgId: string,
+    memberId: string,
+): Promise<{ id: string; name: string | null } | null> {
+    const { data, error } = await supabase
+        .from("customer_members")
+        .select("customer_id, customers(name)")
+        .eq("org_id", orgId)
+        .eq("id", memberId)
+        .maybeSingle();
+    if (error || !data) return null;
+    const row = data as { customer_id?: string | null; customers?: { name?: string | null } | null };
+    const id = (row.customer_id ?? "").trim();
+    if (!id) return null;
+    return { id, name: row.customers?.name ?? null };
 }
 
 // ---------------------------------------------------------------------------

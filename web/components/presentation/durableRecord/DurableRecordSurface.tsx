@@ -27,6 +27,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
@@ -67,6 +68,7 @@ type LoadState =
 export default function DurableRecordSurface({
     subjectType,
     subjectId,
+    presentation = "full",
     /** The card the gesture asked to land on (ASPECT). Absent = the grain's default composition. */
     cardKey,
     /**
@@ -79,6 +81,8 @@ export default function DurableRecordSurface({
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
+    /** See {@link WorkspaceDurableRecordHost}'s `presentation`. */
+    presentation?: "full" | "contextual";
     cardKey?: string | null;
     contextKey?: string | null;
     onRecordChanged?: () => void;
@@ -126,17 +130,37 @@ export default function DurableRecordSurface({
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
             });
-            // The ENTRY's preference decides the initial context, filtered to ones the record
-            // actually holds. With no usable preference the projection's own first option wins —
-            // never a precedence invented in this component.
-            setSelectedContextKey(resolveInitialContextOption(contexts, contextKey)?.key ?? null);
+            /*
+             * WHICH CONTEXT OPENS FIRST.
+             *
+             * `full` keeps its existing behaviour: something is always selected, because that
+             * presentation shows the whole record anyway and an unselected strip would read as a
+             * missing card.
+             *
+             * `contextual` starts UNSELECTED and shows the chooser, because the chooser IS the
+             * product there — the question "what do you want to see about Lennon?" is the thing the
+             * operator arrived to answer. Two exceptions, both honest: an ENTRY that named a context
+             * already answered it, and a subject with exactly ONE option has no decision to make.
+             * Adding chooser furniture in front of a single option is the kind of ceremony this
+             * convergence is removing.
+             */
+            const preferred = resolveInitialContextOption(contexts, contextKey);
+            setSelectedContextKey(
+                presentation === "full"
+                    ? preferred?.key ?? null
+                    : contextKey
+                      ? preferred?.key ?? null
+                      : contexts.length === 1
+                        ? contexts[0]!.key
+                        : null,
+            );
         } catch (e) {
             setState({
                 status: "error",
                 message: e instanceof Error ? e.message : "Could not open this record.",
             });
         }
-    }, [subjectType, subjectId, contextKey]);
+    }, [subjectType, subjectId, contextKey, presentation]);
 
     useEffect(() => {
         void load();
@@ -190,22 +214,90 @@ export default function DurableRecordSurface({
             data-durable-record-context-count={state.contexts.length}
         >
             {/* Only when there is a CHOICE. One context is not a decision. */}
-            <DurableRecordContextStrip
-                options={state.contexts}
-                selectedKey={selectedContextKey}
-                onSelect={setSelectedContextKey}
-            />
+            {presentation === "full" || selectedContextKey ? (
+                <DurableRecordContextStrip
+                    options={state.contexts}
+                    selectedKey={selectedContextKey}
+                    onSelect={setSelectedContextKey}
+                />
+            ) : null}
 
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                <OpportunityFocusPanelModeGrid
-                    model={state.model}
-                    // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable record
-                    // composes none of them, so there is nothing to select.
-                    onSelectTab={() => {}}
-                    requestedCardFocus={
-                        cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
-                    }
-                />
+                {/*
+                  * THE CHOOSER — "what do you want to see about Lennon?"
+                  *
+                  * Business language only. Every line is an option the subject ACTUALLY holds, from
+                  * the same producer Search reads; nothing here is synthesized and nothing is
+                  * hardcoded, so a child with no household simply has no Household line rather than
+                  * a line that opens nothing.
+                  *
+                  * No ids, no process keys, no context-type names. An operator choosing between
+                  * "Enrollment · Waitlist" and "Household" is making a business decision, and the
+                  * machinery that resolves it is not part of the question.
+                  */}
+                {presentation === "contextual" && !selectedContextKey ? (
+                    <div data-record-context-chooser="true">
+                        <p className="px-1 text-[13px] font-semibold text-alloy-midnight">
+                            {state.model.subject.label ?? "Record"}
+                        </p>
+                        {state.contexts.length === 0 ? (
+                            <p className="mt-2 px-1 text-[12px] text-alloy-midnight/55">
+                                There is nothing recorded about this record yet.
+                            </p>
+                        ) : (
+                            <ul className="mt-2 grid gap-1.5">
+                                {state.contexts.map((option) => (
+                                    <li key={option.key}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedContextKey(option.key)}
+                                            data-record-context-choice={option.key}
+                                            data-record-context-kind={option.kind}
+                                            className="flex w-full items-center justify-between gap-3 rounded-lg border border-alloy-stone/22 bg-white px-3 py-2.5 text-left hover:border-alloy-bend-pine/40 hover:bg-alloy-bend-pine/[0.04]"
+                                        >
+                                            <span className="min-w-0">
+                                                <span className="block truncate text-[13px] font-semibold text-alloy-midnight">
+                                                    {option.label}
+                                                </span>
+                                                {option.detail ? (
+                                                    <span className="mt-0.5 block truncate text-[11.5px] text-alloy-midnight/55">
+                                                        {option.detail}
+                                                    </span>
+                                                ) : null}
+                                            </span>
+                                            <ChevronRight
+                                                className="h-4 w-4 shrink-0 text-alloy-midnight/35"
+                                                aria-hidden
+                                                strokeWidth={1.9}
+                                            />
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ) : null}
+
+                {/*
+                  * THE FULL COMPOSITION — every card the grain declares.
+                  *
+                  * Deliberately NOT rendered in `contextual` presentation. Operations realizes a
+                  * record as "choose one thing, see that thing", and rendering the grid there would
+                  * put the giant record page back underneath the chooser — the exact surface this
+                  * convergence removed. The grid stays available for record-first runtimes where the
+                  * record genuinely IS the destination.
+                  */}
+                {presentation === "full" ? (
+                    <OpportunityFocusPanelModeGrid
+                        model={state.model}
+                        // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable
+                        // record composes none of them, so there is nothing to select.
+                        onSelectTab={() => {}}
+                        requestedCardFocus={
+                            cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
+                        }
+                    />
+                ) : null}
 
                 {/*
                   * The contextual card for the selected context, when the record is a child.

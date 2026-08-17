@@ -39,6 +39,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
+import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
+import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
+import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { DURABLE_STAFF_SUBJECT_KEY } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
@@ -267,6 +270,47 @@ export default function DurableRecordContextualCard({
      * is a `person`, and if that declaration were ever withdrawn this branch would go quiet rather
      * than render a card the registry does not admit.
      */
+    /*
+     * ── A CANONICAL CARD ABOUT THE RECORD ITSELF ──
+     *
+     * Not a published composition and not a commitment: the child's own details, or their family.
+     * Both cards already exist and are already canonical — `child_identity` from the durable child
+     * composition, `household` from `composeDurableHouseholdSubject`. Neither is configured here and
+     * neither is re-derived; this branch only decides WHERE they appear.
+     *
+     * Household in particular is composed from the household's own record. It does not route through
+     * a Work Unit to obtain the card, because a family is a record and not a queue position — and
+     * fabricating a case to render one was the specific thing the convergence forbids.
+     */
+    if (option.surface === "canonical_record") {
+        if (option.kind === "relationship" && option.hostEntityId) {
+            return (
+                <DurableHouseholdContextCard
+                    householdId={option.hostEntityId}
+                    contextKey={option.key}
+                />
+            );
+        }
+        if (option.kind === "identity" && childSubject) {
+            if (!cardAppliesToGrain("child_identity", "child")) return null;
+            return (
+                <div
+                    className="rounded-lg border border-alloy-stone/22 bg-white"
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="child_identity"
+                >
+                    <FocusPanelCardRenderer
+                        model={deriveChildIdentityCard(childSubject, new Date())}
+                        context={operationalContext}
+                        focusPanelMode="summary"
+                    />
+                </div>
+            );
+        }
+        return null;
+    }
+
     if (option.surface === "canonical_operational") {
         const grain = subject.kind === "child" ? "child" : "person";
         if (!cardAppliesToGrain("scheduling", grain)) return null;

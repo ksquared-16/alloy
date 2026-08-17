@@ -45,7 +45,21 @@ import type { SubjectContext, SubjectContextKind } from "@/lib/context/subjectCo
  * What kind of surface an option resolves. See the module docblock — these are not degrees of one
  * thing, they are different questions with different owners.
  */
-export type DurableContextSurface = "published_composition" | "canonical_operational" | "none";
+export type DurableContextSurface =
+    | "published_composition"
+    | "canonical_operational"
+    /**
+     * A canonical platform card about the RECORD ITSELF — the child's own details, or their family.
+     *
+     * Distinct from `canonical_operational`, which is a durable operational RELATIONSHIP (a
+     * commitment). "Lennon's date of birth" and "Lennon is committed to Toddler A on Mon/Wed/Fri"
+     * are not degrees of one thing: the first is who he is, the second is what has been promised
+     * about him. Collapsing them would have put identity behind a surface named for commitments.
+     *
+     * Like `canonical_operational`, it resolves NO published composition and invents no business
+     * process. The platform already owns `child_identity` and `household`; the surface IS that card.
+     */
+    | "canonical_record";
 
 /**
  * The context kinds that are DURABLE OPERATIONAL RELATIONSHIPS with a canonical platform card.
@@ -60,6 +74,14 @@ export type DurableContextSurface = "published_composition" | "canonical_operati
  * nothing about it — which is worse than the honest `none` it gets instead.
  */
 const CANONICAL_OPERATIONAL_KINDS: readonly SubjectContextKind[] = ["schedule", "placement"];
+
+/**
+ * The context kinds answered by a canonical card ABOUT THE RECORD, not about a commitment.
+ *
+ * Declared as data for the same reason the operational set above is: adding one should be a list
+ * entry, and the whole set should be readable in one place.
+ */
+const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = ["identity", "relationship"];
 
 export type DurableRecordContextOption = {
     /** Stable selection key. Unique within a subject; safe in a URL. */
@@ -127,7 +149,9 @@ export function durableRecordContextOptions(
                 siteLocationId: context.site_location_id ?? null,
                 surface: CANONICAL_OPERATIONAL_KINDS.includes(context.kind)
                     ? "canonical_operational"
-                    : "none",
+                    : CANONICAL_RECORD_KINDS.includes(context.kind)
+                      ? "canonical_record"
+                      : "none",
             });
             continue;
         }

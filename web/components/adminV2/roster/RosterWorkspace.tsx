@@ -540,7 +540,15 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
               * which is why the cohort, the server-paged offset, the filter and the scroll are still
               * there on close — a structural property, not something restored afterwards.
               */}
-            <WorkspaceDurableRecordHost hostKey="roster">
+            {/*
+              * OPERATIONS REALIZES A RECORD AS A CHOICE, NOT AS A PAGE.
+              *
+              * `contextual` renders subject → chooser → exactly one card, centered over the mounted
+              * workspace. The full composition grid stays available to record-first runtimes; here
+              * it would put the giant record page back under the chooser, which is the surface this
+              * convergence removes.
+              */}
+            <WorkspaceDurableRecordHost hostKey="roster" presentation="contextual">
             <WorkspaceSurface
                 tone={mode === "work" && section === "roster" ? "canvas" : "stone"}
                 scroll

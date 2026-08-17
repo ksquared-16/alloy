@@ -48,9 +48,24 @@ export default function WorkspaceDurableRecordHost({
     children,
     /** Marker for tests/diagnostics, e.g. `roster`. */
     hostKey,
+    presentation = "full",
 }: {
     children: ReactNode;
     hostKey: string;
+    /**
+     * HOW a durable record is realized over this host.
+     *
+     * `full`        the whole composition — every card the grain declares, in the panel grid. What a
+     *               record-first runtime needs when the record IS the destination.
+     * `contextual`  a chooser and exactly ONE card, centered and bounded. What Operations needs,
+     *               because there the record is never the destination: the operator came to see one
+     *               thing about a person and should be able to say which.
+     *
+     * Two presentations of one composition, not two records. Both read the same contexts from the
+     * same producer and render the same cards; they differ only in how much is shown at once and
+     * where it sits.
+     */
+    presentation?: "full" | "contextual";
 }) {
     const [record, setRecord] = useState<OpenRecord | null>(null);
     /**
@@ -136,7 +151,9 @@ export default function WorkspaceDurableRecordHost({
 
                 {record ? (
                     <div
-                        className="absolute inset-0 z-10 flex flex-col bg-alloy-midnight/10"
+                        className={`absolute inset-0 z-10 flex bg-alloy-midnight/10 ${
+                            presentation === "contextual" ? "items-center justify-center p-4" : "flex-col"
+                        }`}
                         data-durable-record-overlay="true"
                         onMouseDown={(e) => {
                             if (e.target === e.currentTarget) close();
@@ -145,9 +162,21 @@ export default function WorkspaceDurableRecordHost({
                         <div
                             role="dialog"
                             aria-label="Record"
-                            className="m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/25 bg-white shadow-lg"
+                            className={
+                                presentation === "contextual"
+                                    ? /*
+                                       * CENTERED AND BOUNDED — the card sits over the workspace, it
+                                       * does not become the workspace. `max-h`/`overflow-y` keep a
+                                       * long card scrollable inside its own bounds rather than
+                                       * stretching the panel to the height of the screen, which is
+                                       * what produced the dead white space QA reported.
+                                       */
+                                      "m-auto flex max-h-[min(88vh,44rem)] w-[min(94vw,40rem)] min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/25 bg-white shadow-xl"
+                                    : "m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/25 bg-white shadow-lg"
+                            }
                             data-durable-record-panel={record.subjectType}
                             data-durable-record-panel-subject={record.subjectId}
+                            data-durable-record-presentation={presentation}
                         >
                             <div className="flex shrink-0 items-center justify-end border-b border-alloy-stone/15 px-2 py-1.5">
                                 <button
@@ -166,6 +195,7 @@ export default function WorkspaceDurableRecordHost({
                                 subjectId={record.subjectId}
                                 cardKey={record.cardKey ?? null}
                                 contextKey={record.contextKey ?? null}
+                                presentation={presentation}
                                 onRecordChanged={onRecordChanged}
                             />
                         </div>
