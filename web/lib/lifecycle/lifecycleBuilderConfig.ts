@@ -73,6 +73,7 @@ const PROCESS_OWNED_KEYS = [
     "manual_status_transition_policy_v1",
     "work_views_v1",
     "participation_v1",
+    "entry_stage_key",
     "stages",
 ] as const;
 
@@ -164,6 +165,27 @@ export type LifecycleBuilderProcessRecord = {
     work_views_v1?: WorkViewConfigV1Stored[];
     /** Operator-authored Participation definition — the engine reads its contract (Process Builder). */
     participation_v1?: ParticipationConfigV1;
+    /**
+     * The stage a journey of this process begins in — DECLARED, never inferred (B1a).
+     *
+     * Business Process configuration owns this. It exists because nothing else in the model answers
+     * the question: stage `sort_order` is presentation order, `tracks_v1` orders tracks, and the
+     * transition graph cannot answer either — in Firefly's own published revision three active
+     * stages have no incoming edge (`lead`, `waitlist`, `enrolling`), because a stage reachable only
+     * by a split rule or by an operator movement looks exactly like a starting stage from the graph.
+     * Deriving from any of those would silently pick a stage nobody chose.
+     *
+     * A single scalar rather than a per-stage `is_entry` flag, so ambiguity is structurally
+     * impossible: two stages cannot both claim entry.
+     *
+     * Absent means UNAUTHORED, which is not a default — consumers must refuse rather than guess, the
+     * same posture `requirements_v1` takes for D-90. Publication validates that a declared key names
+     * an active stage of this process, and a published revision is immutable, so a running journey's
+     * entry stage cannot move underneath it.
+     *
+     * @see lib/lifecycle/processEntryStage.ts — the one resolver
+     */
+    entry_stage_key?: string;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -271,6 +293,13 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         const workViews = parseWorkViewsV1(row.work_views_v1);
         const participation = parseParticipationConfigV1(row.participation_v1) ?? undefined;
+        // Read as authored. Whether the key names a real active stage is a PUBLISH question, not a
+        // parse one: silently dropping an unresolvable key here would turn a configuration error
+        // into "no entry stage authored", which is a different and much quieter failure.
+        const entry_stage_key =
+            typeof row.entry_stage_key === "string" && row.entry_stage_key.trim()
+                ? row.entry_stage_key.trim()
+                : undefined;
         processes.push(withUnknownFields({
             id,
             key,
@@ -283,6 +312,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             ...(manualPolicy ? { manual_status_transition_policy_v1: manualPolicy } : {}),
             ...(workViews ? { work_views_v1: workViews } : {}),
             ...(participation ? { participation_v1: participation } : {}),
+            ...(entry_stage_key ? { entry_stage_key } : {}),
             stages,
         }, captureUnknownFields(row, PROCESS_OWNED_KEYS)));
     }

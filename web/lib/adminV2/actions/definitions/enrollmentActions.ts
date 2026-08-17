@@ -147,6 +147,25 @@ export const enrollmentStartAction: RegisteredAction = {
                         opportunity_id: result.opportunityId,
                         context_outcome: result.contextOutcome,
                         reused: result.reused,
+                        // The participant link is the operator's whole reason for pressing Start, so
+                        // it is reported here rather than left to be discovered. When nothing was
+                        // realized the code says why — a start with no packet is a real outcome, not
+                        // a silent one.
+                        participant_launch: result.participantLaunch.realized
+                            ? {
+                                  realized: true,
+                                  outcome: result.participantLaunch.value.outcome,
+                                  session_id: result.participantLaunch.value.sessionId,
+                                  packet_definition_id: result.participantLaunch.value.packetDefinitionId,
+                                  public_link_id: result.participantLaunch.value.publicLinkId,
+                                  stage_key: result.participantLaunch.value.stageKey,
+                                  participant_path: result.participantLaunch.value.participantPath,
+                              }
+                            : {
+                                  realized: false,
+                                  code: result.participantLaunch.code,
+                                  detail: result.participantLaunch.detail,
+                              },
                     },
                 },
             };

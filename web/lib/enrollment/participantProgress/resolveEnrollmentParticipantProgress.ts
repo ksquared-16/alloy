@@ -26,6 +26,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequirements";
+import { resolveEffectiveStageKey } from "@/lib/lifecycle/processEntryStage";
 import { resolveCurrentEnrollmentSession } from "@/lib/pos/packet/enrollmentObjectiveSession";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { departmentForOpportunityContext } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
@@ -172,7 +173,19 @@ export async function resolveEnrollmentParticipantProgress(
         departmentId,
     });
 
-    const stageKey = (instance.stage_key ?? "").trim() || null;
+    /**
+     * B1a. A journey that has not been moved yet has `stage_key = NULL` — process-start semantics
+     * deliberately leave it there rather than stamping a position the execution graph never
+     * produced. It is nonetheless governed by its process's DECLARED entry stage, and that is what
+     * its requirements project from; otherwise a parent's objective would stay empty until an
+     * operator happened to move them.
+     *
+     * A persisted stage always wins, because it is where the journey actually is.
+     */
+    const stageKey = resolveEffectiveStageKey({
+        persistedStageKey: instance.stage_key,
+        process: configuration.builder?.processes.find((p) => p.key === instance.process_key) ?? null,
+    });
     // D-90 presence-is-authority, unchanged: an authored-empty section means the stage requires
     // nothing and yields a total of 0. An ABSENT section means the governing artifact says nothing
     // about this stage, which after D-97 normalization only happens for a revision published before

@@ -43,6 +43,15 @@
 # "the feature was never granted" produced identical behaviour and the defect stayed invisible
 # for a whole slice. Outcome-only controls would not have caught it.
 #
+# B1 added `startEnrollmentParticipantLaunch` — the reachability proof that was missing. It runs
+# the whole chain unstubbed against an in-memory database double that enforces the three
+# constraints the invariants rest on (packet-definition key uniqueness, the 1:1 link binding, and
+# the one-current-session partial index): operator Start Enrollment → pinned revision → declared
+# entry stage → `requirements_v1` Form requirements → derived packet → minted link → anchored
+# session → token resolves that session → the Participant Runtime objective the conversation card
+# mounts on. It also carries the authority controls: a stage requiring no Forms realizes nothing,
+# and a packet edited by hand refuses instead of becoming an Enrollment requirement.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -89,4 +98,5 @@ jobs:
             tests/lifecycle/participantConversationAdmission.test.ts \
             tests/lifecycle/participantGovernedInterpretation.test.ts \
             tests/lifecycle/participantConversationSurface.test.ts \
-            tests/lifecycle/participantProviderAuthorization.test.ts
+            tests/lifecycle/participantProviderAuthorization.test.ts \
+            tests/lifecycle/startEnrollmentParticipantLaunch.test.ts
