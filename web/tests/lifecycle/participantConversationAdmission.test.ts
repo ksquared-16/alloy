@@ -295,15 +295,13 @@ describe("7. unsupported classes are reported truthfully, never as redacted", ()
         );
     });
 
-    it("BLOCKER: an identity-class element is refused — tokenization is unimplemented", () => {
-        // A SECOND missing primitive, independent of text minimization and not named by D-101.
-        // `identity` maps to the `tokenize` transformation, whose dispatch rule is
-        // `disposition: "refused", support: "unsupported"` — "Tokenization requires a token vault
-        // that does not exist." A DOB and a participant's answer about one are honestly identity
-        // class, so admitting them needs a decision D-101 did not make.
+    it("identity is refused wherever D-102 has NOT been declared", () => {
+        // `identity` maps to `tokenize`, whose dispatch rule is refused/unsupported —
+        // "Tokenization requires a token vault that does not exist."
         //
-        // Recorded as a passing control rather than dodged by relabelling the element `operational`,
-        // which would be exactly the false claim this platform refuses everywhere else.
+        // D-102 lets the PARTICIPANT CONVERSATION policy admit it anyway, declared. This control
+        // pins the other side of that line: a policy that has not declared the exception still
+        // refuses, so the admission cannot leak into generic Trust by being merely available.
         const result = transformForReasoning({
             classification: {
                 elements: [
@@ -316,7 +314,7 @@ describe("7. unsupported classes are reported truthfully, never as redacted", ()
                 ],
                 classes_present: ["identity"],
             } as never,
-            policy: PARTICIPANT_CONVERSATION_ADMISSION_V1,
+            policy: { key: "undeclared_v1", pii_mode: "strict", prohibited_classes: [] },
             knowledge: [],
         });
 
@@ -439,5 +437,149 @@ describe("8. the deterministic fallback still completes the interaction", () => 
         expect(
             interpretParticipantResponseDeterministically({ turn: signature, directValue: "signed" }).kind,
         ).toBe("corrected_value");
+    });
+});
+
+// ---------------------------------------------------------------------------
+// D-102 — scoped untransformed identity admission
+// ---------------------------------------------------------------------------
+
+describe("D-102 — identity admitted without tokenization, scoped and declared", () => {
+    const identityElement = {
+        key: "participant_response_text",
+        information_class: "identity",
+        transformation: "tokenize",
+        value: "Actually she was born May 6, 2021",
+    };
+
+    function transformIdentityUnder(policy: Record<string, unknown>) {
+        return transformForReasoning({
+            classification: { elements: [identityElement], classes_present: ["identity"] } as never,
+            policy: policy as never,
+            knowledge: [],
+        });
+    }
+
+    it("1. identity under an ORDINARY policy still refuses — tokenization is unsupported", () => {
+        const result = transformIdentityUnder({
+            key: "ordinary_v1",
+            pii_mode: "strict",
+            prohibited_classes: [],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.refusal_code).toBe("PRIVACY_TRANSFORM_UNSUPPORTED");
+    });
+
+    it("4. eligible current-turn identity IS admitted under the participant policy", () => {
+        const result = transformIdentityUnder(PARTICIPANT_CONVERSATION_ADMISSION_V1 as never);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.context.transformed).toHaveProperty("participant_response_text");
+    });
+
+    it("5-6. evidence states admitted-untransformed and NEVER claims tokenization", () => {
+        const result = transformIdentityUnder(PARTICIPANT_CONVERSATION_ADMISSION_V1 as never);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+
+        expect(result.context.acknowledged_untransformed_classes).toEqual(["identity"]);
+
+        const record = result.context.transformations.find((t) => t.key === "participant_response_text")!;
+        expect(record.disposition).toBe("admitted");
+        // The distinguishing level: not `implemented`, not `compatibility_preserved`, not `unsupported`.
+        expect(record.support).toBe("acknowledged_untransformed");
+        expect(record.rationale).toContain("No transformation");
+        // The claim that must never appear.
+        expect(record.support).not.toBe("implemented");
+        expect(JSON.stringify(record)).not.toMatch(/tokenized/i);
+    });
+
+    it("7. a policy claiming BOTH transformed and acknowledged-untransformed refuses", () => {
+        // `operational` maps to `pass_through`, which IS implemented. Declaring an exception to a
+        // rule that is being followed is a false statement in the other direction.
+        const result = transformForReasoning({
+            classification: { elements: [], classes_present: [] } as never,
+            policy: {
+                key: "false_exception_v1",
+                pii_mode: "strict",
+                prohibited_classes: [],
+                acknowledged_untransformed_classes: ["operational"],
+            } as never,
+            knowledge: [],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.refusal_code).toBe("PRIVACY_CONTRADICTORY_TRANSFORMATION_DECLARATION");
+        }
+    });
+
+    it("D-102 is opt-in: no existing policy acquires untransformed identity", () => {
+        const result = transformForReasoning({
+            classification: { elements: [], classes_present: [] } as never,
+            policy: { key: "legacy_v1", pii_mode: "strict", prohibited_classes: [] },
+            knowledge: [],
+        });
+        expect(result.ok).toBe(true);
+        if (result.ok) expect(result.context.acknowledged_untransformed_classes).toEqual([]);
+    });
+
+    it("financial is still refused outright under the participant policy", () => {
+        const result = transformForReasoning({
+            classification: {
+                elements: [
+                    { key: "x", information_class: "financial", transformation: "aggregate", value: "1" },
+                ],
+                classes_present: ["financial"],
+            } as never,
+            policy: PARTICIPANT_CONVERSATION_ADMISSION_V1,
+            knowledge: [],
+        });
+        expect(result.ok).toBe(false);
+        if (!result.ok) expect(result.refusal_code).toBe("PRIVACY_PROHIBITED_CLASS");
+    });
+});
+
+describe("D-102 — the acknowledgment is NOT sufficient on its own", () => {
+    // 2, 3, 8. The policy says identity may be admitted. Eligibility still decides WHICH identity,
+    // and it is enforced above the privacy engine — which cannot see a conversation turn.
+    it("2. identity with no active deterministic turn is refused by eligibility", () => {
+        expect(turnIsEligibleForProviderInterpretation(turn({ need: null })).eligible).toBe(false);
+    });
+
+    it("3. identity on an INELIGIBLE need is refused by eligibility", () => {
+        const result = turnIsEligibleForProviderInterpretation(
+            turn({
+                need: need({
+                    identity: {
+                        key: "child:c1:person:passport_number",
+                        canonical_key: "person:passport_number",
+                        shared_value_key: "person:passport_number",
+                        field_key: "passport_number",
+                        entity_type: "person",
+                        basis: "canonical",
+                        scope: "child",
+                        subject_id: "c1",
+                        artifact_specific: false,
+                    },
+                }),
+            }),
+        );
+        expect(result.eligible).toBe(false);
+    });
+
+    it("8. government id remains refused under the participant conversation policy", () => {
+        // Neither minimized nor acknowledged — it is not admitted at all.
+        expect(PARTICIPANT_CONVERSATION_ADMISSION_V1.acknowledged_unminimized_classes).not.toContain(
+            "government_id",
+        );
+        expect(PARTICIPANT_CONVERSATION_ADMISSION_V1.required_text_minimizers).not.toContain("government_id");
+        for (const key of ["person:ssn", "customer_member:government_id", "person:passport_number"]) {
+            expect(D101_ELIGIBLE_FIELD_KEYS.has(key)).toBe(false);
+        }
+    });
+
+    it("DOB is the eligible ordinary fact the vertical requires", () => {
+        expect(D101_ELIGIBLE_FIELD_KEYS.has("customer_member:dob")).toBe(true);
+        expect(turnIsEligibleForProviderInterpretation(turn()).eligible).toBe(true);
     });
 });

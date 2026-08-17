@@ -188,6 +188,7 @@ describe("S1 happy path — one contract produces one complete Decision Package"
                 text_minimizations: [],
                 participant_redactions: [],
                 acknowledged_unminimized_classes: [],
+                acknowledged_untransformed_classes: [],
             },
             proposal: {
                 recommendation: {},

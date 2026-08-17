@@ -25,7 +25,8 @@ import type {
 } from "@/lib/privacy/redactKnownParticipants";
 import { expandParticipantTokens, redactKnownParticipants } from "@/lib/privacy/redactKnownParticipants";
 import type { PrivacyTransformRefusalCode, TransformationRecord } from "@/lib/trust/privacy/transformationDispatch";
-import { applyTransformation } from "@/lib/trust/privacy/transformationDispatch";
+import { applyTransformation, TRANSFORMATION_RULES } from "@/lib/trust/privacy/transformationDispatch";
+import { INFORMATION_CLASS_TRANSFORMATIONS } from "@/lib/trust/classification/informationClasses";
 import { TRUST_REGISTRY } from "@/lib/trust/registry/trustRegistry";
 
 export type PrivacyPolicyV1 = {
@@ -84,6 +85,27 @@ export type PrivacyPolicyV1 = {
      * a transformation and disclaim it at once, and the transform refuses.
      */
     readonly acknowledged_unminimized_classes?: readonly TextMinimizationClass[];
+    /**
+     * D-102. Information classes this policy admits WITHOUT the transformation they normally
+     * require, declared so the evidence can say so truthfully.
+     *
+     * The transformation-dispatch analogue of {@link acknowledged_unminimized_classes}, and it
+     * exists for the same reason: `identity` maps to `tokenize`, tokenization requires a token vault
+     * that does not exist, and the dispatch therefore REFUSES the element. That refusal is correct
+     * for every generic policy and stays correct — this field does not change dispatch, it records a
+     * per-policy decision to admit anyway.
+     *
+     * **Not available globally.** Like every other field here it is opt-in per policy, so a policy
+     * that does not declare it keeps refusing identity exactly as before. The narrowness that makes
+     * the exception defensible is enforced ABOVE this layer — the capability admits only the current
+     * deterministic turn's minimal facts, only for an eligible need — because a privacy engine
+     * cannot see a conversation turn and should not pretend to.
+     *
+     * A class whose transformation is actually IMPLEMENTED may not be acknowledged here: claiming an
+     * exception to a rule that is being followed is a false statement in the other direction, and
+     * the transform refuses it.
+     */
+    readonly acknowledged_untransformed_classes?: readonly InformationClass[];
 };
 
 /**
@@ -156,6 +178,14 @@ export type ReasoningContextV1 = {
      * conversation one.
      */
     readonly acknowledged_unminimized_classes: readonly TextMinimizationClass[];
+    /**
+     * D-102. Classes admitted WITHOUT their normally required transformation.
+     *
+     * The honest counterpart to `transformations`: that list says what each element's transformation
+     * did; this one names the classes for which the answer was "nothing, knowingly". Empty for every
+     * policy that does not declare it, which is every policy but the participant conversation one.
+     */
+    readonly acknowledged_untransformed_classes: readonly InformationClass[];
 };
 
 export type KnowledgeReference = {
@@ -167,6 +197,7 @@ export type KnowledgeReference = {
 export type PrivacyTransformRefusal =
     | "PRIVACY_PROHIBITED_CLASS"
     | "PRIVACY_CONTRADICTORY_MINIMIZATION_DECLARATION"
+    | "PRIVACY_CONTRADICTORY_TRANSFORMATION_DECLARATION"
     | PrivacyTransformRefusalCode
     | TextMinimizationRefusalCode
     | ParticipantRedactionRefusalCode;
@@ -263,6 +294,26 @@ export function transformForReasoning(input: {
         };
     }
 
+    // D-102. A class whose transformation is actually implemented may not be acknowledged as
+    // untransformed. Claiming an exception to a rule that is being followed is a false statement in
+    // the other direction, and evidence that carried it would be as untrustworthy as a missing one.
+    const acknowledgedUntransformed = input.policy.acknowledged_untransformed_classes ?? [];
+    const falselyExcepted = acknowledgedUntransformed.filter(
+        (cls) => TRANSFORMATION_RULES[INFORMATION_CLASS_TRANSFORMATIONS[cls]].support === "implemented",
+    );
+    if (falselyExcepted.length > 0) {
+        return {
+            ok: false,
+            refusal_code: "PRIVACY_CONTRADICTORY_TRANSFORMATION_DECLARATION",
+            detail:
+                `Privacy policy ${input.policy.key} acknowledges class(es) ` +
+                `${[...new Set(falselyExcepted)].sort().join(", ")} as admitted-untransformed, but their ` +
+                `transformation is implemented and would have run. A policy may follow a rule or declare an ` +
+                `exception to it, never both.`,
+            transformations: [],
+        };
+    }
+
     const prohibited = input.classification.elements.filter((e) =>
         input.policy.prohibited_classes.includes(e.information_class),
     );
@@ -291,6 +342,23 @@ export function transformForReasoning(input: {
             information_class: element.information_class,
             transformation: element.transformation,
         } as const;
+
+        // D-102. The ONE place an otherwise-refused element may be admitted, and only when this
+        // policy named its class in advance. The dispatch rule is unchanged and still says refused;
+        // what changes is that the policy already decided to accept that, and the record says so.
+        if (outcome.disposition === "refused" && acknowledgedUntransformed.includes(element.information_class)) {
+            admitted[element.key] = element.value;
+            transformations.push({
+                ...base,
+                disposition: "admitted",
+                support: "acknowledged_untransformed",
+                rationale:
+                    `Policy ${input.policy.key} explicitly admits ${element.information_class} without its ` +
+                    `required ${element.transformation} transformation, which is unavailable. No transformation ` +
+                    `was performed and none is claimed.`,
+            });
+            continue;
+        }
 
         if (outcome.disposition === "refused") {
             transformations.push({
@@ -410,6 +478,7 @@ export function transformForReasoning(input: {
             // D-101. Declared, sorted, and reported whether or not any text was present — the
             // policy's admission is a property of the POLICY, not of which message arrived.
             acknowledged_unminimized_classes: [...acknowledgedUnminimized].sort(),
+            acknowledged_untransformed_classes: [...acknowledgedUntransformed].sort(),
             classes_present: input.classification.classes_present,
             pii_mode: input.policy.pii_mode,
             transformations,

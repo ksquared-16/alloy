@@ -190,6 +190,7 @@ describe("the registered synchronous strategy is unchanged", () => {
                 text_minimizations: [],
                 participant_redactions: [],
                 acknowledged_unminimized_classes: [],
+                acknowledged_untransformed_classes: [],
             },
             nowIso: NOW,
         });

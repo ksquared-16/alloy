@@ -41,7 +41,21 @@ import type { InformationClass, TransformationPolicy } from "@/lib/trust/classif
  * label a pass-through as `implemented`, which is the exact lie this slice
  * removes.
  */
-export const TRANSFORMATION_SUPPORT_LEVELS = ["implemented", "compatibility_preserved", "unsupported"] as const;
+export const TRANSFORMATION_SUPPORT_LEVELS = [
+    "implemented",
+    "compatibility_preserved",
+    "unsupported",
+    /**
+     * D-102. The transformation this class normally requires did NOT run, and the policy explicitly
+     * acknowledged that before the element was admitted.
+     *
+     * Distinct from `unsupported`, which accompanies a REFUSAL: this element was admitted. Distinct
+     * from `implemented` and `compatibility_preserved`, which both claim something happened. A reader
+     * of the evidence can tell "tokenized" from "admitted raw, knowingly" without reading the engine,
+     * which is the entire reason this level exists rather than reusing one of the other three.
+     */
+    "acknowledged_untransformed",
+] as const;
 
 export type TransformationSupport = (typeof TRANSFORMATION_SUPPORT_LEVELS)[number];
 
