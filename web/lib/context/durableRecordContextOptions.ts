@@ -68,10 +68,10 @@ export type DurableContextSurface =
  * the `scheduling` card renders both. Declared as data rather than as a condition so that adding a
  * relationship is a list entry, and so the whole set is stated in one place.
  *
- * `employment` is deliberately ABSENT. It is equally durable and equally operational, and it has no
- * card that composes it AS A COMMITMENT (the Employment card is a person-grain identity card).
- * Listing it here without one would produce a region that asserts a relationship and then shows
- * nothing about it — which is worse than the honest `none` it gets instead.
+ * `employment` is deliberately ABSENT from THIS list. It is equally durable and equally operational,
+ * but it has no card that composes it AS A COMMITMENT — the Employment card is a person-grain
+ * identity card. It is therefore a `canonical_record` kind (see below), which is the category that
+ * actually describes it.
  */
 const CANONICAL_OPERATIONAL_KINDS: readonly SubjectContextKind[] = ["schedule", "placement"];
 
@@ -81,7 +81,20 @@ const CANONICAL_OPERATIONAL_KINDS: readonly SubjectContextKind[] = ["schedule", 
  * Declared as data for the same reason the operational set above is: adding one should be a list
  * entry, and the whole set should be readable in one place.
  */
-const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = ["identity", "relationship"];
+const CANONICAL_RECORD_KINDS: readonly SubjectContextKind[] = [
+    "identity",
+    "relationship",
+    /*
+     * `employment` belongs HERE, not with the operational relationships above, and the note beside
+     * that list already said why before this category existed: the Employment card is a person-grain
+     * IDENTITY card, and there is no card that composes employment as a COMMITMENT.
+     *
+     * That was written as a reason to give it `none`. It is really a reason to call it what it is —
+     * a canonical card about the record. Whether Jane works here is of the same kind as Lennon's
+     * date of birth: something true about the person, not something promised about their week.
+     */
+    "employment",
+];
 
 export type DurableRecordContextOption = {
     /** Stable selection key. Unique within a subject; safe in a URL. */

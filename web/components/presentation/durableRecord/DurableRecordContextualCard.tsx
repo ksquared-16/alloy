@@ -41,6 +41,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import { deriveChildIdentityCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveChildFocusPanelCards";
+import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
+import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
@@ -109,7 +112,11 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
  */
 export type DurableContextualSubject =
     | { kind: "child"; child: DurableChildSubject }
-    | { kind: "staff"; personId: string; label: string; imageUrl?: string | null };
+    /**
+     * The composed person, whole. The Employment card reads its employment signal and truth bag, so
+     * narrowing this to an id would force a re-fetch of what the composer already produced.
+     */
+    | { kind: "staff"; person: DurablePersonSubject };
 
 export default function DurableRecordContextualCard({
     option,
@@ -167,7 +174,7 @@ export default function DurableRecordContextualCard({
              *
              * The context grain is `person`, which is what the registry declares `scheduling` for.
              */
-            const staff = subject as Extract<DurableContextualSubject, { kind: "staff" }>;
+            const staff = (subject as Extract<DurableContextualSubject, { kind: "staff" }>).person;
             return {
                 grain: "person" as const,
                 subject: { type: "person" as const, id: staff.personId, label: staff.label },
@@ -178,7 +185,7 @@ export default function DurableRecordContextualCard({
                     [DURABLE_STAFF_SUBJECT_KEY]: {
                         personId: staff.personId,
                         name: staff.label,
-                        imageUrl: staff.imageUrl ?? null,
+                        imageUrl: null,
                     },
                 },
             } as unknown as OperationalContext;
@@ -289,6 +296,30 @@ export default function DurableRecordContextualCard({
                     householdId={option.hostEntityId}
                     contextKey={option.key}
                 />
+            );
+        }
+        if (option.kind === "employment" && subject.kind === "staff") {
+            /*
+             * The EXISTING Employment card, centered — read-only exactly as it is on the native
+             * panel. `derivePersonEmploymentCard` decides nothing about employment: `is_staff`,
+             * `current` and `state_label` arrive already decided by `lib/employment` and are carried
+             * through. Making it editable here would be a second execution path for a capability
+             * that lives elsewhere, and this slice is not that slice.
+             */
+            if (!cardAppliesToGrain("employment", "person")) return null;
+            return (
+                <div
+                    className="rounded-lg border border-alloy-stone/22 bg-white"
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="employment"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonEmploymentCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                    />
+                </div>
             );
         }
         if (option.kind === "identity" && childSubject) {

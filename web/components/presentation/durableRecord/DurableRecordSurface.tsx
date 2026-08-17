@@ -37,6 +37,7 @@ import {
     type DurableRecordContextOption,
 } from "@/lib/context/durableRecordContextOptions";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import {
     decodeDurableRecordModel,
@@ -55,7 +56,15 @@ type LoadState =
           /** The child, when this record is one — the contextual card composes against it. */
           childSubject: DurableChildSubject | null;
           /** The person, when this record is one. Carries only identity; commitments ride below. */
-          personSubject: { personId: string; label: string } | null;
+          /**
+           * The composed person, WHOLE — not narrowed to id + label.
+           *
+           * The Employment card composes from the person's own employment signal and truth bag, so
+           * a host that kept only an id would have to re-fetch or re-derive what the composer
+           * already produced. It is the same object the model was built from, which is what keeps
+           * the card beside the panel from disagreeing with it.
+           */
+          personSubject: DurablePersonSubject | null;
           /**
            * Canonical assignment facts for a `canonical_operational` context, composed with the
            * record so the Schedule card reveals WITH the panel rather than opening its own gate.
@@ -109,7 +118,7 @@ export default function DurableRecordSurface({
                       model?: DurableRecordModelWire;
                       contexts?: DurableRecordContextOption[];
                       childSubject?: DurableChildSubject | null;
-                      personSubject?: { personId?: string; label?: string } | null;
+                      personSubject?: DurablePersonSubject | null;
                       schedulingProjection?: SchedulingProjectionFirstPaint | null;
                       message?: string;
                   }
@@ -119,16 +128,15 @@ export default function DurableRecordSurface({
                 return;
             }
             const contexts = (json.contexts ?? []) as DurableRecordContextOption[];
-            const person = json.personSubject ?? null;
+            const person = (json.personSubject ?? null) as DurablePersonSubject | null;
             setState({
                 status: "ready",
                 model: decodeDurableRecordModel(json.model),
                 contexts,
                 childSubject: (json.childSubject ?? null) as DurableChildSubject | null,
-                personSubject:
-                    person?.personId
-                        ? { personId: person.personId, label: person.label?.trim() || "Staff member" }
-                        : null,
+                personSubject: person?.personId
+                    ? { ...person, label: person.label?.trim() || "Staff member" }
+                    : null,
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
             });
@@ -337,11 +345,7 @@ export default function DurableRecordSurface({
                             subject={
                                 state.childSubject
                                     ? { kind: "child", child: state.childSubject }
-                                    : {
-                                          kind: "staff",
-                                          personId: state.personSubject!.personId,
-                                          label: state.personSubject!.label,
-                                      }
+                                    : { kind: "staff", person: state.personSubject! }
                             }
                             schedulingProjection={state.schedulingProjection}
                             onSaved={onRecordChanged}
