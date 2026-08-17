@@ -276,6 +276,36 @@ on conflict (id) do update set
   status = excluded.status,
   end_date = null;
 
+-- And FAIL if it did not take.
+--
+-- ── WHY AN ASSERT AND NOT ANOTHER DELETE ──
+--
+-- The person-prefixed delete at the top of this file ALREADY reclaims Jane's operator-created rows;
+-- the fixture is genuinely self-cleaning. What it cannot do is clean a run it was never applied
+-- before. O-3 performs a real `change_room`, and the runtime answers one by closing the current
+-- assignment and inserting a new one — so running the spec twice WITHOUT re-applying this fixture
+-- leaves Jane starting on the very date the second run is about to move her to. It then tries to end
+-- that assignment the day before its own start and is refused by
+-- `schedule_assignments_end_after_start`, which reads exactly like a product regression.
+--
+-- The verification block at the end of this file already counted Jane's staff rows and already said
+-- "must be 1". It printed 3 for two runs and nothing stopped, because a SELECT that reports a number
+-- is not a check — someone has to read it. Asserted here, a stale tenant ends the fixture instead of
+-- decorating it, and the failure names the cause rather than surfacing as a browser mystery.
+do $$
+declare
+    n int;
+begin
+    select count(*) into n
+    from schedule_assignments
+    where subject_type = 'staff'
+      and subject_person_id = 'fbc00000-0000-4000-8000-00000000a001'::uuid;
+    if n <> 1 then
+        raise exception
+            'fixture not restorative: Jane holds % staff assignments, expected exactly 1 (prior-run rows survived)', n;
+    end if;
+end $$;
+
 -- ══ THE EQUALITY SUBJECT — an EXISTING seeded case, not a new one ══════════════════════════════
 --
 -- ── WHY THE KURZMAN CASE CANNOT CARRY THE NATIVE HALF ──

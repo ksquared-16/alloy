@@ -72,6 +72,21 @@ const EFFECTIVE_FROM = "2026-06-01";
  * the database refuses — `schedule_assignments_end_after_start`, correctly. A later date is valid
  * whether scenario 8 runs after 7 or on its own against a fresh fixture, which is what a serial
  * proving journey needs.
+ *
+ * ── AND THE SAME HAZARD BETWEEN RUNS, WHICH THIS COMMENT USED TO MISS ──
+ *
+ * Fixed dates make scenarios 7 and 8 safe with each other. They do NOT make a whole RUN safe with
+ * the run before it: the second pass finds Jane already starting 2026-07-01, tries to close that row
+ * on 2026-06-30, and draws the identical refusal — surfaced through the UI as `SAVE REFUSED`, which
+ * looks exactly like a product regression in whatever branch happens to be under test. It cost a
+ * real investigation once; the row provenance (`source_key = 'operator'`, created during the PRIOR
+ * run) is what settled it.
+ *
+ * `roster-people-search-convergence.sql` reclaims those operator-created rows, so the precondition
+ * is that it is applied BEFORE this spec — which `alloy-certify journey` does per spec, and which a
+ * hand-run `playwright test` does not. Run this file by hand twice and the second run fails for a
+ * reason that has nothing to do with the code. The fixture now ASSERTS that baseline instead of
+ * printing it, so the failure arrives named at the fixture rather than as a browser mystery.
  */
 const ROOM_C = "Infant Room A";
 const ROOM_C_ID = "00000000-0000-4000-8000-000000000012";
