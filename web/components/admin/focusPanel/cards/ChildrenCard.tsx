@@ -1059,6 +1059,7 @@ export default function ChildrenCard({
                                 child={child}
                                 depth="summary"
                                 childrenSurfaceConfig={childrenSurfaceConfig}
+                                focusedMemberId={childAttentionMemberId || null}
                                 canMutate={canMutateIdentity}
                                 composingChildrenSurface={composingChildrenSurface}
                                 rosterAvatarComposer={
@@ -1166,6 +1167,7 @@ function TruthRow({
 function ChildSummaryRow({
     child,
     childrenSurfaceConfig,
+    focusedMemberId = null,
     depth = "summary",
     onActivate,
     onSaveField,
@@ -1178,6 +1180,8 @@ function ChildSummaryRow({
 }: {
     child: ChildrenEvidenceChild;
     childrenSurfaceConfig: ReturnType<typeof readChildrenNestedConfigFromDoc>;
+    /** `customer_members.id` of the child under Attention, when a lens has focused one. */
+    focusedMemberId?: string | null;
     depth?: "summary" | "context";
     onActivate?: (childId: string) => void;
     onSaveField?: (args: IdentityFieldSaveArgs) => Promise<{ ok: boolean } | void>;
@@ -1206,8 +1210,27 @@ function ChildSummaryRow({
               onSavePhoto,
               onClearPhoto,
           });
+    /**
+     * The child under ATTENTION, marked in the roster.
+     *
+     * Children stays family Settlement chrome — siblings remain visible and the card does not
+     * elevate itself — but when a lens has focused one child the operator must be able to see WHICH.
+     * This reuses the focused member identity the card already resolves from
+     * `child.customer_member_id`; it is not a second child-selection system and it mutates nothing.
+     */
+    const isFocusedChild = Boolean(
+        focusedMemberId && child.customerMemberId && child.customerMemberId === focusedMemberId,
+    );
     return (
-        <div className="alloy-os-children__summary-row" data-children-child={child.id}>
+        <div
+            className={clsx(
+                "alloy-os-children__summary-row",
+                isFocusedChild && "alloy-os-children__summary-row--focused",
+            )}
+            data-children-child={child.id}
+            data-children-focused-child={isFocusedChild ? "true" : undefined}
+            aria-current={isFocusedChild ? "true" : undefined}
+        >
             <IdentityRecordSummary
                 record={{ ...record, badge: child.status }}
                 depth={depth}
