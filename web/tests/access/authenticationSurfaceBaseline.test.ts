@@ -91,18 +91,113 @@ describe("W-30 / IA-R10 — the show/hide baseline", () => {
 const SHARED_FIELD = "components/auth/PasswordField.tsx";
 const PRESENTATION = "lib/auth/passwordFieldPresentation.ts";
 
+const PASSWORD_INPUT = /type=\{?["']password["']\}?/;
+const PASSWORD_INPUT_G = /type=\{?["']password["']\}?/g;
+
+/**
+ * The ONE exemption class `RL-37` admits, and the reason it is not a hole.
+ *
+ * `W-30`'s subject is the **authentication** password: a value a person types to prove they are
+ * themselves, which they may need to see to type correctly, which a policy constrains, and which
+ * the browser should offer to manage. Centralising those three decisions in one component is the
+ * whole of the workstream.
+ *
+ * A write-only provider secret is none of those things. It authenticates *Alloy to a third party*,
+ * not a person to Alloy; the product states it is never shown again once stored; and no password
+ * policy governs a credential another vendor issued. Routing it through `PasswordField` would not
+ * centralise an authentication decision — it would add a reveal control to a stored organizational
+ * credential, which is a different product question with a different answer.
+ *
+ * **The grain is the FIELD, not the file.** An entry names one input by its `data-testid`, and the
+ * lock asserts the file's password-input COUNT equals the number of entries registered against it.
+ * So a new password input added to an already-exempt file is a violation, and the exemption cannot
+ * be widened by editing the file it names. There is no path prefix, no glob and no wildcard —
+ * asserted below, not merely intended.
+ */
+type WriteOnlySecretField = {
+    /** Exact repo-relative path. Asserted to exist and to contain no pattern metacharacter. */
+    readonly file: string;
+    /** The input's `data-testid`. Asserted to be present in that file. */
+    readonly testId: string;
+    /** Why this specific field is not an authentication password. Asserted >= 40 characters. */
+    readonly reason: string;
+};
+
+const WRITE_ONLY_PROVIDER_SECRETS: readonly WriteOnlySecretField[] = [
+    {
+        file: "components/adminV2/settings/organization/CommunicationsChannelDialog.tsx",
+        testId: "communications-dialog-twilio-token",
+        reason:
+            "Twilio Auth Token — the organization's outbound SMS provider credential. It authenticates "
+            + "Alloy to Twilio rather than a person to Alloy, is stored write-only and never rendered "
+            + "back to the operator, and is governed by Twilio's key format rather than PASSWORD_POLICY.",
+    },
+    {
+        file: "components/adminV2/settings/organization/CommunicationsChannelDialog.tsx",
+        testId: "communications-dialog-resend-key",
+        reason:
+            "Resend API key — the organization's outbound email provider credential, on the same terms "
+            + "as the Twilio token above: machine-to-machine, write-only, never shown again once stored, "
+            + "and not subject to the authentication password policy W-30 centralises.",
+    },
+];
+
+type DiscoveredPasswordFile = {
+    readonly file: string;
+    readonly passwordInputs: number;
+    readonly testIds: readonly string[];
+};
+
 /** Every file that renders a password input, found rather than listed. */
-function passwordInputFiles(): string[] {
+function discoverPasswordInputFiles(): DiscoveredPasswordFile[] {
     return [...sourceFilesUnder("app"), ...sourceFilesUnder("components")]
-        .filter((abs) => /type=\{?["']password["']\}?/.test(code(abs)))
-        .map(rel)
-        .sort();
+        .map((abs) => ({ file: rel(abs), src: code(abs) }))
+        .filter(({ src }) => PASSWORD_INPUT.test(src))
+        .map(({ file, src }) => ({
+            file,
+            passwordInputs: (src.match(PASSWORD_INPUT_G) ?? []).length,
+            testIds: [...src.matchAll(/data-testid="([^"]+)"/g)].map((m) => m[1]),
+        }))
+        .sort((a, b) => a.file.localeCompare(b.file));
+}
+
+/**
+ * Pure so the positive controls below can feed it fabricated discoveries. A file survives only by
+ * being the shared component itself, or by having EVERY one of its password inputs registered.
+ */
+function rl37Violations(
+    discovered: readonly DiscoveredPasswordFile[],
+    register: readonly WriteOnlySecretField[],
+): string[] {
+    const out: string[] = [];
+    for (const found of discovered) {
+        if (found.file === SHARED_FIELD || found.file === PRESENTATION) continue;
+        const entries = register.filter((e) => e.file === found.file);
+        if (entries.length === 0) {
+            out.push(
+                `${found.file} — renders a password input and is not a registered write-only provider secret; `
+                + "render @/components/auth/PasswordField instead",
+            );
+            continue;
+        }
+        const absent = entries.filter((e) => !found.testIds.includes(e.testId)).map((e) => e.testId);
+        if (absent.length > 0) {
+            out.push(`${found.file} — registered field(s) no longer present: ${absent.sort().join(", ")}`);
+        }
+        if (found.passwordInputs !== entries.length) {
+            out.push(
+                `${found.file} — ${found.passwordInputs} password input(s) but ${entries.length} registered; `
+                + "a new input is not covered by an existing exemption",
+            );
+        }
+    }
+    return out.sort();
 }
 
 describe("W-30 / RL-37 — one component owns every password field", () => {
-    it("no bare type=\"password\" outside the shared component's presentation module", () => {
+    it("no bare type=\"password\" outside the shared component or a registered write-only secret", () => {
         expect(
-            passwordInputFiles().filter((f) => f !== SHARED_FIELD && f !== PRESENTATION),
+            rl37Violations(discoverPasswordInputFiles(), WRITE_ONLY_PROVIDER_SECRETS),
             "render @/components/auth/PasswordField — a second password input is a second set of "
                 + "show/hide, autocomplete and policy decisions, which is what RL-37 exists to prevent",
         ).toEqual([]);
@@ -132,6 +227,84 @@ describe("W-30 / RL-37 — one component owns every password field", () => {
         expect(usingShared).toEqual(["app/login/page.tsx", "app/reset-password/page.tsx"]);
         const fields = code(join(webRoot, "app/reset-password/page.tsx")).match(/<PasswordField\b/g) ?? [];
         expect(fields).toHaveLength(2);
+    });
+
+    /* ------------------------------------- the exemption register cannot rot or widen */
+
+    it("names exact files, never a prefix, glob or wildcard", () => {
+        for (const entry of WRITE_ONLY_PROVIDER_SECRETS) {
+            expect(entry.file, `${entry.file} contains a pattern metacharacter`).not.toMatch(/[*?[\]{}]/);
+            expect(entry.file, `${entry.file} is a directory prefix, not a file`).toMatch(/\.tsx?$/);
+            expect(existsSync(join(webRoot, entry.file)), `${entry.file} does not exist`).toBe(true);
+        }
+    });
+
+    it("states a semantic reason per field, and never exempts the shared component itself", () => {
+        for (const entry of WRITE_ONLY_PROVIDER_SECRETS) {
+            expect(entry.reason.length, `${entry.testId} reason is too short to be a reason`)
+                .toBeGreaterThanOrEqual(40);
+            expect([SHARED_FIELD, PRESENTATION]).not.toContain(entry.file);
+        }
+        const ids = WRITE_ONLY_PROVIDER_SECRETS.map((e) => `${e.file}#${e.testId}`);
+        expect(new Set(ids).size, "duplicate entry — one field, one exemption").toBe(ids.length);
+    });
+
+    it("every registered field is still on the surface it claims", () => {
+        // A stale exemption is a hole that outlives the input it was written for.
+        for (const entry of WRITE_ONLY_PROVIDER_SECRETS) {
+            const src = code(join(webRoot, entry.file));
+            expect(src, `${entry.testId} is registered but absent from ${entry.file}`)
+                .toContain(`data-testid="${entry.testId}"`);
+        }
+    });
+
+    /* ------------------------------------------------ positive controls on the filter */
+
+    it("still convicts an unregistered file that renders a password input", () => {
+        expect(
+            rl37Violations(
+                [{ file: "components/some/NewThing.tsx", passwordInputs: 1, testIds: ["x"] }],
+                WRITE_ONLY_PROVIDER_SECRETS,
+            ),
+        ).toHaveLength(1);
+    });
+
+    it("convicts a NEW password input added to an already-exempt file", () => {
+        // The exemption is per field. Editing the exempt file must not widen it.
+        const exempt = WRITE_ONLY_PROVIDER_SECRETS[0].file;
+        const registered = WRITE_ONLY_PROVIDER_SECRETS.filter((e) => e.file === exempt);
+        const violations = rl37Violations(
+            [{
+                file: exempt,
+                passwordInputs: registered.length + 1,
+                testIds: [...registered.map((e) => e.testId), "communications-dialog-something-new"],
+            }],
+            WRITE_ONLY_PROVIDER_SECRETS,
+        );
+        expect(violations).toHaveLength(1);
+        expect(violations[0]).toContain("not covered by an existing exemption");
+    });
+
+    it("convicts a registered field that has disappeared from its file", () => {
+        const exempt = WRITE_ONLY_PROVIDER_SECRETS[0];
+        const violations = rl37Violations(
+            [{ file: exempt.file, passwordInputs: 0, testIds: [] }],
+            [exempt],
+        );
+        expect(violations.join(" ")).toContain("no longer present");
+    });
+
+    it("does not exempt a different file that happens to reuse an exempt testId", () => {
+        expect(
+            rl37Violations(
+                [{
+                    file: "components/other/Copycat.tsx",
+                    passwordInputs: 1,
+                    testIds: [WRITE_ONLY_PROVIDER_SECRETS[0].testId],
+                }],
+                WRITE_ONLY_PROVIDER_SECRETS,
+            ),
+        ).toHaveLength(1);
     });
 });
 
