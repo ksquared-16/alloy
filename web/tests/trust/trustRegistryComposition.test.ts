@@ -483,12 +483,14 @@ describe("the production composition root", () => {
             "capability.attention_suggestion_enrichment",
             // Trust adoption Phase 1.1 — the first capability to adopt the platform.
             "capability.processing_source_classification",
+            "capability.participant_conversation_interpretation",
             // Trust adoption Phase 1.4 — registered but DORMANT.
             "capability.processing_identity_subject_resolution",
         ]);
         expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.id)).toEqual([...TRUST_REGISTRY.composition_order]);
         expect(TRUST_CONTRIBUTION_MANIFEST.map((c) => c.owner)).toEqual([
             "platform",
+            "capability",
             "capability",
             "capability",
             "capability",
@@ -510,6 +512,9 @@ describe("the production composition root", () => {
             // Phase 2.8 Gate C. Same capability, same manifest position.
             "attention_suggestion_enrichment_provider_backed",
             "processing_source_classification",
+            // V1.1 participant conversational interpretation. Provider-backed ONLY: the
+            // deterministic interpreter never leaves the process, so it needs no governed class.
+            "participant_conversation_interpretation_provider_backed",
             "processing_identity_subject_resolution",
         ];
         expect(TRUST_REGISTRY.listDecisionClassKeys()).toEqual(expected);

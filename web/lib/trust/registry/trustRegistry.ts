@@ -27,6 +27,7 @@
  */
 
 import { ATTENTION_SUGGESTION_ENRICHMENT_CONTRIBUTION } from "@/lib/trust/capabilities/attentionSuggestionEnrichment/contribution";
+import { PARTICIPANT_CONVERSATION_INTERPRETATION_CONTRIBUTION } from "@/lib/trust/capabilities/participantConversationInterpretation/contribution";
 import { PROCESSING_SOURCE_CLASSIFICATION_CONTRIBUTION } from "@/lib/trust/capabilities/processingSourceClassification/contribution";
 import { PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CONTRIBUTION } from "@/lib/trust/capabilities/processingIdentitySubjectResolution/contribution";
 import { PLATFORM_PRIVACY_POLICY_CONTRIBUTION } from "@/lib/trust/platform/platformPrivacyPolicies";
@@ -43,6 +44,7 @@ export const TRUST_CONTRIBUTION_MANIFEST: readonly TrustContribution[] = Object.
     // ---- capabilities ------------------------------------------------------
     ATTENTION_SUGGESTION_ENRICHMENT_CONTRIBUTION,
     PROCESSING_SOURCE_CLASSIFICATION_CONTRIBUTION,
+    PARTICIPANT_CONVERSATION_INTERPRETATION_CONTRIBUTION,
     // Trust adoption Phase 1.4 — registered but DORMANT: no production caller.
     PROCESSING_IDENTITY_SUBJECT_RESOLUTION_CONTRIBUTION,
 ]);

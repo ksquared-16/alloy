@@ -17,6 +17,15 @@ export const AI_ALLOWED_FEATURES = [
     "task_assist_draft",
     /** Workflow Assist Cards 4–5 — deterministic workflow draft proposals (no LLM). @see docs/sprints/archive/05_2026/workflow_assist_v1.md */
     "workflow_assist_draft",
+    /**
+     * Participant Runtime V1.1 — governed interpretation of a participant's conversational response
+     * to the CURRENT Enrollment turn.
+     *
+     * Its own feature rather than folded into an existing one, because it is the only feature whose
+     * subject is a PARTICIPANT rather than an operator: an org may reasonably want draft enrichment
+     * for staff and no model anywhere near a parent's words. Enrollment stays completable either way.
+     */
+    "participant_conversation_interpretation",
 ] as const;
 
 export type AiAllowedFeature = (typeof AI_ALLOWED_FEATURES)[number];
