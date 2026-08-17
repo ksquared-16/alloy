@@ -37,6 +37,12 @@
 # unreadable candidate fails closed to `unresolved`; an invalid value is refused and
 # mutates nothing.
 #
+# B2 added `participantProviderAuthorization` — the org-level provider gate. It asserts the
+# canonical AI-policy owner (`org_settings.metadata.ai_policy`) is the table actually queried,
+# not merely that a denial happened: the gate fails closed, so reading the WRONG table and
+# "the feature was never granted" produced identical behaviour and the defect stayed invisible
+# for a whole slice. Outcome-only controls would not have caught it.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -82,4 +88,5 @@ jobs:
             tests/lifecycle/participantEnrollmentRuntime.test.ts \
             tests/lifecycle/participantConversationAdmission.test.ts \
             tests/lifecycle/participantGovernedInterpretation.test.ts \
-            tests/lifecycle/participantConversationSurface.test.ts
+            tests/lifecycle/participantConversationSurface.test.ts \
+            tests/lifecycle/participantProviderAuthorization.test.ts
