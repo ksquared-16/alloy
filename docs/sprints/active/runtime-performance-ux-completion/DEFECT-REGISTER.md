@@ -1011,3 +1011,48 @@ Assignment placement); the N-fetch performance question (does avatar identity tr
 existing child projection, or does each placement resolve independently); failure/fallback; and
 replace/remove invalidation. The next session should start by listing which projections call
 `resolveProfilePhotosForActor` — that single answer determines most of the rest.
+
+### R-019 · Phase 3B — the avatar projection matrix (COMPLETE)
+
+**Durable truth:** `persons.metadata.profile_photo_document_id` — a DOCUMENT reference. Signed URLs
+are never persisted back to person metadata.
+
+**One resolver, one injector.** `resolveIdentityPhotoUrl` is the single read adapter;
+`lib/documents/projectPersonProfilePhotos.ts` is the single server-side injector, minting
+actor-scoped URLs through `resolveProfilePhotosForActor` and writing `resolved_photo_url` onto
+person-keyed rows.
+
+| Surface / read model | Identity available | Canonical resolver | Server projection injects | Verdict |
+|---|---|---|---|---|
+| Child-grain Queue row | member + person | `resolveIdentityPhotoUrlFromRaw` (`buildChildGrainQueueRowContext:475`) | `QueueService` → `projectResolvedProfilePhotosOntoInquiryChildrenRows`; queue route supplies the actor | wired |
+| Children card | member + person | `resolveChildPhotoUrlFromRaw` → same adapter (`buildChildrenCardEvidence:402`) | `opportunityEntityRecord` → `projectResolvedProfilePhotosOntoRows` | wired |
+| Household contacts | person | `resolveIdentityPhotoUrlFromRaw` (5 call sites) | same opportunity projection | wired |
+| Assignment roster | person | `resolveIdentityPhotoUrlFromMetadata` | `buildAssignmentRosterReadModel` calls `resolveProfilePhotosForActor` directly | wired |
+| Person profile photo doc | person | `resolveIdentityPhotoUrlFromMetadata` | n/a — resolution helper | wired |
+
+**No surface resolves avatars independently, and there is no second avatar store.** The
+architecture the mission asked for already exists: durable document reference → shared server
+resolver → `photo_url`/`resolved_photo_url` in the read model → shared presentation. **No N+1
+avatar metadata path was found** — every injector is batched over a row set, not per component.
+
+**Current Firefly state — initials are CORRECT, not a defect.** Measured on both Waitlist children:
+zero `<img>` elements in the queue rows or the Children card, and the provisioning answer contains
+**no `resolved_photo_url` at all** (`hasResolved: false`; the only photo-ish keys are the
+`showAvatar` / `useProfilePhotos` display options). Neither Lennon nor Wrigley has an avatar, so
+every placement correctly degrades to initials.
+
+**Consequence for the remaining phases.** The reported "uploads, then disappears" is therefore
+**not reproducible from current data** — it needs a real upload first. That upload is a durable
+write to Firefly (creates a document and sets `persons.metadata.profile_photo_document_id`), and
+because these children start with NO avatar, restoring means removing the photo AND not leaving the
+test document behind.
+
+**3C–3G NOT started, deliberately.** Beginning an upload without the budget to finish the
+restore in the same pass risks leaving test imagery in Firefly, which the mission explicitly
+forbids. The next session should start there, with restore scripted before the upload runs.
+
+**Personless children — still open, and NOT to be solved by a second avatar owner.**
+`savePersonChildPhoto` requires `personId` and 400s without it, while `customer_members.person_id`
+is nullable and the durable child model insists a child may exist with no person row. Whether any
+current Firefly/production flow actually produces an avatar-capable personless child is unproven —
+resolve that before treating it as a gap. **PRODUCT / DATA MODEL DECISION** if it is real.
