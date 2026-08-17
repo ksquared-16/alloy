@@ -336,7 +336,7 @@ describe("provider failure matrix — no mutation, fallback intact, evidence tru
         } as never);
 
         expect(timedOut.ok).toBe(false);
-        if (!timedOut.ok) return;
+        if (timedOut.ok) return;
         expect(timedOut.detail).toContain("did not produce a result");
         // The slow-but-eventually-fine call above must not have leaked a success anywhere.
         expect(outcome.ok).toBe(true);
@@ -356,7 +356,7 @@ describe("provider failure matrix — no mutation, fallback intact, evidence tru
         } as never);
 
         expect(outcome.ok).toBe(false);
-        if (!outcome.ok) return;
+        if (outcome.ok) return;
         expect(outcome.detail).toContain("No governed reasoning provider is configured");
     });
 
@@ -368,7 +368,7 @@ describe("provider failure matrix — no mutation, fallback intact, evidence tru
         } as never);
 
         expect(outcome.ok).toBe(false);
-        if (!outcome.ok) return;
+        if (outcome.ok) return;
         expect(outcome.detail).toContain("governed Eligible Reasoning Input");
     });
 
