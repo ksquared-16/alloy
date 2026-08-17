@@ -23,6 +23,8 @@ import {
     type FamilyGuidedPlan,
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
+import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
+import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     IntakeFrame,
     IntakeCard,
@@ -130,6 +132,15 @@ export function FormEmbedClient({
     >({});
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    /**
+     * The Enrollment objective for this token, when there is one.
+     *
+     * Null for an ordinary form link and for a packet predating the D-95 process anchor — the
+     * endpoint answers `NO_ENROLLMENT_JOURNEY` for both — so every existing participant experience
+     * renders exactly as before. Fetched after paint and never blocking: a failure here must not
+     * keep a parent from their forms.
+     */
+    const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(null);
     const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
@@ -460,6 +471,25 @@ export function FormEmbedClient({
         );
     }
 
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`,
+                );
+                if (!res.ok) return;
+                const json = (await res.json()) as { ok?: boolean; data?: ParticipantObjectiveWire };
+                if (!cancelled && json?.ok && json.data) setEnrollmentObjective(json.data);
+            } catch {
+                /* An ordinary form link, or a transient failure. Either way the packet flow stands. */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [token]);
+
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
     const guided = packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
@@ -525,6 +555,25 @@ export function FormEmbedClient({
             previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             contentClassName={clsx(submitting && "pointer-events-none opacity-90")}
         >
+            {/*
+              * V1.2 — the conversational Enrollment turn, ABOVE the packet flow.
+              *
+              * Rendered only when this token resolves an Enrollment journey; `enrollmentObjective`
+              * stays null for an ordinary form link and for a packet predating the D-95 anchor, so
+              * every existing participant experience is byte-identical.
+              *
+              * When the turn becomes artifact work the card says so and the packet flow below is
+              * where the parent continues — conversation handles shared facts, Forms stay
+              * authoritative for review, signatures and acknowledgments.
+              */}
+            {enrollmentObjective ? (
+                <div className="mb-6">
+                    <EnrollmentConversationCard
+                        token={token}
+                        initialObjective={enrollmentObjective}
+                    />
+                </div>
+            ) : null}
             {familyMode && famStep ? (
                 <div key={`fam-${famIdx}`} className="parent-intake-step-in">
                     <IntakeProgress phaseLabel={famPhase} stepIndex={famIdx} total={familySteps.length} />
