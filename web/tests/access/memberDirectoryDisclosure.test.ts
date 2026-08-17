@@ -89,7 +89,15 @@ type Caller = {
     permissionKeys: string[];
 };
 
-const ORG_ADMIN: Caller = { label: "org admin", portalEligible: true, roleKeys: ["admin"], permissionKeys: [] };
+// W-13/AD-22: an org admin is described by the grant it holds, not by the role string. The literal
+// no longer satisfies `canManageUsersAndRoles`, and every org admin holds this key (`20260505120100`,
+// `seed_default_rbac`, `20260811120000`).
+const ORG_ADMIN: Caller = {
+    label: "org admin",
+    portalEligible: true,
+    roleKeys: ["admin"],
+    permissionKeys: ["settings.users_roles"],
+};
 const GRANT_HOLDER: Caller = {
     label: "granted, not admin",
     portalEligible: true,

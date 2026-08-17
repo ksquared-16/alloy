@@ -25,7 +25,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
     canManageUsersAndRoles,
+    canReadUsersAndRolesCatalog,
     SETTINGS_USERS_ROLES_PERMISSION,
+    SETTINGS_USERS_ROLES_READ_PERMISSION,
 } from "@/lib/admin/canManageUsersAndRoles";
 import {
     ACCESS_SURFACE_DECLARATIONS,
@@ -87,6 +89,29 @@ function principal(over: Partial<Principal> & { userId: string }): Principal {
         allowedSiteLocationIds: null,
         ...over,
     };
+}
+
+/**
+ * An org `admin` **as the grant table actually describes one** — holding `settings.users_roles`.
+ *
+ * Until W-13/AD-22 these fixtures were `roleKeys: ["admin"]` with an EMPTY `permissionKeys`, and they
+ * passed. That is worth stating plainly, because it means this matrix was certifying the fifth
+ * authority layer rather than catching it: `canManageUsersAndRoles` opened with
+ * `if (roleKeys.includes("admin")) return true`, so five of the eleven fixtures were admitted by a
+ * string in application code and no capability was ever read. A matrix whose administrator holds no
+ * capability cannot notice that the capability stopped being enforced.
+ *
+ * The grant is not invented to make the test pass. `20260505120100` backfills `admin ->
+ * settings.users_roles` for every org, `seed_default_rbac` enumerates it for new orgs, and
+ * `20260811120000` re-asserts it for every `role_definitions` row. The fixture now says what the
+ * database says.
+ */
+function adminPrincipal(over: Partial<Principal> & { userId: string }): Principal {
+    return principal({
+        roleKeys: ["admin"],
+        permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+        ...over,
+    });
 }
 
 /** The status the Access routes actually return for this principal. */
@@ -152,7 +177,7 @@ const FIXTURES: Fixture[] = [
     {
         id: "F1",
         persona: "org-wide administrator",
-        caller: principal({ userId: "u-admin", roleKeys: ["admin"] }),
+        caller: adminPrincipal({ userId: "u-admin" }),
         admitted: true,
         subject: {
             roleKeys: ["admin"],
@@ -251,7 +276,7 @@ const FIXTURES: Fixture[] = [
     {
         id: "F5",
         persona: "user with multiple roles",
-        caller: principal({ userId: "u-multirole", roleKeys: ["admin", "regional_lead"] }),
+        caller: adminPrincipal({ userId: "u-multirole", roleKeys: ["admin", "regional_lead"] }),
         admitted: true,
         subject: {
             roleKeys: ["admin", "regional_lead"],
@@ -273,7 +298,7 @@ const FIXTURES: Fixture[] = [
     {
         id: "F6",
         persona: "invited / not-yet-admitted user",
-        caller: principal({ userId: "u-admin2", roleKeys: ["admin"] }),
+        caller: adminPrincipal({ userId: "u-admin2" }),
         admitted: true,
         subject: {
             roleKeys: ["ops"],
@@ -296,7 +321,7 @@ const FIXTURES: Fixture[] = [
     {
         id: "F7",
         persona: "inactive / deactivated membership",
-        caller: principal({ userId: "u-admin3", roleKeys: ["admin"] }),
+        caller: adminPrincipal({ userId: "u-admin3" }),
         admitted: true,
         subject: {
             roleKeys: ["ops"],
@@ -320,7 +345,7 @@ const FIXTURES: Fixture[] = [
     {
         id: "F8",
         persona: "user with no access profile",
-        caller: principal({ userId: "u-admin4", roleKeys: ["admin"] }),
+        caller: adminPrincipal({ userId: "u-admin4" }),
         admitted: true,
         subject: {
             roleKeys: ["ops"],
@@ -599,6 +624,62 @@ describe("The layers are separable — capability is not scope", () => {
     it("an unauthenticated caller is refused before capability is consulted", async () => {
         expect(await routeStatus({ ok: false, status: 401 })).toBe(401);
         expect(await routeStatus({ ok: false, status: 403 })).toBe(403);
+    });
+});
+
+describe("W-13 / AD-22 — the chain is four layers, and the role literal is not one of them", () => {
+    /**
+     * `04-authentication-model.md §3.6` records `portalEligible` and the `admin` literal as a FIFTH
+     * layer: authority stored in no table, scoped to no org, belonging to neither branch, and
+     * sufficient on its own at a capability gate. These are the assertions that keep it removed.
+     */
+    it("the admin role_key alone no longer satisfies the capability gate", async () => {
+        const literalOnly = principal({ userId: "u-admin-ungranted", roleKeys: ["admin"] });
+
+        expect(canManageUsersAndRoles(literalOnly)).toBe(false);
+        expect(await routeStatus(literalOnly)).toBe(403);
+    });
+
+    it("every role key is inert at the gate — only the grant admits", async () => {
+        for (const roleKeys of [["admin"], ["ops"], ["admin", "ops"], ["regional_lead"], []]) {
+            const ungranted = principal({ userId: `u-${roleKeys.join("-") || "none"}`, roleKeys });
+            expect(canManageUsersAndRoles(ungranted)).toBe(false);
+        }
+
+        // …and the grant admits with no role key at all, which is the same statement from the other
+        // side: the predicate reads L4 (the resolved set) and nothing above it.
+        const grantOnly = principal({
+            userId: "u-granted-no-role",
+            roleKeys: [],
+            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+        });
+        expect(canManageUsersAndRoles(grantOnly)).toBe(true);
+        expect(await routeStatus(grantOnly)).toBe(200);
+    });
+
+    it("the catalog READ admits the weaker key without conferring management", () => {
+        // `ops` reads the RBAC catalog today by being portal-eligible. After the collapse it reads by
+        // holding `settings.users_roles.read` — and that key must NOT let it mutate, or a migration
+        // written to preserve access would have widened it.
+        const opsReader = principal({
+            userId: "u-ops-reader",
+            roleKeys: ["ops"],
+            permissionKeys: [SETTINGS_USERS_ROLES_READ_PERMISSION],
+        });
+
+        expect(canReadUsersAndRolesCatalog(opsReader)).toBe(true);
+        expect(canManageUsersAndRoles(opsReader)).toBe(false);
+
+        // A manager can always read.
+        const manager = principal({
+            userId: "u-manager",
+            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+        });
+        expect(canReadUsersAndRolesCatalog(manager)).toBe(true);
+
+        // And neither key is conjured from a role string.
+        const plainOps = principal({ userId: "u-plain-ops-2", roleKeys: ["ops"] });
+        expect(canReadUsersAndRolesCatalog(plainOps)).toBe(false);
     });
 });
 

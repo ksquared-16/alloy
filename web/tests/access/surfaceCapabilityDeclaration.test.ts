@@ -271,9 +271,13 @@ describe("W-49 · L8 — navigation filters from the declaration", () => {
     });
 
     it("derives held capabilities by calling the routes' own gate, not a second predicate", () => {
-        expect(heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [] })).toEqual(
-            new Set([SETTINGS_USERS_ROLES_PERMISSION])
-        );
+        expect(
+            heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION] })
+        ).toEqual(new Set([SETTINGS_USERS_ROLES_PERMISSION]));
+        // W-13/AD-22 — and the role string alone derives nothing. Before the fifth layer was removed
+        // this case read `roleKeys: ["admin"], permissionKeys: []` and expected the capability, which
+        // is the surface agreeing with a literal rather than with the catalog.
+        expect(heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [] })).toEqual(new Set());
         expect(
             heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION] })
         ).toEqual(new Set([SETTINGS_USERS_ROLES_PERMISSION]));
@@ -364,7 +368,10 @@ describe("W-49 · AE-4 — the surface is not reachable by URL without the capab
      * redirects — navigation promising what admission refuses, one level out from the chapter tabs.
      */
     it("filters the /organization Access card from the same declaration", () => {
-        const admin = heldAccessCapabilities({ roleKeys: ["admin"], permissionKeys: [] });
+        const admin = heldAccessCapabilities({
+            roleKeys: ["admin"],
+            permissionKeys: [SETTINGS_USERS_ROLES_PERMISSION],
+        });
         const opsOnly = heldAccessCapabilities({ roleKeys: ["ops"], permissionKeys: [] });
         expect(isOrganizationDomainVisible("access", admin)).toBe(true);
         expect(isOrganizationDomainVisible("access", opsOnly)).toBe(false);

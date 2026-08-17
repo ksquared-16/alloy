@@ -42,7 +42,6 @@
         "ops.workflows.read",
         "ops.workflows.write",
         "scheduling.read",
-        "scheduling.write",
-        "settings.users_roles.read"
+        "scheduling.write"
     ]
 }
