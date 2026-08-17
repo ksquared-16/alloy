@@ -112,6 +112,22 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     const [dayHealth, setDayHealth] = useState<RosterHealthCounts | null>(null);
 
     /**
+     * ── THE ROSTER'S TEMPORAL ANCHOR — WORKSPACE STATE, BESIDE SITE ──
+     *
+     * `rosterDay` is the day the operator deliberately moved to; `rosterServerToday` is the org's
+     * own service date, resolved once by the day surface. The effective day is `rosterDay ??
+     * rosterServerToday`.
+     *
+     * These live HERE, and not in `RosterSurface`, for the same reason `siteId` does: the workspace
+     * unmounts the Roster surface whenever the operator visits Attendance, Staff or Children, so any
+     * anchor held below this line silently resets on the way back. Range and lens were already
+     * workspace state; the day was the one piece of Roster context that was not, and Roster →
+     * Attendance → Roster is precisely the trip that exposed it.
+     */
+    const [rosterDay, setRosterDay] = useState<string | null>(null);
+    const [rosterServerToday, setRosterServerToday] = useState<string | null>(null);
+
+    /**
      * Positions and the org's SERVICE DATE, for the durable population sections.
      *
      * One bootstrap for the workspace, not one per section. Records loaded its own, and two
@@ -591,11 +607,19 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         onSelectWeek={onSelectWeek}
                         weekChangePending={weekChangePending}
                         onDayHealth={setDayHealth}
+                        day={rosterDay}
+                        onDayChange={setRosterDay}
+                        serverToday={rosterServerToday}
+                        onServerToday={setRosterServerToday}
                         onOpenAttendance={(roomLocationId) => {
                             // Expectation → actuality, inside one workspace. Site is
                             // already shared; the room travels; the date does not need
                             // to, because Roster only offers this on the org's today
                             // and Attendance resolves that date itself.
+                            //
+                            // The Roster's own anchor is workspace state, so it survives
+                            // this switch rather than unmounting with the surface — the
+                            // operator returns to the day they left, not to an empty one.
                             setAttendanceRoomId(roomLocationId);
                             setSection("attendance");
                         }}
@@ -667,9 +691,9 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         siteName={siteName}
                         initialRoomId={attendanceRoomId}
                         onBackToRoster={(roomLocationId) => {
-                            // The reciprocal move. Site is workspace state and the day
-                            // roster resolves the org's today itself, so returning only
-                            // has to carry the room.
+                            // The reciprocal move. Site, range, lens AND the day anchor are
+                            // all workspace state, so returning only has to carry the room
+                            // — everything else was never lost to begin with.
                             if (roomLocationId) setFocusRoomId(roomLocationId);
                             setRange("day");
                             setSection("roster");

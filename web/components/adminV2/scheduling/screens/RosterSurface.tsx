@@ -18,7 +18,7 @@
  * This is the EXPECTATION layer. Nothing here reads or writes attendance.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
 import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
@@ -92,6 +92,26 @@ export type RosterSurfaceProps = {
     assignmentBulk?: AssignmentRosterBulkHandlers;
     /** Day-range health counts, for the workspace control band. */
     onDayHealth?: Parameters<typeof DailyRoster>[0]["onHealth"];
+
+    /**
+     * ── THE TEMPORAL ANCHOR, OWNED ABOVE ──
+     *
+     * `day` and `serverToday` used to be this component's own state. That was already one lift up
+     * from the day view, and it was enough to survive Day → Week → Day, because this surface stays
+     * mounted across a range change.
+     *
+     * It was NOT enough for Roster → Attendance → Roster. The workspace swaps this whole surface out
+     * for Attendance, so the anchor unmounted and the operator returned to an empty date — the same
+     * defect one altitude up, and invisible to the range-switch proof that motivated the first lift.
+     *
+     * Temporal state therefore belongs beside SITE, which the workspace already owns for exactly
+     * this reason. Two values passed as props, not an Operations state bag: range and lens are
+     * already workspace state, and bagging them would only hide where each value actually lives.
+     */
+    day: string | null;
+    onDayChange: (day: string | null) => void;
+    serverToday: string | null;
+    onServerToday: (today: string | null) => void;
 };
 
 /*
@@ -129,16 +149,11 @@ export default function RosterSurface({
     onOpenStaffSubject,
     assignmentBulk,
     onDayHealth,
+    day,
+    onDayChange: setDay,
+    serverToday,
+    onServerToday: setServerToday,
 }: RosterSurfaceProps) {
-    /**
-     * The day lives HERE, not inside the day view, so a Day → Week → Day trip comes
-     * back to the day the operator was looking at. Owned by the day view, the state
-     * unmounted on every range switch and the surface silently reset to today —
-     * "stable context" is the whole reason Roster is one surface instead of two tabs.
-     */
-    const [day, setDay] = useState<string | null>(null);
-    const [serverToday, setServerToday] = useState<string | null>(null);
-
     /**
      * Switching range keeps the operator at the same moment in time, in both
      * directions: Day → Week shows the week containing that day, and Week → Day

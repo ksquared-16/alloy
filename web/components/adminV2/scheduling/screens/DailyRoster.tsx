@@ -145,21 +145,56 @@ function shiftYmd(ymd: string, days: number): string {
     return dt.toISOString().slice(0, 10);
 }
 
-/** Operator sentence for the room's staffing state — meaning before numbers. */
-function staffingSentence(cell: RosterCell): string {
-    if (cell.staffingSufficiency === "idle") {
-        return "No one expected in this room today";
+/*
+ * ── THE DAY'S HEADLINE IS THE ACTUAL STATE ──
+ *
+ * Day Roster answers "what is happening now"; Week Roster answers "what is planned". The card's
+ * dominant cues — accent, header chip, sentence — therefore read `actualStaffingSufficiency`, and
+ * the PLANNED verdict stays visible below as the comparison half it has always been.
+ *
+ * This was a real defect, not a preference. A room could be planned-sufficient and actually short at
+ * the same instant — precisely the state the actual verdict exists to expose — and the card led with
+ * a green "Staffed" chip, a green accent and "1 of 1 staff scheduled" while its own comparison block
+ * said Short two lines down. The strongest signal on the surface contradicted the one the operator
+ * had to act on. No staffing math changed here; only which of the two canonical verdicts is loudest.
+ */
+
+/** Operator sentence for the room's ACTUAL operating state — meaning before numbers. */
+function actualStateSentence(cell: RosterCell): string {
+    if (cell.actualStaffingSufficiency === "idle") {
+        /*
+         * Two different silences, and they must not sound alike. "Nobody was expected" is a room
+         * that is closed today; "nobody has arrived" is a room whose day has not started. Both are
+         * neutral — never green — but only one of them is still waiting on somebody.
+         */
+        return cell.expectedChildCount > 0
+            ? `No one here yet — ${cell.expectedChildCount} expected`
+            : "No one expected in this room today";
     }
-    if (cell.staffingSufficiency === "unknown") {
+    if (cell.actualStaffingSufficiency === "unknown") {
         return "Staffing requirement not configured for this room";
     }
-    if (cell.staffingSufficiency === "short") {
-        const gap = (cell.requiredStaff ?? 0) - cell.scheduledStaffCount;
-        return `Short ${gap} staff`;
+    if (cell.actualStaffingSufficiency === "short") {
+        const gap = (cell.actualRequiredStaff ?? 0) - cell.actualStaffPresent;
+        return `Short ${gap} staff right now`;
     }
     // The badge already says "Staffed"; repeating it here spent the sentence line
-    // on nothing. Say the numbers the verdict was reached from.
-    return `${cell.scheduledStaffCount} of ${cell.requiredStaff ?? cell.scheduledStaffCount} staff scheduled`;
+    // on nothing. Say the numbers the verdict was reached from — the PRESENT ones.
+    return `${cell.actualStaffPresent} of ${cell.actualRequiredStaff ?? cell.actualStaffPresent} staff here now`;
+}
+
+/**
+ * Verdict label for the ACTUAL half.
+ *
+ * The shared `staffingVerdictLabel` renders `idle` as "No one expected", which is true of a plan and
+ * false of an observation: a room with two children expected and none arrived is not a room where no
+ * one was expected. Same neutral tone, honest sentence.
+ */
+function actualVerdictLabel(cell: RosterCell): string {
+    if (cell.actualStaffingSufficiency === "idle" && cell.expectedChildCount > 0) {
+        return "No one here yet";
+    }
+    return staffingVerdictLabel(cell.actualStaffingSufficiency);
 }
 
 /**
@@ -342,7 +377,10 @@ export default function DailyRoster({
         if (!model) return [];
         return [...model.cells].sort(
             compareByAttentionThenName((c) => ({
-                verdict: c.staffingSufficiency,
+                // Attention order follows the SAME verdict the card leads with. Sorting a Day by
+                // planned state would float a room that is fine right now above the one that is
+                // actually short — the exact inversion the headline change exists to remove.
+                verdict: c.actualStaffingSufficiency,
                 operating: isOperating(c),
                 name: c.roomName,
             }))
@@ -413,9 +451,17 @@ export default function DailyRoster({
                                    verdict and the state lived only in a small badge.
                                    On a surface whose job is state legibility, the
                                    strongest colour cue has to be the state. */
-                                className={`${WS_PANEL_SURFACE} p-3 ${accentForState(cell.staffingSufficiency)}`}
+                                className={`${WS_PANEL_SURFACE} p-3 ${accentForState(cell.actualStaffingSufficiency)}`}
                                 data-roster-room={cell.roomLocationId}
-                                data-roster-state={cell.staffingSufficiency}
+                                /*
+                                 * The room's DOMINANT state on a Day is its actual one. Published
+                                 * under the same attribute the surface has always used, because the
+                                 * question "what state is this room in" has one answer per range —
+                                 * and the planned verdict remains separately readable below as
+                                 * `data-roster-planned-state`, so nothing became unassertable.
+                                 */
+                                data-roster-state={cell.actualStaffingSufficiency}
+                                data-roster-headline-basis="actual"
                             >
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
@@ -423,14 +469,14 @@ export default function DailyRoster({
                                             {cell.roomName}
                                         </h3>
                                         <p className="mt-0.5 text-[12px] text-alloy-midnight/60">
-                                            {staffingSentence(cell)}
+                                            {actualStateSentence(cell)}
                                         </p>
                                     </div>
                                     <span
-                                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.staffingSufficiency)}`}
-                                        data-roster-room-state={cell.staffingSufficiency}
+                                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.actualStaffingSufficiency)}`}
+                                        data-roster-room-state={cell.actualStaffingSufficiency}
                                     >
-                                        {staffingVerdictLabel(cell.staffingSufficiency)}
+                                        {actualVerdictLabel(cell)}
                                     </span>
                                 </div>
 
@@ -530,7 +576,7 @@ export default function DailyRoster({
                                                 className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-semibold ${staffingChipChrome(cell.actualStaffingSufficiency)}`}
                                                 data-roster-actual-state={cell.actualStaffingSufficiency}
                                             >
-                                                {staffingVerdictLabel(cell.actualStaffingSufficiency)}
+                                                {actualVerdictLabel(cell)}
                                             </span>
                                         </div>
                                     </div>

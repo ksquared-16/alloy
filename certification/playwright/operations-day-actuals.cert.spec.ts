@@ -79,6 +79,11 @@ async function readRoom(page: Page, roomId: string) {
         requiredActual: await attr("data-roster-required-actual"),
         planned: await el.locator("[data-roster-planned-state]").getAttribute("data-roster-planned-state"),
         actual: await el.locator("[data-roster-actual-state]").getAttribute("data-roster-actual-state"),
+        /** The card's DOMINANT state — accent, header chip, sentence. */
+        headline: await el.getAttribute("data-roster-state"),
+        headlineChip: await el.locator("[data-roster-room-state]").first().getAttribute("data-roster-room-state"),
+        headlineLabel: (await el.locator("[data-roster-room-state]").first().innerText()).trim(),
+        accent: (await el.getAttribute("class")) ?? "",
     };
 }
 
@@ -119,6 +124,35 @@ test("1–10 — the operating room shows expected beside actual, and both verdi
     await expect(card.locator('[data-roster-planned-state="sufficient"]')).toBeVisible();
     await expect(card.locator('[data-roster-actual-state="short"]')).toBeVisible();
 
+    /*
+     * ── THE HEADLINE FOLLOWS THE ACTUAL STATE ──
+     *
+     * This is the visual half of the same claim, and it is asserted separately because the previous
+     * build satisfied every assertion above while leading with a green "Staffed" chip, a green accent
+     * and "1 of 1 staff scheduled". The comparison block was right and the card was still lying: on a
+     * DAY the operator reads the accent and the chip first, and those said the room was fine.
+     *
+     * Day headline = actual. Week headline = planned. Planned stays visible as the comparison half —
+     * asserted below, so this can never be satisfied by simply deleting the plan.
+     */
+    expect(r.headline, "the card's dominant state is the ACTUAL one").toBe("short");
+    expect(r.headlineChip, "the header chip is the actual verdict").toBe("short");
+    expect(r.headlineLabel, "and it says so in words").toBe("Short");
+    expect(r.headlineLabel, "a room that is actually short never reads Staffed").not.toBe("Staffed");
+    // The left accent is the attention token, not the met-state token.
+    expect(r.accent, "accent is attention, not pine").toContain("border-l-alloy-gold-dark");
+    expect(r.accent).not.toContain("border-l-[#00A283]");
+
+    // …and the PLAN is still legible beside it, in words, not only in an attribute.
+    await expect(card.getByText("Planned staffing")).toBeVisible();
+    await expect(card.getByText("Actual staffing")).toBeVisible();
+    const plannedChip = card.locator("[data-roster-planned-state]");
+    const actualChip = card.locator("[data-roster-actual-state]");
+    await expect(plannedChip, "Planned still says Sufficient").toHaveText("Staffed");
+    await expect(actualChip, "Actual says Short").toHaveText("Short");
+    // The sentence under the room name speaks the present tense, not the schedule.
+    await expect(card).toContainText("right now");
+
     await page.screenshot({ path: path.join(SHOTS, "1-operating-room.png"), fullPage: true });
     await card.screenshot({ path: path.join(SHOTS, "2-planned-sufficient-actual-short.png") });
 });
@@ -152,6 +186,10 @@ test("12+13 — idle and unknown-ratio rooms stay neutral, never green", async (
     expect(idle.childrenHere).toBe("0");
     expect(idle.planned, "an empty room is not Sufficient").not.toBe("sufficient");
     expect(idle.actual, "an empty room is not Sufficient").not.toBe("sufficient");
+    // The headline moved to actual — the neutral states must have moved with it, not gone green.
+    expect(idle.headline, "an empty room's dominant state stays neutral").not.toBe("sufficient");
+    expect(idle.headlineLabel).not.toBe("Staffed");
+    expect(idle.accent, "no pine accent on a room nobody is in").not.toContain("border-l-[#00A283]");
     await page.locator(room(IDLE)).screenshot({ path: path.join(SHOTS, "4-idle-room.png") });
 
     /*
@@ -166,6 +204,11 @@ test("12+13 — idle and unknown-ratio rooms stay neutral, never green", async (
     expect(unknown.requiredPlanned, "no ratio resolves").toBe("unknown");
     expect(unknown.planned).toBe("unknown");
     expect(unknown.actual, "an unresolvable room is never Sufficient").not.toBe("sufficient");
+    expect(unknown.headline, "and neither is its headline").not.toBe("sufficient");
+    expect(unknown.headlineLabel).not.toBe("Staffed");
+    expect(unknown.accent, "no pine accent where the platform cannot tell").not.toContain(
+        "border-l-[#00A283]",
+    );
     await page.locator(room(UNKNOWN)).screenshot({ path: path.join(SHOTS, "5-unknown-room.png") });
 });
 
@@ -182,6 +225,11 @@ test("14 — Open Attendance carries site, service date and room, and stays in O
         .not.toBe("");
     const dateBefore = await page.locator('[data-roster-date="true"]').inputValue();
     const urlBefore = page.url();
+    // The full context the operator is standing in, captured before the trip.
+    const rangeBefore = await page.locator("[data-roster-range]").getAttribute("data-roster-range");
+    const lensBefore = await page.locator("[data-roster-lens]").getAttribute("data-roster-lens");
+    expect(rangeBefore).toBe("day");
+    expect(lensBefore).toBe("rooms");
 
     const open = page.locator(room(OPERATING)).locator(`[data-roster-open-attendance="${OPERATING}"]`);
     await expect(open, "Attendance handoff is offered on today's roster").toBeVisible({ timeout: SETTLE });
@@ -197,14 +245,39 @@ test("14 — Open Attendance carries site, service date and room, and stays in O
     // The SAME room, and Attendance renders the same canonical facts it was handed.
     await expect(page.locator(`[data-attendance-room="${OPERATING}"]`)).toBeVisible({ timeout: SETTLE });
 
-    // Back to Roster — the day the operator was on is still the day they return to.
+    /*
+     * ── AND BACK. THE WHOLE CONTEXT, NOT JUST THE ROUTE ──
+     *
+     * This is the leg that failed. The date was correct on the way in and empty on the way back,
+     * because `day` and `serverToday` lived inside `RosterSurface` — which the workspace unmounts to
+     * show Attendance. Site, range and lens survived only because they were already workspace state;
+     * the day was the one piece of Roster context that was not.
+     *
+     * Asserted as EQUALITY to the value captured before the trip, not merely as "non-empty": a
+     * remount that silently resolves the org's today would look identical on a day when the operator
+     * happened to be on today, and would lose them on any other day.
+     */
     await page.locator('[data-workspace-mode-sections="roster"] button', { hasText: "Roster" })
         .first()
         .click();
     await expect(page.locator(SHELL)).toHaveAttribute("data-operations-section", "roster", {
         timeout: SETTLE,
     });
-    expect(await page.locator('[data-roster-date="true"]').inputValue()).toBe(dateBefore);
+
+    await expect(page.locator(SHELL), "site survived the round trip").toContainText(SITE_NAME);
+    expect(await page.locator('[data-roster-date="true"]').inputValue(), "service date").toBe(dateBefore);
+    expect(
+        await page.locator("[data-roster-range]").getAttribute("data-roster-range"),
+        "Roster range",
+    ).toBe(rangeBefore);
+    expect(
+        await page.locator("[data-roster-lens]").getAttribute("data-roster-lens"),
+        "Roster lens",
+    ).toBe(lensBefore);
+    // Room context — the room handed to Attendance is the room Roster comes back focused on.
+    await expect(page.locator(room(OPERATING)), "room context").toBeVisible({ timeout: SETTLE });
+    // …and the card is still telling the truth it told before the trip.
+    await expect(page.locator(room(OPERATING))).toHaveAttribute("data-roster-state", "short");
 
     await page.screenshot({ path: path.join(SHOTS, "6-attendance-handoff.png"), fullPage: true });
 });
