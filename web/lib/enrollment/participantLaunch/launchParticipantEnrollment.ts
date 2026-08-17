@@ -149,16 +149,25 @@ export async function launchParticipantEnrollment(
         };
     }
 
+    // A row read from the database types `process_key` as nullable; the configuration subject does
+    // not. Normalized once here rather than coerced at each use, so the two shapes cannot drift.
+    const processKey = (instance.process_key ?? "").trim() || ENROLLMENT_PROCESS_KEY;
+
     const configuration = await resolveProcessInstanceConfiguration({
         supabase,
         orgId,
-        processInstance: instance,
+        processInstance: {
+            id: instance.id,
+            process_key: processKey,
+            stage_key: instance.stage_key,
+            business_process_revision_id: instance.business_process_revision_id,
+        },
     });
 
     // The process the journey belongs to, read from the pinned payload. `activeLifecycleProcess` is
     // the fallback only for a payload that names no matching key.
     const process =
-        configuration.builder?.processes.find((p) => p.key === (instance.process_key ?? ENROLLMENT_PROCESS_KEY)) ??
+        configuration.builder?.processes.find((p) => p.key === processKey) ??
         activeLifecycleProcess(configuration.builder ?? { version: 1, active_process_id: null, processes: [] });
 
     const stageKey = resolveEffectiveStageKey({
@@ -179,14 +188,14 @@ export async function launchParticipantEnrollment(
 
     const plan = planRequirementDerivedPacket({
         builder: configuration.builder,
-        processKey: instance.process_key ?? ENROLLMENT_PROCESS_KEY,
+        processKey,
         stageKey,
     });
 
     const packet = await ensureRequirementDerivedPacketDefinition(supabase, {
         orgId,
         revisionId,
-        processKey: instance.process_key ?? ENROLLMENT_PROCESS_KEY,
+        processKey,
         plan,
     });
     if (!packet.ok) return { ok: false, refusal: packet.refusal };
