@@ -5205,6 +5205,16 @@ html[data-alloy-os-runtime-split="true"]
   justify-content: flex-start;
 }
 .alloy-os-children__summary-row:hover { background: color-mix(in srgb, var(--alloy-os-accent, #2f6f4f) 5%, #fff); }
+/* The child under Attention, when a lens has focused one. Siblings stay fully legible — this marks
+   which child the panel is about, it does not demote the rest to secondary. A left rule plus a
+   faint wash is the card language already used for selection elsewhere in the runtime. */
+.alloy-os-children__summary-row--focused {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  box-shadow: inset 2px 0 0 0 var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-children__summary-row--focused:hover {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+}
 .alloy-os-children__summary-main { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
 .alloy-os-children__summary-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .alloy-os-children__summary-meta { display: flex; flex-direction: column; gap: 2px; }

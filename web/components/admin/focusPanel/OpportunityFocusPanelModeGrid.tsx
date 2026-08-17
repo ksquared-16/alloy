@@ -174,8 +174,20 @@ export default function OpportunityFocusPanelModeGrid({
     // always used, so the enrollment panel is identical rather than merely equivalent.
     const isCaseGrain = subjectGrain === "opportunity";
     const publishedDoc = usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain);
+    /**
+     * Does a settled family opportunity stand behind this subject?
+     *
+     * The durable path opens a record subject-first — no Opportunity, no lens — so nothing
+     * family-scoped is authoritative and its composition stays sparse. Every other source reached
+     * this panel through an operational lens, where `overlayChildMissionOntoSettledFocusModel`
+     * states the contract: Record of Attention = the focused child, Record of Truth / Settlement =
+     * the family opportunity. That is a CONTEXT distinction, not a grain one — expressing it as a
+     * grain would have re-litigated `cardAppliesToGrain` and leaked family cards onto every child.
+     */
+    const familySettlement = model.source !== "durable_subject";
     const activeDoc = isSummary
-        ? (isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefaultDocForGrain(subjectGrain)
+        ? (isCaseGrain ? publishedDoc : null)
+          ?? focusPanelSummaryDefaultDocForGrain(subjectGrain, { familySettlement })
         : null;
     const instanceMap = useMemo(
         () => (activeDoc ? deriveFocusPanelInstanceMap(activeDoc) : new Map()),

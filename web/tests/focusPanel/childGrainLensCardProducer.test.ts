@@ -144,7 +144,16 @@ describe("the grain guard is not weakened", () => {
     it("still consults the publication for the CASE grain only", () => {
         expect(grid).toContain('const isCaseGrain = subjectGrain === "opportunity"');
         expect(grid).toContain("usePublishedFocusPanelSummaryDoc(isSummary && isCaseGrain)");
-        expect(grid).toContain("(isCaseGrain ? publishedDoc : null) ?? focusPanelSummaryDefaultDocForGrain(subjectGrain)");
+        // The published doc reaches `activeDoc` only through the case-grain ternary; a non-case
+        // subject falls through to its own code-owned composition.
+        expect(grid).toMatch(/\(isCaseGrain \? publishedDoc : null\)\s*\n?\s*\?\?\s*focusPanelSummaryDefaultDocForGrain\(subjectGrain/);
+    });
+
+    it("decides family settlement from the subject's PATH, never from its grain", () => {
+        // Expressing this as a grain would re-litigate `cardAppliesToGrain` and leak family cards
+        // onto every child, including a durable standalone one.
+        expect(grid).toContain('const familySettlement = model.source !== "durable_subject"');
+        expect(grid).toContain("focusPanelSummaryDefaultDocForGrain(subjectGrain, { familySettlement })");
     });
 
     it("keeps a non-case subject on its own code-owned composition", () => {
