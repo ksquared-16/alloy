@@ -55,7 +55,15 @@ const TATUM_CASE = "00000000-0000-4000-8000-400000000963";
 const CONFIGURED_LABEL_DOB = "Birthday";
 const CONFIGURED_LABEL_FIRST = "Given name";
 
-const ROSTER_NAV = '[data-adminv2-sidebar-modal-nav="roster"]';
+/**
+ * The rail entry is OPERATIONS — Roster is one of its four WORK sections.
+ *
+ * The workspace attributes this file asserts on are unchanged: `OperationsWorkspaceShell` publishes
+ * the Roster-era `data-adminv2-roster-workspace` / `data-roster-section` as aliases beside its
+ * canonical pair, precisely so a re-parent did not force every prior acceptance to be rewritten.
+ * Only the DOOR moved.
+ */
+const ROSTER_NAV = '[data-adminv2-sidebar-modal-nav="operations"]';
 const ROSTER_SHELL = '[data-adminv2-roster-workspace="true"]';
 const HOST_BODY = '[data-durable-record-host-body="true"]';
 const OVERLAY = '[data-durable-record-overlay="true"]';

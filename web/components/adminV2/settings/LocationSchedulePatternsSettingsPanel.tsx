@@ -2,9 +2,12 @@
 
 /**
  * Canonical `schedule_patterns` · shared with Locations — this panel lists/creates/updates
- * rows through the same `/api/admin/schedule-patterns` endpoints that the Scheduling
- * Studio → Patterns editor uses (`SchedulingWorkspace.tsx`'s `onMutatePattern`). There is
+ * rows through the same `/api/admin/schedule-patterns` endpoints that
+ * `Operations → Studio → Patterns` uses (`OperationsStudio.tsx`'s `onMutatePattern`). There is
  * no separate Locations-only pattern store; Studio is simply another client of this API.
+ *
+ * The editor moved hosts when Assignments was absorbed into Operations; the API, the table and this
+ * panel did not. That is the whole point of naming the endpoint here rather than the screen.
  */
 
 import { useCallback, useEffect, useState } from "react";

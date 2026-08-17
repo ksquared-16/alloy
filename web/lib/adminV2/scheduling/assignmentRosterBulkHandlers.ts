@@ -3,9 +3,9 @@
 /**
  * THE ASSIGNMENT LEDGER'S BULK COMMANDS — one wiring, for every host that offers them.
  *
- * These four handlers lived inline in `SchedulingWorkspace`, which was correct while the Assignments
- * workspace was the only place an operator could select several assignments. Roster now offers the
- * same lens, and two copies of "how do I archive a set of assignments" would be two places to fix
+ * These four handlers lived inline in the Assignments workspace, which was correct while it was the
+ * only place an operator could select several assignments. That workspace is retired and
+ * `Operations → Work → Roster` now offers the same lens, and two copies of "how do I archive a set of assignments" would be two places to fix
  * the day a payload changes — with no error to tell you the second one drifted.
  *
  * ── IT EXECUTES NOTHING OF ITS OWN ──
