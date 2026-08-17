@@ -26,7 +26,7 @@
  * indistinguishable, and telling them apart here would leak the record's existence.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
@@ -89,6 +89,8 @@ export default function DurableRecordSurface({
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
     const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
+    /** Whether the initial context has been chosen for THIS record. See `load` below. */
+    const selectionInitializedRef = useRef(false);
 
     const load = useCallback(async () => {
         setState({ status: "loading" });
@@ -144,6 +146,22 @@ export default function DurableRecordSurface({
              * Adding chooser furniture in front of a single option is the kind of ceremony this
              * convergence is removing.
              */
+            /*
+             * INITIALIZE ONCE PER RECORD — never re-apply.
+             *
+             * `load` runs again whenever its identity changes, and re-applying the initial selection
+             * from inside it silently DISCARDS the operator's choice. That is what made exactly the
+             * two fetching contexts fail: Enrollment resolves a published doc and Household composes
+             * the family, both of which re-render this subtree, and the re-applied initial selection
+             * reset the key to null — so the card unmounted and the chooser reappeared. Child and
+             * Schedule render straight from props, never re-ran it, and looked fine.
+             *
+             * A choice the operator has already made is not an initial condition, so it is guarded
+             * by a ref rather than by the effect's dependencies — dependencies say WHEN to reload
+             * data, and this is not data.
+             */
+            if (selectionInitializedRef.current) return;
+            selectionInitializedRef.current = true;
             const preferred = resolveInitialContextOption(contexts, contextKey);
             setSelectedContextKey(
                 presentation === "full"
@@ -163,6 +181,8 @@ export default function DurableRecordSurface({
     }, [subjectType, subjectId, contextKey, presentation]);
 
     useEffect(() => {
+        // A different subject is a different record, and its initial context must be chosen afresh.
+        selectionInitializedRef.current = false;
         void load();
     }, [load]);
 
