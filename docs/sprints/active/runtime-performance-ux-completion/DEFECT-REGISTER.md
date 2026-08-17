@@ -956,3 +956,58 @@ Batch 1 converted Settings / organization calculations (13 → 0 across 3 files)
 counts CALL SITES, not affected surfaces** — Wave 3A converted seven surfaces via the shared
 adapter and moved the number by zero. The ledger test fails if any enforced file
 introduces a raw `<select>`, if a listed file grows, or if a converted file is not lowered.
+
+---
+
+## R-019 · Child avatar persistence — canonical owner established (3A), certification NOT done
+
+**Status: audit complete, fix/certification NOT started.** Recorded so the remaining work starts
+from evidence rather than repeating the trace.
+
+### The canonical owner
+
+| Question | Answer |
+|---|---|
+| What entity owns the avatar? | **The `person`** — `POST /api/admin/persons/{personId}/profile-photo` with `{ document_id }` |
+| Where is the durable reference? | A **document reference**, not a URL. The person row points at a document |
+| Is the URL durable or signed? | **Signed / temporary** |
+| Is there one resolution path? | **Yes** — `resolveIdentityPhotoUrl` calls itself "THE single profile-image compatibility adapter. Every photo-reading path in the platform funnels through here" |
+
+Its contract, verbatim in order: canonical document reference → resolved **server-side**, injected as
+`photo_url` by the batch resolver (`resolveProfilePhotosForActor`); then an approved stable external
+URL; otherwise **null → initials**. And explicitly: *"An INTERNAL SIGNED URL is never returned …
+returning one would hand a caller a stale bearer credential that outlives the authorization it was
+minted under."*
+
+### Why an avatar can appear and then disappear
+
+The upload response's signed `photoUrl` is shown immediately through two client-side channels — an
+in-memory `Map` (`childAvatarSessionPreview`, whose own docblock says it lasts "until
+`_inquiry_children` evidence catches up with `photo_url`") and `resolved_photo_url` merged into
+client truth. Neither survives a reload.
+
+After reload the image exists **only** if the server-side batch resolver injected a fresh
+`photo_url` into that surface's projection. Where it did not, `resolveIdentityPhotoUrl` correctly
+drops the stale signed URL and the avatar degrades to initials. So the reported symptom is not a
+storage failure — the durable document reference is intact — it is a **projection-coverage**
+question: which read models run `resolveProfilePhotosForActor`.
+
+That is also the likely reason the Waitlist queue renders `W` / `L` initials while the Children card
+can show an image: different projections, one resolver.
+
+### A hard constraint worth stating
+
+`savePersonChildPhoto` **requires `personId`** and returns 400 without it. But
+`customer_members.person_id` is nullable, and the durable child model is explicit that "a child can
+exist with **no `persons` row at all** and must still be identifiable". **A child without a person
+row therefore cannot hold an avatar today.** Whether that is intended is a product decision, not a
+bug to patch silently.
+
+### What remains (3B–3F)
+
+Not started, and deliberately not guessed at: upload round-trip persistence across reload / Work-View
+switch / Work-Unit exit; propagation coverage per surface (queue row, Children card, Records, any
+Assignment placement); the N-fetch performance question (does avatar identity travel with the
+existing child projection, or does each placement resolve independently); failure/fallback; and
+replace/remove invalidation. The next session should start by listing which projections call
+`resolveProfilePhotosForActor` — that single answer determines most of the rest.
