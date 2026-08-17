@@ -660,6 +660,9 @@
     "app/api/admin/communications/bindings/route.ts": {
       "GET": {
         "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
       }
     },
     "app/api/admin/communications/conversations/[id]/assign/route.ts": {
@@ -729,6 +732,14 @@
         "status": "pending"
       },
       "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/provider-connection/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "POST": {
         "status": "pending"
       }
     },
@@ -955,7 +966,17 @@
         "status": "pending"
       }
     },
+    "app/api/admin/debug/certification/inbound-email/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
     "app/api/admin/debug/context/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/debug/inbound-ingress/route.ts": {
       "GET": {
         "status": "pending"
       }
@@ -1134,6 +1155,19 @@
       }
     },
     "app/api/admin/documents/upload/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/durable-record/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/employment-positions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
       "POST": {
         "status": "pending"
       }
@@ -2042,6 +2076,11 @@
         "status": "pending"
       }
     },
+    "app/api/admin/operator-focus/resolve/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
     "app/api/admin/opportunities/[id]/activity-signal/route.ts": {
       "GET": {
         "status": "pending"
@@ -2775,6 +2814,31 @@
         "status": "pending"
       }
     },
+    "app/api/admin/records/bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/child-identity/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/children/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/households/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/schedule-patterns/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
     "app/api/admin/related/[entity]/[id]/route.ts": {
       "GET": {
         "status": "pending"
@@ -2787,6 +2851,11 @@
     },
     "app/api/admin/relationship-actions/execute/route.ts": {
       "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/roster/route.ts": {
+      "GET": {
         "status": "pending"
       }
     },
@@ -2932,6 +3001,16 @@
         "status": "declared",
         "capability": "settings.users_roles",
         "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/staff/directory/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/staff/resolve-person/route.ts": {
+      "POST": {
+        "status": "pending"
       }
     },
     "app/api/admin/status-definitions/[id]/route.ts": {
@@ -3385,6 +3464,16 @@
         "reason": "The custom fields flagged for public booking, for the ALLOY_PUBLIC_ORG_ID org. Same shape as booking-config: the org comes from environment rather than the request, and the projection is restricted to fields explicitly marked public. Service-role access with an org filter the caller cannot influence."
       }
     },
+    "app/api/public/forms/[token]/enrollment-objective/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-turn/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
     "app/api/public/forms/[token]/resolve/route.ts": {
       "GET": {
         "status": "none",
@@ -3428,6 +3517,11 @@
       "POST": {
         "status": "none",
         "reason": "The family cancelling the booking their path token names. Token-scoped admission, as cancel-intent; no org membership exists to carry a capability."
+      }
+    },
+    "app/api/public/tour-booking/[token]/confirm-attendance/route.ts": {
+      "POST": {
+        "status": "pending"
       }
     },
     "app/api/public/tour-booking/[token]/confirm/route.ts": {
