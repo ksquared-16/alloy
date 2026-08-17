@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
-import { mergeRoleDefinitionsWithDefaults, type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
+import { type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
 
-/** GET: list roles for org. Portal (admin/ops) or Users & Roles managers. */
+/**
+ * GET: list roles for org. Portal (admin/ops) or Users & Roles managers.
+ *
+ * **W-61.** Every role in this response has a persisted `role_definitions` row. The response
+ * used to be passed through `mergeRoleDefinitionsWithDefaults`, which fabricated any missing
+ * member of a hard-coded four-role constant; see `@/lib/admin/defaultRoleDefinitions` for why
+ * that was removed and why removing it changes no org's role list. The database orders by
+ * `is_system` then `role_label`, which is the order the merge used to impose.
+ */
 export async function GET() {
     const auth = await requirePortalOrUsersRolesManageAuth();
     if (!auth.ok) return auth.response;
@@ -21,14 +29,13 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rolesRaw: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
+    const roles: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
         role_key: (r as { role_key: string }).role_key,
         role_label: (r as { role_label: string }).role_label,
         is_system: (r as { is_system: boolean }).is_system,
         is_active: (r as { is_active: boolean }).is_active,
         created_at: (r as { created_at?: string }).created_at ?? null,
     }));
-    const roles = mergeRoleDefinitionsWithDefaults(rolesRaw);
 
     return NextResponse.json({ roles });
 }
