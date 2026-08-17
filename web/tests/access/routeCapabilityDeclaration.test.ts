@@ -45,7 +45,7 @@ type Declaration =
 type Report = {
     ok: boolean;
     counts: { routes: number; methods: number; declared: number; none: number; pending: number; bound: number };
-    ratchet: { max_pending: number | null };
+    ratchet: { max_pending: number | null; inherited: number; owned_pending: number };
     violations: { route: string; kind: string; detail: string }[];
     bindings: { route: string; method: string; helper: string; capability: string; enforcedIn: string }[];
     onDisk: [string, string[]][];
@@ -59,6 +59,7 @@ const table = JSON.parse(readFileSync(TABLE_PATH, "utf8")) as {
     reviewed: string;
     note: string;
     ratchet: { max_pending: number };
+    inherited?: { frozen: string; handlers: { route: string; method: string }[] };
     routes: Record<string, Record<string, Declaration>>;
 };
 
@@ -140,7 +141,11 @@ describe("W-14 · RL-10 — the declared route capability table", () => {
     });
 
     it("ratchets the pending backlog downward", () => {
-        expect(report.counts.pending).toBeLessThanOrEqual(table.ratchet.max_pending);
+        // The bound is over the backlog this program OWNS. Raw `pending` also counts handlers other
+        // programs introduced while this branch was frozen; those are enumerated in `inherited` and
+        // asserted live, still-exported and still-pending by the suite below. Subtracting an
+        // ENUMERATED list is not slack — a handler is either named by a human or counted here.
+        expect(report.ratchet.owned_pending).toBeLessThanOrEqual(table.ratchet.max_pending);
         const result = checkWith((t) => {
             t.ratchet.max_pending = Math.max(0, t.ratchet.max_pending - 1);
         });
@@ -597,6 +602,111 @@ describe("W-15 sizing — the reader finds a gate that is really there", () => {
             `export async function DELETE() { return Response.json({ deleted: true }); }\n`
         );
         expect(bucketOf(route, "DELETE")).toBe("none");
+    });
+});
+
+/**
+ * The inherited list — growth this program did not cause, admitted only by enumeration.
+ *
+ * `max_pending` is a ONE-WAY ratchet over the Access backlog. A frozen branch rejoining a base that
+ * moved by 459 commits grows the denominator without anyone backsliding, which the ceiling alone
+ * cannot express. Raising it forfeits the ratchet; holding it makes the gate permanently red for
+ * work no Access session performed. So the effective bound is `pending - inherited <= max_pending`,
+ * and every inherited entry must keep earning its place — the tests below are the proof that it does.
+ */
+describe("W-14 · RL-10 — inherited handlers, the enumerated denominator", () => {
+    const inherited = table.inherited?.handlers ?? [];
+
+    it("the ceiling did NOT move; the program-owned backlog is what is bounded", () => {
+        // The whole point of the treatment: 695 before, 695 after.
+        expect(table.ratchet.max_pending).toBe(695);
+        expect(report.ratchet.max_pending).toBe(695);
+        expect(report.ratchet.owned_pending).toBe(report.counts.pending - report.ratchet.inherited);
+        expect(report.ratchet.owned_pending).toBeLessThanOrEqual(695);
+        // And the treatment is doing real work — if inherited were empty this would be red.
+        expect(report.counts.pending).toBeGreaterThan(695);
+    });
+
+    it("every inherited entry names a live, still-exported, still-pending handler", () => {
+        const onDisk = new Map(report.onDisk);
+        expect(inherited.length).toBeGreaterThan(0);
+        for (const { route, method } of inherited) {
+            expect(onDisk.get(route), `${route} is inherited but absent from disk`).toContain(method);
+            expect(table.routes[route]?.[method]?.status, `${route}#${method}`).toBe("pending");
+        }
+        expect(report.ratchet.inherited).toBe(inherited.length);
+    });
+
+    it("an unlisted pending handler still breaks the ratchet", () => {
+        // Drop one entry and it becomes an ordinary pending handler counted against the ceiling.
+        // This is exactly the shape of a NEW route arriving unlisted: 696 owned against 695.
+        const r = checkWith((t) => {
+            t.inherited!.handlers = t.inherited!.handlers.slice(1);
+        });
+        expect(r.ratchet.owned_pending).toBe(696);
+        expect(r.violations.map((v) => v.kind)).toContain("ratchet-pending");
+        expect(r.ok).toBe(false);
+    });
+
+    it("a stale inherited entry fails — a route that no longer exists", () => {
+        const r = checkWith((t) => {
+            t.inherited!.handlers = [...t.inherited!.handlers, { route: "app/api/admin/gone/route.ts", method: "GET" }];
+        });
+        const stale = r.violations.filter((v) => v.kind === "stale-inherited");
+        expect(stale).toHaveLength(1);
+        expect(stale[0].detail).toContain("no such route file");
+    });
+
+    it("a stale inherited entry fails — a method the file no longer exports", () => {
+        const r = checkWith((t) => {
+            t.inherited!.handlers = [...t.inherited!.handlers, { route: inherited[0].route, method: "TRACE" }];
+        });
+        expect(r.violations.filter((v) => v.kind === "stale-inherited")[0]?.detail).toContain("no longer exported");
+    });
+
+    it("an inherited handler that becomes declared or none FAILS until it is removed", () => {
+        const { route, method } = inherited[0];
+        // Classified but still listed — the allowance would otherwise outlive the backlog item.
+        const stillListed = checkWith((t) => {
+            t.routes[route][method] = {
+                status: "none",
+                reason: "A reason long enough to satisfy the substantive-reason rule for a none declaration.",
+            } as Declaration;
+        });
+        const classified = stillListed.violations.filter((v) => v.kind === "classified-inherited");
+        expect(classified).toHaveLength(1);
+        expect(classified[0].detail).toContain("remove it from inherited");
+
+        // Removed alongside the classification — the ceiling absorbs the gain, no raise needed.
+        const removed = checkWith((t) => {
+            t.routes[route][method] = {
+                status: "none",
+                reason: "A reason long enough to satisfy the substantive-reason rule for a none declaration.",
+            } as Declaration;
+            t.inherited!.handlers = t.inherited!.handlers.filter(
+                (h) => !(h.route === route && h.method === method),
+            );
+        });
+        expect(removed.ratchet.max_pending).toBe(695);
+        expect(removed.ratchet.owned_pending).toBe(695);
+        expect(removed.violations).toEqual([]);
+    });
+
+    it("refuses a duplicate entry, so one handler cannot buy two units of slack", () => {
+        const r = checkWith((t) => {
+            t.inherited!.handlers = [...t.inherited!.handlers, { ...t.inherited!.handlers[0] }];
+        });
+        expect(r.violations.map((v) => v.kind)).toContain("duplicate-inherited");
+    });
+
+    it("asserts nothing about authorization — every inherited handler is still backlog", () => {
+        // The list must never become a quiet exemption. `pending` means unreviewed, and OD-7 governs
+        // the conversion for these exactly as for the other 695.
+        for (const { route, method } of inherited) {
+            const decl = table.routes[route]?.[method] as Declaration & { capability?: unknown };
+            expect(decl.status).toBe("pending");
+            expect(decl.capability ?? null).toBeNull();
+        }
     });
 });
 

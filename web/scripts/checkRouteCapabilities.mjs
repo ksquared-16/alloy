@@ -944,18 +944,74 @@ export function runRouteCapabilityCheck(tablePath = TABLE_PATH) {
         }
     }
 
+    // Handlers this program did not introduce. A frozen branch rejoining a base that moved by 459
+    // commits grows the DENOMINATOR without anyone backsliding on the backlog, which the one-way
+    // ceiling alone cannot express: raising it would forfeit the ratchet, and holding it would make
+    // the gate permanently red for work no Access session performed. So growth is admitted only by
+    // ENUMERATION, at route#method grain, and every entry has to keep earning its place.
+    //
+    // Nothing here weakens a claim. An inherited handler is still `pending` — still W-15 backlog,
+    // still awaiting OD-7 — it is merely not counted against a ceiling that predates it.
+    const inheritedRaw = Array.isArray(table.inherited?.handlers) ? table.inherited.handlers : [];
+    const inheritedSeen = new Set();
+    let inheritedLive = 0;
+    for (const entry of inheritedRaw) {
+        const route = entry?.route;
+        const method = entry?.method;
+        const key = `${route}#${method}`;
+        if (!route || !method) {
+            violations.push({ route: String(route ?? "(inherited)"), kind: "malformed-inherited", detail: `inherited entry needs both route and method: ${JSON.stringify(entry)}` });
+            continue;
+        }
+        if (inheritedSeen.has(key)) {
+            violations.push({ route, kind: "duplicate-inherited", detail: `${method} is listed twice; one handler, one entry` });
+            continue;
+        }
+        inheritedSeen.add(key);
+        // Three ways an entry goes stale, all of them failures until it is removed. This is what
+        // makes the allowance self-expiring rather than a permanent widening.
+        if (!onDisk.has(route)) {
+            violations.push({ route, kind: "stale-inherited", detail: `${method} is inherited but no such route file exists; remove it from inherited` });
+            continue;
+        }
+        if (!onDisk.get(route).includes(method)) {
+            violations.push({ route, kind: "stale-inherited", detail: `${method} is inherited but no longer exported; remove it from inherited` });
+            continue;
+        }
+        const status = declared[route]?.[method]?.status;
+        if (status !== "pending") {
+            violations.push({
+                route,
+                kind: "classified-inherited",
+                detail: `${method} is inherited but now declares ${JSON.stringify(status ?? "nothing")}; a classified handler is no longer backlog — remove it from inherited so the ceiling absorbs the gain`,
+            });
+            continue;
+        }
+        inheritedLive += 1;
+    }
+    counts.inherited = inheritedLive;
+
     // The pending backlog is ratcheted so W-15 can only make progress. Without this, the table
-    // passes forever by declaring every new route `pending`.
+    // passes forever by declaring every new route `pending`. The bound is over the backlog this
+    // program OWNS: total pending, less the enumerated handlers other programs introduced.
     const ceiling = table.ratchet?.max_pending;
-    if (typeof ceiling === "number" && counts.pending > ceiling) {
+    const owned = counts.pending - inheritedLive;
+    if (typeof ceiling === "number" && owned > ceiling) {
         violations.push({
             route: "(ratchet)",
             kind: "ratchet-pending",
-            detail: `${counts.pending} pending declarations exceeds the ceiling of ${ceiling}; lower the ceiling as routes are reviewed, never raise it`,
+            detail: `${counts.pending} pending less ${inheritedLive} inherited = ${owned} program-owned, which exceeds the ceiling of ${ceiling}; lower the ceiling as routes are reviewed, never raise it — a handler another program introduced belongs in inherited, named`,
         });
     }
 
-    return { ok: violations.length === 0, counts, ratchet: { max_pending: ceiling ?? null }, violations, bindings, onDisk: [...onDisk] };
+    return {
+        ok: violations.length === 0,
+        counts,
+        ratchet: { max_pending: ceiling ?? null, inherited: inheritedLive, owned_pending: owned },
+        violations,
+        bindings,
+        onDisk: [...onDisk],
+    };
 }
 
 /** Route → methods → suggested capability evidence. Authoring aid only. */
@@ -1035,7 +1091,9 @@ if (invokedDirectly) {
         console.log(`  declared (requires a capability)   ${String(c.declared).padStart(4)}`);
         console.log(`    ↳ bound to source (3 joins)      ${String(c.bound).padStart(4)}`);
         console.log(`  none (reviewed, reason recorded)   ${String(c.none).padStart(4)}`);
-        console.log(`  pending (W-15 backlog)             ${String(c.pending).padStart(4)}   ceiling ${report.ratchet.max_pending}`);
+        console.log(`  pending (W-15 backlog)             ${String(c.pending).padStart(4)}`);
+        console.log(`    ↳ inherited from other programs  ${String(report.ratchet.inherited).padStart(4)}   enumerated, not counted against the ceiling`);
+        console.log(`    ↳ program-owned backlog          ${String(report.ratchet.owned_pending).padStart(4)}   ceiling ${report.ratchet.max_pending}`);
 
         if (process.argv.includes("--pending")) {
             console.log(`\n--- pending ---`);

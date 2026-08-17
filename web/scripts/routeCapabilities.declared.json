@@ -1,8 +1,135 @@
 {
-  "reviewed": "2026-08-10 — W-14 initial issuance (assignment asg_0232d36df9694c)",
+  "reviewed": "2026-08-10 \u2014 W-14 initial issuance (assignment asg_0232d36df9694c)",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
     "max_pending": 695
+  },
+  "inherited": {
+    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog.",
+    "frozen": "2026-08-17",
+    "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal eligibility, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
+    "handlers": [
+      {
+        "route": "app/api/admin/communications/bindings/route.ts",
+        "method": "POST",
+        "introduced_by": "b15146314",
+        "program": "fix(comms): an organization's own connection must read as connected"
+      },
+      {
+        "route": "app/api/admin/communications/provider-connection/route.ts",
+        "method": "DELETE",
+        "introduced_by": "33e3d2c9e",
+        "program": "feat(comms): Resend self-service \u2014 connect your own account, verified before connected"
+      },
+      {
+        "route": "app/api/admin/communications/provider-connection/route.ts",
+        "method": "POST",
+        "introduced_by": "33e3d2c9e",
+        "program": "feat(comms): Resend self-service \u2014 connect your own account, verified before connected"
+      },
+      {
+        "route": "app/api/admin/debug/certification/inbound-email/route.ts",
+        "method": "POST",
+        "introduced_by": "02b4e0d3f",
+        "program": "feat(comms): certify the email operator loop, and converge the last speculative inbound code"
+      },
+      {
+        "route": "app/api/admin/debug/inbound-ingress/route.ts",
+        "method": "GET",
+        "introduced_by": "186823355",
+        "program": "feat(comms): support can find an unattributable message without reading it"
+      },
+      {
+        "route": "app/api/admin/durable-record/route.ts",
+        "method": "GET",
+        "introduced_by": "7bb31bcd8",
+        "program": "feat(attention): durable record destination \u2014 client intent, surface, browser-certified"
+      },
+      {
+        "route": "app/api/admin/employment-positions/route.ts",
+        "method": "GET",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/admin/employment-positions/route.ts",
+        "method": "POST",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/admin/operator-focus/resolve/route.ts",
+        "method": "POST",
+        "introduced_by": "1f899b686",
+        "program": "feat(runtime): one adapter turns an operator record gesture into an attention movement"
+      },
+      {
+        "route": "app/api/admin/records/bootstrap/route.ts",
+        "method": "GET",
+        "introduced_by": "27f4a8181",
+        "program": "feat(records): Records Workspace V1 \u2014 Staff + Children durable record management"
+      },
+      {
+        "route": "app/api/admin/records/child-identity/route.ts",
+        "method": "POST",
+        "introduced_by": "9f763d014",
+        "program": "feat(records): Records -> Children -> Add child"
+      },
+      {
+        "route": "app/api/admin/records/children/route.ts",
+        "method": "GET",
+        "introduced_by": "27f4a8181",
+        "program": "feat(records): Records Workspace V1 \u2014 Staff + Children durable record management"
+      },
+      {
+        "route": "app/api/admin/records/households/route.ts",
+        "method": "GET",
+        "introduced_by": "9f763d014",
+        "program": "feat(records): Records -> Children -> Add child"
+      },
+      {
+        "route": "app/api/admin/records/schedule-patterns/route.ts",
+        "method": "GET",
+        "introduced_by": "ac5c286b3",
+        "program": "feat(records): offer the two enrollment paths, gated on the child's real state"
+      },
+      {
+        "route": "app/api/admin/roster/route.ts",
+        "method": "GET",
+        "introduced_by": "f894ddec6",
+        "program": "feat(roster): Combined Daily Roster \u2014 children and staff on one room\u00b7date cell"
+      },
+      {
+        "route": "app/api/admin/staff/directory/route.ts",
+        "method": "GET",
+        "introduced_by": "c254e3a9f",
+        "program": "feat(staff): operator-visible Add Staff at /organization/staff"
+      },
+      {
+        "route": "app/api/admin/staff/resolve-person/route.ts",
+        "method": "POST",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/public/forms/[token]/enrollment-objective/route.ts",
+        "method": "GET",
+        "introduced_by": "a98d99f4d",
+        "program": "feat(enrollment): Participant Runtime V1 \u2014 the conversational Enrollment loop"
+      },
+      {
+        "route": "app/api/public/forms/[token]/enrollment-turn/route.ts",
+        "method": "POST",
+        "introduced_by": "a98d99f4d",
+        "program": "feat(enrollment): Participant Runtime V1 \u2014 the conversational Enrollment loop"
+      },
+      {
+        "route": "app/api/public/tour-booking/[token]/confirm-attendance/route.ts",
+        "method": "POST",
+        "introduced_by": "a76b6ece9",
+        "program": "feat(enrollment): finalize Tour E2E \u2014 booking Work View, internal recipients"
+      }
+    ]
   },
   "routes": {
     "app/api/action-links/consume-accept-job/route.ts": {
@@ -26,7 +153,7 @@
     "app/api/action/[token]/consume/route.ts": {
       "POST": {
         "status": "none",
-        "reason": "The token is in the path and is the credential. Same class as action-links, different generation of the same feature — the duplication is real and is IA-8's territory, not a capability question."
+        "reason": "The token is in the path and is the credential. Same class as action-links, different generation of the same feature \u2014 the duplication is real and is IA-8's territory, not a capability question."
       }
     },
     "app/api/action/[token]/route.ts": {
@@ -846,7 +973,7 @@
         "status": "declared",
         "capability": "settings.manage",
         "helper": "canManageProgramPublication",
-        "note": "Was declared as 'canWriteProgramPublication', a function that does not exist anywhere in the repository. The gate itself was real and correct — POST has always called canManageProgramPublication, which requires settings.manage — but the table named an enforcement site a reviewer could not follow. Corrected when the W-15 binding join made the claim checkable."
+        "note": "Was declared as 'canWriteProgramPublication', a function that does not exist anywhere in the repository. The gate itself was real and correct \u2014 POST has always called canManageProgramPublication, which requires settings.manage \u2014 but the table named an enforcement site a reviewer could not follow. Corrected when the W-15 binding join made the claim checkable."
       }
     },
     "app/api/admin/contact-options/route.ts": {
@@ -932,7 +1059,7 @@
     "app/api/admin/customer-person-role-types/[id]/route.ts": {
       "DELETE": {
         "status": "none",
-        "reason": "The handler is an unconditional 405: it takes no parameters, reads no request, touches no client and returns NOT_IMPLEMENTED on every call. There is no action to authorize. This is the state's intended use — 'no gate' as an auditable assertion rather than an absence — and it is reviewable from six lines of source, which is why it is settled here instead of waiting on W-15's product decisions."
+        "reason": "The handler is an unconditional 405: it takes no parameters, reads no request, touches no client and returns NOT_IMPLEMENTED on every call. There is no action to authorize. This is the state's intended use \u2014 'no gate' as an auditable assertion rather than an absence \u2014 and it is reviewable from six lines of source, which is why it is settled here instead of waiting on W-15's product decisions."
       },
       "PATCH": {
         "status": "pending"
@@ -2356,7 +2483,7 @@
         "status": "declared",
         "capability": "documents.read",
         "helper": "assertDocumentAccess",
-        "note": "Recorded, not imposed. This handler already calls the very assertDocumentAccess that documents/[id]/signed-url and vendors/[id]/documents/signed-url both declare as documents.read, and already refuses on decision.outcome !== 'allowed' before the URL is minted. The table was under-reporting: it sat 'pending' while enforcing. Declaring it changes who may call this route by nothing at all, which is what makes it Director-ownable where the rest of W-15 is not. The check runs inside `if (doc)` because that is the only branch that discloses anything — the no-document fall-through returns metadata the person read already carries. POST and DELETE stay pending deliberately: they gate on ctx.role !== 'admin', which is a gate but not a capability gate, and which key replaces a raw role check is W-15's product call."
+        "note": "Recorded, not imposed. This handler already calls the very assertDocumentAccess that documents/[id]/signed-url and vendors/[id]/documents/signed-url both declare as documents.read, and already refuses on decision.outcome !== 'allowed' before the URL is minted. The table was under-reporting: it sat 'pending' while enforcing. Declaring it changes who may call this route by nothing at all, which is what makes it Director-ownable where the rest of W-15 is not. The check runs inside `if (doc)` because that is the only branch that discloses anything \u2014 the no-document fall-through returns metadata the person read already carries. POST and DELETE stay pending deliberately: they gate on ctx.role !== 'admin', which is a gate but not a capability gate, and which key replaces a raw role check is W-15's product call."
       },
       "POST": {
         "status": "pending"
@@ -3173,7 +3300,7 @@
     "app/api/admin/users/route.ts": {
       "GET": {
         "status": "pending",
-        "note": "W-14 FINDING — the method grain found this. POST requires settings.users_roles; GET requires only getAdminContextCached(), i.e. portal admission. A file-grained census counts this file as gated because POST is. Whether roster read should require settings.users_roles is a product decision for W-15, not a worker's — declaring it 'none' here would assert an answer this workstream has no authority to give, so this stays 'pending'. AMENDED: the finding's DISCLOSURE half is closed. GET no longer returns every member's email address to everyone the portal admits — the address is projected against canManageUsersAndRoles (the same predicate the managing routes enforce, read a second time) and a server-computed `label` carries the naming function its consumers actually needed. Admission is deliberately unchanged, so this remains a pending declaration and not a resolved one. See lib/access/memberDirectoryProjection.ts and tests/access/memberDirectoryDisclosure.test.ts."
+        "note": "W-14 FINDING \u2014 the method grain found this. POST requires settings.users_roles; GET requires only getAdminContextCached(), i.e. portal admission. A file-grained census counts this file as gated because POST is. Whether roster read should require settings.users_roles is a product decision for W-15, not a worker's \u2014 declaring it 'none' here would assert an answer this workstream has no authority to give, so this stays 'pending'. AMENDED: the finding's DISCLOSURE half is closed. GET no longer returns every member's email address to everyone the portal admits \u2014 the address is projected against canManageUsersAndRoles (the same predicate the managing routes enforce, read a second time) and a server-computed `label` carries the naming function its consumers actually needed. Admission is deliberately unchanged, so this remains a pending declaration and not a resolved one. See lib/access/memberDirectoryProjection.ts and tests/access/memberDirectoryDisclosure.test.ts."
       },
       "POST": {
         "status": "declared",
@@ -3437,13 +3564,13 @@
     "app/api/build-info/route.ts": {
       "GET": {
         "status": "none",
-        "reason": "Build metadata. Reads no database and no caller — there is nothing tenant-scoped to authorize."
+        "reason": "Build metadata. Reads no database and no caller \u2014 there is nothing tenant-scoped to authorize."
       }
     },
     "app/api/leads/gutters/route.ts": {
       "POST": {
         "status": "none",
-        "reason": "Public inbound lead capture: an anonymous marketing form creates a lead. Unauthenticated by design — the whole purpose is to hear from someone who has no account. RESIDUAL RISK, recorded rather than resolved here: an unauthenticated write with no rate limit is an abuse surface. That is a throttling concern, not an authorization one — there is no principal to authorize — so it does not belong in this table and is not silently closed by this entry."
+        "reason": "Public inbound lead capture: an anonymous marketing form creates a lead. Unauthenticated by design \u2014 the whole purpose is to hear from someone who has no account. RESIDUAL RISK, recorded rather than resolved here: an unauthenticated write with no rate limit is an abuse surface. That is a throttling concern, not an authorization one \u2014 there is no principal to authorize \u2014 so it does not belong in this table and is not silently closed by this entry."
       }
     },
     "app/api/marketing/demo-request/route.ts": {
@@ -3455,7 +3582,7 @@
     "app/api/public/booking-config/route.ts": {
       "GET": {
         "status": "none",
-        "reason": "Renders the public booking form for the single org named by ALLOY_PUBLIC_ORG_ID. The org is taken from environment, never from the request, so a caller cannot steer it at another tenant — which is what would make an unauthenticated read dangerous here. Pricing and catalog data intended for anonymous display."
+        "reason": "Renders the public booking form for the single org named by ALLOY_PUBLIC_ORG_ID. The org is taken from environment, never from the request, so a caller cannot steer it at another tenant \u2014 which is what would make an unauthenticated read dangerous here. Pricing and catalog data intended for anonymous display."
       }
     },
     "app/api/public/field-definitions/route.ts": {
@@ -3483,7 +3610,7 @@
     "app/api/public/forms/[token]/submissions/[submissionId]/route.ts": {
       "GET": {
         "status": "none",
-        "reason": "Public form fill by opaque token: the token in the path is the credential and scopes the submission. The respondent is a family or applicant with no org membership, so there is no principal to hold a capability — requiring one would make the form unfillable by everyone it is for."
+        "reason": "Public form fill by opaque token: the token in the path is the credential and scopes the submission. The respondent is a family or applicant with no org membership, so there is no principal to hold a capability \u2014 requiring one would make the form unfillable by everyone it is for."
       },
       "PATCH": {
         "status": "none",
@@ -3510,7 +3637,7 @@
     "app/api/public/tour-booking/[token]/cancel-intent/route.ts": {
       "POST": {
         "status": "none",
-        "reason": "A prospective family acting on the tour link mailed to them. The path token is the credential and scopes the booking; the family holds no org membership, so there is no capability for them to hold. NOTE — `book` and `slots` on this same surface are deliberately NOT declared here: they classified into other gate-evidence buckets and were never measured as ungated, and declaring a route this session did not examine is the inference this table exists to refuse."
+        "reason": "A prospective family acting on the tour link mailed to them. The path token is the credential and scopes the booking; the family holds no org membership, so there is no capability for them to hold. NOTE \u2014 `book` and `slots` on this same surface are deliberately NOT declared here: they classified into other gate-evidence buckets and were never measured as ungated, and declaring a route this session did not examine is the inference this table exists to refuse."
       }
     },
     "app/api/public/tour-booking/[token]/cancel/route.ts": {
@@ -3568,13 +3695,13 @@
     "app/api/verticals/route.ts": {
       "GET": {
         "status": "none",
-        "reason": "The platform vertical catalog — not tenant data and not org-scoped. Read through the service-role client because the list is platform-level, and there is no caller to scope it to."
+        "reason": "The platform vertical catalog \u2014 not tenant data and not org-scoped. Read through the service-role client because the list is platform-level, and there is no caller to scope it to."
       }
     },
     "app/api/webhooks/resend/route.ts": {
       "POST": {
         "status": "none",
-        "reason": "Provider callback from Resend. Admission is the Svix signature, verified against RESEND_WEBHOOK_SECRET, and the handler FAILS CLOSED — 503 when the secret is unconfigured, 400 when the signature headers are absent. The caller is a delivery provider, not a principal; there is no membership and therefore no capability. The signature is the boundary."
+        "reason": "Provider callback from Resend. Admission is the Svix signature, verified against RESEND_WEBHOOK_SECRET, and the handler FAILS CLOSED \u2014 503 when the secret is unconfigured, 400 when the signature headers are absent. The caller is a delivery provider, not a principal; there is no membership and therefore no capability. The signature is the boundary."
       }
     },
     "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts": {
