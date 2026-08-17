@@ -23,15 +23,26 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import RosterWorkspaceShell, { type RosterSite } from "@/app/adminV2/roster/RosterWorkspaceShell";
+import OperationsWorkspaceShell, {
+    type OperationsSite as RosterSite,
+} from "@/app/adminV2/operations/OperationsWorkspaceShell";
+import OperationsStudio from "@/components/adminV2/operations/OperationsStudio";
 import RosterKpiStrip, { type RosterHealthCounts } from "@/app/adminV2/roster/RosterKpiStrip";
 import {
-    resolveRosterSection,
-    type RosterSection,
-} from "@/app/adminV2/roster/rosterSections";
+    resolveOperationsStudioSection,
+    resolveOperationsWorkSection as resolveRosterSection,
+    type OperationsMode,
+    type OperationsStudioSection,
+    type OperationsWorkSection as RosterSection,
+} from "@/app/adminV2/operations/operationsSections";
 import WorkspaceSurface from "@/components/workspace/WorkspaceSurface";
 import RosterSurface, { type RosterLens } from "@/components/adminV2/scheduling/screens/RosterSurface";
+import { buildAssignmentRosterBulkHandlers } from "@/lib/adminV2/scheduling/assignmentRosterBulkHandlers";
+import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 import AttendanceWorkspace from "@/components/adminV2/scheduling/screens/AttendanceWorkspace";
+import RecordsStaffSection from "@/components/adminV2/records/RecordsStaffSection";
+import RecordsChildrenSection from "@/components/adminV2/records/RecordsChildrenSection";
+import WorkspaceDurableRecordHost from "@/components/presentation/durableRecord/WorkspaceDurableRecordHost";
 import {
     type RosterData,
     type RosterFilterContext,
@@ -40,13 +51,16 @@ import {
 import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import { mondayOfWeekContaining, addDaysYmdLocal } from "@/components/workspace/WeekPicker";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import {
+    DURABLE_RECORD_CLOSED_EVENT,
+    type DurableRecordClosedDetail,
+} from "@/lib/runtime/focus/DurableRecordHostContext";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import {
-    dispatchAdminV2OpenSchedulingModal,
     ROSTER_WORKSPACE_DEEPLINK_KEY,
     type OpenRosterModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
-import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
+import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
 
 async function schedApi(path: string): Promise<any> {
     const res = await fetch(`/api/admin/scheduling${path}`, {
@@ -56,12 +70,29 @@ async function schedApi(path: string): Promise<any> {
 }
 
 export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
+    /**
+     * WORK or STUDIO — running the operating day, or configuring what it is made of.
+     *
+     * Defaults to Work every time the workspace opens. Studio is where an operator goes
+     * deliberately and rarely; remembering it across opens would land someone on a configuration
+     * screen when they came to look at the day.
+     */
+    const [mode, setMode] = useState<OperationsMode>("work");
+    const [studioSection, setStudioSection] =
+        useState<Exclude<OperationsStudioSection, "templates">>("types");
     const [section, setSection] = useState<RosterSection>("roster");
     const [range, setRange] = useState<RosterRange>("day");
     const [lens, setLens] = useState<RosterLens>("rooms");
 
     const [sites, setSites] = useState<RosterSite[] | null>(null);
     const [siteId, setSiteId] = useState<string>("");
+    /**
+     * The org's configured Assignment Categories, for the Assignments lens' Bulk Assign picker.
+     *
+     * ORG-scoped, not site-scoped, so it is loaded once rather than per site — which is also why it
+     * is not folded into the site effect below. Authored in Studio; this is only a read.
+     */
+    const [assignmentTypes, setAssignmentTypes] = useState<OrgAssignmentTypeOption[] | null>(null);
     /**
      * Once the operator picks a site, no late bootstrap response may move them.
      * The same hazard the day roster had: a slower response arriving after a
@@ -80,8 +111,37 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     /** Day-range health, reported up by the day surface for the control band. */
     const [dayHealth, setDayHealth] = useState<RosterHealthCounts | null>(null);
 
-    /** Stale-response guard for every site-scoped load. */
+    /**
+     * Positions and the org's SERVICE DATE, for the durable population sections.
+     *
+     * One bootstrap for the workspace, not one per section. Records loaded its own, and two
+     * bootstraps in one workspace is two answers to "what day is it" — a section that read the
+     * browser clock would disagree with the roster rendered beside it. Sites already come from
+     * Roster's own load, so this asks only for what Roster does not already have.
+     */
+    const [peopleBootstrap, setPeopleBootstrap] = useState<{
+        positions: { id: string; key: string | null; label: string }[];
+        todayYmd: string;
+    } | null>(null);
+
+    /** Stale-response guard for the WEEK load. */
     const loadSeq = useRef(0);
+    /**
+     * Stale-response guard for the ASSIGNMENT LEDGER load — its own counter, deliberately.
+     *
+     * These were one shared counter, and sharing it silently broke the refresh seam. The ledger
+     * reload captured `loadSeq`, issued its fetch, and then called `loadWeek`, which increments
+     * `loadSeq` — so by the time the ledger response arrived the sequence had moved and the result
+     * was discarded as stale. It was not stale; it was the only fresh data in the request.
+     *
+     * The effect is that an assignment edit wrote correctly, announced itself correctly, and the
+     * Assignments lens went on showing the old room — indistinguishable from a broken write, and
+     * invisible to any test that asserted on the action's response rather than on the projection.
+     *
+     * A stale-response guard belongs to ONE request stream. Two independent loads sharing one
+     * counter means either can cancel the other, and which one wins is a race.
+     */
+    const assignSeq = useRef(0);
     const weekCache = useRef<Map<string, RosterData>>(new Map());
 
     const focusRecord = useOperatorRecordFocus();
@@ -96,9 +156,87 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         [focusRecord, onClose],
     );
 
+    /*
+     * Assignment Categories — loaded ONCE, on first need.
+     *
+     * Deferred until the Assignments lens is actually opened, for the same reason the people
+     * bootstrap is deferred: Roster opens on the operating day, and paying for the org's category
+     * catalogue on every Roster open would make the common case slower to serve a lens the operator
+     * may never select.
+     *
+     * The endpoint is `?view=assignment_types` — the same one the Assignments workspace calls, which
+     * resolves `loadOrgAssignmentTypes`. There is no Roster-specific list and no second config owner.
+     */
+    useEffect(() => {
+        if (lens !== "assignments" || assignmentTypes) return;
+        let alive = true;
+        void schedApi("?view=assignment_types").then((r) => {
+            if (!alive) return;
+            setAssignmentTypes((r?.assignmentTypes as OrgAssignmentTypeOption[]) ?? []);
+        });
+        return () => {
+            alive = false;
+        };
+    }, [lens, assignmentTypes]);
+
+    // ── Durable population bootstrap — loaded once, on first need ────────────
+    //
+    // Deferred until Staff or Children is actually opened: the operating day is what Roster opens
+    // on, and paying for positions + service date on every Roster open would make the common case
+    // slower to serve a section the operator may never visit.
+    const needsPeopleBootstrap = section === "staff" || section === "children";
+    useEffect(() => {
+        if (!needsPeopleBootstrap || peopleBootstrap) return;
+        let alive = true;
+        void (async () => {
+            try {
+                const res = await fetch("/api/admin/records/bootstrap", { credentials: "include" });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    positions?: { id: string; key: string | null; label: string }[];
+                    todayYmd?: string;
+                };
+                if (!alive || !json.ok) return;
+                setPeopleBootstrap({
+                    positions: json.positions ?? [],
+                    todayYmd: json.todayYmd ?? new Date().toISOString().slice(0, 10),
+                });
+            } catch {
+                // The sections still work without positions (they only shape Staff cohorts), and a
+                // failed bootstrap must not leave the operator on a permanent spinner.
+                if (alive) {
+                    setPeopleBootstrap({ positions: [], todayYmd: new Date().toISOString().slice(0, 10) });
+                }
+            }
+        })();
+        return () => {
+            alive = false;
+        };
+    }, [needsPeopleBootstrap, peopleBootstrap]);
+
     // ── Deep link ────────────────────────────────────────────────────────────
+    /**
+     * Every link ever written to Roster, Records or Assignments arrives here.
+     *
+     * A STUDIO destination is checked first and returns, because Studio and Work are mutually
+     * exclusive placements: a link naming `types` wants Assignment Categories, and also applying a
+     * work section for it would leave the workspace in Studio while a Work tab reads as selected.
+     */
     const applyDeepLink = useCallback((detail: OpenRosterModalDetail | null) => {
         if (!detail) return;
+        // Site first — it applies to both modes, and a Studio link carrying one means "configure
+        // THIS site's patterns".
+        if (detail.siteLocationId) {
+            siteChosenRef.current = true;
+            setSiteId(detail.siteLocationId);
+        }
+        const studio = resolveOperationsStudioSection(detail.studioSection ?? null);
+        if (studio) {
+            setMode("studio");
+            setStudioSection(studio);
+            return;
+        }
+        setMode("work");
         const resolved = resolveRosterSection(detail.section);
         if (resolved) setSection(resolved);
         if (detail.range) setRange(detail.range);
@@ -108,10 +246,6 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             setAttendanceRoomId(detail.roomLocationId);
         }
         if (detail.filter) setRosterFilter(detail.filter as RosterFilterKind);
-        if (detail.siteLocationId) {
-            siteChosenRef.current = true;
-            setSiteId(detail.siteLocationId);
-        }
     }, []);
 
     useEffect(() => {
@@ -196,10 +330,10 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
         setWeek(null);
         setSubjects(null);
         void loadWeek(siteId, "");
-        const seq = loadSeq.current;
+        const seq = ++assignSeq.current;
         void schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`).then(
             (res) => {
-                if (seq !== loadSeq.current) return;
+                if (seq !== assignSeq.current) return;
                 setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
             },
         );
@@ -235,6 +369,81 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     const siteName = useMemo(
         () => sites?.find((s) => s.id === siteId)?.name ?? "All sites",
         [sites, siteId],
+    );
+
+    /**
+     * Re-read the commitments this workspace already loads, after one changes.
+     *
+     * The WEEK is invalidated too, and that is the point of Roster being a projection of commitments
+     * rather than a plan of its own: change an assignment and who is expected where changes with it.
+     * A lens that refreshed only its own list would leave the Rooms board asserting the old plan.
+     */
+    const reloadAssignments = useCallback(() => {
+        if (!siteId) return;
+        const seq = ++assignSeq.current;
+        void schedApi(`?view=assignment_roster&site_location_id=${encodeURIComponent(siteId)}`).then(
+            (res) => {
+                if (seq !== assignSeq.current) return;
+                setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
+            },
+        );
+        weekCache.current.clear();
+        void loadWeek(siteId, week?.weekStart ?? "");
+    }, [siteId, loadWeek, week?.weekStart]);
+
+    /*
+     * ── AN EDITED COMMITMENT RELOADS THE PROJECTION ──
+     *
+     * The durable host announces a close with `changed`, and Staff/Children already listen for their
+     * own rows. Roster listens for the same signal because an assignment write changes something it
+     * PROJECTS rather than something it lists: who is expected where, and the ledger the Assignments
+     * lens reads.
+     *
+     * `changed` is respected, not ignored — a record that was only looked at must not cost a
+     * re-query. And Roster RE-READS rather than patching a row it already has: an optimistic edit
+     * here would be a second answer about a commitment whose authority is the ledger.
+     */
+    useEffect(() => {
+        const onClosed = (ev: Event) => {
+            const detail = (ev as CustomEvent<DurableRecordClosedDetail>).detail;
+            if (!detail?.changed) return;
+            reloadAssignments();
+        };
+        window.addEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+        return () => window.removeEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+    }, [reloadAssignments]);
+
+    /*
+     * The ledger's bulk commands for the Assignments lens.
+     *
+     * Built by the SAME factory the Assignments workspace uses — one wiring, one set of canonical
+     * action keys, one grain guard. Roster supplies its own refresh because it owns its own reads;
+     * nothing about what the commands DO is decided here.
+     */
+    const assignmentBulk = useMemo(
+        () =>
+            buildAssignmentRosterBulkHandlers({
+                subjects: subjects ?? [],
+                // The org's configured Assignment Categories, from `?view=assignment_types` — the
+                // SAME endpoint and the same `loadOrgAssignmentTypes` owner the Assignments
+                // workspace reads. Studio remains where they are authored; this is a read of that
+                // configuration, never a Roster-local list.
+                assignmentTypes: assignmentTypes ?? [],
+                siteId,
+                onRefresh: reloadAssignments,
+                // Single-subject create belongs to the child's own record, not to a second modal in
+                // the lens: the operator opens the child and uses the canonical Schedule card, which
+                // is the same surface every other single-assignment gesture now reaches.
+                onCreateForChild: (customerMemberId) => {
+                    void focusRecord({
+                        entity_type: "customer_members",
+                        entity_id: customerMemberId,
+                        intent: "durable_record",
+                        preferred_context_key: "schedule",
+                    });
+                },
+            }),
+        [subjects, assignmentTypes, siteId, reloadAssignments, focusRecord],
     );
 
     /**
@@ -287,15 +496,30 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     }, [rosterFilter, week]);
 
     return (
-        <RosterWorkspaceShell
-            section={section}
-            onSectionChange={(next) => {
+        <OperationsWorkspaceShell
+            mode={mode}
+            /*
+             * SWITCHING MODE CHANGES NOTHING ELSE.
+             *
+             * `mode` is the only state a Work ↔ Studio switch touches: site, date, week, Roster lens,
+             * focused room, filter, and every section's own cohort/offset/scroll all live in state
+             * that stays mounted. Studio renders BESIDE Work rather than replacing this component,
+             * so returning from Studio returns to the operating day exactly as it was left.
+             *
+             * That is a structural property, not a restore step — there is no snapshot to take and
+             * nothing to put back, which is why there is no code here doing either.
+             */
+            onModeChange={setMode}
+            workSection={section}
+            studioSection={studioSection}
+            onWorkSectionChange={(next) => {
                 setSection(next);
                 if (next !== "roster") {
                     setFocusRoomId(undefined);
                     setRosterFilter(null);
                 }
             }}
+            onStudioSectionChange={setStudioSection}
             sites={sites}
             siteId={siteId}
             onSiteChange={(next) => {
@@ -305,13 +529,40 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
             siteName={siteName}
             onClose={onClose}
             metricsColumn={
-                section === "roster" ? (
+                mode === "work" && section === "roster" ? (
                     <RosterKpiStrip counts={healthCounts} range={range} loading={loadingWeek && !healthCounts} />
                 ) : undefined
             }
         >
-            <WorkspaceSurface tone={section === "roster" ? "canvas" : "stone"} scroll padded>
-                {section === "roster" ? (
+            {/*
+              * The record host wraps the whole body, so opening Lennon layers his record OVER the
+              * section rather than replacing it. Nothing below is unmounted while a record is open,
+              * which is why the cohort, the server-paged offset, the filter and the scroll are still
+              * there on close — a structural property, not something restored afterwards.
+              */}
+            <WorkspaceDurableRecordHost hostKey="roster">
+            <WorkspaceSurface
+                tone={mode === "work" && section === "roster" ? "canvas" : "stone"}
+                scroll
+                padded
+            >
+                {/*
+                  * STUDIO — configuration, beside the operating day rather than instead of it.
+                  *
+                  * Rendered inside the SAME surface and the same record host, so entering Studio does
+                  * not unmount Work. That is what makes returning free: there is no state to restore
+                  * because none was ever torn down.
+                  */}
+                {mode === "studio" ? (
+                    <OperationsStudio
+                        view={studioSection}
+                        siteId={siteId}
+                        siteName={siteName}
+                        sites={(sites ?? []).map((s) => ({ id: s.id, name: s.name }))}
+                    />
+                ) : null}
+
+                {mode === "work" && section === "roster" ? (
                     <RosterSurface
                         range={range}
                         onRangeChange={setRange}
@@ -321,6 +572,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         siteName={siteName}
                         weekData={week}
                         assignmentSubjects={subjects ?? []}
+                        assignmentBulk={assignmentBulk}
                         loadingWeek={loadingWeek}
                         focusRoomId={focusRoomId}
                         filter={filterContext}
@@ -340,19 +592,31 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                             setSection("attendance");
                         }}
                         onManageAssignment={(subject) => {
-                            // Roster writes nothing. The authoritative surface is
-                            // Assignments, in its own workspace, opened at this subject.
-                            dispatchAdminV2OpenSchedulingModal({
-                                mode: "work",
-                                workView: "assignments",
-                                siteLocationId: siteId || null,
-                                focusSubject:
-                                    subject.subjectType === "staff"
-                                        ? { personId: subject.personId }
-                                        : {
-                                              customerMemberId: subject.customerMemberId,
-                                              enrollmentAgreementId: subject.enrollmentAgreementId,
-                                          },
+                            /*
+                             * ── THE HANDOFF THAT LEFT OPERATIONS, REMOVED ──
+                             *
+                             * This dispatched `adminv2:open-scheduling-modal` and took the operator
+                             * to a different workspace to change a commitment — costing them the
+                             * lens, the site, the date and the filter they had set up, and making
+                             * "Assignments" a destination again.
+                             *
+                             * It now opens the subject's own durable record OVER Roster, with the
+                             * Schedule context preferred, so the canonical `scheduling` card is what
+                             * they land on. Same six RegisteredActions, same card; the difference is
+                             * that Roster stays mounted underneath and is still there on close.
+                             *
+                             * `focusRecord`, NOT `focusRecordAndYield`: yielding closes this
+                             * workspace, which is right when the destination REPLACES Roster and
+                             * exactly wrong here, where the record opens on top of it.
+                             */
+                            const isStaff = subject.subjectType === "staff";
+                            const entityId = isStaff ? subject.personId : subject.customerMemberId;
+                            if (!entityId) return;
+                            void focusRecord({
+                                entity_type: isStaff ? "persons" : "customer_members",
+                                entity_id: entityId,
+                                intent: "durable_record",
+                                preferred_context_key: "schedule",
                             });
                         }}
                         onOpenChild={(child) => {
@@ -389,7 +653,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                     />
                 ) : null}
 
-                {section === "attendance" ? (
+                {mode === "work" && section === "attendance" ? (
                     <AttendanceWorkspace
                         siteLocationId={siteId}
                         siteName={siteName}
@@ -425,7 +689,56 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                         }
                     />
                 ) : null}
+
+                {/*
+                  * The durable population. Recomposed, not rewritten: the same section components,
+                  * the same server-owned cohort projections and the same record gesture Records
+                  * shipped — now with Roster's site actually supplied to Children, which Records
+                  * could never do because it had no site picker.
+                  */}
+                {mode === "work" && section === "staff" ? (
+                    peopleBootstrap ? (
+                        <RecordsStaffSection
+                            positions={peopleBootstrap.positions}
+                            sites={(sites ?? []).map((s) => ({ id: s.id, label: s.name }))}
+                            todayYmd={peopleBootstrap.todayYmd}
+                        />
+                    ) : (
+                        <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading staff…</p>
+                    )
+                ) : null}
+
+                {mode === "work" && section === "children" ? (
+                    peopleBootstrap ? (
+                        /*
+                         * NOT scoped by the workspace's site picker, and that is deliberate.
+                         *
+                         * Passing Roster's `siteId` here looked like a free win — the prop existed
+                         * and Records never had a site to supply. Browser certification showed what
+                         * it actually does: site scope is implemented as "children with an ACTIVE
+                         * `child_placements` row at that site", the picker defaults to the first
+                         * site rather than All, and in the certification tenant NOT ONE of 1500
+                         * children holds an active placement. Children rendered empty, and an empty
+                         * list reads as "this tenant has no children" rather than "you are looking
+                         * at one site's placements".
+                         *
+                         * The deeper reason it was wrong: this section is the DURABLE population —
+                         * a child is here because the household record exists, not because a
+                         * placement is running. Scoping it by today's operating site contradicts
+                         * the section's own doctrine. The header control means "which site's
+                         * operating day", which is Roster and Attendance; it does not mean "which
+                         * children exist".
+                         *
+                         * A site filter FOR Children would be a product decision with its own
+                         * control and its own default — not a side effect of sharing a header.
+                         */
+                        <RecordsChildrenSection todayYmd={peopleBootstrap.todayYmd} />
+                    ) : (
+                        <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading children…</p>
+                    )
+                ) : null}
             </WorkspaceSurface>
-        </RosterWorkspaceShell>
+            </WorkspaceDurableRecordHost>
+        </OperationsWorkspaceShell>
     );
 }

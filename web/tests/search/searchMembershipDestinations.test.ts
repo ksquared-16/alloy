@@ -169,19 +169,36 @@ describe("a subject's destinations are its truthful cohorts", () => {
 });
 
 describe("the subject click does not claim a Work View the operator did not choose", () => {
-    it("Open <subject> hosts on a view that PROVABLY contains them", () => {
-        // Previously this fell back to the case unit, whose default lens was the empty `New`.
+    it("claims NO Work View at all — the strongest form of not choosing one", () => {
+        // This test used to assert the subject click hosted on a view that PROVABLY contained the
+        // subject, which was the best available answer while the record click was still an
+        // operational movement. It no longer has to settle: "show me Lennon" is a record intent and
+        // names no lens, provable or otherwise.
         const [primary] = resolve(lennon, [enrollment([membership("waitlist", "Waitlist", "child")])]);
 
         expect(primary.key).toBe("subject");
         expect(primary.label).toContain("Lennon");
-        expect(primary.host_work_view_id).toBe("waitlist");
-        expect(primary.host_work_view_id).not.toBe("new_leads");
+        expect(primary.target).toBe("durable_record");
+        expect(primary.host_work_view_id ?? null).toBeNull();
+        expect(primary.host_work_unit_key ?? null).toBeNull();
     });
 
-    it("with nothing provable it falls back to the stage signal rather than inventing one", () => {
-        const [primary] = resolve(lennon, [enrollment([])]);
-        expect(primary.host_work_view_id).toBe("new_leads");
+    it("the OPERATIONAL cohorts still host on views that PROVABLY contain the subject", () => {
+        // The property the old subject assertion protected, kept where it belongs. Previously this
+        // fell back to the case unit, whose default lens was the empty `New`.
+        const waitlist = resolve(lennon, [enrollment([membership("waitlist", "Waitlist", "child")])]).find(
+            (d) => d.key === "work_view:enrollment:waitlist",
+        )!;
+
+        expect(waitlist.host_work_view_id).toBe("waitlist");
+        expect(waitlist.host_work_view_id).not.toBe("new_leads");
+    });
+
+    it("with nothing provable the process destination falls back to the stage signal", () => {
+        // Still a fallback, never an invention — and now it can only affect an explicitly
+        // operational destination, never the record click.
+        const process = resolve(lennon, [enrollment([])]).find((d) => d.key === "process:enrollment")!;
+        expect(process.host_work_view_id).toBe("new_leads");
     });
 });
 

@@ -25,19 +25,31 @@ import DailyRoster from "@/components/adminV2/scheduling/screens/DailyRoster";
 import RosterStaffLens, {
     type RosterStaffLensSubject,
 } from "@/components/adminV2/scheduling/screens/RosterStaffLens";
+import AssignmentRosterPanel, {
+    type AssignmentRosterBulkHandlers,
+    type AssignmentRosterSubject,
+} from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
 import SchedulingRoster, {
     type RosterData,
     type RosterFilterContext,
 } from "@/components/adminV2/scheduling/screens/SchedulingRoster";
-import type { AssignmentRosterSubject } from "@/components/adminV2/scheduling/screens/AssignmentRosterPanel";
-import type { RosterRange } from "@/app/adminV2/scheduling/schedulingSections";
+import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
 
 /**
  * Rooms is the operating view. Staff answers "where is Jane this week" — a pivot
  * of the same week data, offered only at the week range because a single day's
  * staff list is already on the Rooms cards.
+ *
+ * ASSIGNMENTS is the third, and it is a different grain rather than a third pivot: Rooms and Staff
+ * read the operating DAY (who is expected where, given the commitments), while Assignments reads the
+ * COMMITMENTS themselves — every subject the site holds, whether or not today expects them. That is
+ * why it ignores range and site-day state and renders the ledger panel directly.
+ *
+ * It is a lens and NOT a fifth Work section, deliberately. A section would make "Assignments" a
+ * destination again, which is the workspace noun the Operations convergence removes; a lens keeps it
+ * as a way of looking at the Roster's own subject matter.
  */
-export type RosterLens = "rooms" | "staff";
+export type RosterLens = "rooms" | "staff" | "assignments";
 
 export type RosterSurfaceProps = {
     range: RosterRange;
@@ -71,15 +83,35 @@ export type RosterSurfaceProps = {
     onManageAssignment?: Parameters<typeof DailyRoster>[0]["onManageAssignment"];
     /** Record attention from the Staff lens — same gesture as everywhere else. */
     onOpenStaffSubject?: (subject: RosterStaffLensSubject) => void;
+    /**
+     * The ledger's bulk commands, for the Assignments lens. Built by
+     * `buildAssignmentRosterBulkHandlers` — the same wiring the Assignments workspace uses, so the
+     * two hosts cannot drift into two answers about what "archive these" does.
+     */
+    assignmentBulk?: AssignmentRosterBulkHandlers;
     /** Day-range health counts, for the workspace control band. */
     onDayHealth?: Parameters<typeof DailyRoster>[0]["onHealth"];
 };
 
+/**
+ * The lenses offered at a given range.
+ *
+ * STAFF is week-only, and that predates this control: "a single day's staff list is already on the
+ * Rooms cards". ASSIGNMENTS is offered at both, because a commitment is not a property of the day —
+ * hiding it on Day would make the operator change range to reach something the range does not
+ * govern.
+ */
+function lensesForRange(range: RosterRange): readonly RosterLens[] {
+    return range === "week" ? (["rooms", "staff", "assignments"] as const) : (["rooms", "assignments"] as const);
+}
+
 function LensControl({
     lens,
+    range,
     onLensChange,
 }: {
     lens: RosterLens;
+    range: RosterRange;
     onLensChange: (lens: RosterLens) => void;
 }) {
     return (
@@ -87,7 +119,7 @@ function LensControl({
             className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/25"
             data-roster-lens={lens}
         >
-            {(["rooms", "staff"] as const).map((key, i) => (
+            {lensesForRange(range).map((key, i) => (
                 <button
                     key={key}
                     type="button"
@@ -167,6 +199,7 @@ export default function RosterSurface({
     onOpenAttendance,
     onManageAssignment,
     onOpenStaffSubject,
+    assignmentBulk,
     onDayHealth,
 }: RosterSurfaceProps) {
     /**
@@ -210,7 +243,44 @@ export default function RosterSurface({
         [range, changeRange],
     );
 
-    const lensControl = <LensControl lens={lens} onLensChange={onLensChange} />;
+    const lensControl = <LensControl lens={lens} range={range} onLensChange={onLensChange} />;
+
+    /*
+     * ── THE COMMITMENT LENS ──
+     *
+     * Checked FIRST, and ahead of every range branch, because it is the one lens that does not read
+     * the operating day: an assignment exists whether or not today expects it, so a Day/Week split
+     * would be asking a question the ledger has no answer to. The range control is still rendered so
+     * the operator can leave the lens without hunting for it.
+     *
+     * `assignmentSubjects` is the array this surface ALREADY receives for the Rooms lens — the same
+     * `?view=assignment_roster` projection the Assignments workspace reads. No second fetch, no
+     * second shape, and nothing here re-derives a commitment.
+     */
+    if (lens === "assignments") {
+        return (
+            <div
+                className="flex min-h-0 flex-1 flex-col gap-3"
+                data-roster-assignments-lens="true"
+                // The site these commitments belong to. Published because "the lens shows the
+                // ledger" is only checkable against the SAME site — and an empty lens is the correct
+                // answer for a site with no assignments, which a row count alone cannot tell apart
+                // from a broken one.
+                data-roster-assignments-site={siteLocationId}
+            >
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    {control()}
+                    {lensControl}
+                </div>
+                <AssignmentRosterPanel
+                    subjects={assignmentSubjects}
+                    loading={loadingWeek}
+                    siteName={siteName}
+                    bulk={assignmentBulk}
+                />
+            </div>
+        );
+    }
 
     if (range === "week" && lens === "staff") {
         return (
@@ -259,7 +329,12 @@ export default function RosterSurface({
             onDateChange={setDay}
             serverToday={serverToday}
             onServerToday={setServerToday}
-            rangeControl={control()}
+            rangeControl={
+                <>
+                    {control()}
+                    {lensControl}
+                </>
+            }
             onOpenAttendance={onOpenAttendance}
             onManageAssignment={onManageAssignment}
             onHealth={onDayHealth}

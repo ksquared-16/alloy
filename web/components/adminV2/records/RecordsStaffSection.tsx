@@ -24,6 +24,11 @@ import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
 import { applyCohort, buildStaffCohorts, type RecordCohort } from "@/lib/adminV2/records/recordCohorts";
 import { OPERATOR_FOCUS_CARDS } from "@/lib/runtime/focus/operatorFocusCards";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
+import {
+    DURABLE_RECORD_CLOSED_EVENT,
+    type DurableRecordClosedDetail,
+} from "@/lib/runtime/focus/DurableRecordHostContext";
 
 export type StaffEntry = {
     employmentId: string;
@@ -104,6 +109,17 @@ export default function RecordsStaffSection({
         void load();
     }, [load]);
 
+    /** Same contract as Children: a record that was WRITTEN refreshes; one that was read does not. */
+    useEffect(() => {
+        const onClosed = (event: Event) => {
+            const detail = (event as CustomEvent<DurableRecordClosedDetail>).detail;
+            if (!detail?.changed || detail.subjectType !== "person") return;
+            void load();
+        };
+        window.addEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+        return () => window.removeEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+    }, [load]);
+
     const cohorts = useMemo<RecordCohort<StaffEntry>[]>(
         () =>
             buildStaffCohorts(
@@ -162,7 +178,7 @@ export default function RecordsStaffSection({
                 trailing={
                     <button
                         type="button"
-                        className="shrink-0 rounded bg-alloy-blue px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-blue/90"
+                        className={`shrink-0 ${WS_ACTION_PRIMARY}`}
                         onClick={() => setAddOpen(true)}
                         data-staff-add-open="true"
                     >
@@ -189,7 +205,7 @@ export default function RecordsStaffSection({
                 {staff == null ? (
                     <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading…</p>
                 ) : visible.length === 0 ? (
-                    <div className="rounded border border-dashed border-admin-border px-4 py-8 text-center">
+                    <div className="rounded-lg border border-dashed border-alloy-stone/30 px-4 py-8 text-center">
                         <p className="text-[13px] font-medium text-alloy-midnight/75">
                             {rows.length === 0 ? "No staff yet" : "No staff in this view"}
                         </p>
@@ -201,14 +217,14 @@ export default function RecordsStaffSection({
                     </div>
                 ) : (
                     <ul
-                        className="divide-y divide-admin-border rounded border border-admin-border bg-white"
+                        className="divide-y divide-alloy-stone/15 overflow-hidden rounded-lg border border-alloy-stone/22 bg-white"
                         data-staff-list="true"
                     >
                         {visible.map((s) => (
                             <li key={s.employmentId}>
                                 <button
                                     type="button"
-                                    className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-midnight/[0.03]"
+                                    className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                     onClick={() => openStaff(s.personId)}
                                     data-staff-person={s.personId}
                                     data-staff-row="true"

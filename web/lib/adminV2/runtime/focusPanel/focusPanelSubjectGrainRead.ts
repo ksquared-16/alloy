@@ -21,7 +21,15 @@
 
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
-const KNOWN_GRAINS: readonly OperationalSubjectType[] = ["opportunity", "child", "person"];
+const KNOWN_GRAINS: readonly OperationalSubjectType[] = [
+    "opportunity",
+    "child",
+    "person",
+    // The durable FAMILY. It must be listed here or it narrows to `opportunity` by the compatibility
+    // default above — and a household read as a case would silently offer the case's cards on a
+    // surface that has no process, which is the failure this list exists to prevent.
+    "household",
+];
 
 /** Narrow a contract-open subject type to a known grain; unrecognized values read as the case grain. */
 export function asFocusPanelSubjectGrain(raw: string | null | undefined): OperationalSubjectType {

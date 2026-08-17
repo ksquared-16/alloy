@@ -75,8 +75,8 @@ export function searchSelectionFromResult(result: SearchResult): SearchSelection
     let entityType: SearchSelectionEntityType | null = null;
     let entityId: string | null = null;
 
-    // Destinations are Focus Panel targets now, so the flat record reference is
-    // the HOST record that renders the subject's panel — not a drawer address.
+    // An OPERATIONAL destination is a Focus Panel target, so the flat record reference is the HOST
+    // record that renders the subject's panel — not a drawer address.
     if (primary?.target === "focus_panel") {
         const type = (primary.host_entity_type ?? "").trim();
         const id = (primary.host_entity_id ?? "").trim();
@@ -85,6 +85,48 @@ export function searchSelectionFromResult(result: SearchResult): SearchSelection
             entityId = id;
         }
     }
+
+    // A RECORD destination names the subject itself and carries no host at all — that is the point
+    // of it. These consumers still want a flat record reference, so it is resolved from the subject.
+    //
+    // This branch is not cosmetic. When the primary destination became `durable_record`, a picker
+    // that only understood `focus_panel` would have found no entity on any person or child result
+    // and filtered EVERY one of them away — silently, with an empty list rather than an error. That
+    // is exactly the regression this module was written after, arriving from the other direction.
+    if (!entityType && primary?.target === "durable_record") {
+        const subjectType = (primary.subject_type ?? "").trim();
+        const subjectId = (primary.subject_id ?? "").trim();
+        if (subjectId) {
+            if (subjectType === "person") {
+                entityType = "persons";
+                entityId = subjectId;
+            } else if (subjectType === "child") {
+                // A child's flat reference is its PERSON when it has one — these consumers pick
+                // records in the drawer vocabulary, which has no child grain. A child with a null
+                // `person_id` (ordinary: the column is nullable) therefore yields no reference, and
+                // dropping it is the honest outcome rather than inventing an entity type.
+                const childPersonId = (result.subject.person_id ?? "").trim();
+                if (childPersonId) {
+                    entityType = "persons";
+                    entityId = childPersonId;
+                }
+            } else if (subjectType === "household") {
+                // A household maps CLEANLY, unlike a child: `customers` is already in this
+                // vocabulary and `subject_id` is already `customers.id`.
+                //
+                // This arm is the regression the comment above records, arriving a third time. When
+                // the household's primary destination flipped from `focus_panel` to
+                // `durable_record`, its host went with it — so a picker that understood only the two
+                // earlier durable grains would have dropped EVERY household result, silently, as an
+                // empty list rather than an error.
+                entityType = "customers";
+                entityId = subjectId;
+            }
+        }
+    }
+
+    // …and a record destination still knows the case behind the subject through its OPERATIONAL
+    // siblings, which is where `opportunity_id` below is resolved from.
 
     // A campus opens a settings route rather than a drawer, so its record
     // reference is the subject itself.

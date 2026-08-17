@@ -47,11 +47,22 @@ describe("sidebar modal navigation", () => {
         expect(read("lib/adminV2/adminV2NavConstants.ts")).toContain("ADMIN_V2_NOTIFICATIONS_HREF");
     });
 
-    it("sidebar lists the Assignments workspace modal", () => {
+    /**
+     * ONE Operations entry, where Roster / Records / Assignments used to be three.
+     *
+     * The absence assertions matter as much as the presence one: the convergence claim is that a
+     * single placement exists, and a rail carrying both Operations and a surviving Assignments
+     * button would satisfy "Operations is in the sidebar" while failing the actual invariant.
+     */
+    it("sidebar lists exactly one Operations workspace modal", () => {
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
-        expect(sidebar).toContain("SidebarSchedulingNavItem");
+        expect(sidebar).toContain("SidebarOperationsNavItem");
+        expect(sidebar).not.toContain("SidebarSchedulingNavItem");
+        expect(sidebar).not.toContain("SidebarRosterNavItem");
         const items = read("app/adminV2/components/SidebarModalNavItems.tsx");
-        expect(items).toContain("dispatchAdminV2OpenSchedulingModal");
-        expect(items).toContain('label="Assignments"');
+        expect(items).toContain("dispatchAdminV2OpenOperationsModal");
+        expect(items).toContain('label="Operations"');
+        expect(items).not.toContain('label="Assignments"');
+        expect(items).not.toContain('label="Roster"');
     });
 });

@@ -53,23 +53,41 @@ const child = (id: string): SearchSubject => ({
 const resolve = (subject: SearchSubject, contexts: SearchContext[]) =>
     resolveSearchDestinations({ subject, contexts, promotedKeys: [] });
 
-describe("a participant's destination carries their own Work View", () => {
-    it("the primary destination carries the stage-bound view, not the family unit", () => {
-        const primary = resolve(child("cm-lennon"), [participation()])[0];
+/**
+ * These assertions moved from the SUBJECT destination to the OPERATIONAL one.
+ *
+ * Participant-grain view resolution is a property of going to WORK on someone — a waitlisted child
+ * sent to the family's Lead unit lands in a queue that does not contain them. It was asserted on
+ * the subject click only because the subject click used to be an operational movement. Every
+ * property below is unchanged; the record click simply no longer participates in any of them.
+ */
+const work = (subject: SearchSubject, contexts: SearchContext[], key = "process:enrollment") =>
+    resolve(subject, contexts).find((d) => d.key === key)!;
 
-        expect(primary.host_work_view_id).toBe("waitlist");
+describe("a participant's destination carries their own Work View", () => {
+    it("the operational destination carries the stage-bound view, not the family unit", () => {
+        const operational = work(child("cm-lennon"), [participation()]);
+
+        expect(operational.host_work_view_id).toBe("waitlist");
         // The family answer is still carried — as a FALLBACK for callers, never the preferred one.
-        expect(primary.host_work_unit_key).toBe(FAMILY_UNIT);
-        expect(primary.host_work_view_id).not.toBe(primary.host_work_unit_key);
+        expect(operational.host_work_unit_key).toBe(FAMILY_UNIT);
+        expect(operational.host_work_view_id).not.toBe(operational.host_work_unit_key);
+    });
+
+    it("the RECORD destination carries neither, and that is the separation", () => {
+        const record = resolve(child("cm-lennon"), [participation()])[0];
+        expect(record.target).toBe("durable_record");
+        expect(record.host_work_view_id ?? null).toBeNull();
+        expect(record.host_work_unit_key ?? null).toBeNull();
     });
 
     it("SIBLINGS in one case resolve different views", () => {
         // One household, one case, two children, two destinations. No single family-level answer
         // can serve both, which is why the family unit cannot be the authority.
-        const waitlisted = resolve(child("cm-lennon"), [participation()])[0];
-        const touring = resolve(child("cm-wrigley"), [
+        const waitlisted = work(child("cm-lennon"), [participation()]);
+        const touring = work(child("cm-wrigley"), [
             participation({ detail: "Tour", destination_work_view_id: "tours" }),
-        ])[0];
+        ]);
 
         expect(waitlisted.host_work_view_id).toBe("waitlist");
         expect(touring.host_work_view_id).toBe("tours");
@@ -79,12 +97,12 @@ describe("a participant's destination carries their own Work View", () => {
     });
 
     it("falls back to the family unit when the stage has NO configured view", () => {
-        const primary = resolve(child("cm-lennon"), [
+        const operational = work(child("cm-lennon"), [
             participation({ destination_work_view_id: null }),
-        ])[0];
+        ]);
 
-        expect(primary.host_work_view_id).toBeNull();
-        expect(primary.host_work_unit_key).toBe(FAMILY_UNIT);
+        expect(operational.host_work_view_id).toBeNull();
+        expect(operational.host_work_unit_key).toBe(FAMILY_UNIT);
     });
 
     it("a PROCESS destination resolves the view of the process the operator asked for", () => {
@@ -109,7 +127,7 @@ describe("a participant's destination carries their own Work View", () => {
         // The demotion, stated as behaviour. Stage binding says `waitlist`; evaluated membership says
         // the subject is actually in `all_children`. Membership wins, because it is the only one of
         // the two that was checked against the subject rather than inferred from where they stand.
-        const primary = resolve(child("cm-lennon"), [
+        const proven = resolve(child("cm-lennon"), [
             {
                 ...participation(),
                 operational_memberships: [
@@ -124,9 +142,11 @@ describe("a participant's destination carries their own Work View", () => {
                     },
                 ],
             },
-        ])[0];
+        ]).find((d) => d.key === "work_view:enrollment:all_children")!;
 
-        expect(primary.host_work_view_id).toBe("all_children");
+        expect(proven.host_work_view_id).toBe("all_children");
+        // …and the stage-bound guess does not also appear as a competing destination.
+        expect(proven.operational_member_id).toBe("pi-lennon-enrollment");
     });
 
     it("a HOUSEHOLD subject does not borrow a child's view", () => {
@@ -141,8 +161,23 @@ describe("a participant's destination carries their own Work View", () => {
             household_case_work_unit_key: FAMILY_UNIT,
         };
 
+        /*
+         * The CLAIM of this scenario is unchanged and is now held more strongly.
+         *
+         * It asserted that a household resolves to `focus_panel` on its case with a NULL work view —
+         * "does not borrow a child's view" proven by the view being absent. A household is now a
+         * durable record, so there is no lens field to leave null: the destination names the family
+         * and nothing operational at all, which cannot borrow a child's view because it carries no
+         * view, no unit and no host.
+         *
+         * The case remains reachable — its operational siblings still carry `FAMILY_UNIT` — it is
+         * simply no longer what "open this family" means.
+         */
         const primary = resolve(household, [])[0];
-        expect(primary.host_work_unit_key).toBe(FAMILY_UNIT);
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("household");
+        expect(primary.subject_id).toBe(HOUSEHOLD);
         expect(primary.host_work_view_id ?? null).toBeNull();
+        expect(primary.host_work_unit_key ?? null).toBeNull();
     });
 });

@@ -378,15 +378,25 @@ describe("Case 1 — child search", () => {
 
         const primary = joe.destinations.find((d) => d.primary);
         expect(primary).toBeTruthy();
-        expect(primary!.target).toBe("focus_panel");
-        expect(primary!.card_key).toBe("children");
-        expect(primary!.item_id).toBe(JOE_MEMBER);
+        expect(primary!.target).toBe("durable_record");
+        expect(primary!.subject_type).toBe("child");
+        expect(primary!.subject_id).toBe(JOE_MEMBER);
 
+        // The OPERATIONAL contexts are exposed beside it, on the same result — the point of the
+        // original assertion (no intermediate page) is unchanged.
         expect(joe.destinations.length).toBeGreaterThan(1);
         expect(joe.destinations.some((d) => d.key === "household")).toBe(true);
+        // An operational destination on the case sits beside the record one. (Whether it carries a
+        // work unit depends on queue membership, which this fixture does not model — asserting one
+        // here would be asserting the fixture, not the contract.)
+        expect(
+            joe.destinations.some(
+                (d) => d.target === "focus_panel" && d.host_entity_type === "opportunities",
+            ),
+        ).toBe(true);
     });
 
-    it("a child with NO person row opens its participation record, not the household", async () => {
+    it("a child with NO person row opens THE CHILD, and its work still hosts on the case", async () => {
         // Found by browser certification against the live tenant: real children can
         // have `person_id = null`. Falling straight through to the household opens
         // the FAMILY when the operator asked for the CHILD.
@@ -400,12 +410,21 @@ describe("Case 1 — child search", () => {
         const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
         const primary = subject.destinations.find((d) => d.primary)!;
 
-        expect(primary.card_key).toBe("children");
-        expect(primary.host_entity_type).toBe("opportunities");
-        expect(primary.host_entity_id).toBe(JOE_OPPORTUNITY);
+        // The record click names the CHILD — the strongest possible form of "not the household".
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_id).toBe(JOE_MEMBER);
+
+        // …and going to WORK on them still resolves child → participation → host case.
+        const work = subject.destinations.find(
+            (d) => d.target === "focus_panel" && d.host_entity_type === "opportunities",
+        )!;
+        expect(work.host_entity_id).toBe(JOE_OPPORTUNITY);
     });
 
-    it("falls back to the household only when there is no participation record", async () => {
+    it("a child with NO participation at all is STILL openable as a record", async () => {
+        // This case used to fall through to the household because the subject destination needed a
+        // host to exist at all. A durable record needs none, so the child no longer has to be
+        // represented by their family in order to be opened.
         const fixtures = baseFixtures();
         const joe = (fixtures.customer_members as Array<Record<string, unknown>>).find(
             (m) => m.id === JOE_MEMBER
@@ -416,9 +435,14 @@ describe("Case 1 — child search", () => {
         const { results } = await run("Joe Smith", openDim, fixtures);
         const subject = results.find((r) => r.subject.id === JOE_MEMBER)!;
         const primary = subject.destinations.find((d) => d.primary)!;
-        expect(primary.card_key).toBe("children");
-        expect(primary.host_entity_type).toBe("customers");
-        expect(primary.host_entity_id).toBe(SMITH_HOUSEHOLD);
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("child");
+        expect(primary.subject_id).toBe(JOE_MEMBER);
+
+        // The household context remains reachable, explicitly labelled, on its own destination.
+        const household = subject.destinations.find((d) => d.key === "household")!;
+        expect(household.host_entity_type).toBe("customers");
+        expect(household.host_entity_id).toBe(SMITH_HOUSEHOLD);
     });
 
     it("never targets a legacy drawer type", async () => {
@@ -551,7 +575,10 @@ describe("Case 5 — staff/person search to the limit of the canonical model", (
         const kelly = results.find((r) => r.subject.id === KELLY_PERSON)!;
         expect(kelly).toBeTruthy();
         expect(kelly.subject.kind).toBe("person");
-        expect(kelly.destinations.find((d) => d.primary)?.card_key).toBe("household");
+        const primary = kelly.destinations.find((d) => d.primary)!;
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("person");
+        expect(primary.subject_id).toBe(KELLY_PERSON);
     });
 
     it("does NOT fabricate a staff role or campus assignment", async () => {

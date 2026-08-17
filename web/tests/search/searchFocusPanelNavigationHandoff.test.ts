@@ -52,10 +52,20 @@ const child: SearchSubject = {
 const resolve = (subject: SearchSubject, contexts: SearchContext[]) =>
     resolveSearchDestinations({ subject, contexts, promotedKeys: [] });
 
+/**
+ * The OPERATIONAL destination for a process — the one that hands off to the kernel.
+ *
+ * These tests are about the work handoff, and the subject click is no longer part of it: a record
+ * intent names a record and resolves no unit. The handoff properties are unchanged; they are simply
+ * asserted where they now live.
+ */
+const operational = (subject: SearchSubject, contexts: SearchContext[], key = "process:enrollment") =>
+    resolve(subject, contexts).find((d) => d.key === key)!;
+
 describe("Search resolves a destination the kernel can actually move to", () => {
     it("the host href parses into the attention the kernel adapter expects", () => {
-        const primary = resolve(child, [enrollment])[0];
-        const href = operatorWorkUnitHrefFromKey(primary.host_work_unit_key!);
+        const work = operational(child, [enrollment]);
+        const href = operatorWorkUnitHrefFromKey(work.host_work_unit_key!);
 
         // This is the exact parse `useWorkUnitEntryMovement` performs. A destination the
         // adapter cannot parse moves nothing and blanks the surface silently.
@@ -77,24 +87,24 @@ describe("Search resolves a destination the kernel can actually move to", () => 
 
     it("carries the HOST record, not the child the operator searched for", () => {
         // Host, active subject, card and item are four different identities.
-        const primary = resolve(child, [enrollment])[0];
-        expect(primary.host_entity_type).toBe("opportunities");
-        expect(primary.host_entity_id).toBe(OPP);
-        expect(primary.item_id).toBe("cm-joe");
-        expect(primary.card_key).toBe(SEARCH_CARD_KEYS.children);
+        const work = operational(child, [enrollment]);
+        expect(work.host_entity_type).toBe("opportunities");
+        expect(work.host_entity_id).toBe(OPP);
+        expect(work.item_id).toBe("cm-joe");
+        expect(work.card_key).toBe(SEARCH_CARD_KEYS.currentWork);
     });
 
     it("a child with no person row still resolves a host and a work unit", () => {
         // `person_id = null` is real: a child can exist with no canonical person row.
         // The destination must still go child → participation → host case, and must
         // never fall back to opening the family as the subject.
-        const primary = resolve(
+        const work = operational(
             { kind: "child", id: "cm-joe3", display_name: "Joe Smith", person_id: null, household_id: HOUSEHOLD },
             [enrollment]
-        )[0];
-        expect(primary.host_entity_id).toBe(OPP);
-        expect(primary.host_work_unit_key).toBe(WORK_UNIT);
-        expect(primary.item_id).toBe("cm-joe3");
+        );
+        expect(work.host_entity_id).toBe(OPP);
+        expect(work.host_work_unit_key).toBe(WORK_UNIT);
+        expect(work.item_id).toBe("cm-joe3");
     });
 
     it("a process context stays a DISTINCT destination from the subject", () => {
@@ -105,17 +115,20 @@ describe("Search resolves a destination the kernel can actually move to", () => 
         expect(subject).toBeTruthy();
         expect(process).toBeTruthy();
         expect(process!.key).not.toBe(subject!.key);
-        // Same host, different operator intent — which is why dedupe keys on the
-        // destination key and never on the underlying record.
-        expect(process!.host_entity_id).toBe(subject!.host_entity_id);
-        expect(process!.card_key).not.toBe(subject!.card_key);
+        // They are now distinct in KIND, not merely in card: one names a record, the other names
+        // work. That is a stronger separation than the one this test originally pinned — the two
+        // used to differ only by `card_key` while sharing an operational payload.
+        expect(subject!.target).toBe("durable_record");
+        expect(process!.target).toBe("focus_panel");
+        expect(process!.host_entity_id).toBe(OPP);
+        expect(subject!.host_entity_id ?? null).toBeNull();
     });
 
     it("a context worked by no work unit yields no work unit — it does not guess", () => {
         const unhosted: SearchContext = { ...enrollment, destination_work_unit_key: null };
-        const primary = resolve(child, [unhosted])[0];
-        expect(primary.host_entity_id).toBe(OPP);
-        expect(primary.host_work_unit_key).toBeNull();
+        const work = operational(child, [unhosted]);
+        expect(work.host_entity_id).toBe(OPP);
+        expect(work.host_work_unit_key).toBeNull();
     });
 });
 
@@ -148,12 +161,20 @@ describe("a producer states intent; the kernel applies it", () => {
     });
 
     it("the attention listener moves through the ONE work-unit entry adapter", async () => {
-        const src = await code("components/adminV2/OperatorFocusAttentionListener.tsx");
         // Not a second gesture path — the same adapter the workspace links use. A
         // second path is what produced the blank surface originally.
+        const src = await code("components/adminV2/OperatorFocusAttentionListener.tsx");
         expect(src).toContain("useWorkUnitEntryMovement");
+        /*
+         * GATE A, UNCONDITIONAL. This was briefly relaxed to an ORDERING that permitted a push from
+         * the workspace root, on the theory that the root renders no Surface Host. It renders one —
+         * `SurfaceHostProvider` wraps the entire workspace and decides from committed Focus — and in
+         * the browser the push left the surface blank for 60s while the movement composed in ~2.0s.
+         * See `drawerProductEradication.test.ts` for the full trace.
+         */
         expect(src).not.toContain("router.push");
-        expect(src).not.toContain("next/navigation");
+        expect(src).not.toContain("useRouter");
+        expect(src).not.toContain("usePathname");
     });
 
     it("the attention listener is mounted INSIDE the runtime kernel", async () => {

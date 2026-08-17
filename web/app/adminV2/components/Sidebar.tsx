@@ -34,9 +34,7 @@ import {
     SidebarAnalyticsNavItem,
     SidebarInboxNavItem,
     SidebarProcessingNavItem,
-    SidebarSchedulingNavItem,
-    SidebarRosterNavItem,
-    SidebarRecordsNavItem,
+    SidebarOperationsNavItem,
     SidebarTasksNavItem,
 } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
@@ -238,12 +236,18 @@ function SidebarNav({
     );
 
     const processingLink = <SidebarProcessingNavItem collapsed={collapsed} />;
-    const schedulingLink = <SidebarSchedulingNavItem collapsed={collapsed} />;
-    // Roster sits next to Assignments: the plan beside the commitments it derives from.
-    const rosterLink = <SidebarRosterNavItem collapsed={collapsed} />;
-    // Records sits after the operational workspaces: you reach for it when the queues are not the
-    // answer — a durable record, not a work item.
-    const recordsLink = <SidebarRecordsNavItem collapsed={collapsed} />;
+    /*
+     * ONE Operations entry, where there were three.
+     *
+     * Roster (the plan), Records (the people) and Assignments (the commitments and their
+     * configuration) were three rail items onto one operating day. A director looking for a person
+     * and a director looking at a short room are the same director, and three doors asked them to
+     * decide which they were before they had looked.
+     *
+     * There is deliberately no hidden duplicate: the Roster and Assignments entries are GONE, not
+     * conditionally rendered, so there is no state in which two buttons open the same workspace.
+     */
+    const operationsLink = <SidebarOperationsNavItem collapsed={collapsed} />;
 
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
@@ -491,9 +495,7 @@ function SidebarNav({
                             <>
                                 {inboxLink}
                                 {processingLink}
-                                {schedulingLink}
-                                {rosterLink}
-                                {recordsLink}
+                                {operationsLink}
                                 {tasksLink}
                                 {analyticsLink}
                             </>
@@ -513,9 +515,7 @@ function SidebarNav({
                                 <>
                                     {inboxLink}
                                     {processingLink}
-                                    {schedulingLink}
-                                    {rosterLink}
-                                    {recordsLink}
+                                    {operationsLink}
                                     {tasksLink}
                                     {analyticsLink}
                                     {lifecycleNavExpanded}

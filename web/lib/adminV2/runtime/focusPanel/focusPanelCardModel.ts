@@ -44,6 +44,20 @@ export type FocusPanelCardArchetype = (typeof FOCUS_PANEL_CARD_ARCHETYPES)[numbe
 export type FocusPanelProfileField = {
     label: string;
     value: string | null;
+    /**
+     * Another RECORD this field names, when it names one — which makes the row an operator gesture
+     * instead of a printed string.
+     *
+     * "Household — Kurzman Family" on a child's identity card is a reference to a record that
+     * exists, and an operator reading it wants to go there. Without this the only route to the
+     * family is to search for it by name, retyping something the surface is already showing.
+     *
+     * `subject_type` is deliberately a plain string, matching `OperationalSubjectRef.type`: the
+     * platform contract stays open so a producer can name a grain without a platform-layer edit, and
+     * the renderer narrows it through `durableSubjectTypeFor` — an unrecognised grain renders as
+     * plain text rather than as a control that goes nowhere.
+     */
+    record?: { subject_type: string; subject_id: string } | null;
 };
 
 export type FocusPanelCollectionItem = {

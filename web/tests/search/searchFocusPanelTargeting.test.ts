@@ -59,7 +59,7 @@ describe("Search targets Focus Panel cards, never the drawer", () => {
         for (const [subject, contexts] of subjects) {
             for (const d of resolve(subject, contexts)) {
                 expect(d.target).not.toBe("open_drawer");
-                expect(["focus_panel", "route"]).toContain(d.target);
+                expect(["durable_record", "focus_panel", "route"]).toContain(d.target);
             }
         }
     });
@@ -70,24 +70,37 @@ describe("Search targets Focus Panel cards, never the drawer", () => {
         }
     });
 
-    it("child → Children card, that child focused", () => {
+    it("child → the DURABLE CHILD, with no lens chosen on the operator's behalf", () => {
         const primary = resolve(child, [enrollment])[0];
-        expect(primary.target).toBe("focus_panel");
-        expect(primary.card_key).toBe("children");
-        expect(primary.item_id).toBe("cm-lennon");
-        // Hosted by the case the child participates in — NOT the household.
-        expect(primary.host_entity_type).toBe("opportunities");
-        expect(primary.host_entity_id).toBe(OPP);
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("child");
+        expect(primary.subject_id).toBe("cm-lennon");
+        // THE POINT OF THE SLICE. Clicking "Lennon Kurzman · Child" used to commit the family's
+        // Work Unit and the first Work View Lennon happened to be in. A record intent names the
+        // record; it resolves no host and claims no lens.
+        expect(primary.host_entity_id ?? null).toBeNull();
+        expect(primary.host_work_unit_key ?? null).toBeNull();
+        expect(primary.host_work_view_id ?? null).toBeNull();
     });
 
-    it("a child with NO person row still focuses Children, not Household", () => {
-        // This is the exact shape that used to fall through to the family.
-        const primary = resolve(child, [enrollment])[0];
-        expect(primary.card_key).toBe("children");
-        expect(primary.card_key).not.toBe("household");
+    it("a child with NO case and NO participation is still openable", () => {
+        // The old shape returned null without a host, so a child whose enrollment had completed —
+        // or who never had one — rendered as a result that could not be opened at all. A durable
+        // record needs no queue, which is the whole reason the grain exists.
+        const orphan = resolve({ ...child, household_id: null }, [])[0];
+        expect(orphan.target).toBe("durable_record");
+        expect(orphan.subject_id).toBe("cm-lennon");
     });
 
-    it("person → Household card, that person's row focused", () => {
+    it("the OPERATIONAL destination still focuses the Children card on the case", () => {
+        const process = resolve(child, [enrollment]).find((d) => d.key === "process:enrollment")!;
+        expect(process.target).toBe("focus_panel");
+        expect(process.host_entity_type).toBe("opportunities");
+        expect(process.host_entity_id).toBe(OPP);
+        expect(process.item_id).toBe("cm-lennon");
+    });
+
+    it("person → the DURABLE PERSON, not the family's case panel", () => {
         const kelly: SearchSubject = {
             kind: "person",
             id: "p-kelly",
@@ -96,14 +109,47 @@ describe("Search targets Focus Panel cards, never the drawer", () => {
             household_id: CUST,
         };
         const primary = resolve(kelly, [])[0];
-        expect(primary.card_key).toBe("household");
-        expect(primary.item_id).toBe("p-kelly");
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("person");
+        expect(primary.subject_id).toBe("p-kelly");
+        // Their household context remains available as a SEPARATE, explicitly-labelled destination.
+        expect(resolve(kelly, []).some((d) => d.key === "household")).toBe(true);
     });
 
-    it("household → Household card with no item", () => {
+    it("carries the query's context as a PREFERENCE, and only one the subject holds", () => {
+        const preferred = resolve(child, [enrollment, schedule], ["enrollment"])[0];
+        expect(preferred.target).toBe("durable_record");
+        expect(preferred.preferred_context_key).toBe("enrollment");
+
+        // A term the subject has no context for expresses an interest the record cannot honour.
+        const unheld = resolve(child, [schedule], ["enrollment"])[0];
+        expect(unheld.preferred_context_key ?? null).toBeNull();
+
+        // …and with no intent at all the host resolves its own default.
+        expect(resolve(child, [enrollment])[0].preferred_context_key ?? null).toBeNull();
+    });
+
+    it("household → the durable household record, on the household's own id", () => {
         const household: SearchSubject = { kind: "household", id: CUST, display_name: "Kurzman Family", household_id: CUST };
         const primary = resolve(household, [])[0];
-        expect(primary.card_key).toBe("household");
+        /*
+         * This asserted `card_key === "household"` — the Household CARD on the household's case.
+         *
+         * Clicking a family is a RECORD intent, exactly as clicking a child or a person is. The old
+         * shape resolved it through `resolveHost`, which falls through to the case and returned
+         * NOTHING when there wasn't one, so a family whose enrollment had completed rendered in
+         * Search and could not be opened at all.
+         *
+         * Note that this subject carries no `household_case_entity_id` and no work unit, and a
+         * destination is produced anyway. That is the change in one line: identity decides that a
+         * record can be opened, not queue membership.
+         */
+        expect(primary.target).toBe("durable_record");
+        expect(primary.subject_type).toBe("household");
+        expect(primary.subject_id).toBe(CUST);
+        // A record intent chooses no lens and elevates no card.
+        expect(primary.host_work_view_id ?? null).toBeNull();
+        expect(primary.card_key ?? null).toBeNull();
         expect(primary.item_id ?? null).toBeNull();
     });
 
@@ -187,13 +233,14 @@ describe("Search uses the ONE canonical focus seam", () => {
         expect(listener).not.toContain("openDrawer");
     });
 
-    it("a child destination names the host record's WORK UNIT, never its process", () => {
-        const primary = resolve(child, [enrollment])[0];
-        expect(primary.host_work_unit_key).toBe(WORK_UNIT);
-        // The regression this pins: emitting the process key produced
-        // `/workspace/work-unit/enrollment`, which answers `work_unit_not_found`,
+    it("an OPERATIONAL child destination names the host record's WORK UNIT, never its process", () => {
+        // Asserted on the operational destination because that is the only kind that carries a
+        // work unit now. The property is unchanged and still load-bearing: emitting the process
+        // key produced `/workspace/work-unit/enrollment`, which answers `work_unit_not_found`,
         // composes nothing, and leaves the operator on an empty page with no error.
-        expect(primary.host_work_unit_key).not.toBe(enrollment.key);
+        const process = resolve(child, [enrollment]).find((d) => d.key === "process:enrollment")!;
+        expect(process.host_work_unit_key).toBe(WORK_UNIT);
+        expect(process.host_work_unit_key).not.toBe(enrollment.key);
     });
 
     it("a process destination hosts on ITS OWN context's work unit", () => {
@@ -207,9 +254,9 @@ describe("Search uses the ONE canonical focus seam", () => {
         // page contains it and no Focus Panel can host it. Naming a unit anyway would
         // be a fabricated route that fails silently at the far end.
         const unhosted: SearchContext = { ...enrollment, destination_work_unit_key: null };
-        const primary = resolve(child, [unhosted])[0];
-        expect(primary.host_entity_id).toBe(OPP);
-        expect(primary.host_work_unit_key).toBeNull();
+        const process = resolve(child, [unhosted]).find((d) => d.key === "process:enrollment")!;
+        expect(process.host_entity_id).toBe(OPP);
+        expect(process.host_work_unit_key).toBeNull();
     });
 
     it("falls through to a participation that IS worked somewhere", () => {
@@ -219,8 +266,12 @@ describe("Search uses the ONE canonical focus seam", () => {
             label: "Annual Registration",
             destination_work_unit_key: null,
         };
-        const primary = resolve(child, [unhosted, enrollment])[0];
-        expect(primary.host_work_unit_key).toBe(WORK_UNIT);
+        // The cross-context fallback now lives on the HOUSEHOLD destination, which is the
+        // destination that still asks "which unit works this subject at all" without naming a
+        // context of its own. The property is the same one: prefer a participation that IS worked
+        // somewhere over one that is worked nowhere.
+        const household = resolve(child, [unhosted, enrollment]).find((d) => d.key === "household")!;
+        expect(household.host_work_unit_key).toBe(WORK_UNIT);
     });
 });
 

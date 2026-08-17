@@ -2,8 +2,7 @@
 
 import type { ReactNode } from "react";
 // Forms lives inside the Digital Mailroom — no standalone Forms nav / /admin/forms (Mailroom doctrine).
-// Scheduling (CalendarRange) is a staging improvement kept during reconciliation.
-import { Inbox, ListChecks, BarChart3, Layers, CalendarRange, CalendarClock, Contact } from "lucide-react";
+import { Inbox, ListChecks, BarChart3, Layers, Contact } from "lucide-react";
 
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
@@ -20,9 +19,7 @@ import {
     dispatchAdminV2OpenTasksPanel,
     dispatchAdminV2OpenAnalyticsModal,
     dispatchAdminV2OpenProcessingModal,
-    dispatchAdminV2OpenSchedulingModal,
-    dispatchAdminV2OpenRosterModal,
-    dispatchAdminV2OpenRecordsModal,
+    dispatchAdminV2OpenOperationsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -234,68 +231,31 @@ export function SidebarProcessingNavItem({ collapsed }: { collapsed: boolean }) 
         />
     );
 }
-/** Assignments — operational placement command center; opens as a workspace modal. */
-export function SidebarSchedulingNavItem({ collapsed }: { collapsed: boolean }) {
-    const activeModal = useActiveAdminV2WorkspaceModal();
-    return (
-        <SidebarModalNavButton
-            collapsed={collapsed}
-            title="Assignments — rooms, types, and operational placement"
-            label="Assignments"
-            icon={<CalendarRange size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
-            active={activeModal === "scheduling"}
-            dataAttr="scheduling"
-            onClick={() => {
-                dispatchAdminV2OpenSchedulingModal();
-            }}
-        />
-    );
-}
-
 /**
- * Roster — the operating plan and its actuality mode (Attendance); opens as a
- * workspace modal. Peer of Assignments, not a tab inside it: Assignments owns the
- * durable commitments, Roster answers who is expected where and when given them.
- */
-export function SidebarRosterNavItem({ collapsed }: { collapsed: boolean }) {
-    const activeModal = useActiveAdminV2WorkspaceModal();
-    return (
-        <SidebarModalNavButton
-            collapsed={collapsed}
-            title="Roster — who is expected where and when, and who is actually here"
-            label="Roster"
-            icon={<CalendarClock size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-            badge={null}
-            active={activeModal === "roster"}
-            dataAttr="roster"
-            onClick={() => {
-                dispatchAdminV2OpenRosterModal();
-            }}
-        />
-    );
-}
-
-/**
- * Records — the durable record-management home; opens as a workspace modal.
+ * OPERATIONS — the operating day, the people it is made of, and its configuration.
  *
- * A peer of the operational workspaces rather than a chapter of Organization: Organization
- * configures the business, Records is where an operator finds a human. It is deliberately last in
- * the operational group — you reach for it when the queues are not the answer.
+ * One rail entry where there were three. Roster answered "who is expected where", Records answered
+ * "who are these people", and Assignments answered "what commitments is that derived from, and how
+ * are they configured" — three doors onto the same day, which made an operator declare in advance
+ * which question they were about to ask. They are now WORK and STUDIO inside one workspace.
+ *
+ * The ICON stays the people mark rather than a calendar. The name is broader now, but what an
+ * operator is reaching for is unchanged — "where do I find Lennon", "is Toddler A short" — and the
+ * mark they already learned to find in the rail should keep pointing at it.
  */
-export function SidebarRecordsNavItem({ collapsed }: { collapsed: boolean }) {
+export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) {
     const activeModal = useActiveAdminV2WorkspaceModal();
     return (
         <SidebarModalNavButton
             collapsed={collapsed}
-            title="Records — staff and children, whether or not they are in a queue"
-            label="Records"
+            title="Operations — the operating day, the people it is made of, and its configuration"
+            label="Operations"
             icon={<Contact size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={null}
-            active={activeModal === "records"}
-            dataAttr="records"
+            active={activeModal === "operations"}
+            dataAttr="operations"
             onClick={() => {
-                dispatchAdminV2OpenRecordsModal();
+                dispatchAdminV2OpenOperationsModal();
             }}
         />
     );

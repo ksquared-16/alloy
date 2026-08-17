@@ -42,6 +42,11 @@ import {
 } from "@/lib/adminV2/records/childEnrollmentState";
 import { buildChildCohorts } from "@/lib/adminV2/records/recordCohorts";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import {
+    DURABLE_RECORD_CLOSED_EVENT,
+    type DurableRecordClosedDetail,
+} from "@/lib/runtime/focus/DurableRecordHostContext";
+import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 
 export type ChildEntry = {
     customerMemberId: string;
@@ -165,6 +170,24 @@ export default function RecordsChildrenSection({
         };
     }, [buildUrl, reloadToken]);
 
+    /**
+     * A record that was EDITED refreshes its row; one that was only read does not.
+     *
+     * The host reports which, so this listener does not have to infer it from the fact that a record
+     * closed. Re-querying the cohort every time a record is dismissed would make browsing the list
+     * cost a round trip per glance, and never re-querying would leave an edited name stale in the
+     * row the operator just came back to.
+     */
+    useEffect(() => {
+        const onClosed = (event: Event) => {
+            const detail = (event as CustomEvent<DurableRecordClosedDetail>).detail;
+            if (!detail?.changed || detail.subjectType !== "child") return;
+            setReloadToken((n) => n + 1);
+        };
+        window.addEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+        return () => window.removeEventListener(DURABLE_RECORD_CLOSED_EVENT, onClosed);
+    }, []);
+
     const loadMore = useCallback(async () => {
         if (nextOffset == null || loadingMore) return;
         setLoadingMore(true);
@@ -271,7 +294,7 @@ export default function RecordsChildrenSection({
                 trailing={
                     <button
                         type="button"
-                        className="shrink-0 rounded bg-alloy-blue px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-blue/90"
+                        className={`shrink-0 ${WS_ACTION_PRIMARY}`}
                         onClick={() => setAddOpen(true)}
                         data-child-add-open="true"
                     >
@@ -298,7 +321,7 @@ export default function RecordsChildrenSection({
                 {children == null ? (
                     <p className="px-2 py-6 text-[12px] text-alloy-midnight/50">Loading…</p>
                 ) : visible.length === 0 ? (
-                    <div className="rounded border border-dashed border-admin-border px-4 py-8 text-center">
+                    <div className="rounded-lg border border-dashed border-alloy-stone/30 px-4 py-8 text-center">
                         <p className="text-[13px] font-medium text-alloy-midnight/75">
                             {isDefaultView ? "No children yet" : "No children in this view"}
                         </p>
@@ -310,7 +333,7 @@ export default function RecordsChildrenSection({
                     </div>
                 ) : (
                     <ul
-                        className="divide-y divide-admin-border rounded border border-admin-border bg-white"
+                        className="divide-y divide-alloy-stone/15 overflow-hidden rounded-lg border border-alloy-stone/22 bg-white"
                         data-children-list="true"
                     >
                         {visible.map((c) => {
@@ -322,7 +345,7 @@ export default function RecordsChildrenSection({
                                 <li key={c.customerMemberId}>
                                     <button
                                         type="button"
-                                        className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-midnight/[0.03]"
+                                        className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                         onClick={() => openChild(c.customerMemberId)}
                                         data-child-member={c.customerMemberId}
                                         data-child-row="true"
@@ -358,7 +381,7 @@ export default function RecordsChildrenSection({
                                             {next.actions.includes("start_enrollment") ? (
                                                 <button
                                                     type="button"
-                                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5"
+                                                    className="rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
                                                     onClick={() =>
                                                         void startEnrollment(c.customerMemberId, c.displayName)
                                                     }
@@ -370,7 +393,7 @@ export default function RecordsChildrenSection({
                                             {next.actions.includes("enroll_directly") ? (
                                                 <button
                                                     type="button"
-                                                    className="rounded border border-admin-border px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-midnight/5"
+                                                    className="rounded border border-alloy-stone/25 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/10"
                                                     onClick={() =>
                                                         setDirectEnroll({
                                                             id: c.customerMemberId,
@@ -397,7 +420,7 @@ export default function RecordsChildrenSection({
                         </p>
                         <button
                             type="button"
-                            className="rounded border border-admin-border px-2.5 py-1 text-[12px] font-medium text-alloy-midnight/75 hover:border-alloy-stone/45 disabled:opacity-50"
+                            className={WS_ACTION_SECONDARY}
                             onClick={() => void loadMore()}
                             disabled={loadingMore}
                             data-children-load-more="true"

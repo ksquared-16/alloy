@@ -37,6 +37,11 @@ import {
     DURABLE_CHILD_GRAIN,
     type DurableChildSubject,
 } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import { deriveHouseholdFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveHouseholdFocusPanelCards";
+import {
+    DURABLE_HOUSEHOLD_GRAIN,
+    type DurableHouseholdSubject,
+} from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableHouseholdSubjectModel";
 
 export type FocusPanelWorkModeFromDurablePersonInput = {
     mode: FocusPanelMode;
@@ -175,6 +180,84 @@ export function focusPanelWorkModeModelFromDurableChild(
         mode,
         subject: { type: "child", id: subject.memberId, label: subject.label },
         context: buildDurableChildOperationalContext(subject, canMutate, input.operationalHost ?? null),
+        cardModels,
+        cardReadiness,
+        commands: [],
+        title: subject.label,
+        statusLabel: null,
+        canMutate,
+        perspective: null,
+    };
+}
+
+// ── HOUSEHOLD ────────────────────────────────────────────────────────────────────────────────────
+
+export type FocusPanelWorkModeFromDurableHouseholdInput = {
+    mode: FocusPanelMode;
+    subject: DurableHouseholdSubject;
+    canMutate: boolean;
+    /**
+     * Operational context, when a queue happens to hold one of this family's cases. ENRICHMENT ONLY,
+     * and the plural matters: a family can have several cases and the host names at most one of them,
+     * so it may add "somewhere this family is being worked" and may never stand for the family.
+     */
+    operationalHost?: OperationalHostContext | null;
+};
+
+/**
+ * The household's `OperationalContext`.
+ *
+ * `businessProcess` is all-null even when an operational host exists — the same rule the child and
+ * person paths follow, and for a sharper reason here: a household with two enrollments has two stages,
+ * so ANY single stage on this panel would be a claim about the family that is true of at most one of
+ * its cases.
+ *
+ * The grain is `case` (see `DURABLE_HOUSEHOLD_GRAIN`) while the subject TYPE is `household`. That pair
+ * is what lets the registry offer the Household card here and withhold the case-shaped ones.
+ */
+export function buildDurableHouseholdOperationalContext(
+    subject: DurableHouseholdSubject,
+    canMutate: boolean,
+    operationalHost: OperationalHostContext | null = null,
+): OperationalContext {
+    return {
+        grain: DURABLE_HOUSEHOLD_GRAIN,
+        subject: { type: "household", id: subject.householdId, label: subject.label },
+        businessProcess: { key: null, label: null, stageKey: null },
+        perspective: null,
+        truth: subject.truth,
+        signals: NOT_APPLICABLE_CASE_SIGNALS,
+        operationalHost,
+        capabilities: { canMutate, maskedChannels: false },
+        status: "ready",
+    };
+}
+
+export function focusPanelWorkModeModelFromDurableHousehold(
+    input: FocusPanelWorkModeFromDurableHouseholdInput,
+): FocusPanelWorkModeModel {
+    const { mode, subject, canMutate } = input;
+
+    // As on the person and child paths: the host never participates in card derivation. Which cards a
+    // family composes is a property of the family, not of whether someone is currently working one of
+    // its enrollments.
+    const cardModels = deriveHouseholdFocusPanelCards({ subject });
+
+    const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>();
+    for (const [key, model] of cardModels) {
+        cardReadiness.set(key, model.visible ? "ready" : "not_applicable");
+    }
+
+    return {
+        source: "durable_subject",
+        phase: "settled",
+        mode,
+        subject: { type: "household", id: subject.householdId, label: subject.label },
+        context: buildDurableHouseholdOperationalContext(
+            subject,
+            canMutate,
+            input.operationalHost ?? null,
+        ),
         cardModels,
         cardReadiness,
         commands: [],

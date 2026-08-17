@@ -208,15 +208,51 @@ describe("card applicability is declared per card, not switched centrally", () =
 
     it("an undeclared card is case-only — silence never widens applicability", () => {
         expect(DEFAULT_CARD_GRAINS).toEqual(["opportunity"]);
-        expect(cardGrains("household")).toEqual(["opportunity"]);
-        expect(cardAppliesToGrain("household", "person")).toBe(false);
+        /*
+         * `children` is the honest witness for this rule now that `household` carries a declaration
+         * of its own — and it stays undeclared deliberately, not by oversight.
+         * `buildChildrenCardModel` reads `_inquiry_children`, which is ONE ENROLLMENT'S projection of
+         * a family's children; a durable household knows its children through `customer_members`, a
+         * wider and differently-shaped set. Declaring the grain without a builder that reads the
+         * canonical edge would put enrollment framing on children who have no enrollment.
+         */
+        expect(cardGrains("children")).toEqual(["opportunity"]);
+        expect(cardAppliesToGrain("children", "household")).toBe(false);
         expect(cardAppliesToGrain("children", "person")).toBe(false);
+        // …and a declaration widens a card only to the grains it NAMES, never to every grain: the
+        // Household card is declared for `household`, and is still not a person card.
+        expect(cardAppliesToGrain("household", "person")).toBe(false);
     });
 
-    it("the person grain selects only Employment out of the whole catalog", () => {
-        expect(cardKeysForGrain("person")).toEqual(["employment"]);
+    it("Household is declared for the case AND the durable family", () => {
+        // The second card to carry a grain declaration, and the reason the durable Household surface
+        // composes at all: silence would have left it case-only, `deriveHouseholdFocusPanelCards`
+        // would have built nothing, and the record would have opened empty.
+        expect(cardGrains("household")).toEqual(["opportunity", "household"]);
+        expect(cardAppliesToGrain("household", "household")).toBe(true);
+        expect(cardAppliesToGrain("household", "opportunity")).toBe(true);
+    });
+
+    /**
+     * The person grain selects TWO cards, and the second one arrived by declaration.
+     *
+     * This asserted `["employment"]` for as long as a person had exactly one canonical truth to
+     * show. `scheduling` joined it when the Assignments card was generalized around
+     * `OperationalAssignmentSubject`: `schedule_assignments` was extended in place so children and
+     * staff would not acquire competing scheduling engines, and every canonical assignment action
+     * already declared `person` among its supported entity types — the CARD was the last layer
+     * still assuming a child.
+     *
+     * The assertion is updated rather than loosened. An exact list is what makes an accidental
+     * widening visible, and this test earned its keep by failing the moment the grain changed.
+     */
+    it("the person grain selects Employment and Assignments out of the whole catalog", () => {
+        expect(cardKeysForGrain("person")).toEqual(["employment", "scheduling"]);
         // The catalog is one vocabulary; selection is what varies.
         expect(FOCUS_PANEL_CARDS.length).toBeGreaterThan(10);
+        // Widening named `person` and NOTHING else: a staff member's commitment is a person fact,
+        // a household's is not.
+        expect(cardAppliesToGrain("scheduling", "household")).toBe(false);
     });
 
     it("every card that was case-grain is still case-grain — only child-grain cards are excluded", () => {

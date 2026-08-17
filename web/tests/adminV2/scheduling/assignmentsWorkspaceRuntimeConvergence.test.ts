@@ -23,9 +23,9 @@ describe("Workspace expand + BOS stacking", () => {
         expect(bos).toMatch(/Escape/);
     });
 
-    it("Scheduling / Processing / Communications / Work Items share BosModalShell", () => {
+    it("Operations / Processing / Communications / Work Items share BosModalShell", () => {
         for (const rel of [
-            "app/adminV2/components/SchedulingModal.tsx",
+            "app/adminV2/components/OperationsModal.tsx",
             "app/adminV2/processing/ProcessingModal.tsx",
             "app/adminV2/components/InboxModal.tsx",
             "app/adminV2/components/MyTasksModal.tsx",
@@ -35,17 +35,38 @@ describe("Workspace expand + BOS stacking", () => {
     });
 });
 
-describe("Assignments Workspace shared runtime", () => {
-    it("preloads studio + work data in one site bootstrap (no Studio-only cold load)", () => {
-        const ws = read("components/adminV2/scheduling/SchedulingWorkspace.tsx");
-        expect(ws).toContain("coreSnapshotReady");
-        expect(ws).toContain("siteBootstrapSeqRef");
-        expect(ws).toContain("view=assignment_roster");
-        expect(ws).toContain("view=studio_config");
-        expect(ws).toContain("schedule-patterns");
-        expect(ws).toContain("data-assignments-ws-timings");
-        // Must not reload studio solely because mode flipped to studio when snapshot exists.
-        expect(ws).toMatch(/Entering Studio no longer cold-loads/);
+describe("Operations Studio runtime", () => {
+    /**
+     * Studio loads ON DEMAND, and this replaces the opposite assertion.
+     *
+     * The Assignments workspace preloaded Studio as part of a site-wide bootstrap so entering Studio
+     * never cold-started — correct for a workspace whose whole purpose was the ledger and its
+     * configuration. Operations is not that workspace: WORK is where an operator lands and by far
+     * where they stay, and paying four configuration reads on every Roster open to make an
+     * occasional Studio visit faster is the wrong trade.
+     *
+     * So the invariant inverted deliberately, and the test says so rather than being deleted —
+     * a removed assertion would leave no record that the behaviour was chosen.
+     */
+    it("loads configuration when Studio is entered, not on every Operations open", () => {
+        const studio = read("components/adminV2/operations/OperationsStudio.tsx");
+        expect(studio).toContain("/api/admin/assignment-types");
+        expect(studio).toContain("view=studio_config");
+        expect(studio).toContain("schedule-patterns");
+        expect(studio).toContain("view=calculations");
+        // Mounted only in Studio mode — the gate that makes "on demand" true.
+        const ws = read("components/adminV2/roster/RosterWorkspace.tsx");
+        expect(ws).toContain('mode === "studio" ? (');
+        expect(ws).toContain("<OperationsStudio");
+    });
+
+    /**
+     * Patterns remain SHARED with Locations → Schedule. Placement moved; ownership did not.
+     */
+    it("reads patterns from the shared endpoint, with no Operations-specific store", () => {
+        const studio = read("components/adminV2/operations/OperationsStudio.tsx");
+        expect(studio).toContain("/api/admin/schedule-patterns");
+        expect(studio).toContain("mapRawPattern");
     });
 
     it("Assignment Categories consume snapshot operationalRooms", () => {

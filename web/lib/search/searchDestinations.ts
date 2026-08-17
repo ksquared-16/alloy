@@ -206,16 +206,35 @@ function firstName(displayName: string): string {
 }
 
 /**
- * The subject's own card — what clicking the result focuses.
+ * The subject's own destination — what clicking the RESULT means.
  *
- *   child     → Children card, that child selected
- *   person    → Household card, that person's relationship row selected
- *   household → Household card
+ *   child     → the durable child record
+ *   person    → the durable person record
+ *   household → the Household card on the household's case (no durable household grain yet)
  *   location  → canonical Settings route (a campus has no Focus Panel card)
+ *
+ * ── THIS IS A RECORD INTENT, AND IT NO LONGER CHOOSES A LENS ──
+ *
+ * Until this changed, a child's subject destination carried `host_work_unit_key` and
+ * `host_work_view_id` resolved from `resolveHostWorkViewId` — "the subject's FIRST truthful
+ * membership". Clicking "Lennon Kurzman · Child · Kurzman Family" therefore committed the Waitlist
+ * lens on the family's Work Unit, because Lennon happens to be in it. Nobody asked for Waitlist;
+ * Search picked it, and picked it silently.
+ *
+ * A record destination now names the record and nothing else. Its operational siblings — the
+ * per-membership cohort destinations below — still carry every one of those fields, because those
+ * ARE operational intents and the lens is the point of them.
+ *
+ * ── A HOST IS NO LONGER REQUIRED ──
+ *
+ * The old shape returned null without a host, so a child whose enrollment had completed, or who
+ * never entered one, produced NO subject destination at all — the result rendered and could not be
+ * opened. A durable record needs no case and no queue, which is the whole reason the grain exists.
  */
 export function resolveSubjectDestination(
     subject: SearchSubject,
-    contexts: readonly SearchContext[] = []
+    contexts: readonly SearchContext[] = [],
+    preferredContextKey?: string | null
 ): SearchDestination | null {
     if (subject.kind === "location") {
         return {
@@ -227,51 +246,65 @@ export function resolveSubjectDestination(
         };
     }
 
-    const host = resolveHost(subject, contexts);
-    if (!host) return null;
-
-    if (subject.kind === "child") {
+    if (subject.kind === "child" || subject.kind === "person") {
         return {
             key: "subject",
             label: `Open ${firstName(subject.display_name)}`,
-            target: "focus_panel",
-            card_key: SEARCH_CARD_KEYS.children,
-            item_id: subject.id,
-            host_entity_type: host.type,
-            host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
+            target: "durable_record",
+            // `child` is keyed on `customer_members.id` and `person` on `persons.id` — both are
+            // `SearchSubject.id` by the subject contract, so no host walk is involved.
+            subject_type: subject.kind,
+            subject_id: subject.id,
+            // A preference the QUERY expressed ("Lennon assignment"), never a commitment. The host
+            // must still be correct when it is absent.
+            preferred_context_key: preferredRecordContextKey(contexts, preferredContextKey),
             primary: true,
         };
     }
 
-    if (subject.kind === "person") {
-        return {
-            key: "subject",
-            label: `Open ${firstName(subject.display_name)}`,
-            target: "focus_panel",
-            card_key: SEARCH_CARD_KEYS.household,
-            item_id: subject.person_id ?? subject.id,
-            host_entity_type: host.type,
-            host_entity_id: host.id,
-            host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
-            primary: true,
-        };
-    }
-
-    // household
+    /*
+     * Household — now a DURABLE RECORD, like the two above.
+     *
+     * This used to be "the Household card on the household's own case", with the note that it would
+     * become a `durable_record` once a household composition existed. It exists
+     * (`composeDurableHouseholdSubject`), so this is that flip — and it fixes a defect, not only a
+     * shape. The old branch called `resolveHost`, which falls through to the household's CASE, and
+     * returned null when there wasn't one. A family whose enrollment had completed, or who never had
+     * one, therefore produced NO subject destination at all: the result rendered in Search and could
+     * not be opened. That is the same sentence already written above for children, and it has the
+     * same answer — a durable record needs no case and no queue.
+     *
+     * The household's own case is still reachable; it is simply no longer what "open this family"
+     * means. Its operational siblings below carry it.
+     */
     return {
         key: "subject",
         label: `Open ${subject.display_name}`,
-        target: "focus_panel",
-        card_key: SEARCH_CARD_KEYS.household,
-        host_entity_type: host.type,
-        host_entity_id: host.id,
-        host_work_unit_key: resolveHostWorkUnitKey(subject, contexts),
-            host_work_view_id: resolveHostWorkViewId(contexts),
+        target: "durable_record",
+        subject_type: "household",
+        // `SearchSubject.id` for a household subject is `customers.id` by the subject contract — the
+        // same id `composeDurableHouseholdSubject` reads. No host walk is involved.
+        subject_id: subject.id,
+        preferred_context_key: preferredRecordContextKey(contexts, preferredContextKey),
         primary: true,
     };
+}
+
+/**
+ * The context a record destination should PREFER, when the query named one.
+ *
+ * Only a context the subject actually holds may be preferred — a query term that matches no
+ * participation expresses an interest the record cannot honour, and passing it through would make
+ * the host open on a context that is not there.
+ */
+function preferredRecordContextKey(
+    contexts: readonly SearchContext[],
+    promoted?: string | null
+): string | null {
+    const wanted = (promoted ?? "").trim();
+    if (!wanted) return null;
+    const held = contexts.find((c) => c.key === wanted || (wanted === "schedule" && c.kind === "schedule"));
+    return held ? held.key : null;
 }
 
 /** Household context for a subject that belongs to one. */
@@ -346,6 +379,17 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
         };
     },
     relationship: () => null,
+    /**
+     * Employment produces no operational destination, and the exhaustive `Record` is what forced
+     * this to be stated rather than forgotten.
+     *
+     * Employment is a STANDING, not a queue position: there is no business process behind it, no
+     * Work View that holds a staff member, and no host case whose Focus Panel would compose them.
+     * The context still ranks and displays — an operator sees "Employment · Lead Teacher · Active" —
+     * and the person's RECORD destination is where they go from there. A destination naming a unit
+     * anyway would be the fabricated route this resolver exists to refuse.
+     */
+    employment: () => null,
     placement: (_context, subject, host, allContexts) => {
         if (!host || subject.kind !== "child") return null;
         return {
@@ -376,7 +420,9 @@ export function resolveSearchDestinations(args: {
     const { subject, contexts, promotedKeys } = args;
     const host = resolveHost(subject, contexts);
 
-    const primary = resolveSubjectDestination(subject, contexts);
+    // The query's promoted context rides the RECORD destination as a preference. It does not make
+    // the gesture operational — "Lennon assignment" still means "open Lennon", on Assignment.
+    const primary = resolveSubjectDestination(subject, contexts, promotedKeys[0] ?? null);
     const secondary: SearchDestination[] = [];
 
     for (const context of contexts) {

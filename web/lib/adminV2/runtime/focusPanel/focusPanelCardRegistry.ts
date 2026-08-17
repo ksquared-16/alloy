@@ -74,7 +74,25 @@ export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<Car
  */
 export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
-    { key: "household", title: "Household", ownsOperationalTruth: true },
+    /**
+     * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
+     * durable Household surface exist at all. Silence would have left it case-only by the
+     * `DEFAULT_CARD_GRAINS` rule, so `deriveHouseholdFocusPanelCards` would compose nothing and the
+     * record would open empty. That is the silence rule working, not a bug to route around.
+     *
+     * It clears the truthfulness bar at both grains for the same reason Employment does:
+     * `buildOpportunityFamilyContactRows` already answers "who is this family, and how do we reach
+     * them" from `customer_persons` alone, with no case involved. Same card, same renderer, same
+     * model builder — only the producer of the record differs.
+     */
+    { key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"] },
+    /**
+     * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads `_inquiry_children`
+     * — one enrollment's projection of a family's children — while a durable household knows its
+     * children through `customer_members`, a wider and differently-shaped set. Declaring the grain
+     * without a builder that reads the canonical edge would render enrollment framing for children
+     * that have no enrollment. See `deriveHouseholdFocusPanelCards`.
+     */
     { key: "children", title: "Children", ownsOperationalTruth: true },
     /**
      * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
@@ -103,8 +121,31 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_mission", title: "Current Mission" },
     { key: "timeline", title: "Timeline" },
     { key: "notes", title: "Notes" },
-    // Truth-owning card with no reserved-cell title (renders its own): declared for the lifecycle concern.
-    { key: "scheduling", ownsOperationalTruth: true },
+    /**
+     * Truth-owning card with no reserved-cell title (it renders its own).
+     *
+     * Declared for `child` as well as the case, because a commitment is a fact about the CHILD. The
+     * card was always child-shaped inside — it renders per-child assignment rows and executes every
+     * canonical assignment action against a `customer_members.id` — and the case grain was only ever
+     * the surface that happened to host it.
+     *
+     * This is the declaration that lets `Operations → Roster → Lennon → Schedule` render the SAME
+     * card the case panel renders, rather than a second assignments view. It reaches the child grain
+     * as a durable OPERATIONAL context (`canonical_operational`), not through a published
+     * composition — there is no `schedule` business process and there must not be one.
+     *
+     * ── AND `person`, BECAUSE A COMMITMENT IS NOT A CHILD CONCEPT ──
+     *
+     * `schedule_assignments` was extended in place so children and staff would not acquire competing
+     * scheduling engines, and every canonical assignment action already declares `person` among its
+     * supported entity types. The card was the only layer still assuming a child, and generalizing
+     * it around `OperationalAssignmentSubject` is what makes this third grain honest rather than
+     * aspirational: `Roster → Staff → Jane → Schedule` renders THIS card, not a staff copy of it.
+     *
+     * The grain concern remains the gate. A card reaches the person grain because it is declared
+     * here — never because a component decided it could.
+     */
+    { key: "scheduling", ownsOperationalTruth: true, grains: ["opportunity", "child", "person"] },
 ];
 
 const CARD_BY_KEY: ReadonlyMap<FocusPanelCardKey, CardDefinition> = new Map(

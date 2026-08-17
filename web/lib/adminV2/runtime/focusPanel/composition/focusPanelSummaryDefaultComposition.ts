@@ -259,6 +259,38 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
 ];
 
 /**
+ * The durable FAMILY's composition — the Household card, on its own.
+ *
+ * Same six-column left lane as the child, for the same recorded reason: a 12-column card forces
+ * `planPublishedLayout` to fall back from `lanes` to `grid`.
+ *
+ * ── THIS ARM IS WHY THE CARD WAS ONCE INVISIBLE ──
+ *
+ * Widening `OperationalSubjectType` without adding an arm to the switch below left it NON-EXHAUSTIVE,
+ * so it returned `undefined` and the surface composed a grid with no areas: the model carried a ready
+ * Household card and the panel rendered nothing, with no error. That is a TYPE error and CI would
+ * have caught it — `npm run typecheck` cannot run on this host, and the browser found it first.
+ *
+ * ── AND WHY IT IS DISTINCT FROM THE TWO CHILD COMPOSITIONS ABOVE ──
+ *
+ * A durable family is not a child seen through its family, and it is not a case. It is the household
+ * as its own record: one card, family-owned, with nothing borrowed from an enrollment it may not
+ * have. `familySettlement` above answers "is a settled family the Record of Truth BEHIND this
+ * child"; this arm answers "the family IS the record", which is a different question with a
+ * different subject.
+ */
+export const FOCUS_PANEL_SUMMARY_HOUSEHOLD_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    {
+        key: "household",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
+    },
+];
+
+/**
  * Where the subject is, not merely what it is.
  *
  * `familySettlement` says a settled family opportunity is the Record of Truth behind this subject.
@@ -289,6 +321,13 @@ export function focusPanelDefaultCompositionForGrain(
             return context?.familySettlement
                 ? FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION
                 : FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION;
+        case "household":
+            /*
+             * The family as its own record. It never consults `context` for the same reason `person`
+             * does not: a household IS the family, so "a settled family backs this subject" is not a
+             * distinction it can draw about itself.
+             */
+            return FOCUS_PANEL_SUMMARY_HOUSEHOLD_COMPOSITION;
         case "opportunity":
             return FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION;
     }

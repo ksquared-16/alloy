@@ -59,14 +59,36 @@ export function applyCanonicalChildrenCollectionPolicy(
         .map(({ row }) => row);
 }
 
+/**
+ * The DURABLE child-row source, for a record surface that is about one child.
+ *
+ * `_inquiry_children` is a CASE's roster: one enrollment's view of a family's children, carrying that
+ * enrollment's desired program, schedule and outcome. On a durable child record there is no
+ * enrollment and no family roster — the collection has exactly one member and it is the subject.
+ *
+ * This key exists so that fact can be stated without borrowing the case's name for it. Writing the
+ * subject into `_inquiry_children` would have worked identically today and told every future reader
+ * that an inquiry exists, which is the case-shaped-truth copying the convergence audit forbids.
+ *
+ * The rows are shaped the same because the ROW SHAPE is canonical child identity —
+ * `mapRawInquiryChildrenToDrawerRows` is total and defaults every enrollment-scoped field to null,
+ * so a durable row maps to a child with no participation projections. That is the honest answer for
+ * a host that has not loaded participation, and it is the state the card already renders correctly.
+ */
+export const DURABLE_CHILD_ROWS_KEY = "_durable_child_rows" as const;
+
 /** Normalize Focus Panel children rows from operational truth using canonical collection policy. */
 export function normalizeFocusPanelChildrenRowsFromTruth(truth: Record<string, unknown>): {
     rows: FocusPanelChildDrawerRow[];
     rawRows: Record<string, unknown>[];
 } {
-    const rawRows = ((truth._inquiry_children as unknown[]) ?? []).map((x) =>
-        x && typeof x === "object" ? (x as Record<string, unknown>) : {},
-    );
+    // A case's roster, or a record's single subject — never both. A durable host supplies one key
+    // and a case host the other, so there is no precedence to get wrong.
+    const source =
+        (truth._inquiry_children as unknown[] | undefined)
+        ?? (truth[DURABLE_CHILD_ROWS_KEY] as unknown[] | undefined)
+        ?? [];
+    const rawRows = source.map((x) => (x && typeof x === "object" ? (x as Record<string, unknown>) : {}));
     const mapped = mapRawInquiryChildrenToDrawerRows(rawRows);
     return {
         rows: applyCanonicalChildrenCollectionPolicy(mapped, rawRows),

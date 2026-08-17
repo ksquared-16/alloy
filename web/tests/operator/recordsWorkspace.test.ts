@@ -1,5 +1,9 @@
 /**
- * RECORDS WORKSPACE V1 — the cohort model and the record gestures.
+ * THE DURABLE POPULATION — the cohort model and the record gestures, now under Roster.
+ *
+ * Staff and Children were a separate Records workspace. The product moved; the code did not get
+ * rewritten, and these tests are the evidence for that claim — they still exercise the same cohort
+ * functions and the same section components, from their new home.
  *
  * The browser proves the surface. These prove the parts a screenshot cannot: that cohort membership
  * is DERIVED rather than stored, that `Lead Teachers` comes from the tenant's configuration and not
@@ -24,7 +28,10 @@ import {
     type ChildCohortRecord,
     type StaffCohortRecord,
 } from "@/lib/adminV2/records/recordCohorts";
-import { resolveRecordsSection, RECORDS_SECTION_TABS } from "@/app/adminV2/records/recordsSections";
+import {
+    resolveOperationsWorkSection as resolveRosterSection,
+    OPERATIONS_WORK_TABS as ROSTER_SECTION_TABS,
+} from "@/app/adminV2/operations/operationsSections";
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
 const TODAY = "2026-08-14";
@@ -33,15 +40,59 @@ function staff(over: Partial<StaffCohortRecord>): StaffCohortRecord {
     return { isOpen: true, startDate: "2026-01-05", endDate: null, positionKey: null, ...over };
 }
 
-describe("Records is two sections and no People layer", () => {
-    it("declares exactly Staff and Children", () => {
-        expect(RECORDS_SECTION_TABS.map((t) => t.key)).toEqual(["staff", "children"]);
+describe("the durable population lives beside the operating day, with no People layer", () => {
+    it("Roster declares the operating day AND its people, in that order", () => {
+        expect(ROSTER_SECTION_TABS.map((t) => t.key)).toEqual([
+            "roster",
+            "attendance",
+            "staff",
+            "children",
+        ]);
     });
 
-    it("resolves a deep link, and refuses an unknown section rather than defaulting", () => {
-        expect(resolveRecordsSection("children")).toBe("children");
-        expect(resolveRecordsSection("people")).toBeNull();
-        expect(resolveRecordsSection(null)).toBeNull();
+    it("still resolves every link ever written to the separate Records workspace", () => {
+        // The re-home is a MOVE. A deep link that stops resolving is a removal wearing a move's
+        // clothes: the page still loads and nothing opens, which reads as "the link is fine".
+        expect(resolveRosterSection("children")).toBe("children");
+        expect(resolveRosterSection("staff")).toBe("staff");
+        expect(resolveRosterSection("daily_roster")).toBe("roster");
+        expect(resolveRosterSection("people")).toBeNull();
+        expect(resolveRosterSection(null)).toBeNull();
+    });
+
+    it("the separate Records workspace is GONE, not merely unlinked", () => {
+        // An orphaned mount is worse than a deleted one: it keeps compiling, keeps drifting from the
+        // sections that are actually rendered, and eventually someone wires it back up.
+        for (const rel of [
+            "components/adminV2/records/RecordsWorkspace.tsx",
+            "app/adminV2/components/RecordsModal.tsx",
+            "app/adminV2/records/RecordsWorkspaceShell.tsx",
+            "app/adminV2/records/recordsSections.ts",
+        ]) {
+            expect(() => read(rel), `${rel} must not exist`).toThrow();
+        }
+        const sidebar = read("app/adminV2/components/Sidebar.tsx");
+        expect(sidebar).not.toContain("SidebarRecordsNavItem");
+    });
+
+    it("Roster mounts the SAME section components, not copies", () => {
+        const src = read("components/adminV2/roster/RosterWorkspace.tsx");
+        expect(src).toContain("RecordsStaffSection");
+        expect(src).toContain("RecordsChildrenSection");
+        /*
+         * …and Children is NOT scoped by the workspace site picker.
+         *
+         * It was, briefly. Browser certification found that site scope means "children with an
+         * active placement at that site", that the picker defaults to a site rather than All, and
+         * that no child in the certification tenant holds an active placement — so the durable
+         * population rendered empty and read as "this tenant has no children".
+         *
+         * Asserted on the RENDER SITE rather than by counting `siteLocationId` in the file: Roster
+         * and Attendance legitimately take the site, and a whole-file scan would go green the
+         * moment someone reintroduced it for Children.
+         */
+        const childrenMount = src.slice(src.indexOf("<RecordsChildrenSection"));
+        expect(childrenMount.slice(0, childrenMount.indexOf("/>"))).not.toContain("siteLocationId");
     });
 });
 
@@ -222,7 +273,7 @@ describe("Add Staff moved rather than being rewritten", () => {
     it("`/organization/staff` no longer renders a directory", () => {
         const src = read("app/adminV2/settings/organization/staff/page.tsx");
         expect(src).toContain("redirect");
-        expect(src).toContain("workspace=records");
+        expect(src).toContain("workspace=roster&section=staff");
         expect(src).not.toContain("StaffDirectoryPage");
     });
 });

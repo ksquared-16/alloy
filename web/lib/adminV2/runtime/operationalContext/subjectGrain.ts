@@ -29,8 +29,14 @@ import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/
  * documented in `docs/runtime/GRAIN-AUTHORITY-MAP.md` §10. Resolving it is a separate decision; this type is
  * only what the panel calls its subject, and existing guards that compare against `"opportunity"` keep
  * working unchanged for the family grain.
+ *
+ * `household` is the durable FAMILY — `customers` reached without a case. It is a distinct subject type
+ * from `opportunity` even though both sit at `OperationalGrain` `case`, and the distinction is load
+ * bearing: a case is one enrollment's view of a family, a household is the family. Keeping them apart is
+ * what lets the card registry offer the Household card at both while refusing case-shaped cards
+ * (`current_work`, `health`, `tour_summary`) at the durable one, where there is no process to report.
  */
-export type OperationalSubjectType = "opportunity" | "child" | "person";
+export type OperationalSubjectType = "opportunity" | "child" | "person" | "household";
 
 export type SubjectGrainResolution =
     | { ok: true; grain: OperationalGrain; subjectType: OperationalSubjectType }

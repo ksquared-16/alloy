@@ -198,11 +198,27 @@ describe("Gate A — active-runtime movement is never a route push", () => {
         expect(durableCall).not.toContain("operatorWorkUnitHrefFromKey");
     });
 
-    it("the in-kernel listener has no router at all", () => {
+    it("the listener moves, and never pushes — from anywhere in the workspace", () => {
         const src = code("components/adminV2/OperatorFocusAttentionListener.tsx");
         expect(src).toContain("useWorkUnitEntryMovement");
+        /*
+         * GATE A, UNCONDITIONAL — and this assertion was briefly weakened, which is worth recording.
+         *
+         * It was relaxed to an ORDERING ("the push is reachable only when not already on a work-unit
+         * surface") on the theory that the workspace ROOT renders no Surface Host and therefore needs
+         * a URL. The root does render one: `SurfaceHostProvider` wraps the whole workspace and decides
+         * visibility from committed Focus, not from the pathname.
+         *
+         * The browser settled it. From the root, the push changed the URL and the surface NEVER
+         * mounted (polled to 60s, blank); the movement composed the same destination in ~2.0s. So the
+         * symbol ban is not a lucky proxy here — inside this listener it IS the rule, and the ordering
+         * version was strictly weaker, because it permitted the one branch that cannot work.
+         */
         expect(src).not.toContain("router.push");
-        expect(src).not.toContain("next/navigation");
+        expect(src).not.toContain("useRouter");
+        // …and no pathname branch either. A listener that asks WHERE IT IS has re-acquired the
+        // distinction that produced the blank surface.
+        expect(src).not.toContain("usePathname");
     });
 });
 

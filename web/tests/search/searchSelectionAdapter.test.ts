@@ -52,6 +52,100 @@ function locationResult(): SearchResult {
     };
 }
 
+/**
+ * The SHIPPING shape after the record/work split: the primary destination is a durable record and
+ * carries no host at all.
+ */
+function durableChildResult(overrides: { personId?: string | null } = {}): SearchResult {
+    const personId = overrides.personId === undefined ? "p-1" : overrides.personId;
+    return {
+        subject: {
+            kind: "child",
+            id: "cm-1",
+            display_name: "Joe Smith",
+            person_id: personId,
+            household_id: "cust-1",
+        },
+        recognition: {
+            type_label: "Child",
+            household_name: "Smith Household",
+            location_label: "Bend Campus",
+            age_label: "4y 2mo",
+        },
+        contexts: [],
+        destinations: [
+            { key: "subject", label: "Open Joe", target: "durable_record", subject_type: "child", subject_id: "cm-1", primary: true },
+            { key: "process:enrollment", label: "Enrollment", target: "focus_panel", card_key: "current_work", context_key: "enrollment", host_entity_type: "opportunities", host_entity_id: "opp-9" },
+            { key: "household", label: "Household", target: "focus_panel", card_key: "household", host_entity_type: "customers", host_entity_id: "cust-1" },
+        ],
+        ranking: { score: 500, reasons: [] },
+    };
+}
+
+function durablePersonResult(): SearchResult {
+    return {
+        subject: { kind: "person", id: "p-kelly", display_name: "Kelly Kurzman", person_id: "p-kelly", household_id: "cust-1" },
+        recognition: { type_label: "Parent / Guardian" },
+        contexts: [],
+        destinations: [
+            { key: "subject", label: "Open Kelly", target: "durable_record", subject_type: "person", subject_id: "p-kelly", primary: true },
+        ],
+        ranking: { score: 400, reasons: [] },
+    };
+}
+
+describe("a DURABLE primary destination still yields a pickable record", () => {
+    /**
+     * The regression this exists to prevent, arriving from the opposite direction to the original.
+     *
+     * When the subject destination became `durable_record` it stopped carrying a host — and a
+     * projection that only understood `focus_panel` would have found no entity on ANY person or
+     * child result and filtered every one of them away. Silently: an empty picker, not an error.
+     * That is the same failure mode this module was written after.
+     */
+    it("does not zero out the picker for a child", () => {
+        const selection = searchSelectionFromResult(durableChildResult())!;
+        expect(selection).toBeTruthy();
+        expect(selection.entity_type).toBe("persons");
+        expect(selection.entity_id).toBe("p-1");
+        expect(selection.name).toBe("Joe Smith");
+        // The case behind the subject is still resolved, from the OPERATIONAL siblings.
+        expect(selection.opportunity_id).toBe("opp-9");
+    });
+
+    it("does not zero out the picker for a person", () => {
+        const selection = searchSelectionFromResult(durablePersonResult())!;
+        expect(selection.entity_type).toBe("persons");
+        expect(selection.entity_id).toBe("p-kelly");
+    });
+
+    it("drops a child with no person row rather than inventing an entity type", () => {
+        // `customer_members.person_id` is nullable and null is ordinary. These consumers pick in the
+        // drawer vocabulary, which has no child grain, so the honest answer is no reference — never
+        // a fabricated `customer_members` entity type, which the legacy guard below also forbids.
+        expect(searchSelectionFromResult(durableChildResult({ personId: null }))).toBeNull();
+    });
+
+    it("never names a legacy drawer entity type", () => {
+        for (const result of [durableChildResult(), durablePersonResult()]) {
+            const selection = searchSelectionFromResult(result);
+            expect(selection?.entity_type).not.toBe("customer_members");
+            expect(selection?.entity_type).not.toBe("contacts");
+        }
+    });
+
+    it("still builds picker options from a durable-primary result set", () => {
+        const options = buildRecordPickerOptions(
+            searchSelectionsFromResults([durableChildResult(), durablePersonResult()]),
+        );
+        // Both people are pickable. (The builder also derives a household option from the child's
+        // `customer_id`, which is pre-existing behaviour and not what this test is about.)
+        const people = options.filter((o) => o.entity_type === "person").map((o) => o.entity_id);
+        expect(people).toContain("p-1");
+        expect(people).toContain("p-kelly");
+    });
+});
+
 describe("search selection projection", () => {
     it("flattens a subject to the HOST record its PRIMARY destination names", () => {
         const selection = searchSelectionFromResult(childResult())!;

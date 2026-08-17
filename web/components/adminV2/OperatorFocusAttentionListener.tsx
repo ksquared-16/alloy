@@ -30,6 +30,32 @@ import {
  * `useWorkUnitEntryGesture` — "an entry point that is not wired to K1 is not merely un-migrated; it
  * is broken."
  *
+ * ── AND THERE IS NO PUSH, FROM ANYWHERE IN THE WORKSPACE ──
+ *
+ * This listener is a SIBLING of `SurfaceHostProvider` inside `RuntimeKernelProvider`, in the
+ * WORKSPACE layout. So wherever it can fire, the Surface Host is mounted — and the Host decides what
+ * is visible from COMMITTED FOCUS, never from the pathname (`SurfaceHostContext`: "the visible
+ * decision — committed Focus, and nothing else"). The workspace ROOT is not an exception to that; it
+ * is the ordinary case.
+ *
+ * A push was tried here, on the theory that the root renders no Surface Host. It does render one, and
+ * the browser settled it:
+ *
+ *   push from the root  → the URL changes and the surface NEVER mounts. Measured to 60s, blank. The
+ *                         page segment re-renders and re-seeds, but a soft navigation re-reads no
+ *                         address, so nothing consumes the seed and no preparation is ever begun.
+ *   move from the root  → the surface composes in ~2.0s, with the same address projected onto the
+ *                         URL by attention afterwards.
+ *
+ * Same destination, same parameters; one paints and one does not. This is the failure the doctrine
+ * already names — "an entry point that is not wired to K1 is not merely un-migrated; it is broken" —
+ * and it is invisible to any assertion that stops at the URL, which is exactly how a push survived a
+ * browser certification once already.
+ *
+ * The genuine off-kernel case is real, and it is not here: `useOperatorRecordFocus` owns it, because
+ * a caller OUTSIDE the workspace layout has no kernel to move and a cold load is the one moment a URL
+ * may establish attention (Art 2.4).
+ *
  * ── CARD AND ITEM FOCUS RIDE THE SAME MOVEMENT ──
  *
  * They are carried as the ASPECT — the kernel's own scope for "finer than the Operational Subject" —
@@ -86,13 +112,13 @@ export default function OperatorFocusAttentionListener() {
             // expresses. The selected row rides along so the surface commits the record the operator
             // asked for rather than the lens's default subject, and the card + item ride along as
             // the ASPECT — the kernel's own name for "finer than the subject".
-            move(
-                operatorWorkUnitHrefFromKey(hostSlug),
-                null,
-                subjectId,
-                formatCardFocusAspect(detail.card_focus ?? null),
-                { cohort },
-            );
+            const href = operatorWorkUnitHrefFromKey(hostSlug);
+            const aspect = formatCardFocusAspect(detail.card_focus ?? null);
+
+            // ONE MECHANISM, WHEREVER THE OPERATOR STANDS IN THE WORKSPACE. The Surface Host reads
+            // committed Focus, so the root and a live surface are the same case; the address is a
+            // projection attention writes afterwards, never the thing that causes the surface.
+            move(href, null, subjectId, aspect, { cohort });
         };
 
         window.addEventListener(ADMINV2_OPERATOR_FOCUS_SELECTION_EVENT, onSelect);

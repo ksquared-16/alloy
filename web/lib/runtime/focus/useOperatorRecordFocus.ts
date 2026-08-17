@@ -77,6 +77,7 @@ import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryGesture";
 import type { OperatorFocusTarget } from "@/lib/workUnits/operatorFocusTarget";
 import { durableRecordHref, durableSubjectTypeFor } from "@/lib/runtime/focus/durableRecordRoute";
+import { useDurableRecordHostOptional } from "@/lib/runtime/focus/DurableRecordHostContext";
 
 /**
  * What the caller is asking for. Never inferred from subject type or caller location.
@@ -119,6 +120,15 @@ export type OperatorRecordFocusRequest = {
      * before durable records keeps its exact behaviour without being touched.
      */
     intent?: OperatorRecordFocusIntent;
+    /**
+     * A business context the CALLER would like the durable host to open on — a preference, never a
+     * commitment, and never an operational movement.
+     *
+     * Search sets it when the query named a context ("Lennon assignment"); Roster leaves it unset
+     * and the host resolves its own default. A record must stay correct with no preference at all,
+     * so nothing downstream may require this. `durable_record` only.
+     */
+    preferred_context_key?: string | null;
 };
 
 /** Module-scoped so a repeated gesture on the same record does not re-ask. */
@@ -167,6 +177,9 @@ export type OperatorRecordFocus = (request: OperatorRecordFocusRequest) => Promi
 
 export function useOperatorRecordFocus(): OperatorRecordFocus {
     const kernel = useRuntimeKernelOptional();
+    // Null when no workspace in this tree can hold a record. That is an ANSWER (route instead),
+    // never a reason to do nothing.
+    const durableHost = useDurableRecordHostOptional();
     const move = useWorkUnitEntryMovement();
     const router = useRouter();
     const pathname = usePathname();
@@ -195,10 +208,30 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
             if (request.intent === "durable_record") {
                 const grain = durableSubjectTypeFor(entityType);
                 if (grain) {
+                    const cardKey = request.card_focus?.card_key ?? null;
+                    const contextKey = (request.preferred_context_key ?? "").trim() || null;
+
+                    // ── INSIDE A WORKSPACE THAT HOSTS RECORDS ──
+                    //
+                    // Open it OVER the workspace, which stays mounted. A push from here would
+                    // unmount the section the operator was working in — its cohort, its
+                    // server-paged offset, its filter, its site and its scroll — and returning
+                    // would re-mount it at defaults. Same reasoning as the operational branch
+                    // below: the realization follows from where the caller stands, and this is
+                    // the only one that preserves what the operator had set up.
+                    if (durableHost) {
+                        durableHost.open({
+                            subjectType: grain,
+                            subjectId: entityId,
+                            cardKey,
+                            contextKey,
+                        });
+                        return true;
+                    }
+
                     // The ASPECT rides the address so a cold load lands on the same card. Absent, the
                     // grain's default composition decides — durable attention never requires an aspect.
-                    const cardKey = request.card_focus?.card_key ?? null;
-                    router.push(durableRecordHref(grain, entityId, cardKey));
+                    router.push(durableRecordHref(grain, entityId, cardKey, contextKey));
                     return true;
                 }
             }
@@ -270,6 +303,6 @@ export function useOperatorRecordFocus(): OperatorRecordFocus {
             router.push(`${href}${href.includes("?") ? "&" : "?"}${params.toString()}`);
             return true;
         },
-        [kernel, move, router, pathname]
+        [kernel, durableHost, move, router, pathname]
     );
 }

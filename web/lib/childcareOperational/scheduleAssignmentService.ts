@@ -80,6 +80,18 @@ export async function getOperationalScheduleAssignmentForAgreement(
 export type ListScheduleAssignmentsFilters = {
     enrollmentAgreementId?: string;
     customerMemberId?: string;
+    /**
+     * A STAFF subject's person. `schedule_assignments` is shared by children and staff on purpose
+     * (`operationalAssignmentService` extended it in place rather than growing a second scheduling
+     * engine), so reading a staff member's assignments is a filter on this table, never another one.
+     */
+    subjectPersonId?: string;
+    /**
+     * Carried EXPLICITLY rather than inferred from `subjectPersonId` being present, for the same
+     * reason `loadSubjectContexts` carries it: a child WITH a linked person would otherwise match a
+     * staff query, and the failure would be a plausible wrong answer rather than an error.
+     */
+    subjectType?: "child" | "staff";
 };
 
 export async function listScheduleAssignments(
@@ -94,6 +106,12 @@ export async function listScheduleAssignments(
     }
     if (filters.customerMemberId) {
         q = q.eq("customer_member_id", filters.customerMemberId);
+    }
+    if (filters.subjectPersonId) {
+        q = q.eq("subject_person_id", filters.subjectPersonId);
+    }
+    if (filters.subjectType) {
+        q = q.eq("subject_type", filters.subjectType);
     }
 
     q = q.order("start_date", { ascending: false });

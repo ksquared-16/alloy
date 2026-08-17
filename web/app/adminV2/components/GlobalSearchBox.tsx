@@ -13,6 +13,11 @@ import {
 import { splitInlineDestinations } from "@/lib/search/searchDestinations";
 import { GLOBAL_SEARCH_DROPDOWN_Z_INDEX } from "@/lib/adminV2/globalRecordSearchOpen";
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import {
+    durableRecordEntityType,
+    durableSubjectTypeFor,
+} from "@/lib/runtime/focus/durableRecordRoute";
 import { warmSearchFocusTarget } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
@@ -158,6 +163,10 @@ function SearchResultRow({
 
 export default function GlobalSearchBox() {
     const router = useRouter();
+    // Record intent goes through the SAME adapter every other record gesture uses. This control
+    // renders in the top nav, above every workspace provider — which is why it may not call the
+    // runtime kernel directly, and why the adapter (not this component) owns the destination.
+    const focusRecord = useOperatorRecordFocus();
     const wrapRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -264,6 +273,32 @@ export default function GlobalSearchBox() {
                 router.push(destination.href);
                 return;
             }
+
+            // ── RECORD INTENT ──
+            //
+            // "Show me Lennon." No lens, no host case, no Work Unit — those answer "where is this
+            // WORKED", and this gesture is not asking that. The adapter owns the destination for
+            // both realizations (in-workspace host, or the canonical address on a cold entry), so
+            // this control states intent and nothing else.
+            if (destination.target === "durable_record") {
+                const subjectType = (destination.subject_type ?? "").trim();
+                const subjectId = (destination.subject_id ?? "").trim();
+                if (!subjectType || !subjectId) return;
+                // A grain this build does not recognise is not a destination. Reading it through the
+                // default arm of a ternary is exactly what would have sent a household to the
+                // attention resolver as a PERSON id — a 404 on a record that plainly exists.
+                const grain = durableSubjectTypeFor(subjectType);
+                if (!grain) return;
+                dismiss();
+                void focusRecord({
+                    // The adapter speaks table names; the destination speaks grains.
+                    entity_type: durableRecordEntityType(grain),
+                    entity_id: subjectId,
+                    intent: "durable_record",
+                    preferred_context_key: destination.preferred_context_key ?? null,
+                });
+                return;
+            }
             const hostType = (destination.host_entity_type ?? "").trim();
             const hostId = (destination.host_entity_id ?? "").trim();
             if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
@@ -313,7 +348,7 @@ export default function GlobalSearchBox() {
             // the product this replaces.
             dispatchOperatorFocusSelection(selection);
         },
-        [dismiss, router]
+        [dismiss, router, focusRecord]
     );
 
     const openSubject = useCallback(
