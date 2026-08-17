@@ -53,7 +53,8 @@ export type ParticipantInterpretationRequest = {
     readonly channel: TrustChannel;
     /** Affirmative provider permission. Absent or false keeps the deterministic path. */
     readonly provider_reasoning_permitted: boolean;
-    readonly repository?: TrustRepository;
+    /** REQUIRED: a governed decision that is not persisted is not governed. */
+    readonly repository: TrustRepository;
     readonly nowIso: string;
 };
 
@@ -159,19 +160,24 @@ export async function interpretParticipantResponseViaTrust(
         return NOT_ATTEMPTED(`Decision contract refused: ${contractResult.refusal_code}`);
     }
 
-    const decision = await executeDecisionContract({
+    const execution = await executeDecisionContract({
         contract: contractResult.contract,
         eligibleReasoningInput: eligibleInput.input,
         resolvedInformation: {},
         semanticMap: {},
         nowIso: request.nowIso,
-        ...(request.repository ? { repository: request.repository } : {}),
+        repository: request.repository,
     });
+    // The runtime returns an EXECUTION; the durable artifact is its package.
+    const decision = execution.package;
 
     // 5. Only a VALIDATED recommendation may become a candidate. A package whose outcome is anything
     //    else — refused policy, refused privacy, failed validation, provider failure — yields null,
     //    and the caller falls back. Provider output is never a session command.
-    if (decision.outcome !== "accepted") {
+    // `recommended` is the ONLY non-refusal outcome. Every other value in the closed set — refused
+    // policy, permission, privacy, budget, failed validation, failed reasoning — yields no candidate,
+    // and the caller falls back to the deterministic interpreter.
+    if (decision.outcome !== "recommended") {
         return {
             candidate: null,
             decision_package: decision,
@@ -179,7 +185,7 @@ export async function interpretParticipantResponseViaTrust(
         };
     }
 
-    const recommendation = decision.reasoning?.proposal?.recommendation as
+    const recommendation = (decision.recommendation ?? undefined) as
         | { interpretation?: unknown; value?: unknown }
         | undefined;
 

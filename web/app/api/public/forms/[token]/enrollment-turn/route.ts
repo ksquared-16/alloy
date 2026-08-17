@@ -25,6 +25,7 @@ import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntim
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
 import { participantProviderReasoningPermitted } from "@/lib/enrollment/participantRuntime/participantProviderAuthorization";
+import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 
 function plaintextToken(raw: string): string {
@@ -89,13 +90,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             response_text: text,
             field: null,
             correlation_id: `participant-turn:${access.value.sessionId}`,
-            initiating_actor: "participant",
-            channel: "public_link",
+            // The participant acts through a public link, so there is no operator identity to name
+            // and none is invented. `system` with a null actor id is the honest description.
+            initiating_actor: { actor_type: "system", actor_id: null },
+            channel: "participant",
             provider_reasoning_permitted: await participantProviderReasoningPermitted(
                 supabase,
                 access.value.orgId,
             ),
             nowIso: new Date().toISOString(),
+            repository: createSupabaseTrustRepository(supabase),
         });
         if (governed.candidate) candidate = governed.candidate;
     }

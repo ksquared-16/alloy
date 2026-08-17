@@ -55,13 +55,13 @@ const PARTICIPANT_CONVERSATION_INTERPRETATION_CLASS: DecisionClassDefinitionV1 =
      */
     trust_threshold: 0,
     /**
-     * No operator review. This is a participant-facing reading of a participant's own sentence, and
+     * `automatic` — no human review. This is a participant-facing reading of a participant's own sentence, and
      * its consequence is bounded: a candidate that survives goes to deterministic validation, and a
      * wrong one is refused there or corrected by the participant on the next turn. Queuing an
      * operator for every conversational turn would make the runtime unusable and would imply the
      * interpretation has authority it does not have.
      */
-    review_requirement: "none",
+    review_requirement: "automatic",
     learning_policy_key: "none_v1",
     economic_policy: { max_latency_ms: PARTICIPANT_INTERPRETATION_DEADLINE_MS, max_escalation_level: 1 },
     /**
