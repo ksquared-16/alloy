@@ -1,3 +1,11 @@
+---
+owner: product
+status: sprint
+last_reviewed: 2026-08-17
+sprint: records-roster-completion-phase0
+base: origin/staging @ 287aa2372
+---
+
 # B1 — Start Enrollment as the participant-runtime launch owner
 
 Status: **investigation complete, wiring STOPPED at stop condition 1.**
