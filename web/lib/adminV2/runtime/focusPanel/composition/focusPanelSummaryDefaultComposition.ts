@@ -199,8 +199,12 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *   current_work     the focused child's Waitlist/stage Mission — the overlay already replaces the
  *                    family's Current Work with it, and it carries the certified command grammar
  *                    (Message / Send form / Tour), so Tour, Forms and Communications arrive with it.
- *   child_identity   who the operator is looking at. Derived through the SAME child derivation the
- *                    durable path uses.
+ *   (no child_identity) the focused child is already stated TWICE — the Focus Panel header carries
+ *                    "Lennon Kurzman · Waitlist · North Campus", and the Children card names him,
+ *                    marks him active and holds his DOB, program and context. A standalone identity
+ *                    card would be a third place presenting the same facts, and a second product
+ *                    surface for a child the runtime already identifies. It belongs to the DURABLE
+ *                    composition, where there is no header subject and no Children card to carry it.
  *   children         kept, with the focused child active; siblings are supporting context. A child
  *                    subject is a reason to scope this card, never to remove it.
  *   household        family/relationship context, and honestly family-scoped — it does not claim to
@@ -208,9 +212,9 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *   billing_preview  family-scoped contextual information, placed last and compact precisely
  *                    because it is not child-owned. Its priority differs from Current Work.
  *
- * Layout mirrors the case surface: What's Next holds the left column full height; identity then
- * children stack on the right; household and billing close on a shared bottom row. No card spans
- * all 12 columns — that forces `planPublishedLayout` from `lanes` to `grid` for the whole panel.
+ * Layout mirrors the case surface exactly: What's Next holds the left column full height; Household
+ * then Children stack on the right; Assignments and Billing Preview close on a shared bottom row. No card spans all 12
+ * columns — that forces `planPublishedLayout` from `lanes` to `grid` for the whole panel.
  */
 export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly SummaryCompositionEntry[] = [
     {
@@ -222,7 +226,7 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         encodedDensity: "standard",
     },
     {
-        key: "child_identity",
+        key: "household",
         tier: "reference",
         visibility: "visible",
         area: { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
@@ -238,7 +242,12 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         encodedDensity: "standard",
     },
     {
-        key: "household",
+        // Assignments. Placement IS child-scoped, and this card is also the DESTINATION the
+        // Children card's placement field links resolve to — `DEFAULT_LINK_DESTINATIONS` maps
+        // `inquiry_child.program` / schedule / start_date to `scheduling`. Omitting it left the
+        // Assignment affordance rendering but inert: `navigateIdentityFieldLink` refuses a card
+        // absent from `focusTargets` and returns `destination_unavailable`, silently.
+        key: "scheduling",
         tier: "reference",
         visibility: "visible",
         area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
