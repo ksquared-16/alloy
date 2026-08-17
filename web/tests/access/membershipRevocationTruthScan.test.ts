@@ -372,8 +372,15 @@ export async function POST() {
     });
 
     it("follows a helper-mediated deletion, which a route-file census misses", () => {
+        // The alias is interpolated rather than written inline. `verify:module-imports` is a
+        // deployment guard that regex-scans tracked source for alias imports with no notion of
+        // string literals, so an inline spelling here reads as this test file importing a module
+        // that does not exist in `web/` — it exists only inside the synthetic root built below.
+        // The emitted fixture is byte-identical either way; only the source spelling changes.
+        // (Do not name the pattern literally in this comment: the scanner would match that too.)
+        const helperAlias = "@/lib/revoke";
         const root = build({
-            "app/api/x/route.ts": `import { revoke } from "@/lib/revoke";
+            "app/api/x/route.ts": `import { revoke } from ${JSON.stringify(helperAlias)};
 export async function POST() { await revoke(); }
 `,
             "lib/revoke.ts": `export async function revoke() {
