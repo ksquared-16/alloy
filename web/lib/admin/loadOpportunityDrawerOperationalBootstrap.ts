@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { documentActorFromAdminGate } from "@/lib/documents/projectPersonProfilePhotos";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEntityRecord";
 import type {
@@ -74,6 +75,9 @@ export async function loadOpportunityDrawerOperationalBootstrap(
     const tVis0 = Date.now();
     const entityP = buildOpportunityDrawerVisiblePayload(supabase, orgId, oppRow as Record<string, unknown>, {
         hintDepartmentId: ctxDept || null,
+        // Same reason as the drawer VM composer: without the actor the bootstrap seeds
+        // `_inquiry_children` with no `resolved_photo_url` and avatars degrade to initials.
+        documentActor: documentActorFromAdminGate(gate),
     });
     const tLayout0 = Date.now();
     const layoutP = fetchEffectiveRecordDrawerLayout(supabase, orgId, "opportunity");

@@ -29,7 +29,7 @@ const visible = (c: readonly { key: string; visibility: string }[]) =>
 const FAMILY_SCOPED = ["household", "children", "billing_preview"] as const;
 
 describe("a standalone durable child stays sparse", () => {
-    it("composes identity only, with no family-scoped card", () => {
+    it("KEEPS its identity card — there is no header subject or Children card to carry it", () => {
         const composition = focusPanelDefaultCompositionForGrain("child");
         expect(keys(composition)).toEqual(["child_identity"]);
         for (const familyCard of FAMILY_SCOPED) expect(keys(composition)).not.toContain(familyCard);
@@ -76,8 +76,30 @@ describe("a child with family settlement keeps the enrollment context", () => {
         expect(rowOf("billing_preview")).toBeGreaterThan(rowOf("current_work"));
     });
 
-    it("still identifies the focused child", () => {
-        expect(visible(composition)).toContain("child_identity");
+    it("does NOT add a standalone child identity card", () => {
+        // The focused child is already stated by the Focus Panel header and by the Children card,
+        // which names him, marks him active and carries DOB/program/context. A third presentation
+        // of the same facts is redundant product chrome and a second place to maintain child truth.
+        expect(keys(composition)).not.toContain("child_identity");
+    });
+
+    it("represents the focused child through Children, not a card of its own", () => {
+        expect(visible(composition)).toContain("children");
+        expect(visible(composition)).toEqual([
+            "current_work",
+            "household",
+            "children",
+            "scheduling",
+            "billing_preview",
+        ]);
+    });
+
+    it("composes Assignments, the destination the Children placement links resolve to", () => {
+        // `DEFAULT_LINK_DESTINATIONS` maps inquiry_child.program / schedule / start_date to
+        // `scheduling`. Without it in the composition the card is absent from `focusTargets`,
+        // and `navigateIdentityFieldLink` returns `destination_unavailable` — the affordance
+        // renders and does nothing.
+        expect(visible(composition)).toContain("scheduling");
     });
 
     it("keeps Tour and Communications reachable as linked destinations", () => {

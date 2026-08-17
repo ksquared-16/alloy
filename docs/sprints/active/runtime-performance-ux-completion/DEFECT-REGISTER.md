@@ -956,3 +956,195 @@ Batch 1 converted Settings / organization calculations (13 → 0 across 3 files)
 counts CALL SITES, not affected surfaces** — Wave 3A converted seven surfaces via the shared
 adapter and moved the number by zero. The ledger test fails if any enforced file
 introduces a raw `<select>`, if a listed file grows, or if a converted file is not lowered.
+
+---
+
+## R-019 · Child avatar persistence — canonical owner established (3A), certification NOT done
+
+**Status: audit complete, fix/certification NOT started.** Recorded so the remaining work starts
+from evidence rather than repeating the trace.
+
+### The canonical owner
+
+| Question | Answer |
+|---|---|
+| What entity owns the avatar? | **The `person`** — `POST /api/admin/persons/{personId}/profile-photo` with `{ document_id }` |
+| Where is the durable reference? | A **document reference**, not a URL. The person row points at a document |
+| Is the URL durable or signed? | **Signed / temporary** |
+| Is there one resolution path? | **Yes** — `resolveIdentityPhotoUrl` calls itself "THE single profile-image compatibility adapter. Every photo-reading path in the platform funnels through here" |
+
+Its contract, verbatim in order: canonical document reference → resolved **server-side**, injected as
+`photo_url` by the batch resolver (`resolveProfilePhotosForActor`); then an approved stable external
+URL; otherwise **null → initials**. And explicitly: *"An INTERNAL SIGNED URL is never returned …
+returning one would hand a caller a stale bearer credential that outlives the authorization it was
+minted under."*
+
+### Why an avatar can appear and then disappear
+
+The upload response's signed `photoUrl` is shown immediately through two client-side channels — an
+in-memory `Map` (`childAvatarSessionPreview`, whose own docblock says it lasts "until
+`_inquiry_children` evidence catches up with `photo_url`") and `resolved_photo_url` merged into
+client truth. Neither survives a reload.
+
+After reload the image exists **only** if the server-side batch resolver injected a fresh
+`photo_url` into that surface's projection. Where it did not, `resolveIdentityPhotoUrl` correctly
+drops the stale signed URL and the avatar degrades to initials. So the reported symptom is not a
+storage failure — the durable document reference is intact — it is a **projection-coverage**
+question: which read models run `resolveProfilePhotosForActor`.
+
+That is also the likely reason the Waitlist queue renders `W` / `L` initials while the Children card
+can show an image: different projections, one resolver.
+
+### A hard constraint worth stating
+
+`savePersonChildPhoto` **requires `personId`** and returns 400 without it. But
+`customer_members.person_id` is nullable, and the durable child model is explicit that "a child can
+exist with **no `persons` row at all** and must still be identifiable". **A child without a person
+row therefore cannot hold an avatar today.** Whether that is intended is a product decision, not a
+bug to patch silently.
+
+### What remains (3B–3F)
+
+Not started, and deliberately not guessed at: upload round-trip persistence across reload / Work-View
+switch / Work-Unit exit; propagation coverage per surface (queue row, Children card, Records, any
+Assignment placement); the N-fetch performance question (does avatar identity travel with the
+existing child projection, or does each placement resolve independently); failure/fallback; and
+replace/remove invalidation. The next session should start by listing which projections call
+`resolveProfilePhotosForActor` — that single answer determines most of the rest.
+
+### R-019 · Phase 3B — the avatar projection matrix (COMPLETE)
+
+**Durable truth:** `persons.metadata.profile_photo_document_id` — a DOCUMENT reference. Signed URLs
+are never persisted back to person metadata.
+
+**One resolver, one injector.** `resolveIdentityPhotoUrl` is the single read adapter;
+`lib/documents/projectPersonProfilePhotos.ts` is the single server-side injector, minting
+actor-scoped URLs through `resolveProfilePhotosForActor` and writing `resolved_photo_url` onto
+person-keyed rows.
+
+| Surface / read model | Identity available | Canonical resolver | Server projection injects | Verdict |
+|---|---|---|---|---|
+| Child-grain Queue row | member + person | `resolveIdentityPhotoUrlFromRaw` (`buildChildGrainQueueRowContext:475`) | `QueueService` → `projectResolvedProfilePhotosOntoInquiryChildrenRows`; queue route supplies the actor | wired |
+| Children card | member + person | `resolveChildPhotoUrlFromRaw` → same adapter (`buildChildrenCardEvidence:402`) | `opportunityEntityRecord` → `projectResolvedProfilePhotosOntoRows` | wired |
+| Household contacts | person | `resolveIdentityPhotoUrlFromRaw` (5 call sites) | same opportunity projection | wired |
+| Assignment roster | person | `resolveIdentityPhotoUrlFromMetadata` | `buildAssignmentRosterReadModel` calls `resolveProfilePhotosForActor` directly | wired |
+| Person profile photo doc | person | `resolveIdentityPhotoUrlFromMetadata` | n/a — resolution helper | wired |
+
+**No surface resolves avatars independently, and there is no second avatar store.** The
+architecture the mission asked for already exists: durable document reference → shared server
+resolver → `photo_url`/`resolved_photo_url` in the read model → shared presentation. **No N+1
+avatar metadata path was found** — every injector is batched over a row set, not per component.
+
+**Current Firefly state — initials are CORRECT, not a defect.** Measured on both Waitlist children:
+zero `<img>` elements in the queue rows or the Children card, and the provisioning answer contains
+**no `resolved_photo_url` at all** (`hasResolved: false`; the only photo-ish keys are the
+`showAvatar` / `useProfilePhotos` display options). Neither Lennon nor Wrigley has an avatar, so
+every placement correctly degrades to initials.
+
+**Consequence for the remaining phases.** The reported "uploads, then disappears" is therefore
+**not reproducible from current data** — it needs a real upload first. That upload is a durable
+write to Firefly (creates a document and sets `persons.metadata.profile_photo_document_id`), and
+because these children start with NO avatar, restoring means removing the photo AND not leaving the
+test document behind.
+
+**3C–3G NOT started, deliberately.** Beginning an upload without the budget to finish the
+restore in the same pass risks leaving test imagery in Firefly, which the mission explicitly
+forbids. The next session should start there, with restore scripted before the upload runs.
+
+**Personless children — still open, and NOT to be solved by a second avatar owner.**
+`savePersonChildPhoto` requires `personId` and 400s without it, while `customer_members.person_id`
+is nullable and the durable child model insists a child may exist with no person row. Whether any
+current Firefly/production flow actually produces an avatar-capable personless child is unproven —
+resolve that before treating it as a gap. **PRODUCT / DATA MODEL DECISION** if it is real.
+
+### R-019 · LIVE FAILURE FOUND — and the 3B "no avatars exist" claim is RETRACTED
+
+**Correction first.** Phase 3B concluded "neither child has an avatar, so initials are correct".
+**That was wrong.** It inferred absence from two surfaces that render nothing. Querying the record
+directly disproves it.
+
+`GET /api/admin/entity/opportunities/d097e1a8-…` returns, for BOTH children:
+
+| Child | `person_id` | `resolved_photo_url` | `photo_url` |
+|---|---|---|---|
+| Lennon Kurzman | `794b4bfe-…` | **populated** — signed URL to `…-IMG_1438.jpeg` | null |
+| Wrigley Kurzman | `c256182e-…` | **populated** — signed URL to `…-IMG_5380.jpeg` | null |
+
+So **both children have a canonical Person AND a durable avatar already**. No upload was needed, and
+none was performed — the round trip's premise was already satisfied by real Firefly data, so **no
+test imagery was created and nothing needed restoring.**
+
+**The failure, live.** In the Waitlist lens nothing renders an avatar at all:
+
+```
+queue rows      9ab36f48 imgs=0 ("W")   93722453 imgs=0 ("L")
+children card   imgs=0        scheduling imgs=0        household imgs=0
+whole page      1 img total
+```
+
+**First projection where `resolved_photo_url` disappears — identified.** The Waitlist lens is seeded
+by the provisioning answer, and that payload carries **no `resolved_photo_url` at any depth**
+(measured directly: `hasResolved: false`; the only photo-ish keys are the `showAvatar` /
+`useProfilePhotos` display options). `workUnitProvisioningAnswer` assembles `_inquiry_children` from
+enriched children / household children / subject metadata and **never runs the photo projection**,
+while the two paths that do resolve correctly:
+
+- `QueueService` → `projectResolvedProfilePhotosOntoInquiryChildrenRows` (guarded on `documentActor?.ok`)
+- `opportunityEntityRecord` → `projectResolvedProfilePhotosOntoRows`
+
+The read adapter is NOT at fault: `resolveIdentityPhotoUrlFromRaw` returns `resolved_photo_url`
+outright ("resolver output wins — its provenance is known"). It is reading rows that never received
+the key.
+
+**The fix, not yet applied:** project resolved photos onto `_inquiry_children` inside
+`workUnitProvisioningAnswer`, exactly as `QueueService` already does — same helper, same actor guard.
+One owner, no new resolver, cache or store. `req.supabase` and `req.orgId` are already in scope
+there; the document actor is the piece to thread through.
+
+**Also worth stating:** the signed URLs carry `exp - iat = 300s`. Any fix must resolve per request
+rather than caching the URL, which is what the batch projection already does.
+
+**Personless children — closed as NOT a current gap.** Both real Firefly enrollment children have a
+canonical `person_id`, so the avatar-capable path has a Person in the flow that matters here. No
+second avatar owner is warranted.
+
+### R-019 · The provisioning-answer fix was the WRONG OWNER — attempted, disproven, reverted
+
+The accepted diagnosis said `workUnitProvisioningAnswer` builds `_inquiry_children` without running
+the photo projection. I implemented exactly that — threaded `documentActorFromAdminGate(gate)`
+through `composeProvisioningAnswerForRoute` into the request, and batched
+`projectResolvedProfilePhotosOntoRows` over the assembled children.
+
+**It changed nothing, because the premise was wrong.** Querying the answer directly:
+
+```
+GET /api/admin/work-units/waitlist/provisioning-answer?workViewId=new_work_view_4
+  hasInquiryChildren : false
+  personIds          : []
+  hasResolved        : false
+```
+
+**The provisioning answer carries no `_inquiry_children` for this lens at all**, so there was nothing
+to project onto — `inquiryChildrenSource` is null and the new code is a no-op. It was reverted rather
+than merged: dead code in a commit-critical path, immediately before a timing phase, is worse than
+no code. (The 2 failing `d1ProvisioningAnswer` tests were confirmed **pre-existing** by reverting and
+re-running — they fail identically without the change, on `process_instances` / `tour_bookings`.)
+
+**What this tells us, and where to look next.** The Focus Panel's children data on the Waitlist lens
+does **not** come from the provisioning answer. It comes from the opportunity entity record — and
+that record **already carries `resolved_photo_url`** for both children (measured directly). So the
+fact is present in the data the panel consumes, and the break is **downstream of the projection**:
+either in how the Focus Panel merges that record into `context.truth`, or in the avatar presentation
+gate on the Children roster row.
+
+**Do not re-run the projection hypothesis.** The next session should start from the browser, not the
+server: with both children holding a populated `resolved_photo_url` in the opportunity record,
+determine whether `buildChildrenCardEvidence` receives rows carrying that key (log `imageUrl` at
+`buildChildrenCardEvidence:402`), and whether `ChildSummaryRow` / `IdentityRecordSummary` renders an
+`<img>` at all in the roster state — the roster showed **zero** `<img>` elements while the drilled-in
+composer state does offer "Add photo", which suggests the roster avatar may be presentation-gated
+rather than data-starved.
+
+**Unchanged and still true:** one canonical owner (`persons.metadata.profile_photo_document_id`),
+one read adapter (`resolveIdentityPhotoUrl`), one batched injector, no N+1, and both children have a
+canonical `person_id`. No Firefly data was written at any point in this investigation.
