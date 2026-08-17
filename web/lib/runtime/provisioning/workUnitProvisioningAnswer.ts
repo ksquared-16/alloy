@@ -91,6 +91,8 @@ import {
 import { attachChildGrainWaitlistPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import type { ChildProvisioningRowWithPlacement } from "@/lib/runtime/provisioning/attachChildGrainWaitlistPlacement";
 import { attachChildGrainInquiryProgramFallback } from "@/lib/runtime/provisioning/attachChildGrainInquiryProgramFallback";
+import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { attachChildGrainAvatar } from "@/lib/runtime/provisioning/attachChildGrainAvatar";
 import {
     enrichOperationalProjectionRows,
     queueRowContextOf,
@@ -493,6 +495,12 @@ export type ProvisioningRequest = {
     /** U-P1 — resolved ONCE by the caller's route gate; never re-resolved inside. */
     orgId: string;
     currentUserId?: string | null;
+    /**
+     * Actor for DOCUMENT authorization. Profile photos are documents whose URLs are minted per
+     * actor per request (~300s) and never persisted. Optional: an answer composed without one is
+     * still valid — its rows simply carry no avatar and present initials.
+     */
+    documentActor?: DocumentActor | null;
     workUnitSlug: string;
     /** Attention is an INPUT, never derived from the route inside this resource (K1 owns intent). */
     requestedWorkViewId?: string | null;
@@ -1324,6 +1332,13 @@ export async function composeWorkUnitProvisioningAnswer(
         childRows = await attachChildGrainInquiryProgramFallback({
             supabase: req.supabase,
             orgId: req.orgId,
+            childRows: childRows as ChildProvisioningRowWithPlacement[],
+        });
+        // One batched member -> person -> photo resolution for the whole page, never per row.
+        childRows = await attachChildGrainAvatar({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            actor: req.documentActor,
             childRows: childRows as ChildProvisioningRowWithPlacement[],
         });
     }
