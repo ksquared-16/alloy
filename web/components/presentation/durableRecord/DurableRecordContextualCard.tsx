@@ -122,7 +122,6 @@ export default function DurableRecordContextualCard({
     option,
     subject,
     schedulingProjection,
-    hostSiteLocationId,
     onSaved,
 }: {
     option: DurableRecordContextOption;
@@ -132,14 +131,6 @@ export default function DurableRecordContextualCard({
      * when the subject holds no commitment — which is a state, not a failure.
      */
     schedulingProjection?: SchedulingProjectionFirstPaint | null;
-    /**
-     * The site the HOST workspace is operating in, when there is one.
-     *
-     * Passed through to the card's truth envelope beside `_scheduling_projection`, because this
-     * answers "where am I operating" — a question the record itself cannot answer and should not
-     * try to. Record-only hosts supply nothing and the card falls back to the subject's own truth.
-     */
-    hostSiteLocationId?: string | null;
     /** Fired after a successful write so the list underneath can refresh this row. */
     onSaved?: () => void;
 }) {
@@ -200,7 +191,6 @@ export default function DurableRecordContextualCard({
                 truth: {
                     _person_name: staff.label,
                     _scheduling_projection: schedulingProjection ?? null,
-                    _host_site_location_id: hostSiteLocationId ?? null,
                     [DURABLE_STAFF_SUBJECT_KEY]: {
                         personId: staff.personId,
                         name: staff.label,
@@ -215,7 +205,6 @@ export default function DurableRecordContextualCard({
             truth: {
                 ...childSubject.truth,
                 _scheduling_projection: schedulingProjection ?? null,
-                _host_site_location_id: hostSiteLocationId ?? null,
                 /*
                  * THE SUBJECT, AS THE COLLECTION'S ONE MEMBER.
                  *

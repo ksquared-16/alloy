@@ -421,19 +421,21 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
     await page.locator('input[type="date"]').first().fill(startDate);
 
     /*
-     * THE CREATE PAYLOAD, OBSERVED — not blocked on.
+     * ── WATCH THE ENDPOINT THE PRODUCT ACTUALLY USES ──
      *
-     * A `waitForRequest` here deadlocked the flow: it must be awaited to yield the request, and
-     * awaiting it before the save race means a refused or never-sent write hangs instead of
-     * reporting. A listener collects whatever the card sends and the race below still decides the
-     * outcome, so the payload assertions describe a save that actually happened.
+     * Creating from a chosen Assignment Category takes `save()`'s FIRST branch: `createAsSecondary`
+     * is true whenever a category is pending, so it calls `onCreateSecondary` and returns — it never
+     * reaches `schedApi`. The write is the canonical RegisteredAction `assignment.create` on
+     * `/api/admin/actions/execute`, the same command O-3 certifies.
      *
-     * Asserted on the REQUEST rather than a label: the payload is what the service judges, and a
-     * card displaying "Riverside" while sending "" is exactly the failure this control exists for.
+     * An earlier draft watched `/api/admin/scheduling` and collected nothing, then read the shared
+     * `data-schedule-error` node — which a failed GET had already written — and reported a refused
+     * save for a request that was never sent to that route. Watching the right endpoint is the
+     * whole correction; the product was doing the right thing throughout.
      */
     const posts: Record<string, unknown>[] = [];
     page.on("request", (r) => {
-        if (r.method() === "POST" && r.url().includes("/api/admin/scheduling")) {
+        if (r.method() === "POST" && r.url().includes("/api/admin/actions/execute")) {
             try {
                 posts.push(JSON.parse(r.postData() ?? "{}"));
             } catch {
@@ -441,6 +443,15 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
             }
         }
     });
+
+    /*
+     * The error node is SHARED with the card's own GETs, and one of those has usually already
+     * written to it by now. Capturing its prior text means a refusal is judged by what CHANGED,
+     * not by what was already on screen — the mistake that reported a refused save three times for
+     * a request that had not been sent.
+     */
+    const errorNote = page.locator("[data-schedule-error='true']");
+    const staleError = (await errorNote.count()) ? (await errorNote.first().innerText()).trim() : "";
 
     const commit = page.locator("[data-schedule-commit='true']").first();
     await expect(commit, "the card considers the assignment complete").toBeEnabled({ timeout: SETTLE });
@@ -461,28 +472,31 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
      */
     expect(posts.length, "the card actually sent a create request").toBeGreaterThan(0);
 
-    const errorNote = page.locator("[data-schedule-error='true']");
     await expect
         .poll(
-            async () =>
-                (await errorNote.count()) > 0
-                    ? `SAVE REFUSED: ${await errorNote.first().innerText()}`
-                    : (await page.locator('[data-assignment-list-surface="true"]').count()) > 0
-                      ? "saved"
-                      : "pending",
+            async () => {
+                const note = (await errorNote.count())
+                    ? (await errorNote.first().innerText()).trim()
+                    : "";
+                if (note && note !== staleError) return `SAVE REFUSED: ${note}`;
+                if (posts.length > 0 && (await page.locator('[data-assignment-list-surface="true"]').count()) > 0)
+                    return "saved";
+                return "pending";
+            },
             { timeout: SETTLE },
         )
         .toBe("saved");
     await page.screenshot({ path: path.join(SHOTS, "8-created.png"), fullPage: true });
 
-    // ── the payload the service accepted ──
-    const sent = posts.at(-1) ?? {};
-    expect(sent.site_location_id, "the create payload carries the operator's declared site").toBe(
-        RIVERSIDE_ID,
-    );
-    expect(sent.customer_member_id, "and the subject chosen in the chooser").toBe(CREATE_SUBJECT);
-    expect(sent.room_location_id, "and the room selected through the picker").toBe(roomId);
-    expect(sent.start_date, "and the start date entered in the editor").toBe(startDate);
+    // ── the command the UI authored ──
+    expect(posts.length, "Save emitted a canonical action request").toBeGreaterThan(0);
+    const sent = posts.at(-1) as any;
+    expect(sent.action_key, "the canonical assignment command").toBe("assignment.create");
+    expect(sent.entity_id, "bound to the subject chosen in the chooser").toBe(CREATE_SUBJECT);
+    expect(sent.payload?.room_location_id, "the room selected through the picker").toBe(roomId);
+    expect(sent.payload?.start_date, "the start date entered in the editor").toBe(startDate);
+    expect(sent.payload?.assignment_type_id, "the configured category selected in the UI").toBeTruthy();
+    console.log("[UX5 create payload] " + JSON.stringify(sent));
 
     // ── 14 — the CANONICAL FACT, not a toast ──
     await page.keyboard.press("Escape");
