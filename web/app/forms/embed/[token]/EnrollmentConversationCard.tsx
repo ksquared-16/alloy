@@ -58,6 +58,14 @@ export type EnrollmentConversationCardProps = {
      * is a lie the participant cannot act on, so the card refuses to say it.
      */
     readonly artifactRenderable?: boolean;
+    /**
+     * Reports a value the conversation has settled, and which artifact fields it fills.
+     *
+     * The paperwork below must already show what the parent just said. Without this the review
+     * rendered an empty box for an answer given seconds earlier — the value was in the session, and
+     * the surface had not been told.
+     */
+    readonly onValueSettled?: (fieldIds: readonly string[], value: unknown) => void;
 };
 
 type TurnResponse = {
@@ -72,6 +80,7 @@ export function EnrollmentConversationCard({
     onArtifactHandoff,
     onPhaseChange,
     artifactRenderable = true,
+    onValueSettled,
 }: EnrollmentConversationCardProps) {
     const [objective, setObjective] = useState(initialObjective);
     /**
@@ -117,6 +126,13 @@ export function EnrollmentConversationCard({
              */
             const optimistic = payload.settledAs?.trim();
             const asked = participantQuestion(objective);
+            // Same instant as the transcript entry: the artifact shows the answer as it is given.
+            if (payload.value !== undefined && objective.next_turn.field_ids.length > 0) {
+                onValueSettled?.(objective.next_turn.field_ids, payload.value);
+            }
+            if (payload.text === "yes" && objective.next_turn.field_ids.length > 0) {
+                onValueSettled?.(objective.next_turn.field_ids, objective.next_turn.proposed_value);
+            }
             if (optimistic) setSettled((prev) => [...prev, { said: asked, answered: optimistic }]);
             setCorrecting(false);
             setElaborating(false);
@@ -159,7 +175,7 @@ export function EnrollmentConversationCard({
                 setBusy(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, objective],
+        [token, onArtifactHandoff, onPhaseChange, onValueSettled, objective],
     );
 
     const turn = objective.next_turn;
@@ -295,7 +311,10 @@ export function EnrollmentConversationCard({
                         type="button"
                         disabled={busy}
                         // Resolves the turn outright — no redundant Continue after a binary answer.
-                        onClick={() => void submit({ value: null, settledAs: skipLabel ?? "Nothing to add" })}
+                        // The label IS the answer. Writing null would leave the need `missing` and
+                        // the question would come back forever; "No known allergies" is both true
+                        // and what a specialist would write on the form.
+                        onClick={() => void submit({ value: skipLabel, settledAs: skipLabel ?? "Nothing to add" })}
                         className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
                     >
                         {skipLabel}
@@ -332,7 +351,7 @@ export function EnrollmentConversationCard({
                     <button
                         type="button"
                         disabled={busy}
-                        onClick={() => void submit({ value: null, settledAs: skipLabel })}
+                        onClick={() => void submit({ value: skipLabel, settledAs: skipLabel })}
                         className="text-[13px] text-alloy-midnight/60 underline underline-offset-2 disabled:opacity-50"
                         data-participant-skip="true"
                     >

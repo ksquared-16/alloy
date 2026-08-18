@@ -37,6 +37,7 @@ function turn(over: Record<string, unknown> = {}) {
         label: "Child Dob",
         options: [] as string[],
         optional: false,
+        field_ids: [],
         ...over,
     } as never;
 }
@@ -198,5 +199,50 @@ describe("the surface reads as a conversation, not a wizard", () => {
         const plan = code("lib/forms/guidedQuestionPlan.ts");
         // "1 already filled in · 7 to add" counted handbook paragraphs as fields to fill.
         expect(plan).toContain("formFieldCollectsValue");
+    });
+});
+
+describe("the conversation actually happens, and the paperwork arrives filled", () => {
+    it("an optional need is still ASKED — optionality decides blocking, not worth asking", () => {
+        const selector = code("lib/enrollment/participantRuntime/selectNextParticipantTurn.ts");
+        // Filtering on `requires_participant_action` skipped optional needs entirely, so a journey
+        // whose only outstanding fact was optional went straight to the paperwork and the parent was
+        // never spoken to at all. Browser-verified: the surface now opens with the allergies question.
+        expect(selector).toContain('need.state === "known_requires_confirmation" || need.state === "missing"');
+        expect(selector).not.toContain(".filter((need) => need.requires_participant_action)");
+    });
+
+    it("skipping writes the honest answer, so the question does not come back forever", () => {
+        const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
+        // A null write leaves the need `missing` and it is re-asked on the next recompute.
+        expect(card).toContain("submit({ value: skipLabel");
+        expect(card).not.toContain("submit({ value: null");
+    });
+
+    it("an operator's authoring note never reaches a parent", () => {
+        const host = code("app/forms/embed/[token]/FormEmbedClient.tsx");
+        // "Needs destination configuration" was rendering to parents as guidance under a field.
+        // Referenced by its constant so a reword follows rather than silently stops working.
+        expect(host).toContain("PROCESSING_NEEDS_DESTINATION_DESCRIPTION");
+        expect(host).toContain("withoutAuthoringNotes(parsedSchema)");
+    });
+
+    it("the artifact is filled from the record, with the conversation laid over it", () => {
+        const ctx = code("lib/public/forms/resolvePublicFormEmbedContext.ts");
+        expect(ctx).toContain("participantPrefillValues");
+        // Canonical first, session over it — the same precedence the needs projection uses, so a
+        // stale record can never overwrite what the parent just said.
+        expect(ctx).toContain("{ ...canonical, ...shared }");
+    });
+
+    it("an answer appears in the paperwork as it is given", () => {
+        const wire = code("lib/enrollment/participantRuntime/participantObjectiveWireModel.ts");
+        expect(wire).toContain("field_ids:");
+
+        const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
+        expect(card).toContain("onValueSettled?.(objective.next_turn.field_ids");
+
+        const host = code("app/forms/embed/[token]/FormEmbedClient.tsx");
+        expect(host).toContain("onValueSettled={(fieldIds, value)");
     });
 });

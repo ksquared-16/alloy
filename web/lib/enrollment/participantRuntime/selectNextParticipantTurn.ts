@@ -83,8 +83,19 @@ export type NextParticipantTurnInput = {
  * long-term architecture: shared facts collected efficiently, artifacts still authoritative.
  */
 export function selectNextParticipantTurn(input: NextParticipantTurnInput): ParticipantTurn {
+    /**
+     * Every UNRESOLVED shared need is offered, blocking or not.
+     *
+     * Filtering on `requires_participant_action` skipped optional needs entirely — so a journey
+     * whose only outstanding fact was optional went straight to the paperwork and the parent was
+     * never spoken to at all. That is exactly what a specialist would not do: allergies is optional
+     * and it is still the question you ask.
+     *
+     * Optionality decides whether a need BLOCKS completion — it drives the progress count and the
+     * skip affordance — not whether it is worth asking about.
+     */
     const actionable = input.needs.needs
-        .filter((need) => need.requires_participant_action)
+        .filter((need) => need.state === "known_requires_confirmation" || need.state === "missing")
         .sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
 
     const next = actionable[0];
