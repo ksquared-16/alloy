@@ -8,6 +8,8 @@ export type PublishedFormEnvelope = {
     formKey: string;
     formName: string;
     formKind: string;
+    /** Authored brand tokens, carried so the public surface has ONE theme source. */
+    formMetadata: unknown;
 };
 
 /** Resolve published schema/version for a form definition (optionally pinned). */
@@ -19,14 +21,14 @@ export async function loadPublishedFormEnvelope(
 ): Promise<PublishedFormEnvelope | null> {
     const { data: formDef, error: formErr } = await supabase
         .from("form_definitions")
-        .select("id, key, name, kind")
+        .select("id, key, name, kind, metadata")
         .eq("id", formDefinitionId)
         .eq("org_id", orgId)
         .maybeSingle();
 
     if (formErr || !formDef) return null;
 
-    const fd = formDef as { id: string; key: string; name: string; kind: string };
+    const fd = formDef as { id: string; key: string; name: string; kind: string; metadata?: unknown };
 
     let versionId: string | null = null;
     let schemaJson: unknown = null;
@@ -76,5 +78,6 @@ export async function loadPublishedFormEnvelope(
         formKey: fd.key,
         formName: fd.name,
         formKind: fd.kind,
+        formMetadata: fd.metadata ?? null,
     };
 }

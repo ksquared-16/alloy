@@ -31,8 +31,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { safeParseFormSchema } from "@/lib/forms/schema";
-import type { EnrollmentParticipantProgressResult } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
-import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import {
+    resolveEnrollmentParticipantProgress,
+    type EnrollmentParticipantProgressResult,
+} from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import {
     projectEnrollmentInformationNeeds,
@@ -139,7 +142,8 @@ export async function resolveEnrollmentInformationNeeds(
     // Only requirements the participant can actually act on. `unrealized` has no pinned version and
     // no schema; `unsupported` is a non-form kind. Neither can produce a field need.
     const actionable = prog.requirements.filter(
-        (r) => r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
+        (r: EnrollmentParticipantProgress["requirements"][number]) =>
+            r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
     );
     if (actionable.length === 0 || !session) {
         return {
