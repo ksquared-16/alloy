@@ -209,14 +209,16 @@ describe("card applicability is declared per card, not switched centrally", () =
     it("an undeclared card is case-only — silence never widens applicability", () => {
         expect(DEFAULT_CARD_GRAINS).toEqual(["opportunity"]);
         /*
-         * `children` is the honest witness for this rule now that `household` carries a declaration
-         * of its own — and it stays undeclared deliberately, not by oversight.
-         * `buildChildrenCardModel` reads `_inquiry_children`, which is ONE ENROLLMENT'S projection of
-         * a family's children; a durable household knows its children through `customer_members`, a
-         * wider and differently-shaped set. Declaring the grain without a builder that reads the
-         * canonical edge would put enrollment framing on children who have no enrollment.
+         * `milestones` is the honest witness for this rule now. `children` carried the argument
+         * before, but it has since EARNED a declaration for the child grain — the durable child
+         * composes itself as the one member of its own collection, so the card reads canonical
+         * truth there. Its declaration still deliberately excludes `household` and `person`: a
+         * durable household knows its children through `customer_members`, a wider and
+         * differently-shaped set than any single collection key this card reads, and a person has
+         * no child collection at all.
          */
-        expect(cardGrains("children")).toEqual(["opportunity"]);
+        expect(cardGrains("milestones")).toEqual(["opportunity"]);
+        expect(cardGrains("children")).toEqual(["opportunity", "child"]);
         expect(cardAppliesToGrain("children", "household")).toBe(false);
         expect(cardAppliesToGrain("children", "person")).toBe(false);
         // …and a declaration widens a card only to the grains it NAMES, never to every grain: the
@@ -294,8 +296,9 @@ describe("default composition varies by grain", () => {
 
     it("child composes its own identity card, never the case composition", () => {
         // Was asserted EMPTY before Workstream C — the point then and now is the same: a second
-        // surface must not fall through to the enrollment cards (inventory R3).
-        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["child_identity"]);
+        // surface must not fall through to the enrollment cards (inventory R3). The identity card
+        // is now the CONFIGURED child card (`children`), not the retired hardcoded one.
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["children"]);
         expect(focusPanelSummaryDefaultDocForGrain("child").sections).toHaveLength(1);
     });
 
