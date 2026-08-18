@@ -170,6 +170,18 @@ export default function AssignmentSubjectPicker({
       : (staff ?? []).filter((r) => match(r.name));
   }, [tab, filter, children, staff]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const loaded = tab === "child" ? children != null : staff != null;

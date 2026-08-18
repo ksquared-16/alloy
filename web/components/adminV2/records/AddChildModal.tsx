@@ -281,6 +281,35 @@ export default function AddChildModal({
         }
     }
 
+    /*
+     * Dismissal is natural — X, Escape, backdrop — and never silently discards work.
+     *
+     * Dirty means the operator has typed or chosen something a close would lose; a completed flow
+     * (`done`) has nothing left to lose. The confirmation is the platform's existing dirty-state
+     * sentence (Programs workspace, Configuration Runtime harness), not a new system.
+     */
+    const dirty =
+        step !== "done"
+        && Boolean(household || firstName.trim() || lastName.trim() || dob.trim() || createNewReason.trim());
+    const requestClose = useCallback(() => {
+        if (dirty && !window.confirm("Discard unsaved changes?")) return;
+        onClose();
+    }, [dirty, onClose]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            // Stop the workspace shell's own Escape handler from closing the whole workspace
+            // out from under a modal the operator only meant to dismiss.
+            e.preventDefault();
+            e.stopPropagation();
+            requestClose();
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [open, requestClose]);
+
     if (!open) return null;
 
     return (
@@ -288,6 +317,9 @@ export default function AddChildModal({
             className="fixed inset-0 z-[120] flex items-start justify-center bg-alloy-midnight/30 p-6 pt-[10vh]"
             data-add-child-modal="true"
             data-add-child-step={step}
+            onMouseDown={(e) => {
+                if (e.target === e.currentTarget) requestClose();
+            }}
         >
             <div className="w-full max-w-[520px] rounded-lg border border-alloy-stone/25 bg-white shadow-xl">
                 <header className="flex items-center justify-between border-b border-alloy-stone/25 px-4 py-3">
@@ -297,7 +329,7 @@ export default function AddChildModal({
                         </p>
                         <h2 className="text-[15px] font-semibold text-alloy-midnight">Add child</h2>
                     </div>
-                    <button type="button" className={GHOST_BTN} onClick={onClose} data-add-child-cancel="true">
+                    <button type="button" className={GHOST_BTN} onClick={requestClose} data-add-child-cancel="true">
                         {step === "done" ? "Close" : "Cancel"}
                     </button>
                 </header>
