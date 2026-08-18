@@ -65,6 +65,7 @@ function buildVm(body: string): FamilyCommunicationWorkspaceVM {
                 email_marketing: "unset",
                 sms_marketing: "unset",
             },
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: {

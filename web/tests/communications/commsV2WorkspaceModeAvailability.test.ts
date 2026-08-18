@@ -12,7 +12,7 @@ function minimalVm(overrides: Partial<FamilyCommunicationWorkspaceVM> = {}): Fam
         eligibleRecipients: [],
         disabledRecipients: [],
         selectedRecipients: [],
-        consentSummary: { byContact: {}, household: { email: "unset", sms: "unset", marketing: "unset" }, preferenceProfile: { email_transactional: "unset", sms_transactional: "unset", email_marketing: "unset", sms_marketing: "unset" }, displayFlags: { email: true, sms: true, marketing: true } },
+        consentSummary: { byContact: {}, household: { email: "unset", sms: "unset", marketing: "unset" }, preferenceProfile: { email_transactional: "unset", sms_transactional: "unset", email_marketing: "unset", sms_marketing: "unset" }, preferenceProfilesByContact: {}, displayFlags: { email: true, sms: true, marketing: true } },
         composerDraft: {
             channel: "email",
             recipientContactIds: [],
