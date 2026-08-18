@@ -32,6 +32,7 @@ import { ChevronRight } from "lucide-react";
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
 import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
 import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
@@ -125,10 +126,20 @@ export default function DurableRecordSurface({
     const load = useCallback(async (quiet = false) => {
         if (!quiet) setState({ status: "loading" });
         try {
-            const res = await fetch(
-                `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`,
-                { credentials: "include" },
-            );
+            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`;
+            /*
+             * WARM ON OPEN, FRESH AFTER A WRITE.
+             *
+             * The initial open reads through the workspace's shared dedupe/TTL primitive — the same
+             * one the Work Unit surfaces warm with — so a hover prefetch from the list, a StrictMode
+             * double-mount, or a fast reopen all collapse into one request. A QUIET reload is the
+             * opposite case: it exists because the operator just WROTE, and serving the pre-write
+             * payload back from a 15-second cache would re-seed the exact staleness the reload was
+             * added to kill. It goes straight to the network.
+             */
+            const res = quiet
+                ? await fetch(url, { credentials: "include" })
+                : await dedupeAdminFetchWithTtl(url, { credentials: "include" }, 15_000);
             if (res.status === 404) {
                 setState({ status: "not_found" });
                 return;

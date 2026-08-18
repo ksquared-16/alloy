@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AddChildModal from "@/components/adminV2/records/AddChildModal";
 import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import DirectEnrollModal from "@/components/adminV2/records/DirectEnrollModal";
 import { ENROLLMENT_START_ACTION_KEY } from "@/lib/adminV2/actions/definitions/enrollmentActions";
 import { childNextActions } from "@/lib/adminV2/records/childNextActions";
@@ -417,6 +418,19 @@ export default function RecordsChildrenSection({
                                         type="button"
                                         className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                         onClick={() => openChild(c.customerMemberId)}
+                                        /*
+                                         * Warm the record the operator is ABOUT to open. Hover
+                                         * intent runs 200–600ms ahead of the click, the record
+                                         * surface reads through the same TTL primitive, and the
+                                         * click then joins this flight instead of starting one.
+                                         */
+                                        onMouseEnter={() => {
+                                            void dedupeAdminFetchWithTtl(
+                                                `/api/admin/durable-record?subject_type=child&subject_id=${encodeURIComponent(c.customerMemberId)}`,
+                                                { credentials: "include" },
+                                                15_000,
+                                            ).catch(() => {});
+                                        }}
                                         data-child-member={c.customerMemberId}
                                         data-child-row="true"
                                     >

@@ -48,6 +48,7 @@ import { useEffect, useMemo, useState } from "react";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
@@ -80,9 +81,12 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
     const qs = params.toString();
 
     try {
-        const res = await fetch(
+        // Deduped: the FocusPanelSummaryDocProvider fetches this same document for the card, and
+        // the equality evidence must not cost a second flight for it.
+        const res = await dedupeAdminFetchWithTtl(
             `/api/admin/entity-layouts/focus-panel-summary${qs ? `?${qs}` : ""}`,
             { credentials: "include" },
+            15_000,
         );
         if (!res.ok) return { doc: null, layoutId: null, version: null };
         const json = (await res.json().catch(() => null)) as

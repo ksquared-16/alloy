@@ -19,6 +19,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 import AddStaffModal from "@/components/adminV2/settings/staff/AddStaffModal";
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
@@ -241,6 +242,14 @@ export default function RecordsStaffSection({
                                     type="button"
                                     className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                     onClick={() => openStaff(s.personId)}
+                                    // Same hover warmth as the Children rows — see that comment.
+                                    onMouseEnter={() => {
+                                        void dedupeAdminFetchWithTtl(
+                                            `/api/admin/durable-record?subject_type=person&subject_id=${encodeURIComponent(s.personId)}`,
+                                            { credentials: "include" },
+                                            15_000,
+                                        ).catch(() => {});
+                                    }}
                                     data-staff-person={s.personId}
                                     data-staff-row="true"
                                 >
