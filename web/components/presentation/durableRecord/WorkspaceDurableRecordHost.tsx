@@ -49,6 +49,7 @@ export default function WorkspaceDurableRecordHost({
     /** Marker for tests/diagnostics, e.g. `roster`. */
     hostKey,
     presentation = "full",
+    surfaceKey,
 }: {
     children: ReactNode;
     hostKey: string;
@@ -66,6 +67,18 @@ export default function WorkspaceDurableRecordHost({
      * where it sits.
      */
     presentation?: "full" | "contextual";
+    /**
+     * What the workspace UNDERNEATH is currently showing — e.g. `work:children`, `studio:patterns`.
+     *
+     * An open record is a statement about the surface it was opened from. The host deliberately does
+     * not unmount that surface, so when the operator moved from Children to Staff the card about
+     * Lennon stayed centered over a list of staff — a record answering a question nobody was still
+     * asking. Changing this closes it.
+     *
+     * Omitted, nothing closes on its own: a host with one surface has no such transition, and
+     * inventing one for it would close records for no reason.
+     */
+    surfaceKey?: string;
 }) {
     const [record, setRecord] = useState<OpenRecord | null>(null);
     /**
@@ -116,6 +129,22 @@ export default function WorkspaceDurableRecordHost({
             return null;
         });
     }, []);
+
+    /*
+     * The surface underneath changed, so the record over it is no longer an answer to anything.
+     *
+     * `close()` rather than a bare clear, because the list that is being left still needs to hear
+     * whether the record was edited — a stale row is stale whether the operator dismissed the card
+     * or navigated away from it.
+     *
+     * Guarded on `record` so this never fires on mount or on an ordinary re-render.
+     */
+    const surfaceKeyRef = useRef(surfaceKey);
+    useEffect(() => {
+        if (surfaceKeyRef.current === surfaceKey) return;
+        surfaceKeyRef.current = surfaceKey;
+        if (record) close();
+    }, [surfaceKey, record, close]);
 
     useEffect(() => {
         if (!record) return;

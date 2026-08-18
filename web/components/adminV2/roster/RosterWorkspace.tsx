@@ -606,7 +606,14 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
        * it would put the giant record page back under the chooser, which is the surface this
        * convergence removes.
        */}
-      <WorkspaceDurableRecordHost hostKey="roster" presentation="contextual">
+      <WorkspaceDurableRecordHost
+        hostKey="roster"
+        presentation="contextual"
+        // Moving between sections (or into Studio) leaves the surface the record was opened from.
+        // The body is deliberately never unmounted here, so without this the card stayed centered
+        // over whatever the operator went to look at next.
+        surfaceKey={mode === "studio" ? `studio:${studioSection}` : `work:${section}`}
+      >
         <WorkspaceSurface
           tone={mode === "work" && section === "roster" ? "canvas" : "stone"}
           scroll
