@@ -43,6 +43,27 @@ export const ENROLLMENT_CONFIRMATION_REQUIRED_KEYS: ReadonlySet<string> = new Se
     "child:first_name",
     "child:last_name",
     "child:dob",
+    /**
+     * SHARED-ALIAS spellings of the same child facts.
+     *
+     * A form binds a field either by `entity_type` + `field_key` or by a `shared_value_key` alias,
+     * and `canonicalKeyFor` keys the need by whichever it finds. The entity spellings above only
+     * match the first shape, so a tenant whose forms use aliases — Firefly's own Enrollment form
+     * uses `child_date_of_birth` — got `known` instead of `known_requires_confirmation`, and their
+     * parents were never asked to confirm a fact the record already held.
+     *
+     * Listed rather than normalized: mapping aliases to entity keys would need a second vocabulary
+     * that agrees with `fieldScope.ts`, and a disagreement there would silently change which facts
+     * a parent is asked to confirm.
+     */
+    "child_date_of_birth",
+    "child_first_name",
+    "child_last_name",
+    "child_full_name",
+    "guardian_first_name",
+    "guardian_last_name",
+    "guardian_email",
+    "guardian_phone",
     // Household / primary contact
     "person:first_name",
     "person:last_name",

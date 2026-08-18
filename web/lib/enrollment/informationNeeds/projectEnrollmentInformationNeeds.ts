@@ -9,6 +9,7 @@
  */
 
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
+import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -80,6 +81,10 @@ export function projectEnrollmentInformationNeeds(
 
     for (const form of input.forms) {
         walkScalarFormFields(form.schema, (field) => {
+            // Display-only content is not a participant need. Without this a handbook paragraph
+            // becomes an artifact-specific item called "Page 3" and counts against the parent.
+            if (!formFieldCollectsValue(field)) return;
+
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
@@ -96,6 +101,8 @@ export function projectEnrollmentInformationNeeds(
                 form_field_id: field.id,
                 label: field.label,
                 required: field.required === true,
+                field_type: field.type,
+                options: readFieldOptions(field),
             };
 
             const existing = byKey.get(identity.key);
@@ -113,6 +120,27 @@ export function projectEnrollmentInformationNeeds(
     }
 
     return [...byKey.values()].map((acc) => finalize(acc, input));
+}
+
+/**
+ * The authored choices for a closed field, normalized to strings.
+ *
+ * Shape-tolerant on purpose: option lists appear as bare strings and as `{value,label}` rows across
+ * the form library's history, and a participant control that silently rendered nothing for the older
+ * shape would be worse than the text box it replaced.
+ */
+function readFieldOptions(field: { options?: unknown }): readonly string[] {
+    const raw = (field as { options?: unknown }).options;
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item === "string" && item.trim()) out.push(item.trim());
+        else if (item && typeof item === "object") {
+            const v = (item as { value?: unknown; label?: unknown }).value ?? (item as { label?: unknown }).label;
+            if (typeof v === "string" && v.trim()) out.push(v.trim());
+        }
+    }
+    return out;
 }
 
 function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInformationNeed {

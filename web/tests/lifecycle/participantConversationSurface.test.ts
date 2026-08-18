@@ -41,6 +41,8 @@ const COMPONENT = COMPONENT_SOURCE.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\
 function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObjectiveWire {
     return {
         stage_key: "enrollment",
+        subject_display_name: "Ada",
+        phase: "shared_collection",
         progress: { total: 2, satisfied: 0, remaining: 2 },
         things_remaining: 2,
         next_turn: {
@@ -48,8 +50,9 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             prompt: "We have Date of Birth as 2021-05-04. Is that correct?",
             proposed_value: "2021-05-04",
             resolves_occurrences: 5,
-            input_type: "text",
+            input_type: "date",
             label: "Date of Birth",
+            options: [],
         },
         complete: false,
         ...overrides,
@@ -70,24 +73,38 @@ describe("turn rendering", () => {
     });
 
     it("5. a collect turn gets a field-appropriate deterministic input", () => {
-        const cases: [string, string, string][] = [
-            ["Date of Birth", "text", "date"],
-            ["Email", "text", "email"],
-            ["Phone", "text", "tel"],
-            ["Allergies", "text", "text"],
+        // The AUTHORED control now reaches the wire — `input_type` used to be the constant "text"
+        // for every need, which is why label-sniffing was the only signal and why a date of birth
+        // arrived as a plain box. An authored type is a decision and leads; the label is consulted
+        // only when the form carries no usable type.
+        const authored: [string, string][] = [
+            ["date", "date"],
+            ["email", "email"],
+            ["phone", "tel"],
+            ["text", "text"],
         ];
-        for (const [label, hint, expected] of cases) {
+        for (const [hint, expected] of authored) {
             const control = controlForTurn({
                 ...wire().next_turn,
                 kind: "collect_missing_value",
                 proposed_value: null,
                 input_type: hint,
-                label,
+                label: "Date of Birth",
             });
             expect(control.kind).toBe("value");
             if (control.kind !== "value") continue;
-            expect(control.inputType).toBe(expected);
+            expect(control.inputType, `authored ${hint} must win`).toBe(expected);
         }
+
+        // Fallback, for older forms whose fields carry no type at all.
+        const sniffed = controlForTurn({
+            ...wire().next_turn,
+            kind: "collect_missing_value",
+            proposed_value: null,
+            input_type: null,
+            label: "Date of Birth",
+        });
+        expect(sniffed).toMatchObject({ kind: "value", inputType: "date" });
     });
 
     it("13. an artifact turn hands off rather than duplicating Form controls", () => {
@@ -128,8 +145,10 @@ describe("turn rendering", () => {
 
 describe("3. progress is deterministic and truthful", () => {
     it("counts things still requiring the participant, not requirements", () => {
-        expect(progressLine(wire({ things_remaining: 3 }))).toBe("3 things remaining");
-        expect(progressLine(wire({ things_remaining: 1 }))).toBe("1 thing remaining");
+        // Parent-centric wording: these are questions left to answer, not Form controls. The old
+        // "8 to add · 1 to sign or upload" described the implementation to someone who cannot see it.
+        expect(progressLine(wire({ things_remaining: 3 }))).toBe("3 things left to check");
+        expect(progressLine(wire({ things_remaining: 1 }))).toBe("1 thing left to check");
     });
 
     it("offers no percentage over a denominator a parent cannot see", () => {

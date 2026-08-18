@@ -52,6 +52,15 @@
 # mounts on. It also carries the authority controls: a stage requiring no Forms realizes nothing,
 # and a packet edited by hand refuses instead of becoming an Enrollment requirement.
 #
+# The Experience Convergence slice added three. `startEnrollmentIdempotentReuse` pins that a
+# repeat Start Enrollment reports reuse rather than a null id every caller renders as failure.
+# `participantSurfaceHookOrder` pins that every hook precedes the participant surface's early
+# returns — the V1.2 objective effect sat below six of them and crashed the page the first time a
+# parent opened their link. `participantExperienceConvergence` carries the experience itself:
+# canonical facts confirmed rather than asked for, participant language instead of column
+# headings, semantic controls instead of one text box, the packet Form deferred while shared facts
+# remain, and signature/acknowledgment reached only at artifact review.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -99,4 +108,7 @@ jobs:
             tests/lifecycle/participantGovernedInterpretation.test.ts \
             tests/lifecycle/participantConversationSurface.test.ts \
             tests/lifecycle/participantProviderAuthorization.test.ts \
-            tests/lifecycle/startEnrollmentParticipantLaunch.test.ts
+            tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
+            tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
+            tests/lifecycle/participantSurfaceHookOrder.test.ts \
+            tests/lifecycle/participantExperienceConvergence.test.ts

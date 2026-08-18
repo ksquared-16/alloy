@@ -14,8 +14,23 @@
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 
+/**
+ * Which part of the experience the participant is in.
+ *
+ * `shared_collection` — confirming and supplying facts that populate every artifact at once. The raw
+ * Form must NOT be presented underneath: a parent who has just answered a question should not then
+ * find the same box below it.
+ * `artifact_review` — shared facts are settled; what remains belongs to a specific document
+ * (acknowledgment, signature, an artifact-only field). This is where the populated artifact is shown.
+ * `complete` — nothing remains.
+ */
+export type ParticipantPhase = "shared_collection" | "artifact_review" | "complete";
+
 export type ParticipantObjectiveWire = {
     readonly stage_key: string | null;
+    /** The child this Enrollment is about, for participant copy. Never an internal identifier. */
+    readonly subject_display_name: string | null;
+    readonly phase: ParticipantPhase;
     readonly progress: {
         readonly total: number;
         readonly satisfied: number;
@@ -32,6 +47,8 @@ export type ParticipantObjectiveWire = {
         /** The control type to render when a deterministic input is needed. */
         readonly input_type: string | null;
         readonly label: string | null;
+        /** Closed option set, when the authored control has one. Empty otherwise. */
+        readonly options: readonly string[];
     };
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
@@ -39,12 +56,26 @@ export type ParticipantObjectiveWire = {
 
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
+    context?: { readonly subjectDisplayName?: string | null },
 ): ParticipantObjectiveWire {
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
 
+    // Shared collection is over when no need that can be answered ONCE for every artifact is still
+    // waiting. What is left after that is artifact-specific by construction — Slice 2.4 gives those
+    // needs a null shared key — so the phase is derived, never tracked.
+    const sharedOutstanding =
+        (objective.known_requiring_confirmation ?? []).length + (objective.missing ?? []).length;
+    const phase: ParticipantPhase = turn.kind === "complete"
+        ? "complete"
+        : sharedOutstanding > 0
+          ? "shared_collection"
+          : "artifact_review";
+
     return {
         stage_key: objective.stage_key,
+        subject_display_name: (context?.subjectDisplayName ?? "").trim() || null,
+        phase,
         progress: {
             total: objective.progress.total_requirements,
             satisfied: objective.progress.satisfied_requirements,
@@ -60,6 +91,7 @@ export function participantObjectiveWireModel(
             // unavailable — the fallback has to be renderable from this payload alone.
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
+            options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
         },
         complete: turn.kind === "complete",
     };
@@ -78,5 +110,17 @@ function inputTypeForNeed(
     const need = objective.next_turn.need;
     if (!need) return null;
     const occurrence = need.occurrences.find((o) => o.form_field_id === formFieldId);
-    return occurrence ? "text" : null;
+    // The authored type, not "text". This returned a constant, which is why a date of birth and a
+    // free-text note reached the participant as the same undifferentiated box.
+    return occurrence ? occurrence.field_type : null;
+}
+
+/** The authored option set for the current need, when the control is a closed one. */
+function optionsForNeed(
+    objective: ParticipantEnrollmentObjective,
+    formFieldId: string,
+): readonly string[] {
+    const need = objective.next_turn.need;
+    if (!need) return [];
+    return need.occurrences.find((o) => o.form_field_id === formFieldId)?.options ?? [];
 }
