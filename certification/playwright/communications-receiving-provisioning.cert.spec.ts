@@ -32,8 +32,33 @@ const PAGE = "/organization/communications";
 const BINDINGS = "/api/admin/communications/bindings";
 const ROUTES = "/api/admin/communications/ingress-routes";
 
+const CONNECTION = "/api/admin/communications/provider-connection";
 const VISIBLE_IDENTITY = "hello@northwind-cert.invalid";
 const CERT_DISCOVERED_DOMAIN = "inbound.northwind-cert.invalid";
+/** Mirrors `CERTIFICATION_RESEND_KEY`. Resolves to no credential at all. */
+const CERT_KEY = "certification-synthetic-resend-key";
+
+/**
+ * Connect the organization's own Resend account.
+ *
+ * A PRECONDITION THIS FILE MUST BUILD, not one it may assume. Mail routing setup
+ * correctly refuses (409) until an account exists, and a PRISTINE tenant seeds
+ * email bindings but NO provider account — the accounts present on an inherited
+ * tenant are residue from earlier certification runs. Relying on that residue is
+ * exactly the ambient-fixture mistake that made an earlier suite pass on an empty
+ * queue.
+ *
+ * Idempotent: connecting twice is fine, so every test can call it.
+ */
+async function ensureResendConnected(page: Page) {
+    const res = await page.request.post(CONNECTION, {
+        data: { provider: "resend", api_key: CERT_KEY },
+        failOnStatusCode: false,
+    });
+    // Accept both "connected now" and "already connected"; only a hard refusal
+    // is a problem, and it would make every assertion below meaningless.
+    expect(res.status(), "the certification Resend connection is available").toBeLessThan(500);
+}
 
 async function emailBinding(page: Page) {
     const res = await page.request.get(BINDINGS);
@@ -56,6 +81,7 @@ async function setup(page: Page, body: Record<string, unknown>) {
 
 test.describe("Receiving domain discovery", () => {
     test("P-1 a discovered domain is OFFERED, never silently selected", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const first = await setup(page, { binding_id: binding.id });
         // Either the tenant already has a route (a later run), or setup asks for
@@ -71,6 +97,7 @@ test.describe("Receiving domain discovery", () => {
     });
 
     test("P-2 an invalid receiving domain is refused, with the reason", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         // The likeliest mistake: the Resend page shows a full address.
         const address = await setup(page, {
@@ -86,6 +113,7 @@ test.describe("Receiving domain discovery", () => {
     });
 
     test("P-3 a valid domain produces a destination AT that domain", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const res = await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         expect(res.status).toBe(200);
@@ -103,6 +131,7 @@ test.describe("Idempotence and tenancy", () => {
         // The failure this prevents is not a duplicate row but a duplicate
         // ADDRESS: a forwarding rule already created against the first would
         // point somewhere Alloy no longer watches.
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const a = await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         const b = await setup(page, { binding_id: binding.id });
@@ -114,6 +143,7 @@ test.describe("Idempotence and tenancy", () => {
     });
 
     test("P-5 exactly one route exists for the binding after repeated setup", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         const res = await page.request.get(ROUTES);
@@ -122,6 +152,7 @@ test.describe("Idempotence and tenancy", () => {
     });
 
     test("P-6 a binding this org does not own cannot be configured", async ({ page }) => {
+        await ensureResendConnected(page);
         // Naming a binding is never the same as being allowed to configure it.
         const res = await setup(page, {
             binding_id: "00000000-0000-4000-8000-0000000000ff",
@@ -131,6 +162,7 @@ test.describe("Idempotence and tenancy", () => {
     });
 
     test("P-7 a malformed binding id is refused", async ({ page }) => {
+        await ensureResendConnected(page);
         const res = await setup(page, { binding_id: "not-a-uuid" });
         expect(res.status).toBe(400);
     });
@@ -138,6 +170,7 @@ test.describe("Idempotence and tenancy", () => {
 
 test.describe("The hidden destination stays hidden", () => {
     test("P-8 it is absent from the ordinary bindings projection", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         // That projection feeds the channel cards, the composer's From line and
@@ -150,6 +183,7 @@ test.describe("The hidden destination stays hidden", () => {
     test("P-9 the configuration page shows the visible identity, and the destination only in setup", async ({
         page,
     }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const created = await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         const destination = String(created.json.hidden_destination ?? "");
@@ -171,6 +205,7 @@ test.describe("The hidden destination stays hidden", () => {
 
 test.describe("Provisioning is not receiving", () => {
     test("P-10 a created destination does NOT report receiving ready", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const res = await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         expect(res.json.receiving_observed).toBe(false);
@@ -183,6 +218,7 @@ test.describe("Provisioning is not receiving", () => {
     });
 
     test("P-11 the page says Waiting for routed email, and offers no redundant action", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         await page.goto(PAGE);
@@ -196,6 +232,7 @@ test.describe("Provisioning is not receiving", () => {
     });
 
     test("P-12 setup survives a reload", async ({ page }) => {
+        await ensureResendConnected(page);
         const binding = await emailBinding(page);
         const created = await setup(page, { binding_id: binding.id, receiving_domain: CERT_DISCOVERED_DOMAIN });
         const destination = String(created.json.hidden_destination ?? "");

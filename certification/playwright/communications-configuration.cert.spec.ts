@@ -125,7 +125,15 @@ test.describe("Organization Communications — the five questions", () => {
         // unless the detail carries evidence of an actual arrival.
         if (receiveState === "ready") {
             expect(email!.readiness.receive.detail).toContain("Last inbound verified");
-            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Ready");
+            // "Connected", not "Ready": email receiving states that mail has
+            // ACTUALLY ARRIVED, where "Ready" would read as a capability. SMS
+            // below keeps the shared vocabulary, because its readiness is one.
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Connected");
+        } else if (receiveState === "awaiting_routed_email") {
+            // A destination exists and nothing has come through it yet.
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
+                "Waiting for routed email"
+            );
         } else {
             expect(receiveState).toBe("routing_setup_required");
             await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
