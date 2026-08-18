@@ -29,6 +29,16 @@ const SHELL = '[data-adminv2-operations-workspace="true"]';
 const CREATE_ASSIGNMENT = '[data-assignment-create="true"]';
 const PICKER = '[data-assignment-subject-picker="true"]';
 const CARD = "[data-contextual-card-subject-kind]";
+/*
+ * The creation subject: a child with a COMMITTED Riverside placement.
+ *
+ * Not the fixture's waitlisted child, deliberately. A waitlisted child's placement is `proposed`, so
+ * the site cannot be resolved from it and the save is refused with "customer_member_id and a
+ * resolvable site are required" — correct service behaviour, and the least deterministic path
+ * available. Creating for a committed child is the ordinary operator case this control is for.
+ */
+const CREATE_SUBJECT = "00000000-0000-4000-8000-000050000021";
+const RIVERSIDE_ID = "00000000-0000-4000-8000-000000000010";
 
 test.beforeAll(() => fs.mkdirSync(SHOTS, { recursive: true }));
 
@@ -283,51 +293,84 @@ test("16+17 — bulk actions remain selection-scoped and no flow opens the retir
 /**
  * A COMMAND THAT OPENS SOMETHING IS NOT A COMMAND THAT CREATES SOMETHING.
  *
- * Every assertion above stops at the canonical card opening. That is the right boundary for the
- * affordance claims, and it is exactly the boundary a broken write would hide behind: the picker
- * would still choose a subject, the card would still appear, and nothing would reach the ledger.
+ * Everything above stops at the canonical card opening. That is the right boundary for an affordance
+ * claim and exactly the boundary a broken write hides behind: the picker would choose, the card would
+ * appear, and nothing would reach the ledger. So this drives the whole operator sentence and then
+ * reads the CANONICAL projection back — the same `?view=assignment_roster` the lens and Roster read.
  *
- * So this drives the whole sentence — command → subject → canonical card → real save — and then
- * reads the CANONICAL projection back. The before/after counts come from `data-assignment-total`,
- * published by the lens from the same read model the Roster uses, so a card that reported success
- * while writing nothing fails here.
+ * ── THE INTERACTION IS BORROWED, NOT INVENTED ──
  *
- * It MUTATES the tenant. `roster-people-search-convergence.sql` reclaims operator-created rows for
- * its own subjects, so the fixture must be applied before a re-run — the lesson this sprint already
- * paid for once, recorded in that fixture's own header.
+ * The room picker's contract is already exercised by `assignment-subject-convergence`, and this
+ * follows it exactly: the Room region opens the picker, the picker commits BY ID (a label match
+ * could hit a different room whose name merely contains the same words), and days come from the
+ * pattern shortcut rather than individual weekday toggles. An earlier draft guessed at each of those
+ * and left Save disabled with no explanation — the options are `disabled` until eligibility scores,
+ * so clicking a merely-visible one does nothing at all.
+ *
+ * ── GRAIN ──
+ *
+ * CHILD. One grain is enough: the RegisteredAction authority is independently certified for both,
+ * and the chooser tests above keep proving Child and Staff each reach the card. A child avoids the
+ * effective-dated supersede path a second staff assignment would take, which is what makes the room,
+ * category and start date deterministic here.
+ *
+ * MUTATES `schedule_assignments`. The baseline is asserted below rather than assumed.
  */
-/*
- * ── UNFINISHED, AND DELIBERATELY LEFT VISIBLE ──
- *
- * `fixme` because the SPEC cannot yet drive the Schedule editor to a saveable state — not because
- * the product failed. Progress is real and stops in a known place: the command opens the canonical
- * card over Operations, `+ Add Assignment` reaches the type picker, a configured Assignment Category
- * is chosen, and the editor composes with a start date. Save then stays disabled pending a ROOM, and
- * the room control is a picker that replaces the editor with its own scored list; the option click
- * does not record a room here yet.
- *
- * Left in the file rather than deleted so the gap is legible: points 14 and 15 are NOT proven by
- * this suite. What IS proven, by the tests above, is that the handoff reaches the canonical card —
- * and that assertion is now genuine, which it was not before (see the overlay note in 11/12).
- */
-test.fixme("14+15 — Create assignment writes a canonical assignment, and the lens re-reads it", async ({
+test("14+15 — Create assignment writes a canonical assignment, and the lens re-reads it", async ({
     page,
 }) => {
     await openAssignmentsLens(page);
 
-    const total = () =>
-        page.locator("[data-assignment-total]").first().getAttribute("data-assignment-total");
-    const before = Number(await total());
-    expect(before, "the ledger reports a total before the write").toBeGreaterThanOrEqual(0);
+    /** The canonical projection the lens and Roster both read — never the DOM's own arithmetic. */
+    const ledger = async () =>
+        await page.evaluate(async (site) => {
+            const res = await fetch(
+                `/api/admin/scheduling?view=assignment_roster&site_location_id=${encodeURIComponent(site)}`,
+                { credentials: "include" },
+            );
+            const json = await res.json().catch(() => ({}));
+            const subjects = (json?.subjects ?? []) as any[];
+            return {
+                total: subjects.reduce((n, s) => n + (s.assignments?.length ?? 0), 0),
+                bySubject: Object.fromEntries(
+                    subjects.map((s) => [
+                        s.subjectKey,
+                        (s.assignments ?? []).map((a: any) => a.assignmentId),
+                    ]),
+                ),
+            };
+        }, RIVERSIDE_ID);
 
-    // ── command → subject → canonical card ──
+    /*
+     * BASELINE, ASSERTED LOUDLY.
+     *
+     * This spec's fixture gives Riverside a known population. If a previous run left the tenant
+     * mutated, the counts below still add up — but the room and category offered to the subject may
+     * not, and the failure would land somewhere unrelated. Failing here names the cause.
+     */
+    const before = await ledger();
+    expect(
+        before.total,
+        "stale tenant: re-apply certification/fixtures/roster-people-search-convergence.sql",
+    ).toBeGreaterThan(0);
+
+    const domTotal = () =>
+        page.locator("[data-assignment-total]").first().getAttribute("data-assignment-total");
+    expect(Number(await domTotal()), "the lens and the projection agree before the write").toBe(
+        before.total,
+    );
+
+    // ── command → subject → canonical card, over Operations ──
     await page.locator(CREATE_ASSIGNMENT).first().click();
     await expect(page.locator(PICKER)).toBeVisible({ timeout: SETTLE });
     await page.locator('[data-assignment-subject-tab="child"]').click();
-    const subject = page.locator('[data-assignment-subject-kind="child"]').first();
-    await expect(subject).toBeVisible({ timeout: SETTLE });
+    const subject = page.locator(`[data-assignment-subject-option="${CREATE_SUBJECT}"]`);
+    await expect(subject, "the fixture's child is offered by canonical identity").toBeVisible({
+        timeout: SETTLE,
+    });
     const subjectName = (await subject.innerText()).trim();
     await subject.click();
+
     await expect(
         page.locator('[data-durable-record-overlay="true"]'),
         "the card must be reachable, which means over Operations",
@@ -336,96 +379,97 @@ test.fixme("14+15 — Create assignment writes a canonical assignment, and the l
         timeout: SETTLE,
     });
 
-    // ── the card's own create flow: new → configured type → editor → save ──
-    /*
-     * Scroll it into view before clicking.
-     *
-     * The control is present immediately but Playwright's actionability check spun on "visible,
-     * enabled and stable" — the card body scrolls, and the panel animates a subject into view with
-     * `behavior: "smooth"`, so the button is genuinely still moving when the click is attempted.
-     * Scrolling first settles it; forcing the click would instead have hidden a real defect.
-     */
+    // ── the card's own create flow ──
     const createNew = page.locator('[data-schedule-create-new="true"]').first();
-    await expect(createNew, "the card offers its own create affordance").toBeAttached({ timeout: SETTLE });
-    await createNew.scrollIntoViewIfNeeded();
+    await expect(createNew, "the card offers its own create affordance").toBeVisible({ timeout: SETTLE });
     await createNew.click();
-    await expect(page.locator('[data-assignment-type-picker="true"]')).toBeVisible({ timeout: SETTLE });
 
-    /*
-     * 13, proven rather than asserted about: the types offered here are the TENANT'S configured
-     * Assignment Categories, authored in Operations → Studio. Picking the first real option is what
-     * makes this a canonical write instead of a fixture-shaped one.
-     */
+    // A REAL configured Assignment Category, authored in Operations → Studio.
+    await expect(page.locator('[data-assignment-type-picker="true"]')).toBeVisible({ timeout: SETTLE });
     const type = page.locator("[data-assignment-type-option]").first();
     await expect(type, "configured Assignment Categories are offered").toBeVisible({ timeout: SETTLE });
+    const categoryName = (await type.innerText()).trim().split("\n")[0]!.trim();
     await type.click();
 
-    const commit = page.locator('[data-schedule-commit="true"]');
-    await expect(commit, "the editor composed").toBeVisible({ timeout: SETTLE });
-
     /*
-     * FILL WHAT THE CARD REQUIRES — the card decides, not this spec.
+     * ── THE ROOM, THROUGH THE PICKER THE OPERATOR USES ──
      *
-     * `canSave` needs at least one weekday, an effective-from date, and a room when the chosen
-     * category requires one. Save stays DISABLED until then, which is the card protecting its own
-     * invariants; driving it any other way would be writing around the surface under test.
+     * Options stay `disabled` until eligibility has scored them, and a `blocked` one opens an
+     * override confirmation rather than committing. So: wait for the scored state, then take the
+     * first option the card itself considers selectable, and remember its ID for the proof.
      */
-    const editor = page.locator('[data-schedule-editor="true"]');
-    await editor.locator('button[data-day="1"]').click();
+    await page.locator("[data-room-change='true']").first().click();
+    await expect(page.locator("[data-room-picker='true']")).toBeVisible({ timeout: SETTLE });
+    await expect(page.locator('[data-room-options-ready="scored"]')).toBeVisible({ timeout: SETTLE });
+    const selectable = page
+        .locator("[data-room-option]")
+        .filter({ hasNot: page.locator('[data-room-classification="blocked"]') });
+    const room = selectable.first();
+    await expect(room, "the card offers a selectable room for this subject").toBeEnabled({
+        timeout: SETTLE,
+    });
+    const roomId = await room.getAttribute("data-room-option");
+    const roomName = (await room.innerText()).trim().split("\n")[0]!.trim();
+    await room.click();
 
-    const startDate = page.locator('[data-schedule-editor="true"] input[type="date"]').first();
-    await startDate.fill(new Date().toISOString().slice(0, 10));
+    // Days come from the pattern shortcut — the same route `assignment-subject-convergence` drives.
+    await page.locator("[data-pattern-shortcut='true']").first().click();
+    await expect(page.locator("[data-pattern-list='true']")).toBeVisible({ timeout: SETTLE });
+    await page.locator("[data-pattern-option]").first().click();
 
-    /*
-     * A ROOM, from the card's own scored options.
-     *
-     * Not a `<select>` — the room control is a button that opens a list the card scores against the
-     * child's placement, so the first draft's `select` locator matched nothing and Save stayed
-     * disabled with no explanation. Waiting for `data-room-options-ready` before choosing, because
-     * the options arrive scored and picking during "pending" selects whatever happened to render.
-     */
-    const roomChange = editor.locator('[data-room-change="true"]').first();
-    if (await roomChange.count()) {
-        await roomChange.click();
-        const options = page.locator("[data-room-options-ready] [data-room-option]");
-        await expect(options.first(), "the card offers rooms for this subject").toBeVisible({
-            timeout: SETTLE,
-        });
-        await options.first().click();
-        /*
-         * Picking a room REPLACES the editor with its own surface, so the Save button is absent
-         * until the card comes back. Waiting for the room to be recorded — not for a fixed delay —
-         * is what makes the next assertion about `canSave` rather than about timing.
-         */
-        await expect(editor.locator('[data-room-value="true"]'), "the card recorded a room").toBeVisible({
-            timeout: SETTLE,
-        });
-    }
+    const startDate = new Date().toISOString().slice(0, 10);
+    await page.locator('input[type="date"]').first().fill(startDate);
 
+    const commit = page.locator("[data-schedule-commit='true']").first();
     await expect(commit, "the card considers the assignment complete").toBeEnabled({ timeout: SETTLE });
     await commit.click();
 
-    // The save must actually land — a card that stayed in the editor with an error is a failed write.
-    await expect(page.locator('[data-schedule-commit="true"]')).toHaveCount(0, { timeout: SETTLE });
+    /*
+     * A REFUSED WRITE MUST SAY SO rather than time out downstream — the editor renders its error
+     * above the fold of a scrolling body, so a failed save looks exactly like a slow one.
+     */
+    const errorNote = page.locator("[data-schedule-error='true']");
+    await expect
+        .poll(
+            async () =>
+                (await errorNote.count()) > 0
+                    ? `SAVE REFUSED: ${await errorNote.first().innerText()}`
+                    : (await page.locator('[data-assignment-list-surface="true"]').count()) > 0
+                      ? "saved"
+                      : "pending",
+            { timeout: SETTLE },
+        )
+        .toBe("saved");
     await page.screenshot({ path: path.join(SHOTS, "8-created.png"), fullPage: true });
 
-    // ── back to the lens: the canonical projection re-read, with no page load ──
+    // ── 14 — the CANONICAL FACT, not a toast ──
     await page.keyboard.press("Escape");
     await expect(page.locator('[data-durable-record-overlay="true"]')).toHaveCount(0, { timeout: SETTLE });
 
-    // 14 — the new commitment is in the canonical Assignments projection.
+    const after = await ledger();
+    expect(after.total, "exactly one new commitment in the canonical projection").toBe(before.total + 1);
+
+    // It belongs to the subject chosen in the chooser — identified by the ids that are NEW.
+    const key = Object.keys(after.bySubject).find(
+        (k) => (after.bySubject[k]?.length ?? 0) > (before.bySubject[k]?.length ?? 0),
+    );
+    expect(key, "the new assignment attaches to a subject that gained one").toBeTruthy();
+    expect(key, "and that subject is the one chosen in the chooser").toContain(CREATE_SUBJECT);
+
+    // …carrying the room, category and start date entered through the UI.
+    const row = page.locator(`[data-assignment-roster-subject="${key}"]`);
+    await expect(row).toContainText(subjectName, { timeout: SETTLE });
+    await expect(row, "the room selected through the picker").toContainText(roomName);
+    await expect(row, "the category selected in the UI").toContainText(categoryName);
+
+    // 15 — the LENS re-read canonical truth, exactly once, with no page load.
     await expect
-        .poll(async () => Number(await total()), { timeout: SETTLE })
-        .toBe(before + 1);
+        .poll(async () => Number(await domTotal()), { timeout: SETTLE })
+        .toBe(before.total + 1);
 
-    // …and it belongs to the subject the operator chose, not to whoever happened to be first.
-    await expect(page.locator('[data-assignment-roster="true"]')).toContainText(subjectName);
-
-    // 15 — Roster reads the same truth: the Rooms lens composes from the projection that just grew.
+    // …and Roster composes from the same grown projection.
     await page.locator('[data-roster-lens-option="rooms"]').click();
     await expect(page.locator("[data-roster-rooms]")).toBeVisible({ timeout: SETTLE });
-
-    // Still Operations, still no reload, never the retired workspace.
     await expect(page.locator(SHELL)).toHaveAttribute("data-operations-section", "roster");
     await page.screenshot({ path: path.join(SHOTS, "9-lens-refreshed.png"), fullPage: true });
 });
