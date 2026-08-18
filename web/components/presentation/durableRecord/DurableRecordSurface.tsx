@@ -101,8 +101,15 @@ export default function DurableRecordSurface({
     /** Whether the initial context has been chosen for THIS record. See `load` below. */
     const selectionInitializedRef = useRef(false);
 
-    const load = useCallback(async () => {
-        setState({ status: "loading" });
+    /**
+     * Reload the composed record.
+     *
+     * `quiet` keeps the current model on screen while the refetch runs. A save is not a navigation:
+     * dropping to the loading state would close the card the operator just edited and return them to
+     * the chooser, which reads as the edit having thrown them out.
+     */
+    const load = useCallback(async (quiet = false) => {
+        if (!quiet) setState({ status: "loading" });
         try {
             const res = await fetch(
                 `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`,
@@ -360,7 +367,21 @@ export default function DurableRecordSurface({
                                     : { kind: "staff", person: state.personSubject! }
                             }
                             schedulingProjection={state.schedulingProjection}
-                            onSaved={onRecordChanged}
+                            /*
+                             * A SAVE REFRESHES THIS RECORD, not only the list underneath it.
+                             *
+                             * The card shows the value it just wrote from its own session state, so
+                             * the surface LOOKED right while the composed truth behind it stayed at
+                             * the value it had on open. Re-entering Edit then seeded the stale fact
+                             * and offered to save it back — the operator's own change silently
+                             * proposed as an undo.
+                             *
+                             * Quietly, so the card the operator is holding stays on screen.
+                             */
+                            onSaved={() => {
+                                void load(true);
+                                onRecordChanged?.();
+                            }}
                         />
                     </div>
                 ) : null}
