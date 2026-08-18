@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: handoff
+status: sprint
 last_reviewed: 2026-08-14
 supersedes: []
 ---
