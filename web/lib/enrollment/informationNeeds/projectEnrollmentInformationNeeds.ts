@@ -129,8 +129,8 @@ export function projectEnrollmentInformationNeeds(
  * the form library's history, and a participant control that silently rendered nothing for the older
  * shape would be worse than the text box it replaced.
  */
-function readFieldOptions(field: { options?: unknown }): readonly string[] {
-    const raw = (field as { options?: unknown }).options;
+function readFieldOptions(field: unknown): readonly string[] {
+    const raw = (field as { options?: unknown })?.options;
     if (!Array.isArray(raw)) return [];
     const out: string[] = [];
     for (const item of raw) {

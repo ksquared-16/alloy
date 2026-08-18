@@ -26,6 +26,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     controlForTurn,
+    participantIntro,
+    participantQuestion,
     progressLine,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
@@ -36,6 +38,13 @@ export type EnrollmentConversationCardProps = {
     readonly initialObjective: ParticipantObjectiveWire;
     /** Called when the turn becomes artifact work, so the host hands off to the packet flow. */
     readonly onArtifactHandoff?: () => void;
+    /**
+     * Reports the runtime phase after every turn.
+     *
+     * The host defers the packet Form while shared facts remain, and the parent crosses into
+     * artifact review MID-conversation — without this the Form would stay hidden until a reload.
+     */
+    readonly onPhaseChange?: (phase: ParticipantObjectiveWire["phase"]) => void;
 };
 
 type TurnResponse = {
@@ -66,7 +75,7 @@ export function EnrollmentConversationCard({
     const control = useMemo(() => controlForTurn(objective.next_turn), [objective]);
 
     const submit = useCallback(
-        async (payload: { text?: string; value?: string }) => {
+        async (payload: { text?: string; value?: unknown }) => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true);
