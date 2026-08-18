@@ -267,6 +267,23 @@ describe("the record gestures use the durable contract", () => {
         expect(src).toContain("participantLink");
     });
 
+    it("canonical mutations tell every derived surface to re-read", () => {
+        const src = read("components/adminV2/records/RecordsChildrenSection.tsx");
+        // Live QA: metric tiles and process counts kept stale numbers until the browser was
+        // refreshed, because this list reloaded ITSELF and nothing else. The workspace already has a
+        // refresh bus; both canonical child mutations now announce on it.
+        expect(src).toContain("broadcastWorkspaceMutation");
+        expect(src).toContain('broadcastWorkspaceMutation("child.add")');
+        expect(src).toContain("broadcastWorkspaceMutation(ENROLLMENT_START_ACTION_KEY)");
+
+        // Both keys must be registered as membership-changing, or listeners patch rows they can see
+        // instead of refetching the counts they cannot.
+        const bus = read("lib/admin/opportunityQueueRefreshEvent.ts");
+        const membership = bus.slice(0, bus.indexOf("QUEUE_ROW_DISPLAY_PATCH_ACTION_KEYS"));
+        expect(membership).toContain('"child.add"');
+        expect(membership).toContain('"enrollment.start"');
+    });
+
     it("Add Child is NOT wired to any execution path", () => {
         const src = read("components/adminV2/records/RecordsChildrenSection.tsx");
         // Phase 0 found the existing child-create path resolves ambiguous identity silently.

@@ -40,6 +40,12 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     // membership classification is required for off-screen / cross-lane refetch + pill counts.
     "waitlist_child",
     "move_to_waitlist",
+    // Records/Operations child mutations. Neither has an Opportunity subject, so both broadcast —
+    // but both change what derived surfaces COUNT: `child.add` adds a durable child, and
+    // `enrollment.start` creates a journey and its participant packet. Listed here so listeners
+    // refetch rows AND counts rather than patching a row that may not be on screen at all.
+    "child.add",
+    "enrollment.start",
 ]);
 
 /**

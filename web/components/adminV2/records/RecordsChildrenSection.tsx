@@ -32,6 +32,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AddChildModal from "@/components/adminV2/records/AddChildModal";
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import DirectEnrollModal from "@/components/adminV2/records/DirectEnrollModal";
 import { ENROLLMENT_START_ACTION_KEY } from "@/lib/adminV2/actions/definitions/enrollmentActions";
 import { childNextActions } from "@/lib/adminV2/records/childNextActions";
@@ -276,6 +277,13 @@ export default function RecordsChildrenSection({
                         : `${context} There is nothing for the parent to complete yet.`,
                 );
                 setReloadToken((n) => n + 1);
+                // This list is not the only surface derived from what just changed. Metric tiles,
+                // process counts and work-unit queues are mounted elsewhere and were reading stale
+                // numbers until the operator refreshed the browser. The shared refresh bus already
+                // exists for exactly this; a child mutation has no Opportunity subject, so it
+                // broadcasts, and `enrollment.start` is registered as membership-changing so
+                // listeners refetch counts rather than patching a row that may not be on screen.
+                broadcastWorkspaceMutation(ENROLLMENT_START_ACTION_KEY);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not start enrollment");
             }
@@ -503,6 +511,7 @@ export default function RecordsChildrenSection({
                     );
                     setLastAdded({ id: r.customerMemberId, name: r.displayName });
                     setReloadToken((n) => n + 1);
+                    broadcastWorkspaceMutation("child.add");
                 }}
                 onOpenRecord={(customerMemberId) => {
                     setAddOpen(false);
