@@ -206,6 +206,10 @@ const PROVIDER_LABELS: Record<string, string> = { resend: "Resend", twilio: "Twi
 const READINESS_RANK: Record<ReadinessState, number> = {
     ready: 5,
     verification_required: 4,
+    // Both mean "configured, not working yet". Awaiting a routed email is
+    // FURTHER along than needing setup — Alloy has a destination and is waiting
+    // on someone else's forwarding rule.
+    awaiting_routed_email: 3.75,
     routing_setup_required: 3.5,
     setup_required: 3,
     provider_unavailable: 2,

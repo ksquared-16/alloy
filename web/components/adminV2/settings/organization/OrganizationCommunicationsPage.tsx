@@ -75,6 +75,9 @@ function toneFor(state: ReadinessState): string {
         // organization's OWN mail provider has not been done yet, and until mail
         // actually arrives Alloy has no way to know whether it has.
         case "routing_setup_required":
+        // Alloy is ready and waiting on someone else's forwarding rule. Amber,
+        // not red: nothing is broken, and nothing more is owed inside Alloy.
+        case "awaiting_routed_email":
             return "bg-amber-500/12 text-amber-900";
         case "disabled":
             return "bg-alloy-midnight/8 text-alloy-midnight/60";
@@ -163,6 +166,10 @@ function nextActionLabel(channel: ChannelKey, direction: "sending" | "receiving"
     // Alloy and not at Resend. "Set up replies" pointed administrators at the
     // wrong place for the one state where the work is genuinely theirs.
     if (state === "routing_setup_required") return "Set up mail routing";
+    // Deliberately NO action. The destination exists and the rule is theirs to
+    // add at their own mail provider — offering "Set up mail routing" again would
+    // send an administrator to redo work they have already done.
+    if (state === "awaiting_routed_email") return null;
     return channel === "email" ? "Set up replies" : "Set up receiving";
 }
 
@@ -546,7 +553,15 @@ function ChannelPanel({
                         <ReadinessRow
                             label="Receiving"
                             state={card.receiving.state}
-                            text={card.receiving.label}
+                            /* Email receiving says "Connected", not "Ready": it is a
+                               statement about mail having actually arrived, and
+                               "Ready" reads as a capability rather than an
+                               observation. SMS keeps the shared vocabulary. */
+                            text={
+                                card.channel === "email" && card.receiving.state === "ready"
+                                    ? "Connected"
+                                    : card.receiving.label
+                            }
                             testId={`communications-${card.channel}-receiving`}
                             value={card.identity.find((l) => l.label === "Replies")?.value || null}
                             // An address on this row is NOT proof that mail reaches

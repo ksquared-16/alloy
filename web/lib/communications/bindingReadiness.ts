@@ -44,6 +44,21 @@ export type ReadinessState =
      * primary-domain identity Alloy cannot continuously prove that one still does.
      */
     | "routing_setup_required"
+    /**
+     * EMAIL RECEIVING ONLY. A hidden destination EXISTS and nothing has arrived
+     * through it yet.
+     *
+     * Distinct from `routing_setup_required` because the outstanding action is
+     * different and so is who performs it. There, Alloy has nowhere to receive
+     * and the administrator finishes setup in Alloy. Here, Alloy is ready and
+     * waiting on a forwarding rule at the organization's own mail provider —
+     * telling them to "set up mail routing" again would send them to redo work
+     * they have already done.
+     *
+     * Emphatically still NOT ready. Creating a destination proves Alloy has
+     * somewhere to receive; it proves nothing about whether mail reaches it.
+     */
+    | "awaiting_routed_email"
     /** The operator switched this binding off. Not a fault. */
     | "disabled"
     /** No runtime exists for this provider on this channel. Not fixable by config. */
@@ -491,8 +506,8 @@ function evaluateReceive(params: {
 
     if (ingress) {
         return {
-            state: "routing_setup_required",
-            detail: `Routing setup required. A delivery destination is ready for ${identity}, and no mail has arrived through it yet. Add the forwarding rule at your mail provider, then send one test message — this turns green when Alloy actually receives it.`,
+            state: "awaiting_routed_email",
+            detail: `A private destination is ready for ${identity}, and no mail has arrived through it yet. Add the routing rule at your mail provider, then send one test message — this turns to Connected when Alloy actually receives it.`,
         };
     }
 
@@ -513,6 +528,8 @@ export function readinessLabel(state: ReadinessState): string {
             return "Verification required";
         case "routing_setup_required":
             return "Routing setup required";
+        case "awaiting_routed_email":
+            return "Waiting for routed email";
         case "disabled":
             return "Disabled";
         case "provider_unavailable":
