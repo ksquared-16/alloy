@@ -59,6 +59,14 @@ export type CompiledArtifactControl = {
     readonly value: unknown;
     /** Authored prose, for `display_content`. */
     readonly content: string | null;
+    /**
+     * The canonical binding identity, when the control has one.
+     *
+     * This is what makes an EDIT a shared-value write rather than a form patch: every control
+     * carrying the same key is the same fact, so a correction applied to one must show on all of
+     * them. Null for the artifact's own controls — they have no shared identity to write to.
+     */
+    readonly shared_key: string | null;
 };
 
 export type CompiledArtifactSection = {
@@ -106,14 +114,21 @@ function readOptions(field: unknown): readonly string[] {
  * binding — a yes/no that belongs to this document rather than to the family's shared record. A
  * label-matching rule would break the moment a tenant wrote "I agree" instead.
  */
-function classify(field: FormField, value: unknown): CompiledControlKind {
+function classify(field: FormField, sharedKey: string | null, value: unknown): CompiledControlKind {
     if (!formFieldCollectsValue(field)) return "display_content";
     if (field.type === "signature") return "signature";
 
-    const bound = canonicalKeyFor(field).basis !== "unbound";
+    const bound = sharedKey != null;
     if (!bound && field.type === "boolean") return "acknowledgment";
     if (bound && hasValue(value)) return "resolved_shared_value";
     return "unresolved_artifact_specific";
+}
+
+/** The binding identity an edit writes to — the same derivation that keys an information need. */
+function sharedKeyOf(field: FormField): string | null {
+    const resolved = canonicalKeyFor(field);
+    if (resolved.basis === "unbound") return null;
+    return resolved.shared_value_key ?? resolved.key;
 }
 
 /**
@@ -136,15 +151,17 @@ export function compileParticipantArtifact(
                 continue;
             }
             const value = values[field.id];
+            const sharedKey = sharedKeyOf(field);
             controls.push({
                 field_id: field.id,
                 label: field.label ?? "",
-                kind: classify(field, value),
+                kind: classify(field, sharedKey, value),
                 input_type: field.type,
                 options: readOptions(field),
                 required: field.required === true,
                 value: value ?? null,
                 content: (field as { content?: string }).content ?? null,
+                shared_key: sharedKey,
             });
         }
     };

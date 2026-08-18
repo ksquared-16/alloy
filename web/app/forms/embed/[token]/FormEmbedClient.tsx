@@ -25,6 +25,11 @@ import {
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
+import { CompiledArtifactReview } from "./CompiledArtifactReview";
+import {
+    compileParticipantArtifact,
+    type CompiledArtifactControl,
+} from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -94,6 +99,20 @@ function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | nul
         if (empty) merged[fieldId] = value;
     }
     return { ...payload, values: merged };
+}
+
+/**
+ * A sub-schema for rendering ONE compiled control (or the final acknowledge-and-sign group) through
+ * the Forms engine, inside the compiled review.
+ *
+ * Title and section titles are stripped deliberately: the review owns the document's presentation,
+ * and on the certification form the authored section titles are OCR page markers ("Page 1") that
+ * must not resurface as headings beside a single input. The FIELDS are untouched — type, options,
+ * validation and signature semantics all remain the Form's.
+ */
+function reviewControlSubSchema(schema: FormSchemaV1, fieldIds: string[]): FormSchemaV1 {
+    const sub = subSchemaForFieldsGrouped(schema, fieldIds, "");
+    return { ...sub, sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })) };
 }
 
 type ResolveOk = {
@@ -655,6 +674,81 @@ export function FormEmbedClient({
               : (famStep.child?.label ?? "Child")
         : undefined;
 
+    /**
+     * THE COMPILED REVIEW — "here is your completed paperwork", not "here is a form".
+     *
+     * When the runtime owns the journey and shared collection is done, the artifact is presented as
+     * the compiled model: settled facts read as facts with Edit beside them, only genuinely
+     * outstanding controls appear as inputs, and acknowledgment + signature follow the content as
+     * the final phase. The raw Form in edit mode — every control an input, including the two facts
+     * the parent settled seconds ago — is exactly what this replaces.
+     *
+     * Compiled from the SAME schema and payload the Form would render, on every render: an edit or
+     * a late-settled conversation value reclassifies immediately, because the classification is
+     * derived state, not a snapshot.
+     */
+    const enrollmentReview = enrollmentJourney && participantPhase === "artifact_review" && artifactRenderable;
+    const compiled = enrollmentReview
+        ? compileParticipantArtifact(schema, (payload.values ?? {}) as Record<string, unknown>)
+        : null;
+    const finalPhaseFieldIds = compiled
+        ? [...compiled.acknowledgments, ...compiled.signatures].map((c) => c.field_id)
+        : [];
+
+    /**
+     * An edit at review writes THROUGH the shared-value mechanism, never into one artifact.
+     *
+     * Locally the value lands on every control carrying the same canonical key — the same fact must
+     * not read as two values on one page. Durably it goes to `enrollment-edit`, which merges it into
+     * the session's `shared_values` by the same path a conversational answer takes. D-99 needs no
+     * invalidation call: a confirmation is bound to a value fingerprint, so the changed value simply
+     * stops matching it, and the recomputed objective in the response tells this surface if the
+     * runtime now wants the conversation back.
+     *
+     * Optimistic with rollback, matching the conversation card: the fact reads as corrected the
+     * moment the parent commits it, and if the platform refuses, the previous value returns — the
+     * optimism never outlives the truth.
+     */
+    const handleReviewEdit = (control: CompiledArtifactControl, value: unknown) => {
+        if (!compiled) return;
+        const targets = control.shared_key
+            ? compiled.sections
+                  .flatMap((s) => s.controls)
+                  .filter((c) => c.shared_key === control.shared_key)
+                  .map((c) => c.field_id)
+            : [control.field_id];
+        const previous = payload;
+        const values = { ...((payload.values ?? {}) as Record<string, unknown>) };
+        for (const id of targets) values[id] = value;
+        const next = { ...payload, values };
+        setMessage(null);
+        setValidationErrors(null);
+        setPayload(next);
+        void persistDraft(next);
+        void (async () => {
+            try {
+                const res = await fetch(`/api/public/forms/${encToken}/enrollment-edit`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ field_id: control.field_id, value }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    data?: { objective?: ParticipantObjectiveWire };
+                };
+                if (!json.ok) throw new Error("edit not accepted");
+                if (json.data?.objective) {
+                    setEnrollmentObjective(json.data.objective);
+                    setEnrollmentPhase(json.data.objective.phase);
+                }
+            } catch {
+                setPayload(previous);
+                void persistDraft(previous);
+                setMessage("That change didn't save — please try again.");
+            }
+        })();
+    };
+
     return (
         <IntakeFrame
             packetName={packetProgress?.packet_name}
@@ -706,7 +800,75 @@ export function FormEmbedClient({
              */}
             {sharedCollectionInProgress ? null : (
             <>
-            {familyMode && famStep ? (
+            {enrollmentReview && compiled ? (
+                <IntakeCard>
+                    {/* The document keeps its identity — a parent is reviewing a named piece of
+                        paperwork, not a generic summary screen. */}
+                    <IntakeHeading title={schema.title ?? "Your paperwork"} />
+                    <CompiledArtifactReview
+                        artifact={compiled}
+                        onEditValue={handleReviewEdit}
+                        renderInput={(control) => (
+                            // Still the participant's to do, and still the Form's control: the same
+                            // engine renders it, so type, options and validation stay authored.
+                            <div className="[&_header]:hidden">
+                                <FormEngineRenderer
+                                    schema={reviewControlSubSchema(schema, [control.field_id])}
+                                    payload={payload}
+                                    onChange={(next) => {
+                                        setValidationErrors(null);
+                                        setMessage(null);
+                                        setPayload(next);
+                                        void persistDraft(next);
+                                    }}
+                                    mode="edit"
+                                    optionValuesByFieldId={optionValuesByFieldId}
+                                    optionChoicesByFieldId={optionChoicesByFieldId}
+                                    variant="embed"
+                                    validationErrors={validationErrors ?? undefined}
+                                />
+                            </div>
+                        )}
+                    />
+                    {/* The FINAL phase: after the content has been read comes the acknowledging and
+                        the signing. Rendered by the Forms engine, because what an acknowledgment
+                        and a signature MEAN is the Form's authority — only their place on the page
+                        is decided here. */}
+                    {finalPhaseFieldIds.length > 0 ? (
+                        <div
+                            className="mt-8 border-t border-alloy-midnight/[0.08] pt-6 [&_header]:hidden"
+                            data-artifact-final-phase="true"
+                        >
+                            <h3 className="pb-3 text-[15px] font-medium text-alloy-midnight">
+                                Acknowledge and sign
+                            </h3>
+                            <FormEngineRenderer
+                                schema={reviewControlSubSchema(schema, finalPhaseFieldIds)}
+                                payload={payload}
+                                onChange={(next) => {
+                                    setValidationErrors(null);
+                                    setMessage(null);
+                                    setPayload(next);
+                                    void persistDraft(next);
+                                }}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        </div>
+                    ) : null}
+                    <IntakeFooter
+                        errorLines={errorLines}
+                        message={message}
+                        primaryLabel={submitting ? "Finishing…" : "Sign and finish"}
+                        onPrimary={() => void handleSubmit()}
+                        primaryDisabled={submitting || !submissionId}
+                        primaryBusy={submitting}
+                    />
+                </IntakeCard>
+            ) : familyMode && famStep ? (
                 <div key={`fam-${famIdx}`} className="parent-intake-step-in">
                     <IntakeProgress phaseLabel={famPhase} stepIndex={famIdx} total={familySteps.length} />
                     {showPacketChecklist ? (
