@@ -209,9 +209,30 @@ export default function DurableRecordSurface({
             if (presentation === "full") {
                 setSelectedContextKey(resolveInitialContextOption(contexts, contextKey)?.key ?? null);
             } else {
+                /*
+                 * An entry's preference is a DECLARED INTENT, and two kinds are honoured in place:
+                 *
+                 *   – a record context ("open Lennon on Household") switches which record view
+                 *     shows first;
+                 *   – an OPERATIONAL context ("Create assignment → choose Lennon" arrives with
+                 *     `schedule`) opens the platform's operational card directly. The operator
+                 *     already said what they came to do; landing them on the record card and making
+                 *     them find Schedule again would replace their command with a detour.
+                 *
+                 * A PROCESS preference is the one kind that is not selected in place: a process is
+                 * related WORK, its home is the Work View, and the `Go to` entries are how the
+                 * overlay offers it. The record card stays the default there.
+                 */
                 const recordOptions = contexts.filter((o) => o.surface === "canonical_record");
                 const preferred = contextKey
-                    ? resolveInitialContextOption(recordOptions, contextKey)
+                    ? resolveInitialContextOption(
+                          contexts.filter(
+                              (o) =>
+                                  o.surface === "canonical_record"
+                                  || o.surface === "canonical_operational",
+                          ),
+                          contextKey,
+                      )
                     : null;
                 setSelectedContextKey(
                     preferred?.key
