@@ -566,7 +566,16 @@ export function FormEmbedClient({
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
-    const guided = packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
+    /**
+     * The guided WIZARD is for packets the participant fills from scratch.
+     *
+     * An Enrollment journey has already had its conversation: the shared facts are settled and the
+     * artifact arrives populated. Walking that same parent through "Confirm what we already have →
+     * A few details we still need → Sign & upload" re-asks what they just answered and re-frames a
+     * review as data entry. So when the runtime owns the journey, the artifact is reviewed WHOLE.
+     */
+    const enrollmentJourney = enrollmentObjective != null;
+    const guided = !enrollmentJourney && packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
     const guidedSteps = guidedPlan?.steps ?? [];
     const stepIdx = guided ? Math.min(guidedStepIdx, guidedSteps.length - 1) : 0;
     const guidedStep = guided ? guidedSteps[stepIdx] : null;
@@ -614,7 +623,7 @@ export function FormEmbedClient({
     };
 
     const summaries = packetProgress?.step_summaries ?? [];
-    const showPacketChecklist = packetProgress != null && summaries.length > 0;
+    const showPacketChecklist = !enrollmentJourney && packetProgress != null && summaries.length > 0;
     const famPhase = famStep
         ? famStep.kind === "household"
             ? "Household"
@@ -711,7 +720,7 @@ export function FormEmbedClient({
                         />
                     </IntakeCard>
                 </div>
-            ) : packetProgress && !guidedPlan ? (
+            ) : !enrollmentJourney && packetProgress && !guidedPlan ? (
                 <IntakeNotice>Preparing your steps…</IntakeNotice>
             ) : guided && guidedStep ? (
                 <div key={`guided-${stepIdx}`} className="parent-intake-step-in">
@@ -774,7 +783,15 @@ export function FormEmbedClient({
                     <IntakeFooter
                         errorLines={errorLines}
                         message={message}
-                        primaryLabel={submitting ? "Submitting…" : "Submit"}
+                        primaryLabel={
+                            enrollmentJourney
+                                ? submitting
+                                    ? "Finishing…"
+                                    : "Sign and finish"
+                                : submitting
+                                  ? "Submitting…"
+                                  : "Submit"
+                        }
                         onPrimary={() => void handleSubmit()}
                         primaryDisabled={submitting || !submissionId}
                         primaryBusy={submitting}

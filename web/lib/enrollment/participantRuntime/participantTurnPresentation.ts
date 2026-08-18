@@ -133,7 +133,19 @@ export function optionalSkipLabel(objective: ParticipantObjectiveWire): string |
     if (!objective.next_turn.optional) return null;
     const label = naturalFieldLabel(objective.next_turn.label).toLowerCase();
     if (label.includes("allerg")) return "No known allergies";
-    return "Skip — nothing to add";
+    return "Nothing to add";
+}
+
+/**
+ * The affirmative half of an optional question.
+ *
+ * A specialist asks a yes/no question and only reaches for the form when the answer is yes. This is
+ * the "yes" — it reveals the authored control rather than submitting anything, so a parent who has
+ * something to tell us is not typing into a box they never asked for.
+ */
+export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string | null {
+    if (!objective.next_turn.optional) return null;
+    return "Yes — I'll tell you";
 }
 
 /**
@@ -201,26 +213,40 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
     // Always `'s`, including for names ending in s — "Test Process's", the way the parent would say
     // it. The plural-possessive rule does not apply to a personal name.
     const possessive = subject ? `${subject}'s` : "your child's";
+    const them = subject || "your child";
     const label = naturalFieldLabel(turn.label);
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
+        // "birthday", not "date of birth" — a specialist sitting next to a parent does not read
+        // them the column name.
+        const spoken = label === "date of birth" ? "birthday" : label;
         return shown
-            ? `I have ${possessive} ${label} as ${shown}. Is that correct?`
-            : `Is ${possessive} ${label} still correct?`;
+            ? `I have ${possessive} ${spoken} as ${shown}. Is that still right?`
+            : `Is ${possessive} ${spoken} still right?`;
     }
     if (turn.kind === "collect_missing_value") {
+        // Allergies is the reference case: a specialist ASKS whether there are any. They do not
+        // present a field called Allergies and wait for the parent to work out what to type.
+        if (label.includes("allerg")) {
+            return `Does ${them} have any allergies we should know about?`;
+        }
         return `What is ${possessive} ${label}?`;
     }
     if (turn.kind === "complete_artifact") {
         return subject
-            ? `I have everything I need for ${subject}'s paperwork. Please review and finish it below.`
-            : "I have everything I need. Please review and finish the paperwork below.";
+            ? `That's everything I needed. I filled out ${subject}'s enrollment paperwork — take a quick look and change anything that isn't right.`
+            : "That's everything I needed. I filled out the paperwork — take a quick look and change anything that isn't right.";
     }
     if (turn.kind === "complete") {
         return "That's everything — thank you.";
     }
     return turn.prompt;
+}
+
+/** The line that introduces the signature, once the paperwork has been reviewed. */
+export function participantSignaturePrompt(): string {
+    return "Everything look good? One last step — sign below.";
 }
 
 /**
@@ -233,8 +259,8 @@ export function participantIntro(objective: ParticipantObjectiveWire): string | 
     if (objective.phase !== "shared_collection") return null;
     const subject = (objective.subject_display_name ?? "").trim();
     return subject
-        ? `Welcome to Enrollment for ${subject}. I already have some information on file, so I'll confirm that first and only ask for what's missing.`
-        : "I already have some information on file, so I'll confirm that first and only ask for what's missing.";
+        ? `I already have most of ${subject}'s information, so I'll just check it with you and ask for anything I'm missing.`
+        : "I already have most of your child's information, so I'll just check it with you and ask for anything I'm missing.";
 }
 
 /**
@@ -248,13 +274,12 @@ export function participantIntro(objective: ParticipantObjectiveWire): string | 
 export function progressLine(objective: ParticipantObjectiveWire): string {
     if (objective.complete) return "All done — thank you.";
     const remaining = objective.things_remaining;
-    if (objective.phase === "artifact_review") {
-        return "Just the paperwork left to review and sign.";
-    }
-    if (remaining <= 0) return "Almost there — one last step.";
+    if (objective.phase === "artifact_review") return "";
+    if (remaining <= 0) return "";
     // Parent-centric, and true: these are the questions left, not Form controls or upload slots.
     // "8 to add · 1 to sign or upload" described the implementation to someone who cannot see it.
-    return remaining === 1 ? "1 thing left to check" : `${remaining} things left to check`;
+    // Subtle, and never a stepper: "Step 2 of 3" describes the machine's plan, not the parent's.
+    return remaining === 1 ? "Just one more thing" : `Just ${remaining} things left`;
 }
 
 /**

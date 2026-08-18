@@ -111,8 +111,10 @@ describe("known facts are confirmed, not asked for", () => {
 
     it("asks the parent to confirm, in their own words, with the value spelled out", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
+        // "birthday", the way a specialist would say it — and "still right?", which is what you ask
+        // about something already on file.
         expect(participantQuestion(wire)).toBe(
-            "I have Test Process's date of birth as May 15, 2022. Is that correct?",
+            "I have Test Process's birthday as May 15, 2022. Is that still right?",
         );
         // NOT the internal prompt, and never the column heading.
         expect(participantQuestion(wire)).not.toContain("Child Dob");
@@ -128,8 +130,9 @@ describe("known facts are confirmed, not asked for", () => {
     it("opens by telling the parent what the conversation will do", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
         const intro = participantIntro(wire);
-        expect(intro).toContain("Welcome to Enrollment for Test Process");
-        expect(intro).toContain("only ask for what's missing");
+        // Specialist voice: what Alloy already has, and what it still needs. Not a welcome banner.
+        expect(intro).toContain("I already have most of Test Process's information");
+        expect(intro).toContain("ask for anything I'm missing");
     });
 });
 
@@ -227,8 +230,10 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
             }),
             { subjectDisplayName: "Test Process" },
         );
-        expect(participantQuestion(wire)).toContain("review");
-        expect(progressLine(wire)).toContain("review and sign");
+        expect(participantQuestion(wire)).toContain("I filled out");
+        expect(participantQuestion(wire)).toContain("take a quick look");
+        // No progress line at all during review — the artifact itself is the context.
+        expect(progressLine(wire)).toBe("");
     });
 });
 

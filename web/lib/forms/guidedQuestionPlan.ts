@@ -17,6 +17,7 @@
  * to siblings. Pure, deterministic, no I/O.
  */
 
+import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
 export type GuidedStepKind = "confirm" | "provide" | "uploads";
@@ -62,6 +63,9 @@ export function buildGuidedQuestionPlan(schema: FormSchemaV1, values: Record<str
     const representativeOf = new Map<string, string>();
     for (const field of schema.fields) {
         if (field.type === "group") continue;
+        // Display content is not work. A `text_block` was being counted as something to add, which
+        // is how a parent was told there were seven things left on a form with three questions.
+        if (!formFieldCollectsValue(field)) continue;
         const ck = canonicalKeyFor(field);
         (canonicalGroups[ck] ??= []).push(field.id);
         if (!representativeOf.has(ck)) representativeOf.set(ck, field.id);
@@ -77,6 +81,7 @@ export function buildGuidedQuestionPlan(schema: FormSchemaV1, values: Record<str
             missingIds.push(field.id); // structural; always shown in "provide"
             continue;
         }
+        if (!formFieldCollectsValue(field)) continue;
         const ck = canonicalKeyFor(field);
         if (representativeOf.get(ck) !== field.id) continue; // collapse duplicates
 
