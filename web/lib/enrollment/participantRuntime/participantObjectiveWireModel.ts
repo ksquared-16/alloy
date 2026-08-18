@@ -51,6 +51,14 @@ export type ParticipantObjectiveWire = {
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
         readonly optional: boolean;
+        /**
+         * The artifact fields this single answer fills.
+         *
+         * Already visible to the participant — they are the ids of controls on their own form — and
+         * they are what lets the surface show the answer in the paperwork the instant it is given,
+         * rather than leaving a field the parent just answered looking empty until a reload.
+         */
+        readonly field_ids: readonly string[];
     };
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
@@ -104,6 +112,7 @@ export function participantObjectiveWireModel(
             label: firstOccurrence?.label ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
+            field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         complete: turn.kind === "complete",
     };

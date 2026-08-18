@@ -145,6 +145,7 @@ describe("an authored date cannot degrade into a text box", () => {
                 label,
                 options: [],
                 optional: false,
+                field_ids: [],
             });
             expect(control).toMatchObject({ kind: "value", inputType: "date" });
         }

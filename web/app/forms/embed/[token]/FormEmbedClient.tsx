@@ -1,8 +1,9 @@
 "use client";
 
+import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import type { FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -60,6 +61,28 @@ type ResolvePacketMeta = {
  * Without this the review step showed empty boxes for facts that were sitting in the session — the
  * value existed, keyed correctly, and nothing read it.
  */
+/**
+ * Strip operator-facing authoring notes from a schema before a PARENT sees it.
+ *
+ * "Needs destination configuration" is the form builder's own placeholder, telling an operator that
+ * a field has no canonical destination yet. It was rendering to parents as guidance underneath
+ * "Child Full Name" — an internal to-do presented as an instruction to someone who cannot act on it.
+ *
+ * Referenced by its constant rather than matched as a string, so the day the builder rewords it this
+ * follows rather than silently stops working. The FIELD still renders; only the note is removed.
+ */
+function withoutAuthoringNotes(schema: FormSchemaV1): FormSchemaV1 {
+    const strip = (fields: FormField[]): FormField[] =>
+        fields.map((f) => {
+            const next =
+                f.description?.trim() === PROCESSING_NEEDS_DESTINATION_DESCRIPTION
+                    ? { ...f, description: undefined }
+                    : f;
+            return next.type === "group" ? { ...next, fields: strip(next.fields) } : next;
+        });
+    return { ...schema, fields: strip(schema.fields) };
+}
+
 function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | null | undefined): FormPayload {
     const shared = packet?.shared_prefill_by_field_id;
     if (!shared || Object.keys(shared).length === 0) return payload;
@@ -254,7 +277,7 @@ export function FormEmbedClient({
                 setMessage("Invalid form schema");
                 return;
             }
-            setSchema(parsedSchema);
+            setSchema(withoutAuthoringNotes(parsedSchema));
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
@@ -656,6 +679,15 @@ export function FormEmbedClient({
                         initialObjective={enrollmentObjective}
                         onPhaseChange={setEnrollmentPhase}
                         artifactRenderable={artifactRenderable}
+                        onValueSettled={(fieldIds, value) => {
+                            // Merge into the rendered artifact immediately. The session already
+                            // holds this; the paperwork should not wait for a reload to agree.
+                            setPayload((prev) => {
+                                const values = { ...((prev.values ?? {}) as Record<string, unknown>) };
+                                for (const id of fieldIds) values[id] = value;
+                                return { ...prev, values };
+                            });
+                        }}
                     />
                 </div>
             ) : null}
