@@ -244,12 +244,35 @@ export default function AddStaffModal({
         }
     }
 
+    // Same dismissal contract as Add Child: X / Escape / backdrop, guarded by the platform's
+    // existing dirty-state confirmation so typed work is never silently discarded.
+    const dirty = Boolean(firstName.trim() || lastName.trim() || email.trim() || phone.trim());
+    const requestClose = useCallback(() => {
+        if (dirty && !window.confirm("Discard unsaved changes?")) return;
+        onClose();
+    }, [dirty, onClose]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            e.preventDefault();
+            e.stopPropagation();
+            requestClose();
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [open, requestClose]);
+
     if (!open) return null;
 
     return (
         <div
             className="fixed inset-0 z-[120] flex items-start justify-center bg-alloy-midnight/30 p-6 pt-[10vh]"
             data-add-staff-modal="true"
+            onMouseDown={(e) => {
+                if (e.target === e.currentTarget) requestClose();
+            }}
         >
             <div className="w-full max-w-[520px] rounded-lg border border-admin-border bg-white shadow-xl">
                 <header className="flex items-center justify-between border-b border-admin-border px-4 py-3">
@@ -259,7 +282,7 @@ export default function AddStaffModal({
                         </p>
                         <h2 className="text-[15px] font-semibold text-alloy-midnight">Add staff</h2>
                     </div>
-                    <button type="button" className={GHOST_BTN} onClick={onClose} data-add-staff-cancel="true">
+                    <button type="button" className={GHOST_BTN} onClick={requestClose} data-add-staff-cancel="true">
                         Cancel
                     </button>
                 </header>

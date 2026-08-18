@@ -18,6 +18,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 import AddStaffModal from "@/components/adminV2/settings/staff/AddStaffModal";
 import RecordsCohortBar from "@/components/adminV2/records/RecordsCohortBar";
@@ -44,6 +46,8 @@ export type StaffEntry = {
     isOpen: boolean;
     startDate: string;
     endDate: string | null;
+    /** Actor-scoped canonical photo from the platform's one projection. Null → initials. */
+    photoUrl?: string | null;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -236,12 +240,28 @@ export default function RecordsStaffSection({
                             <li key={s.employmentId}>
                                 <button
                                     type="button"
-                                    className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
+                                    className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                     onClick={() => openStaff(s.personId)}
+                                    // Same hover warmth as the Children rows — see that comment.
+                                    onMouseEnter={() => {
+                                        void dedupeAdminFetchWithTtl(
+                                            `/api/admin/durable-record?subject_type=person&subject_id=${encodeURIComponent(s.personId)}`,
+                                            { credentials: "include" },
+                                            15_000,
+                                        ).catch(() => {});
+                                    }}
                                     data-staff-person={s.personId}
                                     data-staff-row="true"
                                 >
-                                    <span className="min-w-0">
+                                    {/* The CANONICAL avatar — same resolver, same photo, as Work
+                                        Views, Search and the Focus Panel. */}
+                                    <CardAvatar
+                                        name={s.displayName}
+                                        imageUrl={s.photoUrl ?? null}
+                                        size={28}
+                                        recordId={s.personId}
+                                    />
+                                    <span className="min-w-0 flex-1">
                                         <span className="block truncate text-[13px] font-medium text-alloy-midnight">
                                             {s.displayName}
                                         </span>

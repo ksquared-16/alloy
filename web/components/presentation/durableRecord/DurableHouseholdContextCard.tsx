@@ -29,6 +29,8 @@
 
 import { useEffect, useState } from "react";
 
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { deriveHouseholdFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveHouseholdFocusPanelCards";
@@ -54,9 +56,17 @@ export default function DurableHouseholdContextCard({
         setState({ status: "loading" });
         void (async () => {
             try {
-                const res = await fetch(
+                /*
+                 * Through the workspace dedupe/TTL primitive: Child → Household → Child → Household
+                 * re-mounts this component each time, and refetching the same family on every
+                 * switch made the toggle feel like a navigation. Thirty seconds of warmth is safe —
+                 * the card is read-only on this host, and a record reload after a write goes
+                 * through the surface's own fresh path, not this one.
+                 */
+                const res = await dedupeAdminFetchWithTtl(
                     `/api/admin/durable-record?subject_type=household&subject_id=${encodeURIComponent(householdId)}`,
                     { credentials: "include" },
+                    30_000,
                 );
                 const json = (await res.json().catch(() => null)) as
                     | { ok?: boolean; householdSubject?: DurableHouseholdSubject | null }
@@ -110,8 +120,7 @@ export default function DurableHouseholdContextCard({
 
     return (
         <div
-            className="rounded-lg border border-alloy-stone/22 bg-white"
-            data-contextual-card="record"
+                        data-contextual-card="record"
             data-contextual-card-context={contextKey}
             data-contextual-card-canonical-card="household"
             data-contextual-card-household={state.subject.householdId}

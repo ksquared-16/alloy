@@ -31,6 +31,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { buildPersonDrawerEntityPayloadForViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerEntityPayloadForViewModel";
 import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
+import {
+    documentActorFromAdminParts,
+    projectResolvedProfilePhotosOntoRows,
+} from "@/lib/documents/projectPersonProfilePhotos";
 import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import {
     durableChildCollectionRow,
@@ -98,6 +102,30 @@ export async function composeDurableChildSubject(
     const householdName = householdId ? await householdNameFor(supabase, orgId, householdId) : null;
 
     /*
+     * THE CANONICAL PROFILE PHOTO, resolved through the platform's one projection.
+     *
+     * The person payload above does not carry a presentable photo URL — durable truth is a document
+     * reference (`persons.metadata.profile_photo_document_id`), and only the projection may mint the
+     * actor-scoped URL for it. Without this the configured Children card fell back to initials on a
+     * child whose photo every other host shows, which reads as "no photo exists" — a different and
+     * wronger statement than "this host did not resolve it".
+     *
+     * The admin service actor is used deliberately: this composer already runs behind the admin
+     * route gate, and the same projection under the same actor is what the queue page rows resolve.
+     */
+    let resolvedPhotoUrl: string | null = null;
+    if (personId) {
+        const photoRows = await projectResolvedProfilePhotosOntoRows({
+            supabase,
+            orgId,
+            actor: documentActorFromAdminParts({ ok: true, orgId, role: "admin", roleKeys: ["admin"], permissionKeys: [] }),
+            rows: [{ person_id: personId }] as Record<string, unknown>[],
+        }).catch(() => null);
+        const url = photoRows?.[0]?.resolved_photo_url;
+        resolvedPhotoUrl = typeof url === "string" && url.trim() ? url : null;
+    }
+
+    /*
      * THE CHILD'S OWN PROFILE SCALARS.
      *
      * Gender, allergies, medical notes, special instructions and preferred name are not columns on
@@ -144,6 +172,9 @@ export async function composeDurableChildSubject(
         special_instructions: trimOrNull(profile?.special_instructions),
         _household_name: householdName,
         _child_identity_source: personRecord ? "member+person" : "member",
+        // The one key the photo adapters trust by PROVENANCE. Null is omitted rather than written:
+        // an explicit null would overwrite a value a wider person payload legitimately carried.
+        ...(resolvedPhotoUrl ? { resolved_photo_url: resolvedPhotoUrl } : {}),
     };
 
     const subject: DurableChildSubject = {

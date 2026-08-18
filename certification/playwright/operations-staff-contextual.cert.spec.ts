@@ -33,7 +33,7 @@ const SECTION_TABS = '[data-workspace-mode-sections="roster"] button';
 const SECTION_FILTER = '[data-records-filter="true"]';
 const OVERLAY = '[data-durable-record-overlay="true"]';
 const PANEL = "[data-durable-record-panel]";
-const CHOOSER = '[data-record-context-chooser="true"]';
+const RELATED_WORK = '[data-record-related-work="true"]';
 /** The full composition grid — the giant record surface. Must never appear in Operations. */
 const FULL_GRID = "[data-focus-panel-grid-cell]";
 
@@ -52,7 +52,7 @@ async function openJane(page: Page) {
     await expect(page.locator(OVERLAY)).toBeVisible({ timeout: SETTLE });
 }
 
-async function choose(page: Page, kind: string) {
+async function selectContext(page: Page, kind: string) {
     const choice = page.locator(`[data-record-context-kind="${kind}"]`).first();
     await expect(choice, `Jane must truthfully offer a ${kind} context`).toBeVisible({
         timeout: SETTLE,
@@ -70,67 +70,65 @@ async function choose(page: Page, kind: string) {
 }
 
 // ═══ 1 — the chooser, same grammar as Children ═══════════════════════════════════════════════
-test("1 — Staff → Jane opens the chooser, not a giant record surface", async ({ page }) => {
+test("1 — Staff → Jane opens the canonical Employment card immediately", async ({ page }) => {
     await openJane(page);
 
-    const chooser = page.locator(CHOOSER);
-    await expect(chooser).toBeVisible({ timeout: SETTLE });
+    /*
+     * RECORD-FIRST: the operator clicked Jane, so Jane's standing is the default object of
+     * attention — the Employment card, unbidden, with no chooser in front of it. Schedule is her
+     * related operational work and is offered SEPARATELY, as work.
+     */
+    await expect(page.locator("[data-contextual-card]").first()).toHaveAttribute(
+        "data-contextual-card-canonical-card",
+        "employment",
+        { timeout: SETTLE },
+    );
     await expect(page.locator(FULL_GRID)).toHaveCount(0);
 
-    // The contexts Jane ACTUALLY holds — derived, never a hardcoded staff menu.
-    for (const kind of ["employment", "schedule"]) {
-        await expect(
-            page.locator(`[data-record-context-kind="${kind}"]`).first(),
-            `Jane holds a ${kind} context and it must be offered`,
-        ).toBeVisible({ timeout: SETTLE });
-    }
+    const related = page.locator(RELATED_WORK);
+    await expect(related).toBeVisible({ timeout: SETTLE });
+    await expect(
+        related.locator('[data-record-context-kind="schedule"]').first(),
+        "Schedule is related work, offered beside the record rather than in front of it",
+    ).toBeVisible({ timeout: SETTLE });
 
     // Child-only contexts must NOT appear on a staff member — the producer is shared, and a shared
     // producer that leaked household onto a person would be worse than a separate one.
     await expect(page.locator('[data-record-context-kind="relationship"]')).toHaveCount(0);
     await expect(page.locator('[data-record-context-kind="identity"]')).toHaveCount(0);
 
-    const text = (await chooser.innerText()).toLowerCase();
-    for (const leak of ["process_instance", "opportunity", "work unit", "durable_record", "person_id"]) {
-        expect(text, `the chooser must not expose "${leak}"`).not.toContain(leak);
+    const text = (await page.locator(PANEL).innerText()).toLowerCase();
+    for (const leak of ["process_instance", "durable_record", "person_id"]) {
+        expect(text, `the overlay must not expose "${leak}"`).not.toContain(leak);
     }
 
-    await page.screenshot({ path: path.join(SHOTS, "1-staff-chooser.png"), fullPage: true });
+    // POSITIVE CONTROL: Jane's own standing, from lib/employment — not an empty shell.
+    await expect(page.locator("[data-contextual-card]").first()).toContainText("Lead Teacher", {
+        timeout: SETTLE,
+    });
+
+    await page.screenshot({ path: path.join(SHOTS, "1-staff-record-first.png"), fullPage: true });
 });
 
-// ═══ 2 + 3 + 4 — each choice opens its canonical card, centered, without leaving ══════════════
-for (const c of [
-    { n: 2, kind: "employment", card: "employment", shot: "2-employment" },
-    { n: 3, kind: "schedule", card: "scheduling", shot: "3-schedule" },
-]) {
-    test(`${c.n} — ${c.kind} opens the canonical ${c.card} card centered over Operations`, async ({
-        page,
-    }) => {
-        await openJane(page);
-        await choose(page, c.kind);
+// ═══ 2 — Schedule, reached from Related work, renders the canonical card in place ═══════════
+test("2 — schedule opens the canonical scheduling card centered over Operations", async ({ page }) => {
+    await openJane(page);
+    await selectContext(page, "schedule");
 
-        const card = page.locator("[data-contextual-card]").first();
-        await expect(card).toBeVisible({ timeout: SETTLE });
-        // The CANONICAL card, named — not a staff-specific lookalike.
-        await expect(card).toHaveAttribute("data-contextual-card-canonical-card", c.card, {
-            timeout: SETTLE,
-        });
-
-        if (c.kind === "employment") {
-            // POSITIVE CONTROL: Jane's own standing, from `lib/employment` — not an empty shell.
-            await expect(card).toContainText("Lead Teacher", { timeout: SETTLE });
-        } else {
-            // The staff-capable Scheduling card proven in O-3b, at staff grain.
-            await expect(page.locator('[data-scheduling-card="true"]')).toHaveAttribute(
-                "data-scheduling-subject-kind",
-                "staff",
-                { timeout: SETTLE },
-            );
-        }
-
-        await page.screenshot({ path: path.join(SHOTS, `${c.shot}.png`), fullPage: true });
+    const card = page.locator("[data-contextual-card]").first();
+    await expect(card).toBeVisible({ timeout: SETTLE });
+    await expect(card).toHaveAttribute("data-contextual-card-canonical-card", "scheduling", {
+        timeout: SETTLE,
     });
-}
+    // The staff-capable Scheduling card proven in O-3b, at staff grain.
+    await expect(page.locator('[data-scheduling-card="true"]')).toHaveAttribute(
+        "data-scheduling-subject-kind",
+        "staff",
+        { timeout: SETTLE },
+    );
+
+    await page.screenshot({ path: path.join(SHOTS, "2-schedule.png"), fullPage: true });
+});
 
 // ═══ 5 — close returns to exactly the same Staff browse state ════════════════════════════════
 test("5 — close returns to the same Staff cohort, filter and URL", async ({ page }) => {
@@ -149,7 +147,6 @@ test("5 — close returns to the same Staff cohort, filter and URL", async ({ pa
 
     await row.click();
     await expect(page.locator(OVERLAY)).toBeVisible({ timeout: SETTLE });
-    await choose(page, "employment");
 
     await page.keyboard.press("Escape");
     await expect(page.locator(OVERLAY)).toHaveCount(0, { timeout: SETTLE });
@@ -186,20 +183,28 @@ test("6 — Search → Jane resolves the same contexts Operations offers", async
 
     await openJane(page);
     /*
-     * Wait for the chooser BEFORE reading it. `locator.evaluateAll` does not auto-wait — it returns
-     * whatever matches at that instant — so querying straight after `openJane` read an empty list
-     * and reported a divergence that did not exist. An assertion that can fail for a reason other
-     * than the claim is not the assertion this test wants.
+     * The record opens on Employment (the default record view — nav renders only when there is a
+     * CHOICE of record views, and Jane has one), and Schedule sits in Related work. Between the
+     * default card's own context and the related entries, every context the endpoint returned must
+     * be REPRESENTED on screen — the assertion that keeps Operations from composing its own menu.
      */
-    await expect(page.locator(CHOOSER)).toBeVisible({ timeout: SETTLE });
-    await expect(page.locator("[data-record-context-choice]").first()).toBeVisible({ timeout: SETTLE });
+    await expect(page.locator("[data-contextual-card]").first()).toBeVisible({ timeout: SETTLE });
     const rendered = (
-        await page.locator("[data-record-context-choice]").evaluateAll((els) =>
-            els.map((el) => el.getAttribute("data-record-context-choice") ?? ""),
-        )
-    ).sort();
+        await page
+            .locator("[data-record-context-choice], [data-contextual-card]")
+            .evaluateAll((els) =>
+                els.map(
+                    (el) =>
+                        el.getAttribute("data-record-context-choice")
+                        ?? el.getAttribute("data-contextual-card-context")
+                        ?? "",
+                ),
+            )
+    )
+        .filter(Boolean)
+        .sort();
 
-    expect(rendered).toEqual(fromApi);
+    expect([...new Set(rendered)]).toEqual(fromApi);
 
     await page.screenshot({ path: path.join(SHOTS, "6-search-parity.png"), fullPage: true });
 });

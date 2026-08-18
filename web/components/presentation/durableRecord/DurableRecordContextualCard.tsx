@@ -48,6 +48,7 @@ import { useEffect, useMemo, useState } from "react";
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
 import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
 import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
 import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
@@ -80,9 +81,12 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
     const qs = params.toString();
 
     try {
-        const res = await fetch(
+        // Deduped: the FocusPanelSummaryDocProvider fetches this same document for the card, and
+        // the equality evidence must not cost a second flight for it.
+        const res = await dedupeAdminFetchWithTtl(
             `/api/admin/entity-layouts/focus-panel-summary${qs ? `?${qs}` : ""}`,
             { credentials: "include" },
+            15_000,
         );
         if (!res.ok) return { doc: null, layoutId: null, version: null };
         const json = (await res.json().catch(() => null)) as
@@ -375,8 +379,7 @@ export default function DurableRecordContextualCard({
             if (!cardAppliesToGrain("employment", "person")) return null;
             return (
                 <div
-                    className="rounded-lg border border-alloy-stone/22 bg-white"
-                    data-contextual-card="record"
+                                        data-contextual-card="record"
                     data-contextual-card-context={option.key}
                     data-contextual-card-canonical-card="employment"
                 >
@@ -413,8 +416,7 @@ export default function DurableRecordContextualCard({
         if (!cardAppliesToGrain("scheduling", grain)) return null;
         return (
             <div
-                className="rounded-lg border border-alloy-stone/22 bg-white"
-                data-contextual-card="operational"
+                                data-contextual-card="operational"
                 data-contextual-card-context={option.key}
                 data-contextual-card-kind={option.kind}
                 data-contextual-card-canonical-card="scheduling"
