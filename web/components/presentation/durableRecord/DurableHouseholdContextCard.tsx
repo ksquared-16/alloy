@@ -110,8 +110,7 @@ export default function DurableHouseholdContextCard({
 
     return (
         <div
-            className="rounded-lg border border-alloy-stone/22 bg-white"
-            data-contextual-card="record"
+                        data-contextual-card="record"
             data-contextual-card-context={contextKey}
             data-contextual-card-canonical-card="household"
             data-contextual-card-household={state.subject.householdId}

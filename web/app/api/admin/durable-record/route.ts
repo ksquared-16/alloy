@@ -19,6 +19,7 @@ import { encodeDurableRecordModel } from "@/lib/adminV2/runtime/focusPanel/durab
 import { resolveAttentionTarget } from "@/lib/workUnits/operatorFocusTarget";
 import { loadSubjectContexts } from "@/lib/context/loadSubjectContexts";
 import { durableRecordContextOptions } from "@/lib/context/durableRecordContextOptions";
+import { durableRecordRelatedWork } from "@/lib/context/durableRecordRelatedWork";
 
 /**
  * GET `/api/admin/durable-record?subject_type=person|child&subject_id=…`
@@ -113,7 +114,7 @@ export async function GET(request: NextRequest) {
                 canMutate: false,
                 operationalHost,
             });
-            const personContexts = await contextOptionsFor({
+            const enumerated = await contextOptionsFor({
                 supabase,
                 orgId: ctx.orgId,
                 dimensions,
@@ -121,6 +122,7 @@ export async function GET(request: NextRequest) {
                 id: subjectId,
                 personId: subjectId,
             });
+            const personContexts = enumerated.options;
 
             /*
              * THE STAFF MEMBER'S SCHEDULE CONTEXT, composed exactly as the child's is below.
@@ -154,6 +156,15 @@ export async function GET(request: NextRequest) {
                 ok: true,
                 model: encodeDurableRecordModel(model),
                 contexts: personContexts,
+                /*
+                 * `Go to` entries, resolved by SEARCH'S OWN destination resolver over the same
+                 * contexts — not by an Operations resolver, which must not exist. Empty for most
+                 * staff (employment is a standing, not a queue position), and empty is ordinary.
+                 */
+                relatedWork: durableRecordRelatedWork(
+                    { kind: "person", personId: subjectId, label: composed.subject.label },
+                    enumerated.contexts,
+                ),
                 // The composed person, carried so the contextual card can name its subject without a
                 // second round trip — the same object the model was built from.
                 personSubject: composed.subject,
@@ -204,7 +215,7 @@ export async function GET(request: NextRequest) {
             now: new Date(),
             operationalHost,
         });
-        const contexts = await contextOptionsFor({
+        const enumerated = await contextOptionsFor({
             supabase,
             orgId: ctx.orgId,
             dimensions,
@@ -212,6 +223,7 @@ export async function GET(request: NextRequest) {
             id: subjectId,
             personId: composed.subject.personId,
         });
+        const contexts = enumerated.options;
 
         /*
          * THE SCHEDULE CONTEXT'S FACTS, composed here rather than fetched by the card.
@@ -248,6 +260,22 @@ export async function GET(request: NextRequest) {
             // not a re-read, which could disagree with the panel rendered beside it.
             childSubject: composed.subject,
             contexts,
+            /*
+             * `Go to` entries — "Enrollment · Waitlist", "Assignment" — resolved by SEARCH'S OWN
+             * destination resolver over the same contexts. Each carries the exact selection payload
+             * a Search click would have dispatched, which is what makes the two entries land on one
+             * destination rather than two implementations of it.
+             */
+            relatedWork: durableRecordRelatedWork(
+                {
+                    kind: "child",
+                    memberId: subjectId,
+                    personId: composed.subject.personId,
+                    householdId: composed.subject.householdId,
+                    label: composed.subject.label,
+                },
+                enumerated.contexts,
+            ),
             schedulingProjection,
         });
     } catch (e) {
@@ -285,10 +313,13 @@ async function contextOptionsFor(input: {
             dimensions: input.dimensions,
             subject: { grain: input.grain, id: input.id, personId: input.personId },
         });
-        return durableRecordContextOptions(contexts);
+        // Two projections of ONE enumeration: what may be SELECTED on the record, and where related
+        // work may NAVIGATE. Both read the same `SubjectContext[]`, so they cannot disagree about
+        // which contexts the subject holds — only about what a surface does with them.
+        return { options: durableRecordContextOptions(contexts), contexts };
     } catch (e) {
         console.error("[durable-record] context enumeration failed", e);
-        return [];
+        return { options: [], contexts: [] };
     }
 }
 

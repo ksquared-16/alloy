@@ -194,30 +194,45 @@ export default function WorkspaceDurableRecordHost({
                             className={
                                 presentation === "contextual"
                                     ? /*
-                                       * CENTERED AND BOUNDED — the card sits over the workspace, it
-                                       * does not become the workspace. `max-h`/`overflow-y` keep a
-                                       * long card scrollable inside its own bounds rather than
-                                       * stretching the panel to the height of the screen, which is
-                                       * what produced the dead white space QA reported.
+                                       * CENTERED, BOUNDED — AND UNBOXED. The canonical card carries
+                                       * its own border and elevation, so wrapping it in a second
+                                       * white panel put a box around a box and demoted the card to
+                                       * content. The container here is pure placement: width bound,
+                                       * height bound, its own scroll. The close affordance floats
+                                       * in the header row the surface renders.
                                        */
-                                      "m-auto flex max-h-[min(88vh,44rem)] w-[min(94vw,40rem)] min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/25 bg-white shadow-xl"
+                                      "m-auto flex max-h-[min(88vh,44rem)] w-[min(94vw,40rem)] min-h-0 flex-col overflow-y-auto"
                                     : "m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/25 bg-white shadow-lg"
                             }
                             data-durable-record-panel={record.subjectType}
                             data-durable-record-panel-subject={record.subjectId}
                             data-durable-record-presentation={presentation}
                         >
-                            <div className="flex shrink-0 items-center justify-end border-b border-alloy-stone/15 px-2 py-1.5">
-                                <button
-                                    type="button"
-                                    onClick={close}
-                                    className="rounded p-1 text-alloy-midnight/45 hover:bg-alloy-stone/10 hover:text-alloy-midnight/70"
-                                    aria-label="Close record"
-                                    data-durable-record-close="true"
-                                >
-                                    <X className="h-4 w-4" aria-hidden strokeWidth={1.9} />
-                                </button>
-                            </div>
+                            {presentation === "contextual" ? (
+                                <div className="flex shrink-0 items-center justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={close}
+                                        className="rounded-full bg-white/90 p-1 text-alloy-midnight/50 shadow-sm ring-1 ring-alloy-stone/20 hover:text-alloy-midnight/80"
+                                        aria-label="Close record"
+                                        data-durable-record-close="true"
+                                    >
+                                        <X className="h-4 w-4" aria-hidden strokeWidth={1.9} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex shrink-0 items-center justify-end border-b border-alloy-stone/15 px-2 py-1.5">
+                                    <button
+                                        type="button"
+                                        onClick={close}
+                                        className="rounded p-1 text-alloy-midnight/45 hover:bg-alloy-stone/10 hover:text-alloy-midnight/70"
+                                        aria-label="Close record"
+                                        data-durable-record-close="true"
+                                    >
+                                        <X className="h-4 w-4" aria-hidden strokeWidth={1.9} />
+                                    </button>
+                                </div>
+                            )}
                             <DurableRecordSurface
                                 key={record.nonce}
                                 subjectType={record.subjectType}
@@ -226,6 +241,7 @@ export default function WorkspaceDurableRecordHost({
                                 contextKey={record.contextKey ?? null}
                                 presentation={presentation}
                                 onRecordChanged={onRecordChanged}
+                                onRequestClose={close}
                             />
                         </div>
                     </div>

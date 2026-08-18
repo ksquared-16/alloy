@@ -375,8 +375,7 @@ export default function DurableRecordContextualCard({
             if (!cardAppliesToGrain("employment", "person")) return null;
             return (
                 <div
-                    className="rounded-lg border border-alloy-stone/22 bg-white"
-                    data-contextual-card="record"
+                                        data-contextual-card="record"
                     data-contextual-card-context={option.key}
                     data-contextual-card-canonical-card="employment"
                 >
@@ -413,8 +412,7 @@ export default function DurableRecordContextualCard({
         if (!cardAppliesToGrain("scheduling", grain)) return null;
         return (
             <div
-                className="rounded-lg border border-alloy-stone/22 bg-white"
-                data-contextual-card="operational"
+                                data-contextual-card="operational"
                 data-contextual-card-context={option.key}
                 data-contextual-card-kind={option.kind}
                 data-contextual-card-canonical-card="scheduling"
