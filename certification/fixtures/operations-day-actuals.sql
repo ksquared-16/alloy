@@ -172,10 +172,41 @@ on conflict (id) do nothing;
 -- fact either, because "not arrived yet" and "marked absent" are different states and the one the
 -- Day Roster must not miscount is the silent one. Sam has no presence fact, which is what makes the
 -- room actually short.
+-- ── THE ID MUST CARRY THE DAY, OR THE FACT NEVER ARRIVES AGAIN ──
+--
+-- This row used to carry a FIXED id under `on conflict (id) do nothing`. That is idempotent within a
+-- single day and silently wrong on the next one: the id already existed from yesterday, so the
+-- insert did nothing, today got no check-in, and every actual count read zero. The gate then failed
+-- with "Children here now: expected 1, received 0" — which reads exactly like the Day Roster losing
+-- its actual data, and is really a fixture that quietly stopped writing at midnight UTC.
+--
+-- Deriving the id FROM the service date gives each day its own row, keeps the fixture re-appliable
+-- any number of times within a day, and deletes nothing — which the append-only trigger forbids in
+-- any case. The data is date-dependent, so its identity has to be.
 insert into child_attendance_events (id, org_id, enrollment_agreement_id, customer_member_id, site_location_id, event_kind, entry_type, event_at, service_date, room_location_id, actor_type, source_type, source_key) values
-  ('fbc40000-0000-4000-8000-00000000af01'::uuid, :'org'::uuid, 'fbc40000-0000-4000-8000-0000000000e1'::uuid, 'fbc40000-0000-4000-8000-00000000ac01'::uuid, 'fbc40000-0000-4000-8000-000000000001'::uuid,
+  (md5('ux4-ada-check-in-' || :'ux4_today')::uuid, :'org'::uuid, 'fbc40000-0000-4000-8000-0000000000e1'::uuid, 'fbc40000-0000-4000-8000-00000000ac01'::uuid, 'fbc40000-0000-4000-8000-000000000001'::uuid,
    'check_in', 'original', (:'ux4_today'::date + time '08:30') at time zone 'UTC', :'ux4_today'::date, 'fbc40000-0000-4000-8000-00000000000a'::uuid, 'staff', 'operator_action', 'certification')
 on conflict (id) do nothing;
+
+-- And FAIL if today's fact is not there.
+--
+-- The verification block below already counted this and already said "must be 1". It printed 0 and
+-- the run carried on, so the miss surfaced as a browser assertion about the PRODUCT instead of as a
+-- fixture that had not written. Same lesson as `roster-people-search-convergence.sql`: a SELECT that
+-- reports a number is not a check.
+do $$
+declare
+    n int;
+begin
+    select count(*) into n
+    from child_attendance_events
+    where site_location_id = 'fbc40000-0000-4000-8000-000000000001'::uuid
+      and service_date = to_char(now() at time zone 'UTC', 'YYYY-MM-DD')::date;
+    if n <> 1 then
+        raise exception
+            'fixture did not write today''s check-in: % events for the UX4 campus today, expected 1', n;
+    end if;
+end $$;
 
 -- ── Verification: what a run should see before the browser starts.
 select 'service date' as fixture, :'ux4_today' as n
