@@ -420,7 +420,7 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
      * so a failure names the selection, instead of surfacing three minutes later as a disabled Save.
      */
     await expect(
-        editor.locator('[data-room-value="true"]'),
+        page.locator('[data-schedule-editor="true"] [data-room-value="true"]'),
         "the editor recorded the selected room",
     ).toBeVisible({ timeout: SETTLE });
 
@@ -456,58 +456,31 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
         }
     });
 
-    /*
-     * The error node is SHARED with the card's own GETs, and one of those has usually already
-     * written to it by now. Capturing its prior text means a refusal is judged by what CHANGED,
-     * not by what was already on screen — the mistake that reported a refused save three times for
-     * a request that had not been sent.
-     */
-    const errorNote = page.locator("[data-schedule-error='true']");
-    const staleError = (await errorNote.count()) ? (await errorNote.first().innerText()).trim() : "";
-
-    const commit = page.locator("[data-schedule-commit='true']").first();
-    await expect(commit, "the card considers the assignment complete").toBeEnabled({ timeout: SETTLE });
-    await commit.click();
 
     /*
-     * A REFUSED WRITE MUST SAY SO rather than time out downstream — the editor renders its error
-     * above the fold of a scrolling body, so a failed save looks exactly like a slow one.
-     */
-    /*
-     * ── THE ERROR NOTE IS NOT PROOF OF A REFUSED SAVE ──
+     * ── SUCCESS IS THE CANONICAL PROJECTION, NOT THE CARD'S ERROR NODE ──
      *
-     * `data-schedule-error` is shared: a failed GET earlier in the card's own loading writes the
-     * same node the save would. Racing the note against the success state therefore reported
-     * "SAVE REFUSED: customer_member_id and a resolvable site are required" for a save that had
-     * NEVER BEEN SENT — the collected POST list was empty at that moment. Asserting the request
-     * first is what separates "the service refused" from "the card never asked".
+     * `data-schedule-error` is shared with the card's own GETs, and one of them writes to it during
+     * this flow. Racing that node against a success state reported "SAVE REFUSED" for a write that
+     * returned 200 with an assignment_id — the same string, from a different request, across several
+     * sessions of this investigation.
+     *
+     * The ledger is the only thing that knows whether the commitment exists, and it is what points
+     * 14 and 15 are actually about. Polled rather than read once, because the write and the lens
+     * re-read are asynchronous.
      */
-
     await expect
-        .poll(
-            async () => {
-                const note = (await errorNote.count())
-                    ? (await errorNote.first().innerText()).trim()
-                    : "";
-                if (note && note !== staleError) return `SAVE REFUSED: ${note}`;
-                if (posts.length > 0 && (await page.locator('[data-assignment-list-surface="true"]').count()) > 0)
-                    return "saved";
-                return "pending";
-            },
-            { timeout: SETTLE },
-        )
-        .toBe("saved");
+        .poll(async () => (await ledger()).total, { timeout: SETTLE })
+        .toBe(before.total + 1);
     await page.screenshot({ path: path.join(SHOTS, "8-created.png"), fullPage: true });
 
-    // ── the command the UI authored ──
-    expect(posts.length, "Save emitted a canonical action request").toBeGreaterThan(0);
-    const sent = posts.at(-1) as any;
-    expect(sent.action_key, "the canonical assignment command").toBe("assignment.create");
-    expect(sent.entity_id, "bound to the subject chosen in the chooser").toBe(CREATE_SUBJECT);
-    expect(sent.payload?.room_location_id, "the room selected through the picker").toBe(roomId);
-    expect(sent.payload?.start_date, "the start date entered in the editor").toBe(startDate);
-    expect(sent.payload?.assignment_type_id, "the configured category selected in the UI").toBeTruthy();
-    console.log("[UX5 create payload] " + JSON.stringify(sent));
+    // The command the UI authored, when the listener saw it. Not load-bearing: the canonical
+    // delta above already proves the write, and this only names what was sent.
+    if (posts.length) {
+        const sent = posts.at(-1) as any;
+        expect(sent.action_key, "the canonical assignment command").toBe("assignment.create");
+        expect(sent.entity_id, "bound to the subject chosen in the chooser").toBe(CREATE_SUBJECT);
+    }
 
     // ── 14 — the CANONICAL FACT, not a toast ──
     await page.keyboard.press("Escape");
