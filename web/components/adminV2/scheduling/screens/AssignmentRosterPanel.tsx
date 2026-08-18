@@ -151,6 +151,30 @@ export default function AssignmentRosterPanel({
         return null;
     }, [detailAssignmentId, subjects]);
 
+    /**
+     * WHO THIS LENS IS ACTUALLY SHOWING.
+     *
+     * The line used to read "{n} children" unconditionally. O-3 generalised assignment subjects to
+     * Child AND Staff, so a ledger listing a staff member counted them as a child in its own summary
+     * — visible on screen as "4 children" above a list containing Jane, a staff member.
+     *
+     * Counted from each subject's canonical `subjectType`, never from the array length, and the two
+     * grains are named separately when both are present rather than folded into a neutral word like
+     * "subjects": an operator reading a roster wants to know it holds three children and one staff
+     * member, and "4 subjects" hides exactly that.
+     */
+    const subjectSummary = useMemo(() => {
+        const children = subjects.filter((s) => s.subjectType === "child").length;
+        const staff = subjects.filter((s) => s.subjectType === "staff").length;
+        const childPart = `${children} ${children === 1 ? "child" : "children"}`;
+        // "Staff" is already plural; a "1 staffs" would be the same carelessness in the other
+        // direction.
+        const staffPart = `${staff} staff`;
+        if (children && staff) return `${childPart} · ${staffPart}`;
+        if (staff) return staffPart;
+        return childPart;
+    }, [subjects]);
+
     const totalAssignments = useMemo(
         () => subjects.reduce((n, s) => n + s.assignmentCount, 0),
         [subjects]
@@ -269,8 +293,14 @@ export default function AssignmentRosterPanel({
     return (
         <div className="flex min-h-0 flex-col gap-3" data-assignment-roster="true">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] text-alloy-slate">
-                    {subjects.length} {subjects.length === 1 ? "child" : "children"} · {totalAssignments}{" "}
+                <p
+                    className="text-[11px] text-alloy-slate"
+                    // Published so a refresh can be PROVEN rather than described. Reading the count
+                    // out of prose would pass against a line that says "5 assignments" beside four.
+                    data-assignment-total={totalAssignments}
+                    data-assignment-subjects={subjects.length}
+                >
+                    {subjectSummary} · {totalAssignments}{" "}
                     {totalAssignments === 1 ? "assignment" : "assignments"} · {siteName}
                 </p>
                 {/*
