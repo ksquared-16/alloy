@@ -180,6 +180,14 @@ export async function GET(request: NextRequest) {
                 // an empty list that reads as "this family is in nothing", which is a claim, whereas
                 // omitting the key says the question does not apply at this grain.
                 contexts: [],
+                /*
+                 * The composed household, carried so a host that only wants the CARD can build its
+                 * operational context without a second round trip — the same reason `childSubject`
+                 * and `personSubject` ride along above. Operations renders the Household card
+                 * centered over the workspace and needs exactly this and nothing else; it must not
+                 * reach for a case to get it.
+                 */
+                householdSubject: composed.subject,
             });
         }
 

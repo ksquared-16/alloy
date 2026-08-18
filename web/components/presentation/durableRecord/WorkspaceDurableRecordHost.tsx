@@ -48,9 +48,37 @@ export default function WorkspaceDurableRecordHost({
     children,
     /** Marker for tests/diagnostics, e.g. `roster`. */
     hostKey,
+    presentation = "full",
+    surfaceKey,
 }: {
     children: ReactNode;
     hostKey: string;
+    /**
+     * HOW a durable record is realized over this host.
+     *
+     * `full`        the whole composition — every card the grain declares, in the panel grid. What a
+     *               record-first runtime needs when the record IS the destination.
+     * `contextual`  a chooser and exactly ONE card, centered and bounded. What Operations needs,
+     *               because there the record is never the destination: the operator came to see one
+     *               thing about a person and should be able to say which.
+     *
+     * Two presentations of one composition, not two records. Both read the same contexts from the
+     * same producer and render the same cards; they differ only in how much is shown at once and
+     * where it sits.
+     */
+    presentation?: "full" | "contextual";
+    /**
+     * What the workspace UNDERNEATH is currently showing — e.g. `work:children`, `studio:patterns`.
+     *
+     * An open record is a statement about the surface it was opened from. The host deliberately does
+     * not unmount that surface, so when the operator moved from Children to Staff the card about
+     * Lennon stayed centered over a list of staff — a record answering a question nobody was still
+     * asking. Changing this closes it.
+     *
+     * Omitted, nothing closes on its own: a host with one surface has no such transition, and
+     * inventing one for it would close records for no reason.
+     */
+    surfaceKey?: string;
 }) {
     const [record, setRecord] = useState<OpenRecord | null>(null);
     /**
@@ -102,6 +130,22 @@ export default function WorkspaceDurableRecordHost({
         });
     }, []);
 
+    /*
+     * The surface underneath changed, so the record over it is no longer an answer to anything.
+     *
+     * `close()` rather than a bare clear, because the list that is being left still needs to hear
+     * whether the record was edited — a stale row is stale whether the operator dismissed the card
+     * or navigated away from it.
+     *
+     * Guarded on `record` so this never fires on mount or on an ordinary re-render.
+     */
+    const surfaceKeyRef = useRef(surfaceKey);
+    useEffect(() => {
+        if (surfaceKeyRef.current === surfaceKey) return;
+        surfaceKeyRef.current = surfaceKey;
+        if (record) close();
+    }, [surfaceKey, record, close]);
+
     useEffect(() => {
         if (!record) return;
         const onKeyDown = (e: KeyboardEvent) => {
@@ -136,7 +180,9 @@ export default function WorkspaceDurableRecordHost({
 
                 {record ? (
                     <div
-                        className="absolute inset-0 z-10 flex flex-col bg-alloy-midnight/10"
+                        className={`absolute inset-0 z-10 flex bg-alloy-midnight/10 ${
+                            presentation === "contextual" ? "items-center justify-center p-4" : "flex-col"
+                        }`}
                         data-durable-record-overlay="true"
                         onMouseDown={(e) => {
                             if (e.target === e.currentTarget) close();
@@ -145,9 +191,21 @@ export default function WorkspaceDurableRecordHost({
                         <div
                             role="dialog"
                             aria-label="Record"
-                            className="m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/25 bg-white shadow-lg"
+                            className={
+                                presentation === "contextual"
+                                    ? /*
+                                       * CENTERED AND BOUNDED — the card sits over the workspace, it
+                                       * does not become the workspace. `max-h`/`overflow-y` keep a
+                                       * long card scrollable inside its own bounds rather than
+                                       * stretching the panel to the height of the screen, which is
+                                       * what produced the dead white space QA reported.
+                                       */
+                                      "m-auto flex max-h-[min(88vh,44rem)] w-[min(94vw,40rem)] min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/25 bg-white shadow-xl"
+                                    : "m-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/25 bg-white shadow-lg"
+                            }
                             data-durable-record-panel={record.subjectType}
                             data-durable-record-panel-subject={record.subjectId}
+                            data-durable-record-presentation={presentation}
                         >
                             <div className="flex shrink-0 items-center justify-end border-b border-alloy-stone/15 px-2 py-1.5">
                                 <button
@@ -166,6 +224,7 @@ export default function WorkspaceDurableRecordHost({
                                 subjectId={record.subjectId}
                                 cardKey={record.cardKey ?? null}
                                 contextKey={record.contextKey ?? null}
+                                presentation={presentation}
                                 onRecordChanged={onRecordChanged}
                             />
                         </div>

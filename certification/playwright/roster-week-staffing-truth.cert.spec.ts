@@ -37,7 +37,7 @@ test("roster product audit — week board vs the staffing verdict it is served",
             JSON.stringify({ section: "roster" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();

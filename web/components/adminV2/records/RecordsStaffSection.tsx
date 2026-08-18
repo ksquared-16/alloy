@@ -166,7 +166,7 @@ export default function RecordsStaffSection({
     );
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col" data-records-staff="true">
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col xl:max-w-[80rem]" data-records-staff="true">
             <RecordsCohortBar
                 cohorts={cohorts}
                 activeCohortKey={activeCohort.key}
@@ -214,6 +214,18 @@ export default function RecordsStaffSection({
                                 ? "Add the people who work here. Alloy reuses an existing person record when one already exists."
                                 : "This is a real answer for the cohort, not a filter problem."}
                         </p>
+                        {/* Same rule as Children: repeat the command only when the population is
+                            genuinely empty, in text rather than as a second primary. */}
+                        {rows.length === 0 ? (
+                            <button
+                                type="button"
+                                className="mt-3 text-[12px] font-semibold text-alloy-bend-pine"
+                                onClick={() => setAddOpen(true)}
+                                data-staff-add-open-empty="true"
+                            >
+                                Add staff
+                            </button>
+                        ) : null}
                     </div>
                 ) : (
                     <ul

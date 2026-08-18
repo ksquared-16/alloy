@@ -1,61 +1,67 @@
 "use client";
 
 /**
- * THE CONFIGURED CONTEXTUAL CARD, rendered on a durable host.
+ * THE CANONICAL CARD, rendered on a durable host.
  *
- * It resolves the tenant's published Focus Panel composition for the SELECTED context's addressing
- * tuple — the same `entity_layouts` row, through the same endpoint and the same
- * `resolveSurfaceVariant`, that the native operational Focus Panel resolves — and renders the Child
- * card's configured fields from it.
+ * Operations does not have record cards. It has a PLACE to put them: a centered surface over the
+ * browse list, holding the same card the Work Unit's Focus Panel and a Search destination render.
+ * This component decides which canonical card the SELECTED CONTEXT calls for and mounts it. It
+ * composes no fields, names no labels and owns no layout, because a host that decides any of those
+ * has stopped hosting a card and started being one.
  *
- * Flatter than the native card, and deliberately so: a record host is a denser surface than a work
- * surface. What it may NOT do is change which fields exist, what they are called, what order they
- * are in, or which may be edited — none of which is decided here. `resolveContextualChildCard`
- * decides, from configuration, for both hosts.
+ * ── THE INVARIANT ──
  *
- * ── WHY THE DOC ID AND VERSION ARE IN THE DOM ──
+ *     same subject + same selected context ⇒ the same card, the same actions, the same editability,
+ *     whichever host renders it.
  *
- * The invariant is an equality between two hosts, and equality claims that cannot be observed tend
- * to become aspirations. The resolved layout id, its version and a fingerprint of the effective
- * configuration are published as data attributes so a browser certification can assert the SAME
- * values it reads on the native panel — rather than asserting that both surfaces "show child
- * information", which is exactly the proof the architecture brief refuses.
+ * It holds structurally rather than by resemblance. `FocusPanelCardRenderer` is the renderer both
+ * hosts use; the card models come from the platform's own producers; and the CONFIGURATION is
+ * resolved by `FocusPanelSummaryDocProvider` against the option's addressing tuple —
+ * `(businessProcessKey, workViewId, stageKey, statusKey)` — the same tuple, the same endpoint and
+ * the same `resolveSurfaceVariant` the native operational panel commits. There is no Operations
+ * layout, nothing is re-published, and no configuration is copied.
+ *
+ * That is also why the Child and Enrollment contexts are ONE branch and not two. They differ by the
+ * tuple they resolve, not by the card they get: Child addresses no process and resolves the org's
+ * Children Surface, Enrollment addresses the enrollment cohort and resolves whatever that cohort's
+ * variant publishes. A second branch for "the plain child card" is how a host acquires a second
+ * opinion about a child.
+ *
+ * ── EDITING IS PART OF THE CARD, NOT A HOST FEATURE ──
+ *
+ * A canonical card that renders its fields and refuses to change them is a different card wearing
+ * the right labels. `buildDurableChildFocusPanelMutation` supplies the same write authorities the
+ * case host injects, without the case-scoped orchestration around them, so Edit → Save lands on
+ * canonical child truth from here exactly as it does from a Work Unit.
  *
  * ── AN UNCONFIGURABLE CONTEXT SAYS SO ──
  *
- * Assignment and Employment have no business process, so there is no published composition to
- * resolve for them. The card states that plainly instead of approximating one. Inventing a card for
- * a context that has none is the failure mode this whole slice exists to avoid.
- *
- * ── EDITING GOES THROUGH THE DOMAIN'S OWN AUTHORITY ──
- *
- * A field is editable here when the CONFIGURATION says it is editable AND the value's canonical home
- * is the child record. Enrollment projections satisfy the first and not the second: they live on a
- * participation row, and a durable host writing one would create participation as a side effect of
- * an edit. They render, configured and in order, without an edit affordance — a truthful card, not
- * a degraded one.
+ * Some contexts have no business process and never should. Schedule is a commitment, not a stage, so
+ * it renders the platform's `scheduling` card from assignment truth rather than resolving a
+ * composition that would require inventing a process for it. Anything with neither a process nor a
+ * canonical card states that plainly instead of approximating one — inventing a card for a context
+ * that has none is the failure this whole surface exists to avoid.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import SchedulingCard from "@/components/admin/focusPanel/cards/SchedulingCard";
+import FocusPanelCardRenderer from "@/components/admin/focusPanel/FocusPanelCardRenderer";
+import { FocusPanelSummaryDocProvider } from "@/lib/adminV2/runtime/focusPanel/usePublishedFocusPanelSummaryDoc";
+import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
+import { buildDurableChildFocusPanelMutation } from "@/lib/adminV2/runtime/focusPanel/durableSubject/buildDurableChildFocusPanelMutation";
+import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
+import { buildDurablePersonOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
+import DurableHouseholdContextCard from "@/components/presentation/durableRecord/DurableHouseholdContextCard";
 import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
-import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { DURABLE_STAFF_SUBJECT_KEY } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableStaffSchedulingSubject";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
 import { deriveSchedulingCardModel } from "@/lib/adminV2/runtime/focusPanel/durableSubject/deriveSchedulingCardModel";
 import { buildDurableChildOperationalContext } from "@/lib/adminV2/runtime/focusPanel/durableSubject/focusPanelWorkModeModelFromDurableSubject";
 import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import type { DurableRecordContextOption } from "@/lib/context/durableRecordContextOptions";
-import {
-    contextualCardConfigurationFingerprint,
-    resolveContextualChildCard,
-} from "@/lib/adminV2/runtime/focusPanel/contextualCard/resolveContextualChildCard";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
-import {
-    saveContextualChildField,
-    writeTargetForField,
-} from "@/lib/adminV2/runtime/focusPanel/contextualCard/saveContextualChildField";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 type Resolved = {
@@ -106,7 +112,11 @@ async function fetchPublishedComposition(option: DurableRecordContextOption): Pr
  */
 export type DurableContextualSubject =
     | { kind: "child"; child: DurableChildSubject }
-    | { kind: "staff"; personId: string; label: string; imageUrl?: string | null };
+    /**
+     * The composed person, whole. The Employment card reads its employment signal and truth bag, so
+     * narrowing this to an id would force a re-fetch of what the composer already produced.
+     */
+    | { kind: "staff"; person: DurablePersonSubject };
 
 export default function DurableRecordContextualCard({
     option,
@@ -125,15 +135,19 @@ export default function DurableRecordContextualCard({
     onSaved?: () => void;
 }) {
     const [resolved, setResolved] = useState<Resolved | null>(null);
-    /** Values written in this session, so the card shows the saved fact without a re-fetch. */
-    const [overrides, setOverrides] = useState<Record<string, string | null>>({});
-    const [editing, setEditing] = useState<string | null>(null);
-    const [draft, setDraft] = useState("");
-    const [saveError, setSaveError] = useState<string | null>(null);
 
     const childSubject = subject.kind === "child" ? subject.child : null;
-    /** The subject's identity of record — member id for a child, person id for staff. */
-    const subjectId = subject.kind === "child" ? subject.child.memberId : subject.personId;
+    /*
+     * The subject's identity of record — member id for a child, person id for staff.
+     *
+     * This read `subject.personId` while the staff variant was `{ personId, label }`. Widening that
+     * variant to carry the whole composed person left the expression reading `undefined`, so the
+     * scheduling projection lookup below missed and Jane's Schedule card reported ZERO commitments
+     * against a row that plainly existed. Nothing objected: the property simply stopped being there,
+     * and `undefined` is a legal index into a record.
+     */
+    const subjectId =
+        subject.kind === "child" ? subject.child.memberId : subject.person.personId;
 
     /** This subject's canonical commitment facts, keyed as the card expects to find them. */
     const projection = useMemo(
@@ -145,12 +159,8 @@ export default function DurableRecordContextualCard({
      * The context the canonical card reads, built by the SAME producer the durable panel uses — so
      * the card sees one subject, one grain and one truth bag, exactly as it would on a case.
      *
-     * `_scheduling_projection` is attached here rather than in the composer because it belongs to
-     * the SELECTED CONTEXT, not to the subject's identity: a record with no Schedule context
-     * selected has no business carrying assignment facts in its truth.
-     *
-     * `canMutate` is true because this card's whole purpose is invoking canonical assignment
-     * actions; each of those re-authorizes on execution, as it does from the case panel.
+     * `canMutate` is true because these cards' whole purpose is invoking canonical actions; each of
+     * those re-authorizes on execution, as it does from the case panel.
      */
     const operationalContext = useMemo(() => {
         if (!childSubject) {
@@ -164,7 +174,7 @@ export default function DurableRecordContextualCard({
              *
              * The context grain is `person`, which is what the registry declares `scheduling` for.
              */
-            const staff = subject as Extract<DurableContextualSubject, { kind: "staff" }>;
+            const staff = (subject as Extract<DurableContextualSubject, { kind: "staff" }>).person;
             return {
                 grain: "person" as const,
                 subject: { type: "person" as const, id: staff.personId, label: staff.label },
@@ -175,7 +185,7 @@ export default function DurableRecordContextualCard({
                     [DURABLE_STAFF_SUBJECT_KEY]: {
                         personId: staff.personId,
                         name: staff.label,
-                        imageUrl: staff.imageUrl ?? null,
+                        imageUrl: null,
                     },
                 },
             } as unknown as OperationalContext;
@@ -184,52 +194,61 @@ export default function DurableRecordContextualCard({
         return {
             ...base,
             truth: {
+                /*
+                 * The composed truth, UNCHANGED but for the selected context's own facts.
+                 *
+                 * The child's collection row (`_durable_child_rows`) arrives already composed —
+                 * `composeDurableChildSubject` writes it, so every host is handed the same subject
+                 * rather than each assembling one. `_scheduling_projection` is attached here rather
+                 * than in the composer because it belongs to the SELECTED CONTEXT, not to the
+                 * child's identity: a record with no Schedule context selected has no business
+                 * carrying assignment facts in its truth.
+                 */
                 ...childSubject.truth,
                 _scheduling_projection: schedulingProjection ?? null,
-                /*
-                 * THE SUBJECT, AS THE COLLECTION'S ONE MEMBER.
-                 *
-                 * The card iterates a child collection because on a case it renders a family's
-                 * roster. Here the roster has exactly one member and it is the record itself — the
-                 * same degenerate-case reasoning `personEmploymentSignal` already uses for a durable
-                 * person's Employment.
-                 *
-                 * Under `_durable_child_rows`, never `_inquiry_children`: there is no inquiry, and
-                 * borrowing the case's key would tell the next reader that there is one.
-                 */
-                [DURABLE_CHILD_ROWS_KEY]: [
-                    {
-                        id: childSubject.memberId,
-                        customer_member_id: childSubject.memberId,
-                        person_id: childSubject.personId,
-                        display_name: childSubject.label,
-                        dob: childSubject.dateOfBirth,
-                    },
-                ],
             },
         };
     }, [subject, childSubject, schedulingProjection]);
 
-    const commit = useCallback(
-        async (fieldKey: string, value: string) => {
-            setEditing(null);
-            setSaveError(null);
-            // Only reachable from the configured-field branch, which renders for a child only. The
-            // guard makes that a type fact rather than a reading of the control flow above.
-            if (!childSubject) return;
-            const result = await saveContextualChildField({ subject: childSubject, fieldKey, value });
-            if (!result.ok) {
-                setSaveError(result.error);
-                return;
-            }
-            setOverrides((prev) => ({ ...prev, [fieldKey]: value.trim() || null }));
-            onSaved?.();
-        },
+    /*
+     * THE CARD'S ACTIONS, on a host that has no case.
+     *
+     * Built here rather than inside the branch so the identity of the object is stable across
+     * renders — a mutation seam rebuilt every render would re-arm the card's save handlers on every
+     * keystroke.
+     */
+    const childMutation = useMemo(
+        () =>
+            childSubject
+                ? buildDurableChildFocusPanelMutation({
+                      subject: childSubject,
+                      canMutate: true,
+                      onSaved,
+                  })
+                : null,
         [childSubject, onSaved],
     );
 
+    /** The canonical Children card model, composed from the same truth the card will read. */
+    const childCardModel = useMemo(
+        () => (childSubject ? buildChildrenCardModel(operationalContext.truth) : null),
+        [childSubject, operationalContext],
+    );
+
+    /*
+     * The published composition's IDENTITY, for the equality evidence only.
+     *
+     * The card itself reads its configuration through `FocusPanelSummaryDocProvider` below, exactly
+     * as the native panel does. This second read exists so the resolved layout id and version can be
+     * published as data attributes and compared across hosts — an equality claim that cannot be
+     * observed becomes an aspiration.
+     *
+     * It runs for the CHILD context too, whose tuple is simply empty. That is not the absence of a
+     * composition; it is the org-wide one, and a host that skipped the read there could not show
+     * that both surfaces resolved the same document.
+     */
     useEffect(() => {
-        if (option.surface !== "published_composition") {
+        if (!childSubject || option.surface === "canonical_operational" || option.surface === "none") {
             setResolved({ doc: null, layoutId: null, version: null });
             return;
         }
@@ -250,7 +269,65 @@ export default function DurableRecordContextualCard({
         option.stageKey,
         option.statusKey,
         option.surface,
+        childSubject,
     ]);
+
+    /*
+     * ── THE CANONICAL CHILD CARD, FOR WHICHEVER CONTEXT ASKED FOR IT ──
+     *
+     * One renderer for the Child context and the Enrollment context, because they are the same card.
+     * What differs is the ADDRESSING TUPLE the configuration is resolved against, and that is
+     * carried by the option: Child addresses no process and resolves the org's Children Surface;
+     * Enrollment addresses its cohort and resolves whatever that cohort's variant publishes.
+     *
+     * `FocusPanelSummaryDocProvider` is the same provider the native Focus Panel host mounts, so the
+     * card inside reads its fields, labels, order, visibility and editability from the same document
+     * through the same reader. Nothing about the card is decided here — this function decides only
+     * that it is centered, and publishes the evidence for asserting the rest.
+     */
+    const renderCanonicalChildCard = () => {
+        if (!childSubject || !childCardModel || !childMutation) return null;
+        // The registry is the gate, as everywhere: the card reaches the child grain because someone
+        // declared that it can, not because this component wanted to render it.
+        if (!cardAppliesToGrain("children", "child")) return null;
+
+        return (
+            <div
+                data-contextual-card="child"
+                data-contextual-card-context={option.key}
+                data-contextual-card-canonical-card="children"
+                // ── THE EQUALITY EVIDENCE ──
+                //
+                // The effective-configuration FINGERPRINT is published by the card itself
+                // (`data-children-card-fingerprint`), which is what makes it evidence rather than a
+                // second opinion: it is emitted from the rows the card actually rendered.
+                data-contextual-card-layout-id={resolved?.layoutId ?? ""}
+                data-contextual-card-layout-version={resolved?.version ?? ""}
+                data-contextual-card-from-published={resolved?.doc != null ? "true" : "false"}
+                data-contextual-card-business-process={option.businessProcessKey ?? ""}
+                data-contextual-card-stage={option.stageKey ?? ""}
+                data-contextual-card-work-view={option.workViewId ?? ""}
+            >
+                <FocusPanelSummaryDocProvider
+                    enabled
+                    businessProcessKey={option.businessProcessKey}
+                    workViewId={option.workViewId}
+                    stageKey={option.stageKey}
+                    statusKey={option.statusKey}
+                >
+                    <FocusPanelCardRenderer
+                        model={childCardModel}
+                        context={operationalContext}
+                        focusPanelMode="summary"
+                        mutation={childMutation}
+                        // Tab-pane drill navigation, which a contextual card has no tabs for. The
+                        // renderer requires it; pure cards ignore it.
+                        compat={{ onSelectTab: () => {} }}
+                    />
+                </FocusPanelSummaryDocProvider>
+            </div>
+        );
+    };
 
     /*
      * ── A DURABLE OPERATIONAL RELATIONSHIP RENDERS THE PLATFORM'S OWN CARD ──
@@ -267,6 +344,70 @@ export default function DurableRecordContextualCard({
      * is a `person`, and if that declaration were ever withdrawn this branch would go quiet rather
      * than render a card the registry does not admit.
      */
+    /*
+     * ── A CANONICAL CARD ABOUT THE RECORD ITSELF ──
+     *
+     * Not a commitment: the child's own details, their family, or a person's employment. Every card
+     * here already exists and is already canonical; none is configured or re-derived in this file,
+     * which decides only WHERE they appear.
+     *
+     * Household in particular is composed from the household's own record. It does not route through
+     * a Work Unit to obtain the card, because a family is a record and not a queue position — and
+     * fabricating a case to render one was the specific thing the convergence forbids.
+     */
+    if (option.surface === "canonical_record") {
+        if (option.kind === "relationship" && option.hostEntityId) {
+            return (
+                <DurableHouseholdContextCard
+                    householdId={option.hostEntityId}
+                    contextKey={option.key}
+                />
+            );
+        }
+        if (option.kind === "employment" && subject.kind === "staff") {
+            /*
+             * The EXISTING Employment card, centered — read-only exactly as it is on the native
+             * panel. `derivePersonEmploymentCard` decides nothing about employment: `is_staff`,
+             * `current` and `state_label` arrive already decided by `lib/employment` and are carried
+             * through. Making it editable here would be a second execution path for a capability
+             * that lives elsewhere, and this slice is not that slice.
+             */
+            if (!cardAppliesToGrain("employment", "person")) return null;
+            return (
+                <div
+                    className="rounded-lg border border-alloy-stone/22 bg-white"
+                    data-contextual-card="record"
+                    data-contextual-card-context={option.key}
+                    data-contextual-card-canonical-card="employment"
+                >
+                    <FocusPanelCardRenderer
+                        model={derivePersonEmploymentCard(subject.person.employment)}
+                        context={buildDurablePersonOperationalContext(subject.person, false, null)}
+                        focusPanelMode="summary"
+                    // Tab-pane drill navigation, which a contextual card has no tabs for. The
+                    // renderer requires it; pure cards ignore it.
+                    compat={{ onSelectTab: () => {} }}
+                    />
+                </div>
+            );
+        }
+        /*
+         * THE CHILD CONTEXT — the same canonical card the Enrollment context resolves.
+         *
+         * It used to render `child_identity`: four hardcoded facts, no photo, no medical rows, and
+         * no way to change any of them. That was the platform holding two answers to "who is this
+         * child", and an operator who reached Lennon from Operations got the smaller one.
+         *
+         * The tuple is empty here, which is the point — it addresses no process, so the org's own
+         * Children Surface is what resolves. Not a fallback: the configured card for a child
+         * considered as themselves rather than as a participant in something.
+         */
+        if (option.kind === "identity" && childSubject) {
+            return renderCanonicalChildCard();
+        }
+        return null;
+    }
+
     if (option.surface === "canonical_operational") {
         const grain = subject.kind === "child" ? "child" : "person";
         if (!cardAppliesToGrain("scheduling", grain)) return null;
@@ -353,105 +494,5 @@ export default function DurableRecordContextualCard({
         );
     }
 
-    const card = resolveContextualChildCard(resolved.doc, childSubject, {
-        fromPublishedDoc: resolved.doc != null,
-    });
-    const fingerprint = contextualCardConfigurationFingerprint(card.rows);
-
-    return (
-        <div
-            className="rounded-lg border border-alloy-stone/22 bg-white"
-            data-contextual-card="child"
-            data-contextual-card-context={option.key}
-            // ── THE EQUALITY EVIDENCE ──
-            data-contextual-card-layout-id={resolved.layoutId ?? ""}
-            data-contextual-card-layout-version={resolved.version ?? ""}
-            data-contextual-card-nested-surface={card.nestedSurfaceId}
-            data-contextual-card-from-published={card.fromPublishedDoc ? "true" : "false"}
-            data-contextual-card-fingerprint={fingerprint}
-            data-contextual-card-business-process={option.businessProcessKey ?? ""}
-            data-contextual-card-stage={option.stageKey ?? ""}
-            data-contextual-card-work-view={option.workViewId ?? ""}
-        >
-            <div className="flex items-baseline justify-between gap-2 border-b border-alloy-stone/15 px-3 py-2">
-                <span className="text-[11px] font-semibold uppercase tracking-[0.07em] text-alloy-bend-pine">
-                    Child
-                </span>
-                <span className="text-[11px] text-alloy-midnight/45">{option.label}</span>
-            </div>
-
-            {saveError ? (
-                <p
-                    className="mx-3 mt-2 rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11.5px] text-red-700"
-                    data-contextual-card-save-error="true"
-                >
-                    {saveError}
-                </p>
-            ) : null}
-
-            {card.rows.length === 0 ? (
-                <p className="px-3 py-4 text-[12px] text-alloy-midnight/50">
-                    No fields are configured on the Child card for this context.
-                </p>
-            ) : (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 px-3 py-3">
-                    {card.rows.map((row) => {
-                        const value =
-                            row.fieldKey in overrides ? overrides[row.fieldKey] ?? null : row.value;
-                        // Configured as editable AND canonically owned by the child record.
-                        const canEditHere =
-                            row.editable && writeTargetForField(row.fieldKey) === "child_record";
-                        const isEditing = editing === row.fieldKey;
-
-                        return (
-                            <div
-                                key={row.fieldKey}
-                                className={row.layoutWidth === "full" ? "col-span-2" : undefined}
-                                data-contextual-card-field={row.fieldKey}
-                                data-contextual-card-field-editable={row.editable ? "true" : "false"}
-                                data-contextual-card-field-writable={canEditHere ? "true" : "false"}
-                            >
-                                <dt className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                    {row.label}
-                                </dt>
-                                <dd className="text-[12.5px] text-alloy-midnight">
-                                    {isEditing ? (
-                                        <input
-                                            autoFocus
-                                            value={draft}
-                                            onChange={(e) => setDraft(e.target.value)}
-                                            onBlur={() => void commit(row.fieldKey, draft)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter") void commit(row.fieldKey, draft);
-                                                if (e.key === "Escape") setEditing(null);
-                                            }}
-                                            aria-label={row.label}
-                                            data-contextual-card-input={row.fieldKey}
-                                            className="w-full rounded border border-alloy-juniper/50 bg-white px-1.5 py-0.5 text-[12.5px] text-alloy-midnight outline-none"
-                                        />
-                                    ) : canEditHere ? (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setDraft(value ?? "");
-                                                setEditing(row.fieldKey);
-                                            }}
-                                            data-contextual-card-edit={row.fieldKey}
-                                            className="w-full rounded px-1 py-0.5 text-left hover:bg-alloy-stone/[0.08]"
-                                        >
-                                            {value ?? <span className="text-alloy-midnight/35">Not set</span>}
-                                        </button>
-                                    ) : (
-                                        <span className="px-1">
-                                            {value ?? <span className="text-alloy-midnight/35">Not set</span>}
-                                        </span>
-                                    )}
-                                </dd>
-                            </div>
-                        );
-                    })}
-                </dl>
-            )}
-        </div>
-    );
+    return renderCanonicalChildCard();
 }

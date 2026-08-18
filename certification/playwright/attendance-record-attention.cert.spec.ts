@@ -137,7 +137,7 @@ async function openAttendanceRoom(page: Page) {
             JSON.stringify({ section: "attendance" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await expect(page.locator(SCHEDULING)).toBeVisible({ timeout: SETTLE });
 
     // Site selection. Attendance is site-scoped and opens on "All sites", which renders NO rooms —

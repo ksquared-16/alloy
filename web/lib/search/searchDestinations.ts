@@ -378,6 +378,16 @@ const CONTEXT_DESTINATION_RESOLVERS: Record<
             host_work_view_id: resolveHostWorkViewId(allContexts),
         };
     },
+    /**
+     * Identity produces no OPERATIONAL destination, for the same reason Employment does not.
+     *
+     * "Who this child is" is not a queue position: there is no business process behind a date of
+     * birth and no Work View that holds one. The context still ranks and displays, and the subject's
+     * RECORD is where an operator goes from it — which the durable record option already offers as
+     * `canonical_record`. Naming a unit here would fabricate a route, and the exhaustive `Record` is
+     * what forced this to be stated rather than silently omitted.
+     */
+    identity: () => null,
     relationship: () => null,
     /**
      * Employment produces no operational destination, and the exhaustive `Record` is what forced

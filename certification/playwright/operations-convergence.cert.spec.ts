@@ -216,10 +216,18 @@ test.describe("9+10+11 — Staff / Children browse, record open, household", () 
         await expect(jane).toBeVisible({ timeout: SETTLE });
         await jane.click();
         await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
-        await expect(page.locator('[data-universal-card-key="employment"]')).toContainText(
-            "Lead Teacher",
-            { timeout: SETTLE },
-        );
+        /*
+         * EMPLOYMENT IS NOW A CHOICE, not a card on a composition grid.
+         *
+         * This asserted the Employment card was simply present, which held while Operations opened a
+         * record as its whole composition. UX-1 replaced that with a chooser and exactly one card,
+         * so the operator SELECTS Employment and gets the same canonical card. The assertion moved
+         * with the interaction; what it proves — Jane's own standing, from `lib/employment` — did not.
+         */
+        await page.locator('[data-record-context-kind="employment"]').first().click();
+        await expect(page.locator("[data-contextual-card]").first()).toContainText("Lead Teacher", {
+            timeout: SETTLE,
+        });
         await page.screenshot({ path: path.join(SHOTS, "09-staff.png"), fullPage: true });
     });
 
@@ -233,22 +241,21 @@ test.describe("9+10+11 — Staff / Children browse, record open, household", () 
         await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
 
         /*
-         * HOUSEHOLD ATTENTION from the child — through the record REFERENCE on the Child card.
+         * HOUSEHOLD ATTENTION from the child — now a CHOICE that opens the family's own card.
          *
-         * There is no Household CARD at child grain, and there should not be: the registry declares
-         * `household` for `opportunity` and `household` only, and a card reaches a grain because
-         * someone declared it. The family is reachable as a RECORD instead — `customer_members
-         * .customer_id` IS the durable household id — so the operator moves to it rather than
-         * reading a copy of it on the child.
+         * It used to be a record REFERENCE on the Child card, reached inside the composition grid,
+         * which opened the family as a whole record. UX-1 made Household a truthful context in its
+         * own right, so the operator asks for the family directly and gets the canonical Household
+         * card centered over Operations — no Work Unit, and no second record page.
          */
-        const householdRef = page.locator('[data-profile-field-record="household"]');
-        await expect(householdRef).toContainText("Kurzman", { timeout: SETTLE });
-        await householdRef.click();
-        await expect(page.locator(PANEL_READY)).toHaveAttribute(
-            "data-durable-record-subject-type",
+        await page.locator('[data-record-context-kind="relationship"]').first().click();
+        const householdCard = page.locator("[data-contextual-card]").first();
+        await expect(householdCard).toHaveAttribute(
+            "data-contextual-card-canonical-card",
             "household",
             { timeout: SETTLE },
         );
+        await expect(householdCard).toContainText("Kurzman", { timeout: SETTLE });
 
         await page.screenshot({ path: path.join(SHOTS, "10-11-children.png"), fullPage: true });
     });

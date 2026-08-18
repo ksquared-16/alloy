@@ -167,7 +167,16 @@ describe("the grain guard is not weakened", () => {
             expect(family).toContain(familyOnly);
             expect(person).not.toContain(familyOnly);
         }
-        expect(child).toContain("child_identity");
+        /*
+         * A child's composition is the CONFIGURED child card, and a person's is not.
+         *
+         * `children` appears in both the family and the child compositions, and that is not the
+         * guard leaking: it is one card composing two truthfully different collections — a family's
+         * roster on a case, and the subject alone on a child record. The guard's job is to keep it
+         * off a PERSON, who has no such collection at all, and that is what is asserted here.
+         */
+        expect(child).toContain("children");
+        expect(person).not.toContain("children");
         expect(person).not.toContain("child_identity");
     });
 });

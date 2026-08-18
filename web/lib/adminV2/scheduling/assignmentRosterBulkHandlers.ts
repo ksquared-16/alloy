@@ -52,6 +52,15 @@ export type BuildAssignmentRosterBulkHandlersInput = {
     onRefresh: () => void;
     /** Open the single-subject create surface. Hosts differ; the command does not. */
     onCreateForChild: (customerMemberId: string) => void;
+    /**
+     * Open the SUBJECTLESS create command — the lens-level one, which must ask who first.
+     *
+     * Optional, so a host without a chooser offers no command at all rather than one that opens
+     * nothing. This builder returns an EXPLICIT object rather than spreading its input, so a handler
+     * the host passes but this type does not name is silently dropped — which is exactly how the
+     * first attempt at this command reached the panel as `undefined` and rendered nothing.
+     */
+    onCreateAssignment?: () => void;
 };
 
 /**
@@ -67,6 +76,7 @@ export function buildAssignmentRosterBulkHandlers(
     const { subjects, onRefresh } = input;
 
     return {
+        onCreateAssignment: input.onCreateAssignment,
         onCreateForChild: input.onCreateForChild,
 
         onBulkArchive: async (assignmentIds) => {

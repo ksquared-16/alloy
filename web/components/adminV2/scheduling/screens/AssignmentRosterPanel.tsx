@@ -10,6 +10,8 @@ import { BadgeCheck, ChevronDown, ChevronRight } from "lucide-react";
 
 import { AlloySelect } from "@/components/workspace/AlloySelect";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { CREATE_ASSIGNMENT_LABEL } from "@/components/adminV2/scheduling/AssignmentSubjectPicker";
+import { WS_ACTION_PRIMARY } from "@/components/workspace/workspaceTokens";
 import type { OrgAssignmentTypeOption } from "@/lib/operationalAssignments/loadOrgAssignmentTypes";
 
 export type AssignmentRosterSubject = {
@@ -51,6 +53,15 @@ export type BulkAssignmentPreviewRow = {
 };
 
 export type AssignmentRosterBulkHandlers = {
+    /**
+     * THE LENS-LEVEL COMMAND — always available, subject not yet known.
+     *
+     * Kept separate from `onCreateForChild` deliberately. That one is row-scoped and answers "give
+     * THIS subject another commitment"; this one answers "create a commitment", which is a different
+     * sentence and the one an operator actually arrives with. Collapsing them is what put creation
+     * behind a row selection, where it read as something you do TO a row.
+     */
+    onCreateAssignment?: () => void;
     onCreateForChild?: (customerMemberId: string) => void;
     onBulkArchive?: (assignmentIds: string[]) => void | Promise<void>;
     onBulkMakePrimary?: (payload: { subjectKey: string; assignmentId: string; effectiveFrom: string }[]) => void | Promise<void>;
@@ -139,6 +150,30 @@ export default function AssignmentRosterPanel({
         }
         return null;
     }, [detailAssignmentId, subjects]);
+
+    /**
+     * WHO THIS LENS IS ACTUALLY SHOWING.
+     *
+     * The line used to read "{n} children" unconditionally. O-3 generalised assignment subjects to
+     * Child AND Staff, so a ledger listing a staff member counted them as a child in its own summary
+     * — visible on screen as "4 children" above a list containing Jane, a staff member.
+     *
+     * Counted from each subject's canonical `subjectType`, never from the array length, and the two
+     * grains are named separately when both are present rather than folded into a neutral word like
+     * "subjects": an operator reading a roster wants to know it holds three children and one staff
+     * member, and "4 subjects" hides exactly that.
+     */
+    const subjectSummary = useMemo(() => {
+        const children = subjects.filter((s) => s.subjectType === "child").length;
+        const staff = subjects.filter((s) => s.subjectType === "staff").length;
+        const childPart = `${children} ${children === 1 ? "child" : "children"}`;
+        // "Staff" is already plural; a "1 staffs" would be the same carelessness in the other
+        // direction.
+        const staffPart = `${staff} staff`;
+        if (children && staff) return `${childPart} · ${staffPart}`;
+        if (staff) return staffPart;
+        return childPart;
+    }, [subjects]);
 
     const totalAssignments = useMemo(
         () => subjects.reduce((n, s) => n + s.assignmentCount, 0),
@@ -235,6 +270,22 @@ export default function AssignmentRosterPanel({
                 <p className="mt-1 max-w-md text-[12px] text-alloy-slate">
                     Proposed and committed assignments appear here with room, Assignment Category, role, and lifecycle state.
                 </p>
+                {/*
+                 * The empty state REPEATS the command; it does not own it. An operator who reaches an
+                 * empty site should not have to know that the way out is somewhere else — and an
+                 * operator who reaches a populated one should not lose the way in. Same handler, same
+                 * label, same treatment as the header's, so there is one command wearing one name.
+                 */}
+                {bulk?.onCreateAssignment ? (
+                    <button
+                        type="button"
+                        className={`mt-4 ${WS_ACTION_PRIMARY}`}
+                        onClick={() => bulk.onCreateAssignment?.()}
+                        data-assignment-create="true"
+                    >
+                        {CREATE_ASSIGNMENT_LABEL}
+                    </button>
+                ) : null}
             </div>
         );
     }
@@ -242,29 +293,51 @@ export default function AssignmentRosterPanel({
     return (
         <div className="flex min-h-0 flex-col gap-3" data-assignment-roster="true">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[11px] text-alloy-slate">
-                    {subjects.length} {subjects.length === 1 ? "child" : "children"} · {totalAssignments}{" "}
+                <p
+                    className="text-[11px] text-alloy-slate"
+                    // Published so a refresh can be PROVEN rather than described. Reading the count
+                    // out of prose would pass against a line that says "5 assignments" beside four.
+                    data-assignment-total={totalAssignments}
+                    data-assignment-subjects={subjects.length}
+                >
+                    {subjectSummary} · {totalAssignments}{" "}
                     {totalAssignments === 1 ? "assignment" : "assignments"} · {siteName}
                 </p>
+                {/*
+                 * Right side: the standing COMMAND, and — only when rows are selected — the toolbar
+                 * that acts on them. Grouped so the command holds one position whether or not a
+                 * selection exists; the operator's target for "create" must not move because they
+                 * ticked a checkbox somewhere else. Same reasoning as UX-3's control band.
+                 */}
+                <div className="flex flex-wrap items-center gap-2">
+                {bulk?.onCreateAssignment ? (
+                    <button
+                        type="button"
+                        className={`shrink-0 ${WS_ACTION_PRIMARY}`}
+                        onClick={() => bulk.onCreateAssignment?.()}
+                        data-assignment-create="true"
+                    >
+                        {CREATE_ASSIGNMENT_LABEL}
+                    </button>
+                ) : null}
                 {selected.size > 0 ? (
                     <div
                         className="flex flex-wrap items-center gap-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-1.5"
                         data-assignment-roster-bulk="true"
                     >
+                        {/*
+                         * CREATION IS NOT A SELECTION ACTION, so it is no longer offered here.
+                         *
+                         * "Add Assignment" used to appear in this toolbar when exactly one row was
+                         * selected. That made the command's existence depend on a selection, and its
+                         * meaning depend on which row — while the subject an operator most often
+                         * wants is the one with no row at all. The standing command above answers
+                         * that, and the per-subject shortcut still lives on the subject's own card,
+                         * where the subject is genuinely already known.
+                         *
+                         * Everything below is row-scoped and unchanged.
+                         */}
                         <span className="text-[11px] font-semibold text-alloy-midnight">{selected.size} selected</span>
-                        {selectedSubjects.length === 1 && bulk?.onCreateForChild ? (
-                            <button
-                                type="button"
-                                className="text-[11px] font-semibold text-alloy-bend-pine"
-                                onClick={() => {
-                                    const memberId = selectedSubjects[0]?.customerMemberId;
-                                    if (memberId) bulk.onCreateForChild?.(memberId);
-                                }}
-                                data-roster-add-assignment="true"
-                            >
-                                Add Assignment
-                            </button>
-                        ) : null}
                         <button
                             type="button"
                             className="text-[11px] font-semibold text-alloy-bend-pine disabled:opacity-50"
@@ -319,6 +392,7 @@ export default function AssignmentRosterPanel({
                         </button>
                     </div>
                 ) : null}
+                </div>
             </div>
 
             {bulkMode === "assignment" ? (
