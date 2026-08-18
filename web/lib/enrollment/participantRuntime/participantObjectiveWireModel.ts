@@ -63,16 +63,25 @@ export function participantObjectiveWireModel(
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
 
-    // Shared collection is over when no need that can be answered ONCE for every artifact is still
-    // waiting. What is left after that is artifact-specific by construction — Slice 2.4 gives those
-    // needs a null shared key — so the phase is derived, never tracked.
-    const sharedOutstanding =
-        (objective.known_requiring_confirmation ?? []).length + (objective.missing ?? []).length;
-    const phase: ParticipantPhase = turn.kind === "complete"
-        ? "complete"
-        : sharedOutstanding > 0
-          ? "shared_collection"
-          : "artifact_review";
+    /**
+     * PHASE IS DERIVED FROM THE TURN — one authority, not two.
+     *
+     * It used to be derived independently, from `known_requiring_confirmation.length + missing.length`.
+     * That produced a state the product must never reach: the turn selector skips a need that does
+     * not require participant action, so an OPTIONAL missing fact left the turn at
+     * `complete_artifact` while the phase still said `shared_collection`. The card rendered
+     * "review and finish it below" because it reads the turn; the host suppressed the artifact
+     * because it reads the phase. The parent got a handoff with nothing beneath it.
+     *
+     * Two readers of the same situation disagreed because they asked different questions. Now the
+     * turn — which is the deterministic runtime's own answer to "what next" — decides both.
+     */
+    const phase: ParticipantPhase =
+        turn.kind === "complete"
+            ? "complete"
+            : turn.kind === "complete_artifact"
+              ? "artifact_review"
+              : "shared_collection";
 
     return {
         stage_key: objective.stage_key,

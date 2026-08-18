@@ -70,7 +70,9 @@ describe("turn rendering", () => {
         expect(control.kind).toBe("choice_or_text");
         if (control.kind !== "choice_or_text") return;
         expect(control.affirm).toContain("Yes");
-        expect(control.deny).toContain("No");
+        // "Change" — a correction is not a denial, and the button leads to a TYPED control.
+        expect(control.deny).toBe("Change");
+        expect(control.correction).toMatchObject({ kind: "value", inputType: "date" });
     });
 
     it("5. a collect turn gets a field-appropriate deterministic input", () => {

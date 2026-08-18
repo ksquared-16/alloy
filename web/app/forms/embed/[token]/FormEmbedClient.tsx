@@ -549,8 +549,20 @@ export function FormEmbedClient({
 
     // Only an ENROLLMENT token can suppress the form, and only while shared facts remain. An
     // ordinary public Form link has no objective, so this is false and nothing about it changes.
-    const sharedCollectionInProgress =
-        enrollmentObjective != null && (enrollmentPhase ?? enrollmentObjective.phase) === "shared_collection";
+    const participantPhase = enrollmentObjective ? (enrollmentPhase ?? enrollmentObjective.phase) : null;
+    const sharedCollectionInProgress = participantPhase === "shared_collection";
+
+    /**
+     * THE REVIEW INVARIANT: review is only reachable when there is something to review.
+     *
+     * A schema with fields is the renderable artifact. Without this the runtime could tell a parent
+     * "please review and finish it below" with nothing below — which is what happened when the turn
+     * and the phase were derived independently and disagreed. The phase now comes from the turn, so
+     * that specific contradiction is gone; this is the guard that makes the empty state impossible
+     * rather than merely unlikely.
+     */
+    const artifactRenderable = schema != null && schema.fields.length > 0;
+    const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
@@ -634,6 +646,7 @@ export function FormEmbedClient({
                         token={token}
                         initialObjective={enrollmentObjective}
                         onPhaseChange={setEnrollmentPhase}
+                        artifactRenderable={artifactRenderable}
                     />
                 </div>
             ) : null}
