@@ -327,17 +327,17 @@ export default function DurableRecordSurface({
         presentation === "contextual"
             ? state.contexts.filter((option) => option.surface === "canonical_record")
             : [];
+    /*
+     * In-place operational contexts are NOT suppressed by a `Go to` covering the same relationship.
+     * "Show me Lennon's commitment, here" and "take me to where assignments are worked" are two
+     * different intents, exactly as Search offers a record destination beside the operational ones
+     * — and the in-place Scheduling card is the certified O-3b/O-4 editing surface plus the landing
+     * for Create Assignment's declared intent. Removing it whenever a destination existed would
+     * have retired a certified capability as a side effect of adding navigation.
+     */
     const inPlaceOperational =
         presentation === "contextual"
-            ? state.contexts.filter(
-                  (option) =>
-                      option.surface === "canonical_operational"
-                      && !state.relatedWork.some(
-                          (destination) =>
-                              destination.key === "assignment"
-                              || destination.context_key === option.key,
-                      ),
-              )
+            ? state.contexts.filter((option) => option.surface === "canonical_operational")
             : [];
     const hasRelatedWork = state.relatedWork.length > 0 || inPlaceOperational.length > 0;
 
