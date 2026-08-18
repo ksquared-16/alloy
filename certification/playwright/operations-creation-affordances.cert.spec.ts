@@ -412,6 +412,18 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
     const roomName = (await room.innerText()).trim().split("\n")[0]!.trim();
     await room.click();
 
+    /*
+     * PROVE THE ROOM COMMITTED, HERE.
+     *
+     * The picker's option list disappearing is not evidence that the editor recorded a room —
+     * `data-room-value` is what the card publishes once it has one. Asserted at the selection step
+     * so a failure names the selection, instead of surfacing three minutes later as a disabled Save.
+     */
+    await expect(
+        editor.locator('[data-room-value="true"]'),
+        "the editor recorded the selected room",
+    ).toBeVisible({ timeout: SETTLE });
+
     // Days come from the pattern shortcut — the same route `assignment-subject-convergence` drives.
     await page.locator("[data-pattern-shortcut='true']").first().click();
     await expect(page.locator("[data-pattern-list='true']")).toBeVisible({ timeout: SETTLE });
