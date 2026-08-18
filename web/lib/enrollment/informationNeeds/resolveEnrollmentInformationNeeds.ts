@@ -31,6 +31,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { safeParseFormSchema } from "@/lib/forms/schema";
+import type { EnrollmentParticipantProgressResult } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import {
@@ -76,12 +77,23 @@ export async function resolveEnrollmentInformationNeeds(
         requiresConfirmation?: ReadonlySet<string>;
         /** Canonical record prefill by shared key. Lower precedence than session shared values. */
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /**
+         * An already-resolved progress projection.
+         *
+         * The objective resolver computes progress and needs "in parallel", but needs BEGINS by
+         * computing progress itself — so every participant turn resolved the pinned revision, the
+         * session and its items twice, and the second copy was pure duplicate latency. Passing the
+         * first one in removes it. Optional, so every other caller is unchanged.
+         */
+        progress?: EnrollmentParticipantProgressResult;
     },
 ): Promise<EnrollmentInformationNeedsResult> {
-    const progress = await resolveEnrollmentParticipantProgress(supabase, {
-        orgId: input.orgId,
-        processInstanceId: input.processInstanceId,
-    });
+    const progress =
+        input.progress ??
+        (await resolveEnrollmentParticipantProgress(supabase, {
+            orgId: input.orgId,
+            processInstanceId: input.processInstanceId,
+        }));
     if (!progress.ok) return { ok: false, refusal: progress.refusal };
 
     const { value: prog } = progress;

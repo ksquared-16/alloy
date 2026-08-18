@@ -76,6 +76,20 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
 }
 
 /**
+ * The wording for skipping an optional need.
+ *
+ * Offered ONLY where the authored Form says the field may be left unanswered. "None" is the honest
+ * answer for a fact like allergies, and it is the answer the artifact should carry — a parent forced
+ * to type "na" has put a false value into a document they will later sign.
+ */
+export function optionalSkipLabel(objective: ParticipantObjectiveWire): string | null {
+    if (!objective.next_turn.optional) return null;
+    const label = naturalFieldLabel(objective.next_turn.label).toLowerCase();
+    if (label.includes("allerg")) return "No known allergies";
+    return "Skip — nothing to add";
+}
+
+/**
  * A field label written for an OPERATOR, rendered as something a parent would say.
  *
  * "Child Dob" is a column heading. It reached the participant verbatim because the turn's prompt was

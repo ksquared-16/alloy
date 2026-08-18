@@ -8,6 +8,7 @@
  * looser rule than the API does.
  */
 
+import { resolveParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ZodError } from "zod";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
@@ -86,6 +87,7 @@ export async function buildPublicFormResolvePayload(
                 schema_json: null,
                 pdf_mapping_json: null,
                 form: { key: v.formKey, name: v.formName, kind: v.formKind },
+                brand: resolveParticipantBrand(v.formMetadata),
                 link: {
                     expires_at: v.expiresAt,
                     allowed_embed_origins: v.allowedEmbedOrigins,
@@ -123,6 +125,7 @@ export async function buildPublicFormResolvePayload(
             schema_json: v.schemaJson,
             pdf_mapping_json: v.pdfMappingJson,
             form: { key: v.formKey, name: v.formName, kind: v.formKind },
+            brand: resolveParticipantBrand(v.formMetadata),
             link: {
                 expires_at: v.expiresAt,
                 allowed_embed_origins: v.allowedEmbedOrigins,

@@ -1,3 +1,4 @@
+import { sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
 import {
@@ -36,6 +37,8 @@ export type PublicEmbedResolved = {
     formKey: string;
     formName: string;
     formKind: string;
+    /** Authored brand tokens — one theme owner for every participant phase. */
+    formMetadata: unknown;
     packetTerminal: boolean;
     packet: null | {
         packet_session_id: string;
@@ -46,6 +49,15 @@ export type PublicEmbedResolved = {
         current_session_item_id: string;
         /** Ordered steps for progress UI (sequence_index + form display name). */
         step_summaries?: { sequence_index: number; form_name: string }[];
+        /**
+         * Values already settled for THIS artifact, keyed by its own field ids.
+         *
+         * The session has always held these canonically; nothing applied them to the artifact being
+         * rendered, so a parent who answered in the conversation met an empty field at review. Sent
+         * from the server, keyed to this step's schema, so the client never has to know how a shared
+         * key maps onto a form field.
+         */
+        shared_prefill_by_field_id?: Record<string, unknown>;
     };
 };
 
@@ -75,6 +87,7 @@ export async function resolvePublicFormEmbedContext(
                 formKey: v.formKey,
                 formName: v.formName,
                 formKind: v.formKind,
+                formMetadata: v.formMetadata ?? null,
                 packetTerminal: false,
                 packet: null,
             },
@@ -132,6 +145,7 @@ export async function resolvePublicFormEmbedContext(
                 formKey: v.formKey,
                 formName: v.formName,
                 formKind: v.formKind,
+                formMetadata: v.formMetadata ?? null,
                 packetTerminal: true,
                 packet: {
                     packet_session_id: session.id,
@@ -185,6 +199,7 @@ export async function resolvePublicFormEmbedContext(
             formKey: envelope.formKey,
             formName: envelope.formName,
             formKind: envelope.formKind,
+            formMetadata: envelope.formMetadata ?? null,
             packetTerminal: false,
             packet: {
                 packet_session_id: session.id,
@@ -194,6 +209,10 @@ export async function resolvePublicFormEmbedContext(
                 total_steps: totalSteps,
                 current_session_item_id: active.id,
                 step_summaries: stepSummaries ?? undefined,
+                shared_prefill_by_field_id: sharedValuesToFieldIds(
+                    envelope.schemaJson as never,
+                    (session.shared_values ?? {}) as Record<string, unknown>,
+                ),
             },
         },
     };
