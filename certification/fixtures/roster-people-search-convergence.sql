@@ -29,6 +29,13 @@ delete from schedule_assignments where org_id = :'org'::uuid and subject_type = 
   and subject_person_id in (select id from persons where id::text like 'fbc0%');
 delete from schedule_assignments where org_id = :'org'::uuid and customer_member_id in
   (select id from customer_members where customer_id::text like 'fbc0%');
+-- Assignments the BROWSER created against SEEDED members using THIS fixture's assignment type.
+-- The creation-affordance proofs pick a real child from the seeded tenant, so the rows carry a
+-- seeded member id and an fbc type id — invisible to both member-scoped deletes above, and each one
+-- blocks the type delete below with an FK violation that aborts the whole fixture. The class its
+-- own warning describes: silently missed, accumulating, discovered only when the apply fails.
+delete from schedule_assignments where org_id = :'org'::uuid
+  and operational_assignment_type_id::text like 'fbc0%';
 delete from operational_assignment_types where id::text like 'fbc0%';
 delete from schedule_patterns where id::text like 'fbc0%';
 delete from opportunity_customer_members where org_id = :'org'::uuid and customer_member_id in
