@@ -217,14 +217,14 @@ test.describe("9+10+11 — Staff / Children browse, record open, household", () 
         await jane.click();
         await expect(page.locator(PANEL_READY)).toBeVisible({ timeout: SETTLE });
         /*
-         * EMPLOYMENT IS NOW A CHOICE, not a card on a composition grid.
+         * EMPLOYMENT IS THE DEFAULT, unbidden.
          *
-         * This asserted the Employment card was simply present, which held while Operations opened a
-         * record as its whole composition. UX-1 replaced that with a chooser and exactly one card,
-         * so the operator SELECTS Employment and gets the same canonical card. The assertion moved
-         * with the interaction; what it proves — Jane's own standing, from `lib/employment` — did not.
+         * This assertion has now moved twice with the interaction, and what it proves — Jane's own
+         * standing, from `lib/employment` — never has. Composition grid (present among many) →
+         * chooser (selected, then shown) → record-first (pass 2): the operator clicked Jane, so
+         * Jane's record IS the object of attention, and Employment being her only record view means
+         * no nav renders and nothing needs choosing.
          */
-        await page.locator('[data-record-context-kind="employment"]').first().click();
         await expect(page.locator("[data-contextual-card]").first()).toContainText("Lead Teacher", {
             timeout: SETTLE,
         });
