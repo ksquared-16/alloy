@@ -279,7 +279,13 @@ test.describe("Receiving readiness is observed, never inferred", () => {
 
     test("R-4 the page shows the observed state, not a cached claim", async ({ page }) => {
         await page.goto(PAGE);
-        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Ready");
+        // "Connected", not "Ready". Email receiving is a statement about mail
+        // having ACTUALLY ARRIVED, and "Ready" reads as a capability — something
+        // the channel could do — rather than as an observation of something that
+        // happened. SMS keeps the shared vocabulary because its readiness really
+        // is a capability. Changed deliberately with the three-step progression
+        // (routing setup required -> waiting for routed email -> connected).
+        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Connected");
     });
 });
 

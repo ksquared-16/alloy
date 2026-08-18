@@ -73,18 +73,45 @@ describe("an address in the database is never enough for Ready", () => {
         expect(receive.detail).toContain("no delivery destination");
     });
 
-    it("says the rule is missing when a route EXISTS but nothing has arrived", () => {
-        // Two different unfinished states, two different next actions. Collapsing
-        // them tells an administrator to create something that already exists.
+    it("WAITS for routed email when a destination exists but nothing has arrived", () => {
+        // Two different unfinished states, two different next actions, and two
+        // different people owed work. Collapsing them tells an administrator to
+        // create something that already exists.
         const receive = receiveOf(
             evaluateBindingReadiness(emailBinding(), {
                 ...healthy,
                 ingress: { destination: HIDDEN_DESTINATION, lastInboundAt: null },
             })
         );
-        expect(receive.state).toBe("routing_setup_required");
+        expect(receive.state).toBe("awaiting_routed_email");
         expect(receive.detail).toContain("destination is ready");
         expect(receive.detail).toContain("mail provider");
+    });
+
+    it("distinguishes NO destination from a destination awaiting mail", () => {
+        // The progression the product promises:
+        //   no destination -> Routing setup required
+        //   destination, nothing arrived -> Waiting for routed email
+        //   arrival -> Connected
+        const none = receiveOf(evaluateBindingReadiness(emailBinding(), healthy));
+        const waiting = receiveOf(
+            evaluateBindingReadiness(emailBinding(), {
+                ...healthy,
+                ingress: { destination: HIDDEN_DESTINATION, lastInboundAt: null },
+            })
+        );
+        const connected = receiveOf(
+            evaluateBindingReadiness(emailBinding(), {
+                ...healthy,
+                ingress: { destination: HIDDEN_DESTINATION, lastInboundAt: OBSERVED_AT },
+            })
+        );
+        expect([none.state, waiting.state, connected.state]).toEqual([
+            "routing_setup_required",
+            "awaiting_routed_email",
+            "ready",
+        ]);
+        expect(readinessLabel("awaiting_routed_email")).toBe("Waiting for routed email");
     });
 
     it("NEVER renders the hidden destination in operator-facing copy", () => {
