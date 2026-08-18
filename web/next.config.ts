@@ -223,6 +223,12 @@ const nextConfig: NextConfig = {
       { source: "/legacy-admin/system", destination: "/organization", permanent: false },
       { source: "/legacy-admin/system/access-control", destination: "/organization/access", permanent: false },
       { source: "/legacy-admin/system/roles", destination: "/organization/access", permanent: false },
+      // W-59. `/legacy-admin/users` reached the canonical chapter in TWO hops: its own page.tsx
+      // redirected to `/legacy-admin/system/access-control`, which this table then redirected to
+      // `/organization/access`. That page is deleted with the surface, so the first hop has to move
+      // here or the path 404s — and `components/admin/AdminLayout.tsx` still links to it. Same
+      // destination, one hop instead of two; no URL changes where it lands.
+      { source: "/legacy-admin/users", destination: "/organization/access", permanent: false },
       { source: "/legacy-admin/system/departments", destination: "/settings/departments", permanent: false },
       { source: "/legacy-admin/system/work-units", destination: "/settings/work-units", permanent: false },
       { source: "/legacy-admin/system/pipelines", destination: "/organization/processes", permanent: false },

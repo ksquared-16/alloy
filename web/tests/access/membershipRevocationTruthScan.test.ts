@@ -204,9 +204,22 @@ function guardViolations(root: string): Violation[] {
 
 /* ------------------------------------------------------------------- removal surfaces */
 
-/** Client modules that POST to the membership-removal route. Discovered, not listed. */
+/**
+ * Client modules that POST to the membership-removal route. Discovered, not listed.
+ *
+ * **`components/` is scanned as well as `app/`, and the omission was load-bearing.** This walked
+ * `app/` only, which was adequate while the removal surfaces were legacy pages under
+ * `app/legacy-admin/` — and blind to the CANONICAL one, which lives in
+ * `components/adminV2/settings/access/`. So `W-20` hardened the two surfaces the scan could see and
+ * left the surviving one both claiming "they will lose access" and unable to send the
+ * acknowledgement. `W-59` deleted the legacy pair, the subject fell to zero, and the anchor below
+ * is what refused to let that pass as green.
+ *
+ * The lesson is `W-5`'s, one layer out: that lock failed because its subject was an enumerated LIST.
+ * This one's subject was a discovered walk over an enumerated ROOT SET, which rots the same way.
+ */
 function removalSurfaces(root: string): string[] {
-    return sourceFilesUnder(join(root, "app"))
+    return [...sourceFilesUnder(join(root, "app")), ...sourceFilesUnder(join(root, "components"))]
         .filter((abs) => !abs.includes(join("app", "api")))
         .filter((abs) => /\/remove["'`]/.test(code(abs)) && /\/api\/admin\/users\//.test(code(abs)))
         .sort();
@@ -231,7 +244,16 @@ describe("W-20/T-19 — every membership deletion establishes what it revokes", 
     it("no removal surface claims the member loses access, and each carries the acknowledgement path", () => {
         const surfaces = removalSurfaces(webRoot);
         // Anchor: if discovery finds nothing, the two assertions below pass by agreeing with nothing.
-        expect(surfaces.length).toBeGreaterThanOrEqual(2);
+        //
+        // Stated by NAME rather than by a count. A floor of ">= 2" was satisfiable by the two legacy
+        // surfaces alone while the canonical one went unexamined, and it broke — correctly, but for
+        // the wrong reason — the moment W-59 retired them. What must always be in the subject is the
+        // surface an operator actually uses; a count cannot express that, and a count is what let the
+        // canonical surface sit unchecked.
+        const rel = surfaces.map((abs) => relative(webRoot, abs).split("\\").join("/"));
+        expect(rel, "the canonical removal surface must be in the scan's subject").toContain(
+            "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
+        );
 
         const lying = surfaces
             .filter((abs) => ACCESS_LOSS_CLAIM.test(code(abs)))

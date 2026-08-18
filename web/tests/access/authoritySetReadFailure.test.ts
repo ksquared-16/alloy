@@ -234,14 +234,42 @@ describe("W-56 Tier A (`S-11`) — no authority surface clears a set on a failed
         expect(unreportedMutations(source), `${rel}: S-11 — a refused write must not read as success`).toEqual([]);
     });
 
-    it("bites: dropping the refusal report is detected", () => {
-        const src = readFileSync(join(webRoot, "app/legacy-admin/users/UsersClient.tsx"), "utf8");
-        const regressed = src.replace(
-            /if \(res\.ok\) \{[\s\S]*?\n\s{4}\} finally \{/,
-            "if (res.ok) fetchUsers();\n    } finally {",
-        );
-        expect(regressed, "the regression fixture must actually differ from the source").not.toBe(src);
-        expect(unreportedMutations(regressed).length).toBeGreaterThan(0);
+    /**
+     * The fixture is SYNTHETIC, and that is a repair rather than a shortcut.
+     *
+     * It used to mutate `app/legacy-admin/users/UsersClient.tsx` — one of the three surfaces
+     * `W-59` has now deleted, because a live operator could not reach any of them. A positive
+     * control anchored to a specific file stops proving anything the day that file goes, and this
+     * program has already paid three times for a lock whose SUBJECT was a hard-coded list
+     * (`RL-1` twice, `RL-4`). The pattern is what the scanner must convict, so the pattern is what
+     * the control states — and it cannot rot when a surface is retired.
+     *
+     * Stated as a PAIR. A fixture that only proves conviction would also pass against a scanner
+     * that convicts everything, which is the same vacuity in the other direction.
+     */
+    it("bites: dropping the refusal report is detected, and correct handling is not", () => {
+        const silent = `
+    const save = async () => {
+        const res = await fetch("/api/admin/rbac/grants", { method: "PUT" });
+        if (res.ok) fetchUsers();
+    };
+`;
+        expect(
+            unreportedMutations(silent).length,
+            "a mutation whose failure is never reported must be convicted",
+        ).toBeGreaterThan(0);
+
+        const reported = `
+    const save = async () => {
+        const res = await fetch("/api/admin/rbac/grants", { method: "PUT" });
+        if (res.ok) fetchUsers();
+        else setError("Save failed.");
+    };
+`;
+        expect(
+            unreportedMutations(reported),
+            "a mutation that DOES report its failure must not be convicted",
+        ).toEqual([]);
     });
 
     it("bites: reinstating the original silent clear is detected", () => {
