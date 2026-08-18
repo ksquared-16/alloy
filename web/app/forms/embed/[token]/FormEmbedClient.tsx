@@ -141,6 +141,14 @@ export function FormEmbedClient({
      * keep a parent from their forms.
      */
     const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(null);
+    /**
+     * The runtime phase, kept in sync as the conversation advances.
+     *
+     * Seeded from the objective fetch and updated by the card on every turn, because the parent
+     * crosses from shared collection into artifact review MID-conversation — waiting for a reload to
+     * notice would leave them looking at a finished conversation and no paperwork.
+     */
+    const [enrollmentPhase, setEnrollmentPhase] = useState<ParticipantObjectiveWire["phase"] | null>(null);
     const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
@@ -424,7 +432,10 @@ export function FormEmbedClient({
                 );
                 if (!res.ok) return;
                 const json = (await res.json()) as { ok?: boolean; data?: ParticipantObjectiveWire };
-                if (!cancelled && json?.ok && json.data) setEnrollmentObjective(json.data);
+                if (!cancelled && json?.ok && json.data) {
+                    setEnrollmentObjective(json.data);
+                    setEnrollmentPhase(json.data.phase);
+                }
             } catch {
                 /* An ordinary form link, or a transient failure. Either way the packet flow stands. */
             }
@@ -501,6 +512,11 @@ export function FormEmbedClient({
             </IntakeFrame>
         );
     }
+
+    // Only an ENROLLMENT token can suppress the form, and only while shared facts remain. An
+    // ordinary public Form link has no objective, so this is false and nothing about it changes.
+    const sharedCollectionInProgress =
+        enrollmentObjective != null && (enrollmentPhase ?? enrollmentObjective.phase) === "shared_collection";
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
@@ -583,9 +599,25 @@ export function FormEmbedClient({
                     <EnrollmentConversationCard
                         token={token}
                         initialObjective={enrollmentObjective}
+                        onPhaseChange={setEnrollmentPhase}
                     />
                 </div>
             ) : null}
+            {/**
+             * RAW FORM SUPPRESSION.
+             *
+             * While the runtime still has shared information to settle, the packet's own controls are
+             * NOT rendered. A parent who has just confirmed a date of birth in the conversation must
+             * not then find a "Child Dob" box directly underneath it — that is the form-first screen
+             * with a conversational widget attached, not a participant runtime.
+             *
+             * The Form is not bypassed, only deferred: values flow into it through `shared_values`
+             * and prefill exactly as before, and it reappears for review, acknowledgment and
+             * signature the moment shared collection is done. Forms keep their authority over what a
+             * signature and an acknowledgment mean; only when they are PRESENTED changes.
+             */}
+            {sharedCollectionInProgress ? null : (
+            <>
             {familyMode && famStep ? (
                 <div key={`fam-${famIdx}`} className="parent-intake-step-in">
                     <IntakeProgress phaseLabel={famPhase} stepIndex={famIdx} total={familySteps.length} />
@@ -701,6 +733,8 @@ export function FormEmbedClient({
                         primaryBusy={submitting}
                     />
                 </IntakeCard>
+            )}
+            </>
             )}
         </IntakeFrame>
     );

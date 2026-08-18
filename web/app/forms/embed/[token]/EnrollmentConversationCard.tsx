@@ -26,6 +26,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     controlForTurn,
+    participantIntro,
+    participantQuestion,
     progressLine,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
@@ -36,6 +38,13 @@ export type EnrollmentConversationCardProps = {
     readonly initialObjective: ParticipantObjectiveWire;
     /** Called when the turn becomes artifact work, so the host hands off to the packet flow. */
     readonly onArtifactHandoff?: () => void;
+    /**
+     * Reports the runtime phase after every turn.
+     *
+     * The host defers the packet Form while shared facts remain, and the parent crosses into
+     * artifact review MID-conversation — without this the Form would stay hidden until a reload.
+     */
+    readonly onPhaseChange?: (phase: ParticipantObjectiveWire["phase"]) => void;
 };
 
 type TurnResponse = {
@@ -48,6 +57,7 @@ export function EnrollmentConversationCard({
     token,
     initialObjective,
     onArtifactHandoff,
+    onPhaseChange,
 }: EnrollmentConversationCardProps) {
     const [objective, setObjective] = useState(initialObjective);
     const [text, setText] = useState("");
@@ -65,7 +75,7 @@ export function EnrollmentConversationCard({
     const control = useMemo(() => controlForTurn(objective.next_turn), [objective]);
 
     const submit = useCallback(
-        async (payload: { text?: string; value?: string }) => {
+        async (payload: { text?: string; value?: unknown }) => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true);
@@ -95,6 +105,7 @@ export function EnrollmentConversationCard({
                 if (json.data.outcome === "refused" || json.data.outcome === "no_change") {
                     setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
                 }
+                onPhaseChange?.(json.data.objective.phase);
                 if (json.data.objective.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             } catch {
                 setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
@@ -103,7 +114,7 @@ export function EnrollmentConversationCard({
                 setBusy(false);
             }
         },
-        [token, onArtifactHandoff],
+        [token, onArtifactHandoff, onPhaseChange],
     );
 
     const turn = objective.next_turn;
@@ -117,20 +128,28 @@ export function EnrollmentConversationCard({
     }
 
     if (control.kind === "handoff") {
+        // Shared collection is done. The parent is handed a POPULATED artifact to review — not a
+        // blank form — and the signature/acknowledgment live down there with it, where they belong.
         return (
             <IntakeCard>
-                <IntakeHeading
-                    title="Your details are saved."
-                    subtitle="Next, please review and complete the remaining form below."
-                />
-                <p className="text-[13px] text-alloy-midnight/55">{progressLine(objective)}</p>
+                <IntakeHeading title={participantQuestion(objective)} subtitle={progressLine(objective)} />
             </IntakeCard>
         );
     }
 
+    const intro = participantIntro(objective);
+
     return (
         <IntakeCard>
-            <IntakeHeading title={turn.prompt} subtitle={progressLine(objective)} />
+            {intro ? (
+                <p className="mb-4 text-[13px] leading-relaxed text-alloy-midnight/70" data-participant-intro="true">
+                    {intro}
+                </p>
+            ) : null}
+
+            {/* The question a PARENT reads — subject, natural label, and the value we hold. Never the
+                internal prompt, which is written for the runtime and says things like "Child Dob". */}
+            <IntakeHeading title={participantQuestion(objective)} subtitle={progressLine(objective)} />
 
             {turn.resolves_occurrences > 1 ? (
                 <p className="mb-4 text-[13px] text-alloy-midnight/55">
@@ -174,8 +193,41 @@ export function EnrollmentConversationCard({
                         className="rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[14px]"
                     />
                 </div>
+            ) : control.kind === "boolean" ? (
+                <div className="flex flex-wrap gap-2" data-participant-control="boolean">
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void submit({ value: true })}
+                        className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+                    >
+                        {control.affirm}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void submit({ value: false })}
+                        className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight disabled:opacity-50"
+                    >
+                        {control.deny}
+                    </button>
+                </div>
+            ) : control.kind === "options" ? (
+                <div className="flex flex-wrap gap-2" data-participant-control="options">
+                    {control.options.map((option) => (
+                        <button
+                            key={option}
+                            type="button"
+                            disabled={busy}
+                            onClick={() => void submit({ value: option })}
+                            className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight disabled:opacity-50"
+                        >
+                            {option}
+                        </button>
+                    ))}
+                </div>
             ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3" data-participant-control={control.inputType}>
                     <label className="text-[13px] text-alloy-midnight/60" htmlFor="enrollment-turn-value">
                         {control.label}
                     </label>
@@ -194,6 +246,7 @@ export function EnrollmentConversationCard({
             )}
 
             <div className="mt-4 flex items-center gap-3">
+                {control.kind === "boolean" || control.kind === "options" ? null : (
                 <button
                     type="button"
                     disabled={busy || !text.trim()}
@@ -204,6 +257,7 @@ export function EnrollmentConversationCard({
                 >
                     {busy ? "Saving…" : "Continue"}
                 </button>
+                )}
                 {busy ? (
                     <span aria-live="polite" className="text-[13px] text-alloy-midnight/55">
                         Saving your answer…
