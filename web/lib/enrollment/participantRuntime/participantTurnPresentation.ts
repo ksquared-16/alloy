@@ -22,12 +22,38 @@ import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRunti
  * without any model at all.
  */
 export type ParticipantTurnControl =
-    | { readonly kind: "choice_or_text"; readonly affirm: string; readonly deny: string }
-    | { readonly kind: "value"; readonly inputType: "date" | "email" | "tel" | "number" | "text"; readonly label: string }
-    | { readonly kind: "boolean"; readonly affirm: string; readonly deny: string; readonly label: string }
-    | { readonly kind: "options"; readonly options: readonly string[]; readonly label: string }
+    /**
+     * A confirm turn. `correction` is the control the parent meets after "Change" — the SAME typed
+     * control the authored Form uses, so correcting a date of birth is a date picker and not a text
+     * box that happens to be next to a date.
+     */
+    | {
+          readonly kind: "choice_or_text";
+          readonly affirm: string;
+          readonly deny: string;
+          readonly correction: ParticipantValueControl;
+      }
+    | ParticipantValueControl
     | { readonly kind: "handoff" }
     | { readonly kind: "done" };
+
+/** The controls that actually collect a value. Shared by collection and by correction. */
+export type ParticipantValueControl =
+    | {
+          readonly kind: "value";
+          readonly inputType: "date" | "email" | "tel" | "number" | "text";
+          readonly label: string;
+          /** Long prose gets a textarea rather than a single line. */
+          readonly multiline?: boolean;
+      }
+    | { readonly kind: "boolean"; readonly affirm: string; readonly deny: string; readonly label: string }
+    | {
+          readonly kind: "options";
+          readonly options: readonly string[];
+          readonly label: string;
+          /** More than one choice may be selected. */
+          readonly multiple?: boolean;
+      };
 
 /**
  * Field-appropriate deterministic input, chosen from the need's canonical key.
@@ -39,9 +65,24 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
     if (turn.kind === "complete") return { kind: "done" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
-        return { kind: "choice_or_text", affirm: "Yes, that's right", deny: "No, change it" };
+        return {
+            kind: "choice_or_text",
+            affirm: "Yes, that's right",
+            deny: "Change",
+            correction: valueControlForTurn(turn),
+        };
     }
 
+    return valueControlForTurn(turn);
+}
+
+/**
+ * The typed control for a need, from the AUTHORED field type.
+ *
+ * One function, used for both collecting a missing value and correcting a known one — a date of
+ * birth is a date whichever way the parent arrives at it.
+ */
+export function valueControlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantValueControl {
     const label = turn.label?.trim() || "your answer";
     /**
      * The AUTHORED control leads. It is what the parent would have met on the Form itself, so
@@ -61,6 +102,12 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
     }
     if ((authored === "select" || authored === "radio") && turn.options.length > 0) {
         return { kind: "options", options: turn.options, label };
+    }
+    if ((authored === "multiselect" || authored === "checkbox_group") && turn.options.length > 0) {
+        return { kind: "options", options: turn.options, label, multiple: true };
+    }
+    if (authored === "textarea" || authored === "long_text") {
+        return { kind: "value", inputType: "text", label, multiline: true };
     }
     // An authored TEXT field is a decision, not an absence: the operator chose free text, and a
     // label containing the word "date" must not override them.

@@ -198,7 +198,7 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
         expect(host).toContain("sharedCollectionInProgress");
         expect(host).toContain('=== "shared_collection"');
         // Deferred, never bypassed: values still reach the Form through the existing prefill path.
-        expect(host).toContain("enrollmentObjective != null");
+        expect(host).toContain("participantPhase === \"shared_collection\"");
     });
 
     it("phase is derived from outstanding shared needs, and reported on every turn", () => {
