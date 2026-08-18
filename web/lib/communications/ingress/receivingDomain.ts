@@ -141,3 +141,25 @@ export function mintIngressLocalPart(bytes: () => Buffer = () => randomBytes(16)
 export function composeIngressDestination(localPart: string, domain: string): string {
     return `${localPart.trim().toLowerCase()}@${domain.trim().toLowerCase()}`;
 }
+
+/**
+ * Receiving domains a CERTIFICATION run discovers.
+ *
+ * Mirrors `certificationVerifier`: the certification environment holds no
+ * provider credential and is structurally incapable of reaching Resend, so
+ * discovery there would always answer "none" and the detected-domain path could
+ * never be exercised at all.
+ *
+ * These are synthetic and say so — `.invalid` is reserved by RFC 2606 and can
+ * never resolve. What this certifies is the FLOW: that discovered domains are
+ * offered for confirmation rather than silently selected, and that one versus
+ * several produces different UX. It does NOT certify Resend's own API shape;
+ * `extractReceivingDomains` is unit-tested against the documented payload for
+ * that.
+ */
+export const CERTIFICATION_RECEIVING_DOMAINS = ["inbound.northwind-cert.invalid"] as const;
+
+/** Whether this deployment refuses to contact the provider at all. */
+export function certificationDiscoveryEnabled(env: Record<string, string | undefined>): boolean {
+    return String(env.ALLOY_CERTIFICATION ?? "").trim() === "1";
+}

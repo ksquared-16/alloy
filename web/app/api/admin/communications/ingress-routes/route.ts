@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import {
+    CERTIFICATION_RECEIVING_DOMAINS,
+    certificationDiscoveryEnabled,
     extractReceivingDomains,
     validateReceivingDomain,
 } from "@/lib/communications/ingress/receivingDomain";
@@ -110,6 +112,12 @@ async function loadResendAccount(supabase: ReturnType<typeof createAdminClient>,
  * provider at all.
  */
 async function discoverReceivingDomains(apiKey: string | null): Promise<string[]> {
+    // A certification run cannot reach Resend, so discovery there would always
+    // answer "none" and the detected-domain path could never be exercised.
+    // Mirrors `certificationVerifier`, and the domains are RFC 2606 `.invalid`.
+    if (certificationDiscoveryEnabled(process.env as Record<string, string | undefined>)) {
+        return [...CERTIFICATION_RECEIVING_DOMAINS];
+    }
     const key = (apiKey ?? "").trim();
     // The certification credential is structurally incapable of reaching Resend.
     if (!key || key === CERTIFICATION_RESEND_KEY) return [];

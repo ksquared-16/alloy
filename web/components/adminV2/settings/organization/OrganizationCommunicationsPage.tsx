@@ -591,7 +591,12 @@ function ChannelPanel({
                         useless instruction on its own, because the fix is in a
                         system Alloy cannot see. Shown only for Email, and only
                         while receiving is not yet proven. */}
-                    {card.channel === "email" && card.receiving.state !== "ready" && card.connected ? (
+                    {/* Shown once connected too, not only while unfinished. An
+                        administrator re-checking or re-creating a routing rule
+                        needs the destination again, and hiding it the moment
+                        receiving works would send them looking for a value the
+                        product deliberately shows nowhere else. */}
+                    {card.channel === "email" && card.connected ? (
                         <MailRoutingSetupPanel
                             bindingId={card.primaryBindingId}
                             visibleAddress={card.identity.find((l) => l.label === "Replies")?.value || null}
