@@ -49,6 +49,8 @@ export type ParticipantObjectiveWire = {
         readonly label: string | null;
         /** Closed option set, when the authored control has one. Empty otherwise. */
         readonly options: readonly string[];
+        /** The authored Form permits leaving this unanswered — offer a real way past it. */
+        readonly optional: boolean;
     };
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
@@ -92,6 +94,7 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
+            optional: turn.need?.optional === true,
         },
         complete: turn.kind === "complete",
     };

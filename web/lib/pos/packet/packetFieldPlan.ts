@@ -93,7 +93,7 @@ export interface PacketFieldPlan {
     warnings: string[];
 }
 
-function canonicalKeyFor(field: FormField): { key: string; basis: PacketFieldDedupeBasis; entity_type: string | null; field_key: string | null; shared_value_key?: string } {
+export function canonicalKeyFor(field: FormField): { key: string; basis: PacketFieldDedupeBasis; entity_type: string | null; field_key: string | null; shared_value_key?: string } {
     const source = field.field_source;
     const sharedAlias = source?.shared_value_key?.trim();
     const entityType = source?.entity_type?.trim() || null;

@@ -26,6 +26,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     controlForTurn,
+    optionalSkipLabel,
     participantIntro,
     participantQuestion,
     progressLine,
@@ -138,6 +139,8 @@ export function EnrollmentConversationCard({
     }
 
     const intro = participantIntro(objective);
+    // Offered only where the authored Form permits it — never invented by the runtime.
+    const skipLabel = optionalSkipLabel(objective);
 
     return (
         <IntakeCard>
@@ -255,13 +258,22 @@ export function EnrollmentConversationCard({
                     }
                     className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
                 >
-                    {busy ? "Saving…" : "Continue"}
+                    {"Continue"}
                 </button>
                 )}
-                {busy ? (
-                    <span aria-live="polite" className="text-[13px] text-alloy-midnight/55">
-                        Saving your answer…
-                    </span>
+                {/* No "Saving…" — persistence is the platform's business, not a participant-facing
+                    step. The button stays a single Continue and simply cannot be pressed twice;
+                    `inFlight` already makes a duplicate submit impossible. */}
+                {skipLabel ? (
+                    <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void submit({ value: null })}
+                        className="text-[13px] text-alloy-midnight/60 underline underline-offset-2 disabled:opacity-50"
+                        data-participant-skip="true"
+                    >
+                        {skipLabel}
+                    </button>
                 ) : null}
             </div>
 

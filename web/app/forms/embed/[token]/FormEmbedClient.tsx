@@ -24,6 +24,7 @@ import {
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
+import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     IntakeFrame,
@@ -45,7 +46,32 @@ type ResolvePacketMeta = {
     total_steps: number;
     current_session_item_id: string;
     step_summaries?: { sequence_index: number; form_name: string }[];
+    /** Values already settled in the conversation, keyed to THIS step's field ids. */
+    shared_prefill_by_field_id?: Record<string, unknown>;
 };
+
+/**
+ * Apply what the participant has already settled to the artifact being rendered.
+ *
+ * Settled values WIN over an empty draft and lose to anything the participant has typed here: they
+ * are the answer of record until this artifact is edited, and re-imposing them over a live edit
+ * would fight the parent's own keystrokes.
+ *
+ * Without this the review step showed empty boxes for facts that were sitting in the session — the
+ * value existed, keyed correctly, and nothing read it.
+ */
+function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | null | undefined): FormPayload {
+    const shared = packet?.shared_prefill_by_field_id;
+    if (!shared || Object.keys(shared).length === 0) return payload;
+    const current = (payload.values ?? {}) as Record<string, unknown>;
+    const merged: Record<string, unknown> = { ...current };
+    for (const [fieldId, value] of Object.entries(shared)) {
+        const existing = merged[fieldId];
+        const empty = existing == null || (typeof existing === "string" && existing.trim() === "");
+        if (empty) merged[fieldId] = value;
+    }
+    return { ...payload, values: merged };
+}
 
 type ResolveOk = {
     ok: true;
@@ -53,6 +79,7 @@ type ResolveOk = {
         schema_json: unknown | null;
         packet_terminal?: boolean;
         packet?: ResolvePacketMeta | null;
+        brand?: ParticipantBrand | null;
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
         link?: { metadata?: Record<string, unknown> };
@@ -140,6 +167,9 @@ export function FormEmbedClient({
      * renders exactly as before. Fetched after paint and never blocking: a failure here must not
      * keep a parent from their forms.
      */
+    // The tenant's own brand, resolved server-side from the authored form metadata. Held here and
+    // applied by the frame so the conversation and the artifact review cannot theme differently.
+    const [brand, setBrand] = useState<ParticipantBrand | null>(null);
     const [enrollmentObjective, setEnrollmentObjective] = useState<ParticipantObjectiveWire | null>(null);
     /**
      * The runtime phase, kept in sync as the conversation advances.
@@ -202,6 +232,7 @@ export function FormEmbedClient({
 
             if (json.data.packet_terminal) {
                 setPacketProgress(json.data.packet ?? null);
+            setBrand(json.data.brand ?? null);
                 setPacketAlreadyDone(true);
                 setSchema(null);
                 setPhase("ready");
@@ -225,6 +256,7 @@ export function FormEmbedClient({
             }
             setSchema(parsedSchema);
             setPacketProgress(json.data.packet ?? null);
+            setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
             setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
@@ -252,7 +284,7 @@ export function FormEmbedClient({
                             ),
                         };
                     }
-                    setPayload(nextPayload);
+                    setPayload(withSharedPrefill(nextPayload, json.data.packet ?? null));
                     setPhase("ready");
                     return;
                 }
@@ -291,7 +323,7 @@ export function FormEmbedClient({
                     groups: serverPayload.groups ?? initialPayload.groups,
                 };
             }
-            setPayload(firstPayload);
+            setPayload(withSharedPrefill(firstPayload, json.data.packet ?? null));
             setPhase("ready");
         } finally {
             setAdvancingToNextPacketStep(false);
@@ -447,7 +479,7 @@ export function FormEmbedClient({
 
     if (phase === "loading") {
         return (
-            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice>{advancingToNextPacketStep ? "Loading next step…" : "Loading…"}</IntakeNotice>
             </IntakeFrame>
         );
@@ -455,7 +487,7 @@ export function FormEmbedClient({
 
     if (phase === "error") {
         return (
-            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice tone="error">
                     <span>{message ?? "Unable to load this form."}</span>
                 </IntakeNotice>
@@ -466,6 +498,7 @@ export function FormEmbedClient({
     if (packetAlreadyDone) {
         return (
             <IntakeFrame
+                brand={brand}
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
@@ -481,6 +514,7 @@ export function FormEmbedClient({
     if (packetFinalThankYou) {
         return (
             <IntakeFrame
+                brand={brand}
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
@@ -495,7 +529,7 @@ export function FormEmbedClient({
 
     if (!schema) {
         return (
-            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeNotice>Loading…</IntakeNotice>
             </IntakeFrame>
         );
@@ -503,7 +537,7 @@ export function FormEmbedClient({
 
     if (submitted) {
         return (
-            <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
+            <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
                 <IntakeCompletion
                     title="Thank you — your form was submitted."
                     body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."

@@ -14,6 +14,8 @@ export type ResolvedPublicFormLink = {
     formKey: string;
     formName: string;
     formKind: string;
+    /** Authored brand tokens (`logo_url`, `brand_name`, `accent_color`) — the theme's one source. */
+    formMetadata: unknown;
 };
 
 export type ResolvePublicFormLinkFailure =
@@ -63,7 +65,7 @@ export async function resolvePublicFormLinkByToken(
 
     const { data: formDef, error: formErr } = await supabase
         .from("form_definitions")
-        .select("id, key, name, kind, is_active")
+        .select("id, key, name, kind, is_active, metadata")
         .eq("id", row.form_definition_id)
         .eq("org_id", row.org_id)
         .maybeSingle();
@@ -72,7 +74,7 @@ export async function resolvePublicFormLinkByToken(
         return { ok: false, error: { code: "NOT_FOUND", message: "Form not found" } };
     }
 
-    const fd = formDef as { id: string; key: string; name: string; kind: string; is_active: boolean };
+    const fd = formDef as { id: string; key: string; name: string; kind: string; is_active: boolean; metadata?: unknown };
     if (fd.is_active === false) {
         return { ok: false, error: { code: "INACTIVE", message: "This form is archived and no longer accepts submissions" } };
     }
@@ -139,6 +141,7 @@ export async function resolvePublicFormLinkByToken(
             formKey: fd.key,
             formName: fd.name,
             formKind: fd.kind,
+            formMetadata: fd.metadata ?? null,
         },
     };
 }

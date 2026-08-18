@@ -31,7 +31,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { safeParseFormSchema } from "@/lib/forms/schema";
-import { resolveEnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import {
+    resolveEnrollmentParticipantProgress,
+    type EnrollmentParticipantProgressResult,
+} from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
+import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import {
     projectEnrollmentInformationNeeds,
@@ -76,12 +80,23 @@ export async function resolveEnrollmentInformationNeeds(
         requiresConfirmation?: ReadonlySet<string>;
         /** Canonical record prefill by shared key. Lower precedence than session shared values. */
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /**
+         * An already-resolved progress projection.
+         *
+         * The objective resolver computes progress and needs "in parallel", but needs BEGINS by
+         * computing progress itself — so every participant turn resolved the pinned revision, the
+         * session and its items twice, and the second copy was pure duplicate latency. Passing the
+         * first one in removes it. Optional, so every other caller is unchanged.
+         */
+        progress?: EnrollmentParticipantProgressResult;
     },
 ): Promise<EnrollmentInformationNeedsResult> {
-    const progress = await resolveEnrollmentParticipantProgress(supabase, {
-        orgId: input.orgId,
-        processInstanceId: input.processInstanceId,
-    });
+    const progress =
+        input.progress ??
+        (await resolveEnrollmentParticipantProgress(supabase, {
+            orgId: input.orgId,
+            processInstanceId: input.processInstanceId,
+        }));
     if (!progress.ok) return { ok: false, refusal: progress.refusal };
 
     const { value: prog } = progress;
@@ -127,7 +142,8 @@ export async function resolveEnrollmentInformationNeeds(
     // Only requirements the participant can actually act on. `unrealized` has no pinned version and
     // no schema; `unsupported` is a non-form kind. Neither can produce a field need.
     const actionable = prog.requirements.filter(
-        (r) => r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
+        (r: EnrollmentParticipantProgress["requirements"][number]) =>
+            r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
     );
     if (actionable.length === 0 || !session) {
         return {

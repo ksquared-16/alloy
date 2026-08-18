@@ -79,6 +79,13 @@ export type EnrollmentInformationNeed = {
     /** How many Form controls resolve to this one need. The ask-once ratio. */
     readonly occurrence_count: number;
     readonly occurrences: readonly EnrollmentNeedOccurrence[];
+    /**
+     * The authored Form says this may be left unanswered.
+     *
+     * Surfaced to the participant, but never counted as blocking work and always offered a real
+     * resolution — "None" or "Skip" — rather than forcing an untrue answer.
+     */
+    readonly optional?: boolean;
     /** Distinct governing requirements that caused this need to exist. */
     readonly requirement_ids: readonly string[];
     readonly has_value: boolean;

@@ -61,19 +61,26 @@ export async function resolveParticipantEnrollmentObjective(
         canonicalValues?: Readonly<Record<string, unknown>>;
     },
 ): Promise<ParticipantEnrollmentObjectiveResult> {
-    const [progressResult, needsResult] = await Promise.all([
-        resolveEnrollmentParticipantProgress(supabase, {
-            orgId: input.orgId,
-            processInstanceId: input.processInstanceId,
-        }),
-        resolveEnrollmentInformationNeeds(supabase, {
-            orgId: input.orgId,
-            processInstanceId: input.processInstanceId,
-            // D-100 supplies the policy; Slice 2.4 deliberately refused to invent one.
-            requiresConfirmation: enrollmentConfirmationPolicy(),
-            canonicalValues: input.canonicalValues,
-        }),
-    ]);
+    /**
+     * ONE progress projection, computed once and shared.
+     *
+     * This used to run the two in `Promise.all`, which looked parallel and was not: the needs
+     * resolver starts by computing progress itself, so every turn resolved the pinned revision, the
+     * session and its items TWICE. Measured against the live QA session, objective recompute was the
+     * dominant cost of a deterministic turn — with no provider involved at all.
+     */
+    const progressResult = await resolveEnrollmentParticipantProgress(supabase, {
+        orgId: input.orgId,
+        processInstanceId: input.processInstanceId,
+    });
+    const needsResult = await resolveEnrollmentInformationNeeds(supabase, {
+        orgId: input.orgId,
+        processInstanceId: input.processInstanceId,
+        // D-100 supplies the policy; Slice 2.4 deliberately refused to invent one.
+        requiresConfirmation: enrollmentConfirmationPolicy(),
+        canonicalValues: input.canonicalValues,
+        progress: progressResult,
+    });
 
     if (!progressResult.ok) return { ok: false, refusal: progressResult.refusal };
     if (!needsResult.ok) return { ok: false, refusal: needsResult.refusal };

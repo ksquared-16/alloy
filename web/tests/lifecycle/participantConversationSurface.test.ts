@@ -53,6 +53,7 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             input_type: "date",
             label: "Date of Birth",
             options: [],
+            optional: false,
         },
         complete: false,
         ...overrides,

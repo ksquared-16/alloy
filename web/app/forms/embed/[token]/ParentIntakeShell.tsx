@@ -11,6 +11,8 @@
  * rest of Alloy: guided, fast, premium, human — never a raw form.
  */
 
+import type { CSSProperties } from "react";
+import { participantBrandStyle, type ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ReactNode } from "react";
 import clsx from "clsx";
 import { Check } from "lucide-react";
@@ -46,24 +48,44 @@ function BrandMark({ className }: { className?: string }) {
  * Used by every parent-facing state (loading, form, completion).
  */
 export function IntakeFrame({
+    brand,
     children,
     packetName,
     previewBanner,
     contentClassName,
 }: {
+    /**
+     * The tenant's authored brand.
+     *
+     * The frame wraps EVERY participant phase — the conversation and the artifact review are both
+     * inside it — so theming here is what makes them one experience rather than two that happen to
+     * agree. Null falls back to the platform mark, which is what an unbranded tenant should see.
+     */
+    brand?: ParticipantBrand | null;
     children: ReactNode;
     packetName?: string | null;
     previewBanner?: ReactNode;
     contentClassName?: string;
 }) {
     return (
-        <div className="min-h-screen bg-gradient-to-b from-white via-white to-alloy-stone/50">
+        <div
+            className="min-h-screen bg-gradient-to-b from-white via-white to-alloy-stone/50"
+            style={brand ? (participantBrandStyle(brand) as CSSProperties) : undefined}
+            data-participant-brand={brand ? "tenant" : "platform"}
+        >
             {previewBanner}
             <header className="sticky top-0 z-10 border-b border-alloy-midnight/[0.07] bg-white/85 backdrop-blur-sm">
                 <div className="mx-auto flex max-w-2xl items-center gap-2.5 px-4 py-3 sm:px-6">
-                    <BrandMark />
+                    {brand?.logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={brand.logoUrl} alt="" className="h-6 w-6 rounded object-contain" />
+                    ) : (
+                        <BrandMark />
+                    )}
                     <div className="min-w-0 leading-tight">
-                        <div className="text-[13px] font-semibold tracking-tight text-alloy-midnight">{BRAND}</div>
+                        <div className="text-[13px] font-semibold tracking-tight text-alloy-midnight">
+                            {brand?.brandName ?? BRAND}
+                        </div>
                         {packetName ? (
                             <div className="truncate text-[11px] text-alloy-midnight/45">{packetName}</div>
                         ) : null}

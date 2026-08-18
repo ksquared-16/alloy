@@ -185,13 +185,28 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
 
     const has_value = value_source !== "none";
     if (!has_value) {
+        /**
+         * REQUIREDNESS IS THE FORM'S, NOT THE RUNTIME'S.
+         *
+         * `field.required` on the authored control is the only owner of "must this be answered",
+         * and it is carried on every occurrence. A need is blocking when ANY occurrence requires it:
+         * one artifact demanding a fact is enough, and the strictest occurrence has to win or the
+         * packet could be submitted incomplete.
+         *
+         * An optional missing fact is still SURFACED — the parent may want to give it — but it does
+         * not inflate "things left to check", and it must offer a real way out. Without this, the
+         * only way past an optional allergies field was to type something untrue, which is exactly
+         * what QA did: "na".
+         */
+        const blocking = acc.occurrences.some((o) => o.required);
         return {
             ...base,
             state: "missing",
             has_value: false,
             current_value: null,
             value_source: "none",
-            requires_participant_action: true,
+            requires_participant_action: blocking,
+            optional: !blocking,
         };
     }
 

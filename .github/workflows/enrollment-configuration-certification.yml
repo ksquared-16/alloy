@@ -61,6 +61,12 @@
 # headings, semantic controls instead of one text box, the packet Form deferred while shared facts
 # remain, and signature/acknowledgment reached only at artifact review.
 #
+# The artifact-handoff slice added `participantArtifactHandoff` — the five phases as one runtime.
+# It pins the two owners that made a confirmed value vanish before review: a confirm turn wrote D-99
+# evidence and never wrote the value into `shared_values`, and nothing applied `shared_values` to
+# the artifact being RENDERED. It also holds requiredness with the Form, proves an authored date
+# cannot degrade into a text box, and proves one theme owner brands both phases.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -111,4 +117,5 @@ jobs:
             tests/lifecycle/startEnrollmentParticipantLaunch.test.ts \
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
             tests/lifecycle/participantSurfaceHookOrder.test.ts \
-            tests/lifecycle/participantExperienceConvergence.test.ts
+            tests/lifecycle/participantExperienceConvergence.test.ts \
+            tests/lifecycle/participantArtifactHandoff.test.ts
