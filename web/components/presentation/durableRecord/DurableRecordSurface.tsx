@@ -78,6 +78,7 @@ export default function DurableRecordSurface({
     subjectType,
     subjectId,
     presentation = "full",
+    hostSiteLocationId = null,
     /** The card the gesture asked to land on (ASPECT). Absent = the grain's default composition. */
     cardKey,
     /**
@@ -92,6 +93,8 @@ export default function DurableRecordSurface({
     subjectId: string;
     /** See {@link WorkspaceDurableRecordHost}'s `presentation`. */
     presentation?: "full" | "contextual";
+    /** The host workspace's operating site, forwarded to the contextual card's truth envelope. */
+    hostSiteLocationId?: string | null;
     cardKey?: string | null;
     contextKey?: string | null;
     onRecordChanged?: () => void;
@@ -350,6 +353,7 @@ export default function DurableRecordSurface({
                 {selectedContext && (state.childSubject || state.personSubject) ? (
                     <div className="mt-3">
                         <DurableRecordContextualCard
+                            hostSiteLocationId={hostSiteLocationId}
                             option={selectedContext}
                             // The record is one subject or the other, decided by which the composer
                             // returned. Child is checked first only because it is the older path;

@@ -420,6 +420,28 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
     const startDate = new Date().toISOString().slice(0, 10);
     await page.locator('input[type="date"]').first().fill(startDate);
 
+    /*
+     * THE CREATE PAYLOAD, OBSERVED — not blocked on.
+     *
+     * A `waitForRequest` here deadlocked the flow: it must be awaited to yield the request, and
+     * awaiting it before the save race means a refused or never-sent write hangs instead of
+     * reporting. A listener collects whatever the card sends and the race below still decides the
+     * outcome, so the payload assertions describe a save that actually happened.
+     *
+     * Asserted on the REQUEST rather than a label: the payload is what the service judges, and a
+     * card displaying "Riverside" while sending "" is exactly the failure this control exists for.
+     */
+    const posts: Record<string, unknown>[] = [];
+    page.on("request", (r) => {
+        if (r.method() === "POST" && r.url().includes("/api/admin/scheduling")) {
+            try {
+                posts.push(JSON.parse(r.postData() ?? "{}"));
+            } catch {
+                /* a non-JSON body is not this assertion's business */
+            }
+        }
+    });
+
     const commit = page.locator("[data-schedule-commit='true']").first();
     await expect(commit, "the card considers the assignment complete").toBeEnabled({ timeout: SETTLE });
     await commit.click();
@@ -428,6 +450,17 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
      * A REFUSED WRITE MUST SAY SO rather than time out downstream — the editor renders its error
      * above the fold of a scrolling body, so a failed save looks exactly like a slow one.
      */
+    /*
+     * ── THE ERROR NOTE IS NOT PROOF OF A REFUSED SAVE ──
+     *
+     * `data-schedule-error` is shared: a failed GET earlier in the card's own loading writes the
+     * same node the save would. Racing the note against the success state therefore reported
+     * "SAVE REFUSED: customer_member_id and a resolvable site are required" for a save that had
+     * NEVER BEEN SENT — the collected POST list was empty at that moment. Asserting the request
+     * first is what separates "the service refused" from "the card never asked".
+     */
+    expect(posts.length, "the card actually sent a create request").toBeGreaterThan(0);
+
     const errorNote = page.locator("[data-schedule-error='true']");
     await expect
         .poll(
@@ -441,6 +474,15 @@ test("14+15 — Create assignment writes a canonical assignment, and the lens re
         )
         .toBe("saved");
     await page.screenshot({ path: path.join(SHOTS, "8-created.png"), fullPage: true });
+
+    // ── the payload the service accepted ──
+    const sent = posts.at(-1) ?? {};
+    expect(sent.site_location_id, "the create payload carries the operator's declared site").toBe(
+        RIVERSIDE_ID,
+    );
+    expect(sent.customer_member_id, "and the subject chosen in the chooser").toBe(CREATE_SUBJECT);
+    expect(sent.room_location_id, "and the room selected through the picker").toBe(roomId);
+    expect(sent.start_date, "and the start date entered in the editor").toBe(startDate);
 
     // ── 14 — the CANONICAL FACT, not a toast ──
     await page.keyboard.press("Escape");

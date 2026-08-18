@@ -606,7 +606,13 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
        * it would put the giant record page back under the chooser, which is the surface this
        * convergence removes.
        */}
-      <WorkspaceDurableRecordHost hostKey="roster" presentation="contextual">
+      <WorkspaceDurableRecordHost
+        hostKey="roster"
+        // The operator DECLARED this site in the Roster header; a record opened from here
+        // inherits it as creation context. @see ScheduleEditor
+        hostSiteLocationId={siteId}
+        presentation="contextual"
+      >
         <WorkspaceSurface
           tone={mode === "work" && section === "roster" ? "canvas" : "stone"}
           scroll

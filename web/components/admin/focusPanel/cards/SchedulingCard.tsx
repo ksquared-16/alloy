@@ -761,6 +761,18 @@ function ScheduleWorkSurface({
     /** See {@link Props.onMutated}. */
     onMutated?: () => void;
 }) {
+    /**
+     * The site the OPERATOR is working in, read from the truth envelope the host already supplies.
+     *
+     * Reused rather than added as a prop: `truth` is how `_scheduling_projection` reaches this
+     * surface too, so the host speaks to the card through one channel instead of two. Null for
+     * record-only entry points, which keep resolving site from the subject's own projection.
+     */
+    const hostSiteIdFromTruth = (() => {
+        const v = (truth as Record<string, unknown>)?._host_site_location_id;
+        return typeof v === "string" && v.trim() ? v.trim() : null;
+    })();
+
     const [proj, setProj] = useState<SubjectProj | null>(projection);
     const existing = existingView(proj);
     const [mode, setMode] = useState<SurfaceMode>(existing ? "detail" : "create");
@@ -1228,6 +1240,7 @@ function ScheduleWorkSurface({
                 child={child}
                 opportunityId={opportunityId}
                 proj={proj}
+                hostSiteId={hostSiteIdFromTruth}
                 config={config}
                 truth={truth}
                 existing={mode === "edit" ? existing : editingAssignment ? {
@@ -1606,6 +1619,7 @@ function tuitionPlanIdFromTruth(truth: Record<string, unknown> | null | undefine
 }
 
 function ScheduleEditor({
+    hostSiteId,
     child,
     opportunityId,
     proj,
@@ -1644,8 +1658,21 @@ function ScheduleEditor({
     }) => Promise<void>;
 }) {
     const ex = existing?.assignments[0] ?? null;
-    // Site is known from the projection — NO sites fetch, NO editor gate.
-    const siteId = proj?.child.siteId ?? "";
+    /*
+     * ── WHERE THE OPERATOR IS WORKING BEATS WHERE THE SUBJECT HAS BEEN ──
+     *
+     * The projection's site answers "where does this subject already appear". That is the right
+     * answer for a record opened on its own, and the wrong one for a creation started from
+     * Operations → Roster → <site> → Assignments: the operator DECLARED a site, and a subject may
+     * legitimately participate at more than one.
+     *
+     * It was also, until now, frequently no answer at all. A card opened through durable-record
+     * focus carries no projection site, so `site_location_id` went out empty and the service
+     * refused with "customer_member_id and a resolvable site are required" — correctly. The host's
+     * site is the operator's declared intent; the projection remains the fallback, and when neither
+     * exists the refusal stands rather than a site being invented.
+     */
+    const siteId = (hostSiteId ?? "").trim() || proj?.child.siteId || "";
     const siteName = proj?.child.siteName ?? "Site";
     // Operating days constrain which weekday pills can be selected (empty ⇒ all seven).
     const allowedDays = allowedPatternWeekdays(config.operatingDays);
