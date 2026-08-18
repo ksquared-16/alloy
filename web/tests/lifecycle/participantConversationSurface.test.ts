@@ -150,8 +150,9 @@ describe("3. progress is deterministic and truthful", () => {
     it("counts things still requiring the participant, not requirements", () => {
         // Parent-centric wording: these are questions left to answer, not Form controls. The old
         // "8 to add · 1 to sign or upload" described the implementation to someone who cannot see it.
-        expect(progressLine(wire({ things_remaining: 3 }))).toBe("3 things left to check");
-        expect(progressLine(wire({ things_remaining: 1 }))).toBe("1 thing left to check");
+        // Subtle, conversational, and never a stepper — "Step 2 of 3" describes the machine's plan.
+        expect(progressLine(wire({ things_remaining: 3 }))).toBe("Just 3 things left");
+        expect(progressLine(wire({ things_remaining: 1 }))).toBe("Just one more thing");
     });
 
     it("offers no percentage over a denominator a parent cannot see", () => {

@@ -21,16 +21,18 @@
  * language and leaves the controls in place — enhancement, never a dependency.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
     controlForTurn,
     displayValue,
     naturalFieldLabel,
+    optionalAffirmLabel,
     optionalSkipLabel,
     participantIntro,
     participantQuestion,
+    participantSignaturePrompt,
     progressLine,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
@@ -79,9 +81,11 @@ export function EnrollmentConversationCard({
      * interrogation: each answer erased the evidence that anything had happened. Settled facts now
      * stay on screen and the next question appears beneath them.
      */
-    const [settled, setSettled] = useState<{ label: string; value: string }[]>([]);
+    const [settled, setSettled] = useState<{ said: string; answered: string }[]>([]);
     /** Whether the parent has asked to correct the value currently being confirmed. */
     const [correcting, setCorrecting] = useState(false);
+    /** The parent said yes to an optional question and is now telling us the detail. */
+    const [elaborating, setElaborating] = useState(false);
     const [text, setText] = useState("");
     const [notice, setNotice] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
@@ -112,9 +116,11 @@ export function EnrollmentConversationCard({
              * optimism can never outlive the truth.
              */
             const optimistic = payload.settledAs?.trim();
-            const settledLabel = naturalFieldLabel(objective.next_turn.label);
-            if (optimistic) setSettled((prev) => [...prev, { label: settledLabel, value: optimistic }]);
+            const asked = participantQuestion(objective);
+            if (optimistic) setSettled((prev) => [...prev, { said: asked, answered: optimistic }]);
             setCorrecting(false);
+            setElaborating(false);
+            setText("");
             try {
                 const res = await fetch(
                     `/api/public/forms/${encodeURIComponent(token)}/enrollment-turn`,
@@ -153,7 +159,7 @@ export function EnrollmentConversationCard({
                 setBusy(false);
             }
         },
-        [token, onArtifactHandoff, onPhaseChange, objective.next_turn.label],
+        [token, onArtifactHandoff, onPhaseChange, objective],
     );
 
     const turn = objective.next_turn;
@@ -181,11 +187,23 @@ export function EnrollmentConversationCard({
     }
 
     if (control.kind === "handoff") {
-        // Shared collection is done. The parent is handed a POPULATED artifact to review — not a
-        // blank form — and the signature/acknowledgment live down there with it, where they belong.
+        // Shared collection is done. Alloy says so in the same voice it has used throughout, the
+        // conversation so far stays above it, and the POPULATED artifact follows below — with the
+        // acknowledgment and signature where they belong, in the document.
         return (
             <IntakeCard>
-                <IntakeHeading title={participantQuestion(objective)} subtitle={progressLine(objective)} />
+                {settled.length > 0 ? (
+                    <div className="mb-7 flex flex-col gap-5" data-participant-settled="true">
+                        {settled.map((entry, i) => (
+                            <div key={i} className="flex flex-col gap-3">
+                                <Said who="alloy">{entry.said}</Said>
+                                <Said who="parent">{entry.answered}</Said>
+                            </div>
+                        ))}
+                    </div>
+                ) : null}
+                <Said who="alloy">{participantQuestion(objective)}</Said>
+                <p className="pt-3 text-[15px] text-alloy-midnight/55">{participantSignaturePrompt()}</p>
             </IntakeCard>
         );
     }
@@ -193,41 +211,50 @@ export function EnrollmentConversationCard({
     const intro = participantIntro(objective);
     // Offered only where the authored Form permits it — never invented by the runtime.
     const skipLabel = optionalSkipLabel(objective);
+    const affirmLabel = optionalAffirmLabel(objective);
+    /**
+     * An OPTIONAL question is asked as a question first.
+     *
+     * "Does Test Process have any allergies?" gets two answers, and only the affirmative one needs a
+     * field. Presenting the text input up front turns a yes/no question into homework — and forces
+     * the parent who has nothing to say to type something untrue.
+     */
+    const optionalUnanswered = affirmLabel != null && !elaborating;
 
     return (
         <IntakeCard>
             {/* Settled sections stay on screen — the conversation reads as a growing record of what
                 has been agreed, not a sequence of screens that erase each other. */}
             {settled.length > 0 ? (
-                <ul className="mb-5 flex flex-col gap-2" data-participant-settled="true">
+                <div className="mb-7 flex flex-col gap-5" data-participant-settled="true">
                     {settled.map((entry, i) => (
-                        <li
-                            key={`${entry.label}-${i}`}
-                            className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/70"
-                        >
-                            <span aria-hidden className="text-emerald-600">✓</span>
-                            <span className="font-medium text-alloy-midnight">{entry.value}</span>
-                            <span className="text-alloy-midnight/45">{entry.label}</span>
-                        </li>
+                        <div key={i} className="flex flex-col gap-3">
+                            <Said who="alloy">{entry.said}</Said>
+                            <Said who="parent">{entry.answered}</Said>
+                        </div>
                     ))}
-                </ul>
+                </div>
             ) : null}
 
-            {intro ? (
-                <p className="mb-4 text-[13px] leading-relaxed text-alloy-midnight/70" data-participant-intro="true">
-                    {intro}
-                </p>
+            {/* Alloy's opening line, spoken once and then left in the transcript above. */}
+            {intro && settled.length === 0 ? (
+                <div className="mb-5" data-participant-intro="true">
+                    <Said who="alloy">{intro}</Said>
+                </div>
             ) : null}
 
-            {/* The question a PARENT reads — subject, natural label, and the value we hold. Never the
-                internal prompt, which is written for the runtime and says things like "Child Dob". */}
-            <IntakeHeading title={participantQuestion(objective)} subtitle={progressLine(objective)} />
-
-            {turn.resolves_occurrences > 1 ? (
-                <p className="mb-4 text-[13px] text-alloy-midnight/55">
-                    Answering once covers this in {turn.resolves_occurrences} places.
-                </p>
-            ) : null}
+            {/* The current question, in the same voice as everything above it. No card, no heading
+                chrome, no step counter — one continuous conversation. */}
+            <div className="mb-5">
+                <Said who="alloy">{participantQuestion(objective)}</Said>
+                {/* The ask-once promise, said the way a specialist would say it. Slice 2.4 makes it
+                    true; a parent should hear the reassurance, not the ratio. */}
+                {turn.resolves_occurrences > 1 ? (
+                    <p className="pt-1 text-[13px] text-alloy-midnight/45">
+                        I&rsquo;ll use it everywhere it&rsquo;s needed, so you only tell me once.
+                    </p>
+                ) : null}
+            </div>
 
             {control.kind === "choice_or_text" ? (
                 correcting ? (
@@ -262,6 +289,28 @@ export function EnrollmentConversationCard({
                     </button>
                 </div>
                 )
+            ) : optionalUnanswered ? (
+                <div className="flex flex-wrap gap-2" data-participant-control="optional">
+                    <button
+                        type="button"
+                        disabled={busy}
+                        // Resolves the turn outright — no redundant Continue after a binary answer.
+                        onClick={() => void submit({ value: null, settledAs: skipLabel ?? "Nothing to add" })}
+                        className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
+                    >
+                        {skipLabel}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={busy}
+                        // Local: reveals the authored control for the parent who does have something
+                        // to tell us. Nothing is submitted by saying yes.
+                        onClick={() => setElaborating(true)}
+                        className="rounded-xl border border-alloy-midnight/12 px-4 py-2.5 text-[15px] font-medium text-alloy-midnight disabled:opacity-50"
+                    >
+                        {affirmLabel}
+                    </button>
+                </div>
             ) : (
                 <ValueControl
                     control={control}
@@ -276,11 +325,14 @@ export function EnrollmentConversationCard({
                 {/* No "Saving…" — persistence is the platform's business, not a participant-facing
                     step. Confirming resolves the section immediately and the request follows it;
                     `inFlight` already makes a duplicate submit impossible. */}
-                {skipLabel ? (
+                {progressLine(objective) ? (
+                    <span className="text-[13px] text-alloy-midnight/40">{progressLine(objective)}</span>
+                ) : null}
+                {skipLabel && elaborating ? (
                     <button
                         type="button"
                         disabled={busy}
-                        onClick={() => void submit({ value: null })}
+                        onClick={() => void submit({ value: null, settledAs: skipLabel })}
                         className="text-[13px] text-alloy-midnight/60 underline underline-offset-2 disabled:opacity-50"
                         data-participant-skip="true"
                     >
@@ -412,5 +464,30 @@ function ValueControl({
                 </button>
             </div>
         </div>
+    );
+}
+
+/**
+ * One line of the conversation.
+ *
+ * Alloy speaks in the primary voice; the parent's own answers are echoed back quietly beside them.
+ * Deliberately NOT chat bubbles — a parent at an office table is not messaging an app, they are
+ * being helped through paperwork. Two weights and an alignment carry the whole distinction.
+ *
+ * The transcript is DERIVED. Durable truth is the runtime's need state; this is what has been said
+ * about it in this sitting, held locally and rebuilt from nothing on reload.
+ */
+function Said({ who, children }: { who: "alloy" | "parent"; children: ReactNode }) {
+    if (who === "parent") {
+        return (
+            <p className="pl-4 text-[15px] text-alloy-midnight/55" data-said="parent">
+                {children}
+            </p>
+        );
+    }
+    return (
+        <p className="text-[17px] leading-relaxed text-alloy-midnight" data-said="alloy">
+            {children}
+        </p>
     );
 }

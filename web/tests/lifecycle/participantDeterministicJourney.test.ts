@@ -157,3 +157,46 @@ describe("5. review is impossible without an artifact", () => {
         expect(card).toContain("no paperwork to complete here yet");
     });
 });
+
+describe("the surface reads as a conversation, not a wizard", () => {
+    it("keeps the exchange and speaks in one voice", () => {
+        const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
+        // Prior turns stay on screen as what was SAID and what was ANSWERED.
+        expect(card).toContain('data-said="alloy"');
+        expect(card).toContain('data-said="parent"');
+        expect(card).toContain("<Said who=\"alloy\">{participantQuestion(objective)}</Said>");
+        // No heading chrome around the live question — it is a line of conversation.
+        expect(card).not.toContain("<IntakeHeading title={participantQuestion(objective)}");
+    });
+
+    it("asks an optional question as a question, and answers resolve it outright", () => {
+        const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
+        expect(card).toContain('data-participant-control="optional"');
+        expect(card).toContain("optionalAffirmLabel");
+        // "No known allergies" submits immediately; "Yes — I'll tell you" is local and reveals the
+        // authored control. Neither needs a redundant Continue.
+        expect(card).toContain("onClick={() => setElaborating(true)}");
+    });
+
+    it("an Enrollment journey reviews the artifact whole — no stepper, no phase headings", () => {
+        const host = code("app/forms/embed/[token]/FormEmbedClient.tsx");
+        expect(host).toContain("const enrollmentJourney = enrollmentObjective != null");
+        expect(host).toContain("!enrollmentJourney && packetProgress != null && guidedPlan != null");
+        expect(host).toContain("showPacketChecklist = !enrollmentJourney");
+        // And the final action reads as finishing paperwork, not submitting a form.
+        expect(host).toContain('"Sign and finish"');
+    });
+
+    it("says nothing about steps, confirming what we have, or signing and uploading", () => {
+        const presentation = code("lib/enrollment/participantRuntime/participantTurnPresentation.ts");
+        for (const banned of ["Step ", "SIGN & UPLOAD", "Confirm what we already have", "CONFIRM"]) {
+            expect(presentation, `participant copy must not say "${banned}"`).not.toContain(banned);
+        }
+    });
+
+    it("counts display content as nothing, so review cannot claim work that does not exist", () => {
+        const plan = code("lib/forms/guidedQuestionPlan.ts");
+        // "1 already filled in · 7 to add" counted handbook paragraphs as fields to fill.
+        expect(plan).toContain("formFieldCollectsValue");
+    });
+});
