@@ -106,7 +106,13 @@ test("1 — Children → Lennon shows a context chooser, not a giant record surf
 
 // ═══ 2–5 — each choice opens its established card, centered ══════════════════════════════════
 const CHOICES = [
-    { n: 2, kind: "identity", card: "child_identity", shot: "2-child" },
+    /*
+     * The Child context renders the CANONICAL `children` card — the tenant's configured Children
+     * Surface card, the same one a Focus Panel or a Search destination renders. It used to be
+     * `child_identity`, a four-field hardcoded card that existed only on this host; asserting that
+     * key would now pin the exact divergence the human review rejected.
+     */
+    { n: 2, kind: "identity", card: "children", shot: "2-child" },
     { n: 3, kind: "process", card: null, shot: "3-enrollment-waitlist" },
     { n: 4, kind: "relationship", card: "household", shot: "4-household" },
     { n: 5, kind: "schedule", card: "scheduling", shot: "5-schedule" },
