@@ -21,7 +21,14 @@ import { businessProcessPayloadChecksum } from "@/lib/lifecycle/businessProcessP
 const ORG = "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const DEPT = "3933ac47-077a-4de8-aaac-8aed48d80413";
 const FORM = "ee75732b-036d-4b3d-8f33-a87c21b78105";
-const EXPECTED_CURRENT_REVISION = 12;
+/**
+ * The revision this preflight expects to be live.
+ *
+ * Was 12 while the change was pending; the approved publish cut 13, so this now asserts the applied
+ * state. Kept as an assertion rather than deleted: re-running it is how "did anything move under us"
+ * gets answered before the next publish.
+ */
+const EXPECTED_CURRENT_REVISION = 13;
 
 function env(): Record<string, string> {
     const text = readFileSync("/Users/Kelly/Alloy/web/.env.local", "utf8");
@@ -133,7 +140,6 @@ async function main() {
 
     // Apply the two approved edits to the published payload.
     const builder = parseLifecycleBuilderV1(published)!;
-    const process = builder.processes.find((p) => p.key === "enrollment")!;
     const edited = {
         ...builder,
         processes: builder.processes.map((p) =>
@@ -165,7 +171,6 @@ async function main() {
                   },
         ),
     };
-    void process;
 
     const editedPayload = serializeLifecycleBuilderV1(edited);
 
