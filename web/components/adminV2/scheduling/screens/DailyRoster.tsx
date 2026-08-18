@@ -604,7 +604,7 @@ export default function DailyRoster({
                                                 onClick={() => onOpenAttendance(cell.roomLocationId)}
                                                 data-roster-open-attendance={cell.roomLocationId}
                                             >
-                                                Open Attendance →
+                                                Capture attendance →
                                             </button>
                                         ) : (
                                             <span

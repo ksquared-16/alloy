@@ -279,7 +279,7 @@ export default function RecordsChildrenSection({
     );
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col" data-records-children="true">
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col xl:max-w-[80rem]" data-records-children="true">
             <RecordsCohortBar
                 cohorts={cohorts}
                 activeCohortKey={cohortKey}
