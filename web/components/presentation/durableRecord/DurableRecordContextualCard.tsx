@@ -327,6 +327,9 @@ export default function DurableRecordContextualCard({
                         model={derivePersonEmploymentCard(subject.person.employment)}
                         context={buildDurablePersonOperationalContext(subject.person, false, null)}
                         focusPanelMode="summary"
+                    // Tab-pane drill navigation, which a contextual card has no tabs for. The
+                    // renderer requires it; pure cards ignore it.
+                    compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );
@@ -344,6 +347,9 @@ export default function DurableRecordContextualCard({
                         model={deriveChildIdentityCard(childSubject, new Date())}
                         context={operationalContext}
                         focusPanelMode="summary"
+                    // Tab-pane drill navigation, which a contextual card has no tabs for. The
+                    // renderer requires it; pure cards ignore it.
+                    compat={{ onSelectTab: () => {} }}
                     />
                 </div>
             );

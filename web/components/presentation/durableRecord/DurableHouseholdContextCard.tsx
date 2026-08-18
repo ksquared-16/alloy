@@ -120,6 +120,9 @@ export default function DurableHouseholdContextCard({
                 model={model}
                 context={buildDurableHouseholdOperationalContext(state.subject, false, null)}
                 focusPanelMode="summary"
+                    // Tab-pane drill navigation, which a contextual card has no tabs for. The
+                    // renderer requires it; pure cards ignore it.
+                    compat={{ onSelectTab: () => {} }}
             />
         </div>
     );

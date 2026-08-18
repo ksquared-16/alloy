@@ -59,7 +59,12 @@ export type DurableContextSurface =
      * Like `canonical_operational`, it resolves NO published composition and invents no business
      * process. The platform already owns `child_identity` and `household`; the surface IS that card.
      */
-    | "canonical_record";
+    | "canonical_record"
+    /**
+     * No surface resolves. A truthful answer, not a gap: the context is real but nothing in the
+     * platform renders it, and the option must say so rather than borrow a surface that would.
+     */
+    | "none";
 
 /**
  * The context kinds that are DURABLE OPERATIONAL RELATIONSHIPS with a canonical platform card.
