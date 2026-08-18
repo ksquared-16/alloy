@@ -403,6 +403,37 @@ export function FormEmbedClient({
         setChildSlices(seedFamilyChildSlices(familyChildren, childFieldIds, (payload.values ?? {}) as Record<string, unknown>));
     }, [phase, schema, packetProgress, familyChildren, childSlices, payload.values]);
 
+    /**
+     * The Enrollment objective for this token, when there is one.
+     *
+     * MUST stay above the early returns below. It was originally written just before its consumer,
+     * which put it after `if (phase === "loading") return …` — so it never ran on the first render
+     * and did run on the second, changing the hook count from 32 to 33 and crashing the participant
+     * surface with "change in the order of Hooks" the moment a parent opened their link.
+     *
+     * Hooks are unconditional or they are broken: this one is not gated on `phase`, on the token
+     * being an Enrollment token, or on anything else. An ordinary public Form link resolves 409 and
+     * simply leaves the objective null.
+     */
+    useEffect(() => {
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`,
+                );
+                if (!res.ok) return;
+                const json = (await res.json()) as { ok?: boolean; data?: ParticipantObjectiveWire };
+                if (!cancelled && json?.ok && json.data) setEnrollmentObjective(json.data);
+            } catch {
+                /* An ordinary form link, or a transient failure. Either way the packet flow stands. */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [token]);
+
     if (phase === "loading") {
         return (
             <IntakeFrame previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
@@ -470,25 +501,6 @@ export function FormEmbedClient({
             </IntakeFrame>
         );
     }
-
-    useEffect(() => {
-        let cancelled = false;
-        void (async () => {
-            try {
-                const res = await fetch(
-                    `/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`,
-                );
-                if (!res.ok) return;
-                const json = (await res.json()) as { ok?: boolean; data?: ParticipantObjectiveWire };
-                if (!cancelled && json?.ok && json.data) setEnrollmentObjective(json.data);
-            } catch {
-                /* An ordinary form link, or a transient failure. Either way the packet flow stands. */
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [token]);
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
