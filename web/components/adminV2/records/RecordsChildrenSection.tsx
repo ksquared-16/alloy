@@ -108,6 +108,14 @@ export default function RecordsChildrenSection({
     const [loadingMore, setLoadingMore] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [flash, setFlash] = useState<string | null>(null);
+    /**
+     * The parent link Start Enrollment produced, when it produced one.
+     *
+     * Held separately from the flash sentence because it is a THING the operator acts on, not prose:
+     * it has to be selectable and copyable. Null whenever the journey started without realizing a
+     * participant packet, which is a legitimate outcome and is said plainly rather than hidden.
+     */
+    const [participantLink, setParticipantLink] = useState<string | null>(null);
     /** Bumped after a write so the cohort is re-asked rather than spliced client-side. */
     const [reloadToken, setReloadToken] = useState(0);
     /** The child a direct enrollment is being collected for, if any. */
@@ -216,6 +224,7 @@ export default function RecordsChildrenSection({
     const startEnrollment = useCallback(
         async (customerMemberId: string, childName: string) => {
             setFlash(null);
+            setParticipantLink(null);
             setError(null);
             try {
                 const res = await fetch("/api/admin/actions/execute", {
@@ -242,10 +251,29 @@ export default function RecordsChildrenSection({
                 // Records states the OUTCOME the server reported and never names the acquisition
                 // record itself: this surface does not think in those terms, and a guard test
                 // holds that boundary. "On its own" is the operator-meaningful half anyway.
-                setFlash(
+                const context =
                     detail.context_outcome === "joined_live_episode"
                         ? `Enrollment started for ${childName}, inside the family's current enrolment.`
-                        : `Enrollment started for ${childName}, on its own — nothing else was created.`,
+                        : `Enrollment started for ${childName}, on its own.`;
+
+                // What Start Enrollment now realizes is a PARENT PACKET, so saying "nothing else was
+                // created" stopped being true the moment the launch landed. The two outcomes are
+                // reported as themselves: a link the operator can send, or a plain statement that
+                // the journey started with nothing to send yet — which happens whenever the
+                // governing configuration asks the participant for no Forms.
+                const launch = detail.participant_launch as
+                    | { realized?: boolean; participant_path?: string | null; outcome?: string }
+                    | undefined;
+                const path = typeof launch?.participant_path === "string" ? launch.participant_path : null;
+                setParticipantLink(path);
+                setFlash(
+                    launch?.realized
+                        ? `${context} ${
+                              launch.outcome === "resumed"
+                                  ? "Their parent packet was already open — same link."
+                                  : "Their parent packet is ready to send."
+                          }`
+                        : `${context} There is nothing for the parent to complete yet.`,
                 );
                 setReloadToken((n) => n + 1);
             } catch (e) {
@@ -309,6 +337,20 @@ export default function RecordsChildrenSection({
                     data-child-flash="true"
                 >
                     {flash}
+                    {participantLink ? (
+                        <>
+                            {" "}
+                            <a
+                                href={participantLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium underline underline-offset-2"
+                                data-child-participant-link="true"
+                            >
+                                Open the parent link
+                            </a>
+                        </>
+                    ) : null}
                 </p>
             ) : null}
             {error ? (

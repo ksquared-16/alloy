@@ -252,6 +252,21 @@ describe("the record gestures use the durable contract", () => {
         }
     });
 
+    it("Start Enrollment reports the parent packet it now realizes", () => {
+        const src = read("components/adminV2/records/RecordsChildrenSection.tsx");
+        // B1 made Start Enrollment realize a participant packet and access link. The surface used to
+        // say "nothing else was created", which was true when the action only created a process
+        // instance and became false the moment the launch landed. A stale reassurance is worse than
+        // no message: the operator would not go looking for a link that exists.
+        expect(src).not.toContain("nothing else was created");
+        expect(src).toContain("participant_launch");
+        // Both outcomes are stated as themselves — a link to send, or nothing to send yet.
+        expect(src).toContain("nothing for the parent to complete yet");
+        expect(src).toContain('data-child-participant-link="true"');
+        // And the link is a thing to act on, not prose baked into a sentence.
+        expect(src).toContain("participantLink");
+    });
+
     it("Add Child is NOT wired to any execution path", () => {
         const src = read("components/adminV2/records/RecordsChildrenSection.tsx");
         // Phase 0 found the existing child-create path resolves ambiguous identity silently.
