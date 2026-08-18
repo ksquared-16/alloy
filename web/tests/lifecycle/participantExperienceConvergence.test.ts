@@ -165,16 +165,17 @@ describe("controls are semantic, not one text box", () => {
                 input_type: "text",
                 label: "Preferred start date note",
                 options: [],
+                optional: false,
             }),
         ).toMatchObject({ kind: "value", inputType: "text" });
     });
 
     it("boolean and closed-enum needs get their own controls", () => {
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [] }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false }),
         ).toMatchObject({ kind: "boolean" });
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"] }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false }),
         ).toMatchObject({ kind: "options", options: ["AM", "PM"] });
     });
 
