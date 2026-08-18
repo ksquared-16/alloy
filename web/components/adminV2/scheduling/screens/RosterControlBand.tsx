@@ -184,7 +184,9 @@ export default function RosterControlBand({
         lens === "assignments" ? null : range === "week" ? (
             <WeekPicker
                 weekStart={weekStart ?? undefined}
-                weekLabel={weekLabel ?? undefined}
+                // `weekLabel` is required and non-null: the picker renders it as its own text, and
+                // an absent label is a week that has not resolved yet, not a week without a name.
+                weekLabel={weekLabel ?? ""}
                 pending={weekChangePending}
                 onPrev={() => onWeekChange?.(-1)}
                 onNext={() => onWeekChange?.(1)}
