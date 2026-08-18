@@ -27,6 +27,7 @@ import OperationsWorkspaceShell, {
     type OperationsSite as RosterSite,
 } from "@/app/adminV2/operations/OperationsWorkspaceShell";
 import OperationsStudio from "@/components/adminV2/operations/OperationsStudio";
+import AssignmentSubjectPicker from "@/components/adminV2/scheduling/AssignmentSubjectPicker";
 import RosterKpiStrip, { type RosterHealthCounts } from "@/app/adminV2/roster/RosterKpiStrip";
 import {
     resolveOperationsStudioSection,
@@ -110,6 +111,8 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     const [attendanceRoomId, setAttendanceRoomId] = useState<string | null>(null);
     /** Day-range health, reported up by the day surface for the control band. */
     const [dayHealth, setDayHealth] = useState<RosterHealthCounts | null>(null);
+    /** "Create assignment" invoked with no subject in hand — the chooser answers who. */
+    const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
 
     /**
      * ── THE ROSTER'S TEMPORAL ANCHOR — WORKSPACE STATE, BESIDE SITE ──
@@ -450,6 +453,12 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                 // Single-subject create belongs to the child's own record, not to a second modal in
                 // the lens: the operator opens the child and uses the canonical Schedule card, which
                 // is the same surface every other single-assignment gesture now reaches.
+                /*
+                 * The standing lens command. It knows no subject yet, so it asks — and then hands
+                 * off to exactly the same canonical card `onCreateForChild` reaches. Nothing here
+                 * creates an assignment; the Schedule context card remains the sole authority.
+                 */
+                onCreateAssignment: () => setSubjectPickerOpen(true),
                 onCreateForChild: (customerMemberId) => {
                     void focusRecord({
                         entity_type: "customer_members",
@@ -770,6 +779,42 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                     )
                 ) : null}
             </WorkspaceSurface>
+
+            {/*
+             * The subject chooser for the standing "Create assignment" command.
+             *
+             * Mounted at workspace level rather than inside the lens so the choice survives the
+             * lens re-rendering under it, and so the handoff it performs is the workspace's own
+             * record focus — the same gesture Children, Staff and Search all use.
+             */}
+            <AssignmentSubjectPicker
+                open={subjectPickerOpen}
+                onClose={() => setSubjectPickerOpen(false)}
+                onChoose={(subject) => {
+                    setSubjectPickerOpen(false);
+                    /*
+                     * Child grain is `customer_members`; staff grain is `persons`. That asymmetry is
+                     * canonical, not incidental — a child IS the member row, while a staff member is
+                     * addressed as a person — and it is the same pairing the O-3 assignment binding
+                     * speaks. Both land on the SAME contextual card key.
+                     */
+                    void focusRecord(
+                        subject.kind === "child"
+                            ? {
+                                  entity_type: "customer_members",
+                                  entity_id: subject.customerMemberId,
+                                  intent: "durable_record",
+                                  preferred_context_key: "schedule",
+                              }
+                            : {
+                                  entity_type: "persons",
+                                  entity_id: subject.personId,
+                                  intent: "durable_record",
+                                  preferred_context_key: "schedule",
+                              },
+                    );
+                }}
+            />
             </WorkspaceDurableRecordHost>
         </OperationsWorkspaceShell>
     );

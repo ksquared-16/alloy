@@ -214,6 +214,18 @@ export default function RecordsStaffSection({
                                 ? "Add the people who work here. Alloy reuses an existing person record when one already exists."
                                 : "This is a real answer for the cohort, not a filter problem."}
                         </p>
+                        {/* Same rule as Children: repeat the command only when the population is
+                            genuinely empty, in text rather than as a second primary. */}
+                        {rows.length === 0 ? (
+                            <button
+                                type="button"
+                                className="mt-3 text-[12px] font-semibold text-alloy-bend-pine"
+                                onClick={() => setAddOpen(true)}
+                                data-staff-add-open-empty="true"
+                            >
+                                Add staff
+                            </button>
+                        ) : null}
                     </div>
                 ) : (
                     <ul

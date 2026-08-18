@@ -330,6 +330,23 @@ export default function RecordsChildrenSection({
                                 ? "Add a child to a household. Alloy reuses an existing record when one already matches, and adding a child starts no enrollment."
                                 : "This is a real answer for the cohort, not a filter problem."}
                         </p>
+                        {/*
+                         * The empty state REPEATS the command, and only when the population itself is
+                         * empty. On a filtered no-match the honest next move is to change the filter,
+                         * and a second button there would compete with the canonical one still in the
+                         * bar above. Text treatment rather than a second primary: one obvious primary
+                         * action, restated where someone is most likely to be looking for it.
+                         */}
+                        {isDefaultView ? (
+                            <button
+                                type="button"
+                                className="mt-3 text-[12px] font-semibold text-alloy-bend-pine"
+                                onClick={() => setAddOpen(true)}
+                                data-child-add-open-empty="true"
+                            >
+                                Add child
+                            </button>
+                        ) : null}
                     </div>
                 ) : (
                     <ul
