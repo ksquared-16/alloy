@@ -43,6 +43,11 @@ import { cardAppliesToGrain } from "@/lib/adminV2/runtime/focusPanel/focusPanelC
 import { findInquiryChildRow } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { derivePersonEmploymentCard } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
 import { derivePersonFocusPanelCards } from "@/lib/adminV2/runtime/focusPanel/durableSubject/derivePersonFocusPanelCards";
+import type {
+    OperationalEmploymentPerson,
+    OperationalEmploymentSignal,
+} from "@/lib/adminV2/runtime/operationalContext/types";
+import type { PersonEmploymentPeriod } from "@/lib/employment/buildPersonEmploymentComposition";
 
 const NOW = new Date("2026-08-18T12:00:00.000Z");
 
@@ -209,30 +214,43 @@ describe("a child on a family CASE is not treated as a record's subject", () => 
 
 describe("Employment is already canonical, and Operations renders that one", () => {
     it("the host renders the person-grain producer the durable panel composes", () => {
-        const jane = {
+        // Typed against the REAL contracts, not a lookalike: a cast fixture would keep passing
+        // after the signal shape moved, which is the unfalsifiable-fixture trap.
+        const currentPeriod: PersonEmploymentPeriod = {
+            id: "period-jane",
+            status: "active",
+            state_label: "Active",
+            is_open: true,
+            position_label: "Lead Teacher",
+            employment_type: "full_time",
+            employment_type_label: "Full time",
+            primary_location_id: "loc-riverside",
+            primary_location_label: "Northwind — Riverside Campus",
+            external_employee_id: null,
+            start_date: "2026-01-05",
+            end_date: null,
+            end_reason_key: null,
+        };
+        const jane: OperationalEmploymentPerson = {
             personId: "p-jane",
             personLabel: "Jane Okafor",
             employment: {
                 is_staff: true,
-                current: {
-                    state_label: "Active",
-                    position_label: "Lead Teacher",
-                    primary_location_label: "Northwind — Riverside Campus",
-                    employment_type_label: "Full time",
-                },
-                periods: [],
+                current: currentPeriod,
+                periods: [currentPeriod],
+                configured_facts: [],
+                never_employed: false,
             },
         };
-        const person = {
-            personId: "p-jane",
-            label: "Jane Okafor",
-            // The signal shape the composer produces: primary first, then every person with a period.
-            employment: { primary: jane, people: [jane], hasEmployment: true },
-            truth: {},
+        // The signal shape the composer produces: primary first, then every person with a period.
+        const employment: OperationalEmploymentSignal = {
+            primary: jane,
+            people: [jane],
+            hasEmployment: true,
         };
 
-        const fromPanel = derivePersonFocusPanelCards({ employment: person.employment }).get("employment");
-        const fromHostProducer = derivePersonEmploymentCard(person.employment);
+        const fromPanel = derivePersonFocusPanelCards({ employment }).get("employment");
+        const fromHostProducer = derivePersonEmploymentCard(employment);
         expect(fromPanel).toEqual(fromHostProducer);
 
         const host = code("components/presentation/durableRecord/DurableRecordContextualCard.tsx");
