@@ -83,3 +83,39 @@ export function childAgeLabel(dobIso: string | null | undefined, now: Date): str
     const rem = months % 12;
     return rem === 0 ? `${years} yr` : `${years} yr ${rem} mo`;
 }
+
+/**
+ * THE SUBJECT, EXPRESSED AS THE ONE MEMBER OF ITS OWN COLLECTION.
+ *
+ * The canonical Children card renders a COLLECTION because on a case it renders a family's roster.
+ * On a durable child record the roster has exactly one member and it is the record itself — the same
+ * degenerate-case reasoning `personEmploymentSignal` already uses for a durable person's Employment.
+ *
+ * This is the ONE place that shape is decided, so the server composer and any client host produce
+ * an identical row. Two builders would be two answers to "what is this child", and the card would
+ * quietly render whichever host it happened to be mounted on.
+ *
+ * ── WHAT IT CARRIES, AND WHAT IT REFUSES TO ──
+ *
+ * Identity and profile scalars, because those are CHILD facts: they live on the member row (or the
+ * person behind it) and are true with no enrollment anywhere. `resolveIdentityFieldValue` and
+ * `buildChildrenCardEvidence` read several of them off the RAW entry rather than the mapped drawer
+ * row — `gender`, `allergies`, `medical_notes`, `special_instructions`, the photo keys — which is
+ * why the composed truth is spread in rather than a fixed handful of fields being copied out.
+ *
+ * Program, room, schedule type and start date are absent, and absent BY CONSTRUCTION rather than by
+ * omission: they are participation facts on the opportunity-customer-member row, and a durable host
+ * has no participation. The configured card still renders those rows, in their configured order,
+ * reading "Not set" — a card with facts this host has not fetched, never a different card.
+ */
+export function durableChildCollectionRow(subject: DurableChildSubject): Record<string, unknown> {
+    return {
+        ...subject.truth,
+        // The collection's identity keys, pinned last so nothing in the composed truth can move them.
+        id: subject.memberId,
+        customer_member_id: subject.memberId,
+        person_id: subject.personId,
+        display_name: subject.label,
+        dob: subject.dateOfBirth,
+    };
+}

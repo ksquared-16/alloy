@@ -2,7 +2,7 @@
  * Child focus edit state — pure helpers for inquiry-child save from the Focus Panel.
  */
 
-import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import {
     buildInquiryChildOcmPatchFromEditorLocal,
     buildPersonIdentityPatch,
@@ -83,7 +83,16 @@ export function findInquiryChildRow(
 ): InquiryChildRow | null {
     const id = childId.trim();
     if (!id) return null;
-    const rows = mapRawInquiryChildrenToDrawerRows((truth._inquiry_children as unknown[]) ?? []);
+    /*
+     * THE CANONICAL COLLECTION SOURCE, not the case's key.
+     *
+     * This read `_inquiry_children` directly while the card that calls it already composes from
+     * `normalizeFocusPanelChildrenRowsFromTruth`, which also admits `_durable_child_rows`. On a
+     * durable child host the two disagreed: the card rendered the child and offered Edit, and the
+     * seed came back null, so `saveInquiryChild` returned `{ok:false}` with nothing to say. An edit
+     * that reports failure is recoverable; an edit that silently declines to seed is not.
+     */
+    const { rows } = normalizeFocusPanelChildrenRowsFromTruth(truth);
     return rows.find((r) => r.id === id || (r.person_id ?? "").trim() === id) ?? null;
 }
 

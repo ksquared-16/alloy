@@ -77,6 +77,26 @@ export function applyCanonicalChildrenCollectionPolicy(
  */
 export const DURABLE_CHILD_ROWS_KEY = "_durable_child_rows" as const;
 
+/**
+ * Is this truth a DURABLE CHILD RECORD's — the subject alone — rather than a family's roster?
+ *
+ * The grain alone cannot answer it. `child` is also the grain when a child is the ATTENTION subject
+ * on a settled family case: same grain, same subject type, but the collection there is the family's
+ * `_inquiry_children` and the child is one row among siblings. A surface that read the grain and
+ * concluded "the collection is the subject" would drill into that child on a case panel where the
+ * header and What's Next already own attention — the elevation `ChildrenCard`'s attention effect
+ * exists to prevent.
+ *
+ * The COLLECTION SOURCE is what actually distinguishes them, and only one key is ever present: a
+ * case host supplies `_inquiry_children` and a durable host supplies `_durable_child_rows`. The
+ * case's key is checked first so a truth carrying both — which nothing produces, and which would
+ * mean a case had been merged into a record — is treated as the case it claims to be.
+ */
+export function truthHoldsDurableChildCollection(truth: Record<string, unknown>): boolean {
+    if (Array.isArray(truth._inquiry_children)) return false;
+    return Array.isArray(truth[DURABLE_CHILD_ROWS_KEY]);
+}
+
 /** Normalize Focus Panel children rows from operational truth using canonical collection policy. */
 export function normalizeFocusPanelChildrenRowsFromTruth(truth: Record<string, unknown>): {
     rows: FocusPanelChildDrawerRow[];

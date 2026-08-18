@@ -30,7 +30,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { buildPersonDrawerEntityPayloadForViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerEntityPayloadForViewModel";
-import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import { loadCustomerMemberProfileFieldsByMemberId } from "@/lib/completion/loadCustomerMemberProfileFields";
+import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
+import {
+    durableChildCollectionRow,
+    type DurableChildSubject,
+} from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 
 export type ComposeDurableChildSubjectResult =
     | { ok: true; subject: DurableChildSubject }
@@ -92,6 +97,25 @@ export async function composeDurableChildSubject(
 
     const householdName = householdId ? await householdNameFor(supabase, orgId, householdId) : null;
 
+    /*
+     * THE CHILD'S OWN PROFILE SCALARS.
+     *
+     * Gender, allergies, medical notes, special instructions and preferred name are not columns on
+     * `customer_members` — they are configured field values, and `loadCustomerMemberProfileFieldsByMemberId`
+     * is the canonical reader the member's own GET route already uses. Composing without them left
+     * the durable record able to name the child and nothing else, so the canonical Children card
+     * rendered its configured medical rows as permanently unset. That read as "this child has no
+     * allergies recorded", which is a different and more dangerous statement than "this host did not
+     * fetch them".
+     *
+     * A read failure is not fatal, for the same reason the person enrichment above is not: the child
+     * is still identifiable, and refusing the record over an optional enrichment is the queue-scoped
+     * mistake in a new place.
+     */
+    const profile =
+        (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]).catch(() => null))?.get(id)
+        ?? null;
+
     // `display_name` is NOT NULL in the schema, so the name parts are a defence against whitespace,
     // not a real second source. "Child" is the last resort and means the data is wrong, not absent.
     const label =
@@ -113,23 +137,41 @@ export async function composeDurableChildSubject(
         relationship: trimOrNull(member.relationship),
         is_active: member.is_active !== false,
         status_key: trimOrNull(member.status_key),
+        preferred_name: trimOrNull(profile?.preferred_name),
+        gender: trimOrNull(profile?.gender),
+        allergies: trimOrNull(profile?.allergies),
+        medical_notes: trimOrNull(profile?.medical_notes),
+        special_instructions: trimOrNull(profile?.special_instructions),
         _household_name: householdName,
         _child_identity_source: personRecord ? "member+person" : "member",
     };
 
-    return {
-        ok: true,
-        subject: {
-            memberId: String(member.id),
-            personId,
-            householdId,
-            label,
-            dateOfBirth: trimOrNull(member.dob),
-            householdName,
-            isActive: member.is_active !== false,
-            truth,
-        },
+    const subject: DurableChildSubject = {
+        memberId: String(member.id),
+        personId,
+        householdId,
+        label,
+        dateOfBirth: trimOrNull(member.dob),
+        householdName,
+        isActive: member.is_active !== false,
+        truth,
     };
+
+    /*
+     * THE CANONICAL CHILD CARD'S COLLECTION, COMPOSED SERVER-SIDE.
+     *
+     * The card that answers "who is this child" is a collection card, so the subject has to appear
+     * in its own collection for the card to compose at all. Writing that here rather than in a host
+     * is what makes every host agree: the Operations overlay and the record panel render the same
+     * card because they are handed the same truth, not because two components were written to match.
+     *
+     * Under `_durable_child_rows`, never `_inquiry_children`. Both would render identically today,
+     * and the second would tell every later reader — a roster count, a stage projection, a tuition
+     * estimate — that this child sits on an inquiry when no inquiry exists.
+     */
+    truth[DURABLE_CHILD_ROWS_KEY] = [durableChildCollectionRow(subject)];
+
+    return { ok: true, subject };
 }
 
 async function householdNameFor(
