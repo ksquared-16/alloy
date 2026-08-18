@@ -26,12 +26,20 @@ const keys = (c: readonly { key: string }[]) => c.map((e) => e.key);
 const visible = (c: readonly { key: string; visibility: string }[]) =>
     c.filter((e) => e.visibility === "visible").map((e) => e.key);
 
-const FAMILY_SCOPED = ["household", "children", "billing_preview"] as const;
+/*
+ * `children` is deliberately absent from this list.
+ *
+ * It is family-scoped ON A CASE, where it renders a family's roster, and it is child-scoped on a
+ * child record, where the collection holds the subject alone. One card, two truthful collections —
+ * so "does the standalone child composition avoid family cards" cannot be asked about it by key.
+ * The cards that are family-scoped in EVERY reading are the two below.
+ */
+const FAMILY_SCOPED = ["household", "billing_preview"] as const;
 
 describe("a standalone durable child stays sparse", () => {
-    it("KEEPS its identity card — there is no header subject or Children card to carry it", () => {
+    it("KEEPS its identity card — the configured child card, with nothing family-scoped beside it", () => {
         const composition = focusPanelDefaultCompositionForGrain("child");
-        expect(keys(composition)).toEqual(["child_identity"]);
+        expect(keys(composition)).toEqual(["children"]);
         for (const familyCard of FAMILY_SCOPED) expect(keys(composition)).not.toContain(familyCard);
         expect(keys(composition)).not.toContain("current_work");
     });
