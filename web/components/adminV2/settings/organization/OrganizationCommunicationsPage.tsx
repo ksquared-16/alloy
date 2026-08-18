@@ -35,6 +35,7 @@ import {
     type OrgLocation,
 } from "@/lib/communications/organizationCommunicationsModel";
 import type { ProviderConnectionState, ReadinessState } from "@/lib/communications/bindingReadiness";
+import MailRoutingSetupPanel from "@/components/adminV2/settings/organization/MailRoutingSetupPanel";
 import type { LocationHierarchy } from "@/lib/communications/locationHierarchy";
 
 /** Exactly what the bindings route emits under `provider_accounts`. */
@@ -70,6 +71,10 @@ function toneFor(state: ReadinessState): string {
         case "ready":
             return "bg-emerald-600/10 text-emerald-800";
         case "verification_required":
+        // Not green, and not red either. Nothing is broken: a step at the
+        // organization's OWN mail provider has not been done yet, and until mail
+        // actually arrives Alloy has no way to know whether it has.
+        case "routing_setup_required":
             return "bg-amber-500/12 text-amber-900";
         case "disabled":
             return "bg-alloy-midnight/8 text-alloy-midnight/60";
@@ -154,6 +159,10 @@ function nextActionLabel(channel: ChannelKey, direction: "sending" | "receiving"
     if (direction === "sending") {
         return state === "verification_required" ? "Verify domain" : "Set up sending";
     }
+    // The routing rule lives at the organization's own mail provider, not in
+    // Alloy and not at Resend. "Set up replies" pointed administrators at the
+    // wrong place for the one state where the work is genuinely theirs.
+    if (state === "routing_setup_required") return "Set up mail routing";
     return channel === "email" ? "Set up replies" : "Set up receiving";
 }
 
@@ -561,6 +570,18 @@ function ChannelPanel({
                         Showing an address twice, once as a value and once as a
                         readiness detail, made the card longer without answering
                         anything the rows do not. */}
+
+                    {/* The routing setup lives on the card, not behind another
+                        dialog: "Routing setup required" is a truthful state and a
+                        useless instruction on its own, because the fix is in a
+                        system Alloy cannot see. Shown only for Email, and only
+                        while receiving is not yet proven. */}
+                    {card.channel === "email" && card.receiving.state !== "ready" && card.connected ? (
+                        <MailRoutingSetupPanel
+                            bindingId={card.primaryBindingId}
+                            visibleAddress={card.identity.find((l) => l.label === "Replies")?.value || null}
+                        />
+                    ) : null}
 
                     {card.schools.length || card.unparentedRooms.length ? (
                         <SchoolHierarchy card={card} onConfigureLocation={onConfigureLocation} />

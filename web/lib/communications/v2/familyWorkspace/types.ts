@@ -121,6 +121,17 @@ export type ConsentSummary = {
     household: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
     /** Primary-contact granular preference profile for edit UI. */
     preferenceProfile: PersonPreferenceProfile;
+    /**
+     * The granular profile for EACH contact, keyed by person id.
+     *
+     * Preferences are Person-owned: two adults in one household may differ, and
+     * one of them saying STOP says nothing about the other. `preferenceProfile`
+     * above collapses the household to its primary contact, which is right for a
+     * one-line summary and wrong for anything an operator acts on — showing the
+     * primary's answer beside a different recipient's name is a plain untruth
+     * about who agreed to what.
+     */
+    preferenceProfilesByContact: Record<string, PersonPreferenceProfile>;
     displayFlags: { email: boolean; sms: boolean; marketing: boolean };
 };
 

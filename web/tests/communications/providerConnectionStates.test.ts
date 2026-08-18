@@ -194,14 +194,30 @@ describe("nothing regressed for callers that cannot observe the catalogue", () =
         expect(r.providerConnection).toBe("unavailable");
     });
 
-    it("a healthy binding is still ready in both directions", () => {
+    it("a healthy binding sends, and does NOT claim to receive until inbound is observed", () => {
+        // This assertion used to read `receive.state === "ready"`, which is the
+        // defect: a populated `inbound_address` was being treated as proof that
+        // an external mail provider forwards to Alloy. It is configuration, not
+        // evidence. Sending is unaffected — Alloy really can dispatch.
         const r = evaluateBindingReadiness(emailBinding(), {
             credentialAvailable: true,
             approvedConnectionAvailable: true,
         });
         expect(r.providerConnection).toBe("configured");
         expect(r.send.state).toBe("ready");
+        expect(r.receive.state).toBe("routing_setup_required");
+    });
+
+    it("becomes ready to receive once inbound has actually arrived", () => {
+        // The positive control for the assertion above. Without it, "not ready"
+        // would pass even if the state had become permanently unreachable.
+        const r = evaluateBindingReadiness(emailBinding(), {
+            credentialAvailable: true,
+            approvedConnectionAvailable: true,
+            observedInboundAt: "2026-08-14T12:00:00.000Z",
+        });
         expect(r.receive.state).toBe("ready");
+        expect(r.receive.detail).toContain("Last inbound verified");
     });
 
     it("a disabled channel still reads as switched off, not as a provider fault", () => {

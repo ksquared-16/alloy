@@ -175,6 +175,10 @@ export function assembleFamilyWorkspace(
             byContact,
             household,
             preferenceProfile,
+            // Per-person, unaggregated. The household roll-up above stays for the
+            // summary line; anything an operator edits must name the Person whose
+            // preference it actually is.
+            preferenceProfilesByContact: opts.preferenceProfilesByContact ?? {},
             displayFlags: {
                 email: true,
                 sms: true,

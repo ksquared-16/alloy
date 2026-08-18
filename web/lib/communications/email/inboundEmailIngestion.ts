@@ -142,19 +142,113 @@ async function markReceipt(
     await deps.supabase.from("communication_inbound_ingress").update(patch).eq("id", receiptId);
 }
 
-/** Active email bindings whose inbound address could own this message. */
+/**
+ * Active email bindings that could own this message — by the address the parent
+ * wrote to, OR by the destination the provider actually delivered to.
+ *
+ * Both lookups are needed and neither is redundant. Under DIRECT delivery the
+ * provider reports the organization's own address and `inbound_address` matches.
+ * Under SELECTIVE ROUTING the organization keeps its own MX and forwards one
+ * mailbox onward, so the provider reports an opaque ingress destination and
+ * `inbound_address` matches nothing — every such message would be quarantined as
+ * unattributable.
+ *
+ * Ownership is still decided from the BINDING. A route only says which binding a
+ * destination belongs to; it is never itself an owner.
+ */
 async function loadCandidateBindings(
     deps: InboundEmailIngestionDeps,
     addresses: string[]
 ): Promise<InboundEmailBinding[]> {
     const normalized = addresses.map(normalizeEmailAddress).filter((a): a is string => a !== null);
     if (normalized.length === 0) return [];
-    const { data } = await deps.supabase
+
+    const { data: direct } = await deps.supabase
         .from("communication_provider_bindings")
         .select("id, org_id, channel, provider, status, inbound_address, location_id")
         .eq("channel", "email")
         .in("inbound_address", normalized);
-    return (data ?? []) as InboundEmailBinding[];
+
+    const { data: routes } = await deps.supabase
+        .from("communication_ingress_routes")
+        .select("communication_provider_binding_id, destination")
+        .in("destination", normalized);
+
+    const byBindingId = new Map<string, InboundEmailBinding>();
+    for (const row of direct ?? []) {
+        const binding = row as InboundEmailBinding;
+        byBindingId.set(String(binding.id), { ...binding, ingress_destinations: [] });
+    }
+
+    const routedIds = [
+        ...new Set(
+            (routes ?? []).map((r) =>
+                String(
+                    (r as { communication_provider_binding_id: string }).communication_provider_binding_id
+                )
+            )
+        ),
+    ];
+    const missing = routedIds.filter((id) => !byBindingId.has(id));
+    if (missing.length > 0) {
+        const { data: routed } = await deps.supabase
+            .from("communication_provider_bindings")
+            .select("id, org_id, channel, provider, status, inbound_address, location_id")
+            .eq("channel", "email")
+            .in("id", missing);
+        for (const row of routed ?? []) {
+            const binding = row as InboundEmailBinding;
+            byBindingId.set(String(binding.id), { ...binding, ingress_destinations: [] });
+        }
+    }
+
+    for (const raw of routes ?? []) {
+        const r = raw as { communication_provider_binding_id: string; destination: string };
+        const binding = byBindingId.get(String(r.communication_provider_binding_id));
+        if (!binding) continue;
+        const destination = normalizeEmailAddress(r.destination);
+        if (destination && !binding.ingress_destinations!.includes(destination)) {
+            binding.ingress_destinations!.push(destination);
+        }
+    }
+
+    return [...byBindingId.values()];
+}
+
+/**
+ * Record that mail actually ARRIVED at this destination.
+ *
+ * This stamp is the entire basis on which receiving may be reported as working
+ * (see `bindingReadiness.ts`). No configuration produces it and no administrator
+ * can set it by hand — only a message getting through does.
+ *
+ * Deliberately NOT fatal. By this point the message is attributed and persisted;
+ * failing the ingestion because a readiness timestamp could not be written would
+ * lose a parent's message to bookkeeping. Readiness also derives from canonical
+ * history, which already holds this message, so a failure here costs the fast
+ * path and not the evidence.
+ */
+async function stampInboundObservation(
+    deps: InboundEmailIngestionDeps,
+    orgId: string,
+    destinations: string[],
+    observedAt: string
+): Promise<void> {
+    const normalized = destinations.map(normalizeEmailAddress).filter((a): a is string => a !== null);
+    if (normalized.length === 0) return;
+    try {
+        await deps.supabase
+            .from("communication_ingress_routes")
+            .update({
+                last_inbound_at: observedAt,
+                verification_state: "inbound_observed",
+                updated_at: observedAt,
+            })
+            .eq("org_id", orgId)
+            .in("destination", normalized);
+    } catch {
+        /* see above — never fatal */
+    }
 }
 
 /**
@@ -546,6 +640,11 @@ export async function ingestResendInboundEmail(
         resolved_message_id: messageId,
         resolution_note: `correlated:${resolution.method}`,
     });
+
+    // Mail got through. That — and only that — is what lets the configuration
+    // surface say receiving works. Stamped after persistence so the claim can
+    // never outrun the message it is claiming about.
+    await stampInboundObservation(deps, orgId, ownershipCandidateAddresses(event), email.receivedAt);
 
     return {
         status: "persisted",

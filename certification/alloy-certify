@@ -285,7 +285,15 @@ cmd_journey() {
         # The suite genuinely holds both requirements, so the harness honours both rather than
         # picking a side and calling the loser a defect. Detection reads the specs themselves, so
         # a spec that starts (or stops) requiring pristineness needs no change here.
-        if [ "$idx" -eq 1 ] || grep -q 'publicationCount()).toBe(0)' "$f"; then
+        #
+        # Detection matches EITHER the publication probe (historical) or an
+        # explicit `CERT_REQUIRES_PRISTINE_TENANT` marker. The marker exists
+        # because the original grep encodes one spec's incidental assertion as the
+        # universal signal: a file whose claim is "nothing has arrived yet" needs a
+        # pristine tenant just as much, and had no way to say so. Declaring it beats
+        # discovering it — an order-dependent spec that inherits a dirty tenant
+        # fails for a reason that looks like a product defect and is not.
+        if [ "$idx" -eq 1 ] || grep -q 'publicationCount()).toBe(0)' "$f" || grep -q 'CERT_REQUIRES_PRISTINE_TENANT' "$f"; then
             printf '\n── %s  [pristine reset]\n' "$name"
             needs_reset=1
         else
