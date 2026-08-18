@@ -26,6 +26,7 @@ import {
     CHILD_ADD_ACTION_ENTITY_ID,
     CHILD_ADD_ACTION_KEY,
 } from "@/lib/adminV2/actions/definitions/childAddAction";
+import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
 
 type Candidate = {
     record_id: string;
@@ -314,8 +315,56 @@ export default function AddChildModal({
                     {step === "household" ? (
                         <div className="space-y-3">
                             <p className="text-[12px] leading-snug text-alloy-midnight/60">
-                                A child belongs to a household. Choose it explicitly — Alloy will not guess one
-                                from a matching name.
+                                Add a child to an <span className="font-medium">existing household</span>. Choose
+                                it explicitly — Alloy will not guess one from a matching name.
+                            </p>
+                            {/*
+                              * ── THE DOMAIN BOUNDARY, MADE VISIBLE ──
+                              *
+                              * Add Child links a child to a household that already exists; it never
+                              * begins an acquisition. A family that is not on record yet starts as a
+                              * LEAD, and the handoff below opens the platform's EXISTING Create Lead
+                              * entry — the same `adminv2:open-create-lead` event every registry
+                              * caller dispatches — never a second implementation of it. It needs a
+                              * department (Create Lead is department-scoped by schema), so the one
+                              * enrollment-owning department is resolved on click; a tenant where
+                              * none resolves keeps the honest sentence and loses only the shortcut.
+                              */}
+                            <p className="text-[12px] text-alloy-midnight/55" data-add-child-new-family="true">
+                                New family, not on record yet?{" "}
+                                <button
+                                    type="button"
+                                    className="font-medium text-alloy-bend-pine hover:underline"
+                                    data-add-child-create-lead="true"
+                                    onClick={() => {
+                                        void (async () => {
+                                            try {
+                                                const res = await fetch("/api/admin/departments", {
+                                                    credentials: "include",
+                                                });
+                                                const json = (await res.json().catch(() => null)) as {
+                                                    items?: { id?: string }[];
+                                                } | null;
+                                                const departmentId = (json?.items?.[0]?.id ?? "").trim();
+                                                if (!departmentId) return;
+                                                onClose();
+                                                dispatchAdminV2CloseWorkspaceModals();
+                                                window.dispatchEvent(
+                                                    new CustomEvent("adminv2:open-create-lead", {
+                                                        detail: {
+                                                            department_id: departmentId,
+                                                            work_unit_id: null,
+                                                        },
+                                                    }),
+                                                );
+                                            } catch {
+                                                /* the sentence stays; only the shortcut is lost */
+                                            }
+                                        })();
+                                    }}
+                                >
+                                    Create lead →
+                                </button>
                             </p>
                             <div>
                                 <label className={LABEL} htmlFor="child-household-search">
