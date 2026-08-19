@@ -178,26 +178,32 @@ export function fidelityFieldValues(
 /**
  * Join the version's authored placements to the signatures actually captured, producing the
  * engine's marks. A placement with no captured signature is skipped — the engine must never invent
- * a mark the participant did not make.
+ * a mark the participant did not make. A DRAWN capture renders as the drawn image; typed renders
+ * as typed. Evidence kind and mark kind stay aligned — never conflated.
  */
 export function fidelitySignaturePlacements(
     mapping: FidelityPdfMapping,
-    signaturesByFieldId: Readonly<Record<string, { typed_full_name: string | null }>>,
+    signaturesByFieldId: Readonly<
+        Record<string, { typed_full_name: string | null; drawnPng?: Uint8Array | null }>
+    >,
 ): SignaturePlacement[] {
     const marks: SignaturePlacement[] = [];
     for (const placement of mapping.signature_placements) {
         const captured = signaturesByFieldId[placement.field_id];
-        if (!captured?.typed_full_name) continue;
-        marks.push({
+        if (!captured) continue;
+        const base = {
             page: placement.page,
             x: placement.x,
             y: placement.y,
             width: placement.width,
             height: placement.height,
-            kind: "typed",
-            typedName: captured.typed_full_name,
             signerRole: placement.field_id,
-        });
+        };
+        if (captured.drawnPng && captured.drawnPng.length > 0) {
+            marks.push({ ...base, kind: "drawn", drawnPng: captured.drawnPng });
+        } else if (captured.typed_full_name) {
+            marks.push({ ...base, kind: "typed", typedName: captured.typed_full_name });
+        }
     }
     return marks;
 }

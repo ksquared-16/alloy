@@ -255,4 +255,42 @@ describe("negative controls — the document surface cannot bypass the owners", 
         // An edit regenerates the document.
         expect(host).toContain("setDocumentRev((r) => r + 1)");
     });
+
+    it("the document is the SOLE default review — no duplicate semantic section beneath it", () => {
+        const host = code("app/forms/embed/[token]/FormEmbedClient.tsx");
+        // The old always-visible section leaked implementation detail (DOB three times, once per
+        // destination). It must not return.
+        expect(host).not.toContain("data-artifact-check-details");
+        // The participant progression is distinct states, reached by product actions.
+        expect(host).toContain('data-review-paperwork="true"');
+        expect(host).toContain('data-make-a-change="true"');
+        expect(host).toContain('data-everything-looks-good="true"');
+        // Signing is artifact-positioned and captured, not a generic box below the document.
+        expect(host).toContain("<SignatureCaptureDialog");
+        expect(host).toContain("enrollment-signature-asset");
+    });
+
+    it("the edit surface shows FACTS once, never per-destination rows", async () => {
+        const { uniqueResolvedFacts } = await import("@/app/forms/embed/[token]/SemanticFactEditor");
+        const mapping = parseFidelityPdfMapping(await fixtureMapping())!;
+        void mapping;
+        const artifact = (await import("@/lib/enrollment/participantRuntime/compileParticipantArtifact")).compileParticipantArtifact(
+            SCHEMA,
+            {
+                f_name: "John Peters",
+                f_dob: "2025-08-19",
+                f_dob_medical: "2025-08-19",
+                f_dob_pickup: "2025-08-19",
+                f_allergies: "No known allergies",
+            },
+        );
+        // Five resolved controls (three of them DOB destinations) → three FACTS.
+        expect(artifact.resolved).toHaveLength(5);
+        const facts = uniqueResolvedFacts(artifact);
+        expect(facts.map((f) => f.shared_key)).toEqual([
+            "child_full_name",
+            "child_date_of_birth",
+            "customer_member:allergies",
+        ]);
+    });
 });

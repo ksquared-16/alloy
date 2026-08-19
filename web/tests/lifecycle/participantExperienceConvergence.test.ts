@@ -112,9 +112,10 @@ describe("known facts are confirmed, not asked for", () => {
     it("asks the parent to confirm, in their own words, with the value spelled out", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
         // "birthday", the way a specialist would say it — and "still right?", which is what you ask
-        // about something already on file.
+        // about something already on file. The child is called by their FIRST name: the
+        // conversation is with a parent about their child, not about a record.
         expect(participantQuestion(wire)).toBe(
-            "I have Test Process's birthday as May 15, 2022. Is that still right?",
+            "I have Test's birthday as May 15, 2022. Is that still right?",
         );
         // NOT the internal prompt, and never the column heading.
         expect(participantQuestion(wire)).not.toContain("Child Dob");
@@ -131,7 +132,8 @@ describe("known facts are confirmed, not asked for", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
         const intro = participantIntro(wire);
         // Specialist voice: what Alloy already has, and what it still needs. Not a welcome banner.
-        expect(intro).toContain("I already have most of Test Process's information");
+        // First name, same as every other line of the conversation.
+        expect(intro).toContain("I already have most of Test's information");
         expect(intro).toContain("ask for anything I'm missing");
     });
 });
@@ -232,7 +234,8 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
             { subjectDisplayName: "Test Process" },
         );
         expect(participantQuestion(wire)).toContain("I filled out");
-        expect(participantQuestion(wire)).toContain("take a quick look");
+        // The instruction lives on the [Review paperwork] action, not in the sentence.
+        expect(participantQuestion(wire)).toContain("that's everything I needed");
         // No progress line at all during review — the artifact itself is the context.
         expect(progressLine(wire)).toBe("");
     });

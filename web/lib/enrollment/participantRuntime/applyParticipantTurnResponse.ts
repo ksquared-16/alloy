@@ -148,9 +148,25 @@ export async function applyParticipantTurnResponse(
             const shared_values = shallowMergeSharedValues((row.shared_values ?? {}) as Record<string, unknown>, {
                 [sharedKey]: disposition.value,
             });
+            /**
+             * A participant SUPPLYING a value is the strongest confirmation the platform can get —
+             * the same rule the review-edit path follows. Without this evidence, a corrected fact
+             * under the D-100 policy recomputed straight back to `known_requires_confirmation`, and
+             * the runtime asked the parent to confirm the name they had typed seconds earlier —
+             * observed live: "changed to John Peters → is John Peters still right? → asked again".
+             * The fingerprint binds to the corrected value, so a LATER change still re-opens it.
+             */
+            const metadata = buildEnrollmentNeedConfirmationPatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                confirmedValue: disposition.value,
+                confirmedAtIso: input.nowIso,
+            });
+            const patch: Record<string, unknown> = { shared_values };
+            if (metadata) patch.metadata = metadata;
             const { error } = await supabase
                 .from("form_packet_sessions")
-                .update({ shared_values })
+                .update(patch)
                 .eq("id", sessionId)
                 .eq("org_id", input.orgId);
             if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
