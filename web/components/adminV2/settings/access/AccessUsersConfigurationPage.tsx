@@ -42,6 +42,16 @@ import {
     roleAssignmentLabel,
     rolesDiscardedByReplacement,
 } from "@/lib/access/memberRoleAssignment";
+import { buildPermissionGridRows } from "@/lib/admin/permissionGrid";
+import { areaAuthorityLabel } from "@/lib/access/roleAuthoritySummary";
+import {
+    explainEffectiveAccess,
+    explanationIsAnswerable,
+    managedAreas,
+    partialAreas,
+    scopeStatementForMember,
+    type RoleGrantLoad,
+} from "@/lib/access/effectiveAccessExplanation";
 
 type MemberRow = {
     user_id: string;
@@ -131,6 +141,13 @@ export default function AccessUsersConfigurationPage({
     const [departments, setDepartments] = useState<DeptOpt[]>([]);
     const [siteLocations, setSiteLocations] = useState<SiteLocOpt[]>([]);
     const [roles, setRoles] = useState<RoleRow[]>([]);
+    const [permissions, setPermissions] = useState<{ key: string; group_key: string; label: string }[]>([]);
+    /**
+     * OD-8 — per-role grant sets for the selected member, keyed by role. A value of `null` is a
+     * FAILED read, kept distinct from an empty set: the explanation refuses to be an answer when any
+     * role's capabilities are unknown, and collapsing the two here would remove its ability to.
+     */
+    const [roleGrants, setRoleGrants] = useState<Map<string, Set<string> | null>>(new Map());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
@@ -185,6 +202,13 @@ export default function AccessUsersConfigurationPage({
             const rJson = await rRes.json().catch(() => ({}));
             if (!rRes.ok) throw new Error(typeof rJson.error === "string" ? rJson.error : "Failed to load roles");
             setRoles((rJson as { roles?: RoleRow[] }).roles ?? []);
+
+            // The capability catalog. `W-10`: the areas an explanation may name are whatever this
+            // returns, so a capability absent from the platform cannot be explained into existence.
+            const pRes = await fetch("/api/admin/rbac/permissions");
+            const pJson = await pRes.json().catch(() => ({}));
+            if (!pRes.ok) throw new Error(typeof pJson.error === "string" ? pJson.error : "Failed to load capabilities");
+            setPermissions((pJson as { permissions?: { key: string; group_key: string; label: string }[] }).permissions ?? []);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load users.");
         } finally {
@@ -241,6 +265,67 @@ export default function AccessUsersConfigurationPage({
 
     /** The union this membership actually holds. Empty is a real answer and is rendered as one. */
     const selectedHeldRoles = useMemo(() => (selected ? heldRoleKeys(selected) : []), [selected]);
+
+    const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
+
+    /**
+     * OD-8 — load each held role's grants when the selection changes.
+     *
+     * One request per role rather than a union endpoint, because attribution needs to know WHICH
+     * role explains an area. A union would answer "what can they do" and lose "why", and "why" is
+     * the question this chapter exists to answer.
+     *
+     * A rejected or non-ok response stores `null`, not an empty set. That is the whole reason the
+     * state is a Map of nullable sets: the explanation must be able to say it does not know.
+     */
+    useEffect(() => {
+        if (!selected || selectedHeldRoles.length === 0) {
+            setRoleGrants(new Map());
+            return;
+        }
+        let cancelled = false;
+        const keys = [...selectedHeldRoles];
+        void (async () => {
+            const entries = await Promise.all(
+                keys.map(async (roleKey): Promise<[string, Set<string> | null]> => {
+                    try {
+                        const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(roleKey)}`);
+                        if (!res.ok) return [roleKey, null];
+                        const json = (await res.json().catch(() => ({}))) as { permission_keys?: string[] };
+                        if (!Array.isArray(json.permission_keys)) return [roleKey, null];
+                        return [roleKey, new Set(json.permission_keys)];
+                    } catch {
+                        return [roleKey, null];
+                    }
+                }),
+            );
+            if (!cancelled) setRoleGrants(new Map(entries));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [selected, selectedHeldRoles]);
+
+    /** The four layers composed. `null` until a member is selected — there is nothing to explain. */
+    const explanation = useMemo(() => {
+        if (!selected) return null;
+        const heldRoles: RoleGrantLoad[] = selectedHeldRoles.map((roleKey) => ({
+            roleKey,
+            roleLabel: roleLabelByKey.get(roleKey) ?? null,
+            // A role whose grants have not been fetched yet is UNKNOWN, exactly like a failed read.
+            // Rendering an in-flight load as "no capabilities" is the same defect as rendering a
+            // failed one that way, and it is the state an operator is most likely to see.
+            keys: roleGrants.has(roleKey) ? roleGrants.get(roleKey)! : null,
+        }));
+        return explainEffectiveAccess({
+            heldRoles,
+            gridRows,
+            scope: scopeStatementForMember(selected, {
+                departmentName: (id) => departments.find((d) => d.id === id)?.name ?? null,
+                siteName: (id) => siteLocations.find((sl) => sl.id === id)?.label ?? null,
+            }),
+        });
+    }, [selected, selectedHeldRoles, roleLabelByKey, roleGrants, gridRows, departments, siteLocations]);
 
     /**
      * `M2-17`. The roles the replacement `PATCH` would delete if submitted as it stands. The write
@@ -681,6 +766,92 @@ export default function AccessUsersConfigurationPage({
 
                                     {tab === "overview" ?
                                         <div className="grid gap-4 md:grid-cols-2" data-testid="access-user-overview">
+                                            {/*
+                                              * OD-8 / AD-25 — effective access, explained.
+                                              *
+                                              * The chapter's product goal is one sentence an
+                                              * administrator can act on: what this person can do,
+                                              * where, and because of which role. Every clause comes
+                                              * from a different layer, and each can be unknown
+                                              * independently — so the card states the whole answer
+                                              * or states that it cannot, and never a confident
+                                              * half. An explanation is exactly where a plausible
+                                              * wrong answer does the most damage, because the
+                                              * operator acts on it.
+                                              */}
+                                            <ConfigWorkspaceCard
+                                                title="Effective access"
+                                                testId="access-user-effective-access"
+                                                className="md:col-span-2"
+                                            >
+                                                {!explanation ? null
+                                                : !explanation.capabilitiesKnown ?
+                                                    <p
+                                                        className="text-sm text-alloy-midnight/70"
+                                                        data-testid="access-user-effective-unknown"
+                                                        role="status"
+                                                    >
+                                                        What this person can do could not be established — one or
+                                                        more of their roles&apos; capabilities could not be read.
+                                                        Nothing is shown rather than a partial answer.
+                                                    </p>
+                                                : explanation.areas.length === 0 ?
+                                                    <p className="text-sm text-alloy-midnight/70" data-testid="access-user-effective-none">
+                                                        {explanation.roles.length === 0 ?
+                                                            "No role is assigned, so this person holds no operator capabilities."
+                                                        :   "Their roles grant no capabilities the platform acts on."}
+                                                    </p>
+                                                :   <div className="space-y-3" data-testid="access-user-effective-summary">
+                                                        <ul className="space-y-1.5 text-sm">
+                                                            {[...managedAreas(explanation), ...partialAreas(explanation)].map((area) => (
+                                                                <li
+                                                                    key={area.groupKey}
+                                                                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                                                                    data-testid={`access-user-effective-area-${area.groupKey}`}
+                                                                >
+                                                                    <span className="font-medium text-alloy-midnight">
+                                                                        {area.groupLabel}
+                                                                    </span>
+                                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-bend-pine/80">
+                                                                        {areaAuthorityLabel(area)}
+                                                                    </span>
+                                                                    {/*
+                                                                      * Attribution names EVERY contributing role.
+                                                                      * Naming one would make the other invisible to
+                                                                      * an operator asking which assignment to change.
+                                                                      */}
+                                                                    <span className="text-xs text-alloy-midnight/55">
+                                                                        because of {area.from.map((r) => r.roleLabel).join(" and ")}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                        <p className="text-sm text-alloy-midnight/70" data-testid="access-user-effective-scope">
+                                                            {explanation.scope.kind === "organization" ?
+                                                                "Across the whole organization."
+                                                            : explanation.scope.kind === "selected" ?
+                                                                `At ${[...explanation.scope.sites, ...explanation.scope.departments].join(", ")}.`
+                                                            :   `Where this applies is not established: ${explanation.scope.reason}`}
+                                                        </p>
+                                                        {explanation.unlabelledRoleKeys.length > 0 ?
+                                                            <p
+                                                                className="text-[11px] text-alloy-midnight/45"
+                                                                data-testid="access-user-effective-unlabelled"
+                                                            >
+                                                                {explanation.unlabelledRoleKeys.length}{" "}
+                                                                {explanation.unlabelledRoleKeys.length === 1 ? "role is" : "roles are"}{" "}
+                                                                held that this organization does not define, so they explain nothing
+                                                                here.
+                                                            </p>
+                                                        :   null}
+                                                        {!explanationIsAnswerable(explanation) ?
+                                                            <p className="text-[11px] text-alloy-midnight/45">
+                                                                This is a partial account — read it with the note above.
+                                                            </p>
+                                                        :   null}
+                                                    </div>
+                                                }
+                                            </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard title="Account Snapshot" testId="access-user-overview-account">
                                                 <dl className="grid gap-3 text-sm">
                                                     <div>

@@ -93,6 +93,11 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             "app/api/admin/users/[userId]/access-scope/route.ts",
             "app/api/admin/users/[userId]/remove/route.ts",
             "app/api/admin/rbac/roles/route.ts",
+            // OD-8 — the chapter explains effective access, so it reads the capability catalog and
+            // each held role's grants. Both are READS feeding an explanation; the Users chapter
+            // offers no capability editing, which stays in the role editor (`W-59`/`RM-6`).
+            "app/api/admin/rbac/permissions/route.ts",
+            "app/api/admin/rbac/grants/route.ts",
         ],
         divergentRoutes: [
             {

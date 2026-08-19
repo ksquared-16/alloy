@@ -269,3 +269,87 @@ test.describe("W-57 — a level the operator changes is authority the server hol
         await expect(page.getByRole("status")).toContainText(/saved/i);
     });
 });
+
+/**
+ * `OD-8` / `AD-25` — the Users chapter explains effective access.
+ *
+ * The role editor answers *what can this role do*; this answers *why does this person have this
+ * access*. Both are browser-certified because both are claims about what an operator reads, and the
+ * failure mode being guarded is a plausible sentence rather than a broken page.
+ */
+test.describe("OD-8 — effective access is explained, or declared unknown", () => {
+    const USERS = `${ACCESS}?section=users`;
+
+    async function openFirstUser(page: Page) {
+        await page.goto(USERS, { waitUntil: "domcontentloaded" });
+        await expect(page.getByTestId("access-users-page")).toBeVisible();
+        const options = page.locator('[role="option"]');
+        await expect(options.first()).toBeVisible();
+        await options.first().click();
+    }
+
+    test("a selected member gets an effective-access account, not a list of assignments", async ({ page }) => {
+        await openFirstUser(page);
+        const card = page.getByTestId("access-user-effective-access");
+        await expect(card).toBeVisible();
+
+        // Exactly one of the three states renders. Which one depends on the tenant; that all three
+        // are mutually exclusive is the property, because the failure being guarded is a partial
+        // answer rendered as a complete one.
+        const states = ["access-user-effective-summary", "access-user-effective-none", "access-user-effective-unknown"];
+        const visible: string[] = [];
+        for (const id of states) if (await page.getByTestId(id).count()) visible.push(id);
+        expect(visible, "the card must render exactly one account of effective access").toHaveLength(1);
+    });
+
+    test("when it does explain, it says what, where, and because of which role", async ({ page }) => {
+        await openFirstUser(page);
+        const summary = page.getByTestId("access-user-effective-summary");
+        if ((await summary.count()) === 0) {
+            test.info().annotations.push({
+                type: "observation",
+                description: "this member holds no enforced capability — the explanation correctly declined to claim one",
+            });
+            return;
+        }
+
+        // The three clauses. Attribution is asserted as present rather than as a particular role,
+        // because the tenant decides which role that is and pinning it would certify the fixture.
+        const areas = page.locator('[data-testid^="access-user-effective-area-"]');
+        await expect(areas.first()).toBeVisible();
+        await expect(areas.first()).toContainText(/because of \S/);
+        await expect(page.getByTestId("access-user-effective-scope")).toBeVisible();
+
+        // …and it does not decode the platform for the operator on the way.
+        const text = await summary.innerText();
+        expect(text, `a dotted capability key is in the explanation: ${text.match(RAW_KEY)?.[0]}`).not.toMatch(RAW_KEY);
+    });
+
+    test("the account never claims an area at a level the role editor disagrees with", async ({ page, request }) => {
+        // Cross-layer consistency: the explanation is built from the same grants the role editor
+        // edits, so a level here that the server does not hold would be the UI inventing authority.
+        await openFirstUser(page);
+        if ((await page.getByTestId("access-user-effective-summary").count()) === 0) return;
+
+        const areas = await page.locator('[data-testid^="access-user-effective-area-"]').allInnerTexts();
+        expect(areas.length).toBeGreaterThan(0);
+        for (const line of areas) {
+            expect(line).toMatch(/(manage|view|limited · \d+ of \d+)/i);
+        }
+
+        // Every role named in the account exists in the canonical role catalog.
+        const res = await request.get("/api/admin/rbac/roles");
+        expect(res.ok()).toBe(true);
+        const labels = new Set(
+            ((await res.json()) as { roles?: { role_label: string }[] }).roles?.map((r) => r.role_label) ?? [],
+        );
+        expect(labels.size).toBeGreaterThan(0);
+        for (const line of areas) {
+            const because = line.split(/because of /i)[1];
+            if (!because) continue;
+            for (const roleLabel of because.split(/ and /)) {
+                expect(labels.has(roleLabel.trim()), `${roleLabel} is not a defined role`).toBe(true);
+            }
+        }
+    });
+});

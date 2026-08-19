@@ -55,13 +55,37 @@ function sourceFilesUnder(rel: string): string[] {
 }
 
 describe("W-59 / RM-6 — one role editor", () => {
-    it("exactly one component in the tree renders a role-permission grid", () => {
-        // Discovered, not enumerated. The grid is identified by the projection it consumes, so a
-        // second editor reintroduced under any name or path fails this.
-        const renderers = [...sourceFilesUnder("app"), ...sourceFilesUnder("components")].filter((rel) =>
+    it("exactly one component in the tree EDITS role permissions", () => {
+        // Discovered, not enumerated: a second editor reintroduced under any name or path fails.
+        //
+        // The discriminator changed with `OD-8`, and the reason matters. This used to identify an
+        // editor by the projection it consumes — anything importing `buildPermissionGridRows`. That
+        // was exact while the projection had one consumer, and it convicted the Users chapter the
+        // moment that chapter began READING grants to explain effective access. Reading the same
+        // projection is not editing it; `W-59`/`RM-6` is about where authority can be CHANGED, and
+        // a lock that cannot tell a read from a write would have forced the explanation to
+        // re-derive the catalog rather than share it — a second opinion, which is the defect this
+        // initiative keeps removing.
+        //
+        // So the subject is the mutation: `applyGridRowSelection` is the only way a grid level
+        // becomes a grant set, and a surface that calls it is a surface that edits.
+        const all = [...sourceFilesUnder("app"), ...sourceFilesUnder("components")];
+        const editors = all.filter((rel) =>
+            /applyGridRowSelection/.test(readFileSync(join(webRoot, rel), "utf8")),
+        );
+        expect(editors).toEqual(["components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"]);
+
+        // Non-vacuity, and the half the narrower discriminator gives up: readers are still
+        // discovered, so a second EDITOR that avoided the helper would still have to consume the
+        // projection to draw anything, and would show up here for a human to look at.
+        const readers = all.filter((rel) =>
             /buildPermissionGridRows|PermissionGridRow/.test(readFileSync(join(webRoot, rel), "utf8")),
         );
-        expect(renderers).toEqual(["components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"]);
+        expect(readers).toContain("components/adminV2/settings/access/AccessRolesConfigurationPage.tsx");
+        expect(
+            readers.every((rel) => rel.startsWith("components/adminV2/settings/access/")),
+            `the permission projection is consumed outside the Access chapter: ${readers.join(", ")}`,
+        ).toBe(true);
     });
 
     it("the retired surfaces are gone from the tree", () => {
