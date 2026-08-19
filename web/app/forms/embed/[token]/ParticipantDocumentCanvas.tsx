@@ -54,20 +54,23 @@ export function ParticipantDocumentCanvas({
                     const page = await doc.getPage(pageNumber);
                     if (cancelled) return;
                     const base = page.getViewport({ scale: 1 });
-                    const scale = width / base.width;
-                    const viewport = page.getViewport({ scale: scale * dpr });
+                    const viewport = page.getViewport({ scale: width / base.width });
 
+                    // Same render contract as the operator canvas: the CANVAS is handed to pdf.js,
+                    // DPR applied as a transform, CSS size at the logical viewport.
                     const canvas = document.createElement("canvas");
-                    canvas.width = Math.floor(viewport.width);
-                    canvas.height = Math.floor(viewport.height);
-                    canvas.style.width = `${width}px`;
-                    canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
+                    canvas.width = Math.max(1, Math.floor(viewport.width * dpr));
+                    canvas.height = Math.max(1, Math.floor(viewport.height * dpr));
+                    canvas.style.width = `${viewport.width}px`;
+                    canvas.style.height = `${viewport.height}px`;
                     canvas.style.display = "block";
                     canvas.className = "rounded-lg border border-alloy-midnight/10 shadow-sm";
                     canvas.setAttribute("data-participant-document-page", String(pageNumber));
-                    const ctx = canvas.getContext("2d");
-                    if (!ctx) continue;
-                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    await page.render({
+                        canvas,
+                        viewport,
+                        transform: dpr === 1 ? undefined : [dpr, 0, 0, dpr, 0, 0],
+                    }).promise;
                     if (cancelled) return;
                     container.appendChild(canvas);
                 }
