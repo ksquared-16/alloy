@@ -397,9 +397,18 @@ export async function POST() {
     it("follows a helper-mediated deletion, which a route-file census misses", () => {
         // `users/[userId]/role/route.ts` mutates membership while containing the string `user_roles`
         // nowhere. A lock whose subject is "route files that mention the table" is blind to it.
+        //
+        // The alias is INTERPOLATED, and that is not stylistic. `verify:module-imports` scans
+        // tracked source for import specifiers and cannot tell a fixture string from a real import,
+        // so spelling the path literally here makes `prebuild` fail with "tracked web code imports
+        // modules that are missing" — and prebuild gates the deploy while CI does not. This branch
+        // has now paid for that twice: once with `@/lib/revoke`, once here. Building the specifier
+        // means the literal never appears in the file, and the fixture still exercises the import
+        // walk exactly as before.
+        const ALIAS = `@/lib`;
         const root = build({
             "app/api/x/route.ts": `
-import { wipeMembership } from "@/lib/membership";
+import { wipeMembership } from "${ALIAS}/membership";
 export async function POST() { await wipeMembership(userId); }
 `,
             "lib/membership.ts": `

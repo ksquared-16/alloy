@@ -6,8 +6,8 @@
     "$comment": "Lowered 694 -> 693 by OD-8's conversion of admin/users GET. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
   },
   "inherited": {
-    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog.",
-    "frozen": "2026-08-17",
+    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them.",
+    "frozen": "2026-08-19",
     "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal eligibility, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
     "handlers": [
       {
@@ -15,6 +15,18 @@
         "method": "POST",
         "introduced_by": "b15146314",
         "program": "fix(comms): an organization's own connection must read as connected"
+      },
+      {
+        "route": "app/api/admin/communications/ingress-routes/route.ts",
+        "method": "GET",
+        "introduced_by": "8b80393ed",
+        "program": "test(cert): certify self-service receiving setup; keep the panel after connect"
+      },
+      {
+        "route": "app/api/admin/communications/ingress-routes/route.ts",
+        "method": "POST",
+        "introduced_by": "8b80393ed",
+        "program": "test(cert): certify self-service receiving setup; keep the panel after connect"
       },
       {
         "route": "app/api/admin/communications/provider-connection/route.ts",
@@ -858,6 +870,14 @@
     },
     "app/api/admin/communications/identities/route.ts": {
       "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/ingress-routes/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
         "status": "pending"
       }
     },
@@ -3610,10 +3630,28 @@
         "reason": "The custom fields flagged for public booking, for the ALLOY_PUBLIC_ORG_ID org. Same shape as booking-config: the org comes from environment rather than the request, and the projection is restricted to fields explicitly marked public. Service-role access with an org filter the caller cannot influence."
       }
     },
+    "app/api/public/forms/[token]/enrollment-document/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-edit/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
+      }
+    },
     "app/api/public/forms/[token]/enrollment-objective/route.ts": {
       "GET": {
         "status": "none",
         "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-signature-asset/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
       }
     },
     "app/api/public/forms/[token]/enrollment-turn/route.ts": {
