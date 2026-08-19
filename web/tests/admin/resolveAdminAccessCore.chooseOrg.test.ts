@@ -146,3 +146,85 @@ describe("W-22 — the tier A property, stated over the source", () => {
         expect("const roleKeys = [...new Set(normalized.map((r) => r.role))].sort();").not.toMatch(ORG_SORT);
     });
 });
+
+describe("W-22 — I-25's clause, and why it currently has no subject", () => {
+    /**
+     * §9 folds `I-25` into this workstream: *"any cross-request authority cache is keyed on
+     * `(principal, org)` and invalidated by any write to membership, role, grant, or scope."*
+     *
+     * There is no such cache. Every memoization on the authority path is `cache()` from React,
+     * which is REQUEST-scoped — it exists for the duration of one render pass and is gone. So the
+     * clause is satisfied vacuously, and a vacuous satisfaction is exactly the kind that stops
+     * being true without anyone noticing: a module-level `Map` added for performance would make an
+     * authority answer outlive the write that should have invalidated it, and nothing would fail.
+     *
+     * This asserts the premise instead of the clause — the shape `W-62` used for the layer model.
+     */
+    const AUTHORITY_MODULES = [
+        "lib/admin/resolveAdminAccessCore.ts",
+        "lib/admin/resolveAdminPortalOrgCore.ts",
+        "lib/admin/getAdminAccessContext.ts",
+        "lib/admin/canManageUsersAndRoles.ts",
+    ];
+
+    async function executableSource(rel: string) {
+        const { readFileSync } = await import("node:fs");
+        const { join } = await import("node:path");
+        return readFileSync(join(process.cwd(), rel), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, " ")
+            .replace(/^\s*\/\/.*$/gm, " ");
+    }
+
+    /**
+     * A module-level container that is WRITTEN at runtime. The distinction matters and the first
+     * version of this scan got it wrong: it convicted `const PORTAL_ROLES = new Set(["admin",
+     * "ops"])` in both resolvers — a frozen vocabulary, not a cache. A lock that cannot tell a
+     * constant from a store would push someone to rewrite the constant to satisfy it, which is the
+     * string-coincidence failure this program keeps paying for.
+     */
+    function runtimeWrittenStores(src: string): string[] {
+        const declared = [...src.matchAll(
+            /^(?:const|let|var)\s+(\w+)\s*(?::[^=]+)?=\s*new\s+(?:Map|Set|WeakMap|LRUCache)\b/gm,
+        )].map((m) => m[1]!);
+        return declared.filter((name) =>
+            new RegExp(String.raw`\b${name}\s*\.\s*(?:set|add|delete|clear)\s*\(`).test(src),
+        );
+    }
+
+    it("no authority module holds state that outlives the request", async () => {
+        const offenders: string[] = [];
+        for (const rel of AUTHORITY_MODULES) {
+            for (const name of runtimeWrittenStores(await executableSource(rel))) {
+                offenders.push(`${rel}: ${name}`);
+            }
+        }
+        expect(
+            offenders,
+            "a cross-request authority cache must be keyed on (principal, org) and invalidated by "
+                + "every authority write — I-25. Today there is none, which is why none is keyed.",
+        ).toEqual([]);
+    });
+
+    it("the memoization that IS there is request-scoped, and the scan does not convict it", async () => {
+        // Non-vacuity in both directions.
+        const src = await executableSource("lib/admin/getAdminAccessContext.ts");
+        expect(src).toContain('from "react"');
+        expect(src).toMatch(/cache\(/);
+
+        // Bites on a real cache…
+        expect(
+            runtimeWrittenStores('const byUser = new Map<string, Access>();\nfunction f(){ byUser.set(k, v); }'),
+        ).toEqual(["byUser"]);
+        // …acquits the constant it wrongly convicted first time…
+        expect(runtimeWrittenStores('const PORTAL_ROLES = new Set(["admin", "ops"]);')).toEqual([]);
+        // …and acquits request-scoped memoization, which is the mechanism relied on.
+        expect(runtimeWrittenStores("const loadOnce = cache(async () => resolve());")).toEqual([]);
+    });
+
+    it("the constants it acquits are really there — the scan is looking at the right files", async () => {
+        // Without this, "no runtime-written stores" would be satisfied by files containing no
+        // module-level container at all, and the acquittal above would be arguing with nothing.
+        const src = await executableSource("lib/admin/resolveAdminAccessCore.ts");
+        expect(src).toMatch(/^const\s+PORTAL_ROLES\s*=\s*new\s+Set/m);
+    });
+});
