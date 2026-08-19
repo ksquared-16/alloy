@@ -300,7 +300,13 @@ describe("resolveAdminAccessCore", () => {
         expect(core?.allowedSiteLocationIds).toEqual(["site-1"]);
     });
 
-    it("legacy app_users admin fills org when user_roles empty", async () => {
+    // W-20 inverted the next two. They certified the legacy fallback: an `app_users` row, or a
+    // `user_profiles.role`, conferring `admin` and portal admission on a principal with NO
+    // membership. `Q15-A1`/`A2`/`A3` returned zero on the deployed tenant, the fallback was
+    // deleted, and the fixtures are kept EXACTLY as they were so the assertions say the strong
+    // thing: the input that used to grant admin now grants nothing.
+
+    it("legacy app_users admin no longer fills org when user_roles is empty", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [],
             grants: [],
@@ -308,13 +314,10 @@ describe("resolveAdminAccessCore", () => {
             app_users_by_id: { role: "admin", org_id: "legacy-org" },
             app_users_by_auth: null,
         });
-        const core = await resolveAdminAccessCore(sb, "user-1");
-        expect(core?.orgId).toBe("legacy-org");
-        expect(core?.roleKeys).toEqual(["admin"]);
-        expect(core?.portalEligible).toBe(true);
+        expect(await resolveAdminAccessCore(sb, "user-1")).toBeNull();
     });
 
-    it("legacy profile admin resolves org via app_users.org_id lookup", async () => {
+    it("a legacy profile role no longer resolves an org through app_users", async () => {
         const sb = createAccessMockSupabase({
             user_roles: [],
             grants: [],
@@ -323,8 +326,21 @@ describe("resolveAdminAccessCore", () => {
             app_users_by_id: null,
             app_users_by_auth: { role: "admin", org_id: "legacy-org-2" },
         });
-        const core = await resolveAdminAccessCore(sb, "auth-user-9");
-        expect(core?.orgId).toBe("legacy-org-2");
+        expect(await resolveAdminAccessCore(sb, "auth-user-9")).toBeNull();
+    });
+
+    it("the same mock still resolves a principal who HAS a membership — not a broken double", async () => {
+        // Without this, both assertions above would be satisfied by a fixture that cannot resolve
+        // anything at all, which is the vacuity an inverted test invites.
+        const sb = createAccessMockSupabase({
+            user_roles: [{ org_id: "legacy-org", role: "admin" }],
+            grants: [],
+            profile: null,
+            app_users_by_id: { role: "admin", org_id: "legacy-org" },
+            app_users_by_auth: null,
+        });
+        const core = await resolveAdminAccessCore(sb, "user-1");
+        expect(core?.orgId).toBe("legacy-org");
         expect(core?.roleKeys).toEqual(["admin"]);
         expect(core?.portalEligible).toBe(true);
     });
