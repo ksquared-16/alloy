@@ -238,20 +238,32 @@ export type EmailIngressContext = {
     /** The sender's relationships in this organization. Empty = unknown sender. */
     senderRelationships: SenderRelationship[];
     /**
-     * True when at least one `alloy.{uuid}` id in In-Reply-To/References resolves to a
-     * message in THIS organization.
+     * The thread an `alloy.{uuid}` id in In-Reply-To/References resolves to IN THIS
+     * ORGANIZATION, or null.
      *
-     * A boolean, not the ids — because the caller must have done the org-scoped lookup
-     * to know it. Handing this module raw ids would invite it to treat "the header is
-     * well-formed" as "the thread is ours", which is precisely how a valid id naming
-     * another tenant's message would pull mail across the boundary.
+     * The resolved id, not the raw header ids — because the caller must have done the
+     * org-scoped lookup to produce it. Handing this module raw ids would invite it to
+     * treat "the header is well-formed" as "the thread is ours", which is precisely how a
+     * valid id naming another tenant's message would pull mail across the boundary. It is
+     * the thread id rather than a boolean so the observation can record WHICH conversation
+     * proved Lane A, which is the difference between an auditable corpus and a tally.
      */
-    hasResolvableAlloyThread: boolean;
+    resolvedAlloyThreadId: string | null;
 };
 
 /* ---------------------------------------------------------------------------
  * THE DECISION
  * ------------------------------------------------------------------------- */
+
+/**
+ * The policy this decision was produced by.
+ *
+ * Stamped on every observation. Without it an observe-only corpus is unreadable the
+ * moment the policy changes: two rows disagreeing about the same message would be
+ * indistinguishable from the gate being non-deterministic. Bump on ANY change to
+ * precedence, lane mapping or reason codes.
+ */
+export const EMAIL_INGRESS_POLICY_VERSION = "email-ingress-eligibility/2026-08-18.1";
 
 export type EmailIngressLane =
     /** A — a reply to something Alloy sent. Unforgeable, and needs no AI. */
@@ -263,26 +275,69 @@ export type EmailIngressLane =
     /** B — the sender holds a relationship the administrator opted into watching. */
     | "relationship_watch"
     /** The organization named this address explicitly. */
-    | "explicit_allow";
-
-export type EmailIngressRefusal =
-    /** No configured identity appears among the recipients. Not Alloy's mail at all. */
-    | "not_addressed_to_alloy"
-    /** Addressed to a general operational identity, and nothing else admitted it. */
-    | "no_admitting_evidence"
-    /** A watched relationship exists, but the sender could not be authenticated. */
-    | "relationship_unauthenticated"
-    /** The relationship exists and is not one the administrator watches. */
-    | "relationship_not_watched"
-    /** The relationship is watched but no longer active. */
-    | "relationship_inactive";
+    | "explicit_allow"
+    /** No lane admitted. Carried explicitly so a rejection is still a classified row. */
+    | "none";
 
 /**
- * What the caller is authorized to fetch as a result of this decision.
+ * What the gate WOULD do, if it were enforcing.
  *
- * `none` is the load-bearing value and the reason this type exists: it is what lets an
- * ingress receipt record that a message arrived and its body was never requested. A
- * connector treats this as its retrieval budget, not as advice.
+ * Three states, not two, because the honest answer to several real cases is neither
+ * "ingest" nor "reject":
+ *
+ *   WOULD_INGEST         evidence is sufficient and unambiguous. No human needed.
+ *   WOULD_REQUIRE_REVIEW admission is justified, but something material is unresolved —
+ *                        WHO sent it, or WHETHER the claim of who sent it can be trusted,
+ *                        or whether it should become work. A person decides.
+ *   WOULD_REJECT         nothing admits it. Under enforcement, no body would be fetched.
+ *
+ * Collapsing REVIEW into either neighbour is what makes an ingress gate dangerous. Folded
+ * into INGEST, a spoofed sender lands silently in a real family's conversation. Folded
+ * into REJECT, a genuine parent writing from a new address disappears with no trace.
+ */
+export type EmailIngressDisposition = "WOULD_INGEST" | "WOULD_REQUIRE_REVIEW" | "WOULD_REJECT";
+
+/**
+ * Stable machine vocabulary. Reason codes are the ONLY thing an observation row records
+ * about why — never a sentence, and never message content.
+ *
+ * They are also the analysis axis: an observe-only corpus is read by grouping on these, so
+ * a code must name the EVIDENCE, not the outcome. `REJECT_RELATIONSHIP_NOT_WATCHED` is a
+ * setting an administrator can change; `REJECT_RELATIONSHIP_INACTIVE` is not; and a single
+ * `REJECT_INELIGIBLE` would have hidden that difference in exactly the corpus that exists
+ * to surface it.
+ */
+export type EmailIngressReasonCode =
+    | "ADMIT_ALLOY_THREAD"
+    | "ADMIT_PURPOSE_IDENTITY"
+    | "ADMIT_WATCHED_RELATIONSHIP"
+    | "ADMIT_EXPLICIT_ALLOW"
+    | "REVIEW_ACQUISITION_CANDIDATE"
+    | "REVIEW_SHARED_ENDPOINT"
+    | "REVIEW_UNAUTHENTICATED_RELATIONSHIP"
+    | "REJECT_NOT_ADDRESSED_TO_ALLOY"
+    | "REJECT_NO_ADMITTING_EVIDENCE"
+    | "REJECT_RELATIONSHIP_NOT_WATCHED"
+    | "REJECT_RELATIONSHIP_INACTIVE";
+
+/**
+ * How the decision was reached. A closed union with one member, deliberately.
+ *
+ * The brief requires `confidence_basis` to be "deterministic, never AI". A boolean
+ * `usedAi: false` could be flipped by any future caller; a string could be set to
+ * anything. A type whose only inhabitant is `"deterministic"` means an AI-derived
+ * decision cannot be represented in this shape at all — the constraint is carried by the
+ * compiler rather than by reviewer vigilance. Admitting an AI path later would require
+ * widening this union, which is a visible, reviewable change.
+ */
+export type EmailIngressConfidenceBasis = "deterministic";
+
+/**
+ * What the caller would be authorized to fetch under enforcement.
+ *
+ * `none` is the load-bearing value: it is what would let an ingress receipt record that a
+ * message arrived and its body was never requested. In OBSERVE-ONLY mode nothing reads
+ * this to decide anything — see `observeEmailIngressEligibility`.
  */
 export type IngressRetrievalGrant = "none" | "full";
 
@@ -297,26 +352,27 @@ export type SenderAssertion =
     /** Nothing is known about this sender, and nothing should be inferred. */
     | { kind: "unknown" };
 
-export type EmailIngressDecision =
-    | {
-          admitted: true;
-          lane: EmailIngressLane;
-          retrieval: IngressRetrievalGrant;
-          /** The matched identity, and therefore the intake context the address supplies. */
-          identity: IngressIdentity;
-          intakePurposeKey: string | null;
-          senderAssertion: SenderAssertion;
-          /** Human-auditable statement of what actually proved admission. */
-          evidence: string;
-      }
-    | {
-          admitted: false;
-          refusal: EmailIngressRefusal;
-          retrieval: "none";
-          /** The identity that was addressed, when one was — null for `not_addressed_to_alloy`. */
-          identity: IngressIdentity | null;
-          evidence: string;
-      };
+export type EmailIngressDecision = {
+    disposition: EmailIngressDisposition;
+    lane: EmailIngressLane;
+    reasonCode: EmailIngressReasonCode;
+    /** Human-auditable statement of what actually proved (or failed to prove) admission. */
+    evidence: string;
+    confidenceBasis: EmailIngressConfidenceBasis;
+    retrieval: IngressRetrievalGrant;
+    /** The matched identity, and therefore the intake context. Null when none was addressed. */
+    identity: IngressIdentity | null;
+    intakePurposeKey: string | null;
+    senderAssertion: SenderAssertion;
+    /** The correlated thread, when Lane A proved one. Never a thread we merely guessed. */
+    matchedThreadId: string | null;
+    policyVersion: string;
+};
+
+/** Convenience for callers that only care whether enforcement would have let it through. */
+export function wouldAdmit(decision: EmailIngressDecision): boolean {
+    return decision.disposition !== "WOULD_REJECT";
+}
 
 /* ---------------------------------------------------------------------------
  * RESOLUTION
@@ -365,7 +421,7 @@ export function resolveAddressedIdentity(
  * Does this message carry an Alloy conversation token at all?
  *
  * Shape only. Whether the token names a message in THIS organization is
- * `hasResolvableAlloyThread`, which the caller establishes with an org-scoped lookup —
+ * `resolvedAlloyThreadId`, which the caller establishes with an org-scoped lookup —
  * see the note on that field.
  */
 export function carriesAlloyThreadToken(envelope: EmailIngressEnvelope): boolean {
@@ -417,13 +473,13 @@ function assertSender(
 }
 
 /**
- * Decide whether Alloy may ingest this message.
+ * Decide what Alloy WOULD do with this message.
  *
  * PRECEDENCE, and why it is this order:
  *
  *   0. addressed to a configured identity — not precedence, a precondition. Mail naming
  *      no Alloy identity is not refused, it is simply not ours, and saying so with its own
- *      refusal keeps "we declined this" distinct from "this was never offered".
+ *      reason code keeps "we declined this" distinct from "this was never offered".
  *
  *   1. conversation continuity — the only evidence the sender cannot manufacture. It
  *      outranks everything, including a purpose address, because a reply to a conversation
@@ -440,38 +496,67 @@ function assertSender(
  *   5. explicit allow — last, so it can never quietly pre-empt a lane that would have
  *      recorded better evidence for the same admission.
  *
- *   6. refuse, with `retrieval: "none"`.
+ *   6. reject, with `retrieval: "none"`.
  */
 export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): EmailIngressDecision {
     const { envelope, policy } = ctx;
 
     const identity = resolveAddressedIdentity(envelope, policy.identities);
+    const senderAssertion = assertSender(ctx.senderRelationships, policy, envelope);
+    const base = {
+        confidenceBasis: "deterministic" as const,
+        senderAssertion,
+        policyVersion: EMAIL_INGRESS_POLICY_VERSION,
+        matchedThreadId: ctx.resolvedAlloyThreadId ?? null,
+    };
+
     if (!identity) {
         return {
-            admitted: false,
-            refusal: "not_addressed_to_alloy",
+            ...base,
+            disposition: "WOULD_REJECT",
+            lane: "none",
+            reasonCode: "REJECT_NOT_ADDRESSED_TO_ALLOY",
             retrieval: "none",
             identity: null,
+            intakePurposeKey: null,
+            matchedThreadId: null,
             evidence: "No configured receiving identity appears among the recipients.",
         };
     }
 
     const intakePurposeKey = identity.role === "purpose" ? (identity.intakePurposeKey ?? null) : null;
-    const senderAssertion = assertSender(ctx.senderRelationships, policy, envelope);
-    const admit = (lane: EmailIngressLane, evidence: string): EmailIngressDecision => ({
-        admitted: true,
+    const admit = (
+        disposition: EmailIngressDisposition,
+        lane: EmailIngressLane,
+        reasonCode: EmailIngressReasonCode,
+        evidence: string
+    ): EmailIngressDecision => ({
+        ...base,
+        disposition,
         lane,
+        reasonCode,
         retrieval: "full",
         identity,
         intakePurposeKey,
-        senderAssertion,
+        evidence,
+    });
+    const refuse = (reasonCode: EmailIngressReasonCode, evidence: string): EmailIngressDecision => ({
+        ...base,
+        disposition: "WOULD_REJECT",
+        lane: "none",
+        reasonCode,
+        retrieval: "none",
+        identity,
+        intakePurposeKey,
         evidence,
     });
 
     // 1 — Lane A.
-    if (ctx.hasResolvableAlloyThread) {
+    if (ctx.resolvedAlloyThreadId) {
         return admit(
+            "WOULD_INGEST",
             "conversation_continuity",
+            "ADMIT_ALLOY_THREAD",
             "In-Reply-To/References names an Alloy-minted Message-ID resolving to a conversation in this organization."
         );
     }
@@ -479,18 +564,24 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
     // 2 — Lane C.
     if (identity.role === "purpose") {
         return admit(
+            "WOULD_INGEST",
             "purpose_intake",
+            "ADMIT_PURPOSE_IDENTITY",
             `Addressed to the dedicated purpose identity ${identity.address}${
                 intakePurposeKey ? ` (${intakePurposeKey})` : ""
             }; the recipient supplies the authorization.`
         );
     }
 
-    // 3 — Lane D.
+    // 3 — Lane D. Admission is certain; what it should BECOME is not. Creating a Lead from
+    // unauthenticated mail is a separate decision with its own boundary, so the honest
+    // disposition is review rather than ingest.
     if (identity.role === "acquisition") {
         return admit(
+            "WOULD_REQUIRE_REVIEW",
             "acquisition",
-            `Addressed to the dedicated acquisition identity ${identity.address}; unknown senders are expected here.`
+            "REVIEW_ACQUISITION_CANDIDATE",
+            `Addressed to the dedicated acquisition identity ${identity.address}; unknown senders are expected, and no Lead is created without a human decision.`
         );
     }
 
@@ -499,18 +590,31 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
     if (watched) {
         const requireAuth = policy.requireAuthenticatedSenderForRelationshipWatch !== false;
         if (requireAuth && !authenticationPassed(envelope)) {
-            return {
-                admitted: false,
-                refusal: "relationship_unauthenticated",
-                retrieval: "none",
-                identity,
-                evidence: `Sender claims an address holding a watched ${watched.kind} relationship, but sender authentication reported "${
+            // NOT a rejection. A watched relationship really does exist on this address;
+            // what failed is the proof that the sender holds it. Rejecting would silently
+            // discard a possibly-genuine parent, and admitting would file a possible spoof
+            // into that family's conversation. Both are decisions a person should make.
+            return admit(
+                "WOULD_REQUIRE_REVIEW",
+                "relationship_watch",
+                "REVIEW_UNAUTHENTICATED_RELATIONSHIP",
+                `Sender claims an address holding a watched ${watched.kind} relationship, but sender authentication reported "${
                     envelope.authentication ?? "unknown"
-                }". Admission on an unauthenticated From would admit a spoof.`,
-            };
+                }". The relationship is real; the claim to it is unproven.`
+            );
+        }
+        if (senderAssertion.kind === "shared_endpoint") {
+            return admit(
+                "WOULD_REQUIRE_REVIEW",
+                "relationship_watch",
+                "REVIEW_SHARED_ENDPOINT",
+                `Sender holds an active watched ${watched.kind} relationship on an address ${senderAssertion.relationship.personIds.length} Persons share; the relationship is real and names nobody.`
+            );
         }
         return admit(
+            "WOULD_INGEST",
             "relationship_watch",
+            "ADMIT_WATCHED_RELATIONSHIP",
             `Sender holds an active watched ${watched.kind} relationship and sender authentication passed.`
         );
     }
@@ -519,40 +623,40 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
     const sender = normalizeEmailAddress(envelope.sender);
     const allowed = normalizedSet(policy.explicitAllowAddresses ?? []);
     if (sender && allowed.includes(sender)) {
-        return admit("explicit_allow", `Sender ${sender} is on the organization's explicit allow list.`);
+        return admit(
+            "WOULD_INGEST",
+            "explicit_allow",
+            "ADMIT_EXPLICIT_ALLOW",
+            `Sender ${sender} is on the organization's explicit allow list.`
+        );
     }
 
-    // 6 — refuse, as narrowly as the facts allow. The distinction between these matters
-    // to an administrator: "we do not watch vendors" is a setting they can change, and
-    // "this person is no longer enrolled" is not.
+    // 6 — reject, as narrowly as the facts allow. The distinction between these matters to
+    // an administrator: "we do not watch vendors" is a setting they can change, and "this
+    // family left" is not.
+    //
+    // ENDED beats UNWATCHED, deliberately. A former guardian holds an inactive relationship
+    // of a kind nobody watches, so both codes are literally true — and reporting
+    // "not watched" invites exactly the wrong fix, because ticking a box would not bring
+    // them back. Whether a relationship still exists is the more specific fact, so it wins.
     const anyRelationship = ctx.senderRelationships[0] ?? null;
     if (anyRelationship) {
-        const watchedKinds = policy.watchedRelationshipKinds;
-        const kindIsWatched = ctx.senderRelationships.some((r) => watchedKinds.includes(r.kind));
-        if (kindIsWatched) {
-            return {
-                admitted: false,
-                refusal: "relationship_inactive",
-                retrieval: "none",
-                identity,
-                evidence: `Sender holds a watched ${anyRelationship.kind} relationship, but it is not active.`,
-            };
+        const anyActive = ctx.senderRelationships.some((r) => r.status === "active");
+        if (!anyActive) {
+            return refuse(
+                "REJECT_RELATIONSHIP_INACTIVE",
+                `Sender holds a ${anyRelationship.kind} relationship, and it is no longer active.`
+            );
         }
-        return {
-            admitted: false,
-            refusal: "relationship_not_watched",
-            retrieval: "none",
-            identity,
-            evidence: `Sender holds a ${anyRelationship.kind} relationship, which this organization does not watch.`,
-        };
+        const activeKinds = ctx.senderRelationships.filter((r) => r.status === "active").map((r) => r.kind);
+        return refuse(
+            "REJECT_RELATIONSHIP_NOT_WATCHED",
+            `Sender holds an active ${activeKinds[0]} relationship, which this organization does not watch.`
+        );
     }
 
-    return {
-        admitted: false,
-        refusal: "no_admitting_evidence",
-        retrieval: "none",
-        identity,
-        evidence:
-            "Addressed to a general operational identity with no Alloy conversation, no watched relationship and no explicit allow. Body and attachments were never requested.",
-    };
+    return refuse(
+        "REJECT_NO_ADMITTING_EVIDENCE",
+        "Addressed to a general operational identity with no Alloy conversation, no watched relationship and no explicit allow. Under enforcement, body and attachments would never be requested."
+    );
 }

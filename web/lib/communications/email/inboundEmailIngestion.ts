@@ -52,6 +52,7 @@ import {
     surrogateEmailSenderAnchor,
 } from "@/lib/communications/email/inboundEmailAnchor";
 import type { ResendRetrievalResult } from "@/lib/communications/email/resendReceivingClient";
+import { observeEmailIngressEligibility } from "@/lib/communications/ingress/observeEmailIngressEligibility";
 
 export const EMAIL_PROVIDER = "resend";
 
@@ -474,6 +475,14 @@ export async function ingestResendInboundEmail(
         endpointCandidateThreadIds: endpointThreadIds,
     });
 
+    // Lane A evidence for the observe-only gate, taken from the lookup that just ran.
+    //
+    // Only the header-derived candidates count. `endpointCandidateThreadIds` is
+    // sender/recipient provenance — the weakest evidence in the correlation model, and
+    // explicitly NOT proof that this is a reply to something Alloy sent. Passing it would
+    // inflate Lane A with messages that merely share an endpoint with an old conversation.
+    const alloyThreadEvidenceId = inReplyToThreadIds[0] ?? referencesThreadIds[0] ?? null;
+
     // 5 — identity. Unchanged from SMS: exactly one match, or nobody.
     const person = await resolvePersonByEmail(deps, orgId, senderAddress);
 
@@ -645,6 +654,44 @@ export async function ingestResendInboundEmail(
     // surface say receiving works. Stamped after persistence so the claim can
     // never outrun the message it is claiming about.
     await stampInboundObservation(deps, orgId, ownershipCandidateAddresses(event), email.receivedAt);
+
+    // 8 — OBSERVE-ONLY. What the deterministic ingress eligibility gate WOULD have
+    // decided about this message, recorded as evidence and acting on nothing.
+    //
+    // LAST, deliberately. Everything above has already happened: the message is
+    // persisted, the receive event is emitted, the receipt is resolved, and the return
+    // value below is already determined by state this call cannot touch. Observe-only is
+    // therefore a property of WHERE this sits, not of the try/catch inside it — there is
+    // no subsequent statement for a failure to reach, and no future edit can quietly
+    // change that without moving this line.
+    //
+    // The envelope handed over is metadata only. `email.text` and `email.html` are in
+    // scope right here and are deliberately not passed: the gate must remain a function
+    // of what a provider discloses WITHOUT body access, or the observations would measure
+    // a policy that could never be enforced pre-retrieval.
+    await observeEmailIngressEligibility(
+        {
+            orgId,
+            provider: EMAIL_PROVIDER,
+            providerMessageId: event.emailId,
+            envelope: {
+                recipients: ownershipCandidateAddresses(event),
+                sender: senderAddress,
+                messageId: email.messageId,
+                inReplyTo: email.inReplyTo,
+                references: email.references,
+                subject: email.subject,
+                hasAttachments: email.attachments.length > 0,
+                // Derived from the headers the receiving transport stamped, and `unknown`
+                // whenever it stamped none — which the gate treats exactly as a failure
+                // wherever authentication is load-bearing. Reporting `pass` by default to
+                // make Lane B look better would be inventing an assurance.
+                authentication: email.authentication,
+            },
+            resolvedAlloyThreadId: alloyThreadEvidenceId,
+        },
+        deps
+    );
 
     return {
         status: "persisted",
