@@ -158,8 +158,15 @@ export function collapseLevels(levels: readonly PermissionGridLevel[]): AreaAuth
  *
  * A `limited` area states its own arithmetic — *"Limited · 2 of 6"* — because the word alone would
  * be the collapse this module exists to refuse. The others carry no count: they are already exact.
+ *
+ * Takes the three fields it reads rather than the whole {@link RoleAuthorityArea}, so the Users
+ * chapter's {@link ExplainedArea} — the same reading, carrying role attribution instead of rows —
+ * renders through this function instead of restating the vocabulary. One definition of what
+ * "Limited" says, for both chapters.
  */
-export function areaAuthorityLabel(area: RoleAuthorityArea): string {
+export function areaAuthorityLabel(
+    area: Pick<RoleAuthorityArea, "authority" | "granted" | "enforcedTotal">,
+): string {
     switch (area.authority) {
         case "manage":
             return "Manage";

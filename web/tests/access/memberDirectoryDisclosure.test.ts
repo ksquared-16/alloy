@@ -18,7 +18,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const webRoot = process.cwd();
@@ -315,14 +315,75 @@ describe("W14-F1 — the picker agrees with the route it consumes", () => {
 });
 
 describe("W14-F1 — non-vacuity: the removed defect is convicted by name", () => {
-    const pickerSource = readFileSync(
-        join(webRoot, "components/admin/opportunity/OperationalWorkAssigneeSelect.tsx"),
-        "utf8"
-    );
+    /**
+     * EVERY consumer of the roster projection, discovered rather than named.
+     *
+     * This scan used to read one file. The OD-2 reconciliation is why it no longer does: staging had
+     * added `TourInternalRecipientsMultiSelect`, a second consumer of
+     * `fetchOperationalWorkOrgUsers`, carrying `label: row.email?.trim() || row.label` — the exact
+     * expression W14-F1 removed from the first picker, in a file this lock's subject did not
+     * include. It surfaced as a TYPE error on merge, because the option type no longer has the
+     * field; had the type still carried it, the defect would have arrived silently.
+     *
+     * `W-5`'s question again — *does it DISCOVER or ENUMERATE?* — and the enumerated answer failed
+     * the same way it has failed four times before in this register. The subject is now every file
+     * that consumes the projection.
+     */
+    /** Comments removed, so a scan cannot be satisfied — or convicted — by prose. */
+    function executableSource(src: string): string {
+        return src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+    }
 
-    it("the picker no longer prefers a raw address as the option text", () => {
+    it("the strip is real — the removed expression in a COMMENT does not convict", () => {
+        expect(executableSource("// old: label: row.email?.trim() || row.label")).not.toMatch(/row\.email/);
+        expect(executableSource("label: row.email?.trim() || row.label,")).toMatch(/row\.email/);
+    });
+
+    function rosterConsumers(): string[] {
+        const out: string[] = [];
+        const walk = (rel: string) => {
+            for (const entry of readdirSync(join(webRoot, rel))) {
+                const child = `${rel}/${entry}`;
+                if (statSync(join(webRoot, child)).isDirectory()) walk(child);
+                else if (/\.tsx?$/.test(entry) && readFileSync(join(webRoot, child), "utf8").includes("fetchOperationalWorkOrgUsers")) {
+                    out.push(child);
+                }
+            }
+        };
+        walk("app");
+        walk("components");
+        return out.sort();
+    }
+
+    it("the scan finds more than one consumer — the enumerated version could not have", () => {
+        const consumers = rosterConsumers();
+        expect(consumers).toContain("components/admin/opportunity/OperationalWorkAssigneeSelect.tsx");
+        expect(consumers.length, "discovery found only the file the old lock named").toBeGreaterThan(1);
+    });
+
+    it("NO consumer prefers a raw address as the option text", () => {
         // The defect was literally `label: row.email?.trim() || row.label`.
-        expect(pickerSource).not.toMatch(/row\.email/);
+        //
+        // Comment-stripped, and the first run of this scan is why: the fix to the tour picker
+        // records the removed expression in a comment, and an unstripped scan convicted the very
+        // change that removed it. Third time this branch has paid for that — `@/lib/revoke`,
+        // `data-capability="planned"`, and now here.
+        const offenders = rosterConsumers().filter((rel) =>
+            /row\.email/.test(executableSource(readFileSync(join(webRoot, rel), "utf8"))),
+        );
+        expect(
+            offenders,
+            "the roster projection withholds the address; a consumer that reads one is reading a "
+                + "field the route no longer returns, and asking for the defect back",
+        ).toEqual([]);
+    });
+
+    it("the sibling picker carries no address field into the component at all", () => {
+        const pickerSource = readFileSync(
+            join(webRoot, "components/admin/opportunity/OperationalWorkAssigneeSelect.tsx"),
+            "utf8",
+        );
+        expect(executableSource(pickerSource)).not.toMatch(/row\.email/);
     });
 
     it("the route reads the managing predicate rather than a second one that agrees today", () => {

@@ -240,7 +240,12 @@ export function keysForLevel(row: PermissionGridRow, level: PermissionGridLevel)
     return [...new Set([...row.readKeys, ...row.writeKeys])];
 }
 
-export function levelFromGrantedKeys(row: PermissionGridRow, granted: Set<string>): PermissionGridLevel {
+/**
+ * `granted` is READ-ONLY here — the parameter is `ReadonlySet` so a caller holding an immutable
+ * authority set (which `authoritySetKeysForDisplay` returns, deliberately, so a surface cannot
+ * mutate a loaded grant set in place) does not have to copy it or cast it away.
+ */
+export function levelFromGrantedKeys(row: PermissionGridRow, granted: ReadonlySet<string>): PermissionGridLevel {
     const hasWrite = row.writeKeys.some((k) => granted.has(k));
     if (hasWrite) return "write";
     const hasRead = row.readKeys.some((k) => granted.has(k));

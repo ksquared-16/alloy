@@ -139,7 +139,13 @@ export async function claimActionLink(
                 eq: (col: string, val: string) => {
                     is: (col: string, val: null) => {
                         select: (cols: string) => {
-                            maybeSingle: () => Promise<{ data: unknown; error: unknown }>;
+                            // `PromiseLike`, not `Promise`. Supabase's `maybeSingle()` returns a
+                            // `PostgrestBuilder`, which is thenable — `await` works on it — but has
+                            // no `catch`/`finally`. Requiring the full `Promise` shape made this
+                            // structural parameter reject the real `SupabaseClient` every caller
+                            // passes, which is over-specification, not safety: nothing here calls
+                            // anything but `await`.
+                            maybeSingle: () => PromiseLike<{ data: unknown; error: unknown }>;
                         };
                     };
                 };
