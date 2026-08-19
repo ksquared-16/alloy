@@ -12,7 +12,10 @@ export const ANALYTICS_READ_PERMISSION = "reports.read" as const;
 export const ANALYTICS_MANAGE_PERMISSION = "reports.write" as const;
 
 export type AnalyticsReadSubject = {
-    /** admin/ops role_key present for the resolved org (today's portal admission). */
+    /**
+     * admin/ops role_key present for the resolved org. Carried, and deliberately NOT consulted —
+     * see `canReadAnalytics`. `I-35`ᴮ: admission may deny, never authorize.
+     */
     portalEligible: boolean;
     permissionKeys: string[];
 };
@@ -20,16 +23,25 @@ export type AnalyticsReadSubject = {
 /**
  * True when the caller may read org-wide analytics.
  *
- * Portal-eligible principals qualify unconditionally — that preserves today's behaviour for every
- * `admin`/`ops` operator exactly. Everyone else needs an explicit grant, which closes the exposure
- * where any authenticated org member (`regional_lead`, `school_director`) could read org-wide
- * metrics from a route that gated on `access.ok` alone.
+ * **W-13 / `I-35`ᴮ — this gate no longer accepts an admission predicate.** It opened with
+ * `if (subject.portalEligible) return true`, which is `I-35`ᴮ's exact prohibition: *an admission
+ * predicate MUST NOT satisfy a capability gate*. `04…:752` names the cost of leaving it — *"the
+ * fifth layer survives under a new name"* — and it was the third and last site where
+ * `portalEligible` conferred authority rather than merely filtering admission. Every other reader
+ * in the tree DENIES on it (`if (!portalEligible) → 403`), which `I-35`ᴮ permits, because admission
+ * may refuse.
  *
- * Shape mirrors `canReadProgramPublication` in `app/api/admin/configuration/programs/route.ts`.
- * The `portalEligible` leg is what W-13 replaces with a `portal.access` capability.
+ * **Admission is preserved, not narrowed.** `portalEligible` is `admin` OR `ops`, and `reports.read`
+ * was granted to `admin` only. `20260819120000` grants it to `ops` for every org that defines the
+ * role, and aborts if any org is left uncovered — so every principal admitted by the removed leg is
+ * admitted by a capability instead. The read key only: this gate reads, and granting `reports.write`
+ * would have handed `ops` a mutation capability it does not have.
+ *
+ * `portalEligible` remains in the SUBJECT TYPE deliberately. Callers still resolve it, and the field
+ * documents that this gate was told about admission and declined to authorize on it. Deleting the
+ * field would make the refusal invisible.
  */
 export function canReadAnalytics(subject: AnalyticsReadSubject): boolean {
-    if (subject.portalEligible) return true;
     return (
         subject.permissionKeys.includes(ANALYTICS_READ_PERMISSION)
         || subject.permissionKeys.includes(ANALYTICS_MANAGE_PERMISSION)
