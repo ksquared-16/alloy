@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-19
+supersedes: []
+---
+
 # Q15 — what the real-tenant authority census answered
 
 **Executed** 2026-08-19T19:08:36Z by Director on the trusted host.

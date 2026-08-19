@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-19
+supersedes: []
+---
+
 # Worker → Director governed-action seam — root cause and handoff
 
 **Status:** diagnosed here, implementable only in the Gateway lane.
