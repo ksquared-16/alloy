@@ -30,6 +30,7 @@ import {
     compileParticipantArtifact,
     type CompiledArtifactControl,
 } from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
+import { participantSignaturePrompt } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -560,11 +561,22 @@ export function FormEmbedClient({
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
-                <IntakeCompletion
-                    title="All done — thank you."
-                    body="You've finished every form in this packet. Our staff will review your submissions and follow up if anything else is needed."
-                    hint="You can close this window."
-                />
+                {/* An enrollment journey ends in the journey's own words — the parent finished
+                    their child's enrollment paperwork, not "a packet". The generic packet copy
+                    stays for every non-enrollment link, byte-identical. */}
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        title="All done — thank you."
+                        body="You've finished every form in this packet. Our staff will review your submissions and follow up if anything else is needed."
+                        hint="You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
@@ -580,11 +592,19 @@ export function FormEmbedClient({
     if (submitted) {
         return (
             <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
-                <IntakeCompletion
-                    title="Thank you — your form was submitted."
-                    body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."
-                    hint="You can close this window."
-                />
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        title="Thank you — your form was submitted."
+                        body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."
+                        hint="You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
@@ -691,9 +711,16 @@ export function FormEmbedClient({
     const compiled = enrollmentReview
         ? compileParticipantArtifact(schema, (payload.values ?? {}) as Record<string, unknown>)
         : null;
-    const finalPhaseFieldIds = compiled
-        ? [...compiled.acknowledgments, ...compiled.signatures].map((c) => c.field_id)
-        : [];
+    /**
+     * Acknowledgment, then signature — STRUCTURALLY, not by document order.
+     *
+     * On the QA form the authored order happens to agree, but the contract is the participant's:
+     * you confirm you have reviewed the content, and signing is the last thing you do. Rendering
+     * the two classifications as separate phases makes that ordering independent of where an OCR'd
+     * document happened to place its controls.
+     */
+    const ackFieldIds = compiled ? compiled.acknowledgments.map((c) => c.field_id) : [];
+    const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
 
     /**
      * An edit at review writes THROUGH the shared-value mechanism, never into one artifact.
@@ -830,20 +857,45 @@ export function FormEmbedClient({
                             </div>
                         )}
                     />
-                    {/* The FINAL phase: after the content has been read comes the acknowledging and
-                        the signing. Rendered by the Forms engine, because what an acknowledgment
-                        and a signature MEAN is the Form's authority — only their place on the page
-                        is decided here. */}
-                    {finalPhaseFieldIds.length > 0 ? (
+                    {/* The FINAL phases: after the content has been read comes the acknowledging,
+                        and signing comes last. Rendered by the Forms engine, because what an
+                        acknowledgment and a signature MEAN — validation, evidence, audit — is the
+                        Form's authority; only their place on the page is decided here. */}
+                    {ackFieldIds.length > 0 ? (
                         <div
                             className="mt-8 border-t border-alloy-midnight/[0.08] pt-6 [&_header]:hidden"
-                            data-artifact-final-phase="true"
+                            data-artifact-final-phase="acknowledgment"
                         >
-                            <h3 className="pb-3 text-[15px] font-medium text-alloy-midnight">
-                                Acknowledge and sign
-                            </h3>
+                            <p className="pb-3 text-[15px] text-alloy-midnight">
+                                Please confirm you&rsquo;ve reviewed the information above.
+                            </p>
                             <FormEngineRenderer
-                                schema={reviewControlSubSchema(schema, finalPhaseFieldIds)}
+                                schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                payload={payload}
+                                onChange={(next) => {
+                                    setValidationErrors(null);
+                                    setMessage(null);
+                                    setPayload(next);
+                                    void persistDraft(next);
+                                }}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        </div>
+                    ) : null}
+                    {signatureFieldIds.length > 0 ? (
+                        <div
+                            className="mt-8 border-t border-alloy-midnight/[0.08] pt-6 [&_header]:hidden"
+                            data-artifact-final-phase="signature"
+                        >
+                            <p className="pb-3 text-[15px] text-alloy-midnight">
+                                {participantSignaturePrompt()}
+                            </p>
+                            <FormEngineRenderer
+                                schema={reviewControlSubSchema(schema, signatureFieldIds)}
                                 payload={payload}
                                 onChange={(next) => {
                                     setValidationErrors(null);

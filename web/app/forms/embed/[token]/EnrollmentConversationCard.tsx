@@ -27,12 +27,10 @@ import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRunti
 import {
     controlForTurn,
     displayValue,
-    naturalFieldLabel,
     optionalAffirmLabel,
     optionalSkipLabel,
     participantIntro,
     participantQuestion,
-    participantSignaturePrompt,
     progressLine,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
@@ -205,7 +203,9 @@ export function EnrollmentConversationCard({
     if (control.kind === "handoff") {
         // Shared collection is done. Alloy says so in the same voice it has used throughout, the
         // conversation so far stays above it, and the POPULATED artifact follows below — with the
-        // acknowledgment and signature where they belong, in the document.
+        // acknowledgment and signature where they belong, in the document. The signature prompt is
+        // NOT spoken here: it belongs beside the signature itself, which is the review's last
+        // phase, not its first line.
         return (
             <IntakeCard>
                 {settled.length > 0 ? (
@@ -219,7 +219,6 @@ export function EnrollmentConversationCard({
                     </div>
                 ) : null}
                 <Said who="alloy">{participantQuestion(objective)}</Said>
-                <p className="pt-3 text-[15px] text-alloy-midnight/55">{participantSignaturePrompt()}</p>
             </IntakeCard>
         );
     }

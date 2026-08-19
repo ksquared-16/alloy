@@ -246,7 +246,7 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
 
 /** The line that introduces the signature, once the paperwork has been reviewed. */
 export function participantSignaturePrompt(): string {
-    return "Everything look good? One last step — sign below.";
+    return "Everything look right? One last step — sign below.";
 }
 
 /**

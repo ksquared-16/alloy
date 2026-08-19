@@ -118,3 +118,82 @@ describe("it is a projection, not a second Forms authority", () => {
         expect(view).toContain('control.kind === "acknowledgment" || control.kind === "signature"');
     });
 });
+
+describe("binding identity travels with the control", () => {
+    it("every control sharing a canonical key IS the same fact — an edit must reach all of them", () => {
+        const twoOccurrences = {
+            fields: [
+                {
+                    id: "dob_page_1",
+                    type: "date",
+                    label: "Child Dob",
+                    field_source: { entity_type: "child", field_key: "child_date_of_birth", shared_value_key: "child_date_of_birth" },
+                },
+                {
+                    id: "dob_page_3",
+                    type: "date",
+                    label: "Date of Birth (repeat)",
+                    field_source: { entity_type: "child", field_key: "child_date_of_birth", shared_value_key: "child_date_of_birth" },
+                },
+            ],
+        } as never;
+        const artifact = compileParticipantArtifact(twoOccurrences, { dob_page_1: "2022-08-18", dob_page_3: "2022-08-18" });
+        const keys = artifact.resolved.map((c) => c.shared_key);
+        expect(keys).toEqual(["child_date_of_birth", "child_date_of_birth"]);
+        // The host fans an edit out over controls with an EQUAL shared_key. Two occurrences with
+        // the same key is the whole mechanism — if this ever splits, an edit updates one box and
+        // the same fact reads as two values on one page.
+        expect(new Set(keys).size).toBe(1);
+    });
+
+    it("an unbound control has no shared identity and cannot claim one", () => {
+        const artifact = compileParticipantArtifact(SCHEMA, RESOLVED);
+        const unbound = artifact.sections[0].controls.find((c) => c.field_id === "field_1");
+        expect(unbound?.shared_key).toBeNull();
+    });
+});
+
+describe("negative controls — the raw Form cannot silently become the review", () => {
+    const host = code("app/forms/embed/[token]/FormEmbedClient.tsx");
+    /** The enrollment-review branch of the host's render chain, and everything after it. */
+    const reviewStart = host.indexOf("enrollmentReview && compiled ?");
+    const reviewEnd = host.indexOf(": familyMode && famStep ?");
+    const reviewBranch = host.slice(reviewStart, reviewEnd);
+
+    it("the review branch exists and takes precedence over every Form-rendering branch", () => {
+        // -1 on either index means the chain was reordered or the branch was removed — both are the
+        // regression this test exists to catch: an enrollment journey falling through to a Form.
+        expect(reviewStart).toBeGreaterThan(-1);
+        expect(reviewEnd).toBeGreaterThan(reviewStart);
+        expect(reviewBranch).toContain("<CompiledArtifactReview");
+    });
+
+    it("inside the review, Forms renders only carved sub-schemas — never the whole artifact as inputs", () => {
+        // Every FormEngineRenderer in the review branch must take a reviewControlSubSchema carve.
+        const usages = reviewBranch.split("<FormEngineRenderer").slice(1);
+        expect(usages.length).toBeGreaterThan(0);
+        for (const usage of usages) {
+            expect(usage).toContain("schema={reviewControlSubSchema(schema,");
+        }
+        // The raw whole-schema pass is the fallback this guards against.
+        expect(reviewBranch).not.toContain("schema={schema}");
+        // POSITIVE CONTROL: the whole-schema pass still exists for ordinary links — if this ever
+        // fails the assertion above is checking a vocabulary that no longer exists.
+        expect(host.slice(reviewEnd)).toContain("schema={schema}");
+    });
+
+    it("acknowledgment precedes signature structurally, and signing is last", () => {
+        const ack = reviewBranch.indexOf('data-artifact-final-phase="acknowledgment"');
+        const sig = reviewBranch.indexOf('data-artifact-final-phase="signature"');
+        expect(ack).toBeGreaterThan(-1);
+        expect(sig).toBeGreaterThan(ack);
+    });
+
+    it("an edit at review records the D-99 confirmation with the value, in one write", () => {
+        const edit = code("lib/enrollment/participantRuntime/applyParticipantValueEdit.ts");
+        // Without this, fingerprint invalidation re-opens the need and the runtime asks the parent
+        // to confirm the value they just typed. Observed live before the patch existed.
+        expect(edit).toContain("buildEnrollmentNeedConfirmationPatch");
+        expect(edit).toContain("shallowMergeSharedValues");
+    });
+});
