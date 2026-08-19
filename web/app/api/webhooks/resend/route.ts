@@ -9,6 +9,8 @@ import { resendTypeToCanonical } from "@/lib/communications/v2/deliveryReceiptMa
 import { normalizeResendReceivedEvent } from "@/lib/communications/email/inboundEmailNormalization";
 import { ingestResendInboundEmail } from "@/lib/communications/email/inboundEmailIngestion";
 import { fetchReceivedEmail } from "@/lib/communications/email/resendReceivingClient";
+import type { ResendRetrievalResult } from "@/lib/communications/email/resendReceivingClient";
+import { resolveInboundRetrievalCredential } from "@/lib/communications/email/inboundRetrievalCredential";
 
 /** Provider timestamp when supplied, otherwise now. */
 function occurredAtOf(data: Record<string, unknown>): string {
@@ -19,11 +21,31 @@ function occurredAtOf(data: Record<string, unknown>): string {
 /**
  * The credential used to RETRIEVE received email content.
  *
- * Deliberately the same environment key the send path falls back to, so receiving
- * cannot silently run on a different credential than sending.
+ * Resolved from the OWNING BINDING, after ownership — never from the environment alone.
+ * An organization that connected its own Resend account holds its credential in Vault and
+ * its binding names it `vault:…`; reading `process.env.RESEND_API_KEY` here ignored that
+ * entirely and failed such a tenant with `missing_api_key`.
+ *
+ * An org-owned reference is terminal: if it will not resolve, this fails closed rather than
+ * substituting the deployment key, because doing so would keep a revoked connection alive
+ * under a credential the organization never granted. See `inboundRetrievalCredential.ts`.
  */
-function resendApiKey(): string {
-    return (process.env.RESEND_API_KEY ?? "").trim();
+async function retrieveReceivedEmailForOwner(
+    supabase: ReturnType<typeof createAdminClient>,
+    emailId: string,
+    owner: { orgId: string; secretRef: string | null }
+): Promise<ResendRetrievalResult> {
+    const credential = await resolveInboundRetrievalCredential({
+        supabase,
+        orgId: owner.orgId,
+        secretRef: owner.secretRef,
+    });
+    if (!credential.ok) {
+        // Retryable, and deliberately so: both reasons are configuration the operator can
+        // still fix, and the receipt must stay pending so the message is not discarded.
+        return { ok: false, retryable: true, reason: credential.reason };
+    }
+    return fetchReceivedEmail({ emailId, apiKey: credential.apiKey });
 }
 
 function providerMessageIdTail(id: string): string {
@@ -129,7 +151,7 @@ export async function POST(request: NextRequest) {
 
         const outcome = await ingestResendInboundEmail(event, {
             supabase,
-            retrieve: (id) => fetchReceivedEmail({ emailId: id, apiKey: resendApiKey() }),
+            retrieve: (id, owner) => retrieveReceivedEmailForOwner(supabase, id, owner),
         });
 
         // The ONLY case that refuses the webhook. Resend retries, and the retry
