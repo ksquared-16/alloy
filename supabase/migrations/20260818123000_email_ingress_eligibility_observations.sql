@@ -165,6 +165,14 @@ revoke all on table public.communication_ingress_eligibility_observations from a
 
 alter table public.communication_ingress_eligibility_observations enable row level security;
 
+-- DROP-then-CREATE, because `create policy` has no `if not exists` and a bare CREATE
+-- aborts a replay at this line. That matters more than it looks: the REVOKEs above run
+-- BEFORE this point and the GRANTs run AFTER, so an abort here leaves the table stripped
+-- of the access it is supposed to have and skips the verification block entirely — a
+-- migration that fails halfway into a WORSE state than either end. Found by replaying
+-- this file against a database that already had it.
+drop policy if exists comm_ingress_eligibility_obs_select_org
+    on public.communication_ingress_eligibility_observations;
 create policy comm_ingress_eligibility_obs_select_org
     on public.communication_ingress_eligibility_observations for select to authenticated
     using (exists (
@@ -172,6 +180,8 @@ create policy comm_ingress_eligibility_obs_select_org
         where ur.user_id = auth.uid()
           and ur.org_id = communication_ingress_eligibility_observations.org_id));
 
+drop policy if exists comm_ingress_eligibility_obs_service_all
+    on public.communication_ingress_eligibility_observations;
 create policy comm_ingress_eligibility_obs_service_all
     on public.communication_ingress_eligibility_observations for all to authenticated
     using ((auth.role() = 'service_role'::text))
