@@ -1,4 +1,26 @@
 {
+  "ad25_and_w62_session_20": {
+    "AD-25": "APPROVED by the operator: Membership -> Role -> Capability -> Scope. Explicitly NOT a claim that the resolver reads four stores; the requirement is that its reads map TRUTHFULLY onto four layers.",
+    "W-62": {
+      "state": "COMPLETE. \u00a745.3's acceptance artifact exists and is graded.",
+      "artifact": "web/lib/admin/authorityLayers.ts -- the declared enumeration, beside the resolver.",
+      "mapping": "membership: user_roles (row existence). role: user_roles.role. capability: role_permission_grants. scope: user_access_profiles + user_department_access + user_site_access. compatibility: user_profiles.role and app_users.role, feeding Role, never a fifth layer.",
+      "two_things_not_flattened": "(1) user_roles backs TWO layers -- the row's existence is Membership, its role column is Role. Forcing that into one would be tidier and false. (2) The legacy stores are classified compatibility, are still LIVE, and are listed so W-20's removal is a DELETION from this list rather than a silent change of meaning.",
+      "bidirectional": "Both directions asserted, because one alone is worthless: a model proving only 'every entry is real' passes while the resolver grows an eighth store; one proving only 'every read is declared' passes while a layer is invented with nothing behind it. Plus a floor on the walk so neither can agree with nothing.",
+      "mechanism_aware": "Reads are DISCOVERED from .from(\"...\") in source with comments stripped. Neither the resolver's prose nor the test's own header can satisfy it -- RL-41's lesson and the public-form lock's.",
+      "non_vacuity": "Proved by MUTATION: adding a resolver read without a mapping turns it red; deleting a mapping for a live read turns it red. Both files restored byte-exact."
+    },
+    "I-35B": {
+      "finding": "W-13's exit clause was NOT met. canReadAnalytics.ts:32 opened `if (subject.portalEligible) return true` -- admission AUTHORIZING, which is exactly what I-35B forbids. Its own comment had said since it was written that the leg 'is what W-13 replaces'. 04\u2026:752 names the cost of half-answering AD-22: 'the fifth layer survives under a new name.'",
+      "why_a_naive_scan_would_have_failed": "Eleven other sites read the same predicate and ALL of them DENY on it (`if (!portalEligible) -> 403`), which I-35B permits. A grep for the identifier would convict eleven correct call sites and the one defect equally, so the lock is POLARITY-AWARE.",
+      "preservation_not_narrowing": "portalEligible is admin OR ops; reports.read was granted to admin ONLY. Deleting the leg without a grant would have silently removed analytics from every ops operator -- the unannounced narrowing W-8 is this initiative's own record of. 20260819120000 grants ops the READ key first, validated against the canonical catalog by JOIN rather than merely spelled, and ABORTS if any org is left uncovered. Not reports.write: 'a preservation migration that widens is not a preservation migration.'",
+      "fixtures_reconciled_not_deleted": "The ADMIN fixture now carries reports.read because a real admin HOLDS it (verified in cert), and the unit assertion is INVERTED -- a portal-eligible principal with no grant is now REFUSED. The fixture was modelling admission as authorization; the invariant it protected is preserved by the grant, not by the code."
+    },
+    "four_layer_criterion": "MET as a graded claim. \u00a745.3's definition of done is satisfied: one declared enumeration exists in code, the resolver reads no store absent from it, and a check fails when a store is added. GAP-15 is NOT fully closed -- it also asks for a reconciliation TABLE in 02\u2026, which \u00a743 refusal 1 leaves as 02\u2026's to write.",
+    "why_the_loop_stopped": "W-62 runs last in its batch by construction and unlocks nothing. Every remaining workstream is decision-gated or needs a real-tenant census. Re-verified by enumerating all ten `no decision` workstreams (nine done, W-31 is OD-9) and every workstream carrying no gate in its header.",
+    "tests": "tests/access 673 passed / 6 skipped / 0 failed (was 647). prebuild exit 0. Ledger 352 = repo 352, preflight clean.",
+    "boundary": "Applied to alloy-cert ONLY. Not pushed, not merged, not deployed. OD-2 uncrossed."
+  },
   "od1_released_work_session_19": {
     "summary": "OD-1 applied. Eight migrations now live on alloy-cert; ledger 351 = repo 351, preflight clean, zero orphans. Five workstreams completed after the apply.",
     "W-16_and_W-61_exits": "CLOSED with applied-schema evidence, not authored-schema. W-61: two CASCADE FKs collapsed to one RESTRICT, and deleting a role holding grants now RAISES rather than silently deleting 21 grants. W-16: user_roles(org_id, role) -> role_definitions exists, and inserting an undefined role for a REAL user is refused by the database. The first W-16 proof attempt was inconclusive (a random UUID tripped user_id_fkey first) and is recorded as such.",
