@@ -643,6 +643,8 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
             "w16_user_roles_role_foreign_key",
             "w28_replace_role_permission_grants_rpc",
             "w58_save_role_definition_and_grants",
+            "s3_action_link_token_hash",
+            "s3_action_link_token_drop_plaintext",
         ];
         const authored = AUTHORED_HERE.map((frag) => {
             const file = MIGRATION_FILES.find((f) => f.includes(frag));

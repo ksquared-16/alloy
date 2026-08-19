@@ -1,3 +1,4 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { NextRequest, NextResponse } from "next/server";
 import { claimActionLink } from "@/lib/actionLinks";
 import { emitEvent } from "@/lib/emitEvent";
@@ -15,7 +16,7 @@ export async function POST(
     const { data: row, error: fetchErr } = await supabase
         .from("action_links")
         .select("id, action_type, entity_type, entity_id, consumed_at, expires_at, org_id")
-        .eq("token", token)
+        .eq("token_hash", hashFormLinkToken(token))
         .single();
 
     if (fetchErr || !row) {

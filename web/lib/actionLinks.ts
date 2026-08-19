@@ -1,3 +1,4 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getPublicAppOrigin } from "@/lib/publicAppUrl";
@@ -58,8 +59,12 @@ export async function createActionLink(
     const expiresIn = params.expires_in_minutes ?? 120;
     const expires_at = new Date(Date.now() + expiresIn * 60_000).toISOString();
 
+    // S-3: the row carries the DIGEST, not the bearer token. The plaintext is returned to the
+    // caller (it has to be — it goes in the URL the recipient receives) and is never persisted.
+    // `hashFormLinkToken` is the same SHA-256 hex digest `form_links` has always used; this is that
+    // remediation extended to a second family, not a new scheme.
     const baseRow = {
-        token,
+        token_hash: hashFormLinkToken(token),
         org_id: params.org_id,
         action_type: params.action_type,
         entity_type: params.entity_type,
