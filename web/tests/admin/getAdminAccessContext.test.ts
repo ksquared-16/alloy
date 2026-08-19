@@ -8,25 +8,28 @@ import {
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
 
 describe("chooseOrgAndRoleKeysFromMembershipRows", () => {
-    it("prefers smallest org_id among admin/ops rows when mixed with custom roles", () => {
+    // W-22 / `I-7` inverted the next two. They certified the org tiebreak — smallest `org_id` among
+    // admin/ops rows, else smallest among all — which §9 names *"a silent, unexplainable authority
+    // decision"*. `Q18` (deployed, `tha_f2f89635241cea`) found 0 of 6 principals in more than one
+    // organization, so removing it moves nobody; the helper now REFUSES an ambiguous membership
+    // rather than choosing, because there is no request org to consult. Fixtures unchanged, so the
+    // inputs that proved the old behaviour are the ones proving it is gone.
+
+    it("INVERTED: a membership spanning three orgs no longer resolves to the smallest", () => {
         const rows = [
             { org_id: "z-org", role: "coordinator" },
             { org_id: "a-org", role: "admin" },
             { org_id: "m-org", role: "ops" },
         ];
-        const out = chooseOrgAndRoleKeysFromMembershipRows(rows);
-        expect(out?.orgId).toBe("a-org");
-        expect(out?.roleKeys).toEqual(["admin"]);
+        expect(chooseOrgAndRoleKeysFromMembershipRows(rows)).toBeNull();
     });
 
-    it("uses smallest org among all memberships when no admin/ops", () => {
+    it("INVERTED: custom roles across two orgs no longer resolve to the smallest", () => {
         const rows = [
             { org_id: "b-org", role: "school_director" },
             { org_id: "a-org", role: "regional_lead" },
         ];
-        const out = chooseOrgAndRoleKeysFromMembershipRows(rows);
-        expect(out?.orgId).toBe("a-org");
-        expect(out?.roleKeys).toEqual(["regional_lead"]);
+        expect(chooseOrgAndRoleKeysFromMembershipRows(rows)).toBeNull();
     });
 
     it("aggregates multiple roles for chosen org when admin path picks org", () => {

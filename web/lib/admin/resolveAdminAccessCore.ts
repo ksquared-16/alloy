@@ -176,10 +176,44 @@ function logScopeDivergence(
 }
 
 /**
- * Pure helper: primary org + role_keys[] for that org from membership rows.
- * Primary org rule — preserve CRM semantics:
- * - If any admin/ops rows exist, choose lexicographically smallest org_id among those rows only.
- * - Else choose smallest org_id among all membership rows (custom roles).
+ * The org this membership set resolves to, and the roles held there — or `null`.
+ *
+ * **W-22 / `I-7` — no authority decision depends on UUID ordering.**
+ *
+ * This helper used to CHOOSE. If any `admin`/`ops` rows existed it took the lexicographically
+ * smallest `org_id` among those, else the smallest among all rows, and discarded every role in
+ * every other org. §9 names it for what it is: *"sorting UUIDs is a silent, unexplainable authority
+ * decision."* Two things were wrong with it, and only one is about sorting — the portal-precedence
+ * branch discarded a custom role in another org just as silently, without needing a sort to do it.
+ *
+ * **What replaces it is a refusal, not a different choice.** The membership set resolves when it is
+ * unambiguous, and returns `null` when it is not. `null` denies, everywhere this is called.
+ *
+ * **Why refusing is the right size, and why it is not deferred into the architectural fix.** §9's
+ * full remedy is that authority resolves for an explicit `(principal, org)` pair *determined by the
+ * request* — which means threading an org through every caller, and it remains open. §1.6 governs
+ * the gap: *"where a defect can be closed by showing more and refusing more, that fix is scheduled
+ * ahead of the architectural fix that would make it impossible — and it MUST NOT be deferred into
+ * it."* A resolver that cannot express which org the request meant MUST NOT pick one. This is the
+ * same shape as `W-54`'s refusal: a surface that cannot express a fact must not be able to act on
+ * it.
+ *
+ * **What made this safe to do now, and it is evidence rather than confidence.** The `Q18` census ran
+ * against the deployed tenant on 2026-08-19 through the governed trusted-host path
+ * (`tha_f2f89635241cea`):
+ *
+ * - `Q18-A1` — principals holding memberships in more than one organization: **0 of 6**;
+ * - `Q18-B1` — every principal holds memberships in exactly **1** organization;
+ * - `Q18-A2` — multi-org in portal roles: 0; multi-org in custom roles only: 0;
+ * - `Q18-C1` — principals whose chosen org discards a portal role held elsewhere: **0**.
+ *
+ * So the sort decided nothing on real data, and this change moves nobody. `Q15-B1` reporting
+ * `admin` across 2 orgs is not a contradiction: four admin memberships spread over two orgs, with
+ * each principal in only one of them.
+ *
+ * The refusal is what the zero buys. A principal added to a second org tomorrow is denied and
+ * visible, instead of being silently narrowed to whichever UUID sorts first — which is the failure
+ * this could not have been left open against.
  */
 export function chooseOrgAndRoleKeysFromMembershipRows(
     rows: { org_id: string; role: string }[]
@@ -191,14 +225,16 @@ export function chooseOrgAndRoleKeysFromMembershipRows(
     // (which trimmed) showed a working portal administrator.
     const normalized = rows.map((r) => ({ org_id: r.org_id, role: normalizeRoleKey(r.role) })).filter((r) => r.role);
     if (!normalized.length) return null;
-    const adminOpsRows = normalized.filter((r) => PORTAL_ROLES.has(r.role));
-    const pool = adminOpsRows.length > 0 ? adminOpsRows : normalized;
-    const chosenOrg = [...new Set(pool.map((r) => r.org_id))].sort()[0];
-    if (!chosenOrg) return null;
-    const roleKeys = [
-        ...new Set(normalized.filter((r) => r.org_id === chosenOrg).map((r) => r.role)),
-    ].sort();
-    return roleKeys.length ? { orgId: chosenOrg, roleKeys } : null;
+
+    const orgs = [...new Set(normalized.map((r) => r.org_id))];
+    // Ambiguous. There is no request org to consult, and any rule that resolves this — smallest
+    // UUID, portal rows first, most roles — is an authority decision made where no authority
+    // decision belongs. Refuse.
+    if (orgs.length !== 1) return null;
+
+    const orgId = orgs[0]!;
+    const roleKeys = [...new Set(normalized.map((r) => r.role))].sort();
+    return roleKeys.length ? { orgId, roleKeys } : null;
 }
 
 /**
