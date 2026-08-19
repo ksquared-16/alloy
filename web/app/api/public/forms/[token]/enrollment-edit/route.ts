@@ -14,7 +14,10 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
-import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import {
+    recomputeParticipantObjectiveFromContext,
+    resolveParticipantEnrollmentObjectiveWithContext,
+} from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -109,7 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
      * (`scope:subject:canonical_key`), and only the platform's own needs projection knows that key —
      * deriving it here from the schema would be a second authority over need identity.
      */
-    const before = await resolveParticipantEnrollmentObjective(supabase, {
+    const before = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
         canonicalValues: canonical.values,
@@ -128,18 +131,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
     if (!applied.ok) return publicErr(applied.refusal.detail, 409, { code: applied.refusal.code });
 
-    // Recomputed by the platform, as every other participant mutation is: the response tells the
-    // surface what the runtime now wants, rather than the surface assuming its edit sufficed.
-    const objective = await resolveParticipantEnrollmentObjective(supabase, {
-        orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
-        canonicalValues: canonical.values,
-    });
-    if (!objective.ok) return publicErr(objective.refusal.detail, 409, { code: objective.refusal.code });
+    // Recomputed by the platform, as every other participant mutation is — PURELY: the write's
+    // post-write session is in hand and every other objective input is immutable in this request.
+    const baseSession = before.context.needsContext.session;
+    const objective = recomputeParticipantObjectiveFromContext(
+        before.context,
+        baseSession ? { ...baseSession, ...applied.postWrite } : baseSession,
+    );
 
     return publicOk({
         shared_key: sharedKey,
-        objective: participantObjectiveWireModel(objective.value, {
+        objective: participantObjectiveWireModel(objective, {
             subjectDisplayName: canonical.subjectDisplayName,
         }),
     });

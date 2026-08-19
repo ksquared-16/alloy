@@ -79,7 +79,7 @@ type ProcessInstanceRow = {
 };
 
 const SESSION_COLUMNS =
-    "id, org_id, packet_definition_id, started_via_public_link_id, status, launch_context, crm_snapshot, shared_values, current_sequence_index, packet_instance_id, process_instance_id";
+    "id, org_id, packet_definition_id, started_via_public_link_id, status, launch_context, crm_snapshot, shared_values, metadata, current_sequence_index, packet_instance_id, process_instance_id";
 
 const ITEM_COLUMNS =
     "id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id";

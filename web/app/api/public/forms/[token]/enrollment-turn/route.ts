@@ -20,7 +20,10 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
-import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import {
+    recomputeParticipantObjectiveFromContext,
+    resolveParticipantEnrollmentObjectiveWithContext,
+} from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
@@ -60,17 +63,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
 
     // The turn is read from the platform, never from the client. A stale tab cannot answer a
-    // question the objective has already moved past.
-    const canonical = await resolveParticipantCanonicalContext(supabase, {
-        orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
-    });
-    const current = await resolveParticipantEnrollmentObjective(supabase, {
-        orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
-        canonicalValues: canonical.values,
-    });
-    if (!current.ok) return publicErr(current.refusal.detail, 409, { code: current.refusal.code });
+    // question the objective has already moved past. Canonical record and objective context are
+    // independent reads — one wave; the objective is then re-assembled purely with the canonical
+    // values, and the context carries them forward for the post-write recompute.
+    const [canonical, resolved] = await Promise.all([
+        resolveParticipantCanonicalContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+        }),
+        resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+        }),
+    ]);
+    if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
+    const currentContext = { ...resolved.context, canonicalValues: canonical.values };
+    const current = {
+        ok: true as const,
+        value: recomputeParticipantObjectiveFromContext(currentContext, resolved.context.needsContext.session),
+        context: currentContext,
+    };
 
     const text = typeof body.text === "string" ? body.text : null;
 
@@ -121,6 +133,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // the participant would be asked next for something they were about to confirm.
         canonicalValues: canonical.values,
         nowIso: new Date().toISOString(),
+        // The turn this request already resolved, with its context — the apply layer fetches
+        // nothing it already knows and recomputes the objective purely from post-write state.
+        current: { objective: current.value, context: current.context },
     });
     if (!applied.ok) return publicErr(applied.refusal.detail, 409, { code: applied.refusal.code });
 
