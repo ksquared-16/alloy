@@ -1,4 +1,34 @@
 {
+  "od1_apply_attempt_session_17": {
+    "authorization": "OD-1 approved for the SHARED CERTIFICATION ENVIRONMENT ONLY. Not staging, not production, no push/merge/promotion, OD-2 uncrossed.",
+    "outcome": "NOT APPLIED. Blocked by another session's unpushed migrations already applied to the shared certification database. Nothing of mine reached the database; no partial state.",
+    "target": "alloy-cert, the shared LOCAL Docker certification stack (certification/supabase/config.toml -> project_id=alloy-cert), DB on 127.0.0.1:54422. Confirmed as the intended target. `wt3-communications-inbound-sms` held its lease throughout.",
+    "version_collision_found_and_resolved_before_apply": {
+      "what": "The cert ledger already held rows at TWO of the three version numbers this lane authored, and they were NOT this lane's migrations: 20260818120000 = communication_binding_intake_role, 20260818140000 = communications_binding_ingress_privilege_repair. A push would have SILENTLY SKIPPED W-13 and W-16 -- the exact failure docs/handoffs/access-roles-v2-migration-reconciliation.md records.",
+      "why_the_repo_preflight_did_not_catch_it": "scripts/migration-preflight.mjs compares VERSION NUMBERS, not content. My repo had files at those versions, so they did not read as remote-only. A version-level check cannot see a content mismatch; this is a real gap in the guard.",
+      "resolution": "Renumbered to 20260818170000 (W-13), 20260818180000 (M21/W-61), 20260818190000 (M9/W-16) -- above the cert ledger head 20260818160000. Permitted because NONE of the three had been applied anywhere; the colliding ledger rows were another lane's. Documented rather than silent."
+    },
+    "preflight_results_against_live_cert_schema": {
+      "M21_W61_orphaned_grants": "0 -- PASS. Query run read-only against the live cert database.",
+      "M9_W16_undefined_membership_roles": "0 -- PASS. This is W-0 Q3 RE-RUN against real data, which is what the plan requires instead of citing the original zero.",
+      "state_reached": "preflight passed against real schema and real data. NOT applied, NOT ledger-confirmed."
+    },
+    "defects_confirmed_live_in_the_certification_database": {
+      "M21_W61": "role_permission_grants carries BOTH role_permission_grants_role_definitions_fkey AND role_permission_grants_role_fk, and pg_constraint.confdeltype='c' (CASCADE) for both. The duplicate cascading pair W-61 documents is real in the live schema.",
+      "M9_W16": "user_roles has ZERO foreign keys to role_definitions. The absence W-16 closes is real in the live schema.",
+      "significance": "Both defects are now proven by direct database query, not only by reading the baseline SQL."
+    },
+    "why_the_sanctioned_path_is_blocked": {
+      "mechanism": "alloy-cert is a LOCAL Docker database, so `supabase migration up` is its sanctioned mechanism (`db push` targets hosted remotes). Both were tried; both refuse.",
+      "error": "'Remote migration versions not found in local migrations directory' naming 20260817170000, 20260818120000, 20260818123000, 20260818140000, 20260818160000.",
+      "cause": "FIVE migrations are applied to the shared cert database whose files this branch does not have. One (20260817170000) is on origin/staging. The other FOUR are on NO pushed branch -- they are wt3-communications-inbound-sms's LOCAL, UNPUSHED migrations applied directly to the shared database. There is therefore no pushed source from which this branch can reconcile.",
+      "remedies_the_CLI_suggests_and_why_both_are_refused": "`migration repair --status reverted <5 versions>` would mark another session's applied migrations -- and staging's -- as reverted while that session holds the lease and is mid-certification; a lease is never a permit to destroy. `supabase db pull` would rewrite this branch's migrations directory from the remote schema, importing another lane's unpushed work into this tranche. Neither is authorized.",
+      "raw_sql_alternative_refused": "Applying by psql and inserting ledger rows by hand is what governance forbids and what caused the original ledger break. It would also leave the cert ledger holding versions whose files exist only in this unpushed branch -- recreating, for every other lane, exactly the problem wt3 created for this one."
+    },
+    "shared_database_state_after_the_attempt": "UNCHANGED. Ledger count 343 before and after; none of 20260818170000/180000/190000 present; user_roles still has 0 foreign keys to role_definitions. The failed command connected and refused before applying anything. No ambiguous or partial state.",
+    "work_od1_would_have_released_and_remains_blocked": "W-16 exit (schema-enforced), W-61 exit (schema-enforced), W-28 atomicity (needs an RPC that must exist in the target), W-58 (needs W-28), S-3 action-link token-at-rest (needs a dual-read migration applied). All four are blocked by the same external cause, not by any decision.",
+    "tests": "tests/access 630 passed / 6 skipped / 0 failed. repo migration preflight OK (341 files, 341 unique versions). prebuild exit 0."
+  },
   "shipped_session_16": {
     "mode": "Autonomous continuation. Selected work by enumerating every workstream the plan marks `no decision` plus every one carrying no gate at all, rather than by reading the assignment list -- the check the session-11 record asks for after sessions 7, 8 and 9 each reported this program blocked while ungated security work sat unstarted.",
     "W-16_M9": {
