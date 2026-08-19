@@ -64,6 +64,27 @@ export type ParticipantObjectiveWire = {
     readonly complete: boolean;
 };
 
+/**
+ * The child's name as the CONVERSATION currently knows it.
+ *
+ * The canonical record's display name is only the starting point: a parent who corrects the name
+ * mid-conversation must be spoken to with the name they just gave, not the record they corrected —
+ * "I have John's birthday…", never "Test Process4's" after the parent said John Peters. The needs
+ * projection already resolves that precedence (session shared value over canonical), so the wire
+ * reads the resolved `child_full_name` need and falls back to the record only when no such need
+ * carries a value.
+ */
+function resolvedSubjectDisplayName(
+    objective: ParticipantEnrollmentObjective,
+    fallback: string | null | undefined,
+): string | null {
+    const nameNeed = objective.needs.needs.find(
+        (n) => n.identity.shared_value_key === "child_full_name" && typeof n.current_value === "string",
+    );
+    const resolved = ((nameNeed?.current_value as string | undefined) ?? "").trim();
+    return resolved || ((fallback ?? "").trim() || null);
+}
+
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
     context?: { readonly subjectDisplayName?: string | null },
@@ -93,7 +114,7 @@ export function participantObjectiveWireModel(
 
     return {
         stage_key: objective.stage_key,
-        subject_display_name: (context?.subjectDisplayName ?? "").trim() || null,
+        subject_display_name: resolvedSubjectDisplayName(objective, context?.subjectDisplayName),
         phase,
         progress: {
             total: objective.progress.total_requirements,

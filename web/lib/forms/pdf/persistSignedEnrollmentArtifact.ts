@@ -41,6 +41,7 @@ import {
     findExistingGeneratedPdfByIdempotency,
     resolveFormSubmissionDocumentParent,
 } from "@/lib/forms/pdf/createGeneratedPdfForSubmission";
+import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 
 export type PersistSignedArtifactResult =
@@ -93,17 +94,31 @@ export async function persistSignedEnrollmentArtifact(
 
     const { data: sigRows } = await supabase
         .from("form_submission_signatures")
-        .select("field_id, typed_full_name, signer_acknowledged_at, signer_ip_hash")
+        .select("field_id, typed_full_name, drawn_asset_document_id, signer_acknowledged_at, signer_ip_hash")
         .eq("org_id", input.orgId)
         .eq("form_submission_id", input.submissionId);
     const signatures = (sigRows ?? []) as Array<{
         field_id: string;
         typed_full_name: string | null;
+        drawn_asset_document_id: string | null;
         signer_acknowledged_at: string | null;
         signer_ip_hash: string | null;
     }>;
-    const byFieldId: Record<string, { typed_full_name: string | null }> = {};
-    for (const row of signatures) byFieldId[row.field_id] = { typed_full_name: row.typed_full_name };
+    const byFieldId: Record<string, { typed_full_name: string | null; drawnPng?: Uint8Array | null }> = {};
+    for (const row of signatures) {
+        // A drawn signature renders as the drawn image. The bytes come from the evidence's own
+        // document reference; an unreadable asset falls back to nothing rather than to a typed
+        // stand-in — the mark on paper must be the mark that was captured.
+        let drawnPng: Uint8Array | null = null;
+        if (row.drawn_asset_document_id) {
+            const asset = await downloadDocumentBytesSafe(supabase, {
+                orgId: input.orgId,
+                documentId: row.drawn_asset_document_id,
+            });
+            drawnPng = asset?.bytes ?? null;
+        }
+        byFieldId[row.field_id] = { typed_full_name: row.typed_full_name, drawnPng };
+    }
 
     const marks = fidelitySignaturePlacements(mapping, byFieldId);
     if (marks.length === 0) return { ok: true, skipped: "no_signatures" };
@@ -125,7 +140,8 @@ export async function persistSignedEnrollmentArtifact(
     const source = await resolveFidelitySourceBytes(supabase, input.orgId, mapping);
     if (!source.ok) return { ok: false, error: source.detail };
 
-    const firstSigner = signatures.find((s) => s.typed_full_name);
+    // Evidence comes from any captured signature — a drawn-only signature carries no typed name.
+    const firstSigner = signatures.find((s) => s.typed_full_name || s.drawn_asset_document_id) ?? signatures[0];
     const artifact = await buildSignedArtifact({
         sourcePdf: source.bytes,
         documentId: source.sourceRef,

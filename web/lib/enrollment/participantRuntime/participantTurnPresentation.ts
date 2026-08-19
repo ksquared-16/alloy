@@ -207,9 +207,21 @@ export function displayValue(value: unknown): string {
  * which is written for the runtime. A confirm turn states what is on file and asks whether it is
  * right; a collect turn asks for the one thing that is missing, named the way a parent would.
  */
+/**
+ * The name a specialist would USE at the table — the child's first name.
+ *
+ * The full display name identifies the record; the conversation is with a parent about their
+ * child, and "I have John's birthday…" is how that sentence is said. Derived from the resolved
+ * subject name, so a mid-conversation correction changes what the child is called immediately.
+ */
+function familiarName(objective: ParticipantObjectiveWire): string {
+    const subject = (objective.subject_display_name ?? "").trim();
+    return subject.split(/\s+/)[0] ?? "";
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
-    const subject = (objective.subject_display_name ?? "").trim();
+    const subject = familiarName(objective);
     // Always `'s`, including for names ending in s — "Test Process's", the way the parent would say
     // it. The plural-possessive rule does not apply to a personal name.
     const possessive = subject ? `${subject}'s` : "your child's";
@@ -234,9 +246,11 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         return `What is ${possessive} ${label}?`;
     }
     if (turn.kind === "complete_artifact") {
+        // The instruction lives on the [Review paperwork] action, not in the sentence — the
+        // conversation ends by saying what was done, and the button says what happens next.
         return subject
-            ? `That's everything I needed. I filled out ${subject}'s enrollment paperwork — take a quick look and change anything that isn't right.`
-            : "That's everything I needed. I filled out the paperwork — take a quick look and change anything that isn't right.";
+            ? `Great — that's everything I needed. I filled out ${subject}'s enrollment paperwork.`
+            : "Great — that's everything I needed. I filled out the enrollment paperwork.";
     }
     if (turn.kind === "complete") {
         return "That's everything — thank you.";
@@ -257,7 +271,7 @@ export function participantSignaturePrompt(): string {
  */
 export function participantIntro(objective: ParticipantObjectiveWire): string | null {
     if (objective.phase !== "shared_collection") return null;
-    const subject = (objective.subject_display_name ?? "").trim();
+    const subject = familiarName(objective);
     return subject
         ? `I already have most of ${subject}'s information, so I'll just check it with you and ask for anything I'm missing.`
         : "I already have most of your child's information, so I'll just check it with you and ask for anything I'm missing.";

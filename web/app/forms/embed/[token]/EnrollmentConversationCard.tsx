@@ -209,11 +209,11 @@ export function EnrollmentConversationCard({
         return (
             <IntakeCard>
                 {settled.length > 0 ? (
-                    <div className="mb-7 flex flex-col gap-5" data-participant-settled="true">
+                    <div className="mb-7 flex flex-col gap-4" data-participant-settled="true">
                         {settled.map((entry, i) => (
-                            <div key={i} className="flex flex-col gap-3">
-                                <Said who="alloy">{entry.said}</Said>
-                                <Said who="parent">{entry.answered}</Said>
+                            <div key={i} className="flex flex-col gap-1.5">
+                                <Said who="alloy" settled>{entry.said}</Said>
+                                <Said who="parent" settled>{entry.answered}</Said>
                             </div>
                         ))}
                     </div>
@@ -241,11 +241,11 @@ export function EnrollmentConversationCard({
             {/* Settled sections stay on screen — the conversation reads as a growing record of what
                 has been agreed, not a sequence of screens that erase each other. */}
             {settled.length > 0 ? (
-                <div className="mb-7 flex flex-col gap-5" data-participant-settled="true">
+                <div className="mb-7 flex flex-col gap-4" data-participant-settled="true">
                     {settled.map((entry, i) => (
-                        <div key={i} className="flex flex-col gap-3">
-                            <Said who="alloy">{entry.said}</Said>
-                            <Said who="parent">{entry.answered}</Said>
+                        <div key={i} className="flex flex-col gap-1.5">
+                            <Said who="alloy" settled>{entry.said}</Said>
+                            <Said who="parent" settled>{entry.answered}</Said>
                         </div>
                     ))}
                 </div>
@@ -495,16 +495,39 @@ function ValueControl({
  * The transcript is DERIVED. Durable truth is the runtime's need state; this is what has been said
  * about it in this sitting, held locally and rebuilt from nothing on reload.
  */
-function Said({ who, children }: { who: "alloy" | "parent"; children: ReactNode }) {
+function Said({
+    who,
+    settled = false,
+    children,
+}: {
+    who: "alloy" | "parent";
+    /** A turn that has been answered recedes; the current question owns the eye. */
+    settled?: boolean;
+    children: ReactNode;
+}) {
     if (who === "parent") {
         return (
-            <p className="pl-4 text-[15px] text-alloy-midnight/55" data-said="parent">
+            <p
+                className={
+                    settled
+                        ? "pl-4 text-[14px] font-medium text-alloy-bend-pine/85"
+                        : "pl-4 text-[15px] font-medium text-alloy-bend-pine"
+                }
+                data-said="parent"
+            >
                 {children}
             </p>
         );
     }
     return (
-        <p className="text-[17px] leading-relaxed text-alloy-midnight" data-said="alloy">
+        <p
+            className={
+                settled
+                    ? "text-[14px] leading-relaxed text-alloy-midnight/45"
+                    : "text-[19px] font-medium leading-snug text-alloy-midnight"
+            }
+            data-said="alloy"
+        >
             {children}
         </p>
     );
