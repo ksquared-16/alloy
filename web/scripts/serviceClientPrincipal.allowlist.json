@@ -20,7 +20,7 @@
   "reviewed": "2026-08-14",
   "reviewed_by": "PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
   "ratchet": {
-    "max_subject_unresolved": 17,
+    "max_subject_unresolved": 18,
     "max_transitive_only_unresolved": 12,
     "history": [
       "2026-07-31: unresolved 26 (initial baseline), advisory 3.",
@@ -33,7 +33,8 @@
       "Advisory raised 10 → 12: `book` completed the same guard migration as sibling tour routes, and",
       "`confirm-attendance` is a new public tour route on the same capability-token model.",
       "2026-08-16: unresolved raised 14 → 16 for the two Participant Runtime V1 routes (`enrollment-objective`, `enrollment-turn`). Not a loosening: both sit on the SAME capability-token model and the SAME `resolvePublicFormLinkByToken` gate as the four `public/forms/[token]` routes already listed, and the turn route additionally re-resolves the current turn server-side so the caller supplies a value but never a target.",
-      "2026-08-18: unresolved raised 16 → 17 for `enrollment-edit` (compiled artifact review corrections). Same capability-token gate as its two siblings; the caller names a field id but the shared key it writes to is resolved server-side from the PINNED schema, and unbound fields are refused — the request carries a value, never a target."
+      "2026-08-18: unresolved raised 16 → 17 for `enrollment-edit` (compiled artifact review corrections). Same capability-token gate as its two siblings; the caller names a field id but the shared key it writes to is resolved server-side from the PINNED schema, and unbound fields are refused — the request carries a value, never a target.",
+      "2026-08-19: unresolved raised 17 → 18 for `enrollment-document` (original-document artifact vertical). Read-only render of the participant's own filled document; the whole selection chain (session → pinned version → mapped source document → sha-pinned bytes) is server-derived from the token."
     ]
   },
   "exceptions": [
@@ -96,6 +97,11 @@
       "route": "app/api/public/forms/[token]/enrollment-edit/route.ts",
       "model": "capability-token",
       "reason": "Same `resolveParticipantEnrollmentFromToken` gate as its siblings. The caller names a field id from the artifact under review, but the shared key that field writes to is resolved server-side from the session's PINNED form version (`sharedKeyForFieldId`), and an unbound field is refused with NOT_SHARED — so the only mutation is a `shared_values` merge on the token's own session row, and the request body carries a value, never a target."
+    },
+    {
+      "route": "app/api/public/forms/[token]/enrollment-document/route.ts",
+      "model": "capability-token",
+      "reason": "Same gate, READ-ONLY. The request selects nothing: the token resolves the session, the session's D-94 pin selects the form version, the version's fidelity mapping selects the source document, and a sha256 pin refuses drifted bytes. The response is the participant's own filled document, rendered from the same value view the sibling routes serve — no caller-supplied row selector exists anywhere on the path."
     },
     {
       "route": "app/api/webhooks/resend/route.ts",

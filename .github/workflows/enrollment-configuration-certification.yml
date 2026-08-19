@@ -134,4 +134,6 @@ jobs:
             tests/lifecycle/participantExperienceConvergence.test.ts \
             tests/lifecycle/participantArtifactHandoff.test.ts \
             tests/lifecycle/participantDeterministicJourney.test.ts \
-            tests/lifecycle/compiledParticipantArtifact.test.ts
+            tests/lifecycle/compiledParticipantArtifact.test.ts \
+            tests/forms/pdf/fidelityEngine.test.ts \
+            tests/forms/pdf/fidelityMappingVertical.test.ts
