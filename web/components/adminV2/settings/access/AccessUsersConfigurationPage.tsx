@@ -169,7 +169,6 @@ export default function AccessUsersConfigurationPage({
     const [removeBusy, setRemoveBusy] = useState(false);
     const [confirmRemove, setConfirmRemove] = useState(false);
     /** The route's truthful refusal (`T-19`), held so the operator can acknowledge and proceed. */
-    const [removeResidual, setRemoveResidual] = useState<string | null>(null);
     const [actionsOpen, setActionsOpen] = useState(false);
 
     const reload = useCallback(async () => {
@@ -427,7 +426,7 @@ export default function AccessUsersConfigurationPage({
      * and this component lives under `components/`. `W-59` deleted those two surfaces, which is how
      * the gap became visible: the blind spot was the lock's, not the workstream's.
      */
-    const removeUser = async (acknowledgeResidual = false) => {
+    const removeUser = async () => {
         if (!selected) return;
         setRemoveBusy(true);
         setMessage(null);
@@ -436,20 +435,15 @@ export default function AccessUsersConfigurationPage({
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/remove`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ acknowledge_residual_authority: acknowledgeResidual }),
+                body: JSON.stringify({}),
             });
-            const json = (await res.json().catch(() => ({}))) as { error?: string; acknowledgeable?: boolean };
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
             if (!res.ok) {
-                if (res.status === 409 && json.acknowledgeable === true && typeof json.error === "string") {
-                    setRemoveResidual(json.error);
-                    return;
-                }
                 throw new Error(typeof json.error === "string" ? json.error : "Could not remove user");
             }
             setMessage(`${displayName(selected)} removed from this organization.`);
             setSelectedUserId(null);
             setConfirmRemove(false);
-            setRemoveResidual(null);
             setActionsOpen(false);
             await reload();
         } catch (err) {
@@ -638,35 +632,29 @@ export default function AccessUsersConfigurationPage({
                                                             </button>
                                                         :   <div className="space-y-2 px-2 py-1">
                                                                 {/*
-                                                                  * `T-19`: this used to read "They will lose access to this
-                                                                  * organization." Removal deletes the MEMBERSHIP; whether the
-                                                                  * person still reaches the org depends on the legacy identity
-                                                                  * fallback, which only the route can read. The copy now states
-                                                                  * what the action does, and the route says what it revoked.
+                                                                  * `T-19`/`W-20`: this once read "They will lose access to this
+                                                                  * organization", which was false while the legacy identity
+                                                                  * fallback could still admit them — so the copy was narrowed to
+                                                                  * state only what the action performs. The fallback is now
+                                                                  * deleted and membership is the single source, but the copy
+                                                                  * stays as it is: `RL-54` requires removal copy to name what
+                                                                  * the command does, and "remove the membership" is what it
+                                                                  * does. The acknowledgement branch that sat here is gone with
+                                                                  * the residual it acknowledged.
                                                                   */}
                                                                 <p className="text-xs text-alloy-midnight/70">
                                                                     Remove {displayName(selected)}&apos;s membership in this
                                                                     organization?
                                                                 </p>
-                                                                {removeResidual ?
-                                                                    <p
-                                                                        className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-900"
-                                                                        data-testid="access-user-remove-residual"
-                                                                    >
-                                                                        {removeResidual}
-                                                                    </p>
-                                                                :   null}
                                                                 <div className="flex gap-2">
                                                                     <button
                                                                         type="button"
                                                                         disabled={removeBusy}
                                                                         className="rounded-md bg-red-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-40"
-                                                                        onClick={() => void removeUser(removeResidual !== null)}
+                                                                        onClick={() => void removeUser()}
                                                                         data-testid="access-user-remove-confirm"
                                                                     >
-                                                                        {removeBusy ? "Removing…"
-                                                                        : removeResidual ? "Remove anyway"
-                                                                        : "Confirm remove"}
+                                                                        {removeBusy ? "Removing…" : "Confirm remove"}
                                                                     </button>
                                                                     <button
                                                                         type="button"

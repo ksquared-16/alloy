@@ -68,8 +68,12 @@ describe("W-62 / AD-25 — the four-layer model is total in both directions", ()
     it("the scan finds the resolver's reads at all — non-vacuity on the WALK", () => {
         // If the regex or the module list drifted, every assertion below would pass by agreeing with
         // nothing. Asserted before the mapping, not after.
+        // W-20 removed two stores from this resolver (`user_profiles`, `app_users`), so the floor
+        // moved from six to four. It is still a floor and not an equality: the point is that the
+        // walk finds SOMETHING, and pinning the exact count would make every future read a test
+        // edit rather than a fact about coverage.
         const stores = resolverReadStores();
-        expect(stores.length).toBeGreaterThanOrEqual(6);
+        expect(stores.length).toBeGreaterThanOrEqual(4);
         expect(stores).toContain("user_roles");
         expect(stores).toContain("role_permission_grants");
     });
@@ -132,27 +136,59 @@ describe("W-62 / AD-25 — the four-layer model is total in both directions", ()
 
     /* ------------------------------------------------------ fallback, not a layer */
 
-    it("the legacy stores are compatibility inputs, never a fifth layer", () => {
+    it("a compatibility source, if one ever returns, is never a fifth layer", () => {
+        // The list is empty since W-20. The RULE is kept and stated over whatever the list holds,
+        // because deleting it with its last member would mean the next compatibility source added
+        // arrives with nothing constraining it — and the constraint, not the membership, is what
+        // AD-25 needs: a fallback names the canonical layer it feeds and never becomes one.
         const fallback = compatibilitySources();
-        expect(fallback.map((s) => s.store).sort()).toEqual(["app_users", "user_profiles"]);
         for (const s of fallback) {
-            // Each names the CANONICAL layer it feeds …
             expect(AUTHORITY_LAYERS).toContain(s.layer);
-            // … and is never itself canonical for it.
             expect(canonicalStoresForLayer(s.layer)).not.toContain(s.store);
         }
-        // The model must not have grown a layer to house them.
+        // And the model has not grown a layer to house what was removed.
         expect(AUTHORITY_LAYERS).toHaveLength(4);
     });
 
-    it("the fallback is still LIVE, and the model says so rather than pretending it is gone", () => {
-        // W-20 shipped its truthfulness half only; `readLegacyAdminOpsAuthority` still reads both
-        // stores. When its removal half lands, these reads disappear and direction 2 will fail until
-        // the entries are deleted — which is exactly the intended coupling.
+    it("the fallback is GONE, and the model is empty of it rather than quietly reclassifying it", () => {
+        // This assertion used to read the other way: the fallback was live, the two stores were
+        // listed as `compatibility`, and the note here said *"when its removal half lands, these
+        // reads disappear and direction 2 will fail until the entries are deleted — which is
+        // exactly the intended coupling."* W-20 landed, and the coupling worked as designed.
+        //
+        // Both halves are asserted, because either alone can be satisfied dishonestly: an empty
+        // `compatibilitySources()` with the reads still in the resolver would be a model that lies,
+        // and reads removed while the entries remained would be a model that is merely stale.
         const src = executableSource("lib/admin/resolveAdminAccessCore.ts");
-        expect(src).toMatch(/\.from\(\s*["'`]user_profiles["'`]\s*\)/);
-        expect(src).toMatch(/\.from\(\s*["'`]app_users["'`]\s*\)/);
-        expect(compatibilitySources().length).toBeGreaterThan(0);
+        expect(src).not.toMatch(/\.from\(\s*["'`]user_profiles["'`]\s*\)/);
+        expect(src).not.toMatch(/\.from\(\s*["'`]app_users["'`]\s*\)/);
+        expect(compatibilitySources()).toEqual([]);
+    });
+
+    it("no authority-path module reads a legacy identity store — RL-12, over every module", () => {
+        // `M2-5` is why this is stated over the tree and not over one file: `resolveAdminPortalOrgCore`
+        // re-implemented the fallback and served `requireAdminOrOps` across 147 route files, so
+        // deleting it from the enforcing resolver alone would have left the copy granting.
+        const LEGACY_STORES = ["user_profiles", "app_users"];
+        const offenders: string[] = [];
+        for (const rel of ["lib/admin/resolveAdminAccessCore.ts", "lib/admin/resolveAdminPortalOrgCore.ts"]) {
+            const src = executableSource(rel);
+            for (const store of LEGACY_STORES) {
+                if (src.includes(`.from("${store}")`) || src.includes(`.from('${store}')`)) {
+                    offenders.push(`${rel}: ${store}`);
+                }
+            }
+        }
+        expect(offenders, "one principal source — a second one is a fifth layer under another name").toEqual([]);
+    });
+
+    it("that scan can convict — it finds the read that IS there", () => {
+        // Non-vacuity: both modules still read `user_roles`, so the `.from(...)` shape the scan
+        // looks for is present and the empty result above is a fact about the legacy stores rather
+        // than about the matcher.
+        for (const rel of ["lib/admin/resolveAdminAccessCore.ts", "lib/admin/resolveAdminPortalOrgCore.ts"]) {
+            expect(executableSource(rel), rel).toContain('.from("user_roles")');
+        }
     });
 
     /* ------------------------------------------------------------ composition */

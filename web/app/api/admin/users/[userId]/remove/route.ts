@@ -2,29 +2,32 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { isSelfAuthorityMutation, selfAuthorityMutationResponse } from "@/lib/admin/selfAuthorityMutation";
-import {
-    chooseOrgAndRoleKeysFromMembershipRows,
-    readLegacyAdminOpsAuthority,
-    type LegacyAdminOpsAuthorityRead,
-} from "@/lib/admin/resolveAdminAccessCore";
-import {
-    removalRefusal,
-    removalResidualAuthority,
-    residualAuthorityReport,
-} from "@/lib/access/membershipRemovalResidual";
 
 /**
  * POST: remove user from org (delete user_roles row). Requires org admin or `settings.users_roles`.
  * Does not delete auth.users.
  *
- * **W-20 / `T-19` (§48).** Deleting the membership row does not necessarily revoke the principal's
- * authority: the resolver falls through to the legacy identity tables for a principal with no
- * membership row anywhere, and those tables grant `admin`/`ops` outright. So this route used to
- * return `{ ok: true }` for an operation that could **promote** the person it claimed to remove.
- * The removal is now checked before it is performed, refused when it would silently revoke nothing,
- * and reports the residual when an operator has confirmed it anyway. See
- * {@link removalResidualAuthority} for why the fallback's *deletion* stays gated on census `Q15`
- * while this half does not.
+ * **W-20 / `T-19` (§48) — closed by deletion, not by a guard.**
+ *
+ * `01…§49`: *"The failure mode is not 'removal is slow' — it is 'removal is inverted.' … Removing a
+ * `school_director` who has an old `app_users.role = 'admin'` row **promotes them**."* The resolver
+ * fell through to the legacy identity tables for a principal with no membership row anywhere, so
+ * this route could return `{ ok: true }` for an operation that promoted the person it claimed to
+ * remove.
+ *
+ * `T-19` closed the live half first (§1.6) with a guard: read the legacy tables before deleting,
+ * refuse a removal that would revoke nothing, report the residual when an operator confirmed it
+ * anyway. That guard is **gone**, because what it guarded against is gone. `W-20` deleted the
+ * fallback once `Q15-A1` proved the lockout population empty on the deployed tenant, and
+ * `resolveAdminAccessCore` now answers from `user_roles` alone. Deleting the last membership row
+ * revokes the principal's operator authority, unconditionally — so `revoked_access: true` is a
+ * fact about the system's structure rather than a claim this route has to check.
+ *
+ * Keeping the guard would have been worse than redundant. A refusal path that can never fire reads
+ * to the next author as evidence that a second authority source still exists, and `T-6`'s rule
+ * about controls that change nothing applies to guards as much as to radios. `RL-12`
+ * (`membershipRevocationTruthScan`) is what holds the premise: no authority path reads
+ * `user_profiles.role` or `app_users.role`, so removal cannot be inverted again without failing it.
  */
 export async function POST(
     request: Request,
@@ -44,54 +47,7 @@ export async function POST(
         return selfAuthorityMutationResponse();
     }
 
-    const body = (await request.json().catch(() => ({}))) as {
-        acknowledge_residual_authority?: unknown;
-    };
-    const acknowledged = body?.acknowledge_residual_authority === true;
-
     const supabase = createAdminClient();
-
-    // W-20 — what will admit this principal once the row is gone? The read is error-checked rather
-    // than defaulted: an unreadable membership set treated as empty would send the guard down the
-    // legacy path for a principal who is not on it, and an unreadable legacy answer treated as
-    // absent would restore the very false success this guard exists to remove.
-    const { data: membershipRows, error: membershipErr } = await supabase
-        .from("user_roles")
-        .select("org_id, role")
-        .eq("user_id", userId);
-    if (membershipErr) {
-        return NextResponse.json(
-            { error: "Could not read this member's other memberships; nothing was changed." },
-            { status: 500 },
-        );
-    }
-
-    // The fallback fires only when NO membership row remains anywhere. Asked with the resolver's own
-    // predicate over the rows that would survive this delete, so the guard cannot hold a second
-    // opinion about when the legacy path is consulted.
-    const surviving = (Array.isArray(membershipRows) ? membershipRows : [])
-        .filter((r) => r && typeof (r as { org_id?: unknown }).org_id === "string" && typeof (r as { role?: unknown }).role === "string")
-        .map((r) => r as { org_id: string; role: string })
-        .filter((r) => r.org_id !== orgId);
-    const fallbackWouldBeConsulted = chooseOrgAndRoleKeysFromMembershipRows(surviving) === null;
-
-    let legacyRead: LegacyAdminOpsAuthorityRead | null = null;
-    if (fallbackWouldBeConsulted) {
-        legacyRead = await readLegacyAdminOpsAuthority(supabase, userId);
-    }
-
-    const residual = removalResidualAuthority({ fallbackWouldBeConsulted, legacyRead });
-    const refusal = removalRefusal({ residual, acknowledged });
-    if (refusal) {
-        return NextResponse.json(
-            {
-                error: refusal.message,
-                residual_authority: residualAuthorityReport(residual),
-                acknowledgeable: refusal.acknowledgeable,
-            },
-            { status: 409 },
-        );
-    }
 
     const { error } = await supabase
         .from("user_roles")
@@ -101,10 +57,7 @@ export async function POST(
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // A removal that left authority in place says so, so the roster's disappearance of the row is
-    // not read as a revocation that did not happen.
-    const report = residualAuthorityReport(residual);
-    return NextResponse.json(
-        report ? { ok: true, revoked_access: false, residual_authority: report } : { ok: true, revoked_access: true },
-    );
+    // W-20: membership was the only source, so the row's deletion IS the revocation. The field is
+    // kept — clients read it — and it is now true by construction rather than by inspection.
+    return NextResponse.json({ ok: true, revoked_access: true });
 }

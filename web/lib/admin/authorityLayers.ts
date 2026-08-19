@@ -27,10 +27,13 @@
  *    layers, and saying otherwise to make the table tidier would be the untruthful grouping AD-25
  *    forbids. Each READ PURPOSE maps to exactly one layer; the store is listed once per purpose.
  *
- * 2. **`app_users` and `user_profiles` are NOT a fifth layer.** They are the legacy fallback that
- *    `W-20` exists to remove and has not yet removed. They are classified `compatibility`, they name
- *    the canonical layer they feed, and they are visible here precisely so their removal is a
- *    deletion from this list rather than a silent change of meaning.
+ 2. **`app_users` and `user_profiles` were never a fifth layer, and are now not here at all.** They
+ *    were the legacy fallback, classified `compatibility` and listed *"precisely so their removal is
+ *    a deletion from this list rather than a silent change of meaning"*. `W-20` performed that
+ *    deletion once `Q15-A1` proved the lockout population empty on the deployed tenant, so the two
+ *    entries are gone and `compatibilitySources()` is empty. It is kept, rather than removed with
+ *    them, because an empty list is the claim — *no store feeds a layer by compatibility* — and a
+ *    deleted function would leave nothing asserting it.
  *
  * ## How effective access composes
  *
@@ -115,20 +118,6 @@ export const AUTHORITY_SOURCES: readonly AuthoritySource[] = [
         layer: "scope",
         why: "The site/location subdimension's membership set. Same store-vs-layer distinction as the department table.",
     },
-    {
-        store: "user_profiles",
-        classification: "compatibility",
-        layer: "role",
-        column: "role",
-        why: "LEGACY FALLBACK, not a layer. Yields an admin/ops role when no user_roles row exists. W-20 exists to remove it and has removed only its truthfulness half so far — removal is lockout class L4 and needs census Q15 against a real tenant. Listed so its removal is a deletion from this list rather than a silent change of meaning.",
-    },
-    {
-        store: "app_users",
-        classification: "compatibility",
-        layer: "role",
-        column: "role",
-        why: "LEGACY FALLBACK, not a layer. The second of the two stores W-20 removes; it also supplies the org id when the fallback is the only source of authority, which is why W-22's lexicographic tiebreak still has a path to reach.",
-    },
 ] as const;
 
 /** Stores that are authoritative rather than a legacy fallback. */
@@ -136,7 +125,7 @@ export function canonicalSources(): readonly AuthoritySource[] {
     return AUTHORITY_SOURCES.filter((s) => s.classification === "canonical");
 }
 
-/** The legacy fallback reads. Non-empty until W-20's removal half lands. */
+/** The legacy fallback reads. **Empty since W-20's removal half landed**, and asserted to stay so. */
 export function compatibilitySources(): readonly AuthoritySource[] {
     return AUTHORITY_SOURCES.filter((s) => s.classification === "compatibility");
 }

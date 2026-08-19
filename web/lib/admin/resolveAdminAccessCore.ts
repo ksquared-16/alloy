@@ -202,145 +202,37 @@ export function chooseOrgAndRoleKeysFromMembershipRows(
 }
 
 /**
- * W-43 — this is the legacy path that GRANTS `admin`/`ops`, so every read in it destructures its
- * error and refuses on one.
+ * **W-20 — the legacy fallback is gone.** `I-1`/`I-2`, lockout class `L4`.
  *
- * The behaviour is unchanged: a failed read already yielded `data: null`, which fell through every
- * branch to `return null`. It failed closed **incidentally**, as a side effect of the null checks,
- * and `02…§19`'s Tier A rule — no Supabase call in the resolution path destructures `data` without
- * `error` — exists because incidental closure is one refactor away from being incidental opening.
- * Making it deliberate costs nothing and is checkable.
+ * Three tables could make someone `admin` or `ops` — `user_profiles.role`, and `app_users.role`
+ * joined on either of two columns because the linkage was itself ambiguous. Under the canonical
+ * model exactly one source is legal, and this module used to consult the other two whenever
+ * {@link chooseOrgAndRoleKeysFromMembershipRows} found no usable membership.
+ *
+ * **What made the deletion safe, and why it is evidence rather than confidence.** `W-0` established
+ * that the lockout population was empty; the `Q15` census re-established it on the deployed tenant
+ * on 2026-08-19, through the governed trusted-host path, and three questions agreed instead of one:
+ *
+ * - `Q15-A1` — principals who would lose all authority: **0**;
+ * - `Q15-A2` and `Q15-A3` — legacy values that are redundant or stale: **0 and 0**, which is the
+ *   stronger statement. It is not that every legacy value is backed by a canonical membership; the
+ *   legacy columns hold no role for anyone;
+ * - `Q15-A4` — principals reachable only through the fallback: **0**, and no legacy row lacking an
+ *   org.
+ *
+ * So this deletion revokes nothing. §5: with the population at zero rather than merely small, W-20
+ * *"collapses from the four-step ritual to a straight deletion plus its `RL-12` lock"* — there was
+ * no one to migrate.
+ *
+ * **What went with it.** `M2-8`: `app_users.role` carries a `CHECK` constraint enumerating a fourth
+ * role vocabulary, including `vendor_owner` and `vendor_worker`. `W-16`'s foreign key constrains
+ * `user_roles.role` and does nothing about that column, because only the fallback read it. No
+ * authority path reads it now, so the vocabulary is no longer on an authority path at all.
+ *
+ * `M2-5`: the copy in `resolveAdminPortalOrgCore` went in the same commit. Deleting the fallback
+ * from one module and leaving the re-implementation serving `requireAdminOrOps` is the failure mode
+ * `RL-12` is stated over *every* module to catch.
  */
-export type LegacyAdminOpsAuthorityRead =
-    | { status: "absent" }
-    | { status: "present"; orgId: string; role: "admin" | "ops" }
-    | { status: "unknown"; table: string; reason: string };
-
-/**
- * W-20 / `T-19` — the same read, with the third state kept instead of collapsed.
- *
- * `fetchLegacyAdminOpsOrgAndRole` returns `null` for two different facts: *this principal has no
- * legacy grant* and *we could not find out*. For the resolver those are one answer, because both
- * must deny — so the collapse is correct there and the wrapper below performs it.
- *
- * They are **not** one answer for a caller asking whether removing a membership actually revokes
- * authority. There, "no legacy grant" permits the removal and "could not find out" must refuse it:
- * an unknown treated as absent reports a revocation that may not have happened, which is the
- * failure direction `W-43` and `W-56` each closed one layer away. This is `W-56`'s argument about
- * `Set<string>` applied to a nullable return — the type had already lost the fact, so no care at the
- * call site could recover it.
- *
- * Exported so the removal guard asks **this** function rather than re-deriving the fallback's
- * precedence. A guard with its own copy of "when does the legacy path grant" is a second opinion
- * about admission, and this initiative has already paid for that shape twice (`W-42`'s two role-key
- * answers, the duplicated permission catalog).
- */
-export async function readLegacyAdminOpsAuthority(
-    supabase: SupabaseClient,
-    userId: string
-): Promise<LegacyAdminOpsAuthorityRead> {
-    const { data: profile, error: profileErr } = await supabase
-        .from("user_profiles")
-        .select("role")
-        .eq("id", userId)
-        .maybeSingle();
-    if (profileErr) {
-        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "user_profiles", userId, null, profileErr.message);
-        return { status: "unknown", table: "user_profiles", reason: profileErr.message };
-    }
-    const pr = normalizeRoleKey((profile as { role?: unknown } | null)?.role);
-    if (pr === "admin" || pr === "ops") {
-        const orgFromAu = await readOrgIdFromAppUsers(supabase, userId);
-        if (orgFromAu.status === "unknown") return orgFromAu;
-        if (orgFromAu.status === "present") return { status: "present", orgId: orgFromAu.orgId, role: pr };
-    }
-
-    const { data: au, error: auErr } = await supabase
-        .from("app_users")
-        .select("role, org_id")
-        .eq("id", userId)
-        .maybeSingle();
-    if (auErr) {
-        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, auErr.message);
-        return { status: "unknown", table: "app_users", reason: auErr.message };
-    }
-    const auRow = au as { role?: unknown; org_id?: unknown } | null;
-    const ar = normalizeRoleKey(auRow?.role);
-    const oid = auRow && typeof auRow.org_id === "string" ? auRow.org_id : "";
-    if ((ar === "admin" || ar === "ops") && oid) {
-        return { status: "present", orgId: oid, role: ar };
-    }
-
-    const { data: au2, error: au2Err } = await supabase
-        .from("app_users")
-        .select("role, org_id")
-        .eq("auth_user_id", userId)
-        .maybeSingle();
-    if (au2Err) {
-        logAccessReadFailure("fetchLegacyAdminOpsOrgAndRole", "app_users", userId, null, au2Err.message);
-        return { status: "unknown", table: "app_users", reason: au2Err.message };
-    }
-    const au2Row = au2 as { role?: unknown; org_id?: unknown } | null;
-    const ar2 = normalizeRoleKey(au2Row?.role);
-    const oid2 = au2Row && typeof au2Row.org_id === "string" ? au2Row.org_id : "";
-    if ((ar2 === "admin" || ar2 === "ops") && oid2) {
-        return { status: "present", orgId: oid2, role: ar2 };
-    }
-
-    return { status: "absent" };
-}
-
-/**
- * The resolver's view of the same read: anything that is not a established grant denies.
- *
- * Behaviour is byte-for-byte what it was before the three-state existed — a failed read already
- * returned `null` here and `null` already denied. The collapse is performed in **one** place so it
- * cannot be re-performed accidentally by a caller for whom it is wrong.
- */
-async function fetchLegacyAdminOpsOrgAndRole(
-    supabase: SupabaseClient,
-    userId: string
-): Promise<{ orgId: string; role: "admin" | "ops" } | null> {
-    const read = await readLegacyAdminOpsAuthority(supabase, userId);
-    return read.status === "present" ? { orgId: read.orgId, role: read.role } : null;
-}
-
-/**
- * W-43 — a failed org read denies the legacy grant rather than falling through to the next lookup.
- *
- * W-20 correction: that is what W-43's note has always *said*, and returning a bare `null` did not
- * achieve it. The caller's `if (orgFromAu)` test could not tell a failed org read from a missing
- * `org_id`, so a failure fell through to the next `app_users` read and could still grant. The
- * three-state makes the call site honour the rule the comment states.
- */
-async function readOrgIdFromAppUsers(
-    supabase: SupabaseClient,
-    userId: string
-): Promise<{ status: "absent" } | { status: "present"; orgId: string } | { status: "unknown"; table: string; reason: string }> {
-    const { data: au, error: auErr } = await supabase
-        .from("app_users")
-        .select("org_id")
-        .eq("id", userId)
-        .maybeSingle();
-    if (auErr) {
-        logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auErr.message);
-        return { status: "unknown", table: "app_users", reason: auErr.message };
-    }
-    const o = (au as { org_id?: string | null } | null)?.org_id ?? null;
-    if (typeof o === "string" && o.length > 0) return { status: "present", orgId: o };
-
-    const { data: auAuth, error: auAuthErr } = await supabase
-        .from("app_users")
-        .select("org_id")
-        .eq("auth_user_id", userId)
-        .maybeSingle();
-    if (auAuthErr) {
-        logAccessReadFailure("fetchOrgIdFromAppUsers", "app_users", userId, null, auAuthErr.message);
-        return { status: "unknown", table: "app_users", reason: auAuthErr.message };
-    }
-    const o2 = (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
-    return typeof o2 === "string" && o2.length > 0 ? { status: "present", orgId: o2 } : { status: "absent" };
-}
 
 /**
  * W-43 — returns `null` when the grant read FAILED, which is not the same answer as `[]`.
@@ -397,19 +289,11 @@ export async function resolveAdminAccessCore(
           }[]
         : [];
 
-    let orgId: string;
-    let roleKeys: string[];
-
+    // W-20 — membership is the single source of authority. No usable `user_roles` row is not a
+    // reason to look somewhere else; it is the answer.
     const picked = chooseOrgAndRoleKeysFromMembershipRows(rows);
-    if (picked) {
-        orgId = picked.orgId;
-        roleKeys = picked.roleKeys;
-    } else {
-        const legacy = await fetchLegacyAdminOpsOrgAndRole(supabase, userId);
-        if (!legacy) return null;
-        orgId = legacy.orgId;
-        roleKeys = [legacy.role];
-    }
+    if (!picked) return null;
+    const { orgId, roleKeys } = picked;
 
     const portalEligible = roleKeys.some((r) => PORTAL_ROLES.has(r));
     const permissionKeys = await fetchPermissionKeys(

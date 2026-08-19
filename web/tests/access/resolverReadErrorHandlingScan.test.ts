@@ -54,8 +54,15 @@ describe.each(RESOLVER_MODULES)("W-43 Tier A — %s destructures every read's er
     const source = readFileSync(join(process.cwd(), relPath), "utf8");
 
     it("finds the reads it is supposed to be checking (the scan is not vacuous)", () => {
+        // The floor was four, sized when both resolvers carried the legacy fallback's three reads.
+        // `W-20` deleted them, and `resolveAdminPortalOrgCore` is down to its single `user_roles`
+        // read — so a floor of four now convicts the module for having LESS to get wrong.
+        //
+        // One is the honest floor: the property is that the scan found something to check, and it
+        // is deliberately not an equality, because pinning the count makes every future read a test
+        // edit rather than a fact about coverage.
         const reads = supabaseDestructurings(source);
-        expect(reads.length).toBeGreaterThanOrEqual(4);
+        expect(reads.length, `${relPath} has no destructured reads at all`).toBeGreaterThanOrEqual(1);
     });
 
     it("no `await supabase` destructuring takes `data` without `error`", () => {

@@ -185,25 +185,46 @@ describe("W-43 — the enforcing resolver denies on every read failure (F15)", (
     });
 });
 
-describe("W-43 — the legacy admin/ops grant path denies on read failure", () => {
+/**
+ * **W-20 inverted this block, and the inversion is the proof.**
+ *
+ * These three assertions used to certify `W-43`'s hardening of the legacy grant path: a control
+ * establishing that `user_profiles.role = 'admin'` with no membership row *did* grant `admin`, and
+ * two failure cases establishing that a broken read denied instead of falling through.
+ *
+ * `W-20` deleted that path. The fixture is deliberately kept exactly as it was — a principal with
+ * NO membership row and a fully populated set of legacy identity records, healthy reads and all —
+ * because the strongest available statement is that the input which used to confer `admin` now
+ * confers nothing. A fixture rewritten alongside the code would not have said that.
+ */
+describe("W-20 — the legacy admin/ops grant path is gone, not merely hardened", () => {
     const LEGACY: Fixture = {
         user_roles: [],
         legacy_profile_role: "admin",
         app_users: { role: "admin", org_id: ORG },
     };
 
-    it("control: the legacy path does grant admin when its reads are healthy", async () => {
-        const core = await resolveAdminAccessCore(mockSupabase(LEGACY), USER);
-        expect(core?.orgId).toBe(ORG);
-        expect(core?.roleKeys).toEqual(["admin"]);
+    it("the input that used to grant admin now resolves to nothing", async () => {
+        expect(await resolveAdminAccessCore(mockSupabase(LEGACY), USER)).toBeNull();
     });
 
-    it("user_profiles error denies the legacy grant", async () => {
-        expect(await resolveAdminAccessCore(mockSupabase(LEGACY, "user_profiles"), USER)).toBeNull();
+    it("and still nothing when the legacy reads would have failed — there is nothing to fail", async () => {
+        // Previously these were the W-43 cases: a broken legacy read must deny rather than fall
+        // through. They now deny for a stronger reason, and asserting both keeps the file honest
+        // about which reason is operating.
+        for (const broken of ["user_profiles", "app_users"] as const) {
+            expect(await resolveAdminAccessCore(mockSupabase(LEGACY, broken), USER), broken).toBeNull();
+        }
     });
 
-    it("app_users error denies the legacy grant", async () => {
-        expect(await resolveAdminAccessCore(mockSupabase(LEGACY, "app_users"), USER)).toBeNull();
+    it("the fixture is not vacuous — the same principal WITH a membership still resolves", async () => {
+        // Without this, "returns null" would be satisfied by a mock that cannot resolve anything.
+        const withMembership = await resolveAdminAccessCore(
+            mockSupabase({ ...LEGACY, user_roles: [{ org_id: ORG, role: "admin" }] }),
+            USER,
+        );
+        expect(withMembership?.orgId).toBe(ORG);
+        expect(withMembership?.roleKeys).toEqual(["admin"]);
     });
 });
 
@@ -254,25 +275,31 @@ describe("W-43 — the preview resolver denies identically", () => {
     });
 });
 
-describe("W-43 — the third resolver (portal org) denies on read failure", () => {
+describe("W-20 — the third resolver lost its copy of the fallback too (M2-5)", () => {
     const LEGACY: Fixture = {
         user_roles: [],
         legacy_profile_role: "admin",
         app_users: { role: "admin", org_id: ORG },
     };
 
-    it("control: grants portal admission when its reads are healthy", async () => {
-        const r = await resolveAdminPortalOrgCore(mockSupabase(LEGACY), USER);
+    /**
+     * This block is why the removal had to be stated over every module. `resolveAdminPortalOrgCore`
+     * held a byte-for-byte re-implementation of the fallback and serves `requireAdminOrOps` across
+     * 147 route files. Deleting the fallback from the enforcing resolver and leaving this one would
+     * have moved the fifth layer rather than removed it, and every assertion in the block above
+     * would still have passed.
+     */
+    it("the input that used to grant portal admission now resolves to nothing", async () => {
+        expect(await resolveAdminPortalOrgCore(mockSupabase(LEGACY), USER)).toBeNull();
+    });
+
+    it("the fixture is not vacuous — the same principal WITH a membership is still admitted", async () => {
+        const r = await resolveAdminPortalOrgCore(
+            mockSupabase({ ...LEGACY, user_roles: [{ org_id: ORG, role: "admin" }] }),
+            USER,
+        );
         expect(r?.orgId).toBe(ORG);
         expect(r?.portalEligible).toBe(true);
-    });
-
-    it("user_profiles error denies portal admission", async () => {
-        expect(await resolveAdminPortalOrgCore(mockSupabase(LEGACY, "user_profiles"), USER)).toBeNull();
-    });
-
-    it("app_users error denies portal admission", async () => {
-        expect(await resolveAdminPortalOrgCore(mockSupabase(LEGACY, "app_users"), USER)).toBeNull();
     });
 
     it("user_roles error denies portal admission", async () => {

@@ -1,31 +1,44 @@
 /**
- * W-20 / `T-19` — tier A, discovered subject: **no product path deletes a membership without
- * establishing what that deletion actually revokes.**
+ * W-20 / `RL-12` — tier A, discovered subject: **membership is the only source of authority, so a
+ * membership deletion cannot fail to revoke.**
  *
- * Plan: `docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` §48.
+ * Plan: `docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` §48 and §5.
  *
- * Why a discovered lock and not three assertions about one file. `W-5` established the question this
- * initiative asks of every lock — *does it DISCOVER or ENUMERATE?* — and the register records four
- * locks that shipped green with a live escape because the answer was "enumerate". Today there is
- * exactly one route that deletes a `user_roles` row. A lock written against that file passes forever
- * and says nothing about the second one. The subject here is therefore *every module that can delete
- * a membership*, found by walking the import closure of every route — the same discipline
- * `selfAuthorityRouteDiscovery` uses, and for the same reason: `users/[userId]/role/route.ts`
- * mutates membership while containing the string `user_roles` nowhere.
+ * **What this file used to assert, and why it changed.** `T-19` closed the live half of `W-20`
+ * first (§1.6): the resolver fell through to `user_profiles.role` and `app_users.role` for a
+ * principal with no membership row, so deleting the last membership could leave — or even confer —
+ * `admin`. Removal reported `{ ok: true }` for an operation that revoked nothing. The remedy was a
+ * guard: read the legacy tables before deleting, refuse, report the residual. This lock asserted
+ * that guard was present, ordered before the write, and sourced its answer from the module that
+ * granted the authority rather than re-reading the tables itself.
  *
- * The three claims:
+ * `W-20`'s removal half has now landed. `Q15-A1`, run against the deployed tenant through the
+ * governed trusted-host path, returned **zero** principals who would lose all authority — and
+ * `A2`/`A3` returned zero legacy values of any kind, so the columns held no role for anyone. The
+ * fallback is deleted from both resolvers, the guard is deleted with it, and the defect it caught
+ * is now structurally impossible rather than caught.
  *
- * 1. A module that deletes a membership consults the residual-authority guard **before** the delete.
- * 2. It gets its legacy answer from the module that GRANTS it (`readLegacyAdminOpsAuthority`) rather
- *    than reading `user_profiles` / `app_users` itself. A guard with its own copy of the fallback's
- *    precedence is a second opinion about admission, which is `W-42`'s defect in a new place.
- * 3. A surface offering a removal does not claim the member loses access — the claim `T-19`
- *    falsifies — and carries the acknowledgement path, so the refusal is not a dead end.
+ * So the subject moved one level down, from *"is the guard present"* to *"is there anything left to
+ * guard against"*. The claims:
  *
- * **Comments are stripped before any of this is scanned.** The route's own documentation names
- * `app_users.role` and `user_profiles` while describing the defect, and the guard module quotes the
- * plan. An unstripped scan convicts the very code that fixes the bug — §10.2's lesson, and the
- * fourth time this initiative has paid for it.
+ * 1. No module that can delete a membership reads a legacy identity store.
+ * 2. No authority-path module reads one either — stated over **every** module, because `M2-5` is
+ *    that `resolveAdminPortalOrgCore` re-implemented the fallback and served `requireAdminOrOps`
+ *    across 147 route files. Deleting it from the enforcing resolver alone would have left the copy
+ *    granting, and this is the check that would have said so.
+ * 3. A surface offering a removal does not claim more than the command performs — `RL-54`.
+ *
+ * **The discovery discipline is unchanged, and is the reason the file survives its own rewrite.**
+ * `W-5` established the question this initiative asks of every lock — *does it DISCOVER or
+ * ENUMERATE?* — and the register records four locks that shipped green with a live escape because
+ * the answer was "enumerate". The subject here is every module that can delete a membership, found
+ * by walking the import closure of every route: `users/[userId]/role/route.ts` mutates membership
+ * while containing the string `user_roles` nowhere.
+ *
+ * **Comments are stripped before any of this is scanned.** This file, the route and the resolvers
+ * all name `app_users.role` and `user_profiles` while describing the defect they removed. An
+ * unstripped scan convicts the very code that fixes the bug — §10.2's lesson, and the fourth time
+ * this initiative has paid for it.
  */
 import { readdirSync, readFileSync, existsSync, statSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join, dirname, resolve, relative } from "node:path";
@@ -158,49 +171,36 @@ function membershipDeletingModules(root: string): string[] {
 
 type Violation = { file: string; why: string };
 
-function guardViolations(root: string): Violation[] {
+/** Any read of a legacy identity store, in code rather than in prose. */
+const LEGACY_STORE_READ = /from\(\s*["'`](?:user_profiles|app_users)["'`]\s*\)/;
+
+/**
+ * Modules that can delete a membership AND still read a legacy identity store.
+ *
+ * After `W-20` these two facts must never co-occur: a deleter that reads those tables is either
+ * re-deriving the fallback it was supposed to lose, or holding a second opinion about what admits a
+ * principal. Both are the fifth layer returning under another name.
+ */
+function legacyReadingDeleters(root: string): Violation[] {
     const out: Violation[] = [];
     for (const abs of membershipDeletingModules(root)) {
         const src = code(abs);
-        const rel = relative(root, abs).split("\\").join("/");
-
-        const guardAt = src.search(/\bremovalResidualAuthority\s*\(/);
-        const refusalAt = src.search(/\bremovalRefusal\s*\(/);
-        const deleteAt = src.search(MEMBERSHIP_DELETE);
-
-        if (guardAt < 0 || refusalAt < 0) {
-            out.push({
-                file: rel,
-                why:
-                    "deletes a user_roles row without asking removalResidualAuthority/removalRefusal "
-                    + "(@/lib/access/membershipRemovalResidual) — the removal may revoke nothing and "
-                    + "report success, which is T-19",
-            });
-            continue;
-        }
-        if (guardAt > deleteAt || refusalAt > deleteAt) {
-            out.push({
-                file: rel,
-                why: "consults the residual guard AFTER the delete — a refusal issued after the write is not a guard",
-            });
-        }
-        if (/from\(\s*["'`](?:user_profiles|app_users)["'`]\s*\)/.test(src)) {
-            out.push({
-                file: rel,
-                why:
-                    "reads the legacy identity tables itself instead of calling readLegacyAdminOpsAuthority "
-                    + "from the module that grants them — a second opinion about admission (W-42's shape)",
-            });
-        }
-        if (!src.includes("readLegacyAdminOpsAuthority")) {
-            out.push({
-                file: rel,
-                why: "does not obtain its legacy answer from @/lib/admin/resolveAdminAccessCore",
-            });
-        }
+        if (!LEGACY_STORE_READ.test(src)) continue;
+        out.push({
+            file: relative(root, abs).split("\\").join("/"),
+            why:
+                "deletes a user_roles row and reads a legacy identity store — W-20 removed that path, "
+                + "so a read here is a second source of authority the removal cannot revoke",
+        });
     }
     return out;
 }
+
+/** Authority-path modules, which must resolve from membership and nothing else. */
+const AUTHORITY_PATH_MODULES = [
+    "lib/admin/resolveAdminAccessCore.ts",
+    "lib/admin/resolveAdminPortalOrgCore.ts",
+] as const;
 
 /* ------------------------------------------------------------------- removal surfaces */
 
@@ -228,60 +228,85 @@ function removalSurfaces(root: string): string[] {
 /** The claim `T-19` falsifies, in the copy an operator reads before confirming. */
 const ACCESS_LOSS_CLAIM = /(?:will\s+)?lose\s+access|loses\s+access|access\s+will\s+be\s+revoked/i;
 
-describe("W-20/T-19 — every membership deletion establishes what it revokes", () => {
+describe("W-20 / RL-12 — membership is the only source, so removal cannot be inverted", () => {
     it("finds the removal route (discovery has not silently stopped)", () => {
         const found = membershipDeletingModules(webRoot).map((abs) => relative(webRoot, abs).split("\\").join("/"));
         expect(found).toContain("app/api/admin/users/[userId]/remove/route.ts");
     });
 
-    it("no membership-deleting module writes before the residual guard answers", () => {
+    it("no membership-deleting module reads a legacy identity store", () => {
         expect(
-            guardViolations(webRoot),
-            "a deletion that cannot say what it revoked reports a revocation that may not have happened",
+            legacyReadingDeleters(webRoot),
+            "a deleter that reads those tables is re-deriving the fallback W-20 removed",
         ).toEqual([]);
     });
 
-    it("no removal surface claims the member loses access, and each carries the acknowledgement path", () => {
+    it("no authority-path module reads a legacy identity store — the M2-5 clause", () => {
+        const offenders = AUTHORITY_PATH_MODULES.filter((rel) =>
+            LEGACY_STORE_READ.test(code(join(webRoot, rel))),
+        );
+        expect(
+            offenders,
+            "one principal source. The copy in resolveAdminPortalOrgCore served requireAdminOrOps "
+                + "across 147 route files, so this is stated over both modules and not over one",
+        ).toEqual([]);
+    });
+
+    it("the authority path still reads the store it SHOULD — non-vacuity on the modules", () => {
+        // Without this, the assertion above would be satisfied by a resolver that reads nothing, or
+        // by a path list that has drifted to files which no longer exist.
+        for (const rel of AUTHORITY_PATH_MODULES) {
+            const src = code(join(webRoot, rel));
+            expect(src, rel).toMatch(/from\(\s*["'`]user_roles["'`]\s*\)/);
+            expect(src, rel).toContain("chooseOrgAndRoleKeysFromMembershipRows");
+        }
+    });
+
+    it("no usable membership resolves to no authority — the deletion's whole premise", () => {
+        // The behavioural claim, asserted where it is decided. Both resolvers must RETURN on an
+        // unpicked membership rather than continue to a second lookup. A resolver that fell through
+        // to anything else would pass every scan above and still invert a removal.
+        for (const rel of AUTHORITY_PATH_MODULES) {
+            const src = code(join(webRoot, rel));
+            expect(src, `${rel} must deny when no membership is picked`).toMatch(
+                /if\s*\(\s*!\s*picked\s*\)\s*return null;/,
+            );
+        }
+    });
+
+    it("the retired guard is gone, and gone from the tree rather than merely unused", () => {
+        // A refusal path that can never fire reads to the next author as evidence that a second
+        // authority source still exists — T-6's rule about controls that change nothing, applied to
+        // guards. Both the module and its route wiring left with the fallback.
+        expect(existsSync(join(webRoot, "lib", "access", "membershipRemovalResidual.ts"))).toBe(false);
+        const route = code(join(webRoot, "app", "api", "admin", "users", "[userId]", "remove", "route.ts"));
+        expect(route).not.toContain("removalResidualAuthority");
+        expect(route).not.toContain("readLegacyAdminOpsAuthority");
+        expect(route).not.toContain("acknowledge_residual_authority");
+    });
+
+    it("no removal surface claims more than the command performs — RL-54", () => {
         const surfaces = removalSurfaces(webRoot);
-        // Anchor: if discovery finds nothing, the two assertions below pass by agreeing with nothing.
-        //
-        // Stated by NAME rather than by a count. A floor of ">= 2" was satisfiable by the two legacy
-        // surfaces alone while the canonical one went unexamined, and it broke — correctly, but for
-        // the wrong reason — the moment W-59 retired them. What must always be in the subject is the
-        // surface an operator actually uses; a count cannot express that, and a count is what let the
-        // canonical surface sit unchecked.
+        // Anchor by NAME, not by count. A floor of ">= 2" was satisfiable by the two legacy surfaces
+        // alone while the canonical one went unexamined, and it broke — correctly, but for the wrong
+        // reason — the moment W-59 retired them.
         const rel = surfaces.map((abs) => relative(webRoot, abs).split("\\").join("/"));
         expect(rel, "the canonical removal surface must be in the scan's subject").toContain(
             "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
         );
 
+        // The copy rule OUTLIVES the defect that produced it. Removal deletes a membership in ONE
+        // org; a principal holding another org's membership keeps their operator access, so a
+        // blanket "they will lose access" is still a claim the command does not perform. What
+        // changed with W-20 is why it is false, not whether it is.
         const lying = surfaces
             .filter((abs) => ACCESS_LOSS_CLAIM.test(code(abs)))
             .map((abs) => relative(webRoot, abs).split("\\").join("/"));
         expect(
             lying,
-            "removal deletes a membership; whether the person loses ACCESS depends on the legacy "
-                + "identity fallback, and the route is what knows",
+            "removal deletes a membership in this organization; it does not revoke a membership held "
+                + "in another one",
         ).toEqual([]);
-
-        const deadEnd = surfaces
-            .filter((abs) => !code(abs).includes("acknowledge_residual_authority"))
-            .map((abs) => relative(webRoot, abs).split("\\").join("/"));
-        expect(
-            deadEnd,
-            "a surface that cannot send the acknowledgement turns a truthful refusal into an operator "
-                + "with no way to remove the member at all",
-        ).toEqual([]);
-    });
-
-    it("the granting module keeps the three-state read, and collapses it in exactly one place", () => {
-        const src = code(join(webRoot, "lib", "admin", "resolveAdminAccessCore.ts"));
-        expect(src).toMatch(/export\s+async\s+function\s+readLegacyAdminOpsAuthority/);
-        expect(src).toMatch(/status:\s*"unknown"/);
-        // The resolver's collapse of unknown→deny must exist once. More than one site is how the two
-        // meanings of `null` got back into circulation in the first place.
-        const collapses = src.match(/read\.status === "present"/g) ?? [];
-        expect(collapses).toHaveLength(1);
     });
 });
 
@@ -302,18 +327,14 @@ function fixtureTree(files: Record<string, string>): string {
     return root;
 }
 
+/** A post-W-20 deleter: membership only, no second source consulted. */
 const COMPLIANT_ROUTE = `
-import { readLegacyAdminOpsAuthority } from "@/lib/admin/resolveAdminAccessCore";
-import { removalResidualAuthority, removalRefusal } from "@/lib/access/membershipRemovalResidual";
 export async function POST() {
-    const legacyRead = await readLegacyAdminOpsAuthority(supabase, userId);
-    const residual = removalResidualAuthority({ fallbackWouldBeConsulted: true, legacyRead });
-    if (removalRefusal({ residual, acknowledged: false })) return refuse();
-    await supabase.from("user_roles").delete().eq("user_id", userId);
+    await supabase.from("user_roles").delete().eq("user_id", userId).eq("org_id", orgId);
 }
 `;
 
-describe("W-20/T-19 — the scan bites (non-vacuity, by fixture)", () => {
+describe("W-20 / RL-12 — the scan bites (non-vacuity, by fixture)", () => {
     const roots: string[] = [];
     const build = (files: Record<string, string>) => {
         const root = fixtureTree(files);
@@ -326,116 +347,93 @@ describe("W-20/T-19 — the scan bites (non-vacuity, by fixture)", () => {
         readCache.clear();
     };
 
-    it("passes a compliant route, so the checks discriminate rather than reject everything", () => {
+    it("passes a compliant deleter, so the check discriminates rather than rejecting everything", () => {
         const root = build({ "app/api/x/route.ts": COMPLIANT_ROUTE });
         try {
-            expect(guardViolations(root)).toEqual([]);
+            expect(legacyReadingDeleters(root)).toEqual([]);
+            // …and it really was in the subject, rather than passing by not being found.
+            expect(membershipDeletingModules(root)).toHaveLength(1);
         } finally {
             cleanup();
         }
     });
 
-    it("convicts a deletion with no guard at all", () => {
+    it("convicts a deleter that reads user_profiles", () => {
         const root = build({
             "app/api/x/route.ts": `
 export async function POST() {
+    const { data } = await supabase.from("user_profiles").select("role").eq("id", userId);
     await supabase.from("user_roles").delete().eq("user_id", userId);
 }
 `,
         });
         try {
-            const v = guardViolations(root);
+            const v = legacyReadingDeleters(root);
             expect(v).toHaveLength(1);
-            expect(v[0].why).toContain("without asking removalResidualAuthority");
+            expect(v[0].why).toContain("second source of authority");
         } finally {
             cleanup();
         }
     });
 
-    it("convicts a guard that answers after the write", () => {
-        const root = build({
-            "app/api/x/route.ts": `
-import { readLegacyAdminOpsAuthority } from "@/lib/admin/resolveAdminAccessCore";
-import { removalResidualAuthority, removalRefusal } from "@/lib/access/membershipRemovalResidual";
+    it("convicts a deleter that reads app_users — either join column", () => {
+        for (const column of ["id", "auth_user_id"]) {
+            const root = build({
+                "app/api/x/route.ts": `
 export async function POST() {
-    await supabase.from("user_roles").delete().eq("user_id", userId);
-    const residual = removalResidualAuthority({ fallbackWouldBeConsulted: true, legacyRead: null });
-    if (removalRefusal({ residual, acknowledged: false })) return refuse();
-}
-`,
-        });
-        try {
-            const v = guardViolations(root);
-            expect(v.map((x) => x.why).join(" ")).toContain("AFTER the delete");
-        } finally {
-            cleanup();
-        }
-    });
-
-    it("convicts a deleter that re-reads the legacy tables itself", () => {
-        const root = build({
-            "app/api/x/route.ts": `
-import { readLegacyAdminOpsAuthority } from "@/lib/admin/resolveAdminAccessCore";
-import { removalResidualAuthority, removalRefusal } from "@/lib/access/membershipRemovalResidual";
-export async function POST() {
-    const { data } = await supabase.from("app_users").select("role").eq("id", userId).maybeSingle();
-    const residual = removalResidualAuthority({ fallbackWouldBeConsulted: true, legacyRead: null });
-    if (removalRefusal({ residual, acknowledged: false })) return refuse();
+    const { data } = await supabase.from("app_users").select("role, org_id").eq("${column}", userId);
     await supabase.from("user_roles").delete().eq("user_id", userId);
 }
 `,
-        });
-        try {
-            const v = guardViolations(root);
-            expect(v.map((x) => x.why).join(" ")).toContain("second opinion about admission");
-        } finally {
-            cleanup();
+            });
+            try {
+                expect(legacyReadingDeleters(root), column).toHaveLength(1);
+            } finally {
+                cleanup();
+            }
         }
     });
 
     it("follows a helper-mediated deletion, which a route-file census misses", () => {
-        // The alias is interpolated rather than written inline. `verify:module-imports` is a
-        // deployment guard that regex-scans tracked source for alias imports with no notion of
-        // string literals, so an inline spelling here reads as this test file importing a module
-        // that does not exist in `web/` — it exists only inside the synthetic root built below.
-        // The emitted fixture is byte-identical either way; only the source spelling changes.
-        // (Do not name the pattern literally in this comment: the scanner would match that too.)
-        const helperAlias = "@/lib/revoke";
+        // `users/[userId]/role/route.ts` mutates membership while containing the string `user_roles`
+        // nowhere. A lock whose subject is "route files that mention the table" is blind to it.
         const root = build({
-            "app/api/x/route.ts": `import { revoke } from ${JSON.stringify(helperAlias)};
-export async function POST() { await revoke(); }
+            "app/api/x/route.ts": `
+import { wipeMembership } from "@/lib/membership";
+export async function POST() { await wipeMembership(userId); }
 `,
-            "lib/revoke.ts": `export async function revoke() {
+            "lib/membership.ts": `
+export async function wipeMembership(userId: string) {
+    await supabase.from("user_profiles").select("role").eq("id", userId);
     await supabase.from("user_roles").delete().eq("user_id", userId);
 }
 `,
         });
         try {
-            const v = guardViolations(root);
+            const v = legacyReadingDeleters(root);
             expect(v).toHaveLength(1);
-            expect(v[0].file).toBe("lib/revoke.ts");
+            expect(v[0].file).toBe("lib/membership.ts");
         } finally {
             cleanup();
         }
     });
 
     it("does not mistake a commented-out delete, or prose about app_users, for the real thing", () => {
-        // Both halves of §10.2's lesson in one fixture: the comment must not create a subject, and
-        // prose naming the legacy tables must not convict a compliant module.
+        // Both directions of the comment problem in one fixture. The prose names the legacy tables
+        // exactly as this repository's real modules do while explaining what they removed; the
+        // commented delete would make a non-deleter look like a deleter.
         const root = build({
             "app/api/x/route.ts": `
-/** Historically this read app_users.role and did supabase.from("user_roles").delete(). */
-export async function POST() { return ok(); }
+/**
+ * W-20 removed the fallback that read user_profiles.role and app_users.role.
+ * The old shape was: await supabase.from("user_roles").delete().eq("user_id", userId);
+ */
+export async function GET() { return Response.json({ ok: true }); }
 `,
-            "app/api/y/route.ts": COMPLIANT_ROUTE.replace(
-                "export async function POST",
-                "/* Fixes the app_users.role fallback: from(\"app_users\") was read here. */\nexport async function POST",
-            ),
         });
         try {
-            const modules = membershipDeletingModules(root).map((abs) => relative(root, abs));
-            expect(modules).toEqual(["app/api/y/route.ts"]);
-            expect(guardViolations(root)).toEqual([]);
+            expect(membershipDeletingModules(root)).toEqual([]);
+            expect(legacyReadingDeleters(root)).toEqual([]);
         } finally {
             cleanup();
         }
