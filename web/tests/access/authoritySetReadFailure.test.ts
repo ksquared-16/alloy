@@ -106,7 +106,11 @@ describe("W-56 — the revocation chain is broken at the representation", () => 
             join(webRoot, "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"),
             "utf8",
         );
-        const saveBody = src.slice(src.indexOf("const saveGrants"), src.indexOf("const setGridLevel"));
+        // W-58 merged the two saves into one submit, so the guarded function is `saveRole`. The
+        // invariant is unchanged and now covers MORE: the refusal fronts a request that carries the
+        // label as well as the grid, so an unknown grant set cannot reach the write just because the
+        // operator also edited the label.
+        const saveBody = src.slice(src.indexOf("const saveRole"), src.indexOf("const setGridLevel"));
         expect(saveBody).toContain("authoritySetIsWritable");
         expect(
             saveBody.indexOf("authoritySetIsWritable"),

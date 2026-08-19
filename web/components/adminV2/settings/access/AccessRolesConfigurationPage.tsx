@@ -266,56 +266,53 @@ export default function AccessRolesConfigurationPage() {
         }
     };
 
-    const saveRoleMeta = async () => {
+    /**
+     * W-58 / `RM-11` — ONE submit for the role page.
+     *
+     * `01…§40` records the defect this replaces: role meta and grants were two independent save
+     * paths with no dirty-state tracking between them, so *"an operator who edits the label and the
+     * grid and presses one button silently discards the other edit"*. Both edits now travel in one
+     * request, and `save_role_definition_and_grants` writes them in ONE transaction — a failure in
+     * the grants half rolls the label back rather than leaving the page half-saved.
+     *
+     * `W-56`'s refusal still runs FIRST and still refuses the whole submit. That ordering is
+     * deliberate: combining the two saves must not let an unknown grant set reach the write just
+     * because the operator also happened to edit the label.
+     */
+    const saveRole = async () => {
         if (!selected) return;
+        if (!authoritySetIsWritable(grantLoad)) {
+            setMessage(null);
+            setError(grantWriteRefusal);
+            return;
+        }
         setRoleSaving(true);
+        setGrantsSaving(true);
         setMessage(null);
         setError(null);
         try {
             const res = await fetch(`/api/admin/rbac/roles/${encodeURIComponent(selected.role_key)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role_label: roleLabel, is_active: roleActive }),
+                body: JSON.stringify({
+                    role_label: roleLabel,
+                    is_active: roleActive,
+                    permission_keys: [...grantKeys],
+                }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role update failed");
-            setMessage("Role saved.");
+            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Save failed");
+            // The response carries what the database committed, so the grid re-renders the committed
+            // set rather than the set this client hoped for.
+            if (Array.isArray(json.permission_keys)) {
+                setGrantLoad(authoritySetLoaded(json.permission_keys as string[]));
+            }
+            setMessage("Role and permissions saved.");
             await reload();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Role update failed.");
+            setError(err instanceof Error ? err.message : "Save failed.");
         } finally {
             setRoleSaving(false);
-        }
-    };
-
-    const saveGrants = async () => {
-        if (!selected) return;
-        /**
-         * W-56 / `S-11`. The guard sits in front of the write, not only on the button. `IA-7` made
-         * this exact argument in this exact chapter: a `disabled` attribute is a presentation fact,
-         * and a save reachable from a stale render or a programmatic click would still perform the
-         * total revocation. The refusal is stated to the operator rather than failing silently.
-         */
-        if (!authoritySetIsWritable(grantLoad)) {
-            setMessage(null);
-            setError(grantWriteRefusal);
-            return;
-        }
-        setGrantsSaving(true);
-        setMessage(null);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(selected.role_key)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ permission_keys: [...grantKeys] }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Permissions save failed");
-            setMessage("Permissions saved.");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Permissions save failed.");
-        } finally {
             setGrantsSaving(false);
         }
     };
@@ -494,10 +491,17 @@ export default function AccessRolesConfigurationPage() {
                                                         System roles cannot be deactivated.
                                                     </p>
                                                 :   null}
+                                                {/*
+                                                  * W-58: one submit. This button saves the label, the
+                                                  * active flag AND the permission grid in a single
+                                                  * transaction; it is disabled while the grant set is
+                                                  * unknown for the same reason the grid's own save was,
+                                                  * because it now carries that write too.
+                                                  */}
                                                 <ConfigurationSecondaryButton
                                                     className="mt-3"
-                                                    disabled={roleSaving}
-                                                    onClick={() => void saveRoleMeta()}
+                                                    disabled={roleSaving || !authoritySetIsWritable(grantLoad)}
+                                                    onClick={() => void saveRole()}
                                                     data-testid="access-role-save-meta"
                                                 >
                                                     {roleSaving ? "Saving…" : "Save role"}
@@ -710,15 +714,20 @@ export default function AccessRolesConfigurationPage() {
                                               * W-56 / T-22 now takes the other half — the failed GRANTS read. The
                                               * save is disabled whenever the grant set is not known, which is the
                                               * S-11 remedy this comment previously recorded as not taken. The
-                                              * button is the second guard; the first is in `saveGrants` itself.
+                                              * button is the second guard; the first is in `saveRole` itself.
+                                              *
+                                              * W-58: this is the SAME submit as the role card's. Both
+                                              * buttons now call `saveRole`, which sends meta and grants
+                                              * in one request written in one transaction — there is no
+                                              * longer an edit that one button saves and the other drops.
                                               */}
                                             <ConfigurationPrimaryButton
                                                 className="mt-3"
                                                 disabled={grantsSaving || gridRows.length === 0 || !authoritySetIsWritable(grantLoad)}
-                                                onClick={() => void saveGrants()}
+                                                onClick={() => void saveRole()}
                                                 data-testid="access-role-permissions-save"
                                             >
-                                                {grantsSaving ? "Saving…" : "Save permissions"}
+                                                {grantsSaving ? "Saving…" : "Save role and permissions"}
                                             </ConfigurationPrimaryButton>
                                         </ConfigWorkspaceCard>
                                     : tab === "users" ?

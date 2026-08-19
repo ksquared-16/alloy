@@ -642,6 +642,7 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
             "w61_role_key_fk_restrict",
             "w16_user_roles_role_foreign_key",
             "w28_replace_role_permission_grants_rpc",
+            "w58_save_role_definition_and_grants",
         ];
         const authored = AUTHORED_HERE.map((frag) => {
             const file = MIGRATION_FILES.find((f) => f.includes(frag));
@@ -740,5 +741,68 @@ describe("M9 / W-16 — user_roles.role references a defined role", () => {
                 `${name} is added without a guarded drop`,
             ).toBe(true);
         }
+    });
+});
+
+/**
+ * W-58 / `RM-11` — one submit for the role page.
+ *
+ * `01…§40`: role meta and grants were two independent save paths with no dirty-state tracking, so
+ * *"an operator who edits the label and the grid and presses one button silently discards the other
+ * edit"*. `01…§52` is why it could not be built earlier — composing a PATCH with the untransacted
+ * delete-then-insert would have given one operator action three failure points and no compensation.
+ * `W-28` supplied the atomicity; this asserts the composition.
+ */
+describe("W-58 / RM-11 — one submit, one transaction", () => {
+    const surface = () =>
+        readFileSync(join(webRoot, "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"), "utf8");
+
+    it("the role page has ONE submit, and both buttons call it", () => {
+        const src = surface();
+        // The two independent savers are gone by name, not merely unused.
+        expect(src).not.toMatch(/const\s+saveRoleMeta\s*=/);
+        expect(src).not.toMatch(/const\s+saveGrants\s*=/);
+        expect(src).toMatch(/const\s+saveRole\s*=/);
+        // Both buttons submit the same thing.
+        expect((src.match(/void saveRole\(\)/g) ?? []).length).toBe(2);
+    });
+
+    it("the submit carries meta AND grants in one request", () => {
+        const src = surface();
+        const body = src.slice(src.indexOf("const saveRole"), src.indexOf("const setGridLevel"));
+        // One fetch, one method, one body carrying all three fields.
+        expect((body.match(/fetch\(/g) ?? []).length).toBe(1);
+        expect(body).toMatch(/method:\s*"PATCH"/);
+        expect(body).toMatch(/role_label/);
+        expect(body).toMatch(/is_active/);
+        expect(body).toMatch(/permission_keys/);
+        // The old grants endpoint is no longer a second write from this surface.
+        expect(body).not.toMatch(/rbac\/grants/);
+    });
+
+    it("the transaction is the database's, not the route's — meta then grants, one function", () => {
+        const file = MIGRATION_FILES.find((f) => f.includes("w58_save_role_definition_and_grants"));
+        expect(file, "the W-58 migration is missing").toBeTruthy();
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file!), "utf8"));
+        // Meta is written FIRST, so a failure in the grants half rolls it back.
+        const metaAt = sql.search(/UPDATE\s+public\.role_definitions/i);
+        const grantsAt = sql.search(/replace_role_permission_grants\s*\(\s*p_org_id/i);
+        expect(metaAt).toBeGreaterThan(-1);
+        expect(grantsAt).toBeGreaterThan(metaAt);
+        // It COMPOSES W-28 rather than reimplementing it — two copies of a replacement algorithm is
+        // how M2-11's two answers came to disagree.
+        expect(sql).not.toMatch(/DELETE\s+FROM\s+public\.role_permission_grants/i);
+        expect(sql).toMatch(/GRANT\s+EXECUTE[\s\S]{0,140}TO\s+service_role/i);
+    });
+
+    it("the combined path cannot deactivate a system role — the guard fronts it", () => {
+        // A hole this workstream could easily have opened: one convenient request that skips a check
+        // the narrower request enforces.
+        const route = readFileSync(join(webRoot, "app/api/admin/rbac/roles/[role_key]/route.ts"), "utf8");
+        const guardAt = route.search(/System roles cannot be deactivated/);
+        const combinedAt = route.search(/save_role_definition_and_grants/);
+        expect(guardAt).toBeGreaterThan(-1);
+        expect(combinedAt).toBeGreaterThan(-1);
+        expect(guardAt, "the system-role guard must precede the combined branch").toBeLessThan(combinedAt);
     });
 });
