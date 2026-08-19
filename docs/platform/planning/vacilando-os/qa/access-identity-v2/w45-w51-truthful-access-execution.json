@@ -1,4 +1,38 @@
 {
+  "shipped_session_16": {
+    "mode": "Autonomous continuation. Selected work by enumerating every workstream the plan marks `no decision` plus every one carrying no gate at all, rather than by reading the assignment list -- the check the session-11 record asks for after sessions 7, 8 and 9 each reported this program blocked while ungated security work sat unstarted.",
+    "W-16_M9": {
+      "state": "AUTHORED, NOT APPLIED. Implementation complete; exit requires an apply (OD-1).",
+      "defect": "`user_roles.role` is unconstrained text. Governance CLAIMED the foreign key existed, which is why the gap survived -- the claim was the reason nobody looked. Baseline constrains org_id and user_id only (20260329165048:6618,6623).",
+      "fix": "20260818140000_w16_user_roles_role_foreign_key.sql -- FK (org_id, role) -> role_definitions (org_id, role_key) ON DELETE RESTRICT, matching M21 on the neighbouring table. With M21 this completes M15: M2-2's 'redundancy beside an absence' had its redundancy closed last session and its absence closed now.",
+      "plan_cautions_honoured": "Both. The preflight matches on (org_id, role_key) ALONE and never on is_active, because a foreign key does not read it and Q5's form would abort on rows a FK accepts. And because user_roles.role stays unconstrained until this lands, the preflight IS W-0 Q3 re-run at apply time rather than a citation of the old zero.",
+      "lockout_class": "L3. A row the constraint would reject becomes a refusal to migrate naming the offending pairs, not a silent future write failure."
+    },
+    "W-60_S13": {
+      "state": "COMPLETE for the static half. M20 (drop the two compatibility views) deliberately NOT authored -- see below.",
+      "audit_the_plan_opens_with": "Done, from the repository. The 2026-03-29 baseline grants ALL to anon on SIX access-control tables; Phase 0 adds SELECT on the two views; 20260804180000_platform_anon_privilege_revocation.sql revokes all of it broadly (:138) and forward (:83). The base-table contradiction the plan describes no longer rests on 'luck of layering'. W-60's opening condition is satisfied.",
+      "what_the_audit_does_not_fix": "The pattern. ALTER DEFAULT PRIVILEGES cannot stop an explicit GRANT ... TO anon, which is exactly what Phase 0 did. That is what the new lock closes, over all NINE authority objects -- membership, role, grant, catalog and scope. catalogConsolidationLock explicitly declined this scope: 'W-60 owns the general form ... this is only the three catalog objects.'",
+      "M20_deferred_deliberately": "It closes no LIVE invariant (the anon grants are already revoked; the views are residue), it would require amending a W-9 lock that asserts the deprecated names exist as views, and W-62 -- the only thing it unblocks -- is gated on AD-25 regardless. Deferred rather than done, and said so rather than silently skipped."
+    },
+    "RL_32_public_form_leg": {
+      "state": "COMPLETE. The fourth family now has a lock; action_links and webhook were locked in session 12.",
+      "why_the_obligation_differs": "A form link is not single-use -- it is meant to be opened repeatedly, so replay is its normal mode. The obligation is that an EXPIRED or DEACTIVATED link reaches no side effect. All four side-effecting routes funnel through resolvePublicFormLinkByToken, which refuses both before returning a context and matches by token_hash rather than the plaintext sent.",
+      "the_lock_failed_when_first_written": "Recorded because only reversion revealed it. The 'resolver still refuses both states' assertion used indexOf('EXPIRED'), which matches the error-code TYPE UNION at the top of the file, so deleting the actual refusal left the suite 9/9 GREEN. It now matches a returned refusal structurally and the same mutation turns it red. Fourth time in this program a scan has been satisfied by text that was not the thing it meant; first time caught by mutation rather than by reading.",
+      "S_3_finding": "form_links stores token_hash and hashes the caller's token to look it up; action_links still stores its bearer token in the clear. THE REMEDIATION PATTERN S-3 NEEDS ALREADY EXISTS IN THIS REPOSITORY -- it is not a design to invent, only a dual-read migration to apply, and that apply is OD-1."
+    },
+    "migration_ordering_corrected": {
+      "what_happened": "origin/staging advanced 93 commits between sessions and its migration head is now 20260817170000 -- ABOVE both migrations authored the day before. No collision, but a version at or below the remote head is refused by `db push`, the same family of failure as the collision that once silently skipped a migration here. An authored migration became unapplyable while sitting still.",
+      "fix": "Both renumbered to 20260818*, and the ordering lock generalised from 'M21 sorts last' -- true only while it was newest -- to the property that matters: nothing this lane authored may sort below a migration it must apply after.",
+      "standing_hazard": "This will recur every time staging's migration head passes ours while OD-1 is unresolved. Re-verify ordering at apply time; do not trust a version chosen on an earlier day."
+    },
+    "W-22_classified_operator_decision": {
+      "finding": "W-22 carries NO decision marker and no dependency in the plan, so it read as ready. It is not. Its stated form -- 'authority resolves for an explicit (principal, org) pair, determined by the request' -- requires a request-scoped org selection, and NO SUCH MECHANISM EXISTS ANYWHERE in the codebase. Creating one is both a new architectural authority path and an unresolved product question (how an operator selects or switches org).",
+      "what_is_live": "resolveAdminAccessCore.ts:196 still collapses a multi-org principal by `[...new Set(pool.map(r => r.org_id))].sort()[0]` -- lexicographically smallest UUID -- and discards roles in every other org. The existing test suite encodes the behaviour being removed, exactly as the plan warned.",
+      "why_not_partially_done": "The safe-looking subset -- refuse when ambiguous -- is a narrowing whose blast radius is the number of multi-org principals, which is a database question no worker session can answer. W-8 is this initiative's own record of what an unannounced narrowing costs."
+    },
+    "tests": "tests/access 630 passed / 6 skipped / 0 failed (was 611 at session start). New: anonPrivilegeAccessControlSurface 6/6, publicFormCredentialResolution 9/9, roleKeyIntegrityAndGrantReplacement 30/30 (was 20). npm run prebuild exit 0 on every commit.",
+    "certification": "No new browser evidence this session -- nothing shipped needed it. W-59's Tier D evidence from session 15 stands. Everything here is Tier A/B."
+  },
   "shipped_session_15": {
     "workstream": "W-59 \u2014 retire the non-canonical role-editing surfaces. COMPLETE.",
     "tier_D_result": "PASSED, 5/5, authenticated as the seeded operator against the local certification tenant. The blocker was NEVER a human sign-in: certification/alloy-certify carries a deterministic seeded operator (qa.operator@northwind.invalid), exactly as session 8 said.",
