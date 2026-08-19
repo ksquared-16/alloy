@@ -1,4 +1,36 @@
 {
+  "od1_released_work_session_19": {
+    "summary": "OD-1 applied. Eight migrations now live on alloy-cert; ledger 351 = repo 351, preflight clean, zero orphans. Five workstreams completed after the apply.",
+    "W-16_and_W-61_exits": "CLOSED with applied-schema evidence, not authored-schema. W-61: two CASCADE FKs collapsed to one RESTRICT, and deleting a role holding grants now RAISES rather than silently deleting 21 grants. W-16: user_roles(org_id, role) -> role_definitions exists, and inserting an undefined role for a REAL user is refused by the database. The first W-16 proof attempt was inconclusive (a random UUID tripped user_id_fkey first) and is recorded as such.",
+    "W-28": {
+      "state": "COMPLETE. Atomicity is now claimed, and certified against the applied schema.",
+      "what_was_still_wrong": "The fail-closed delta bounded blast radius but was not atomic: a delta computed in application code from a prior READ loses updates when two operators edit one role, and validation sat outside the write.",
+      "fix": "replace_role_permission_grants \u2014 row lock on the role BEFORE any read, validation inside the transaction, delete and insert cannot half-happen. service_role only; authorization stayed in the route.",
+      "proof": "SERIALIZATION PROVEN, not asserted: a second caller blocked 4.12s on the first's lock. Functional: 20 grants replaced by a 2-key request leaves exactly 2.",
+      "two_bugs_caught_by_exercising_it": "(1) the CLI RECORDED the migration in the ledger WITHOUT EXECUTING IT -- only a pg_proc query caught that the function did not exist. Ledger-confirmed is NOT applied, which is why they are separate states. (2) RETURNS TABLE (permission_key) made a PL/pgSQL variable ambiguous against ON CONFLICT's column; Postgres rejects that at CALL time, not CREATE time, so the migration applied cleanly and the function was broken."
+    },
+    "W-58": {
+      "state": "COMPLETE. Released by W-28 and built on it.",
+      "fix": "save_role_definition_and_grants writes meta then CALLS W-28's function -- composed, not reimplemented, because two copies of a replacement algorithm is how M2-11's two answers came to disagree. Route accepts permission_keys; both buttons call one saveRole.",
+      "tier_C_proof": "Label 'Admin' + 20 grants; one submit changing the label AND carrying an invalid key; raises; after: label 'Admin', 20 grants. The partial state 01\u2026\u00a752 warned about is now impossible.",
+      "hole_opened_and_closed": "The combined branch initially sat BEFORE the is_system guard, so a submit carrying permission_keys could have deactivated a system role the meta-only path refuses. One convenient request skipping a check the narrower one enforces. Guard now fronts both; a test asserts the ordering."
+    },
+    "S-3": {
+      "state": "COMPLETE. The plaintext column is GONE from alloy-cert.",
+      "why_the_prior_objection_did_not_apply": "The record said the conversion 'INVALIDATES EVERY LIVE UNCONSUMED LINK unless done as a dual-read window'. It does not, if existing tokens are hashed IN PLACE -- verification never needs the plaintext back. The backfill migration aborts if any row would be left unaddressable.",
+      "digest_equivalence_proven": "node createHash sha256 hex == pg encode(sha256(convert_to(t,'UTF8')),'hex'), verified against the running database. A disagreement would have stranded every existing link while every test exercising only NEW links passed.",
+      "dual_read_window": "TWO migrations, and the gap between them IS the window: add+backfill+nullable, then drop. Applying both before deploying the hash-reading code would leave a running process selecting a dropped column. On cert they move together; the separation exists for environments where they must not.",
+      "preserved": "Bearer usability (the mint still RETURNS the plaintext -- it has to reach the recipient's URL), expiry/deactivation, and RL-32's claimActionLink replay guard, which is locked by a test because a storage change that quietly reopened the replay race would be worse than the defect being fixed. Legacy null-org attribution untouched."
+    },
+    "W-60": "COMPLETE. M20 dropped the two catalog compatibility views after verifying against the RUNNING database that both were still views, that ZERO relations depended on them, and that no product source read them. RL-7's assertion tightened from 'the deprecated names are views' to 'they are absent'.",
+    "why_the_loop_stopped": {
+      "W-62": "Its three predecessors (W-20, W-13, W-60) now all appear satisfied, so it read as released. It is NOT. Proven empirically rather than by citing the wave table: the resolver reads SEVEN stores -- app_users, user_profiles, user_roles, user_access_profiles, user_department_access, user_site_access, role_permission_grants. W-62's exit requires the declared enumeration to have FOUR entries. Grouping seven reads into four IS AD-25's question, and the plan's own words are 'restating the chain as four layers does not make it four layers.'",
+      "W-20_is_partial_not_complete": "Correcting the record: W-20 shipped its TRUTHFULNESS half (T-19 -- removal stops reporting a revocation it did not perform). Its REMOVAL half did not: readLegacyAdminOpsAuthority still reads user_profiles and app_users, so the legacy fallback is live. That is lockout class L4 and needs census Q15 against a real tenant -- which cert-only OD-1 does not provide, because the cert tenant is seeded and cannot answer who in production depends on the fallback.",
+      "everything_else": "Decision-gated: W-15 (OD-7), W-17 (W-57/OD-8), W-18 (D3), W-19 (D4), W-22 (no request-scoped org mechanism exists; creating one is architecture + product), W-24 (AD-11), W-25 (AD-10), W-26/27 (AD-5/6/16), W-29 (AD-9), W-31 (OD-9), W-33-37 (sitting 3), W-38/39 (AD-13/15), W-41 (AD-12), W-44 (AD-4 + OD-7), W-48 (after W-41), W-53 (after W-23 Q7), W-57 (OD-8), W-62 (AD-25)."
+    },
+    "tests": "tests/access 647 passed / 6 skipped / 0 failed (was 630 at session start). Adjacent action-link, unauthenticated-sender and webhook-ordering suites 37/37. prebuild exit 0 on every commit. Certification tenant unmutated by any test: 21 grants and label 'Admin' before and after, every exercise rolled back.",
+    "boundary": "APPLIED TO alloy-cert ONLY. Not staging, not production, not pushed, not merged, not deployed. OD-2 uncrossed."
+  },
   "od1_applied_session_18": {
     "outcome": "ALL THREE APPLIED to alloy-cert and verified. Ledger 343 -> 346, matching the repository exactly.",
     "reconciliation": "Communications published exactly the four applied migrations and no application code (14044542a, parent origin/staging); cherry-picked. A FIFTH orphan remained -- 20260817170000_communication_ingress_routes -- canonical on origin/staging and absent here only because this branch is 93 behind. Taken as a single file rather than by merging 93 commits of unrelated work. Its blob was verified against the applied ledger statements first: the only difference is the 13 statement-terminating semicolons the CLI strips when splitting `statements` into an array. Post-reconciliation preflight: repo 346 files / 346 unique versions, ledger 343, ZERO orphans, history consistent.",
