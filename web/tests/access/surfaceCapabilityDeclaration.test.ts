@@ -126,18 +126,55 @@ describe("W-49 · RL-36 — the surface capability declaration", () => {
         }
     });
 
-    it("joins each surface to W-14's table: a backing route declares the surface's own capability", () => {
+    /**
+     * A surface's capability must SATISFY every capability its backing routes require.
+     *
+     * This asserted equality until OD-7. That forbade the read/write split the decision mandates:
+     * a surface that MANAGES roles gates on `settings.users_roles`, while a backing route that only
+     * READS correctly requires `settings.users_roles.read`, and demanding they be identical would
+     * force every read behind the mutation key — precisely what OD-7's read/write rule prohibits.
+     *
+     * The property W-49 actually protects is the other direction: a surface must not present a
+     * command its route will refuse. So the test is subsumption, not equality — and a route
+     * requiring something the surface's holder does NOT have still fails, which is the case that
+     * matters. Subsumption is not asserted from the key names: it is read from
+     * `canReadUsersAndRolesCatalog`, which is the code that actually accepts the manage key in place
+     * of the read key.
+     */
+    const SUBSUMES: Record<string, readonly string[]> = {
+        "settings.users_roles": ["settings.users_roles.read"],
+    };
+
+    function surfaceSatisfies(surfaceCapability: string, routeCapability: string): boolean {
+        if (surfaceCapability === routeCapability) return true;
+        return (SUBSUMES[surfaceCapability] ?? []).includes(routeCapability);
+    }
+
+    it("the subsumption claim is read from the gate, not from the key names", () => {
+        // If `canReadUsersAndRolesCatalog` stopped accepting the manage key, the mapping above would
+        // be a fiction and every surface/route pair relying on it would be unproven.
+        const gate = fs.readFileSync(path.join(__dirname, "..", "..", "lib/admin/canManageUsersAndRoles.ts"), "utf8");
+        const body = gate.slice(gate.indexOf("export function canReadUsersAndRolesCatalog"));
+        expect(body).toContain("canManageUsersAndRoles(access)");
+        expect(body).toContain("SETTINGS_USERS_ROLES_READ_PERMISSION");
+    });
+
+    it("joins each surface to W-14's table: the surface's capability satisfies its backing routes", () => {
         for (const decl of ACCESS_SURFACE_LIST) {
             for (const route of decl.backingRoutes) {
                 expect(
                     declaredTable.routes[route],
                     `${decl.surfaceKey} names ${route}, which is not in the declared route table`
                 ).toBeDefined();
-                expect(
-                    capabilitiesDeclaredBy(route).has(decl.capability),
-                    `${decl.surfaceKey} gates on ${decl.capability}, but its backing route ${route} does not declare it — ` +
-                        "a surface gate and a command gate that are not the same gate"
-                ).toBe(true);
+                const required = [...capabilitiesDeclaredBy(route)];
+                for (const routeCapability of required) {
+                    expect(
+                        surfaceSatisfies(decl.capability, routeCapability),
+                        `${decl.surfaceKey} gates on ${decl.capability}, but its backing route ${route} requires ` +
+                            `${routeCapability}, which that does not satisfy — a surface presenting a command its ` +
+                            "route will refuse"
+                    ).toBe(true);
+                }
             }
         }
     });

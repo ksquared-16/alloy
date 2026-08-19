@@ -617,10 +617,14 @@ describe("W-15 sizing — the reader finds a gate that is really there", () => {
 describe("W-14 · RL-10 — inherited handlers, the enumerated denominator", () => {
     const inherited = table.inherited?.handlers ?? [];
 
-    it("the ceiling did NOT move; the program-owned backlog is what is bounded", () => {
-        // The whole point of the treatment: 695 before, 695 after.
-        expect(table.ratchet.max_pending).toBe(695);
-        expect(report.ratchet.max_pending).toBe(695);
+    it("the ceiling only ever DESCENDS; the program-owned backlog is what is bounded", () => {
+        // 695 is where the inherited treatment landed — the value OD-1 was not allowed to raise.
+        // W-15's burndown under OD-7 lowers it, which is the ratchet's designed direction, so the
+        // assertion is an upper bound rather than an equality. An equality here would have to be
+        // edited on every conversion, and a test edited that often stops being read.
+        const TREATMENT_CEILING = 695;
+        expect(table.ratchet.max_pending).toBeLessThanOrEqual(TREATMENT_CEILING);
+        expect(report.ratchet.max_pending).toBe(table.ratchet.max_pending);
         expect(report.ratchet.owned_pending).toBe(report.counts.pending - report.ratchet.inherited);
         expect(report.ratchet.owned_pending).toBeLessThanOrEqual(695);
         // And the treatment is doing real work — if inherited were empty this would be red.
@@ -643,7 +647,7 @@ describe("W-14 · RL-10 — inherited handlers, the enumerated denominator", () 
         const r = checkWith((t) => {
             t.inherited!.handlers = t.inherited!.handlers.slice(1);
         });
-        expect(r.ratchet.owned_pending).toBe(696);
+        expect(r.ratchet.owned_pending).toBe(report.ratchet.owned_pending + 1);
         expect(r.violations.map((v) => v.kind)).toContain("ratchet-pending");
         expect(r.ok).toBe(false);
     });
@@ -687,8 +691,8 @@ describe("W-14 · RL-10 — inherited handlers, the enumerated denominator", () 
                 (h) => !(h.route === route && h.method === method),
             );
         });
-        expect(removed.ratchet.max_pending).toBe(695);
-        expect(removed.ratchet.owned_pending).toBe(695);
+        expect(removed.ratchet.max_pending).toBe(table.ratchet.max_pending);
+        expect(removed.ratchet.owned_pending).toBe(report.ratchet.owned_pending);
         expect(removed.violations).toEqual([]);
     });
 

@@ -2,7 +2,7 @@
   "reviewed": "2026-08-10 \u2014 W-14 initial issuance (assignment asg_0232d36df9694c)",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
-    "max_pending": 695
+    "max_pending": 694
   },
   "inherited": {
     "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog.",
@@ -110,24 +110,6 @@
         "method": "POST",
         "introduced_by": "77483a577",
         "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
-      },
-      {
-        "route": "app/api/public/forms/[token]/enrollment-objective/route.ts",
-        "method": "GET",
-        "introduced_by": "a98d99f4d",
-        "program": "feat(enrollment): Participant Runtime V1 \u2014 the conversational Enrollment loop"
-      },
-      {
-        "route": "app/api/public/forms/[token]/enrollment-turn/route.ts",
-        "method": "POST",
-        "introduced_by": "a98d99f4d",
-        "program": "feat(enrollment): Participant Runtime V1 \u2014 the conversational Enrollment loop"
-      },
-      {
-        "route": "app/api/public/tour-booking/[token]/confirm-attendance/route.ts",
-        "method": "POST",
-        "introduced_by": "a76b6ece9",
-        "program": "feat(enrollment): finalize Tour E2E \u2014 booking Work View, internal recipients"
       }
     ]
   },
@@ -164,7 +146,8 @@
     },
     "app/api/admin/access-scope-debug/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "Self-inspection only. The handler reads the CALLER'S OWN resolved scope \u2014 every query is filtered by `gate.userId` and `gate.orgId` from the caller's own gate \u2014 and returns it. It discloses nothing about any other principal and mutates nothing, so there is no operation for a capability to protect. Admission (loadAdminRouteGate) is what bounds it, which is admission used to DENY, not to authorize."
       }
     },
     "app/api/admin/action-definitions/[id]/route.ts": {
@@ -2868,9 +2851,9 @@
     "app/api/admin/rbac/grants/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
+        "capability": "settings.users_roles.read",
         "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "Read leg admits portal-eligible principals too."
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key \u2014 so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
       },
       "PUT": {
         "status": "declared",
@@ -2881,9 +2864,9 @@
     "app/api/admin/rbac/permissions/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
+        "capability": "settings.users_roles.read",
         "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "Portal-eligible principals also pass; that leg is W-13's portal.access."
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key \u2014 so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
       }
     },
     "app/api/admin/rbac/roles/[role_key]/route.ts": {
@@ -2896,9 +2879,9 @@
     "app/api/admin/rbac/roles/route.ts": {
       "GET": {
         "status": "declared",
-        "capability": "settings.users_roles",
+        "capability": "settings.users_roles.read",
         "helper": "requirePortalOrUsersRolesManageAuth",
-        "note": "Read leg admits portal-eligible principals too."
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key \u2014 so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
       },
       "POST": {
         "status": "declared",
@@ -3300,7 +3283,7 @@
     "app/api/admin/users/route.ts": {
       "GET": {
         "status": "pending",
-        "note": "W-14 FINDING \u2014 the method grain found this. POST requires settings.users_roles; GET requires only getAdminContextCached(), i.e. portal admission. A file-grained census counts this file as gated because POST is. Whether roster read should require settings.users_roles is a product decision for W-15, not a worker's \u2014 declaring it 'none' here would assert an answer this workstream has no authority to give, so this stays 'pending'. AMENDED: the finding's DISCLOSURE half is closed. GET no longer returns every member's email address to everyone the portal admits \u2014 the address is projected against canManageUsersAndRoles (the same predicate the managing routes enforce, read a second time) and a server-computed `label` carries the naming function its consumers actually needed. Admission is deliberately unchanged, so this remains a pending declaration and not a resolved one. See lib/access/memberDirectoryProjection.ts and tests/access/memberDirectoryDisclosure.test.ts."
+        "note": "W-15 CONVERSION EXCEPTION under OD-7 rule 6 \u2014 not a missing decision, a failed no-widening test. The canonical capability for this read is settings.users_roles.read (W-13's chapter read key), and admission today is portal eligibility (admin OR ops). Those populations are NOT equal: requirePortalOrUsersRolesManageAuth resolves the capability WITHOUT requiring portalEligible, so a principal holding the key through a custom role an operator granted \u2014 regional_lead, say \u2014 would gain the roster read they do not have today. OD-7 permits conversion only when the new gate is equal to or narrower, and forbids compensating with an ad-hoc secondary role check, which is the only way to close the gap. tests/access/memberDirectoryDisclosure.test.ts asserts this directly ('admission is decided by getAdminContextCached, not by the capability bundle') and was written to prevent exactly this widening. Reconciliation needs either a portal-scoped read capability or an accepted decision that capability holders may read the roster without portal admission \u2014 neither is OD-7's to give. The DISCLOSURE half remains closed: addresses are still projected against canManageUsersAndRoles."
       },
       "POST": {
         "status": "declared",
@@ -3593,12 +3576,14 @@
     },
     "app/api/public/forms/[token]/enrollment-objective/route.ts": {
       "GET": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented \u2014 locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
       }
     },
     "app/api/public/forms/[token]/enrollment-turn/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented \u2014 locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
       }
     },
     "app/api/public/forms/[token]/resolve/route.ts": {
@@ -3648,7 +3633,8 @@
     },
     "app/api/public/tour-booking/[token]/confirm-attendance/route.ts": {
       "POST": {
-        "status": "pending"
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented \u2014 locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
       }
     },
     "app/api/public/tour-booking/[token]/confirm/route.ts": {
