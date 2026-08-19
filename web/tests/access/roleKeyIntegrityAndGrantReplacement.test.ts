@@ -761,14 +761,25 @@ describe("W-58 / RM-11 — one submit, one transaction", () => {
     const surface = () =>
         readFileSync(join(webRoot, "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx"), "utf8");
 
-    it("the role page has ONE submit, and both buttons call it", () => {
+    it("the role page has ONE submit, and every save control calls it", () => {
         const src = surface();
         // The two independent savers are gone by name, not merely unused.
         expect(src).not.toMatch(/const\s+saveRoleMeta\s*=/);
         expect(src).not.toMatch(/const\s+saveGrants\s*=/);
         expect(src).toMatch(/const\s+saveRole\s*=/);
-        // Both buttons submit the same thing.
-        expect((src.match(/void saveRole\(\)/g) ?? []).length).toBe(2);
+
+        // This used to require exactly TWO `void saveRole()` call sites, because W-58 landed on a
+        // tabbed page where the role card and the permissions grid each had a button and the fix
+        // was to point both at one submit. W-57 removed the tab bar and the page now has one save
+        // control, so the count went to one — and the old assertion read that as a regression when
+        // it is the same property arrived at more directly.
+        //
+        // The invariant W-58 owns is not "two buttons": it is that **no save control submits
+        // anything other than the one composed submit**. Counting call sites was a proxy for that;
+        // this asserts it. Fewer buttons is allowed, a second saver is not.
+        const submitCalls = src.match(/void\s+save\w*\(\)/g) ?? [];
+        expect(submitCalls.length).toBeGreaterThanOrEqual(1);
+        for (const call of submitCalls) expect(call).toMatch(/void\s+saveRole\(\)/);
     });
 
     it("the submit carries meta AND grants in one request", () => {

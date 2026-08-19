@@ -180,12 +180,29 @@ describe("W-50 — the surface states the condition rather than drawing a dead c
     it("marks an inert row with the platform's planned-capability discipline", () => {
         // `06…§4.10`: `data-capability="planned"` is this surface's best property. An inert
         // capability is unbuilt capability, so it uses the same marker rather than a new one.
-        expect(source).toContain('data-capability={enforcement.inert ? "planned" : undefined}');
+        //
+        // W-57 rewrote the row and this assertion had to be rewritten with it. It used to pin the
+        // exact expression `data-capability={enforcement.inert ? …}`; the one-page editor computes
+        // the same condition into a local (`enforcement.inert || offered.length <= 1`, which also
+        // catches a row whose only offerable level is "none"). Pinning the spelling made a
+        // *stricter* surface look like a regression. What W-50 actually owns is the property —
+        // an unenforced row is marked, and it says so in words — so that is what is asserted, and
+        // the condition is required to still be derived from `rowEnforcement` rather than authored.
+        expect(source).toMatch(/data-capability=\{[^}]*"planned"[^}]*\}/);
+        expect(source).toContain("rowEnforcement");
         expect(source).toContain("Not enforced");
     });
 
-    it("marks a granted-but-inert capability in the summary instead of listing it as one the role has", () => {
-        expect(source).toContain('data-capability={c.enforced ? undefined : "planned"}');
-        expect(source).toContain("Granted · not enforced");
+    it("does not list a granted-but-inert capability among the ones the role has", () => {
+        // The Overview card this used to read is gone — W-57 folded the role's summary into its
+        // header. The claim survives the merge and is now stronger, because it moved from a
+        // rendering detail into the projection: `heldAuthorityAreas` excludes areas with no
+        // enforced rows, so a role granted the whole catalog cannot read as able to do everything.
+        // `roleAuthoritySummary.ts` is where that is now proved (`oneRoleEditorPage.test.ts`).
+        expect(source).toContain("heldAuthorityAreas");
+        expect(source).toContain("Not enforced");
+        // And the editor still renders EVERY area, so excluding one from the headline is not
+        // hiding it — the record stays visible even when the summary declines to claim it.
+        expect(source).toContain("authorityAreas.map");
     });
 });
