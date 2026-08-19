@@ -33,7 +33,6 @@ import {
     pendingWithKnownGates,
     gateInventory,
     discoverCatalogKeys,
-    // @ts-expect-error - .mjs check script, no type declarations
 } from "../../scripts/checkRouteCapabilities.mjs";
 import { discoverCatalog } from "./permissionCatalogDiscovery";
 

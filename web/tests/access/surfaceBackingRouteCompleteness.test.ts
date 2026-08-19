@@ -22,10 +22,11 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-import {
-    ACCESS_SURFACE_DECLARATIONS,
-    type AccessWorkspaceChapter,
-} from "@/lib/access/surfaceCapabilities";
+import { ACCESS_SURFACE_DECLARATIONS } from "@/lib/access/surfaceCapabilities";
+// The chapter union is declared here and re-used by `surfaceCapabilities`, which imports rather
+// than re-exports it. Importing it from the consumer typechecked under the test config's looser
+// settings and failed `typecheck:tests`; taking it from its owner is also the honest dependency.
+import type { AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 
 const WEB_ROOT = process.cwd();
 const CHAPTER_DIR = path.join(WEB_ROOT, "components/adminV2/settings/access");
