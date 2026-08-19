@@ -14,11 +14,21 @@
  * already destroyed the role's authority. Validating first means the destructive half is never
  * reached by a request the handler was always going to reject.
  *
- * **Scope of the W-28 claim, stated so it is not read as more than it is.** PostgREST cannot span
- * a transaction, so the replacement is a fail-closed DELTA, not an atomic write. It bounds the
- * blast radius — no total wipe, and a mid-flight failure can only under-grant. True atomicity
- * needs the replacement to become one RPC, which needs a migration channel (OD-1). The tests
- * below assert the delta and its ordering; none of them asserts atomicity.
+ * **Scope of the W-28 claim — this changed, and the history is the point.** The replacement passed
+ * through three shapes. It began as "delete every grant, then insert the new set", untransacted, so
+ * a failed insert left the role holding ZERO grants. It became a fail-closed DELTA — read current,
+ * delete only removals, upsert additions, removals first — which bounded the blast radius to
+ * under-granting but was explicitly NOT atomic: a delta computed in application code from a prior
+ * READ loses updates when two operators edit the same role, and no ordering fixes a race between a
+ * read and a write.
+ *
+ * It is now ONE database operation. `replace_role_permission_grants` locks the role before it reads,
+ * so concurrent replacements serialize; validation happens inside that transaction; delete and
+ * insert cannot half-happen. The tests below therefore assert the ROUTE delegates the whole
+ * transition and performs no destructive statement of its own, and the SQL-level block asserts the
+ * properties that now live in the function. Atomicity IS claimed, and it is certified against the
+ * applied alloy-cert schema — the serialization was proven by a second caller blocking on the
+ * first, not by reading the lock statement.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
@@ -44,7 +54,7 @@ import { PUT } from "@/app/api/admin/rbac/grants/route";
 
 type Op = {
     table: string;
-    kind: "select" | "delete" | "insert" | "upsert";
+    kind: "select" | "delete" | "insert" | "upsert" | "rpc";
     filters: Record<string, unknown>;
     inList?: string[];
     rows?: Array<Record<string, unknown>>;
@@ -91,6 +101,15 @@ function recordingClient(resolve: (op: Op) => Outcome) {
             insert: (rows: Array<Record<string, unknown>>) => builder(table, "insert", rows),
             upsert: (rows: Array<Record<string, unknown>>) => builder(table, "upsert", rows),
         }),
+        // W-28: the grant replacement is one RPC now, so the recorder has to be able to see it.
+        // Recorded as an op like any other, which is what lets the tests below assert that the
+        // route issues NO direct delete or upsert against `role_permission_grants` any more.
+        rpc: (fn: string, args: Record<string, unknown>) => {
+            const op: Op = { table: `rpc:${fn}`, kind: "rpc", filters: {}, rows: [args] };
+            ops.push(op);
+            const out = resolve(op);
+            return Promise.resolve({ data: out.data ?? null, error: out.error ?? null });
+        },
     };
 
     return { client, ops };
@@ -205,118 +224,173 @@ describe("W-61 / H3 — the handler validates role_key before it writes", () => 
         const res = await PUT(putRequest("ops", ["a.read"]));
 
         expect(res.status).toBe(200);
-        expect(additiveOps(ops)).toHaveLength(1);
+        // W-28 moved the write into one RPC, so "reached the write path" is now "reached the
+        // function". Asserting `additiveOps` here would silently pass forever once the route
+        // stopped writing directly — a control that cannot fail is not a control.
+        expect(ops.filter((o) => o.kind === "rpc")).toHaveLength(1);
     });
 });
 
-describe("W-28 / T-23 — the replacement cannot wipe a role", () => {
-    it("deletes only the grants actually being removed", async () => {
-        const { client, ops } = recordingClient(
-            defaultResolve({ currentGrants: ["a.read", "a.write", "b.read"] }),
-        );
-        mockClient.value = client;
+describe("W-28 / S-12 — the replacement is one database operation", () => {
+    /** Resolve the RPC as a success returning the committed set. */
+    function rpcWorld(opts: { rpcError?: { message: string }; granted?: string[] } = {}) {
+        return (op: Op): Outcome => {
+            if (op.table === "role_definitions") return { data: { role_key: "ops" } };
+            if (op.kind === "rpc") {
+                if (opts.rpcError) return { error: opts.rpcError };
+                return {
+                    data: (opts.granted ?? ["a.read", "b.write"]).map((granted_permission_key) => ({
+                        granted_permission_key,
+                    })),
+                };
+            }
+            return { data: null };
+        };
+    }
 
-        // Keep a.read, drop a.write and b.read, add b.write.
-        await PUT(putRequest("ops", ["a.read", "b.write"]));
-        const del = destructiveOps(ops);
-
-        expect(del).toHaveLength(1);
-        expect(del[0].inList?.sort()).toEqual(["a.write", "b.read"]);
-    });
-
-    it("never issues an unscoped delete of every grant for the role", async () => {
-        // This is the exact statement that produced the zero-grant role.
-        const { client, ops } = recordingClient(defaultResolve({ currentGrants: ["a.read", "a.write"] }));
-        mockClient.value = client;
-
-        await PUT(putRequest("ops", ["b.read"]));
-
-        for (const del of destructiveOps(ops)) {
-            expect(del.inList, "a delete with no permission_key list removes the whole role").toBeDefined();
-            expect(del.inList!.length).toBeGreaterThan(0);
-        }
-    });
-
-    it("removals run before additions, so a mid-flight failure can only under-grant", async () => {
-        const { client, ops } = recordingClient(defaultResolve({ currentGrants: ["a.read", "a.write"] }));
-        mockClient.value = client;
-
-        await PUT(putRequest("ops", ["b.read"]));
-        const kinds = grantOps(ops)
-            .filter((o) => o.kind !== "select")
-            .map((o) => o.kind);
-
-        expect(kinds).toEqual(["delete", "upsert"]);
-    });
-
-    it("a failed addition leaves the retained grants in place", async () => {
-        const { client, ops } = recordingClient(
-            defaultResolve({ currentGrants: ["a.read", "a.write"], writeError: { message: "insert failed" } }),
-        );
+    it("delegates the whole transition to one RPC call, with the caller's org", async () => {
+        const { client, ops } = recordingClient(rpcWorld());
         mockClient.value = client;
 
         const res = await PUT(putRequest("ops", ["a.read", "b.write"]));
+        expect(res.status).toBe(200);
 
-        expect(res.status).toBe(500);
-        // a.read was never in a delete list, so it survives the failure. Before W-28 the
-        // unscoped delete had already removed it and the role held nothing.
-        //
-        // Every delete must be checked for BEING scoped, not just for its list's contents:
-        // an unscoped delete has no list at all, so a `flatMap(o => o.inList ?? [])` assertion
-        // passes against the very statement this test exists to forbid.
-        for (const del of destructiveOps(ops)) {
-            expect(del.inList, "an unscoped delete removed every grant the role held").toBeDefined();
-            expect(del.inList).not.toContain("a.read");
-        }
+        const rpcs = ops.filter((o) => o.kind === "rpc");
+        expect(rpcs).toHaveLength(1);
+        expect(rpcs[0].table).toBe("rpc:replace_role_permission_grants");
+        expect(rpcs[0].rows?.[0]).toEqual({
+            p_org_id: orgId,
+            p_role_key: "ops",
+            p_permission_keys: ["a.read", "b.write"],
+        });
     });
 
-    it("writes nothing at all when the current grant set cannot be read", async () => {
-        // An unreadable current set must not be treated as an empty one — `toRemove` would be
-        // empty and the revocation half of the operator's edit would silently not happen.
-        const { client, ops } = recordingClient(
-            defaultResolve({ currentError: { message: "unavailable" } }),
-        );
+    it("issues NO destructive or additive statement of its own — that is the atomicity claim", async () => {
+        // The observable form of "one operation owns the transition". If the route still deleted or
+        // upserted directly, the write would span statements again and the function's lock would
+        // protect nothing, because the route would not be inside it.
+        const { client, ops } = recordingClient(rpcWorld());
         mockClient.value = client;
 
-        const res = await PUT(putRequest("ops", ["a.read"]));
+        await PUT(putRequest("ops", ["a.read"]));
 
-        expect(res.status).toBe(500);
-        expect(destructiveOps(ops)).toEqual([]);
-        expect(additiveOps(ops)).toEqual([]);
+        expect(destructiveOps(ops), "the route must not delete grants itself").toEqual([]);
+        expect(additiveOps(ops), "the route must not write grants itself").toEqual([]);
     });
 
-    it("issues no delete when the edit only adds", async () => {
-        const { client, ops } = recordingClient(defaultResolve({ currentGrants: ["a.read"] }));
-        mockClient.value = client;
-
-        await PUT(putRequest("ops", ["a.read", "a.write"]));
-
-        expect(destructiveOps(ops)).toEqual([]);
-    });
-
-    it("clearing every grant is still expressible", async () => {
-        // The delta must not accidentally make "revoke everything" unreachable.
-        const { client, ops } = recordingClient(defaultResolve({ currentGrants: ["a.read", "a.write"] }));
+    it("clearing every grant is still expressible, and still goes through the one operation", async () => {
+        const { client, ops } = recordingClient(rpcWorld({ granted: [] }));
         mockClient.value = client;
 
         const res = await PUT(putRequest("ops", []));
-
         expect(res.status).toBe(200);
-        expect(destructiveOps(ops)[0].inList?.sort()).toEqual(["a.read", "a.write"]);
-        expect(additiveOps(ops)).toEqual([]);
+
+        const rpcs = ops.filter((o) => o.kind === "rpc");
+        expect(rpcs[0].rows?.[0]).toMatchObject({ p_permission_keys: [] });
+        expect(destructiveOps(ops)).toEqual([]);
     });
 
-    it("upserts rather than inserts, so a disallowed row is re-enabled not collided", async () => {
-        const { client, ops } = recordingClient(defaultResolve({ currentGrants: ["a.read"] }));
+    it("echoes the set the database committed, not the set the client asked for", async () => {
+        const { client } = recordingClient(rpcWorld({ granted: ["a.read"] }));
         mockClient.value = client;
 
-        await PUT(putRequest("ops", ["a.read", "a.write"]));
-        const add = additiveOps(ops);
+        const res = await PUT(putRequest("ops", ["a.read", "b.write"]));
+        const json = (await res.json()) as { ok: boolean; permission_keys: string[] };
 
-        expect(add[0].kind).toBe("upsert");
-        expect(add[0].rows).toEqual(
-            expect.arrayContaining([expect.objectContaining({ permission_key: "a.read", allowed: true })]),
+        expect(json.ok).toBe(true);
+        // The function returns what it actually committed. Rendering the request back would show an
+        // operator a grid the database never agreed to.
+        expect(json.permission_keys).toEqual(["a.read"]);
+    });
+
+    it("maps the function's key rejection back to the same stated 400", async () => {
+        const { client } = recordingClient(
+            rpcWorld({ rpcError: { message: 'invalid_permission_keys:b.read,c.write' } }),
         );
+        mockClient.value = client;
+
+        const res = await PUT(putRequest("ops", ["b.read", "c.write"]));
+        const json = (await res.json()) as { error: string };
+
+        expect(res.status).toBe(400);
+        expect(json.error).toContain("b.read");
+        expect(json.error).toContain("c.write");
+        // Moving the check inside the transaction must not start leaking SQL at the operator.
+        expect(json.error).not.toMatch(/constraint|ERRCODE|plpgsql|function/i);
+    });
+
+    it("maps the function's unknown-role rejection back to a stated 400", async () => {
+        const { client } = recordingClient(rpcWorld({ rpcError: { message: "unknown_role_key:ghost" } }));
+        mockClient.value = client;
+
+        const res = await PUT(putRequest("ops", ["a.read"]));
+        expect(res.status).toBe(400);
+        expect(((await res.json()) as { error: string }).error).toContain("ops");
+    });
+
+    it("any other failure is a failure — never a partial success", async () => {
+        // S-11's direction, on the write path: a replacement that did not happen must not return 200.
+        const { client } = recordingClient(rpcWorld({ rpcError: { message: "deadlock detected" } }));
+        mockClient.value = client;
+
+        const res = await PUT(putRequest("ops", ["a.read"]));
+        const json = (await res.json()) as { error: string; ok?: boolean };
+
+        expect(res.status).toBe(500);
+        expect(json.ok).toBeUndefined();
+        expect(json.error).toMatch(/not changed/i);
+        // The raw driver message must not reach the operator.
+        expect(json.error).not.toContain("deadlock");
+    });
+});
+
+/**
+ * The invariants that MOVED into the database. Asserted over the migration's SQL, because that is
+ * where they now live — a route-level test cannot see a row lock.
+ */
+describe("W-28 / S-12 — the function's own guarantees", () => {
+    const fnMigration = () => {
+        const file = MIGRATION_FILES.find((f) => f.includes("w28_replace_role_permission_grants_rpc"));
+        expect(file, "the W-28 RPC migration is missing").toBeTruthy();
+        return executableSql(readFileSync(join(MIGRATIONS_DIR, file!), "utf8"));
+    };
+
+    it("takes the role lock BEFORE it reads anything", () => {
+        const sql = fnMigration();
+        const lockAt = sql.search(/FOR\s+UPDATE/i);
+        const validateAt = sql.search(/permission_definitions/i);
+        const deleteAt = sql.search(/DELETE\s+FROM\s+public\.role_permission_grants/i);
+        expect(lockAt, "no row lock — concurrent replacements would interleave").toBeGreaterThan(-1);
+        expect(lockAt).toBeLessThan(validateAt);
+        expect(lockAt).toBeLessThan(deleteAt);
+    });
+
+    it("validates the keys inside the same transaction that writes", () => {
+        const sql = fnMigration();
+        expect(sql).toMatch(/is_active/);
+        expect(sql).toMatch(/invalid_permission_keys/);
+        // Validation must precede the write, or it is decoration.
+        expect(sql.search(/invalid_permission_keys/)).toBeLessThan(
+            sql.search(/DELETE\s+FROM\s+public\.role_permission_grants/i),
+        );
+    });
+
+    it("deletes only what is no longer desired — never the whole role", () => {
+        const sql = fnMigration();
+        // The delete must be qualified by the desired set. An unqualified delete of the role's
+        // grants is the original T-23 wipe, and inside a transaction it would still be a wipe if
+        // the insert then failed to restore.
+        expect(sql).toMatch(/NOT\s*\(\s*g\.permission_key\s*=\s*ANY/i);
+    });
+
+    it("upserts rather than inserts, so a disallowed row is re-enabled not collided", () => {
+        expect(fnMigration()).toMatch(/ON\s+CONFLICT[\s\S]{0,80}DO\s+UPDATE\s+SET\s+allowed\s*=\s*true/i);
+    });
+
+    it("is service_role only — authorization did not move into the database", () => {
+        const sql = fnMigration();
+        expect(sql).toMatch(/REVOKE\s+ALL\s+ON\s+FUNCTION[\s\S]{0,120}FROM\s+authenticated/i);
+        expect(sql).toMatch(/GRANT\s+EXECUTE\s+ON\s+FUNCTION[\s\S]{0,120}TO\s+service_role/i);
     });
 });
 
@@ -563,7 +637,12 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
         // It is also not a one-time check. `origin/staging` moved 93 commits between sessions and
         // its migration head advanced past both files authored the day before, which is exactly how
         // an authored migration becomes unapplyable while sitting still.
-        const AUTHORED_HERE = ["w13_collapse_portal_eligible", "w61_role_key_fk_restrict", "w16_user_roles_role_foreign_key"];
+        const AUTHORED_HERE = [
+            "w13_collapse_portal_eligible",
+            "w61_role_key_fk_restrict",
+            "w16_user_roles_role_foreign_key",
+            "w28_replace_role_permission_grants_rpc",
+        ];
         const authored = AUTHORED_HERE.map((frag) => {
             const file = MIGRATION_FILES.find((f) => f.includes(frag));
             expect(file, `no migration matching ${frag}`).toBeTruthy();

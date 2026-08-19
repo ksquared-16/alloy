@@ -79,76 +79,62 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: `Invalid or inactive role_key: ${role_key}` }, { status: 400 });
     }
 
-    const { data: activePerms } = await supabase
-        .from("permission_definitions")
-        .select("key")
-        .eq("is_active", true);
-    const validKeys = new Set((activePerms ?? []).map((p) => (p as { key: string }).key));
-    const invalid = permission_keys.filter((k) => !validKeys.has(k));
-    if (invalid.length > 0) {
-        return NextResponse.json({ error: `Invalid or inactive permission keys: ${invalid.join(", ")}` }, { status: 400 });
-    }
+    // Key validation is NOT performed here any more. It moved inside the transaction that writes,
+    // because a key deactivated between a check here and a write below was validated as live and
+    // written anyway. The RPC re-raises the same rejection, and it is mapped back to the same 400
+    // below, so the operator-visible contract is unchanged.
 
-    // W-28 / `T-23`: this was "delete every grant for the role, then insert the new set" as two
-    // untransacted statements, so a failed insert left the role holding ZERO grants — the same
-    // defect class as `T-13` on a second authority table. PostgREST cannot span a transaction,
-    // so the replacement is written as a delta instead: only the grants actually being removed
-    // are deleted, and the removals run BEFORE the additions.
+    // W-28 / `S-12` / `T-23` — ONE database operation owns the transition.
     //
-    // That ordering is deliberate and is the security-bearing half. If the second statement
-    // fails, the role holds a SUBSET of both its prior and its intended authority — never a
-    // superset, and never nothing. Failing the other way round would leave the role holding
-    // grants the operator had just chosen to revoke, which is a failed revocation reported as
-    // an error rather than as a wipe. Retrying converges, because both statements are idempotent.
+    // The history matters, because two earlier shapes were each better than the last and neither
+    // was atomic. It began as "delete every grant for the role, then insert the new set" as two
+    // untransacted statements, so a failed insert left the role holding ZERO grants. That became a
+    // fail-closed delta — read the current set, delete only the removals, upsert the additions,
+    // removals first — which bounded the blast radius to under-granting. But a delta computed in
+    // application code from a prior READ has a race no ordering can fix: two operators editing the
+    // same role each compute their removals against their own snapshot, the writes interleave, and
+    // the committed state matches NEITHER operator's intent.
     //
-    // This bounds the blast radius; it is not atomicity. The exit criterion is NOT claimed here:
-    // closing it needs the replacement to become one RPC, which needs a migration channel (OD-1).
-    const { data: currentRows, error: currentErr } = await supabase
-        .from("role_permission_grants")
-        .select("permission_key")
-        .eq("org_id", orgId)
-        .eq("role_key", role_key);
+    // `replace_role_permission_grants` closes it. The function takes a row lock on the role before
+    // it reads anything, so concurrent replacements of the same role SERIALIZE — proven, not
+    // assumed: a second caller blocks until the first commits. Key validation moved inside that
+    // same transaction, so a key deactivated mid-flight can no longer be validated as live and
+    // written anyway. Delete and insert cannot half-happen.
+    //
+    // Authorization did not move. `requireUsersRolesManageAuth` above still decides WHO may ask;
+    // the function decides only WHAT the set becomes, and is `EXECUTE`-able by `service_role` alone.
+    const { data: granted, error: replaceErr } = await supabase.rpc("replace_role_permission_grants", {
+        p_org_id: orgId,
+        p_role_key: role_key,
+        p_permission_keys: permission_keys,
+    });
 
-    if (currentErr) {
-        return NextResponse.json({ error: currentErr.message }, { status: 500 });
-    }
-
-    // An unreadable current set must not be treated as an empty one: `toRemove` would then be
-    // empty and the revocation half of the operator's edit would silently not happen. That is
-    // W-43's read-failure lesson, applied to a delta instead of to a resolver.
-    const desired = new Set(permission_keys);
-    const current = (currentRows ?? []).map((r) => (r as { permission_key: string }).permission_key);
-    const toRemove = current.filter((k) => !desired.has(k));
-
-    if (toRemove.length > 0) {
-        const { error: deleteErr } = await supabase
-            .from("role_permission_grants")
-            .delete()
-            .eq("org_id", orgId)
-            .eq("role_key", role_key)
-            .in("permission_key", toRemove);
-
-        if (deleteErr) {
-            return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+    if (replaceErr) {
+        // The function's rejections are re-raised as the same operator-visible 400s the route used
+        // to produce itself, so moving the check into the transaction changed nothing the operator
+        // sees. Anything else is a genuine failure and must not read as a partial success.
+        const message = replaceErr.message ?? "";
+        const invalid = message.match(/invalid_permission_keys:([^\s"]+)/);
+        if (invalid) {
+            return NextResponse.json(
+                { error: `Invalid or inactive permission keys: ${invalid[1].split(",").join(", ")}` },
+                { status: 400 },
+            );
         }
-    }
-
-    if (permission_keys.length > 0) {
-        // Upsert rather than insert: a grant row that exists with `allowed = false` is not in
-        // `toRemove` (its key is still desired) and would collide on a bare insert.
-        const rows = permission_keys.map((permission_key) => ({
-            org_id: orgId,
-            role_key,
-            permission_key,
-            allowed: true,
-        }));
-        const { error: upsertErr } = await supabase
-            .from("role_permission_grants")
-            .upsert(rows, { onConflict: "org_id,role_key,permission_key" });
-        if (upsertErr) {
-            return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+        if (/unknown_role_key:/.test(message)) {
+            return NextResponse.json({ error: `Invalid or inactive role_key: ${role_key}` }, { status: 400 });
         }
+        return NextResponse.json(
+            { error: "The grants were not changed." },
+            { status: 500 },
+        );
     }
 
-    return NextResponse.json({ ok: true });
+    // The function returns the resulting set. Echoing it means the operator's next render is the
+    // state the database committed, not the state the client hoped for.
+    const resulting = Array.isArray(granted)
+        ? (granted as { granted_permission_key: string }[]).map((r) => r.granted_permission_key)
+        : [];
+
+    return NextResponse.json({ ok: true, permission_keys: resulting });
 }

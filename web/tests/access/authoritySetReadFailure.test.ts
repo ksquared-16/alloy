@@ -74,11 +74,23 @@ describe("W-56 — an unloaded authority set is UNKNOWN, not EMPTY", () => {
  */
 describe("W-56 — the revocation chain is broken at the representation", () => {
     it("the grants PUT still treats an empty list as a total revocation (the hazard is real)", () => {
-        const src = readFileSync(join(webRoot, "app/api/admin/rbac/grants/route.ts"), "utf8");
-        expect(src).toMatch(/\.from\("role_permission_grants"\)\s*\n?\s*\.delete\(\)/);
-        expect(src, "the insert is skipped when the list is empty, so [] deletes and restores nothing").toMatch(
-            /if\s*\(permission_keys\.length\s*>\s*0\)/,
-        );
+        // W-28 moved the replacement into `replace_role_permission_grants`, so the hazard moved with
+        // it — it did not go away, and this must keep proving it is real or W-56's guard is guarding
+        // nothing. Asserted in two halves, across the boundary the write now spans.
+        const route = readFileSync(join(webRoot, "app/api/admin/rbac/grants/route.ts"), "utf8");
+        // 1. The route forwards the list verbatim. An empty list reaches the database as an empty list.
+        expect(route).toMatch(/replace_role_permission_grants/);
+        expect(route).toMatch(/p_permission_keys:\s*permission_keys/);
+
+        // 2. The function deletes everything NOT in that list, so an empty array removes every grant.
+        const migrations = readdirSync(join(webRoot, "..", "supabase", "migrations"))
+            .filter((f) => f.includes("w28_replace_role_permission_grants_rpc"));
+        expect(migrations, "the W-28 migration is missing").toHaveLength(1);
+        const fn = readFileSync(join(webRoot, "..", "supabase", "migrations", migrations[0]), "utf8");
+        expect(
+            fn,
+            "the delete is bounded by the desired set, so [] is still a total revocation",
+        ).toMatch(/NOT\s*\(\s*g\.permission_key\s*=\s*ANY\s*\(\s*v_keys\s*\)\s*\)/i);
     });
 
     it("a failed read cannot produce the revoking payload, because the guard refuses first", () => {

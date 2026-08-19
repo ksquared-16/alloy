@@ -247,7 +247,15 @@ describe("RL-7 — one catalog, one FK (W-9, tier A)", () => {
     });
 
     it("every writer of role_permission_grants validates against the table the FK names", () => {
-        const writers = productSources().filter((s) => GRANTS_WRITE.test(s.text));
+        // The subject spans BOTH trees now. W-28 moved the grant replacement out of the route and
+        // into `replace_role_permission_grants`, so scanning product sources alone would find zero
+        // writers and the non-vacuity guard below would be the only thing that noticed. A writer
+        // that moves to SQL has not stopped being a writer.
+        const productWriters = productSources().filter((s) => GRANTS_WRITE.test(s.text));
+        const sqlWriters = migrations()
+            .filter((m) => /INSERT\s+INTO\s+(?:public\.)?role_permission_grants\b/i.test(m.sql))
+            .map((m) => ({ path: m.name, text: m.sql }));
+        const writers = [...productWriters, ...sqlWriters];
 
         // Non-vacuity: if this finds nothing, the regex has drifted, not the code.
         expect(writers.length).toBeGreaterThanOrEqual(1);
