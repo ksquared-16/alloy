@@ -1,3 +1,11 @@
+---
+owner: product
+status: sprint
+last_reviewed: 2026-08-18
+sprint: participant-runtime-compiled-artifact-review
+base: origin/staging @ f6a05e013
+---
+
 # Preflight — `Child Full Name` canonical binding on the Firefly QA Enrollment Form
 
 **Status: PREPARED, NOT EXECUTED. Blocked on Director authorization before any write to hosted
