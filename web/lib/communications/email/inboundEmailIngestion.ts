@@ -57,8 +57,19 @@ export const EMAIL_PROVIDER = "resend";
 
 export type InboundEmailIngestionDeps = {
     supabase: SupabaseClient;
-    /** Fetches full content; the caller supplies the credential resolution. */
-    retrieve: (emailId: string) => Promise<ResendRetrievalResult>;
+    /**
+     * Fetches full content, for a message whose OWNER is already known.
+     *
+     * The owning organization and its binding's credential reference are passed in rather
+     * than looked up by the fetcher, because retrieval must run under the credential of the
+     * tenant that owns the message. Resolving a key before ownership — or without it, from
+     * the environment — is how an organization that had connected its own Resend account
+     * still failed with `missing_api_key` while its credential sat unread in Vault.
+     */
+    retrieve: (
+        emailId: string,
+        owner: { orgId: string; secretRef: string | null }
+    ) => Promise<ResendRetrievalResult>;
     now?: () => string;
 };
 
@@ -165,7 +176,7 @@ async function loadCandidateBindings(
 
     const { data: direct } = await deps.supabase
         .from("communication_provider_bindings")
-        .select("id, org_id, channel, provider, status, inbound_address, location_id")
+        .select("id, org_id, channel, provider, status, inbound_address, location_id, secret_ref")
         .eq("channel", "email")
         .in("inbound_address", normalized);
 
@@ -193,7 +204,7 @@ async function loadCandidateBindings(
     if (missing.length > 0) {
         const { data: routed } = await deps.supabase
             .from("communication_provider_bindings")
-            .select("id, org_id, channel, provider, status, inbound_address, location_id")
+            .select("id, org_id, channel, provider, status, inbound_address, location_id, secret_ref")
             .eq("channel", "email")
             .in("id", missing);
         for (const row of routed ?? []) {
@@ -430,7 +441,11 @@ export async function ingestResendInboundEmail(
     const receivingAddress = ownership.receivingAddress;
 
     // 3 — retrieval. The webhook never carried the body or the headers.
-    const retrieval = await deps.retrieve(event.emailId);
+    // Ownership is settled above; the credential is resolved from the owning binding.
+    const retrieval = await deps.retrieve(event.emailId, {
+        orgId,
+        secretRef: ownership.binding.secret_ref ?? null,
+    });
     if (!retrieval.ok) {
         if (retrieval.retryable) {
             await markReceipt(deps, claim.row.id, {
