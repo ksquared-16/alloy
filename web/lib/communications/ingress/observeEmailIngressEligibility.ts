@@ -51,8 +51,10 @@ import {
     type IngressIdentity,
     type IngressIdentityRole,
     type IngressRelationshipKind,
+    type SenderAuthentication,
     type SenderRelationship,
 } from "@/lib/communications/ingress/emailIngressEligibility";
+import type { SenderAuthenticationEvidence } from "@/lib/communications/email/inboundEmailNormalization";
 
 /**
  * Where each relationship kind comes from, or that it comes from nowhere.
@@ -68,7 +70,7 @@ export const INGRESS_RELATIONSHIP_SOURCES: Record<
     guardian: {
         derivable: true,
         source:
-            "person_child_relationships(status=active) + person_child_relationship_roles(role_key in parent|guardian), where the child holds a live child_enrollment_agreements row",
+            "EITHER person_child_relationships(status=active) + person_child_relationship_roles(role_key in parent|guardian) where the child holds a live child_enrollment_agreements row, OR an active customer_persons row whose role_type is a canonical parent/guardian key",
     },
     former_guardian: {
         derivable: true,
@@ -94,6 +96,26 @@ export const INGRESS_RELATIONSHIP_SOURCES: Record<
         source: "NOT DERIVABLE: no table, column or vocabulary represents an agency relationship",
     },
 };
+
+/**
+ * Canonical household roles that make somebody a child's parent or guardian.
+ *
+ * Taken from the vocabulary that already exists rather than invented here: the keys are
+ * `customer_person_role_types` rows (`parent`, `guardian`, `primary_contact`, …) and the
+ * grouping matches `lib/admin/person/resolvePersonDrawerProfile.ts`, which has been the
+ * de facto authority on "is this person a parent" for the operator surfaces. Two modules
+ * disagreeing about who counts as a guardian is worse than either answer.
+ *
+ * `primary` is included because the drawer authority includes it — an older alias that
+ * still appears in imported data. `emergency_contact` and `authorized_pickup` are
+ * deliberately absent: holding a child's emergency number is not authority to read the
+ * organization's mail.
+ */
+const HOUSEHOLD_GUARDIAN_ROLE_KEYS = new Set(["parent", "guardian", "primary_contact", "primary"]);
+const HOUSEHOLD_EMERGENCY_ROLE_KEYS = new Set(["emergency_contact", "emergency"]);
+
+/** Household membership statuses that have ended. Null and 'active' are both live. */
+const ENDED_CUSTOMER_PERSON_STATUS = new Set(["inactive", "ended", "archived", "removed"]);
 
 /** Opportunity statuses that end demand. Everything else, including null, is still live. */
 const TERMINAL_OPPORTUNITY_STATUS = new Set(["won", "lost", "closed"]);
@@ -135,6 +157,8 @@ export type ObserveEmailIngressInput = {
      * disagree about the one piece of evidence they share.
      */
     resolvedAlloyThreadId: string | null;
+    /** Which check produced `envelope.authentication`. `none` when nothing was reported. */
+    authenticationEvidence?: SenderAuthenticationEvidence;
 };
 
 /* ---------------------------------------------------------------------------
@@ -203,19 +227,31 @@ export async function loadIngressIdentities(
 }
 
 /**
- * Every relationship this sender address holds, expressed in the gate's vocabulary.
+ * Who this sender endpoint resolves to, and what they are to the organization.
  *
- * `personIds` is the set of Persons holding the ADDRESS, not the relationship — the shared
- * household endpoint case turns on how many people write from one mailbox, and collapsing
- * that to the relationship's own person would hide it.
+ * ONE resolver, returning both halves. They were previously fused — relationships were
+ * returned and `personIds` rode along inside each one — which made the shared-endpoint
+ * signal a PROPERTY OF A RELATIONSHIP. The consequence was found in the historical
+ * backtest: an address held by two Persons who happen to hold no watched relationship
+ * reported `unknown` and was rejected, while ingestion had correctly flagged it ambiguous.
+ * Ambiguity is a fact about the ENDPOINT, so it is resolved first and reported separately.
+ *
+ * There is deliberately no second lookup anywhere for Lane B. Everything the gate knows
+ * about a sender comes from here, so the backtest and the live hook cannot drift.
  */
+export type SenderEndpointResolution = {
+    /** Persons in THIS organization holding this address. >1 is a shared endpoint. */
+    personIds: string[];
+    relationships: SenderRelationship[];
+};
+
 export async function loadSenderRelationships(
     deps: EmailIngressObservationDeps,
     orgId: string,
     senderAddress: string
-): Promise<SenderRelationship[]> {
+): Promise<SenderEndpointResolution> {
     const address = (senderAddress ?? "").trim().toLowerCase();
-    if (!address.includes("@")) return [];
+    if (!address.includes("@")) return { personIds: [], relationships: [] };
 
     const { data: personRows } = await deps.supabase
         .from("persons")
@@ -224,9 +260,9 @@ export async function loadSenderRelationships(
         .ilike("email", address)
         .limit(22);
     const personIds = (personRows ?? []).map((r) => String((r as { id: string }).id));
-    if (personIds.length === 0) return [];
+    if (personIds.length === 0) return { personIds, relationships: [] };
 
-    const [relRes, empRes, oppRes] = await Promise.all([
+    const [relRes, empRes, oppRes, custRes] = await Promise.all([
         deps.supabase
             .from("person_child_relationships")
             .select("id, status, customer_member_id")
@@ -242,6 +278,11 @@ export async function loadSenderRelationships(
             .select("opportunity_id")
             .eq("org_id", orgId)
             .in("person_id", personIds),
+        deps.supabase
+            .from("customer_persons")
+            .select("role_type, status, end_date")
+            .eq("org_id", orgId)
+            .in("person_id", personIds),
     ]);
 
     const relationships = (relRes.data ?? []) as Array<{
@@ -253,7 +294,7 @@ export async function loadSenderRelationships(
     const out: SenderRelationship[] = [];
     const push = (kind: IngressRelationshipKind, active: boolean) => {
         if (out.some((r) => r.kind === kind && r.status === (active ? "active" : "inactive"))) return;
-        out.push({ kind, status: active ? "active" : "inactive", personIds });
+        out.push({ kind, status: active ? "active" : "inactive" });
     };
 
     if (relationships.length > 0) {
@@ -343,7 +384,35 @@ export async function loadSenderRelationships(
         push("prospective_guardian", live);
     }
 
-    return out;
+    // --- household membership -------------------------------------------------------
+    //
+    // The gap the historical backtest exposed. A parent whose relationship is recorded as
+    // household membership — `customer_persons.role_type = 'parent'` — was invisible to
+    // the gate, because only the child-relationship shape was read. In the one real
+    // corpus available, every message from a genuine parent matched through an unrelated
+    // opportunity link instead; remove that accident and they would all have been refused.
+    //
+    // Liveness comes from THIS row rather than from a child's enrollment, deliberately.
+    // A `person_child_relationships` row names a child, so the child's enrollment is its
+    // natural liveness test; a `customer_persons` row names a household membership, and
+    // `end_date` plus `status` is what the model uses to end one. Each shape is judged by
+    // the signal it actually carries.
+    const householdRows = (custRes.data ?? []) as Array<{
+        role_type: string | null;
+        status: string | null;
+        end_date: string | null;
+    }>;
+    const today = (deps.now ?? (() => new Date().toISOString()))().slice(0, 10);
+    for (const row of householdRows) {
+        const role = String(row.role_type ?? "").trim().toLowerCase();
+        const statusEnded = ENDED_CUSTOMER_PERSON_STATUS.has(String(row.status ?? "").trim().toLowerCase());
+        const dateEnded = row.end_date !== null && String(row.end_date).slice(0, 10) < today;
+        const live = !statusEnded && !dateEnded;
+        if (HOUSEHOLD_GUARDIAN_ROLE_KEYS.has(role)) push(live ? "guardian" : "former_guardian", live);
+        else if (HOUSEHOLD_EMERGENCY_ROLE_KEYS.has(role)) push("emergency_contact", live);
+    }
+
+    return { personIds, relationships: out };
 }
 
 /** Watched kinds the data model cannot answer. A named false-negative, not a silent one. */
@@ -381,6 +450,20 @@ export type EmailIngressObservationRow = {
     intake_purpose_key: string | null;
     sender_assertion: EmailIngressDecision["senderAssertion"]["kind"];
     unsupported_watch_kinds: string[];
+    /**
+     * The deterministic authentication facts the gate actually used.
+     *
+     * Preserved because the historical replay could not recover them: authentication is
+     * derived at ingestion from headers the transport stamped, so a message received
+     * before that derivation existed reads `unknown` forever. Recording the result and its
+     * EVIDENCE CLASS — which check spoke, not what it said — means a future corpus can
+     * separate "Lane B is unsafe" from "Lane B was never told anything".
+     *
+     * The class only, never the raw header: a DKIM signature block is provider material
+     * and no analysis needs it.
+     */
+    sender_authentication: SenderAuthentication;
+    sender_authentication_evidence: SenderAuthenticationEvidence;
     evaluation_mode: IngressEvaluationMode;
     evaluated_at: string;
     policy_version: string;
@@ -415,12 +498,17 @@ export function projectObservationRow(params: {
         lane: decision.lane,
         reason_code: decision.reasonCode,
         confidence_basis: "deterministic",
-        matched_relationship_type: assertion.kind === "unknown" ? null : assertion.relationship.kind,
+        // Null on a shared endpoint that holds no relationship — the very case the
+        // ambiguity correction exists for. `assertion.relationship` is nullable precisely
+        // because two Persons can share a mailbox without either being anybody we watch.
+        matched_relationship_type: assertion.kind === "unknown" ? null : (assertion.relationship?.kind ?? null),
         matched_identity_id: params.bindingId,
         matched_thread_id: decision.matchedThreadId,
         intake_purpose_key: decision.intakePurposeKey,
         sender_assertion: assertion.kind,
         unsupported_watch_kinds: params.unsupportedKinds,
+        sender_authentication: params.input.envelope.authentication ?? "unknown",
+        sender_authentication_evidence: params.input.authenticationEvidence ?? "none",
         evaluation_mode: params.evaluationMode,
         evaluated_at: params.evaluatedAt,
         policy_version: decision.policyVersion,
@@ -475,7 +563,11 @@ export async function observeEmailIngressEligibility(
             loadIngressIdentities(deps, input.orgId),
             resolveWatchedRelationshipKinds(deps, input.orgId),
         ]);
-        const senderRelationships = await loadSenderRelationships(deps, input.orgId, input.envelope.sender);
+        const { personIds, relationships } = await loadSenderRelationships(
+            deps,
+            input.orgId,
+            input.envelope.sender
+        );
 
         const policy: EmailIngressPolicy = {
             orgId: input.orgId,
@@ -485,7 +577,8 @@ export async function observeEmailIngressEligibility(
         const decision = evaluateEmailIngressEligibility({
             envelope: input.envelope,
             policy,
-            senderRelationships,
+            senderRelationships: relationships,
+            senderPersonIds: personIds,
             resolvedAlloyThreadId: input.resolvedAlloyThreadId,
         });
 
@@ -520,6 +613,7 @@ export function evaluateForObservation(params: {
     input: ObserveEmailIngressInput;
     identities: IngressIdentity[];
     senderRelationships: SenderRelationship[];
+    senderPersonIds: string[];
     watchedRelationshipKinds: IngressRelationshipKind[];
 }): EmailIngressDecision {
     return evaluateEmailIngressEligibility({
@@ -530,6 +624,7 @@ export function evaluateForObservation(params: {
             watchedRelationshipKinds: params.watchedRelationshipKinds,
         },
         senderRelationships: params.senderRelationships,
+        senderPersonIds: params.senderPersonIds,
         resolvedAlloyThreadId: params.input.resolvedAlloyThreadId,
     });
 }

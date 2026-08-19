@@ -77,6 +77,16 @@ export type HistoricalInboundEmail = {
      */
     canonicalThreadMessageCount: number;
     canonicalThreadOutboundCount: number;
+    /**
+     * Outbound messages in this thread sent BEFORE this one arrived.
+     *
+     * The distinction that decides whether an engagement signal is usable at all. A gate
+     * runs at arrival time and can only see the past; `canonicalThreadOutboundCount`
+     * includes replies the message itself provoked, which is hindsight. Any candidate rule
+     * must be evaluated on this field, and a rule that only works on the other one is not
+     * a rule — it is a description of what already happened.
+     */
+    canonicalThreadOutboundBeforeCount: number;
     /** What ingestion concluded about the sender at the time. Audit context only. */
     inboundResolution: string | null;
     correlationMethod: string | null;
@@ -125,6 +135,7 @@ export function backtestMessage(params: {
     message: HistoricalInboundEmail;
     policy: EmailIngressPolicy;
     senderRelationships: SenderRelationship[];
+    senderPersonIds: string[];
     counterfactualAuthenticated?: boolean;
 }): BacktestOutcome {
     try {
@@ -134,6 +145,7 @@ export function backtestMessage(params: {
             }),
             policy: params.policy,
             senderRelationships: params.senderRelationships,
+            senderPersonIds: params.senderPersonIds,
             resolvedAlloyThreadId: params.message.resolvedAlloyThreadId,
         });
         return { message: params.message, decision, error: null };
@@ -251,4 +263,64 @@ export function selectAuditSample(
     }
 
     return [...picked.values()];
+}
+
+/* ---------------------------------------------------------------------------
+ * CANDIDATE SIGNAL — endpoint provenance + organizational engagement
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Would a "we have talked to this endpoint before" rule change this decision?
+ *
+ * Evaluated in TWO forms, because the difference between them is the finding:
+ *
+ *   causal    outbound sent BEFORE this message arrived. The only form a gate could
+ *             actually use, because a gate runs at arrival.
+ *   hindsight any outbound in the thread, including the reply this message provoked.
+ *             Not implementable — listed so the gap between the two is visible rather
+ *             than accidentally claimed as a result.
+ *
+ * The function reports; it decides nothing. Nothing in the gate calls it, and adopting the
+ * signal would be a separate, explicit change.
+ */
+export type EngagementCandidate = {
+    messageId: string;
+    currentDisposition: EmailIngressDecision["disposition"];
+    currentReasonCode: EmailIngressDecision["reasonCode"];
+    /** Ingestion's own correlation, which is what "endpoint provenance" means here. */
+    correlationMethod: string | null;
+    causalEngagement: boolean;
+    hindsightEngagement: boolean;
+    /** What may be believed about the sender — the false-positive axis for this signal. */
+    senderAssertion: string;
+    matchedRelationshipType: string | null;
+};
+
+export function evaluateEngagementCandidate(outcomes: readonly BacktestOutcome[]): {
+    candidates: EngagementCandidate[];
+    recoveredByCausal: number;
+    recoveredByHindsight: number;
+} {
+    const candidates = outcomes
+        .filter((o) => o.error === null && o.decision.disposition === "WOULD_REJECT")
+        .map((o) => ({
+            messageId: o.message.messageId,
+            currentDisposition: o.decision.disposition,
+            currentReasonCode: o.decision.reasonCode,
+            correlationMethod: o.message.correlationMethod,
+            // Endpoint provenance is a PRECONDITION of the candidate rule: the signal is
+            // "this endpoint already has a conversation", not "somebody once replied".
+            causalEngagement:
+                o.message.correlationMethod === "endpoint_provenance" &&
+                o.message.canonicalThreadOutboundBeforeCount > 0,
+            hindsightEngagement: o.message.canonicalThreadOutboundCount > 0,
+            senderAssertion: o.decision.senderAssertion.kind,
+            matchedRelationshipType:
+                o.decision.senderAssertion.kind === "unknown" ? null : (o.decision.senderAssertion.relationship?.kind ?? null),
+        }));
+    return {
+        candidates,
+        recoveredByCausal: candidates.filter((c) => c.causalEngagement).length,
+        recoveredByHindsight: candidates.filter((c) => c.hindsightEngagement).length,
+    };
 }

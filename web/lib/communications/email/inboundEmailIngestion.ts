@@ -688,6 +688,7 @@ export async function ingestResendInboundEmail(
                 // make Lane B look better would be inventing an assurance.
                 authentication: email.authentication,
             },
+            authenticationEvidence: email.authenticationEvidence,
             resolvedAlloyThreadId: alloyThreadEvidenceId,
         },
         deps

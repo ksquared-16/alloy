@@ -77,14 +77,16 @@ type CorpusMessage = {
         | "spoofed_parent";
     recipient: string;
     relationships: SenderRelationship[];
+    /** Persons holding the sender endpoint. >1 is ambiguity, independent of relationship. */
+    personIds: string[];
     resolvedAlloyThreadId: string | null;
     authentication: SenderAuthentication;
 };
 
-const guardian = (personIds = ["p"]): SenderRelationship => ({ kind: "guardian", status: "active", personIds });
-const prospective: SenderRelationship = { kind: "prospective_guardian", status: "active", personIds: ["p"] };
-const former: SenderRelationship = { kind: "former_guardian", status: "inactive", personIds: ["p"] };
-const staff: SenderRelationship = { kind: "staff", status: "active", personIds: ["p"] };
+const guardian: SenderRelationship = { kind: "guardian", status: "active" };
+const prospective: SenderRelationship = { kind: "prospective_guardian", status: "active" };
+const former: SenderRelationship = { kind: "former_guardian", status: "inactive" };
+const staff: SenderRelationship = { kind: "staff", status: "active" };
 
 /**
  * 1,000 messages in the proportions the capability audit assumed.
@@ -96,20 +98,20 @@ const staff: SenderRelationship = { kind: "staff", status: "active", personIds: 
  * hide the only false negatives worth arguing about.
  */
 function buildCorpus(authentication: SenderAuthentication): CorpusMessage[] {
-    const base = { recipient: DIRECTOR.address, relationships: [], resolvedAlloyThreadId: null, authentication } as const;
+    const base = { recipient: DIRECTOR.address, relationships: [], personIds: [], resolvedAlloyThreadId: null, authentication } as const;
     // `authentication` FIRST, so a message that names its own (the spoofed ones) keeps it.
     const repeat = (n: number, m: Partial<CorpusMessage> & Omit<CorpusMessage, "authentication">): CorpusMessage[] =>
         Array.from({ length: n }, () => ({ authentication, ...m }) as CorpusMessage);
 
     return [
         // --- 5% conversation continuity ------------------------------------------------
-        ...repeat(40, { ...base, truth: "thread_reply", relationships: [guardian()], resolvedAlloyThreadId: THREAD }),
+        ...repeat(40, { ...base, truth: "thread_reply", relationships: [guardian], personIds: ["p"], resolvedAlloyThreadId: THREAD }),
         ...repeat(10, { ...base, truth: "thread_reply", recipient: ENROLLMENT.address, resolvedAlloyThreadId: THREAD }),
 
         // --- 20% eligible relationships -------------------------------------------------
-        ...repeat(150, { ...base, truth: "known_guardian", relationships: [guardian()] }),
-        ...repeat(35, { ...base, truth: "prospective_family", relationships: [prospective] }),
-        ...repeat(15, { ...base, truth: "shared_household", relationships: [guardian(["p1", "p2"])] }),
+        ...repeat(150, { ...base, truth: "known_guardian", relationships: [guardian], personIds: ["p"] }),
+        ...repeat(35, { ...base, truth: "prospective_family", relationships: [prospective], personIds: ["p"] }),
+        ...repeat(15, { ...base, truth: "shared_household", relationships: [guardian], personIds: ["p1", "p2"] }),
 
         // --- 5% purpose and acquisition -------------------------------------------------
         ...repeat(15, { ...base, truth: "purpose_intake", recipient: SUBSIDY.address }),
@@ -120,13 +122,13 @@ function buildCorpus(authentication: SenderAuthentication): CorpusMessage[] {
         ...repeat(250, { ...base, truth: "newsletter" }),
         ...repeat(120, { ...base, truth: "bank" }),
         ...repeat(60, { ...base, truth: "payroll" }),
-        ...repeat(90, { ...base, truth: "vendor_invoice", relationships: [{ kind: "vendor", status: "active", personIds: ["p"] }] }),
-        ...repeat(60, { ...base, truth: "staff", relationships: [staff] }),
+        ...repeat(90, { ...base, truth: "vendor_invoice", relationships: [{ kind: "vendor", status: "active" }], personIds: ["p"] }),
+        ...repeat(60, { ...base, truth: "staff", relationships: [staff], personIds: ["p"] }),
         ...repeat(40, { ...base, truth: "agency_direct" }),
         ...repeat(30, { ...base, truth: "legal" }),
-        ...repeat(30, { ...base, truth: "former_family", relationships: [former] }),
+        ...repeat(30, { ...base, truth: "former_family", relationships: [former], personIds: ["p"] }),
         ...repeat(15, { ...base, truth: "parent_new_address" }),
-        ...repeat(5, { ...base, truth: "spoofed_parent", relationships: [guardian()], authentication: "fail" }),
+        ...repeat(5, { ...base, truth: "spoofed_parent", relationships: [guardian], personIds: ["p"], authentication: "fail" }),
     ];
 }
 
@@ -139,6 +141,7 @@ function decide(message: CorpusMessage): EmailIngressDecision {
         },
         policy: POLICY,
         senderRelationships: message.relationships,
+        senderPersonIds: message.personIds,
         resolvedAlloyThreadId: message.resolvedAlloyThreadId,
     });
 }

@@ -29,7 +29,7 @@ const POLICY: EmailIngressPolicy = {
     watchedRelationshipKinds: ["guardian"],
 };
 
-const guardian: SenderRelationship = { kind: "guardian", status: "active", personIds: ["p"] };
+const guardian: SenderRelationship = { kind: "guardian", status: "active" };
 
 function message(over: Partial<HistoricalInboundEmail> = {}): HistoricalInboundEmail {
     return {
@@ -48,6 +48,7 @@ function message(over: Partial<HistoricalInboundEmail> = {}): HistoricalInboundE
         resolvedAlloyThreadId: null,
         canonicalThreadMessageCount: 1,
         canonicalThreadOutboundCount: 0,
+        canonicalThreadOutboundBeforeCount: 0,
         inboundResolution: "single_person_match",
         correlationMethod: "none",
         receivedAt: "2026-08-01T00:00:00.000Z",
@@ -74,7 +75,7 @@ describe("reconstruction cannot invent evidence", () => {
     it("does not treat the thread ingestion FILED it into as thread evidence", () => {
         // canonicalThreadId is set; resolvedAlloyThreadId is not. Ingestion also files by
         // endpoint provenance, and conflating the two would manufacture Lane A.
-        const outcome = backtestMessage({ message: message(), policy: POLICY, senderRelationships: [] });
+        const outcome = backtestMessage({ message: message(), policy: POLICY, senderRelationships: [], senderPersonIds: [] });
         expect(outcome.decision.lane).not.toBe("conversation_continuity");
         expect(outcome.decision.matchedThreadId).toBeNull();
     });
@@ -84,13 +85,13 @@ describe("the authentication gap is isolated, not averaged away", () => {
     const m = message();
     it("a watched relationship reviews without authentication and ingests with it", () => {
         expect(
-            backtestMessage({ message: m, policy: POLICY, senderRelationships: [guardian] }).decision.reasonCode
+            backtestMessage({ message: m, policy: POLICY, senderRelationships: [guardian], senderPersonIds: ["p"] }).decision.reasonCode
         ).toBe("REVIEW_UNAUTHENTICATED_RELATIONSHIP");
         expect(
             backtestMessage({
                 message: m,
                 policy: POLICY,
-                senderRelationships: [guardian],
+                senderRelationships: [guardian], senderPersonIds: ["p"],
                 counterfactualAuthenticated: true,
             }).decision.reasonCode
         ).toBe("ADMIT_WATCHED_RELATIONSHIP");
@@ -100,7 +101,7 @@ describe("the authentication gap is isolated, not averaged away", () => {
         const laneA = message({ resolvedAlloyThreadId: THREAD });
         for (const counterfactualAuthenticated of [false, true]) {
             expect(
-                backtestMessage({ message: laneA, policy: POLICY, senderRelationships: [], counterfactualAuthenticated })
+                backtestMessage({ message: laneA, policy: POLICY, senderRelationships: [], senderPersonIds: [], counterfactualAuthenticated })
                     .decision.reasonCode
             ).toBe("ADMIT_ALLOY_THREAD");
         }
@@ -115,7 +116,7 @@ describe("failures are results, never omissions", () => {
     };
 
     it("a gate error is counted and does not shrink the corpus", () => {
-        const good = backtestMessage({ message: message(), policy: POLICY, senderRelationships: [] });
+        const good = backtestMessage({ message: message(), policy: POLICY, senderRelationships: [], senderPersonIds: [] });
         const matrix = summarizeBacktest([good, broken]);
         expect(matrix.totalEvaluated).toBe(2);
         expect(matrix.gateErrors).toBe(1);
@@ -126,7 +127,7 @@ describe("failures are results, never omissions", () => {
         const outcome = backtestMessage({
             message: message(),
             policy: null as unknown as EmailIngressPolicy,
-            senderRelationships: [],
+            senderRelationships: [], senderPersonIds: [],
         });
         expect(outcome.error).not.toBeNull();
     });
@@ -134,13 +135,13 @@ describe("failures are results, never omissions", () => {
 
 describe("the audit sample is by rule and is stable", () => {
     const corpus: BacktestOutcome[] = [
-        backtestMessage({ message: message({ messageId: "a", resolvedAlloyThreadId: THREAD }), policy: POLICY, senderRelationships: [] }),
-        backtestMessage({ message: message({ messageId: "b" }), policy: POLICY, senderRelationships: [guardian] }),
+        backtestMessage({ message: message({ messageId: "a", resolvedAlloyThreadId: THREAD }), policy: POLICY, senderRelationships: [], senderPersonIds: [] }),
+        backtestMessage({ message: message({ messageId: "b" }), policy: POLICY, senderRelationships: [guardian], senderPersonIds: ["p"] }),
         ...Array.from({ length: 30 }, (_, i) =>
             backtestMessage({
                 message: message({ messageId: `r${i}`, fromAddress: `x${i}@nowhere.example` }),
                 policy: POLICY,
-                senderRelationships: [],
+                senderRelationships: [], senderPersonIds: [],
             })
         ),
     ];
@@ -164,7 +165,7 @@ describe("the audit sample is by rule and is stable", () => {
         const replied = backtestMessage({
             message: message({ messageId: "replied", fromAddress: "x@nowhere.example", canonicalThreadOutboundCount: 1 }),
             policy: POLICY,
-            senderRelationships: [],
+            senderRelationships: [], senderPersonIds: [],
         });
         const sample = selectAuditSample([...corpus, replied], { unmatchedSample: 1 });
         expect(sample.find((s) => s.message.messageId === "replied")?.auditReason).toBe(

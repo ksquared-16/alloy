@@ -379,6 +379,8 @@ describe("observe-only: what gets written down", () => {
                 "provider_message_id",
                 "reason_code",
                 "sender_assertion",
+                "sender_authentication",
+                "sender_authentication_evidence",
                 "unsupported_watch_kinds",
             ].sort()
         );
@@ -513,6 +515,68 @@ describe("observe-only: relationship derivation against the real model", () => {
             // ENDED, not merely unwatched: ticking a box would not bring this family back.
             reason_code: "REJECT_RELATIONSHIP_INACTIVE",
             matched_relationship_type: "former_guardian",
+        });
+    });
+
+    it("HOUSEHOLD MEMBERSHIP makes a guardian — the gap the first backtest found", async () => {
+        // `customer_persons.role_type = 'parent'` with no end date. No child-relationship
+        // roles, no enrollment agreement: exactly the shape the corpus's only real parent
+        // had, and exactly what the gate used to be blind to.
+        const store = withRelationship({
+            customer_persons: [
+                { id: "cp", org_id: ORG_A, person_id: PERSON, role_type: "parent", status: "active", end_date: null },
+            ],
+        });
+        await ingestResendInboundEmail(event(), deps(store.client()));
+        expect(store.tables[OBSERVATIONS]![0]).toMatchObject({
+            lane: "relationship_watch",
+            matched_relationship_type: "guardian",
+        });
+    });
+
+    it("an end-dated household membership is a FORMER guardian, and is refused", async () => {
+        const store = withRelationship({
+            customer_persons: [
+                { id: "cp", org_id: ORG_A, person_id: PERSON, role_type: "guardian", status: "active", end_date: "2020-01-01" },
+            ],
+        });
+        await ingestResendInboundEmail(event(), deps(store.client()));
+        expect(store.tables[OBSERVATIONS]![0]).toMatchObject({
+            decision: "WOULD_REJECT",
+            reason_code: "REJECT_RELATIONSHIP_INACTIVE",
+            matched_relationship_type: "former_guardian",
+        });
+    });
+
+    it("holding a child's emergency number is not authority to read the organization's mail", async () => {
+        const store = withRelationship({
+            customer_persons: [
+                { id: "cp", org_id: ORG_A, person_id: PERSON, role_type: "emergency_contact", status: "active", end_date: null },
+            ],
+        });
+        await ingestResendInboundEmail(event(), deps(store.client()));
+        expect(store.tables[OBSERVATIONS]![0]).toMatchObject({
+            decision: "WOULD_REJECT",
+            reason_code: "REJECT_RELATIONSHIP_NOT_WATCHED",
+            matched_relationship_type: "emergency_contact",
+        });
+    });
+
+    it("a shared endpoint whose Persons hold NO relationship still surfaces as ambiguity", async () => {
+        const store = makeStore({
+            communication_provider_bindings: [binding()],
+            persons: [
+                { id: PERSON, org_id: ORG_A, email: PARENT },
+                { id: "person-2", org_id: ORG_A, email: PARENT },
+            ],
+        });
+        await ingestResendInboundEmail(event(), deps(store.client()));
+        expect(store.tables[OBSERVATIONS]![0]).toMatchObject({
+            decision: "WOULD_REQUIRE_REVIEW",
+            lane: "none",
+            reason_code: "REVIEW_SHARED_ENDPOINT",
+            sender_assertion: "shared_endpoint",
+            matched_relationship_type: null,
         });
     });
 

@@ -140,14 +140,6 @@ export type IngressRelationshipStatus = "active" | "inactive";
 export type SenderRelationship = {
     kind: IngressRelationshipKind;
     status: IngressRelationshipStatus;
-    /**
-     * Persons holding this address in this organization.
-     *
-     * More than one is a shared household endpoint. It does NOT block admission — the
-     * relationship is real — but it must not produce a Person, which is the rule the
-     * certified SMS and email runtimes already hold.
-     */
-    personIds: string[];
 };
 
 /* ---------------------------------------------------------------------------
@@ -235,8 +227,19 @@ export type EmailIngressPolicy = {
 export type EmailIngressContext = {
     envelope: EmailIngressEnvelope;
     policy: EmailIngressPolicy;
-    /** The sender's relationships in this organization. Empty = unknown sender. */
+    /** The sender's relationships in this organization. Empty = no relationship held. */
     senderRelationships: SenderRelationship[];
+    /**
+     * Persons in this organization holding the sender's address.
+     *
+     * SEPARATE from `senderRelationships`, and that separation is the whole point. These
+     * used to ride inside each relationship, which made "two people share this mailbox" a
+     * property of having a relationship — so an address held by two Persons who happen to
+     * hold none reported `unknown` and was refused, while ingestion had correctly called it
+     * ambiguous. Ambiguity is a fact about the ENDPOINT and is resolved before, and
+     * independently of, anything about what those Persons are to the organization.
+     */
+    senderPersonIds: string[];
     /**
      * The thread an `alloy.{uuid}` id in In-Reply-To/References resolves to IN THIS
      * ORGANIZATION, or null.
@@ -263,7 +266,12 @@ export type EmailIngressContext = {
  * indistinguishable from the gate being non-deterministic. Bump on ANY change to
  * precedence, lane mapping or reason codes.
  */
-export const EMAIL_INGRESS_POLICY_VERSION = "email-ingress-eligibility/2026-08-18.1";
+// 2026-08-18.2 — three deterministic corrections found by the first historical backtest:
+// household membership (`customer_persons.role_type`) became a guardian source; shared
+// endpoints are resolved from the endpoint rather than through a relationship, and can now
+// produce a review on their own; and retrieval follows the LANE rather than the
+// disposition, so an ambiguity-only review authorizes no fetch.
+export const EMAIL_INGRESS_POLICY_VERSION = "email-ingress-eligibility/2026-08-18.2";
 
 export type EmailIngressLane =
     /** A — a reply to something Alloy sent. Unforgeable, and needs no AI. */
@@ -345,8 +353,15 @@ export type IngressRetrievalGrant = "none" | "full";
 export type SenderAssertion =
     /** Relationship held AND authentication passed. A Person may be asserted. */
     | { kind: "verified_relationship"; relationship: SenderRelationship; personId: string }
-    /** Relationship held on an address several Persons share. Real, but names nobody. */
-    | { kind: "shared_endpoint"; relationship: SenderRelationship }
+    /**
+     * The address is held by several Persons, so it names nobody.
+     *
+     * `relationship` is nullable because ambiguity does not depend on one: two Persons
+     * sharing a mailbox is a fact about the endpoint whether or not either of them is a
+     * guardian. Requiring a relationship here is exactly the bug the historical backtest
+     * exposed — it made real ambiguity read as `unknown`.
+     */
+    | { kind: "shared_endpoint"; relationship: SenderRelationship | null; personIds: string[] }
     /** Relationship held, authentication did not pass. Admitted on other evidence only. */
     | { kind: "unverified_relationship"; relationship: SenderRelationship }
     /** Nothing is known about this sender, and nothing should be inferred. */
@@ -458,18 +473,24 @@ function watchedRelationship(
 function assertSender(
     relationships: readonly SenderRelationship[],
     policy: EmailIngressPolicy,
-    envelope: EmailIngressEnvelope
+    envelope: EmailIngressEnvelope,
+    senderPersonIds: readonly string[]
 ): SenderAssertion {
     const watched = watchedRelationship(relationships, policy.watchedRelationshipKinds);
-    const relationship = watched ?? relationships.find((r) => r.status === "active") ?? relationships[0];
-    if (!relationship) return { kind: "unknown" };
+    const relationship = watched ?? relationships.find((r) => r.status === "active") ?? relationships[0] ?? null;
 
-    // A shared household endpoint is checked BEFORE authentication, because it is a
-    // property of the data and not of the message: even a perfectly authenticated email
-    // from an address two Persons hold names neither of them.
-    if (relationship.personIds.length !== 1) return { kind: "shared_endpoint", relationship };
+    // A shared endpoint is decided FIRST, from the endpoint alone, and before
+    // authentication. It is a property of the data rather than of the message: even a
+    // perfectly authenticated email from an address two Persons hold names neither of
+    // them, and that stays true when neither of them is anybody the organization watches.
+    if (senderPersonIds.length > 1) {
+        return { kind: "shared_endpoint", relationship, personIds: [...senderPersonIds] };
+    }
+    if (!relationship) return { kind: "unknown" };
     if (!authenticationPassed(envelope)) return { kind: "unverified_relationship", relationship };
-    return { kind: "verified_relationship", relationship, personId: relationship.personIds[0]! };
+    const personId = senderPersonIds[0];
+    if (!personId) return { kind: "unverified_relationship", relationship };
+    return { kind: "verified_relationship", relationship, personId };
 }
 
 /**
@@ -502,7 +523,7 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
     const { envelope, policy } = ctx;
 
     const identity = resolveAddressedIdentity(envelope, policy.identities);
-    const senderAssertion = assertSender(ctx.senderRelationships, policy, envelope);
+    const senderAssertion = assertSender(ctx.senderRelationships, policy, envelope, ctx.senderPersonIds ?? []);
     const base = {
         confidenceBasis: "deterministic" as const,
         senderAssertion,
@@ -525,6 +546,14 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
     }
 
     const intakePurposeKey = identity.role === "purpose" ? (identity.intakePurposeKey ?? null) : null;
+    // RETRIEVAL FOLLOWS THE LANE, NOT THE DISPOSITION.
+    //
+    // A review that rests on a lane — an acquisition address, a watched relationship — has
+    // already been authorized to look, and a human is deciding what the message MEANS. A
+    // review that rests only on the endpoint being shared has authorized nothing: two
+    // people using one mailbox is not permission to read their mail. So that path grants
+    // `none` and asks a person first. Tying the grant to the disposition would have made
+    // "somebody should look at this" silently mean "so fetch the body".
     const admit = (
         disposition: EmailIngressDisposition,
         lane: EmailIngressLane,
@@ -603,12 +632,17 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
                 }". The relationship is real; the claim to it is unproven.`
             );
         }
+        // AFTER authentication, deliberately. Both facts are true and both mean review, so
+        // the reason code names the stronger problem: if the transport could not vouch
+        // that the message came from this address at all, "that address names two people"
+        // is a detail. The assertion still carries the ambiguity either way, so nothing is
+        // lost — only the headline changes.
         if (senderAssertion.kind === "shared_endpoint") {
             return admit(
                 "WOULD_REQUIRE_REVIEW",
                 "relationship_watch",
                 "REVIEW_SHARED_ENDPOINT",
-                `Sender holds an active watched ${watched.kind} relationship on an address ${senderAssertion.relationship.personIds.length} Persons share; the relationship is real and names nobody.`
+                `Sender holds an active watched ${watched.kind} relationship on an address ${senderAssertion.personIds.length} Persons share; the relationship is real and names nobody.`
             );
         }
         return admit(
@@ -631,7 +665,28 @@ export function evaluateEmailIngressEligibility(ctx: EmailIngressContext): Email
         );
     }
 
-    // 6 — reject, as narrowly as the facts allow. The distinction between these matters to
+    // 6 — AMBIGUITY WITHOUT A LANE.
+    //
+    // Nothing admitted this message, and the address it came from is held by more than one
+    // Person. Rejecting would throw away a fact the organization's own data asserts —
+    // ingestion has always flagged this case — and admitting would be reading two people's
+    // mail because they share a mailbox. So a person decides, and NOTHING is fetched until
+    // they do: this is the one review that grants no retrieval, because no lane authorized
+    // looking. Deliberately `lane: "none"` — ambiguity is not a reason we are allowed in.
+    if (senderAssertion.kind === "shared_endpoint") {
+        return {
+            ...base,
+            disposition: "WOULD_REQUIRE_REVIEW",
+            lane: "none",
+            reasonCode: "REVIEW_SHARED_ENDPOINT",
+            retrieval: "none",
+            identity,
+            intakePurposeKey,
+            evidence: `No lane admitted this message, and its sender address is held by ${senderAssertion.personIds.length} Persons in this organization; who wrote it cannot be decided from the data, and must not be guessed.`,
+        };
+    }
+
+    // 7 — reject, as narrowly as the facts allow. The distinction between these matters to
     // an administrator: "we do not watch vendors" is a setting they can change, and "this
     // family left" is not.
     //

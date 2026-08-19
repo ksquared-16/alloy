@@ -84,10 +84,24 @@ export type NormalizedInboundEmail = ResendReceivedEvent & {
      * being handed a body.
      */
     authentication: SenderAuthenticationResult;
+    /**
+     * WHICH check spoke, not what it said.
+     *
+     * `dmarc` is the only class that ties the visible `From` to an authenticated identity;
+     * `spf` authenticates the envelope sender, which a forward routinely rewrites; `none`
+     * means the transport reported nothing. Kept beside the result because "unknown" and
+     * "unknown because nobody asked" are the same value with different meanings, and the
+     * historical corpus proved that distinction is the difference between a policy finding
+     * and an evidence gap.
+     */
+    authenticationEvidence: SenderAuthenticationEvidence;
 };
 
 /** Whether the transport asserted the sender is who the `From` header claims. */
 export type SenderAuthenticationResult = "pass" | "fail" | "unknown";
+
+/** Which check produced the result. The class only — never the raw signature material. */
+export type SenderAuthenticationEvidence = "dmarc" | "spf" | "none";
 
 function str(value: unknown): string | null {
     return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -236,7 +250,8 @@ export function combineInboundEmail(
         htmlFormat: retrieved?.htmlFormat ?? null,
         inReplyTo: headerValue(retrieved?.headers, "in-reply-to"),
         references: headerValue(retrieved?.headers, "references"),
-        authentication: parseSenderAuthentication(retrieved?.headers),
+        authentication: parseSenderAuthentication(retrieved?.headers).result,
+        authenticationEvidence: parseSenderAuthentication(retrieved?.headers).evidence,
     };
 }
 
@@ -252,24 +267,33 @@ export function combineInboundEmail(
  * exactly as it treats `fail`, so being unable to read a header can never be safer than
  * reading one that failed.
  */
-export function parseSenderAuthentication(headers: unknown): SenderAuthenticationResult {
+export function parseSenderAuthentication(headers: unknown): {
+    result: SenderAuthenticationResult;
+    evidence: SenderAuthenticationEvidence;
+} {
     const results = headerValue(headers, "authentication-results");
     if (results) {
         const dmarc = /\bdmarc\s*=\s*([a-z]+)/i.exec(results);
         if (dmarc) {
             const verdict = dmarc[1]!.toLowerCase();
-            if (verdict === "pass") return "pass";
-            if (verdict === "fail" || verdict === "quarantine" || verdict === "reject") return "fail";
-            return "unknown";
+            if (verdict === "pass") return { result: "pass", evidence: "dmarc" };
+            if (verdict === "fail" || verdict === "quarantine" || verdict === "reject") {
+                return { result: "fail", evidence: "dmarc" };
+            }
+            // DMARC spoke and said something else (`none`, `temperror`). It spoke, so the
+            // evidence class is dmarc; it proved nothing, so the result is unknown.
+            return { result: "unknown", evidence: "dmarc" };
         }
     }
     const spf = headerValue(headers, "received-spf");
     if (spf) {
         const verdict = spf.trim().toLowerCase();
-        if (verdict.startsWith("pass")) return "pass";
-        if (verdict.startsWith("fail") || verdict.startsWith("softfail")) return "fail";
+        if (verdict.startsWith("pass")) return { result: "pass", evidence: "spf" };
+        if (verdict.startsWith("fail") || verdict.startsWith("softfail")) {
+            return { result: "fail", evidence: "spf" };
+        }
     }
-    return "unknown";
+    return { result: "unknown", evidence: "none" };
 }
 
 /**

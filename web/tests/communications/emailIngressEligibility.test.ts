@@ -69,16 +69,15 @@ function ctx(overrides: Partial<EmailIngressContext> = {}): EmailIngressContext 
         envelope: envelope(),
         policy: policy(),
         senderRelationships: [],
+        senderPersonIds: [],
         resolvedAlloyThreadId: null,
         ...overrides,
     };
 }
 
-const guardian = (personIds: string[] = ["p-1"]): SenderRelationship => ({
-    kind: "guardian",
-    status: "active",
-    personIds,
-});
+const guardian: SenderRelationship = { kind: "guardian", status: "active" };
+/** A relationship plus the endpoint that holds it — the two are now separate inputs. */
+const held = (personIds: string[] = ["p-1"]) => ({ senderRelationships: [guardian], senderPersonIds: personIds });
 
 describe("addressed identity", () => {
     it("prefers the most specific dedication when several identities are named", () => {
@@ -122,7 +121,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "parent@gmail.com", inReplyTo: ALLOY_THREAD_TOKEN }),
-                senderRelationships: [guardian()],
+                ...held(),
                 resolvedAlloyThreadId: THREAD,
             })
         );
@@ -132,12 +131,12 @@ describe("pressure tests — the sixteen cases", () => {
             reasonCode: "ADMIT_ALLOY_THREAD",
             matchedThreadId: THREAD,
         });
-        expect(d.senderAssertion).toEqual({ kind: "verified_relationship", relationship: guardian(), personId: "p-1" });
+        expect(d.senderAssertion).toEqual({ kind: "verified_relationship", relationship: guardian, personId: "p-1" });
     });
 
     it("2. known parent starting a fresh email → INGEST, Lane B", () => {
         const d = evaluateEmailIngressEligibility(
-            ctx({ envelope: envelope({ sender: "parent@gmail.com" }), senderRelationships: [guardian()] })
+            ctx({ envelope: envelope({ sender: "parent@gmail.com" }), ...held() })
         );
         expect(d).toMatchObject({
             disposition: "WOULD_INGEST",
@@ -163,7 +162,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "worker@county.gov" }),
-                senderRelationships: [{ kind: "agency", status: "active", personIds: ["p-9"] }],
+                senderRelationships: [{ kind: "agency", status: "active" }],
             })
         );
         expect(d).toMatchObject({
@@ -179,7 +178,7 @@ describe("pressure tests — the sixteen cases", () => {
             ctx({
                 envelope: envelope({ sender: "worker@county.gov" }),
                 policy: policy({ watchedRelationshipKinds: ["guardian", "agency"] }),
-                senderRelationships: [{ kind: "agency", status: "active", personIds: ["p-9"] }],
+                senderRelationships: [{ kind: "agency", status: "active" }],
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_INGEST", lane: "relationship_watch" });
@@ -201,7 +200,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "ap@vendor.com", hasAttachments: true }),
-                senderRelationships: [{ kind: "vendor", status: "active", personIds: ["p-4"] }],
+                senderRelationships: [{ kind: "vendor", status: "active" }],
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_REJECT", reasonCode: "REJECT_RELATIONSHIP_NOT_WATCHED" });
@@ -240,7 +239,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "teacher@school.com" }),
-                senderRelationships: [{ kind: "staff", status: "active", personIds: ["p-7"] }],
+                senderRelationships: [{ kind: "staff", status: "active" }],
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_REJECT", reasonCode: "REJECT_RELATIONSHIP_NOT_WATCHED" });
@@ -273,7 +272,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "household@gmail.com" }),
-                senderRelationships: [guardian(["p-1", "p-2"])],
+                ...held(["p-1", "p-2"]),
             })
         );
         expect(d).toMatchObject({
@@ -300,7 +299,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: '"Dana Whitfield" <parent@gmail.com>', authentication: "fail" }),
-                senderRelationships: [guardian()],
+                ...held(),
             })
         );
         expect(d).toMatchObject({
@@ -313,7 +312,7 @@ describe("pressure tests — the sixteen cases", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "parent@gmail.com", inReplyTo: ALLOY_THREAD_TOKEN, hasAttachments: true }),
-                senderRelationships: [guardian()],
+                ...held(),
                 resolvedAlloyThreadId: THREAD,
             })
         );
@@ -328,11 +327,57 @@ describe("pressure tests — the sixteen cases", () => {
                     subject: "Lennon absent Friday + immunization form",
                     hasAttachments: true,
                 }),
-                senderRelationships: [guardian()],
+                ...held(),
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_INGEST", lane: "relationship_watch" });
         expect(d.confidenceBasis).toBe("deterministic");
+    });
+});
+
+describe("the endpoint decides ambiguity, not the relationship", () => {
+    it("a shared endpoint with NO relationship reviews instead of vanishing into 'unknown'", () => {
+        // The defect the first historical backtest found. Two Persons held the address and
+        // neither was watched, so the gate said `unknown` and refused — while ingestion had
+        // correctly flagged it ambiguous. Ambiguity is a fact about the endpoint.
+        const d = evaluateEmailIngressEligibility(
+            ctx({ envelope: envelope({ sender: "household@gmail.com" }), senderPersonIds: ["p-1", "p-2"] })
+        );
+        expect(d).toMatchObject({
+            disposition: "WOULD_REQUIRE_REVIEW",
+            lane: "none",
+            reasonCode: "REVIEW_SHARED_ENDPOINT",
+        });
+        expect(d.senderAssertion).toMatchObject({ kind: "shared_endpoint", relationship: null, personIds: ["p-1", "p-2"] });
+    });
+
+    it("that review authorizes NO retrieval — sharing a mailbox is not permission to read it", () => {
+        const d = evaluateEmailIngressEligibility(
+            ctx({ envelope: envelope({ sender: "household@gmail.com" }), senderPersonIds: ["p-1", "p-2"] })
+        );
+        expect(d.retrieval).toBe("none");
+    });
+
+    it("but a review that rests on a LANE does authorize retrieval", () => {
+        for (const c of [
+            ctx({ envelope: envelope({ recipients: ["enrollment@school.com"] }) }),
+            ctx({ envelope: envelope({ sender: "p@g.com" }), ...held(["p-1", "p-2"]) }),
+        ]) {
+            const d = evaluateEmailIngressEligibility(c);
+            expect(d.disposition).toBe("WOULD_REQUIRE_REVIEW");
+            expect(d.retrieval).toBe("full");
+        }
+    });
+
+    it("a single-Person endpoint is never ambiguous, however many relationships it holds", () => {
+        const d = evaluateEmailIngressEligibility(
+            ctx({
+                envelope: envelope({ sender: "p@g.com" }),
+                senderRelationships: [guardian, { kind: "emergency_contact", status: "active" }],
+                senderPersonIds: ["p-1"],
+            })
+        );
+        expect(d.senderAssertion.kind).toBe("verified_relationship");
     });
 });
 
@@ -350,7 +395,7 @@ describe("boundaries the gate must hold", () => {
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "former@gmail.com" }),
-                senderRelationships: [{ kind: "guardian", status: "inactive", personIds: ["p-3"] }],
+                senderRelationships: [{ kind: "guardian", status: "inactive" }],
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_REJECT", reasonCode: "REJECT_RELATIONSHIP_INACTIVE" });
@@ -361,7 +406,7 @@ describe("boundaries the gate must hold", () => {
             ctx({
                 envelope: envelope({ sender: "parent@gmail.com" }),
                 policy: policy({ watchedRelationshipKinds: [] }),
-                senderRelationships: [guardian()],
+                ...held(),
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_REJECT", reasonCode: "REJECT_RELATIONSHIP_NOT_WATCHED" });
@@ -369,14 +414,15 @@ describe("boundaries the gate must hold", () => {
 
     it("the administrator's watch order decides which relationship admits a dual-role sender", () => {
         const both: SenderRelationship[] = [
-            { kind: "vendor", status: "active", personIds: ["p-5"] },
-            { kind: "guardian", status: "active", personIds: ["p-5"] },
+            { kind: "vendor", status: "active" },
+            { kind: "guardian", status: "active" },
         ];
         const d = evaluateEmailIngressEligibility(
             ctx({
                 envelope: envelope({ sender: "dual@gmail.com" }),
                 policy: policy({ watchedRelationshipKinds: ["guardian"] }),
                 senderRelationships: both,
+                senderPersonIds: ["p-5"],
             })
         );
         expect(d).toMatchObject({ disposition: "WOULD_INGEST", lane: "relationship_watch" });
@@ -461,19 +507,20 @@ describe("properties that must hold on every path", () => {
         ctx({ envelope: envelope({ sender: "p@g.com", inReplyTo: ALLOY_THREAD_TOKEN }), resolvedAlloyThreadId: THREAD }),
         ctx({ envelope: envelope({ recipients: ["subsidy@school.com"] }) }),
         ctx({ envelope: envelope({ recipients: ["enrollment@school.com"] }) }),
-        ctx({ envelope: envelope({ sender: "p@g.com" }), senderRelationships: [guardian()] }),
-        ctx({ envelope: envelope({ sender: "p@g.com" }), senderRelationships: [guardian(["a", "b"])] }),
+        ctx({ envelope: envelope({ sender: "p@g.com" }), ...held() }),
+        ctx({ envelope: envelope({ sender: "p@g.com" }), ...held(["a", "b"]) }),
+        ctx({ envelope: envelope({ sender: "p@g.com" }), senderPersonIds: ["a", "b"] }),
         ctx({
             envelope: envelope({ sender: "p@g.com", authentication: "fail" }),
-            senderRelationships: [guardian()],
+            ...held(),
         }),
         ctx({
             envelope: envelope({ sender: "t@school.com" }),
-            senderRelationships: [{ kind: "staff", status: "active", personIds: ["s"] }],
+            senderRelationships: [{ kind: "staff", status: "active" }],
         }),
         ctx({
             envelope: envelope({ sender: "old@g.com" }),
-            senderRelationships: [{ kind: "guardian", status: "inactive", personIds: ["o"] }],
+            senderRelationships: [{ kind: "guardian", status: "inactive" }],
         }),
         ctx({ envelope: envelope({ sender: "ok@x.com" }), policy: policy({ explicitAllowAddresses: ["ok@x.com"] }) }),
     ];
@@ -486,10 +533,12 @@ describe("properties that must hold on every path", () => {
         }
     });
 
-    it("every rejection grants no retrieval, and every admission grants full", () => {
+    it("retrieval follows the LANE, not the disposition", () => {
+        // A review that rests on a lane has already been authorized to look. A review that
+        // rests only on the endpoint being shared has authorized nothing.
         for (const c of corpus) {
             const d = evaluateEmailIngressEligibility(c);
-            expect(d.retrieval).toBe(d.disposition === "WOULD_REJECT" ? "none" : "full");
+            expect(d.retrieval).toBe(d.lane === "none" ? "none" : "full");
             expect(wouldAdmit(d)).toBe(d.disposition !== "WOULD_REJECT");
         }
     });
@@ -500,11 +549,13 @@ describe("properties that must hold on every path", () => {
         }
     });
 
-    it("a rejection is still a classified row — lane 'none', never an absent lane", () => {
+    it("a rejection is always lane 'none'; an admission never is", () => {
+        // REVIEW may be either — an ambiguity-only review carries no lane, because
+        // ambiguity is not a reason we are allowed in.
         for (const c of corpus) {
             const d = evaluateEmailIngressEligibility(c);
             if (d.disposition === "WOULD_REJECT") expect(d.lane).toBe("none");
-            else expect(d.lane).not.toBe("none");
+            if (d.disposition === "WOULD_INGEST") expect(d.lane).not.toBe("none");
         }
     });
 });

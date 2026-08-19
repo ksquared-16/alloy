@@ -40,6 +40,7 @@ import {
 } from "@/lib/communications/ingress/observeEmailIngressEligibility";
 import {
     backtestMessage,
+    evaluateEngagementCandidate,
     selectAuditSample,
     summarizeBacktest,
     type BacktestOutcome,
@@ -121,6 +122,7 @@ async function main() {
         ),
         canonicalThreadMessageCount: Number(m.thread_message_count ?? 0),
         canonicalThreadOutboundCount: Number(m.thread_outbound_count ?? 0),
+        canonicalThreadOutboundBeforeCount: Number(m.thread_outbound_before_count ?? 0),
         inboundResolution: m.inbound_resolution ? String(m.inbound_resolution) : null,
         correlationMethod: m.correlation_method ? String(m.correlation_method) : null,
         receivedAt: m.created_at ? String(m.created_at) : null,
@@ -154,8 +156,16 @@ async function main() {
         const out: BacktestOutcome[] = [];
         for (const message of corpus) {
             const policy = policyByOrg.get(message.orgId)!;
-            const senderRelationships = await relationshipsFor(message.orgId, message.fromAddress);
-            out.push(backtestMessage({ message, policy, senderRelationships, counterfactualAuthenticated }));
+            const { relationships, personIds } = await relationshipsFor(message.orgId, message.fromAddress);
+            out.push(
+                backtestMessage({
+                    message,
+                    policy,
+                    senderRelationships: relationships,
+                    senderPersonIds: personIds,
+                    counterfactualAuthenticated,
+                })
+            );
         }
         return out;
     };
@@ -195,7 +205,8 @@ async function main() {
                 `insert into public.communication_ingress_eligibility_observations ` +
                 `(org_id, provider, channel, provider_message_id, decision, lane, reason_code, confidence_basis, ` +
                 `matched_relationship_type, matched_identity_id, matched_thread_id, intake_purpose_key, ` +
-                `sender_assertion, unsupported_watch_kinds, evaluation_mode, evaluated_at, policy_version) values (` +
+                `sender_assertion, unsupported_watch_kinds, sender_authentication, sender_authentication_evidence, ` +
+                `evaluation_mode, evaluated_at, policy_version) values (` +
                 [
                     lit(r.org_id),
                     lit(r.provider),
@@ -211,6 +222,8 @@ async function main() {
                     lit(r.intake_purpose_key),
                     lit(r.sender_assertion),
                     `'{${r.unsupported_watch_kinds.join(",")}}'`,
+                    lit(r.sender_authentication),
+                    lit(r.sender_authentication_evidence),
                     lit(r.evaluation_mode),
                     lit(r.evaluated_at),
                     lit(r.policy_version),
@@ -231,13 +244,18 @@ async function main() {
             matchedRelationshipType:
                 o.error || o.decision.senderAssertion.kind === "unknown"
                     ? null
-                    : o.decision.senderAssertion.relationship.kind,
+                    : (o.decision.senderAssertion.relationship?.kind ?? null),
             senderAssertion: o.error ? null : o.decision.senderAssertion.kind,
             recipientIdentity: o.error ? null : (o.decision.identity?.address ?? null),
             recipientRole: o.error ? null : (o.decision.identity?.role ?? null),
             canonicalThreadId: o.message.canonicalThreadId,
             canonicalThreadMessageCount: o.message.canonicalThreadMessageCount,
             canonicalThreadOutboundCount: o.message.canonicalThreadOutboundCount,
+            canonicalThreadOutboundBeforeCount: o.message.canonicalThreadOutboundBeforeCount,
+            senderPersonCount:
+                o.error || o.decision.senderAssertion.kind !== "shared_endpoint"
+                    ? null
+                    : o.decision.senderAssertion.personIds.length,
             canonicalInboundResolution: o.message.inboundResolution,
             canonicalCorrelationMethod: o.message.correlationMethod,
             attachmentCount: o.message.attachmentCount,
@@ -262,6 +280,7 @@ async function main() {
             ])
         ),
         matrixActual: summarizeBacktest(actual),
+        engagementCandidate: evaluateEngagementCandidate(actual),
         matrixCounterfactualAuthenticated: summarizeBacktest(counterfactual),
         auditSample: selectAuditSample(actual).map((o) => ({
             auditReason: o.auditReason,
