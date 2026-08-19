@@ -219,11 +219,16 @@ describe("ownership decides the credential, and decides it first", () => {
 
     it("retrieval receives the OWNING org and its binding's credential reference", async () => {
         const s = store(seeded);
-        const retrieve = vi.fn(async () => ({ ok: true as const, payload: { text: "x", headers: {} } }));
+        // Typed through the real dependency shape: a bare `vi.fn()` infers a zero-length
+        // argument tuple, and the assertion below reads argument 1.
+        const retrieve: InboundEmailIngestionDeps["retrieve"] = vi.fn(async () => ({
+            ok: true as const,
+            payload: { text: "x", headers: {} },
+        }));
         await ingestResendInboundEmail(receivedEvent(HIDDEN), { supabase: s.client, retrieve, now: () => "2026-08-19T17:00:00.000Z" } as unknown as InboundEmailIngestionDeps);
 
         expect(retrieve).toHaveBeenCalledTimes(1);
-        expect(retrieve.mock.calls[0]![1]).toEqual({ orgId: ORG_A, secretRef: VAULT_REF });
+        expect(vi.mocked(retrieve).mock.calls[0]?.[1]).toEqual({ orgId: ORG_A, secretRef: VAULT_REF });
     });
 
     it("a FORGED received_for reaches no credential at all — retrieval is never attempted", async () => {

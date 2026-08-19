@@ -85,7 +85,12 @@ export async function resolveInboundRetrievalCredential(params: {
     supabase: SupabaseClient;
     orgId: string;
     secretRef: string | null | undefined;
-    env?: NodeJS.ProcessEnv;
+    /**
+     * Variable lookup. Deliberately a plain map rather than `NodeJS.ProcessEnv`: this
+     * function reads exactly one name, and demanding the full process shape would force
+     * every test to supply `NODE_ENV` to ask a question that has nothing to do with it.
+     */
+    env?: Record<string, string | undefined>;
 }): Promise<InboundRetrievalCredential> {
     const env = params.env ?? process.env;
 
