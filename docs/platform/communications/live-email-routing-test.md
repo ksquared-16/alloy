@@ -1,7 +1,7 @@
 ---
 owner: platform
 status: sprint
-last_reviewed: 2026-08-14
+last_reviewed: 2026-08-19
 supersedes: []
 ---
 
@@ -101,7 +101,57 @@ re-open it speculatively.
 
 ---
 
-## 5. What Alloy will still not claim afterwards
+## 5. The fourteen proofs, and how each is settled
+
+Run `certification/communications/live-email-round-trip-verification.sql` against the tenant
+that received the mail, with `org_id` and the unique subject set at the top. Every statement
+is a SELECT. The table below is the acceptance list — a claim with no query behind it is a
+claim nobody checked.
+
+| # | Proof | Settled by |
+|---|---|---|
+| 1 | Resend received it | §1 receipt — `resolved_message_id` non-null |
+| 2 | Exactly one canonical inbound message | §2 `canonical_rows` = 1 |
+| 3 | Sender Person resolution | §4 `inbound_resolution` + the named Person |
+| 4 | Visible recipient stays `kelly@workwithalloy.com` | §3 `to_address` |
+| 5 | Hidden destination is transport only | §5 `destination_leak_check` = 0 |
+| 6 | `Message-ID` | §3 `email_message_id` |
+| 7 | `In-Reply-To` | §3 `email_in_reply_to` |
+| 8 | `References` | §3 `email_references` |
+| 9 | Correct canonical Email thread | §6 — outbound and inbound share one `thread_id` |
+| 10 | Correct Kurzman Family hub | §4 `primary_entity_id` resolves to the right Person; confirm the hub in the browser |
+| 11 | Correct Email subject conversation | §6 — one thread, subject inherited not re-authored |
+| 12 | Unread / Needs reply | §8 `attention_state` = `needs_response` |
+| 13 | Workflow event | §8 exactly one `message_received` |
+| 14 | Duplicate count | §2 — one row, and §8 `event_rows` = 1 |
+
+**§7 is the one that decides the architecture.** `correlation_method` of `in_reply_to` or
+`references` proves RFC correlation survived the forwarding hop. `endpoint_provenance` means
+the message was filed correctly by sender+recipient while our headers were STRIPPED — the
+conversation looks right and the proof failed. Those two outcomes are easy to confuse in a
+screenshot and impossible to confuse in that column.
+
+§9 additionally captures the first **live** observation the ingress gate has ever produced;
+every existing row is `historical_replay`. It changes nothing about the message and is
+recorded only as evidence.
+
+---
+
+## 6. Close the test down
+
+The forwarding rule is **test infrastructure, not the production architecture.**
+
+1. When the round trip has passed and the evidence is captured, **disable the blanket Gmail
+   forwarding rule** at the mail provider.
+2. Leave the hidden destination and the binding in place — they are the receiving identity,
+   and `Connected` continues to mean "we received mail here, most recently at <time>".
+3. Do not leave forwarding enabled as the mixed-inbox solution. What a real mixed inbox
+   needs is recorded, and parked, in
+   `docs/platform/planning/conversation-platform-v1/FUTURE-OPERATIONAL-MAILBOX-INTEGRATION.md`.
+
+---
+
+## 7. What Alloy will still not claim afterwards
 
 Alloy can report mail it has received. It **cannot** see whether a rule inside
 the organization's mail provider still exists, so `Connected` always means *"we
