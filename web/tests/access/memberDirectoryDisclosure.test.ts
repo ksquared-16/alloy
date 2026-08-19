@@ -104,8 +104,26 @@ const GRANT_HOLDER: Caller = {
     roleKeys: ["ops"],
     permissionKeys: ["settings.users_roles"],
 };
-const PORTAL_ONLY: Caller = {
-    label: "portal-admitted, no grant",
+/**
+ * The `ops` operator AFTER `20260819140000`. `OD-8`'s preservation grant gives every org's `ops`
+ * role `settings.users_roles.read`, so this is what an ops principal looks like once the migration
+ * has landed: reads the roster, holds no managing capability, sees no addresses.
+ */
+const OPS_PRESERVED: Caller = {
+    label: "ops with the preserved read capability",
+    portalEligible: true,
+    roleKeys: ["ops"],
+    permissionKeys: ["settings.users_roles.read"],
+};
+
+/**
+ * The same `ops` principal BEFORE the preservation grant — `Q15-B4`'s 2 organizations. Kept as a
+ * fixture rather than deleted, because it is the exact population that would have been locked out
+ * had the conversion shipped first, and it is why the migration is a hard predecessor rather than a
+ * companion.
+ */
+const OPS_UNPRESERVED: Caller = {
+    label: "ops without the read capability (pre-migration)",
     portalEligible: true,
     roleKeys: ["ops"],
     permissionKeys: ["opportunities.write"],
@@ -174,15 +192,15 @@ describe("W14-F1 — the route projects the address against the managing capabil
         expect(users.map((u) => u.email).sort()).toEqual(MEMBERS.map((m) => m.email).sort());
     });
 
-    it("a portal-admitted caller without the grant receives NO address", async () => {
-        const { status, users } = await rosterFor(PORTAL_ONLY);
+    it("ops with the preserved read capability reads the roster and NO address", async () => {
+        const { status, users } = await rosterFor(OPS_PRESERVED);
         expect(status).toBe(200);
         expect(users).toHaveLength(MEMBERS.length);
         for (const u of users) expect(u.email).toBeNull();
     });
 
     it("no address survives anywhere in that payload, under any key", async () => {
-        const { users } = await rosterFor(PORTAL_ONLY);
+        const { users } = await rosterFor(OPS_PRESERVED);
         const serialized = JSON.stringify(users);
         // The domain is the disclosure. A label may legitimately contain the local-part.
         expect(serialized).not.toContain("westbrook-example.org");
@@ -190,25 +208,73 @@ describe("W14-F1 — the route projects the address against the managing capabil
     });
 
     it("still names every member, so the roster remains usable without addresses", async () => {
-        const { users } = await rosterFor(PORTAL_ONLY);
+        const { users } = await rosterFor(OPS_PRESERVED);
         expect(users.map((u) => u.label).sort()).toEqual(["arden", "bly"]);
     });
 });
 
-describe("W14-F1 — narrowing disclosure did not widen reach", () => {
-    it("a caller who is not portal-eligible is still refused", async () => {
-        asCaller(NOT_ADMITTED);
-        const res = await GET();
+describe("OD-8 / W-15 — the roster gate is a capability, and the conversion neither widened nor narrowed", () => {
+    it("a principal holding no roster capability is refused", async () => {
+        const res = await (asCaller(NOT_ADMITTED), GET());
         expect(res.status).toBe(403);
     });
 
-    it("admission is decided by getAdminContextCached, not by the capability bundle", async () => {
-        // Portal-refused, yet holding the managing grant: if admission were re-derived from the
-        // bundle (which does not require portalEligible) this caller would be let in and would
-        // read every address. That is the exact accident this asserts against.
-        asCaller({ ...NOT_ADMITTED, permissionKeys: ["settings.users_roles"], roleKeys: ["admin"] });
-        const res = await GET();
+    it("ops WITHOUT the preserved grant is refused — which is why the migration precedes the code", async () => {
+        // `Q15-B4`'s two organizations, in fixture form. This is the narrowing `OD-8` sequenced
+        // around: had the gate converted first, these operators would have lost the roster with no
+        // announcement. `20260819140000` grants the key and REFUSES to complete while any org
+        // defining `ops` is uncovered, so this state cannot survive the migration.
+        const res = await (asCaller(OPS_UNPRESERVED), GET());
         expect(res.status).toBe(403);
+    });
+
+    it("the capability admits, and admission no longer does — the DECIDED change", async () => {
+        // This assertion used to read the other way, and its note said admission must not be
+        // re-derived from the bundle *"which does not require portalEligible"* — the accident it
+        // was written to prevent.
+        //
+        // `OD-8` decided it, on evidence this lane could not manufacture: `Q15-C1 = 0` — NO role
+        // outside `admin`/`ops` holds `settings.users_roles.read` on the deployed tenant, so the
+        // population this admits is empty in the only database that matters. `OD-7` rule 6 forbade
+        // closing the gap with a secondary portal check, and `OD-8` forbids retaining one to mimic
+        // the old shape.
+        //
+        // The boundary is narrow and worth restating where it is enforced: this says capability
+        // holders may read THIS roster. It is not a general rule that a capability holder enters
+        // every portal surface, and `OD-8` says so explicitly.
+        const res = await (asCaller({ ...NOT_ADMITTED, permissionKeys: ["settings.users_roles.read"], roleKeys: ["auditor"] }), GET());
+        expect(res.status).toBe(200);
+    });
+
+    it("the conversion granted no mutation — the read key does not open POST", async () => {
+        // `OD-8` does not authorize `settings.users_roles`. The read capability must not become a
+        // write one by sharing a route file with it.
+        const routeSource = readFileSync(join(webRoot, "app/api/admin/users/route.ts"), "utf8");
+        const postBody = routeSource.slice(routeSource.indexOf("export async function POST"));
+        expect(postBody).toContain("requireUsersRolesManageAuth");
+        expect(postBody).not.toContain("requirePortalOrUsersRolesManageAuth");
+    });
+
+    it("scope survives the conversion — the roster is still bounded to the caller's org", async () => {
+        // `Membership ∧ Capability ∧ Scope`. Capability decides whether the roster may be read; it
+        // does not decide whose. Asserted structurally, because a query that dropped the org filter
+        // would return the right shape and the wrong rows.
+        const routeSource = readFileSync(join(webRoot, "app/api/admin/users/route.ts"), "utf8");
+        const getBody = routeSource.slice(
+            routeSource.indexOf("export async function GET"),
+            routeSource.indexOf("export async function POST"),
+        );
+        expect(getBody).toMatch(/\.eq\("org_id",\s*access\.orgId\)/);
+    });
+
+    it("the old admission shortcut cannot silently return", async () => {
+        // The regression that would undo this: someone reinstates a portal test "to be safe".
+        // `OD-7` rejects it and `W-13` removed the layer it belongs to — a `portalEligible` read in
+        // this route would be the fifth authority layer under a new name.
+        const routeSource = readFileSync(join(webRoot, "app/api/admin/users/route.ts"), "utf8");
+        const executable = routeSource.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+        expect(executable).not.toContain("portalEligible");
+        expect(executable).not.toContain("getAdminContextCached");
     });
 });
 
@@ -230,14 +296,14 @@ describe("W14-F1 — the picker agrees with the route it consumes", () => {
     }
 
     it("shows names, not addresses, to a caller without the grant", async () => {
-        const options = await pickerOptionsFor(PORTAL_ONLY);
+        const options = await pickerOptionsFor(OPS_PRESERVED);
         expect(options.map((o) => o.label)).toEqual(["arden", "bly"]);
         for (const o of options) expect(o.label).not.toContain("@");
     });
 
     it("shows the SAME names to a caller who may read addresses — the picker never renders one", async () => {
         const granted = await pickerOptionsFor(GRANT_HOLDER);
-        const ungranted = await pickerOptionsFor(PORTAL_ONLY);
+        const ungranted = await pickerOptionsFor(OPS_PRESERVED);
         expect(granted.map((o) => o.label)).toEqual(ungranted.map((o) => o.label));
         for (const o of granted) expect(o.label).not.toContain("@");
     });
@@ -261,8 +327,11 @@ describe("W14-F1 — non-vacuity: the removed defect is convicted by name", () =
 
     it("the route reads the managing predicate rather than a second one that agrees today", () => {
         const routeSource = readFileSync(join(webRoot, "app/api/admin/users/route.ts"), "utf8");
+        // The DISCLOSURE half is unchanged by OD-8: addresses are still projected against the
+        // MANAGING key, so converting the read gate handed the ops population nothing new.
         expect(routeSource).toContain("canManageUsersAndRoles");
-        // Admission must still come from the portal gate.
-        expect(routeSource).toContain("getAdminContextCached");
+        // …and the gate itself is now the capability helper. The old admission read is asserted
+        // absent in the OD-8 block above, where the reason it must stay absent is recorded.
+        expect(routeSource).toContain("requirePortalOrUsersRolesManageAuth");
     });
 });
