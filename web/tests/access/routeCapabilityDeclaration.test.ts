@@ -726,3 +726,91 @@ describe("W-14 · RL-10 — table hygiene", () => {
         expect(pkg.scripts.prebuild).toContain("check:route-capabilities");
     });
 });
+
+/**
+ * W-15 / OD-7 — the classification is asserted against the LIVE table, not merely written down.
+ *
+ * A census recorded as prose goes stale the first time someone converts a handler and forgets to
+ * edit it, and a stale census reads exactly like a current one. These assertions make the recorded
+ * figures a failing test the moment they stop being true.
+ */
+describe("W-15 · OD-7 — the classification stays honest", () => {
+    const classification = (table as unknown as {
+        w15_classification?: {
+            access_owned: { total: number; declared: number; none: number; exceptions: number };
+            conversion_exceptions: { route: string; method: string; reason: string; needs: string }[];
+        };
+    }).w15_classification;
+
+    const ACCESS_PREFIXES = [
+        "app/api/admin/rbac/",
+        "app/api/admin/settings/users-roles/",
+        "app/api/admin/users",
+        "app/api/admin/access-scope",
+        "app/api/admin/permissions",
+        "app/api/admin/send-password-reset",
+    ];
+    const isAccessOwned = (route: string) => ACCESS_PREFIXES.some((p) => route.startsWith(p));
+
+    function accessOwnedTally() {
+        let declared = 0;
+        let none = 0;
+        let pending = 0;
+        for (const [route, methods] of Object.entries(table.routes)) {
+            if (!isAccessOwned(route)) continue;
+            for (const decl of Object.values(methods)) {
+                if (decl.status === "declared") declared += 1;
+                else if (decl.status === "none") none += 1;
+                else pending += 1;
+            }
+        }
+        return { declared, none, pending, total: declared + none + pending };
+    }
+
+    it("the classification block exists", () => {
+        expect(classification, "W-15's classification must live beside the table it describes").toBeDefined();
+    });
+
+    it("its Access-owned counts match the table", () => {
+        const live = accessOwnedTally();
+        expect(live.total).toBe(classification!.access_owned.total);
+        expect(live.declared).toBe(classification!.access_owned.declared);
+        expect(live.none).toBe(classification!.access_owned.none);
+        // Every Access-owned handler still pending must be a RECORDED exception — that is what
+        // "exhausted" means here, and it is the assertion that stops the word being a claim.
+        expect(live.pending).toBe(classification!.access_owned.exceptions);
+    });
+
+    it("every Access-owned pending handler is a recorded exception, by name", () => {
+        const recorded = new Set(
+            classification!.conversion_exceptions.map((e) => `${e.route}#${e.method}`),
+        );
+        const stillPending: string[] = [];
+        for (const [route, methods] of Object.entries(table.routes)) {
+            if (!isAccessOwned(route)) continue;
+            for (const [method, decl] of Object.entries(methods)) {
+                if (decl.status === "pending" && !recorded.has(`${route}#${method}`)) {
+                    stillPending.push(`${route}#${method}`);
+                }
+            }
+        }
+        expect(
+            stillPending,
+            "an Access-owned handler may be pending only if OD-7's rule 6 or another decision keeps it so, "
+                + "and the reason must be recorded rather than implied",
+        ).toEqual([]);
+    });
+
+    it("every recorded exception is still pending — a stale exception is a hole", () => {
+        for (const e of classification!.conversion_exceptions) {
+            const decl = table.routes[e.route]?.[e.method];
+            expect(decl, `${e.route}#${e.method} is recorded as an exception but is not in the table`).toBeDefined();
+            expect(
+                decl!.status,
+                `${e.route}#${e.method} is recorded as an exception but is no longer pending — remove it`,
+            ).toBe("pending");
+            expect(e.reason.length).toBeGreaterThan(80);
+            expect(e.needs.length).toBeGreaterThan(3);
+        }
+    });
+});

@@ -113,6 +113,34 @@
       }
     ]
   },
+  "w15_classification": {
+    "$comment": "W-15's classification under OD-7, kept beside the table it describes so it cannot drift from it. tests/access/routeCapabilityDeclaration.test.ts asserts these counts against the LIVE gate inventory, so a stale figure here is a failing test rather than a stale document.",
+    "policy": "OD-7: a non-capability gate converts to the canonical capability representing the operation it protects, and the conversion MUST NOT widen admission.",
+    "reviewed": "2026-08-19",
+    "access_owned": {
+      "total": 15,
+      "declared": 12,
+      "none": 1,
+      "exceptions": 2,
+      "state": "EXHAUSTED. Every Access-owned handler is now declared, reviewed `none`, or a recorded conversion exception. This is the population OD-7 scopes the burndown to."
+    },
+    "conversion_exceptions": [
+      {
+        "route": "app/api/admin/users/route.ts",
+        "method": "GET",
+        "reason": "OD-7 rule 6 \u2014 the canonical capability WIDENS. Admission today is portal eligibility (admin OR ops by role). settings.users_roles.read is resolved by a helper that does not require portalEligible, so a custom role granted the key would gain the roster read. Closing that gap needs an ad-hoc secondary role check, which rule 6 forbids.",
+        "needs": "either a portal-scoped read capability, or an accepted decision that capability holders may read the roster without portal admission"
+      },
+      {
+        "route": "app/api/admin/send-password-reset/route.ts",
+        "method": "POST",
+        "reason": "Decision-gated for a reason OTHER than OD-7. This is W-38's subject \u2014 the credential-mail primitive bounded by the caller's org \u2014 which the plan gates on AD-15. OD-7 does not release it.",
+        "needs": "AD-15"
+      }
+    ],
+    "systemic_finding_blocking_the_remaining_backlog": "The 292 gate-helper handlers are NOT mechanically convertible under OD-7 alone, and the reason is structural rather than per-route. `requireAdminOrOps` resolves through getAdminOrgContextLight, which refuses unless `portalEligible` \u2014 it admits by ROLE, not by grant. So a pure capability swap admits capability holders who are not portal-eligible, which WIDENS (rule 6), while `portal AND capability` NARROWS for any portal principal whose org lacks the grant. Choosing between them, and proving which applies, needs per-org grant coverage from a real tenant \u2014 the same class of evidence the Q15 gate names, which the seeded certification tenant cannot supply because it defines only admin and ops.",
+    "remaining_by_ownership": "694 owned pending handlers across 142 route families \u2014 forms, communications, commercial, analytics, departments, processing, financials, jobs, opportunities, schedules, workflows and others. Every one carries another program's domain semantics, so the canonical capability for each is that domain's call, not Access's. OD-7 scopes this burndown to Access-owned sites and those are exhausted."
+  },
   "routes": {
     "app/api/action-links/consume-accept-job/route.ts": {
       "POST": {
