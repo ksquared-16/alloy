@@ -89,6 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     //
     // The client supplied WORDS. The turn, the need, the semantic key and the command target are all
     // resolved server-side from the objective — the browser never names the field being answered.
+    let clarificationPrompt: string | null = null;
     if (candidate.kind === "clarification_needed" && text) {
         const governed = await interpretParticipantResponseViaTrust({
             org_id: access.value.orgId,
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             repository: createSupabaseTrustRepository(),
         });
         if (governed.candidate) candidate = governed.candidate;
+        clarificationPrompt = governed.clarification_prompt;
     }
 
     const applied = await applyParticipantTurnResponse(supabase, {
@@ -126,6 +128,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // A refusal is reported, not hidden: the participant is told plainly and asked again.
         outcome: applied.disposition.action,
         ...(applied.disposition.action === "refused" ? { reason: applied.disposition.reason } : {}),
+        // The provider's bounded clarifying question, presentation-only: shown as Alloy's next
+        // line while the SAME deterministic turn and controls stand. It is not persisted, not a
+        // value, and vanishes on any outcome that actually moved the objective.
+        ...(clarificationPrompt && (applied.disposition.action === "no_change" || applied.disposition.action === "refused")
+            ? { clarification: clarificationPrompt }
+            : {}),
         objective: participantObjectiveWireModel(applied.objective, { subjectDisplayName: canonical.subjectDisplayName }),
     });
 }

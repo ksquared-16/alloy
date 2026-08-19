@@ -68,7 +68,13 @@ export type EnrollmentConversationCardProps = {
 
 type TurnResponse = {
     ok: boolean;
-    data?: { outcome: string; reason?: string; objective: ParticipantObjectiveWire };
+    data?: {
+        outcome: string;
+        reason?: string;
+        /** A bounded, provider-authored clarifying question — presentation only. */
+        clarification?: string;
+        objective: ParticipantObjectiveWire;
+    };
     error?: string;
 };
 
@@ -95,6 +101,13 @@ export function EnrollmentConversationCard({
     const [elaborating, setElaborating] = useState(false);
     const [text, setText] = useState("");
     const [notice, setNotice] = useState<string | null>(null);
+    /**
+     * The provider's clarifying question, spoken in Alloy's voice while the SAME deterministic
+     * turn and controls stand. Presentation only — clearing it changes nothing durable.
+     */
+    const [clarification, setClarification] = useState<string | null>(null);
+    /** A free-text reply is being interpreted — the honest "thinking" state. */
+    const [interpreting, setInterpreting] = useState(false);
     const [busy, setBusy] = useState(false);
     /**
      * Guards the request itself, not just the button.
@@ -124,6 +137,11 @@ export function EnrollmentConversationCard({
              */
             const optimistic = payload.settledAs?.trim();
             const asked = participantQuestion(objective);
+            setClarification(null);
+            // Words need interpreting; button answers do not. The thinking state is shown only
+            // while interpretation is actually running — never as decoration.
+            const isFreeText = typeof payload.text === "string" && payload.text !== "yes";
+            if (isFreeText) setInterpreting(true);
             // Same instant as the transcript entry: the artifact shows the answer as it is given.
             if (payload.value !== undefined && objective.next_turn.field_ids.length > 0) {
                 onValueSettled?.(objective.next_turn.field_ids, payload.value);
@@ -159,7 +177,13 @@ export function EnrollmentConversationCard({
                 // participant is told plainly and the controls stay — never an internal code.
                 if (json.data.outcome === "refused" || json.data.outcome === "no_change") {
                     if (optimistic) setSettled((prev) => prev.slice(0, -1));
-                    setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
+                    // The provider's own clarifying question beats the generic ask-again — same
+                    // voice, same turn, no new authority.
+                    if (json.data.clarification) {
+                        setClarification(json.data.clarification);
+                    } else {
+                        setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
+                    }
                 }
                 onPhaseChange?.(json.data.objective.phase);
                 if (json.data.objective.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
@@ -171,6 +195,7 @@ export function EnrollmentConversationCard({
             } finally {
                 inFlight.current = false;
                 setBusy(false);
+                setInterpreting(false);
             }
         },
         [token, onArtifactHandoff, onPhaseChange, onValueSettled, objective],
@@ -262,6 +287,16 @@ export function EnrollmentConversationCard({
                 chrome, no step counter — one continuous conversation. */}
             <div className="mb-5">
                 <Said who="alloy">{participantQuestion(objective)}</Said>
+                {clarification ? (
+                    // The provider's bounded clarifying question, in Alloy's voice. The turn and
+                    // its deterministic controls are UNCHANGED beneath it.
+                    <p
+                        className="pt-2 text-[16px] leading-snug text-alloy-midnight"
+                        data-participant-clarification="true"
+                    >
+                        {clarification}
+                    </p>
+                ) : null}
                 {/* The ask-once promise, said the way a specialist would say it. Slice 2.4 makes it
                     true; a parent should hear the reassurance, not the ratio. */}
                 {turn.resolves_occurrences > 1 ? (
@@ -281,6 +316,7 @@ export function EnrollmentConversationCard({
                         onSubmit={(value, shown) => void submit({ value, settledAs: shown })}
                     />
                 ) : (
+                <>
                 <div className="flex flex-wrap gap-2">
                     <button
                         type="button"
@@ -303,6 +339,8 @@ export function EnrollmentConversationCard({
                         {control.deny}
                     </button>
                 </div>
+                <FreeTextReply busy={busy} interpreting={interpreting} onSend={(words) => void submit({ text: words, settledAs: words })} />
+                </>
                 )
             ) : optionalUnanswered ? (
                 <div className="flex flex-wrap gap-2" data-participant-control="optional">
@@ -328,6 +366,9 @@ export function EnrollmentConversationCard({
                     >
                         {affirmLabel}
                     </button>
+                    <div className="w-full">
+                        <FreeTextReply busy={busy} interpreting={interpreting} onSend={(words) => void submit({ text: words, settledAs: words })} />
+                    </div>
                 </div>
             ) : (
                 <ValueControl
@@ -481,6 +522,63 @@ function ValueControl({
                     Continue
                 </button>
             </div>
+        </div>
+    );
+}
+
+/**
+ * "Or just reply" — the participant's words, sent as WORDS.
+ *
+ * The server interprets deterministically first ("Yep" settles with no provider), and only where
+ * that cannot read the answer does governed interpretation run — which is why the thinking state
+ * appears here and only while a free-text reply is actually in flight. The buttons above remain
+ * the shortcuts; this is the conversational path beside them, never a replacement.
+ */
+function FreeTextReply({
+    busy,
+    interpreting,
+    onSend,
+}: {
+    busy: boolean;
+    interpreting: boolean;
+    onSend: (words: string) => void;
+}) {
+    const [words, setWords] = useState("");
+    const ready = words.trim().length > 0;
+    return (
+        <div className="mt-3" data-participant-freetext="true">
+            <div className="flex items-center gap-2">
+                <input
+                    type="text"
+                    value={words}
+                    disabled={busy}
+                    placeholder="Or just reply here…"
+                    onChange={(e) => setWords(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === "Enter" && ready && !busy) {
+                            onSend(words.trim());
+                            setWords("");
+                        }
+                    }}
+                    className="w-full max-w-[380px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[14px] placeholder:text-alloy-midnight/35"
+                />
+                <button
+                    type="button"
+                    disabled={busy || !ready}
+                    onClick={() => {
+                        onSend(words.trim());
+                        setWords("");
+                    }}
+                    className="rounded-xl border border-alloy-midnight/15 px-3 py-2 text-[14px] font-medium text-alloy-midnight disabled:opacity-40"
+                >
+                    Send
+                </button>
+            </div>
+            {interpreting ? (
+                <p className="animate-pulse pt-2 text-[13px] text-alloy-midnight/45" data-participant-thinking="true">
+                    Thinking…
+                </p>
+            ) : null}
         </div>
     );
 }
