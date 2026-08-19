@@ -26,6 +26,7 @@ import {
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
 import { CompiledArtifactReview } from "./CompiledArtifactReview";
+import { ParticipantDocumentCanvas } from "./ParticipantDocumentCanvas";
 import {
     compileParticipantArtifact,
     type CompiledArtifactControl,
@@ -120,6 +121,7 @@ type ResolveOk = {
     ok: true;
     data: {
         schema_json: unknown | null;
+        pdf_mapping_json?: unknown | null;
         packet_terminal?: boolean;
         packet?: ResolvePacketMeta | null;
         brand?: ParticipantBrand | null;
@@ -128,6 +130,21 @@ type ResolveOk = {
         link?: { metadata?: Record<string, unknown> };
     };
 };
+
+/**
+ * Whether the pinned version carries an ORIGINAL document (a `fidelity_v1` mapping).
+ *
+ * A duck check on the resolve payload, deliberately: the full contract lives server-side (it pulls
+ * crypto and storage), and this flag only chooses PRESENTATION. The document route re-validates
+ * everything; if it refuses, the viewer reports unavailable and the semantic review stands.
+ */
+function hasOriginalDocument(pdfMappingJson: unknown): boolean {
+    return (
+        !!pdfMappingJson &&
+        typeof pdfMappingJson === "object" &&
+        (pdfMappingJson as { engine?: unknown }).engine === "fidelity_v1"
+    );
+}
 
 type ApiErr = {
     ok: false;
@@ -222,6 +239,18 @@ export function FormEmbedClient({
      * notice would leave them looking at a finished conversation and no paperwork.
      */
     const [enrollmentPhase, setEnrollmentPhase] = useState<ParticipantObjectiveWire["phase"] | null>(null);
+    /**
+     * Original-document presentation state.
+     *
+     * `originalDocument` mirrors the pinned version's fidelity mapping; `documentRev` is the
+     * refresh contract — bumping it re-fetches the render, which is how a corrected fact reaches
+     * the document; `documentUnavailable` is the honest fallback: if the document cannot render,
+     * the semantic review stands and the parent is never shown a blank.
+     */
+    const [originalDocument, setOriginalDocument] = useState(false);
+    const [documentRev, setDocumentRev] = useState(0);
+    const [documentUnavailable, setDocumentUnavailable] = useState(false);
+    const documentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
@@ -298,6 +327,9 @@ export function FormEmbedClient({
                 return;
             }
             setSchema(withoutAuthoringNotes(parsedSchema));
+            setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
+            setDocumentUnavailable(false);
+            setDocumentRev(0);
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
@@ -736,6 +768,19 @@ export function FormEmbedClient({
      * moment the parent commits it, and if the platform refuses, the previous value returns — the
      * optimism never outlives the truth.
      */
+    /**
+     * Refresh the rendered document shortly after an artifact-specific answer changes.
+     *
+     * Debounced past the draft PATCH so the render (which reads the draft server-side) sees the
+     * typed value. Presentation-only: the value's persistence is `persistDraft`'s, and a lagging
+     * frame is corrected by the next refresh or by submit.
+     */
+    const scheduleDocumentRefresh = () => {
+        if (!originalDocument || documentUnavailable) return;
+        if (documentRefreshTimer.current) clearTimeout(documentRefreshTimer.current);
+        documentRefreshTimer.current = setTimeout(() => setDocumentRev((r) => r + 1), 1500);
+    };
+
     const handleReviewEdit = (control: CompiledArtifactControl, value: unknown) => {
         if (!compiled) return;
         const targets = control.shared_key
@@ -768,6 +813,9 @@ export function FormEmbedClient({
                     setEnrollmentObjective(json.data.objective);
                     setEnrollmentPhase(json.data.objective.phase);
                 }
+                // The shared value changed durably — regenerate the document so every occurrence
+                // on the paperwork shows the corrected fact.
+                setDocumentRev((r) => r + 1);
             } catch {
                 setPayload(previous);
                 void persistDraft(previous);
@@ -829,9 +877,30 @@ export function FormEmbedClient({
             <>
             {enrollmentReview && compiled ? (
                 <IntakeCard>
-                    {/* The document keeps its identity — a parent is reviewing a named piece of
-                        paperwork, not a generic summary screen. */}
-                    <IntakeHeading title={schema.title ?? "Your paperwork"} />
+                    {/* THE ORIGINAL DOCUMENT IS THE ARTIFACT. When the pinned version carries a
+                        fidelity mapping, the parent reviews their actual enrollment paperwork,
+                        visibly populated — not an HTML re-description of it. The semantic review
+                        below remains the EDIT surface (values are corrected through the shared
+                        mechanism, never by writing on the document), and it is the whole review
+                        when no original document exists or it cannot render. */}
+                    {originalDocument && !documentUnavailable ? (
+                        <ParticipantDocumentCanvas
+                            url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                            onUnavailable={() => setDocumentUnavailable(true)}
+                        />
+                    ) : (
+                        // The document keeps its identity — a parent is reviewing a named piece of
+                        // paperwork, not a generic summary screen.
+                        <IntakeHeading title={schema.title ?? "Your paperwork"} />
+                    )}
+                    {originalDocument && !documentUnavailable ? (
+                        <h3
+                            className="mt-8 border-t border-alloy-midnight/[0.08] pb-2 pt-6 text-[15px] font-medium text-alloy-midnight"
+                            data-artifact-check-details="true"
+                        >
+                            Check the details
+                        </h3>
+                    ) : null}
                     <CompiledArtifactReview
                         artifact={compiled}
                         onEditValue={handleReviewEdit}
@@ -847,6 +916,7 @@ export function FormEmbedClient({
                                         setMessage(null);
                                         setPayload(next);
                                         void persistDraft(next);
+                                        scheduleDocumentRefresh();
                                     }}
                                     mode="edit"
                                     optionValuesByFieldId={optionValuesByFieldId}

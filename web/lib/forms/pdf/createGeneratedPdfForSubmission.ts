@@ -53,7 +53,7 @@ export function resolveFormSubmissionDocumentParent(sub: {
     return null;
 }
 
-async function findExistingGeneratedPdfByIdempotency(
+export async function findExistingGeneratedPdfByIdempotency(
     supabase: SupabaseClient,
     submissionId: string,
     idempotencyKey: string

@@ -78,7 +78,7 @@ export type PublicEmbedResolved = {
  * already agreed to rendered blank. Reading the record as the base layer fixes the class, not just
  * those rows.
  */
-async function participantPrefillValues(
+export async function participantPrefillValues(
     supabase: SupabaseClient,
     orgId: string,
     session: { shared_values?: unknown; process_instance_id?: string | null },
