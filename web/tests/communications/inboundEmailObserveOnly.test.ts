@@ -366,6 +366,7 @@ describe("observe-only: what gets written down", () => {
                 "confidence_basis",
                 "decision",
                 "evaluated_at",
+                "evaluation_mode",
                 "id",
                 "intake_purpose_key",
                 "lane",
@@ -382,6 +383,16 @@ describe("observe-only: what gets written down", () => {
             ].sort()
         );
         expect(row.policy_version).toBe(EMAIL_INGRESS_POLICY_VERSION);
+    });
+
+    it("the LIVE hook stamps live_observed, so a replay row can never be mistaken for it", () => {
+        // The column defaults to `live_observed`, and the live hook says so anyway. A
+        // default is a guess about who wrote the row, and knowing that is this table's
+        // whole value once a historical backtest has populated it.
+        const store = makeStore({ communication_provider_bindings: [binding()] });
+        return ingestResendInboundEmail(event(), deps(store.client())).then(() => {
+            expect(store.tables[OBSERVATIONS]![0]).toMatchObject({ evaluation_mode: "live_observed" });
+        });
     });
 
     it("names the receiving binding and the purpose for a purpose identity", async () => {

@@ -355,6 +355,17 @@ export function unsupportedWatchedKinds(watched: readonly IngressRelationshipKin
  * OBSERVING
  * ------------------------------------------------------------------------- */
 
+/**
+ * Whether an observation watched mail arrive, or judged mail long since filed.
+ *
+ * `historical_replay` rows are produced from an envelope RECONSTRUCTED out of canonical
+ * columns, and a reconstruction cannot carry evidence that was never captured — above all
+ * the transport's authentication result, absent for every message received before this
+ * work landed. Lane B outcomes in a replay are therefore a statement about missing
+ * evidence, not about the policy, and the two populations must never be aggregated.
+ */
+export type IngressEvaluationMode = "live_observed" | "historical_replay";
+
 export type EmailIngressObservationRow = {
     org_id: string;
     provider: string;
@@ -370,6 +381,7 @@ export type EmailIngressObservationRow = {
     intake_purpose_key: string | null;
     sender_assertion: EmailIngressDecision["senderAssertion"]["kind"];
     unsupported_watch_kinds: string[];
+    evaluation_mode: IngressEvaluationMode;
     evaluated_at: string;
     policy_version: string;
 };
@@ -389,6 +401,7 @@ export function projectObservationRow(params: {
     decision: EmailIngressDecision;
     bindingId: string | null;
     unsupportedKinds: IngressRelationshipKind[];
+    evaluationMode: IngressEvaluationMode;
     evaluatedAt: string;
 }): EmailIngressObservationRow {
     const { decision } = params;
@@ -408,6 +421,7 @@ export function projectObservationRow(params: {
         intake_purpose_key: decision.intakePurposeKey,
         sender_assertion: assertion.kind,
         unsupported_watch_kinds: params.unsupportedKinds,
+        evaluation_mode: params.evaluationMode,
         evaluated_at: params.evaluatedAt,
         policy_version: decision.policyVersion,
     };
@@ -483,6 +497,10 @@ export async function observeEmailIngressEligibility(
                 decision,
                 bindingId,
                 unsupportedKinds: unsupportedWatchedKinds(watchedRelationshipKinds),
+                // The live hook is the only caller that may claim this, and it says so
+                // rather than relying on the column default — a default is a guess about
+                // who wrote the row, and this table's whole value is knowing that.
+                evaluationMode: "live_observed",
                 evaluatedAt: now(),
             })
         );
