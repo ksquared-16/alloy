@@ -551,13 +551,115 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
         }
     });
 
-    it("sorts above the staging head it has to apply after", () => {
+    it("every authored-unapplied A&I migration sorts above everything already on staging", () => {
         // A version at or below the remote head is refused by `supabase db push`, and an exact
         // collision is silently skipped — this program has already paid for both.
-        const file = MIGRATION_FILES.find((f) => f.includes("w61_role_key_fk_restrict"))!;
-        const version = file.split("_")[0];
+        //
+        // Stated over the whole authored-unapplied TRANCHE, not over one file. The first form of
+        // this asserted that M21 "sorts last", which was true only while it was the newest; adding
+        // W-16's migration broke a lock that was describing a moment rather than the property. The
+        // property is: nothing this lane authored may sort below migrations it must apply after.
+        //
+        // It is also not a one-time check. `origin/staging` moved 93 commits between sessions and
+        // its migration head advanced past both files authored the day before, which is exactly how
+        // an authored migration becomes unapplyable while sitting still.
+        const AUTHORED_HERE = ["w13_collapse_portal_eligible", "w61_role_key_fk_restrict", "w16_user_roles_role_foreign_key"];
+        const authored = AUTHORED_HERE.map((frag) => {
+            const file = MIGRATION_FILES.find((f) => f.includes(frag));
+            expect(file, `no migration matching ${frag}`).toBeTruthy();
+            return { frag, version: file!.split("_")[0] };
+        });
         const versions = MIGRATION_FILES.map((f) => f.split("_")[0]);
-        expect(versions.filter((v) => v === version)).toHaveLength(1);
-        expect(version).toBe([...versions].sort().at(-1));
+
+        // Unique — an exact collision is the silent-skip failure.
+        for (const { frag, version } of authored) {
+            expect(versions.filter((v) => v === version), `${frag} version is not unique`).toHaveLength(1);
+        }
+
+        // Above every migration this lane did NOT author, which is the set already on staging.
+        const foreignVersions = MIGRATION_FILES.filter(
+            (f) => !AUTHORED_HERE.some((frag) => f.includes(frag)),
+        ).map((f) => f.split("_")[0]);
+        const highestForeign = [...foreignVersions].sort().at(-1)!;
+        for (const { frag, version } of authored) {
+            expect(
+                version > highestForeign,
+                `${frag} (${version}) sorts at or below ${highestForeign}, which db push refuses`,
+            ).toBe(true);
+        }
+    });
+});
+
+/**
+ * `M9` / `W-16` — membership names a DEFINED role.
+ *
+ * `C2`, and the absence half of `M2-2`'s "redundancy beside an absence": `role_permission_grants`
+ * carried two identical foreign keys onto `role_definitions` while `user_roles.role` carried none.
+ * `M21` closed the redundancy; this closes the absence. Governance already claimed this constraint
+ * existed, which is why the gap survived — the claim was the reason nobody looked.
+ *
+ * Same replay discipline as `M21`: the final constraint state is computed by replaying every
+ * migration in version order, so a later migration that drops or weakens it is convicted.
+ */
+function userRolesRoleForeignKeysAfterReplay(files: string[]): Map<string, string> {
+    const state = new Map<string, string>();
+    for (const file of files) {
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+        for (const stmt of sql.split(";")) {
+            if (!/ALTER\s+TABLE\s+(?:ONLY\s+)?(?:"?public"?\.)?"?user_roles"?/i.test(stmt)) continue;
+
+            const dropped = stmt.match(/DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?"?([A-Za-z0-9_]+)"?/i);
+            if (dropped) state.delete(dropped[1]);
+
+            const added = stmt.match(
+                /ADD\s+CONSTRAINT\s+"?([A-Za-z0-9_]+)"?[\s\S]*?FOREIGN\s+KEY\s*\(([^)]*)\)[\s\S]*?REFERENCES\s+(?:"?public"?\.)?"?([A-Za-z0-9_]+)"?/i,
+            );
+            if (!added) continue;
+            const cols = added[2].replace(/["\s]/g, "");
+            if (added[3] !== "role_definitions" || cols !== "org_id,role") continue;
+            state.set(added[1], /ON\s+DELETE\s+RESTRICT/i.test(stmt) ? "RESTRICT" : "OTHER");
+        }
+    }
+    return state;
+}
+
+describe("M9 / W-16 — user_roles.role references a defined role", () => {
+    it("ends with exactly one (org_id, role) foreign key, ON DELETE RESTRICT", () => {
+        const final = userRolesRoleForeignKeysAfterReplay(MIGRATION_FILES);
+        expect([...final.entries()]).toEqual([["user_roles_role_definitions_fkey", "RESTRICT"]]);
+    });
+
+    it("the replay sees the baseline's ABSENCE — non-vacuity", () => {
+        // If the parser matched nothing, the assertion above would pass for the wrong reason.
+        // Replaying everything except M9 must yield NO such constraint, which is the defect C2 names.
+        const beforeM9 = MIGRATION_FILES.filter((f) => !f.includes("w16_user_roles_role_foreign_key"));
+        expect([...userRolesRoleForeignKeysAfterReplay(beforeM9).keys()]).toEqual([]);
+    });
+
+    it("preflights on Q3's form — matching on is_active would abort on rows a FK accepts", () => {
+        const file = MIGRATION_FILES.find((f) => f.includes("w16_user_roles_role_foreign_key"))!;
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+        expect(sql).toMatch(/RAISE\s+EXCEPTION/i);
+        expect(sql).toMatch(/role_definitions/);
+        // The plan's first caution, asserted rather than trusted to the comment above it — and
+        // scoped to the PREFLIGHT BLOCK, not the file. A whole-file scan convicted this migration
+        // for the `COMMENT ON CONSTRAINT` text that tells an operator to retire a role with
+        // `is_active = false`, which is advice, not a predicate. Same class as the deployment guard
+        // that matched its own explanatory comment: the reader must read the code it means.
+        const preflight = sql.match(/DO\s+\$preflight\$([\s\S]*?)\$preflight\$/i)?.[1] ?? "";
+        expect(preflight.length, "no preflight block found").toBeGreaterThan(0);
+        expect(preflight, "the preflight predicate must not read is_active — a foreign key does not")
+            .not.toMatch(/is_active/i);
+    });
+
+    it("is replay-safe — the constraint ADD is guarded", () => {
+        const file = MIGRATION_FILES.find((f) => f.includes("w16_user_roles_role_foreign_key"))!;
+        const sql = executableSql(readFileSync(join(MIGRATIONS_DIR, file), "utf8"));
+        for (const name of [...sql.matchAll(/ADD\s+CONSTRAINT\s+([A-Za-z0-9_]+)/gi)].map((m) => m[1])) {
+            expect(
+                new RegExp(`DROP\\s+CONSTRAINT\\s+IF\\s+EXISTS\\s+${name}\\b`, "i").test(sql),
+                `${name} is added without a guarded drop`,
+            ).toBe(true);
+        }
     });
 });

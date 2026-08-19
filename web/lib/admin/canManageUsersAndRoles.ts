@@ -10,7 +10,7 @@ export const SETTINGS_USERS_ROLES_PERMISSION = "settings.users_roles" as const;
 
 /**
  * The weaker key admitting the RBAC catalog READS — see {@link requirePortalOrUsersRolesManageAuth}.
- * Seeded for every org by `20260817120000_w13_collapse_portal_eligible_fifth_layer_grants.sql`.
+ * Seeded for every org by `20260818120000_w13_collapse_portal_eligible_fifth_layer_grants.sql`.
  */
 export const SETTINGS_USERS_ROLES_READ_PERMISSION = "settings.users_roles.read" as const;
 
