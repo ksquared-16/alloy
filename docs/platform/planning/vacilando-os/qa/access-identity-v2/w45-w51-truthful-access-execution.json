@@ -1,4 +1,29 @@
 {
+  "od1_applied_session_18": {
+    "outcome": "ALL THREE APPLIED to alloy-cert and verified. Ledger 343 -> 346, matching the repository exactly.",
+    "reconciliation": "Communications published exactly the four applied migrations and no application code (14044542a, parent origin/staging); cherry-picked. A FIFTH orphan remained -- 20260817170000_communication_ingress_routes -- canonical on origin/staging and absent here only because this branch is 93 behind. Taken as a single file rather than by merging 93 commits of unrelated work. Its blob was verified against the applied ledger statements first: the only difference is the 13 statement-terminating semicolons the CLI strips when splitting `statements` into an array. Post-reconciliation preflight: repo 346 files / 346 unique versions, ledger 343, ZERO orphans, history consistent.",
+    "W-13_20260818170000": {
+      "ledger": "present -- w13_collapse_portal_eligible_fifth_layer_grants",
+      "invariant_queried_directly": "0 admins missing settings.users_roles; 0 admin/ops missing settings.users_roles.read. Catalog row seeded: settings / 'View users & roles' / active. Grants 1 -> 2 (ops gained the read key).",
+      "significance": "The admission guarantee canManageUsersAndRoles rests on is now schema-backed rather than asserted in a comment.",
+      "regression": "usersRolesAuth + catalogVocabularyReconciliation + catalogConsolidationLock 25/25."
+    },
+    "W-61_M21_20260818180000": {
+      "ledger": "present -- w61_role_key_fk_restrict_no_cascade",
+      "invariant_queried_directly": "TWO CASCADE foreign keys collapsed to exactly ONE, confdeltype='r' (RESTRICT).",
+      "runtime_proof": "Deleting a role_definitions row holding grants raises 'violates foreign key constraint role_permission_grants_role_definitions_fkey'. Before this it would have silently deleted 21 grants. W-61 Tier C exit MET.",
+      "state": "authored -> preflight passed -> applied -> ledger-confirmed -> invariant queried -> runtime exercised. Certified against alloy-cert only."
+    },
+    "W-16_M9_20260818190000": {
+      "ledger": "present -- w16_user_roles_role_foreign_key",
+      "invariant_queried_directly": "FOREIGN KEY (org_id, role) REFERENCES role_definitions(org_id, role_key) ON DELETE RESTRICT exists on user_roles.",
+      "runtime_proof": "Inserting 'not_a_real_role' for a REAL user is refused by the database, not only by the API. W-16 Tier C exit MET.",
+      "inconclusive_first_attempt_recorded": "The first proof used a random UUID and tripped user_roles_user_id_fkey BEFORE reaching the role constraint -- it proved nothing and is recorded as inconclusive rather than quietly replaced. Re-run with a real user.",
+      "positive_control": "The explicit one matched zero rows and proved nothing. The real control is implicit: PostgreSQL validates every existing row when adding a foreign key, so the successful ADD proves the existing membership set satisfies it (1 row in this tenant)."
+    },
+    "privilege_check": "No ACL consequence. All four authority tables unchanged (postgres/authenticated/service_role). `anon` holds ZERO grants on any of the six authority objects -- an independent live confirmation of W-60's S-13 property against the real database rather than against migration text. The default-ACL behaviour Communications flagged (new public tables get authenticated SELECT only) did not arise: these migrations create no tables.",
+    "boundary": "APPLIED TO alloy-cert ONLY. Not staging, not production, not pushed, not merged, not deployed. OD-2 uncrossed."
+  },
   "od1_apply_attempt_session_17": {
     "authorization": "OD-1 approved for the SHARED CERTIFICATION ENVIRONMENT ONLY. Not staging, not production, no push/merge/promotion, OD-2 uncrossed.",
     "outcome": "NOT APPLIED. Blocked by another session's unpushed migrations already applied to the shared certification database. Nothing of mine reached the database; no partial state.",
