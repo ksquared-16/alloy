@@ -23,8 +23,12 @@ const DRAWN_PNG = Uint8Array.from(
 );
 
 const NOW = "2026-07-24T12:00:00.000Z";
-const EVIDENCE_DIR =
-    "/private/tmp/claude-502/-Users-Kelly-Alloy--claude-worktrees-alloy-sprint-bootstrap-3213e5/959419d6-ceb6-4052-8f62-6ae68a63853e/scratchpad/phase7-slice0-evidence";
+/**
+ * Openable evidence artifacts are OPT-IN via FIDELITY_EVIDENCE_DIR. The suite's assertions are the
+ * certification; the PDFs exist for a human eyeball. The previous hardcoded absolute path was a
+ * session-local scratch directory that broke the moment this suite ran in CI.
+ */
+const EVIDENCE_DIR = process.env.FIDELITY_EVIDENCE_DIR?.trim() || null;
 
 async function extractText(bytes: Uint8Array): Promise<string> {
     const moduleName = "unpdf";
@@ -180,8 +184,9 @@ describe("Phase 7 Slice 0 — fidelity generation + native signing", () => {
         expect(text).toContain("Generated: enrolled in Toddler 2");
     });
 
-    // Write openable evidence artifacts for visual/manual verification.
+    // Write openable evidence artifacts for visual/manual verification (opt-in).
     afterAll(async () => {
+        if (!EVIDENCE_DIR) return;
         const result = await buildSignedArtifact(baseInput(source));
         await fs.mkdir(EVIDENCE_DIR, { recursive: true });
         for (const v of result.versions) {

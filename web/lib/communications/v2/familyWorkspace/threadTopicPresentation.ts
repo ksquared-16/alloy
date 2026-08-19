@@ -38,7 +38,6 @@ export function isPersonPrimaryEntity(type: string | null | undefined): boolean 
 }
 
 function deriveConversationMetadataTopic(
-    thread: Pick<ThreadVM, "attentionState" | "slaState">,
     metadata?: ThreadTopicTitleInput["conversationMetadata"],
 ): string | null {
     const action = metadata?.actionLabel?.trim();
@@ -50,16 +49,34 @@ function deriveConversationMetadataTopic(
     const family = metadata?.familyLabel?.trim();
     if (family && !isGenericChannelTitle(family)) return family;
 
-    if (thread.attentionState?.trim()) {
-        const attention = thread.attentionState.trim();
-        if (!isGenericChannelTitle(attention)) return attention;
-    }
-
-    if (thread.slaState?.trim()) {
-        const sla = thread.slaState.trim();
-        if (!isGenericChannelTitle(sla)) return sla;
-    }
-
+    /*
+     * ATTENTION AND SLA STATE ARE NOT TOPICS.
+     *
+     * This used to fall back to `attentionState`, then `slaState`, VERBATIM — so a
+     * conversation with no business context showed its raw storage enum as its
+     * subject line. An operator's queue read:
+     *
+     *     Kurzman Family
+     *     needs_response
+     *
+     * with `needs_routing_resolution` and `first_response_due` appearing the same
+     * way. Confirmed in the browser against the certification tenant; a source
+     * grep did not find it, because every label authority in this codebase was
+     * correct and this path went round all of them.
+     *
+     * Two things were wrong, and deleting the fallback fixes both.
+     *
+     * First, they are database values, and nothing else in the queue renders one.
+     *
+     * Second — the reason a label MAP here would still be wrong — attention is
+     * already on the row twice: the status pill and the attention label, both
+     * properly worded. Restating it as the topic spends the one line that answers
+     * "what is this conversation about" on something already visible, and answers
+     * nothing.
+     *
+     * A conversation with no business context has no topic. Callers fall through
+     * to "General", which is true.
+     */
     return null;
 }
 
@@ -81,7 +98,7 @@ export function deriveThreadTopicTitle(input: ThreadTopicTitleInput): string {
         if (fromMessage && !isGenericChannelTitle(fromMessage)) return fromMessage;
     }
 
-    const fromMetadata = deriveConversationMetadataTopic(input.thread, input.conversationMetadata);
+    const fromMetadata = deriveConversationMetadataTopic(input.conversationMetadata);
     if (fromMetadata) return fromMetadata;
 
     return deriveThreadTopicFallback();

@@ -18,6 +18,10 @@ import {
     queryChildCohortPage,
     type ChildCohortKey,
 } from "@/lib/adminV2/records/childCohortQuery";
+import {
+    documentActorFromAdminParts,
+    projectResolvedProfilePhotosOntoRows,
+} from "@/lib/documents/projectPersonProfilePhotos";
 
 /**
  * Records → Children — the durable child population, read-only.
@@ -67,6 +71,13 @@ export type RecordsChildEntry = {
     /** Committed site, when placement truth exists. Never inferred from a stale opportunity. */
     siteLocationId: string | null;
     siteLocationLabel: string | null;
+    /**
+     * Actor-scoped canonical profile photo, from the SAME projection Work Views, Search and the
+     * Focus Panel read (`persons.metadata.profile_photo_document_id` →
+     * `projectResolvedProfilePhotosOntoRows`). Null when no photo exists or the child has no person
+     * row — the avatar degrades to initials, never to a broken image.
+     */
+    photoUrl: string | null;
 };
 
 /**
@@ -278,6 +289,28 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        /*
+         * Canonical avatars, resolved once for the page. The projection is keyed on `person_id`
+         * and injects `resolved_photo_url` — the exact keys the Focus Panel's identity adapter
+         * reads — so the same child resolves the same photo here, in Search, and on the card.
+         */
+        const rowsWithPhotos = await projectResolvedProfilePhotosOntoRows({
+            supabase,
+            orgId: ctx.orgId,
+            actor: documentActorFromAdminParts({
+                ok: true,
+                userId: ctx.userId,
+                orgId: ctx.orgId,
+                role: ctx.role,
+                roleKeys: access.roleKeys,
+                permissionKeys: access.permissionKeys,
+            }),
+            rows: rows as unknown as Record<string, unknown>[],
+        });
+        const photoByMember = new Map(
+            rowsWithPhotos.map((r) => [String(r.id), (r.resolved_photo_url as string | null) ?? null]),
+        );
+
         const children: RecordsChildEntry[] = rows.map((r) => {
             const participation = participationByMember.get(r.id) ?? null;
             const siteId = siteByMember.get(r.id) ?? null;
@@ -299,6 +332,7 @@ export async function GET(request: NextRequest) {
                 participationStageKey: participation?.stage_key ?? null,
                 siteLocationId: siteId,
                 siteLocationLabel: siteId ? (siteLabelById.get(siteId) ?? null) : null,
+                photoUrl: photoByMember.get(r.id) ?? null,
             };
         });
 

@@ -3,6 +3,7 @@
  */
 
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
@@ -161,7 +162,10 @@ function childStatusPhrase(row: { display_name?: string | null; outcome_status_k
 }
 
 function childrenInsight(record: Record<string, unknown>): { insight: string; detail: string | null } {
-    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    // Through the canonical normalizer, not the raw key: a durable child record supplies its one
+    // member under `_durable_child_rows`, and reading `_inquiry_children` directly would report
+    // "No children linked" about the child the card is FOR.
+    const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
     if (rows.length === 0) return { insight: "No children linked", detail: "Link children to track enrollment progress" };
     const active = rows.filter((r) => r.outcome_status_key !== "declined");
     const insight =
@@ -250,7 +254,8 @@ function childrenCollectionItems(record: Record<string, unknown>): {
     items: FocusPanelCollectionItem[];
     overflowCount: number;
 } {
-    const rows = mapRawInquiryChildrenToDrawerRows((record._inquiry_children as unknown[]) ?? []);
+    // See {@link childrenInsight} — the collection source is decided by the normalizer, once.
+    const { rows } = normalizeFocusPanelChildrenRowsFromTruth(record);
     const visible = rows.slice(0, 3).map((row) => {
         const firstName = (row.display_name ?? "Child").split(/\s+/)[0] ?? "Child";
         const status =

@@ -87,13 +87,31 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      */
     { key: "household", title: "Household", ownsOperationalTruth: true, grains: ["opportunity", "household"] },
     /**
-     * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads `_inquiry_children`
-     * — one enrollment's projection of a family's children — while a durable household knows its
-     * children through `customer_members`, a wider and differently-shaped set. Declaring the grain
-     * without a builder that reads the canonical edge would render enrollment framing for children
-     * that have no enrollment. See `deriveHouseholdFocusPanelCards`.
+     * NOT declared for `household`, deliberately. `buildChildrenCardModel` reads the canonical child
+     * collection — on a case, one enrollment's projection of a family's children — while a durable
+     * household knows its children through `customer_members`, a wider and differently-shaped set.
+     * Declaring the grain without a builder that reads the canonical edge would render enrollment
+     * framing for children that have no enrollment. See `deriveHouseholdFocusPanelCards`.
+     *
+     * ── AND `child`, BECAUSE THIS IS THE CARD THAT ANSWERS "WHO IS THIS CHILD" ──
+     *
+     * It looked like a roster card and so it was declared case-only, and the durable child record
+     * grew a second, smaller card of its own (`child_identity`) to fill the gap. That produced two
+     * platform answers to one question: an operator reaching Lennon from a case saw his photo,
+     * gender, allergies, medical notes and special instructions with an Edit action, and an operator
+     * reaching the same child from Operations saw four fields and no way to change them.
+     *
+     * The card was never really a roster. Its content is the CHILDREN SURFACE configuration —
+     * `children_surface`, resolved by `effectiveChildrenNestedConfig` — which is a child's own field
+     * vocabulary, and its focused perspective renders exactly one child. The collection was the
+     * container, not the subject.
+     *
+     * It reaches the child grain honestly because `normalizeFocusPanelChildrenRowsFromTruth` admits
+     * `_durable_child_rows`: a durable child composes itself as the one member of its own
+     * collection, so the card composes from real truth rather than from a case borrowed for the
+     * occasion. `ChildrenCard` reads `context.grain` and opens on that member — see its docblock.
      */
-    { key: "children", title: "Children", ownsOperationalTruth: true },
+    { key: "children", title: "Children", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
     /**
      * Reads person-owned employment truth; it does not own it, so no lifecycle ownership flag.
      *
@@ -104,9 +122,15 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      */
     { key: "employment", title: "Employment", grains: ["opportunity", "person"] },
     /**
-     * The first CHILD-grain card. Declared for `child` ONLY: it is the durable child's own identity,
-     * not a family's roster, so it has no meaning on a case panel where `children` already answers
-     * "who are this family's children".
+     * The first CHILD-grain card, and no longer the child's user-facing one.
+     *
+     * `children` now reaches this grain (above) and is what a durable child record renders: it is
+     * the tenant's CONFIGURED child card, with the fields, labels, order and edit affordance the
+     * Children Surface declares. This card composes four hardcoded facts and can be edited nowhere.
+     *
+     * It is retained as an INTERNAL FALLBACK, not as a presentation choice — a composition that has
+     * no published Children Surface at all still resolves something rather than nothing. Do not
+     * route a host here to avoid wiring the configured card; that is how the two answers appeared.
      */
     { key: "child_identity", title: "Child", grains: ["child"] },
     { key: "milestones", title: "Milestones" },

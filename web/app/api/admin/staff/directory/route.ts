@@ -9,8 +9,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { isOpenEmploymentStatus } from "@/lib/employment/employmentTypes";
+import {
+    documentActorFromAdminParts,
+    projectResolvedProfilePhotosOntoRows,
+} from "@/lib/documents/projectPersonProfilePhotos";
 
 export type StaffDirectoryEntry = {
     employmentId: string;
@@ -33,6 +38,11 @@ export type StaffDirectoryEntry = {
     isOpen: boolean;
     startDate: string;
     endDate: string | null;
+    /**
+     * Actor-scoped canonical profile photo — the SAME projection Work Views, Search and the Focus
+     * Panel read. Null degrades the avatar to initials, never to a broken image.
+     */
+    photoUrl: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -116,6 +126,28 @@ export async function GET(request: NextRequest) {
         ((locationsRes.data ?? []) as { id: string; label: string | null }[]).map((l) => [l.id, l.label])
     );
 
+    /*
+     * Canonical avatars, resolved once for the whole directory through the platform's one photo
+     * projection. Keyed on `person_id`, which every staff row carries by construction.
+     */
+    const access = await getAdminAccessContextCached();
+    const photoRows = await projectResolvedProfilePhotosOntoRows({
+        supabase,
+        orgId: ctx.orgId,
+        actor: documentActorFromAdminParts({
+            ok: access.ok,
+            userId: ctx.userId,
+            orgId: ctx.orgId,
+            role: ctx.role,
+            roleKeys: access.ok ? access.roleKeys : [],
+            permissionKeys: access.ok ? access.permissionKeys : [],
+        }),
+        rows: visible.map((r) => ({ person_id: r.person_id })) as Record<string, unknown>[],
+    });
+    const photoByPerson = new Map(
+        photoRows.map((r) => [String(r.person_id), (r.resolved_photo_url as string | null) ?? null]),
+    );
+
     const staff: StaffDirectoryEntry[] = visible.map((r) => {
         const person = personById.get(r.person_id);
         const composed = [person?.first_name, person?.last_name].filter(Boolean).join(" ").trim();
@@ -135,6 +167,7 @@ export async function GET(request: NextRequest) {
             isOpen: isOpenEmploymentStatus(r.employment_status),
             startDate: r.start_date,
             endDate: r.end_date,
+            photoUrl: photoByPerson.get(r.person_id) ?? null,
         };
     });
 

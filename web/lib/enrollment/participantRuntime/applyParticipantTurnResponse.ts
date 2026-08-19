@@ -103,17 +103,39 @@ export async function applyParticipantTurnResponse(
         };
 
         if (disposition.action === "confirm_value") {
-            // D-99, bound to the exact value. No canonical record is touched.
+            // D-99, bound to the exact value. No CANONICAL record is touched — confirming does not
+            // rewrite what the organization holds.
             const metadata = buildEnrollmentNeedConfirmationPatch({
                 metadata: row.metadata ?? {},
                 needKey,
                 confirmedValue: disposition.value,
                 confirmedAtIso: input.nowIso,
             });
-            if (metadata) {
+
+            /**
+             * The confirmed value ALSO becomes a session shared value.
+             *
+             * Confirming used to write evidence and nothing else, so the artifacts never received
+             * the fact the parent had just agreed to: the review step rendered an empty date of
+             * birth for a child whose date of birth was on file and had been confirmed seconds
+             * earlier. The evidence said yes; nothing carried the value.
+             *
+             * The session's shared namespace is the right home for it. It is not the canonical
+             * record — it is this packet's answer of record, which is exactly what the artifacts
+             * are filled from, and what "collected or confirmed ONCE and applied everywhere" means.
+             */
+            const patch: Record<string, unknown> = {};
+            if (metadata) patch.metadata = metadata;
+            if (sharedKey) {
+                patch.shared_values = shallowMergeSharedValues(
+                    (row.shared_values ?? {}) as Record<string, unknown>,
+                    { [sharedKey]: disposition.value },
+                );
+            }
+            if (Object.keys(patch).length > 0) {
                 const { error } = await supabase
                     .from("form_packet_sessions")
-                    .update({ metadata })
+                    .update(patch)
                     .eq("id", sessionId)
                     .eq("org_id", input.orgId);
                 if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
@@ -126,9 +148,25 @@ export async function applyParticipantTurnResponse(
             const shared_values = shallowMergeSharedValues((row.shared_values ?? {}) as Record<string, unknown>, {
                 [sharedKey]: disposition.value,
             });
+            /**
+             * A participant SUPPLYING a value is the strongest confirmation the platform can get —
+             * the same rule the review-edit path follows. Without this evidence, a corrected fact
+             * under the D-100 policy recomputed straight back to `known_requires_confirmation`, and
+             * the runtime asked the parent to confirm the name they had typed seconds earlier —
+             * observed live: "changed to John Peters → is John Peters still right? → asked again".
+             * The fingerprint binds to the corrected value, so a LATER change still re-opens it.
+             */
+            const metadata = buildEnrollmentNeedConfirmationPatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                confirmedValue: disposition.value,
+                confirmedAtIso: input.nowIso,
+            });
+            const patch: Record<string, unknown> = { shared_values };
+            if (metadata) patch.metadata = metadata;
             const { error } = await supabase
                 .from("form_packet_sessions")
-                .update({ shared_values })
+                .update(patch)
                 .eq("id", sessionId)
                 .eq("org_id", input.orgId);
             if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };

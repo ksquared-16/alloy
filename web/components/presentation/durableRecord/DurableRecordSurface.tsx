@@ -26,16 +26,22 @@
  * indistinguishable, and telling them apart here would leak the record's existence.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 import OpportunityFocusPanelModeGrid from "@/components/admin/focusPanel/OpportunityFocusPanelModeGrid";
 import DurableRecordContextStrip from "@/components/presentation/durableRecord/DurableRecordContextStrip";
+import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dispatchOperatorFocusSelection } from "@/lib/runtime/focus/operatorFocusSelection";
+import type { SearchDestination } from "@/lib/search/searchContracts";
 import DurableRecordContextualCard from "@/components/presentation/durableRecord/DurableRecordContextualCard";
 import {
     resolveInitialContextOption,
     type DurableRecordContextOption,
 } from "@/lib/context/durableRecordContextOptions";
 import type { DurableChildSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
+import type { DurablePersonSubject } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durablePersonSubjectModel";
 import type { SchedulingProjectionFirstPaint } from "@/lib/adminV2/viewModel/drawer/opportunity/loadSchedulingProjectionsForFirstPaint";
 import {
     decodeDurableRecordModel,
@@ -51,10 +57,23 @@ type LoadState =
           model: FocusPanelWorkModeModel;
           /** Selectable business contexts. Empty is ordinary — a record can stand on its own. */
           contexts: DurableRecordContextOption[];
+          /**
+           * `Go to` entries — operational destinations resolved by Search's own resolver over the
+           * same contexts. Related WORK, never a record view: selecting one navigates.
+           */
+          relatedWork: SearchDestination[];
           /** The child, when this record is one — the contextual card composes against it. */
           childSubject: DurableChildSubject | null;
           /** The person, when this record is one. Carries only identity; commitments ride below. */
-          personSubject: { personId: string; label: string } | null;
+          /**
+           * The composed person, WHOLE — not narrowed to id + label.
+           *
+           * The Employment card composes from the person's own employment signal and truth bag, so
+           * a host that kept only an id would have to re-fetch or re-derive what the composer
+           * already produced. It is the same object the model was built from, which is what keeps
+           * the card beside the panel from disagreeing with it.
+           */
+          personSubject: DurablePersonSubject | null;
           /**
            * Canonical assignment facts for a `canonical_operational` context, composed with the
            * record so the Schedule card reveals WITH the panel rather than opening its own gate.
@@ -67,6 +86,7 @@ type LoadState =
 export default function DurableRecordSurface({
     subjectType,
     subjectId,
+    presentation = "full",
     /** The card the gesture asked to land on (ASPECT). Absent = the grain's default composition. */
     cardKey,
     /**
@@ -76,23 +96,50 @@ export default function DurableRecordSurface({
     contextKey,
     /** Called after a successful write, so the list underneath can refresh exactly that row. */
     onRecordChanged,
+    /**
+     * Ask the host to close this record. `Go to` calls it before dispatching the movement — leaving
+     * for related work is a dismissal, and the host owns what a dismissal tells the list beneath.
+     */
+    onRequestClose,
 }: {
     subjectType: DurableSubjectType;
     subjectId: string;
+    /** See {@link WorkspaceDurableRecordHost}'s `presentation`. */
+    presentation?: "full" | "contextual";
     cardKey?: string | null;
     contextKey?: string | null;
     onRecordChanged?: () => void;
+    onRequestClose?: () => void;
 }) {
     const [state, setState] = useState<LoadState>({ status: "loading" });
     const [selectedContextKey, setSelectedContextKey] = useState<string | null>(null);
+    /** Whether the initial context has been chosen for THIS record. See `load` below. */
+    const selectionInitializedRef = useRef(false);
 
-    const load = useCallback(async () => {
-        setState({ status: "loading" });
+    /**
+     * Reload the composed record.
+     *
+     * `quiet` keeps the current model on screen while the refetch runs. A save is not a navigation:
+     * dropping to the loading state would close the card the operator just edited and return them to
+     * the chooser, which reads as the edit having thrown them out.
+     */
+    const load = useCallback(async (quiet = false) => {
+        if (!quiet) setState({ status: "loading" });
         try {
-            const res = await fetch(
-                `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`,
-                { credentials: "include" },
-            );
+            const url = `/api/admin/durable-record?subject_type=${encodeURIComponent(subjectType)}&subject_id=${encodeURIComponent(subjectId)}`;
+            /*
+             * WARM ON OPEN, FRESH AFTER A WRITE.
+             *
+             * The initial open reads through the workspace's shared dedupe/TTL primitive — the same
+             * one the Work Unit surfaces warm with — so a hover prefetch from the list, a StrictMode
+             * double-mount, or a fast reopen all collapse into one request. A QUIET reload is the
+             * opposite case: it exists because the operator just WROTE, and serving the pre-write
+             * payload back from a 15-second cache would re-seed the exact staleness the reload was
+             * added to kill. It goes straight to the network.
+             */
+            const res = quiet
+                ? await fetch(url, { credentials: "include" })
+                : await dedupeAdminFetchWithTtl(url, { credentials: "include" }, 15_000);
             if (res.status === 404) {
                 setState({ status: "not_found" });
                 return;
@@ -102,8 +149,9 @@ export default function DurableRecordSurface({
                       ok?: boolean;
                       model?: DurableRecordModelWire;
                       contexts?: DurableRecordContextOption[];
+                      relatedWork?: SearchDestination[];
                       childSubject?: DurableChildSubject | null;
-                      personSubject?: { personId?: string; label?: string } | null;
+                      personSubject?: DurablePersonSubject | null;
                       schedulingProjection?: SchedulingProjectionFirstPaint | null;
                       message?: string;
                   }
@@ -113,32 +161,110 @@ export default function DurableRecordSurface({
                 return;
             }
             const contexts = (json.contexts ?? []) as DurableRecordContextOption[];
-            const person = json.personSubject ?? null;
+            const person = (json.personSubject ?? null) as DurablePersonSubject | null;
             setState({
                 status: "ready",
                 model: decodeDurableRecordModel(json.model),
                 contexts,
+                relatedWork: (json.relatedWork ?? []) as SearchDestination[],
                 childSubject: (json.childSubject ?? null) as DurableChildSubject | null,
-                personSubject:
-                    person?.personId
-                        ? { personId: person.personId, label: person.label?.trim() || "Staff member" }
-                        : null,
+                personSubject: person?.personId
+                    ? { ...person, label: person.label?.trim() || "Staff member" }
+                    : null,
                 schedulingProjection:
                     (json.schedulingProjection ?? null) as SchedulingProjectionFirstPaint | null,
             });
-            // The ENTRY's preference decides the initial context, filtered to ones the record
-            // actually holds. With no usable preference the projection's own first option wins —
-            // never a precedence invented in this component.
-            setSelectedContextKey(resolveInitialContextOption(contexts, contextKey)?.key ?? null);
+            /*
+             * WHICH CONTEXT OPENS FIRST.
+             *
+             * `full` keeps its existing behaviour: something is always selected, because that
+             * presentation shows the whole record anyway and an unselected strip would read as a
+             * missing card.
+             *
+             * `contextual` starts UNSELECTED and shows the chooser, because the chooser IS the
+             * product there — the question "what do you want to see about Lennon?" is the thing the
+             * operator arrived to answer. Two exceptions, both honest: an ENTRY that named a context
+             * already answered it, and a subject with exactly ONE option has no decision to make.
+             * Adding chooser furniture in front of a single option is the kind of ceremony this
+             * convergence is removing.
+             */
+            /*
+             * INITIALIZE ONCE PER RECORD — never re-apply.
+             *
+             * `load` runs again whenever its identity changes, and re-applying the initial selection
+             * from inside it silently DISCARDS the operator's choice. That is what made exactly the
+             * two fetching contexts fail: Enrollment resolves a published doc and Household composes
+             * the family, both of which re-render this subtree, and the re-applied initial selection
+             * reset the key to null — so the card unmounted and the chooser reappeared. Child and
+             * Schedule render straight from props, never re-ran it, and looked fine.
+             *
+             * A choice the operator has already made is not an initial condition, so it is guarded
+             * by a ref rather than by the effect's dependencies — dependencies say WHEN to reload
+             * data, and this is not data.
+             */
+            if (selectionInitializedRef.current) return;
+            selectionInitializedRef.current = true;
+            /*
+             * RECORD-FIRST. The operator clicked Lennon, so Lennon is the default object of
+             * attention: the record card opens immediately, with no chooser in front of it.
+             *
+             * The record contexts are the `canonical_record` options — the child's own identity,
+             * their family, a person's employment — and the default is the subject's OWN identity
+             * (`identity` for a child, `employment` for a person), which is always first among them
+             * in the projection's order. An entry's preference is honoured only when it names a
+             * record context: a preferred OPERATIONAL context is related work, and related work
+             * never replaces the record card inside Operations — the `Go to` entries carry it.
+             *
+             * `full` keeps its existing behaviour: something is always selected there.
+             */
+            if (presentation === "full") {
+                setSelectedContextKey(resolveInitialContextOption(contexts, contextKey)?.key ?? null);
+            } else {
+                /*
+                 * An entry's preference is a DECLARED INTENT, and two kinds are honoured in place:
+                 *
+                 *   – a record context ("open Lennon on Household") switches which record view
+                 *     shows first;
+                 *   – an OPERATIONAL context ("Create assignment → choose Lennon" arrives with
+                 *     `schedule`) opens the platform's operational card directly. The operator
+                 *     already said what they came to do; landing them on the record card and making
+                 *     them find Schedule again would replace their command with a detour.
+                 *
+                 * A PROCESS preference is the one kind that is not selected in place: a process is
+                 * related WORK, its home is the Work View, and the `Go to` entries are how the
+                 * overlay offers it. The record card stays the default there.
+                 */
+                const recordOptions = contexts.filter((o) => o.surface === "canonical_record");
+                const preferred = contextKey
+                    ? resolveInitialContextOption(
+                          contexts.filter(
+                              (o) =>
+                                  o.surface === "canonical_record"
+                                  || o.surface === "canonical_operational",
+                          ),
+                          contextKey,
+                      )
+                    : null;
+                setSelectedContextKey(
+                    preferred?.key
+                        ?? recordOptions[0]?.key
+                        // A record with no record context at all (no identity card resolves) still
+                        // opens on SOMETHING it holds rather than on a chooser.
+                        ?? contexts[0]?.key
+                        ?? null,
+                );
+            }
         } catch (e) {
             setState({
                 status: "error",
                 message: e instanceof Error ? e.message : "Could not open this record.",
             });
         }
-    }, [subjectType, subjectId, contextKey]);
+    }, [subjectType, subjectId, contextKey, presentation]);
 
     useEffect(() => {
+        // A different subject is a different record, and its initial context must be chosen afresh.
+        selectionInitializedRef.current = false;
         void load();
     }, [load]);
 
@@ -181,6 +307,64 @@ export default function DurableRecordSurface({
     const selectedContext =
         state.contexts.find((option) => option.key === selectedContextKey) ?? null;
 
+    /*
+     * ── THE RECORD, AND THE WORK, KEPT APART ──
+     *
+     * Record contexts (`canonical_record`) switch the centered card IN PLACE: Child ↔ Household on
+     * a child, Employment on a person. They are views of who this record IS.
+     *
+     * Related work is everything the operator can LEAVE for:
+     *   – `Go to` destinations, resolved by Search's own resolver over the same contexts. Selecting
+     *     one closes Operations and commits the exact selection a Search click would have.
+     *   – in-place operational contexts (a staff member's Schedule) that have no Work View to go
+     *     to. The platform's own card is the only realization of that relationship, so it renders
+     *     here — and it is listed as work, not as a record view, because that is what it is.
+     *
+     * A destination that covers an in-place operational context supersedes it: one relationship
+     * must not appear twice, once as navigation and once as a card.
+     */
+    const recordOptions =
+        presentation === "contextual"
+            ? state.contexts.filter((option) => option.surface === "canonical_record")
+            : [];
+    /*
+     * In-place operational contexts are NOT suppressed by a `Go to` covering the same relationship.
+     * "Show me Lennon's commitment, here" and "take me to where assignments are worked" are two
+     * different intents, exactly as Search offers a record destination beside the operational ones
+     * — and the in-place Scheduling card is the certified O-3b/O-4 editing surface plus the landing
+     * for Create Assignment's declared intent. Removing it whenever a destination existed would
+     * have retired a certified capability as a side effect of adding navigation.
+     */
+    const inPlaceOperational =
+        presentation === "contextual"
+            ? state.contexts.filter((option) => option.surface === "canonical_operational")
+            : [];
+    const hasRelatedWork = state.relatedWork.length > 0 || inPlaceOperational.length > 0;
+
+    /** Commit one `Go to`. The payload mapping is the SAME one GlobalSearchBox performs. */
+    const goTo = (destination: SearchDestination) => {
+        const hostType = (destination.host_entity_type ?? "").trim();
+        const hostId = (destination.host_entity_id ?? "").trim();
+        if (destination.target !== "focus_panel" || !destination.card_key || !hostType || !hostId) return;
+        // Leave FIRST — the record overlay and the Operations workspace both close before the
+        // movement commits, so the operator's click is acknowledged immediately and the kernel's
+        // listener lands attention on an unobstructed surface.
+        onRequestClose?.();
+        dispatchAdminV2CloseWorkspaceModals();
+        dispatchOperatorFocusSelection({
+            entity_type: hostType,
+            entity_id: hostId,
+            host_work_unit_key: (destination.host_work_unit_key ?? "").trim() || null,
+            host_work_view_id: (destination.host_work_view_id ?? "").trim() || null,
+            operational_member_id: (destination.operational_member_id ?? "").trim() || null,
+            card_focus: {
+                card_key: destination.card_key,
+                item_id: destination.item_id ?? null,
+                context_key: destination.context_key ?? null,
+            },
+        });
+    };
+
     return (
         <div
             className="flex min-h-0 flex-1 flex-col"
@@ -189,23 +373,89 @@ export default function DurableRecordSurface({
             data-durable-record-subject-id={state.model.subject.id}
             data-durable-record-context-count={state.contexts.length}
         >
-            {/* Only when there is a CHOICE. One context is not a decision. */}
-            <DurableRecordContextStrip
-                options={state.contexts}
-                selectedKey={selectedContextKey}
-                onSelect={setSelectedContextKey}
-            />
-
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                <OpportunityFocusPanelModeGrid
-                    model={state.model}
-                    // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable record
-                    // composes none of them, so there is nothing to select.
-                    onSelectTab={() => {}}
-                    requestedCardFocus={
-                        cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
-                    }
+            {presentation === "full" ? (
+                <DurableRecordContextStrip
+                    options={state.contexts}
+                    selectedKey={selectedContextKey}
+                    onSelect={setSelectedContextKey}
                 />
+            ) : (
+                /*
+                 * MINIMAL CHROME — the canonical card below is the primary object, and this row is
+                 * only what the card cannot carry for itself: whose record this is, and which
+                 * record view is showing. Rendered flat (no box) so the card's own border and
+                 * elevation are the only frame on screen.
+                 */
+                <div
+                    className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2"
+                    data-record-overlay-header="true"
+                >
+                    <p className="text-[13px] font-semibold text-alloy-midnight">
+                        {state.model.subject.label ?? "Record"}
+                    </p>
+                    {recordOptions.length > 1 ? (
+                        <div
+                            className="flex items-center gap-1"
+                            role="tablist"
+                            aria-label="Record views"
+                            data-record-nav="true"
+                        >
+                            {recordOptions.map((option) => {
+                                const active = option.key === selectedContextKey;
+                                return (
+                                    <button
+                                        key={option.key}
+                                        type="button"
+                                        role="tab"
+                                        aria-selected={active}
+                                        onClick={() => setSelectedContextKey(option.key)}
+                                        data-record-context-choice={option.key}
+                                        data-record-context-kind={option.kind}
+                                        data-durable-record-context={option.key}
+                                        data-durable-record-context-active={active ? "true" : "false"}
+                                        className={[
+                                            "rounded-full px-2.5 py-1 text-[12px] font-medium transition-colors",
+                                            active
+                                                ? "bg-alloy-juniper/[0.12] text-alloy-juniper"
+                                                : "text-alloy-midnight/60 hover:bg-alloy-stone/[0.08] hover:text-alloy-midnight",
+                                        ].join(" ")}
+                                    >
+                                        {option.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ) : null}
+                </div>
+            )}
+
+            <div
+                className={
+                    presentation === "contextual"
+                        ? "min-h-0 flex-1 overflow-y-auto"
+                        : "min-h-0 flex-1 overflow-y-auto px-4 py-4"
+                }
+            >
+                {/*
+                  * THE FULL COMPOSITION — every card the grain declares.
+                  *
+                  * Deliberately NOT rendered in `contextual` presentation. Operations realizes a
+                  * record as "choose one thing, see that thing", and rendering the grid there would
+                  * put the giant record page back underneath the chooser — the exact surface this
+                  * convergence removed. The grid stays available for record-first runtimes where the
+                  * record genuinely IS the destination.
+                  */}
+                {presentation === "full" ? (
+                    <OpportunityFocusPanelModeGrid
+                        model={state.model}
+                        // Drill tabs belong to the queue-hosted panel's drawer-era cards; a durable
+                        // record composes none of them, so there is nothing to select.
+                        onSelectTab={() => {}}
+                        requestedCardFocus={
+                            cardKey ? { card_key: cardKey, subject_key: state.model.subject.id } : null
+                        }
+                    />
+                ) : null}
 
                 {/*
                   * The contextual card for the selected context, when the record is a child.
@@ -225,15 +475,88 @@ export default function DurableRecordSurface({
                             subject={
                                 state.childSubject
                                     ? { kind: "child", child: state.childSubject }
-                                    : {
-                                          kind: "staff",
-                                          personId: state.personSubject!.personId,
-                                          label: state.personSubject!.label,
-                                      }
+                                    : { kind: "staff", person: state.personSubject! }
                             }
                             schedulingProjection={state.schedulingProjection}
-                            onSaved={onRecordChanged}
+                            /*
+                             * A SAVE REFRESHES THIS RECORD, not only the list underneath it.
+                             *
+                             * The card shows the value it just wrote from its own session state, so
+                             * the surface LOOKED right while the composed truth behind it stayed at
+                             * the value it had on open. Re-entering Edit then seeded the stale fact
+                             * and offered to save it back — the operator's own change silently
+                             * proposed as an undo.
+                             *
+                             * Quietly, so the card the operator is holding stays on screen.
+                             */
+                            onSaved={() => {
+                                void load(true);
+                                onRecordChanged?.();
+                            }}
                         />
+                    </div>
+                ) : null}
+
+                {/*
+                  * ── RELATED WORK — where this record is being worked, offered as NAVIGATION ──
+                  *
+                  * Never a record view. A `Go to` closes Operations and commits the same selection
+                  * a Search click would have (one resolver, one executor); an in-place operational
+                  * entry switches the centered card because no Work View exists to go to.
+                  */}
+                {presentation === "contextual" && hasRelatedWork ? (
+                    <div className="mt-3 px-1" data-record-related-work="true">
+                        <p className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/40">
+                            Related work
+                        </p>
+                        <ul className="mt-1.5 grid gap-1">
+                            {state.relatedWork.map((destination) => (
+                                <li key={destination.key}>
+                                    <button
+                                        type="button"
+                                        onClick={() => goTo(destination)}
+                                        data-record-related-work-goto={destination.key}
+                                        data-record-related-work-view={destination.host_work_view_id ?? ""}
+                                        className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left hover:bg-alloy-stone/[0.08]"
+                                    >
+                                        <span className="truncate text-[12.5px] font-medium text-alloy-midnight/80">
+                                            {destination.label}
+                                        </span>
+                                        <span className="shrink-0 text-[12px] font-semibold text-alloy-bend-pine">
+                                            Go to →
+                                        </span>
+                                    </button>
+                                </li>
+                            ))}
+                            {inPlaceOperational.map((option) => {
+                                const active = option.key === selectedContextKey;
+                                return (
+                                    <li key={option.key}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setSelectedContextKey(option.key)}
+                                            data-record-context-choice={option.key}
+                                            data-record-context-kind={option.kind}
+                                            data-durable-record-context={option.key}
+                                            data-durable-record-context-active={active ? "true" : "false"}
+                                            className={[
+                                                "flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left",
+                                                active
+                                                    ? "bg-alloy-juniper/[0.10] text-alloy-juniper"
+                                                    : "hover:bg-alloy-stone/[0.08]",
+                                            ].join(" ")}
+                                        >
+                                            <span className="truncate text-[12.5px] font-medium text-alloy-midnight/80">
+                                                {option.label}
+                                            </span>
+                                            <span className="shrink-0 text-[12px] text-alloy-midnight/45">
+                                                {active ? "Showing" : "View"}
+                                            </span>
+                                        </button>
+                                    </li>
+                                );
+                            })}
+                        </ul>
                     </div>
                 ) : null}
             </div>

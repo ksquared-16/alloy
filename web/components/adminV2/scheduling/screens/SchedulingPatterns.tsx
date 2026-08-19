@@ -143,9 +143,15 @@ export default function SchedulingPatterns({
                     <p className="mt-1 max-w-md text-[12px] text-alloy-slate">
                         Create a pattern — e.g. “Full day, Mon–Fri, 8:30–5:30” — and it becomes a one-click shortcut in the schedule editor.
                     </p>
-                    <button type="button" className={`${WS_ACTION_PRIMARY} mt-4`} onClick={() => setEditing("new")}>
-                        <Plus className="h-3.5 w-3.5" aria-hidden strokeWidth={2.25} /> New pattern
-                    </button>
+                    {/*
+                      * NO SECOND PRIMARY HERE.
+                      *
+                      * This rendered a duplicate `New pattern` primary directly beneath the section
+                      * command, so an empty Studio showed the same action twice and neither read as
+                      * the canonical one. The empty state's job is to explain the capability; the
+                      * command lives in one place, above, where it is also present once the section
+                      * has content.
+                      */}
                 </div>
             ) : (
                 <div className="mt-4 flex flex-col gap-4">

@@ -37,7 +37,16 @@ function rank(f: RoomOrderingFacts): number {
     if (f.verdict === "short") return 0;
     if (f.verdict === "unknown") return f.operating ? 1 : 4;
     if (f.verdict === "sufficient") return 2;
-    if (f.verdict === "idle") return 5;
+    /*
+     * IDLE splits the same way UNKNOWN does, and for the same reason.
+     *
+     * A room nobody was expected in is nothing at all. A room that IS operating — children expected,
+     * staff scheduled — and is idle right now is a room whose day has not started yet, and it belongs
+     * above the closed wing rather than beneath it. The distinction only became reachable when the
+     * Day surface began ordering by the ACTUAL verdict: planned-idle and operating cannot both be
+     * true of a plan, so Week is unaffected by this branch.
+     */
+    if (f.verdict === "idle") return f.operating ? 3 : 5;
     return f.operating ? 1 : 4;
 }
 

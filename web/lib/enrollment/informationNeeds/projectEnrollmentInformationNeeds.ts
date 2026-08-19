@@ -9,6 +9,7 @@
  */
 
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
+import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -80,6 +81,10 @@ export function projectEnrollmentInformationNeeds(
 
     for (const form of input.forms) {
         walkScalarFormFields(form.schema, (field) => {
+            // Display-only content is not a participant need. Without this a handbook paragraph
+            // becomes an artifact-specific item called "Page 3" and counts against the parent.
+            if (!formFieldCollectsValue(field)) return;
+
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
@@ -96,6 +101,8 @@ export function projectEnrollmentInformationNeeds(
                 form_field_id: field.id,
                 label: field.label,
                 required: field.required === true,
+                field_type: field.type,
+                options: readFieldOptions(field),
             };
 
             const existing = byKey.get(identity.key);
@@ -113,6 +120,27 @@ export function projectEnrollmentInformationNeeds(
     }
 
     return [...byKey.values()].map((acc) => finalize(acc, input));
+}
+
+/**
+ * The authored choices for a closed field, normalized to strings.
+ *
+ * Shape-tolerant on purpose: option lists appear as bare strings and as `{value,label}` rows across
+ * the form library's history, and a participant control that silently rendered nothing for the older
+ * shape would be worse than the text box it replaced.
+ */
+function readFieldOptions(field: unknown): readonly string[] {
+    const raw = (field as { options?: unknown })?.options;
+    if (!Array.isArray(raw)) return [];
+    const out: string[] = [];
+    for (const item of raw) {
+        if (typeof item === "string" && item.trim()) out.push(item.trim());
+        else if (item && typeof item === "object") {
+            const v = (item as { value?: unknown; label?: unknown }).value ?? (item as { label?: unknown }).label;
+            if (typeof v === "string" && v.trim()) out.push(v.trim());
+        }
+    }
+    return out;
 }
 
 function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInformationNeed {
@@ -157,13 +185,28 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
 
     const has_value = value_source !== "none";
     if (!has_value) {
+        /**
+         * REQUIREDNESS IS THE FORM'S, NOT THE RUNTIME'S.
+         *
+         * `field.required` on the authored control is the only owner of "must this be answered",
+         * and it is carried on every occurrence. A need is blocking when ANY occurrence requires it:
+         * one artifact demanding a fact is enough, and the strictest occurrence has to win or the
+         * packet could be submitted incomplete.
+         *
+         * An optional missing fact is still SURFACED — the parent may want to give it — but it does
+         * not inflate "things left to check", and it must offer a real way out. Without this, the
+         * only way past an optional allergies field was to type something untrue, which is exactly
+         * what QA did: "na".
+         */
+        const blocking = acc.occurrences.some((o) => o.required);
         return {
             ...base,
             state: "missing",
             has_value: false,
             current_value: null,
             value_source: "none",
-            requires_participant_action: true,
+            requires_participant_action: blocking,
+            optional: !blocking,
         };
     }
 

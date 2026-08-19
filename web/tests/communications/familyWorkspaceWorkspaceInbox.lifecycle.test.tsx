@@ -88,6 +88,7 @@ function buildVm(messages: TimelineEventVM[]): FamilyCommunicationWorkspaceVM {
             byContact: {},
             household: { email: "unset", sms: "unset", marketing: "unset" },
             preferenceProfile: { email_transactional: "unset", sms_transactional: "unset", email_marketing: "unset", sms_marketing: "unset" },
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: { channel: "email", recipientContactIds: ["person-1"], subject: null, body: "", availableChannels: { email: true, sms: true, note: false, reasons: {} }, consentBlockers: [] },

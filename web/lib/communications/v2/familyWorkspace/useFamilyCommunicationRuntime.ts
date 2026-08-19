@@ -87,6 +87,12 @@ export function familyWorkspaceFromPreview(
             byContact,
             household: { email: "unset", sms: "unset", marketing: "unset" },
             preferenceProfile: UNSET_PREFERENCE_PROFILE,
+            // The PREVIEW view model carries no per-person profiles — the heavy
+            // preferences bundle loads with the full workspace. Empty is the
+            // honest value: the affordance then reports "no preferences recorded"
+            // for a person rather than showing the household's answer under their
+            // name, which is exactly the substitution it exists to prevent.
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: preview.composerDraft,

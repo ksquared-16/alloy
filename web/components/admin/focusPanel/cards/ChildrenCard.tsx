@@ -29,6 +29,8 @@ import IdentityDisclosureBackAction from "@/components/admin/focusPanel/identity
 import IdentityDisclosureSurface from "@/components/admin/focusPanel/identity/IdentityDisclosureSurface";
 import IdentityCollectionContext from "@/components/admin/focusPanel/identity/IdentityCollectionContext";
 import { useIdentityDisclosureState } from "@/lib/adminV2/runtime/focusPanel/identity/useIdentityDisclosureState";
+import { truthHoldsDurableChildCollection } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
+import { INITIAL_IDENTITY_DISCLOSURE_STATE } from "@/lib/adminV2/runtime/focusPanel/identity/identityDisclosureState";
 import ComposableRegionShell from "@/components/admin/focusPanel/drillIn/ComposableRegionShell";
 import NestedSurfaceFieldLayoutSurface, {
     type LayoutSurfaceFieldMeta,
@@ -404,6 +406,39 @@ export default function ChildrenCard({
 
     const [editing, setEditing] = useState(false);
     const [relatedViewId, setRelatedViewId] = useState<string | null>(null);
+
+    /*
+     * ── WHEN THE HOST'S SUBJECT IS ONE CHILD ──
+     *
+     * On a case the collection is a family's roster and the card opens on it: the operator has not
+     * yet said which child they mean. On a CHILD-grain host they already have — the record IS the
+     * child — and the collection has exactly one member, which is that child.
+     *
+     * So the card opens focused on the subject. This changes placement, not vocabulary: the fields,
+     * their labels, their order, their visibility and the Edit affordance are all still decided by
+     * `childrenSurfaceConfig`, identically on both hosts. A host may say WHERE the operator lands;
+     * it may not say what they find there.
+     *
+     * The signal is the COMPOSER'S, deliberately, rather than a prop a host passes. A prop would let
+     * any host claim single-subject focus, including one whose collection genuinely holds a family.
+     *
+     * And the grain alone is not enough. `child` is ALSO the grain when a child is the attention
+     * subject on a settled family case, where the collection is the family's roster and the child is
+     * one row among siblings — drilling in there is precisely the elevation the attention effect
+     * below exists to prevent. `truthHoldsDurableChildCollection` asks the question that actually
+     * separates them: which key the collection arrived under.
+     */
+    const subjectFocusChildId =
+        context.grain === "child" && truthHoldsDurableChildCollection(context.truth)
+            ? context.subject.id.trim() || null
+            : null;
+    const initialDisclosure = useMemo(
+        () =>
+            subjectFocusChildId
+                ? { depth: "details" as const, selectedIdentityId: subjectFocusChildId }
+                : INITIAL_IDENTITY_DISCLOSURE_STATE,
+        [subjectFocusChildId],
+    );
     const {
         state: disclosure,
         enterContext,
@@ -411,7 +446,7 @@ export default function ChildrenCard({
         enterEvidence,
         back: backDisclosure,
         reset: resetDisclosure,
-    } = useIdentityDisclosureState();
+    } = useIdentityDisclosureState(initialDisclosure);
 
     /**
      * Linked navigate-away: history keeps exact prior Detail for Back; card default
@@ -473,7 +508,15 @@ export default function ChildrenCard({
         setEditing(false);
         setRelatedViewId(null);
         setCardLinkNav(createEmptyFocusPanelCardLinkNavState());
-        // Child Attention: keep Summary (supporting). Do not drill into Collection/Details.
+        /*
+         * Child Attention on a CASE: keep Summary (supporting). Do not drill into Collection/Details
+         * — What's Next and the header already own attention there.
+         *
+         * On a durable child record `resetDisclosure` returns to the subject rather than to a roster
+         * of one, so both branches are the same call and differ only in what "reset" means. The
+         * branch is kept because the two situations are genuinely different questions and the next
+         * reader should not have to infer that from a shared line.
+         */
         if (context.grain === "child") {
             resetDisclosure();
             return;
@@ -700,13 +743,19 @@ export default function ChildrenCard({
     } else if (focused && disclosure.depth === "details") {
         runtimeFooterAction = (
             <div className="alloy-os-card-nav">
-                {backToSourceButton ?? (
-                    <IdentityDisclosureBackAction
-                        label="← All children"
-                        onBack={composingChildrenSurface ? backWithComposerSync : backDisclosure}
-                        dataAction="back"
-                    />
-                )}
+                {/*
+                  * "← All children" is only true when there ARE other children to go back to. On a
+                  * child-grain host the collection is the subject alone, so the control would take
+                  * the operator to a list of one and call it a step out.
+                  */}
+                {backToSourceButton
+                    ?? (subjectFocusChildId ? null : (
+                        <IdentityDisclosureBackAction
+                            label="← All children"
+                            onBack={composingChildrenSurface ? backWithComposerSync : backDisclosure}
+                            dataAction="back"
+                        />
+                    ))}
                 {canEditChild ?
                     <button
                         type="button"

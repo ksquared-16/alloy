@@ -154,17 +154,23 @@ export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryComposition
 /**
  * CHILD-grain default composition — the durable child's own identity.
  *
- * One card, for the same reason Person has one: `child_identity` is the only card with canonical
- * Child truth that does not require an enrollment. The case-grain `children` card is deliberately
- * absent — it is a family's ROSTER, and placing it here would make a child's own record display a
- * list containing itself.
+ * One card, for the same reason Person has one: it is the only card with canonical Child truth that
+ * does not require an enrollment. That card is `children`, the tenant's CONFIGURED child card — the
+ * same one the case panel renders — and it belongs here because it was never really a roster: its
+ * content is a child's own field vocabulary and its focused perspective renders exactly one child.
  *
- * Program / room / schedule / readiness are enrollment-scoped and belong to operational-context
- * enrichment (Workstream E), not to identity.
+ * The worry that placing it here would make a child's record display a list containing itself is
+ * answered structurally rather than by avoiding the card: on a `child` grain the collection holds
+ * exactly one member and it is the subject, and `ChildrenCard` reads the grain and opens on that
+ * member. `child_identity` — four hardcoded, uneditable facts — was the workaround, and it left the
+ * platform with two answers to "who is this child" depending on how the operator arrived.
+ *
+ * Program / room / schedule / readiness are enrollment-scoped: the configured card renders those
+ * rows unset here rather than fabricating a participation the record does not have.
  */
 export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionEntry[] = [
     {
-        key: "child_identity",
+        key: "children",
         tier: "reference",
         visibility: "visible",
         // Six columns in the left lane — a 12-column card forces `planPublishedLayout` to fall back

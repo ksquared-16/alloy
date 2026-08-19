@@ -28,6 +28,8 @@ import {
     cardKeysForGrain,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { focusPanelSummaryDefaultDocForGrain } from "@/lib/adminV2/runtime/focusPanel/buildFocusPanelSummaryDefaultDoc";
 
 const ORG = "org-1";
@@ -177,7 +179,7 @@ describe("1. closed / completed enrollment", () => {
         expect(reads).not.toContain("work_units");
     });
 
-    it("composes a settled panel model with the child identity card", async () => {
+    it("composes a settled panel model with the canonical child card", async () => {
         const { result } = await compose(closedEnrollmentStore());
         const subject = (result as { ok: true; subject: DurableChildSubject }).subject;
         const model = focusPanelWorkModeModelFromDurableChild({
@@ -190,21 +192,28 @@ describe("1. closed / completed enrollment", () => {
         expect(model.source).toBe("durable_subject");
         expect(model.phase).toBe("settled");
         expect(model.context.grain).toBe("child");
-        expect(model.cardReadiness.get("child_identity")).toBe("ready");
-        expect(model.cardModels.get("child_identity")?.payload?.profileFields).toEqual([
-            { label: "Name", value: "Ada Okafor" },
-            { label: "Date of birth", value: "Mar 9, 2022" },
-            { label: "Age", value: "4 yr 5 mo" },
-            // The Household row NAMES A RECORD, so it is an operator gesture rather than a printed
-            // string — this is the `child → Household → the family` leg at its origin. The reference
-            // is the member row's own `customer_id`, the same edge that already supplied the
-            // household NAME on this card, so nothing extra is read and nothing is inferred.
-            {
-                label: "Household",
-                value: "Okafor Household",
-                record: { subject_type: "household", subject_id: "household-1" },
-            },
-        ]);
+        /*
+         * THE CARD IS `children` — the tenant's CONFIGURED child card, the same one a Work Unit's
+         * Focus Panel and a Search destination render. The durable record no longer composes a
+         * smaller card of its own: two answers to "who is this child" was the defect, and which one
+         * an operator saw depended on how they had arrived.
+         */
+        expect(model.cardReadiness.get("children")).toBe("ready");
+        expect(model.cardModels.get("children")?.key).toBe("children");
+
+        // Composed from the child THEMSELVES, as the one member of their own collection — not from a
+        // family roster borrowed for the occasion, and not from an inquiry that does not exist.
+        const rows = subject.truth[DURABLE_CHILD_ROWS_KEY] as Array<Record<string, unknown>>;
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.customer_member_id).toBe("member-ada");
+        expect(subject.truth._inquiry_children).toBeUndefined();
+
+        const evidence = buildChildrenCardEvidence({ truth: subject.truth });
+        expect(evidence.children.map((c) => c.name)).toEqual(["Ada Okafor"]);
+        expect(evidence.children[0]!.dob).toBe("2022-03-09");
+        // Participation projections stay unset: a durable host has no enrollment to read them from,
+        // and fabricating them would invent the participation the durable grain removed.
+        expect(evidence.children[0]!.program).toBeNull();
     });
 });
 
@@ -235,9 +244,13 @@ describe("2. household child with no enrollment process", () => {
             canMutate: true,
             now: NOW,
         });
-        const card = model.cardModels.get("child_identity");
+        const card = model.cardModels.get("children");
         expect(card?.visible).toBe(true);
-        expect(card?.insight).toBe("5 yr 8 mo old");
+        // `customer_members.person_id` is null here, so nothing about the card may depend on a person
+        // row existing — the member IS the child, and the card composes from it alone.
+        expect(buildChildrenCardEvidence({ truth: subject.truth }).children.map((c) => c.name)).toEqual([
+            "Noah Bell",
+        ]);
     });
 });
 
@@ -319,11 +332,21 @@ describe("the grain contract holds across all three subjects", () => {
         expect(cardAppliesToGrain("child_identity", "person")).toBe(false);
     });
 
-    it("the case-grain `children` roster is NOT reused as the child's own card", () => {
-        // It mentions children; it answers "who are this family's children", which is a different
-        // question and would make a child's record a list containing itself.
-        expect(cardAppliesToGrain("children", "child")).toBe(false);
-        expect(cardKeysForGrain("child")).toEqual(["child_identity", "scheduling"]);
+    it("the `children` card reaches the child grain — and does NOT reach household or person", () => {
+        /*
+         * It looked like a family ROSTER and was declared case-only, which is why a durable child
+         * record grew a second, smaller card. But the card's content is the Children Surface — a
+         * child's own field vocabulary — and its focused perspective renders exactly one child. The
+         * collection was the container, not the subject.
+         *
+         * It reaches this grain honestly because a durable child composes itself as the one member
+         * of its own collection, so the card reads real truth rather than a case borrowed for the
+         * occasion. The grains it must NOT reach are the ones with no such member row.
+         */
+        expect(cardAppliesToGrain("children", "child")).toBe(true);
+        expect(cardAppliesToGrain("children", "household")).toBe(false);
+        expect(cardAppliesToGrain("children", "person")).toBe(false);
+        expect(cardKeysForGrain("child")).toEqual(["children", "child_identity", "scheduling"]);
     });
 
     it("APPLICABLE to a grain is not the same as PLACED in that grain's composition", () => {
@@ -347,12 +370,12 @@ describe("the grain contract holds across all three subjects", () => {
             "scheduling",
         );
         // The composition is what the grid lays out, so this is the assertion that keeps the card
-        // off the identity surface. `deriveChildFocusPanelCards` building only `child_identity` is
-        // covered by the composition scenarios above.
+        // off the identity surface. `deriveChildFocusPanelCards` building only the configured child
+        // card is covered by the composition scenarios above.
     });
 
     it("each grain gets its own default composition", () => {
-        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["child_identity"]);
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).toEqual(["children"]);
         expect(focusPanelDefaultCompositionForGrain("person").map((e) => e.key)).toEqual(["employment"]);
         expect(focusPanelDefaultCompositionForGrain("opportunity").length).toBeGreaterThan(1);
     });

@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 import {
     COMMS_INPUT_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
@@ -36,6 +38,11 @@ export default function TemplateCategoriesManageModal({
     const [editDraft, setEditDraft] = useState("");
     const [busy, setBusy] = useState(false);
     const [localError, setLocalError] = useState<string | null>(null);
+    const [portalReady, setPortalReady] = useState(false);
+
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
 
     useEffect(() => {
         if (!open) {
@@ -56,7 +63,7 @@ export default function TemplateCategoriesManageModal({
         [categories, templates]
     );
 
-    if (!open) return null;
+    if (!open || !portalReady) return null;
 
     const startEdit = (name: string) => {
         setEditing(name);
@@ -97,9 +104,16 @@ export default function TemplateCategoriesManageModal({
         }
     };
 
-    return (
+    /*
+     * Launched from inside the Communications workspace, so it portals to
+     * `document.body` at the platform's nested-overlay constant. A raw `z-[120]`
+     * on an in-context element cannot beat a body-portaled layer, and it carries
+     * none of the ordering guarantees the rest of adminV2 depends on.
+     */
+    return createPortal(
         <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-alloy-midnight/40 px-4 py-8"
+            className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/40 px-4 py-8"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-template-categories-manage-modal="true"
             role="dialog"
             aria-modal="true"
@@ -211,6 +225,7 @@ export default function TemplateCategoriesManageModal({
                     </ul>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

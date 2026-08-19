@@ -26,6 +26,7 @@ import {
     CHILD_ADD_ACTION_ENTITY_ID,
     CHILD_ADD_ACTION_KEY,
 } from "@/lib/adminV2/actions/definitions/childAddAction";
+import { dispatchAdminV2CloseWorkspaceModals } from "@/lib/adminV2/workspaceModalEvents";
 
 type Candidate = {
     record_id: string;
@@ -280,6 +281,35 @@ export default function AddChildModal({
         }
     }
 
+    /*
+     * Dismissal is natural — X, Escape, backdrop — and never silently discards work.
+     *
+     * Dirty means the operator has typed or chosen something a close would lose; a completed flow
+     * (`done`) has nothing left to lose. The confirmation is the platform's existing dirty-state
+     * sentence (Programs workspace, Configuration Runtime harness), not a new system.
+     */
+    const dirty =
+        step !== "done"
+        && Boolean(household || firstName.trim() || lastName.trim() || dob.trim() || createNewReason.trim());
+    const requestClose = useCallback(() => {
+        if (dirty && !window.confirm("Discard unsaved changes?")) return;
+        onClose();
+    }, [dirty, onClose]);
+
+    useEffect(() => {
+        if (!open) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== "Escape") return;
+            // Stop the workspace shell's own Escape handler from closing the whole workspace
+            // out from under a modal the operator only meant to dismiss.
+            e.preventDefault();
+            e.stopPropagation();
+            requestClose();
+        };
+        window.addEventListener("keydown", onKeyDown, true);
+        return () => window.removeEventListener("keydown", onKeyDown, true);
+    }, [open, requestClose]);
+
     if (!open) return null;
 
     return (
@@ -287,6 +317,9 @@ export default function AddChildModal({
             className="fixed inset-0 z-[120] flex items-start justify-center bg-alloy-midnight/30 p-6 pt-[10vh]"
             data-add-child-modal="true"
             data-add-child-step={step}
+            onMouseDown={(e) => {
+                if (e.target === e.currentTarget) requestClose();
+            }}
         >
             <div className="w-full max-w-[520px] rounded-lg border border-alloy-stone/25 bg-white shadow-xl">
                 <header className="flex items-center justify-between border-b border-alloy-stone/25 px-4 py-3">
@@ -296,7 +329,7 @@ export default function AddChildModal({
                         </p>
                         <h2 className="text-[15px] font-semibold text-alloy-midnight">Add child</h2>
                     </div>
-                    <button type="button" className={GHOST_BTN} onClick={onClose} data-add-child-cancel="true">
+                    <button type="button" className={GHOST_BTN} onClick={requestClose} data-add-child-cancel="true">
                         {step === "done" ? "Close" : "Cancel"}
                     </button>
                 </header>
@@ -314,8 +347,56 @@ export default function AddChildModal({
                     {step === "household" ? (
                         <div className="space-y-3">
                             <p className="text-[12px] leading-snug text-alloy-midnight/60">
-                                A child belongs to a household. Choose it explicitly — Alloy will not guess one
-                                from a matching name.
+                                Add a child to an <span className="font-medium">existing household</span>. Choose
+                                it explicitly — Alloy will not guess one from a matching name.
+                            </p>
+                            {/*
+                              * ── THE DOMAIN BOUNDARY, MADE VISIBLE ──
+                              *
+                              * Add Child links a child to a household that already exists; it never
+                              * begins an acquisition. A family that is not on record yet starts as a
+                              * LEAD, and the handoff below opens the platform's EXISTING Create Lead
+                              * entry — the same `adminv2:open-create-lead` event every registry
+                              * caller dispatches — never a second implementation of it. It needs a
+                              * department (Create Lead is department-scoped by schema), so the one
+                              * enrollment-owning department is resolved on click; a tenant where
+                              * none resolves keeps the honest sentence and loses only the shortcut.
+                              */}
+                            <p className="text-[12px] text-alloy-midnight/55" data-add-child-new-family="true">
+                                New family, not on record yet?{" "}
+                                <button
+                                    type="button"
+                                    className="font-medium text-alloy-bend-pine hover:underline"
+                                    data-add-child-create-lead="true"
+                                    onClick={() => {
+                                        void (async () => {
+                                            try {
+                                                const res = await fetch("/api/admin/departments", {
+                                                    credentials: "include",
+                                                });
+                                                const json = (await res.json().catch(() => null)) as {
+                                                    items?: { id?: string }[];
+                                                } | null;
+                                                const departmentId = (json?.items?.[0]?.id ?? "").trim();
+                                                if (!departmentId) return;
+                                                onClose();
+                                                dispatchAdminV2CloseWorkspaceModals();
+                                                window.dispatchEvent(
+                                                    new CustomEvent("adminv2:open-create-lead", {
+                                                        detail: {
+                                                            department_id: departmentId,
+                                                            work_unit_id: null,
+                                                        },
+                                                    }),
+                                                );
+                                            } catch {
+                                                /* the sentence stays; only the shortcut is lost */
+                                            }
+                                        })();
+                                    }}
+                                >
+                                    Create lead →
+                                </button>
                             </p>
                             <div>
                                 <label className={LABEL} htmlFor="child-household-search">

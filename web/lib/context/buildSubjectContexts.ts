@@ -224,3 +224,62 @@ export function buildSubjectEmploymentContext(
         operational_memberships: null,
     };
 }
+
+/**
+ * The record's own information, as a context.
+ *
+ * ── WHY IDENTITY IS A CHOICE AND NOT THE FRAME ──
+ *
+ * The durable record used to open as an identity page with the other contexts arranged underneath
+ * it. That made identity the frame and everything else an accessory, and it is not how an operator
+ * arrives: someone opening Lennon is as likely to want his schedule as his date of birth. Listing
+ * identity beside the others lets them say which, instead of paying for a composition they did not
+ * ask for on the way to the one they did.
+ *
+ * It resolves the canonical `child_identity` card — the same card the durable child composition
+ * already builds. No configuration, no second composition.
+ */
+export function buildSubjectIdentityContext(
+    grain: "child" | "family" | "person",
+    label: string,
+): SubjectContext | null {
+    // Child grain only for now. A person's identity card is Employment, which is already its own
+    // context; offering "Person" beside it would be two names for one card.
+    if (grain !== "child") return null;
+    return {
+        kind: "identity",
+        key: "identity",
+        label,
+        detail: null,
+    };
+}
+
+/**
+ * The subject's household, as a context.
+ *
+ * CHILD GRAIN ONLY, and the reason is the same one `buildSubjectScheduleContext` records for itself:
+ * a household rolled up to household level is a misleading single answer. Here the direction is
+ * reversed — a household asked about its own household is a tautology — but the rule is identical.
+ *
+ * Returns null when the child has no household. `customer_members.customer_id` is nullable, and a
+ * child without a family is a real state; an option that opens nothing is worse than no option.
+ *
+ * It carries the household's id as its destination so the host composes the EXISTING durable
+ * household (`composeDurableHouseholdSubject`) rather than reaching for a case. There is no Work
+ * Unit here and there must not be one: a family is a record, not a queue position.
+ */
+export function buildSubjectHouseholdContext(
+    householdId: string | null | undefined,
+    householdName: string | null | undefined,
+): SubjectContext | null {
+    const id = (householdId ?? "").trim();
+    if (!id) return null;
+    return {
+        kind: "relationship",
+        key: "household",
+        label: "Household",
+        detail: (householdName ?? "").trim() || null,
+        destination_entity_type: "customers",
+        destination_entity_id: id,
+    };
+}

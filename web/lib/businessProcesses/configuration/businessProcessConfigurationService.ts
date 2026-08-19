@@ -355,9 +355,18 @@ export async function publishDraft(
         // RPC would then store THEIR payload under the checksum computed for OURS. Status and
         // validation are deliberately left alone: materializing requirements the tenant already had
         // cannot invalidate a draft that was just validated.
+        //
+        // `draft_revision` MUST advance here. `guard_business_process_draft_revision` makes the
+        // optimistic token structural — a payload change that does not advance it by exactly one is
+        // refused — so this write, which changes the payload, has to move the token like any other
+        // edit. Omitting it made every publish that normalization touches fail, which is every
+        // tenant's FIRST publish after D-97: theirs is the only case where stages still lack
+        // `requirements_v1` and normalization therefore has something to do. Firefly hit it exactly
+        // there, and the trigger's refusal reached the client as a dropped socket rather than a
+        // PostgREST error, which is why it read as a network fault for two attempts.
         const { data: rebased, error: rebaseError } = await supabase
             .from("business_process_drafts")
-            .update({ payload: normalized.payload })
+            .update({ payload: normalized.payload, draft_revision: draft.draftRevision + 1 })
             .eq("id", draft.id)
             .eq("org_id", params.orgId)
             .eq("draft_revision", draft.draftRevision)

@@ -21,6 +21,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
 import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntime/applyParticipantTurnResponse";
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
@@ -60,9 +61,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     // The turn is read from the platform, never from the client. A stale tab cannot answer a
     // question the objective has already moved past.
+    const canonical = await resolveParticipantCanonicalContext(supabase, {
+        orgId: access.value.orgId,
+        processInstanceId: access.value.processInstanceId,
+    });
     const current = await resolveParticipantEnrollmentObjective(supabase, {
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
+        canonicalValues: canonical.values,
     });
     if (!current.ok) return publicErr(current.refusal.detail, 409, { code: current.refusal.code });
 
@@ -108,6 +114,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
         candidate,
+        // The SAME canonical record the turn was selected against. Recomputing the objective after
+        // the write without it would flip every still-unanswered known fact back to `missing`, and
+        // the participant would be asked next for something they were about to confirm.
+        canonicalValues: canonical.values,
         nowIso: new Date().toISOString(),
     });
     if (!applied.ok) return publicErr(applied.refusal.detail, 409, { code: applied.refusal.code });
@@ -116,6 +126,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // A refusal is reported, not hidden: the participant is told plainly and asked again.
         outcome: applied.disposition.action,
         ...(applied.disposition.action === "refused" ? { reason: applied.disposition.reason } : {}),
-        objective: participantObjectiveWireModel(applied.objective),
+        objective: participantObjectiveWireModel(applied.objective, { subjectDisplayName: canonical.subjectDisplayName }),
     });
 }

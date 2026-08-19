@@ -51,7 +51,7 @@ test("Roster is a peer workspace in the operational navigation", async ({ page }
     // Peer of Assignments, not nested under it.
     expect(nav).toContain("scheduling");
 
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await expect(page.locator(ROSTER_WORKSPACE)).toBeVisible({ timeout: SETTLE });
 
     const sections = await page.evaluate(() => {

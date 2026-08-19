@@ -92,7 +92,7 @@ test("day roster never renders one site's rooms under another site's name", asyn
             JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator("[data-daily-roster]").waitFor({ timeout: SETTLE });
 
@@ -135,7 +135,7 @@ test("a second site switch mid-flight wins — the first response cannot overwri
             JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator("[data-daily-roster]").waitFor({ timeout: SETTLE });
 
@@ -196,7 +196,7 @@ test("day roster resolves today from the org, and offers a way back to it", asyn
             JSON.stringify({ section: "roster", range: "day" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await page.locator(SCHEDULING).waitFor({ timeout: SETTLE });
     await page.locator('button[aria-label="Site"]').first().click();
     await page.locator("[role=option]", { hasText: "Riverside" }).first().click();
