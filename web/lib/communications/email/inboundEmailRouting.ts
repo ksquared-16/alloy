@@ -25,6 +25,16 @@ export type InboundEmailBinding = {
     inbound_address: string | null;
     location_id?: string | null;
     /**
+     * The credential reference this binding's provider connection uses.
+     *
+     * Carried on the binding because OWNERSHIP produces the binding, and retrieval must
+     * use the credential of the tenant that owns the message — never a deployment key that
+     * happens to be lying around. `vault:…` names an organization-owned credential;
+     * `env:NAME` or nothing names a deployment-provisioned one. Resolution lives in
+     * `inboundRetrievalCredential.ts`; this is only the reference, never a secret.
+     */
+    secret_ref?: string | null;
+    /**
      * Delivery destinations routed to this binding, from
      * `communication_ingress_routes`.
      *
