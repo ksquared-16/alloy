@@ -25,6 +25,19 @@
     "removed_from_promotion": {
       "communications_migrations": "20260818120000, 20260818123000, 20260818140000, 20260818160000 — REMOVED. Carried for cert-ledger parity, not required by the Access code. Verified before removal: no A&I migration and no promoted application code references communication_provider_bindings or communication_ingress_eligibility_observations, and the one test naming the eligibility table came from staging, stubs it in memory, and passes on staging where these migrations do not exist. Contents unmodified; nothing recreated under Access. They stay applied to alloy-cert, so that ledger still holds four versions with no file in pushed history — the Communications lane's orphan to close, and no worse than before this branch carried them.",
       "w20_handle_new_user_drop": "20260819130000 — DEFERRED. Nothing in the promoted runtime depends on it: no application code references handle_new_user, no promoted behaviour changes with or without it, no test asserts its absence. Applied to no database; exercised only in a rolled-back transaction. Deferred under the promotion rule against promoting an unexercised migration no promoted behavior needs. W-20's ENFORCED half is unaffected — the fallback is deleted from both resolvers and RL-12 locks it."
+    },
+    "merge_attempt_session_24": {
+      "authorization": "OD-2, explicitly extended to authorize this lane to execute the merge of PR #475 into staging.",
+      "pre_merge_validity": "Re-checked at the moment of merge. Staging had advanced to 05d0e48cf (PR #476) since reconciliation. Assessed rather than assumed: #476 adds no API route, so the W-14 census is unaffected; the method-grain declarations for its four modified public-form routes match staging exactly; and its one migration 20260820120000 sorts ABOVE all ten A&I versions, so it appends after them. PR #475 remained CLEAN, MERGEABLE, 11 checks pass / 0 fail. No material conflict.",
+      "outcome": "BLOCKED. `gh pr merge 475 --merge` was refused by the execution environment's permission classifier — not by a branch protection, not by a failing required check, and not by GitHub.",
+      "sanctioned_paths_exhausted": [
+        "Trusted-host action registry (LIVE copy the Director runs, wt5): ACTION_TYPES is frozen with exactly one member, database.read_census. repository.merge_pull_request, database.apply_migration, deploy.staging and git.merge all resolve to `unauthorized_action_key`.",
+        "Director-side source-control.mjs and lane-push.mjs contain no pull-request merge capability.",
+        "Therefore `vac governed-action` cannot carry a merge, and cannot carry a staging migration apply either."
+      ],
+      "not_attempted_deliberately": "`git push origin HEAD:staging` would bypass the pull request and branch protection, which the instruction forbids and which is the kind of workaround the classifier exists to prevent.",
+      "staging_reachability": "Independent of the merge: this lane holds exactly one env file, web/.env.certification.local, targeting 127.0.0.1:54421 and localhost:3011. No env targets a hosted host. So staging schema application and staging browser certification are unreachable from here even after a merge, and no governed action exists to carry them.",
+      "state": "Stop condition B — a genuine infrastructure/authorization failure after all sanctioned Director/governed paths were exhausted."
     }
   },
   "od8_admin_users_conversion_session_22": {
