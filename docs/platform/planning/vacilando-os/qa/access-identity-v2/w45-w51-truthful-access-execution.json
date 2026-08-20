@@ -975,5 +975,18 @@
       "database.read_census cannot target staging, so no governed read can verify a governed write.",
       "Four governed notifications for requests this lane never made were routed here (gar_86bbf1a8043ce6, gar_30385b18a7deab, gar_8354c0f6bee7e1, gar_cdd70c5f4abc3a), two naming target `someone_elses_db`."
     ]
+  },
+  "RETRACTION_false_ledger_claim_session_31": {
+    "retracts": "STAGING_LEDGER_IS_WRONG_session_30 — the claim that seven false ledger rows were written for migrations that never executed. That claim is NOT supported by the evidence and is withdrawn.",
+    "what_the_code_actually_does": "applyMigrationBatch calls inspectLedger ONCE per migration, pre-apply. `ledgerLookupSql` is a read-only SELECT, not an insert — the engine never writes ledger rows at all. On apply failure it `return`s with stopped:true, so migrations after the failure are never reached and never inspected.",
+    "why_i_was_wrong": "I read `ledger-<version>.out` files as proof of ledger INSERTS. They are the stdout of the SELECT preflight, written to a per-version filename that is overwritten across runs. Files exist for versions this batch never reached, which means they are stale artifacts of an EARLIER attempt (tha_a28ea95925b1dd), not evidence about this one. Attributing them to this batch was the error.",
+    "what_IS_established": [
+      "20260818170000, 20260818180000, 20260818190000 EXECUTED SUCCESSFULLY in this batch (INSERT/ALTER output, empty stderr).",
+      "20260818220000 EXECUTED and FAILED: 'ERROR: column \"token\" does not exist' at the backfill. Its ADD COLUMN token_hash reported 'already exists, skipping'.",
+      "The batch then stopped. The remaining six were NOT ATTEMPTED by this batch — correct stop-on-failure behaviour."
+    ],
+    "what_is_NOT_established": "Whether staging's ledger contains rows for any of these versions, and whether the six unattempted migrations' schema effects are present. Determining that requires direct staging schema queries — the instruction's own first required step — and this lane has no staging credential, while database.read_census rejects target `staging` (wrong_database_target).",
+    "s3_root_cause_established": "20260818220000 adds token_hash IF NOT EXISTS then backfills it from `token`; 20260818230000 drops `token`. On staging token_hash ALREADY EXISTS and `token` is ALREADY GONE — which is precisely the end state after BOTH migrations. So staging already satisfies the S-3 final invariant, and the failure is a replay-safety gap: the backfill assumes a pre-state that staging has already moved past. The fix is to make the backfill conditional on the column existing, not to re-add `token`.",
+    "correct_severity": "The grant->convert regression I reported as live is NOT established. It depends on whether the preservation migrations are actually applied on staging, which I cannot read. It should be treated as UNVERIFIED, not as a confirmed outage."
   }
 }
