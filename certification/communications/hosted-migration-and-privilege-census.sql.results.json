@@ -1,0 +1,82 @@
+{
+  "trusted_host_action_id": "tha_1345b6b8331487",
+  "query_hash": "33fd2a78184699f9d7f546b9542a51d8c8fd546e38354497aa33cf5e70419217",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-20T16:50:31.723Z",
+    "question_ids": [
+      "ledger",
+      "ledger_max",
+      "privilege"
+    ],
+    "questions": {
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied",
+          "|||applied"
+        ]
+      },
+      "ledger_max": {
+        "question_id": "ledger_max",
+        "row_count": null,
+        "rows": [
+          "|||highest version recorded on hosted"
+        ]
+      },
+      "privilege": {
+        "question_id": "privilege",
+        "row_count": null,
+        "rows": [
+          "anon|DELETE|f|target",
+          "anon|INSERT|f|target",
+          "anon|SELECT|f|target",
+          "anon|UPDATE|f|target",
+          "authenticated|DELETE|f|target",
+          "authenticated|INSERT|f|target",
+          "authenticated|SELECT|f|target",
+          "authenticated|UPDATE|f|target",
+          "service_role|DELETE|t|target",
+          "service_role|INSERT|t|target",
+          "service_role|SELECT|t|target",
+          "service_role|UPDATE|t|target",
+          "anon|DELETE|f|target",
+          "anon|INSERT|f|target",
+          "anon|SELECT|f|target",
+          "anon|UPDATE|f|target",
+          "authenticated|DELETE|f|target",
+          "authenticated|INSERT|f|target",
+          "authenticated|SELECT|f|target",
+          "authenticated|UPDATE|f|target",
+          "service_role|DELETE|t|target",
+          "service_role|INSERT|t|target",
+          "service_role|SELECT|t|target",
+          "service_role|UPDATE|t|target",
+          "anon|DELETE|f|positive_control",
+          "anon|INSERT|f|positive_control",
+          "anon|SELECT|f|positive_control",
+          "anon|UPDATE|f|positive_control",
+          "authenticated|DELETE|t|positive_control",
+          "authenticated|INSERT|t|positive_control",
+          "authenticated|SELECT|t|positive_control",
+          "authenticated|UPDATE|t|positive_control",
+          "service_role|DELETE|t|positive_control",
+          "service_role|INSERT|t|positive_control",
+          "service_role|SELECT|t|positive_control",
+          "service_role|UPDATE|t|positive_control"
+        ]
+      }
+    },
+    "row_count": 48
+  }
+}
