@@ -19,15 +19,21 @@ type AuthSessionState = {
 const resolveAuthSessionOnce = cache(async (): Promise<AuthSessionState> => {
     const t0 = Date.now();
     let source: AuthSessionState["authSource"] = "none";
+    let clientMs = 0;
+    let jwksMs = 0;
     try {
+        const clientT0 = Date.now();
         const supabase = await createClient();
+        clientMs = Date.now() - clientT0;
         /**
          * The key set must be supplied from the process cache. auth-js caches JWKS on the
          * GoTrueClient INSTANCE, and `createClient()` builds a fresh one per request, so this
          * "local" verification was refetching `/.well-known/jwks.json` from the remote Auth server
          * on every request — measured at ~200ms each. See `lib/auth/jwksCache.ts`.
          */
+        const jwksT0 = Date.now();
         const jwks = await getCachedJwks(getSupabaseUrlForAuth() ?? "", getSupabaseAnonKeyForAuth() ?? "");
+        jwksMs = Date.now() - jwksT0;
         const claimsRes = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
         if (!claimsRes.error && claimsRes.data?.claims) {
             const sub = (claimsRes.data.claims as { sub?: unknown }).sub;
@@ -52,7 +58,7 @@ const resolveAuthSessionOnce = cache(async (): Promise<AuthSessionState> => {
         console.error("[resolveAuthSessionOnce] unexpected:", e);
         return { userId: null, user: null, authSource: "none" };
     } finally {
-        logDbTiming("auth.session_resolve", Date.now() - t0, { source });
+        logDbTiming("auth.session_resolve", Date.now() - t0, { source, client_ms: clientMs, jwks_ms: jwksMs });
     }
 });
 

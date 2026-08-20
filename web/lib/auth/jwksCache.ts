@@ -34,9 +34,25 @@ const JWKS_TTL_MS = 10 * 60 * 1000;
 
 type CacheEntry = { keys: JwksKeySet; fetchedAt: number };
 
-const cache = new Map<string, CacheEntry>();
+/**
+ * Stored on `globalThis`, NOT in module scope.
+ *
+ * A module-level Map looks correct and silently does nothing here. Next gives each route
+ * entrypoint its own module registry in a production build, so every server route holds a
+ * SEPARATE copy of this cache. Measured that way: `jwks_ms` was 167-196ms on every single call —
+ * six per Work Unit load, one per route — a 100% miss rate that reads exactly like no cache at
+ * all, because it was no cache at all. Middleware is one Edge bundle, so its module-level copy
+ * did work (4ms), which is what made the failure look like a route-layer-specific problem.
+ */
+type JwksGlobal = {
+    cache: Map<string, CacheEntry>;
+    inflight: Map<string, Promise<JwksKeySet | null>>;
+};
+const g = globalThis as typeof globalThis & { __alloyJwks?: JwksGlobal };
+const store: JwksGlobal = (g.__alloyJwks ??= { cache: new Map(), inflight: new Map() });
+const cache = store.cache;
 /** De-duplicates concurrent misses so a cold process makes ONE fetch, not one per in-flight request. */
-const inflight = new Map<string, Promise<JwksKeySet | null>>();
+const inflight = store.inflight;
 
 function jwksUrl(supabaseUrl: string): string {
     return `${supabaseUrl.replace(/\/+$/, "")}/auth/v1/.well-known/jwks.json`;
