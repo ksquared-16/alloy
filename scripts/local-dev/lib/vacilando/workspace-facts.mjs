@@ -185,7 +185,8 @@ async function listenPortTable() {
   return byPort;
 }
 
-async function gitFactsForPath(path, cfg) {
+/** Cached dirty/ahead/behind/branch for one worktree path. Shared by board + lanes. */
+export async function gitFactsForPath(path, cfg) {
   const now = Date.now();
   const hit = gitFactsCache.get(path);
   if (hit && now - hit.at < GIT_FACTS_TTL_MS) return hit;
@@ -195,30 +196,54 @@ async function gitFactsForPath(path, cfg) {
     return miss;
   }
   const webRel = `${cfg.web_dir}/next-env.d.ts`;
-  const [dirtyR, abAhead, abBehind, branchR] = await Promise.all([
+  const [dirtyR, abAhead, abBehind, branchR, headR, commitR] = await Promise.all([
     run("git", ["--no-optional-locks", "-C", path, "status", "--porcelain"], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-list", "--count", `${cfg.base_ref}..HEAD`], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-list", "--count", `HEAD..${cfg.base_ref}`], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-parse", "--abbrev-ref", "HEAD"], { timeout: 4000 }),
+    run("git", ["--no-optional-locks", "-C", path, "rev-parse", "HEAD"], { timeout: 4000 }),
+    run("git", ["--no-optional-locks", "-C", path, "log", "-1", "--format=%cI"], { timeout: 4000 }),
   ]);
   let git = "unknown";
+  let modified = 0;
+  let untracked = 0;
+  let conflict = false;
   if (dirtyR.ok) {
     const lines = dirtyR.stdout.split(/\n/).filter((l) => l && !/^\?\? \.env\.local\.agent$/.test(l));
     const meaningful = lines.filter((l) => l.slice(3) !== webRel);
     git = meaningful.length ? "dirty" : "clean";
+    untracked = meaningful.filter((l) => l.startsWith("??")).length;
+    modified = meaningful.length - untracked;
+    conflict = meaningful.some((l) => /^(UU|AA|DD|AU|UA|DU|UD|DD)/.test(l));
   } else if (!existsSync(path)) {
     git = "missing";
+  }
+  if (existsSync(join(path, ".git", "MERGE_HEAD"))
+      || existsSync(join(path, ".git", "rebase-merge"))
+      || existsSync(join(path, ".git", "rebase-apply"))) {
+    conflict = true;
   }
   const ahead = abAhead.ok ? (abAhead.stdout.trim() || "?") : "?";
   const behind = abBehind.ok ? (abBehind.stdout.trim() || "?") : "?";
   const fact = {
     at: now,
-    git,
+    git: conflict ? "conflict" : git,
     ahead_behind: `${ahead}/${behind}`,
     branch: branchR.ok ? (branchR.stdout.trim() || "?") : "?",
+    head: headR.ok ? (headR.stdout.trim() || null) : null,
+    last_commit_at: commitR.ok ? (commitR.stdout.trim() || null) : null,
+    modified,
+    untracked,
+    conflict,
   };
   gitFactsCache.set(path, fact);
   return fact;
+}
+
+/** Public Git facts for a worktree path — same cache as the status hot path. */
+export async function readGitFacts(path, cfg) {
+  if (!cfg) cfg = resolveRuntimeConfig();
+  return gitFactsForPath(path, cfg);
 }
 
 function projectInitiative(statePath) {

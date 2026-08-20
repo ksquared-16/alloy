@@ -12,6 +12,11 @@
  *
  * Endpoints:
  *   GET  /api/health          → liveness + schema
+ *   GET  /api/lanes           → Development Lane discovery (tmux + git facts)
+ *   GET  /api/lanes/:id       → one allowlisted lane (server-resolved tmux target)
+ *   GET  /api/lanes/:id/output → recent pane text (lane_id only; ?mode=extended|latest_response)
+ *   POST /api/lanes/:id/instruction → paste+submit instruction (lane_id + body)
+ *   POST /api/lanes/:id/runtime/release → lane.release_execution_capacity (keep durable lane)
  *   GET  /api/state           → the full Command Center snapshot
  *   GET  /api/events          → SSE stream; a `snapshot` frame on connect + tick
  *   GET  /api/commands        → the registered command catalog (+ unsupported)
@@ -48,7 +53,8 @@ import { getProviderRuntime } from "./vacilando/provider-runtime.mjs";
 import { computeReclaim, memoryPressure, runningDevServers } from "./vacilando/memory-manager.mjs";
 import { diskSignalAsync, freeDiskGb, runGc } from "./vacilando/disk-hygiene.mjs";
 import {
-  claimControlPlaneOwnership,
+  acquireControlPlaneOwnership,
+  releaseControlPlaneOwnership,
   noteBindTiming,
   recordControlPlaneEvent,
   getControlPlaneHealth,
@@ -66,6 +72,31 @@ import { listCapabilities, getCapability, registerCapability } from "./vacilando
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
+import { getDevelopmentLane, getLaneOutput, listDevelopmentLanes, LANE_ID_RE, normalizeLaneId, unexpectedLaneControlFields } from "./vacilando/lanes.mjs";
+import { connectExistingWorkRequest, createNewLaneRequest, listAdoptionCandidates, renameLaneRequest } from "./vacilando/lane-identity-api.mjs";
+import { attachLaneInstructions, enrichOutputRuntime } from "./vacilando/lane-runtime.mjs";
+import { attachLaneRuns, inspectLaneRun } from "./vacilando/execution-run.mjs";
+import { attachLaneRunLifecycle } from "./vacilando/execution-stale.mjs";
+import { attachLaneAdmissions, prioritizeAdmission } from "./vacilando/execution-admission.mjs";
+import { attachLaneSourceControl } from "./vacilando/source-control.mjs";
+import { attachLaneResourceWaits, developmentResourceSnapshot, prioritizeResourceRequest } from "./vacilando/execution-resource.mjs";
+import { attachLaneGovernedActions } from "./vacilando/governed-action-request.mjs";
+import { attachLaneRecovery } from "./vacilando/execution-recovery.mjs";
+import { attachLaneAgentSessions, acceptHandoffReport, acceptOrientationReport, requestSessionRotation, maybeAdvanceSessionRotation } from "./vacilando/agent-session-lifecycle.mjs";
+import { maybeReconcileGovernor, reconcileGovernor } from "./vacilando/execution-reconcile.mjs";
+import { emergencyReleaseExclusive, evaluateExclusiveWindow, reconcileExclusiveWindow } from "./vacilando/execution-exclusive.mjs";
+import { reconcileGrantContinuations } from "./vacilando/execution-resume.mjs";
+import { deliverManagedLaneInstruction, laneInstructionHttpStatus } from "./vacilando/execution-run-send.mjs";
+import { resumePendingOutputWatches, stopAllOutputWatches } from "./vacilando/lane-notify.mjs";
+import {
+  deletePushSubscription,
+  publicPushConfig,
+  publicPushHealth,
+  requestPublicOrigin,
+  savePushSubscription,
+  sendTestPush,
+} from "./vacilando/lane-push.mjs";
+import { getLaneAgentTelemetry, peekLaneTelemetryCache } from "./vacilando/lane-telemetry.mjs";
 import {
   ingestMissionBrief,
   reviewMissionReadiness,
@@ -75,6 +106,21 @@ import {
 import { getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision } from "./vacilando/mission-brief.mjs";
 import { readTimelineSummary, summarizeFromTimeline } from "./vacilando/timeline.mjs";
 import { handleV2Get, handleV2Post } from "./vacilando/v2-api.mjs";
+import {
+  apiAuthRequired,
+  assertPrivateBindHost,
+  authorizeRequest,
+  clearSessionCookieHeader,
+  gatewayRemoteMode,
+  getVacilandoApiToken,
+  isPublicApiPath,
+  requestWantsSecureCookie,
+  sessionCookieHeader,
+  tokenFingerprint,
+  tokenFromHeaders,
+  tokensEqual,
+} from "./vacilando/vacilando-api-auth.mjs";
+import { attachTailscaleListener } from "./vacilando/vacilando-tailscale-bind.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUNTIME_ROOT_DIR = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(process.env.HOME || "", ".local", "state", "alloy-dev");
@@ -92,16 +138,23 @@ const WORKTREE_DISK_TICK_MS = 15 * 60 * 1000;
 const MIME = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
+  ".webmanifest": "application/manifest+json; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
   ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp",
   ".md": "text/plain; charset=utf-8", ".txt": "text/plain; charset=utf-8", ".log": "text/plain; charset=utf-8",
 };
 
-function sendJson(res, status, obj) {
+function sendJson(res, status, obj, extraHeaders = {}) {
   const body = JSON.stringify(obj);
-  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Content-Length": Buffer.byteLength(body), "Cache-Control": "no-store" });
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  });
   res.end(body);
 }
 
@@ -124,7 +177,7 @@ function statusForStage(out) {
  *  so versioned asset URLs bust the browser cache automatically. */
 function assetBuildId() {
   let s = "";
-  for (const f of ["app.js", "styles.css", "index.html"]) {
+  for (const f of ["app.js", "styles.css", "index.html", "gateway.js", "gateway-view.mjs", "mission-control.js"]) {
     try { const st = statSync(join(PUBLIC_DIR, f)); s += `${f}:${st.size}:${Math.round(st.mtimeMs)};`; } catch {}
   }
   return createHash("sha1").update(s).digest("hex").slice(0, 10);
@@ -144,9 +197,17 @@ function serveStatic(res, urlPath) {
   if (rel === "index.html") {
     const v = assetBuildId();
     let html = readFileSync(full, "utf8")
-      .replace(/(src|href)="(app\.js|styles\.css)"/g, `$1="$2?v=${v}"`);
+      .replace(/(src|href)="(app\.js|styles\.css|gateway\.js|gateway-view\.mjs|manifest\.webmanifest)"/g, `$1="$2?v=${v}"`);
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store, must-revalidate", "X-Vacilando-Build": v });
     return res.end(html);
+  }
+  if (rel === "sw.js") {
+    res.writeHead(200, {
+      "Content-Type": "text/javascript; charset=utf-8",
+      "Cache-Control": "no-store, must-revalidate",
+      "Service-Worker-Allowed": "/",
+    });
+    return createReadStream(full).pipe(res);
   }
   res.writeHead(200, { "Content-Type": MIME[extname(full)] || "application/octet-stream", "Cache-Control": "no-store" });
   createReadStream(full).pipe(res);
@@ -650,6 +711,11 @@ function conductorTick() {
         .catch(() => {})
         .finally(() => { silentRecoverInFlight = false; });
     }
+    try {
+      import("./vacilando/governed-action-request.mjs")
+        .then(({ tickGovernedActions }) => tickGovernedActions())
+        .catch(() => {});
+    } catch { /* governed-action tick must not break conductor */ }
     if (process.env.VACILANDO_AUTO_DISPATCH !== "0") {
       import("./vacilando/director-summary.mjs")
         .then(async ({ listMissionsV2 }) => {
@@ -775,6 +841,51 @@ export function createVacilandoServer() {
     const url = new URL(req.url, `http://${LOOPBACK_HOST}`);
     const path = url.pathname;
 
+    if (path.startsWith("/api/") && gatewayRemoteMode() && !isPublicApiPath(path, req.method)) {
+      const auth = authorizeRequest(req.headers, { mutation: req.method !== "GET" && req.method !== "HEAD" });
+      if (!auth.ok) return sendJson(res, auth.status, { ok: false, error: auth.error });
+    }
+
+    if (path === "/api/gateway/session") {
+      const required = apiAuthRequired();
+      const expected = getVacilandoApiToken();
+      const secure = requestWantsSecureCookie(req.headers, { encrypted: Boolean(req.socket?.encrypted) });
+      if (req.method === "GET") {
+        const auth = authorizeRequest(req.headers);
+        const authenticated = required ? Boolean(auth.ok && auth.mode !== "open") : true;
+        return sendJson(res, 200, {
+          ok: true,
+          authRequired: required,
+          authenticated,
+          tokenFingerprint: authenticated && expected ? tokenFingerprint(expected) : null,
+        });
+      }
+      if (req.method === "DELETE") {
+        return sendJson(res, 200, { ok: true, authenticated: false }, {
+          "Set-Cookie": clearSessionCookieHeader({ secure }),
+        });
+      }
+      if (req.method === "POST") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        if (!required) {
+          return sendJson(res, 200, { ok: true, authenticated: true, authRequired: false });
+        }
+        if (!expected) return sendJson(res, 503, { ok: false, error: "api_auth_unconfigured" });
+        const presented = String(
+          body.value?.token || body.value?.gateway_token || tokenFromHeaders(req.headers) || "",
+        );
+        if (!tokensEqual(presented, expected)) {
+          return sendJson(res, 401, { ok: false, error: "unauthorized" });
+        }
+        return sendJson(res, 200, {
+          ok: true,
+          authenticated: true,
+          tokenFingerprint: tokenFingerprint(expected),
+        }, { "Set-Cookie": sessionCookieHeader(expected, { secure }) });
+      }
+    }
+
     // ---- V2 Mission Control API (Director Execution System) ----
     if (path.startsWith("/api/v2/")) {
       try {
@@ -817,6 +928,45 @@ export function createVacilandoServer() {
       }
     }
 
+    if (path === "/api/gateway/push/config" && req.method === "GET") {
+      return sendJson(res, 200, publicPushConfig());
+    }
+    if (path === "/api/gateway/push/health" && req.method === "GET") {
+      return sendJson(res, 200, publicPushHealth({
+        requestOrigin: requestPublicOrigin(req.headers, url),
+      }));
+    }
+    if (path === "/api/gateway/push/test" && req.method === "POST") {
+      const body = await readJsonBody(req);
+      if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+      const extra = Object.keys(body.value || {}).filter((k) => !["endpoint", "lane_id"].includes(k));
+      if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+      const out = await sendTestPush({
+        endpoint: body.value?.endpoint || null,
+        lane_id: body.value?.lane_id || null,
+        origin: requestPublicOrigin(req.headers, url),
+      });
+      const status = out.ok ? 200 : (out.error === "missing_endpoint" || out.error === "device_not_subscribed" || out.error === "origin_mismatch" ? 409 : 502);
+      return sendJson(res, status, out);
+    }
+    if (path === "/api/gateway/push/subscription") {
+      if (req.method === "POST") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const out = savePushSubscription(body.value, {
+          userAgent: req.headers["user-agent"] || null,
+          origin: requestPublicOrigin(req.headers, url),
+        });
+        return sendJson(res, out.ok ? 200 : 400, out);
+      }
+      if (req.method === "DELETE") {
+        const body = await readJsonBody(req);
+        const endpoint = body.ok ? (body.value?.endpoint || url.searchParams.get("endpoint")) : url.searchParams.get("endpoint");
+        const out = deletePushSubscription(endpoint);
+        return sendJson(res, out.ok ? 200 : 400, out);
+      }
+    }
+
     // ---- command runtime (POST; inert JSON only, routed through the registry) ----
     if (req.method === "POST" && (path === "/api/commands" || path === "/api/commands/preview")) {
       const body = await readJsonBody(req);
@@ -845,6 +995,233 @@ export function createVacilandoServer() {
       } catch (e) {
         // NEVER hang: a thrown command returns a real error the UI can show.
         return sendJson(res, 500, { ok: false, stage: "execute", code: "server_error", command: body.value?.command, error: String(e && e.message || e) });
+      }
+    }
+
+    if (req.method === "POST") {
+      if (path === "/api/lanes/create") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["name", "provider", "instruction"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        const out = await createNewLaneRequest(body.value || {});
+        return sendJson(res, out.status, out.body);
+      }
+      if (path === "/api/lanes/connect") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const out = await connectExistingWorkRequest(body.value || {});
+        return sendJson(res, out.status, out.body);
+      }
+      const laneRenameMatch = path.match(/^\/api\/lanes\/([^/]+)\/rename$/);
+      if (laneRenameMatch) {
+        const laneId = normalizeLaneId(laneRenameMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "name");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        const out = renameLaneRequest(laneId, body.value || {});
+        return sendJson(res, out.status, out.body);
+      }
+      const closeStaleMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/close-stale$/);
+      if (closeStaleMatch) {
+        const laneId = normalizeLaneId(closeStaleMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["run_id"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { closeStaleExecutionRun } = await import("./vacilando/execution-stale.mjs");
+          const { activeRunForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id || activeRunForLane(laneId)?.run_id;
+          if (!runId) return sendJson(res, 404, { ok: false, error: "run_not_found" });
+          const out = closeStaleExecutionRun(runId, { origin: "operator" });
+          const status = out.ok ? 200 : (out.error === "run_still_active" ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "close_stale_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const laneSendMatch = path.match(/^\/api\/lanes\/([^/]+)\/instruction$/);
+      if (laneSendMatch) {
+        const laneId = normalizeLaneId(laneSendMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const instruction = body.value?.instruction;
+          const out = await deliverManagedLaneInstruction(laneId, instruction);
+          const status = laneInstructionHttpStatus(out);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "lane_send_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const reportMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/report$/);
+      if (reportMatch) {
+        const laneId = normalizeLaneId(reportMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+          const extra = Object.keys(body.value || {}).filter((k) => !["state", "reason", "summary", "resource", "resource_event", "run_id", "checkpoint_ready", "checkpoint_summary"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+          if (!found.ok) return sendJson(res, found.error === "invalid_lane_id" ? 400 : 404, { ok: false, error: found.error });
+          const { reportRunState, activeRunForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id || activeRunForLane(laneId)?.run_id;
+          if (!runId) return sendJson(res, 404, { ok: false, error: "run_not_found" });
+          const out = reportRunState(runId, body.value?.state, {
+            reason: body.value?.reason || null,
+            summary: body.value?.summary || null,
+            resource: body.value?.resource || null,
+            resource_event: body.value?.resource_event || null,
+            origin: "agent",
+            cwd: found.lane?.worktree?.path || null,
+            expectedLaneId: laneId,
+            checkpoint_ready: body.value?.checkpoint_ready,
+            checkpoint_summary: body.value?.checkpoint_summary || null,
+          });
+          const status = out.ok ? 200 : (out.error === "illegal_transition" || out.error === "worktree_mismatch" || out.error === "lane_mismatch" ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "run_report_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const handoffMatch = path.match(/^\/api\/lanes\/([^/]+)\/agent-session\/handoff$/);
+      if (handoffMatch) {
+        const laneId = normalizeLaneId(handoffMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        try {
+          const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+          if (!found.ok) return sendJson(res, found.error === "invalid_lane_id" ? 400 : 404, { ok: false, error: found.error });
+          const { activeRunForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id || activeRunForLane(laneId)?.run_id;
+          const out = acceptHandoffReport({
+            laneId,
+            runId,
+            handoff: body.value || {},
+            cwd: found.lane?.worktree?.path || null,
+          });
+          return sendJson(res, out.ok ? 200 : 409, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "handoff_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const orientedMatch = path.match(/^\/api\/lanes\/([^/]+)\/agent-session\/oriented$/);
+      if (orientedMatch) {
+        const laneId = normalizeLaneId(orientedMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        try {
+          const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+          if (!found.ok) return sendJson(res, found.error === "invalid_lane_id" ? 400 : 404, { ok: false, error: found.error });
+          const { activeRunForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id || activeRunForLane(laneId)?.run_id;
+          const out = acceptOrientationReport({
+            laneId,
+            runId,
+            orientation: body.value || {},
+            cwd: found.lane?.worktree?.path || null,
+          });
+          return sendJson(res, out.ok ? 200 : 409, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "orientation_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const startMatch = path.match(/^\/api\/lanes\/([^/]+)\/agent-session\/start$/);
+      if (startMatch) {
+        const laneId = normalizeLaneId(startMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const body = await readJsonBody(req);
+          if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+          const extra = unexpectedLaneControlFields(body.value || {});
+          if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+          const { startLaneAgentSession } = await import("./vacilando/agent-session-lifecycle.mjs");
+          const out = await startLaneAgentSession({ laneId });
+          const status = out.ok ? 200
+            : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" || out.error === "provider_capacity" ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "session_start_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const releaseMatch = path.match(/^\/api\/lanes\/([^/]+)\/runtime\/release$/);
+      if (releaseMatch) {
+        const laneId = normalizeLaneId(releaseMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const body = await readJsonBody(req);
+          if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+          const extra = Object.keys(body.value || {});
+          if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+          const { releaseLaneExecutionCapacity } = await import("./vacilando/lane-execution-capacity.mjs");
+          const out = await releaseLaneExecutionCapacity(laneId, { origin: "operator" });
+          const status = out.ok ? 200
+            : (out.error === "unsafe_in_flight" || out.error === "source_control_gate" || out.error === "granted_resource" || out.error === "protected_worktree" || out.error === "runtime_adoption_blocked" ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "runtime_release_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const refreshMatch = path.match(/^\/api\/lanes\/([^/]+)\/agent-session\/refresh$/);
+      if (refreshMatch) {
+        const laneId = normalizeLaneId(refreshMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        try {
+          const out = await requestSessionRotation({
+            laneId,
+            origin: "operator",
+            confirm: body.value?.confirm === true,
+          });
+          const status = out.ok ? 200 : (out.error === "confirm_required" || out.error === "unsafe_checkpoint" ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "session_refresh_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const prioritizeMatch = path.match(/^\/api\/lanes\/([^/]+)\/resource-requests\/([^/]+)\/prioritize$/);
+      if (prioritizeMatch) {
+        const laneId = normalizeLaneId(prioritizeMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const requestId = String(prioritizeMatch[2] || "");
+        const out = prioritizeResourceRequest(requestId, { origin: "operator", expectedLaneId: laneId });
+        const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
+        return sendJson(res, status, out);
+      }
+      const admissionPrioritizeMatch = path.match(/^\/api\/lanes\/([^/]+)\/admission\/prioritize$/);
+      if (admissionPrioritizeMatch) {
+        const laneId = normalizeLaneId(admissionPrioritizeMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const { admissionForLane } = await import("./vacilando/execution-admission.mjs");
+        const rec = admissionForLane(laneId);
+        if (!rec) return sendJson(res, 404, { ok: false, error: "admission_not_found" });
+        const out = prioritizeAdmission(rec.admission_id, { origin: "operator", expectedLaneId: laneId });
+        const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
+        return sendJson(res, status, out);
+      }
+      if (path === "/api/development-resources/exclusive/release") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const out = emergencyReleaseExclusive({
+          confirm: body.value?.confirm === true,
+          actor: "operator",
+          origin: "operator",
+        });
+        const status = out.ok ? 200 : (out.error === "confirm_required" || out.error === "no_exclusive_window" ? 409 : 400);
+        return sendJson(res, status, out);
       }
     }
 
@@ -1064,6 +1441,7 @@ export function createVacilandoServer() {
         server: "vacilando",
         host: LOOPBACK_HOST,
         pid: process.pid,
+        auth_required: apiAuthRequired(),
         control_plane: { status: cp.status, accepting: true, hydrated },
         startup: timings,
       });
@@ -1196,6 +1574,110 @@ export function createVacilandoServer() {
       return sendJson(res, 200, { slot, requests: readRequests(slot) });
     }
     // ---- Single source of truth: who is this slot, and where does this runtime live? ----
+    if (path === "/api/lanes") {
+      try {
+        try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
+        try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
+        const out = await listDevelopmentLanes();
+        const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false }))))))));
+        const development_resources = developmentResourceSnapshot();
+        let execution_capacity = null;
+        try {
+          const { summarizeHostExecutionCapacity } = await import("./vacilando/lane-execution-capacity.mjs");
+          execution_capacity = await summarizeHostExecutionCapacity(lanes);
+        } catch { /* capacity summary is secondary */ }
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
+      }
+    }
+    if (path === "/api/lanes/candidates") {
+      try {
+        const out = await listAdoptionCandidates();
+        return sendJson(res, 200, out);
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "candidate_discovery_failed", detail: String(e && e.message || e) });
+      }
+    }
+    if (path === "/api/development-resources") {
+      try { evaluateExclusiveWindow(); } catch { /* */ }
+      return sendJson(res, 200, developmentResourceSnapshot());
+    }
+    {
+      const laneTelemetryMatch = path.match(/^\/api\/lanes\/([^/]+)\/telemetry$/);
+      if (laneTelemetryMatch) {
+        const laneId = normalizeLaneId(laneTelemetryMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, available: false, error: "invalid_lane_id" });
+        try {
+          const cached = peekLaneTelemetryCache(laneId);
+          const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+          if (!found.ok) {
+            const status = found.error === "invalid_lane_id" ? 400 : 404;
+            return sendJson(res, status, { ok: false, available: false, error: found.error, lane_id: laneId });
+          }
+          const out = cached || await getLaneAgentTelemetry(found.lane);
+          try {
+            found.lane.agent_telemetry = out;
+            await maybeAdvanceSessionRotation(found.lane);
+          } catch { /* rotation must not fail telemetry */ }
+          return sendJson(res, 200, out);
+        } catch (e) {
+          return sendJson(res, 200, { ok: true, available: false, error: "telemetry_failed", lane_id: laneId, detail: String(e && e.message || e) });
+        }
+      }
+    }
+    {
+      const laneOutputMatch = path.match(/^\/api\/lanes\/([^/]+)\/output$/);
+      if (laneOutputMatch) {
+        const laneId = normalizeLaneId(laneOutputMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, available: false, error: "invalid_lane_id" });
+        const linesRaw = url.searchParams.get("lines");
+        const lines = linesRaw != null && /^\d+$/.test(linesRaw) ? Number(linesRaw) : undefined;
+        const mode = url.searchParams.get("mode") || undefined;
+        try {
+          const out = enrichOutputRuntime(await getLaneOutput(laneId, {
+            ...(lines != null ? { maxLines: lines } : {}),
+            ...(mode ? { mode } : {}),
+          }));
+          const status = out.ok ? 200 : (out.error === "invalid_lane_id" ? 400 : out.error === "pane_unavailable" ? 503 : 404);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, available: false, error: "lane_output_failed", detail: String(e && e.message || e) });
+        }
+      }
+    }
+    {
+      const laneRunMatch = path.match(/^\/api\/lanes\/([^/]+)\/run$/);
+      if (laneRunMatch) {
+        const laneId = normalizeLaneId(laneRunMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        return sendJson(res, 200, (() => {
+          const out = inspectLaneRun(laneId);
+          if (out.execution_run) {
+            out.execution_run = attachLaneGovernedActions(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits([{ lane_id: laneId, execution_run: out.execution_run }]))))))[0].execution_run;
+          }
+          return out;
+        })());
+      }
+    }
+    {
+      const laneMatch = path.match(/^\/api\/lanes\/([^/]+)$/);
+      if (laneMatch) {
+        const laneId = normalizeLaneId(laneMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
+          const out = await getDevelopmentLane(laneId);
+          if (out.lane) {
+            try { await maybeAdvanceSessionRotation(out.lane); } catch { /* planned rotation advance must not fail inspect */ }
+            out.lane = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true }))))))))[0];
+          }
+          return sendJson(res, out.ok ? 200 : 404, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
+        }
+      }
+    }
     if (path === "/api/identity") {
       const slotParam = url.searchParams.get("slot");
       const host = runtimeHost();
@@ -1513,6 +1995,28 @@ export function createVacilandoServer() {
     // Yield once so the first HTTP responses after listen are not starved by boot recovery.
     setImmediate(() => {
     const tWarm = Date.now();
+        try { resumePendingOutputWatches(); } catch { /* */ }
+        try {
+          reconcileExclusiveWindow();
+        } catch { /* */ }
+        try {
+          reconcileGovernor({ reason: "boot", depth: "targeted", continuations: false }).then((s) => {
+            if ((s.recovered || 0) + (s.repaired || 0)) {
+              console.log(`[governor] boot reconcile recovered=${s.recovered} repaired=${s.repaired} ${Number(s.ms || 0).toFixed(1)}ms`);
+            }
+          }).catch(() => {});
+        } catch { /* */ }
+        try {
+          import("./vacilando/governed-action-request.mjs")
+            .then(({ tickGovernedActions }) => tickGovernedActions())
+            .catch(() => {});
+        } catch { /* Director freshness recover must not block warm */ }
+        try {
+          reconcileGrantContinuations().then((ex) => {
+            const n = (ex.delivered || 0) + (ex.repaired || 0);
+            if (n) console.log(`[governor] resumed ${n} granted resource continuation(s)`);
+          }).catch(() => {});
+        } catch { /* */ }
     try { const n = recoverInterrupted(); if (n) console.log(`[director] recovered ${n} interrupted request(s)`); } catch { /* best-effort */ }
     try {
       const rec = recoverMissions({ providerResumable });
@@ -1566,7 +2070,18 @@ export function createVacilandoServer() {
     }); // end setImmediate yield
   }
 
-  const backgroundTimers = [];
+  const exclusiveTimer = setInterval(() => {
+    try { evaluateExclusiveWindow(); } catch { /* */ }
+  }, 2000);
+  exclusiveTimer.unref?.();
+  const recoverCheapTimer = setInterval(() => {
+    maybeReconcileGovernor({ reason: "periodic", depth: "cheap" }).catch(() => {});
+  }, 10000);
+  recoverCheapTimer.unref?.();
+  const recoverTargetedTimer = setInterval(() => {
+    reconcileGovernor({ reason: "periodic", depth: "targeted" }).catch(() => {});
+  }, 30000);
+  recoverTargetedTimer.unref?.();
   return {
     server,
     clients,
@@ -1578,8 +2093,12 @@ export function createVacilandoServer() {
       clearInterval(worktreeDiskTimer);
       clearInterval(engHealthTimer);
       clearInterval(condTimer);
-      for (const t of backgroundTimers) clearInterval(t);
+      clearInterval(exclusiveTimer);
+      clearInterval(recoverCheapTimer);
+      clearInterval(recoverTargetedTimer);
+      stopAllOutputWatches();
       server.close();
+      releaseControlPlaneOwnership();
     },
   };
 }
@@ -1597,6 +2116,13 @@ export function getStartupTimings() {
 }
 
 export function startVacilandoServer(port = DEFAULT_PORT) {
+  const bind = assertPrivateBindHost(process.env.VACILANDO_BIND || LOOPBACK_HOST);
+  if (!bind.ok) {
+    const err = new Error(bind.message || bind.error);
+    err.code = bind.error;
+    return Promise.reject(err);
+  }
+
   // Desktop / auto defaults: real provider unless tests authorize mock.
   if (!process.env.VACILANDO_EXECUTION_PROVIDER) {
     process.env.VACILANDO_EXECUTION_PROVIDER = "auto";
@@ -1607,30 +2133,58 @@ export function startVacilandoServer(port = DEFAULT_PORT) {
   }
   process.env.VACILANDO_CONTROL_PLANE_PORT = String(port);
 
+  const acquired = acquireControlPlaneOwnership({
+    pid: process.pid,
+    port: Number(port) || null,
+    worktree: process.cwd(),
+    desktopOwned: process.env.VACILANDO_DESKTOP_OWNED === "1" || process.env.VACILANDO_OWNED === "1",
+    executionProvider: process.env.VACILANDO_EXECUTION_PROVIDER || "auto",
+  });
+  if (!acquired.ok) {
+    recordControlPlaneEvent({ status: "failed", detail: acquired.message || acquired.error });
+    const err = new Error(acquired.message || acquired.error);
+    err.code = acquired.error;
+    err.owner = acquired.owner;
+    return Promise.reject(err);
+  }
+
   recordControlPlaneEvent({ status: "starting", detail: `Binding :${port}`, timings: { process_started_at: startupTimings.process_started_at } });
   const tCreate = Date.now();
   const { server, close, beginBackgroundWarm } = createVacilandoServer();
   startupTimings.create_ms = Date.now() - tCreate;
   return new Promise((res, rej) => {
     server.once("error", (e) => {
+      releaseControlPlaneOwnership();
       recordControlPlaneEvent({ status: "failed", detail: String(e.message || e) });
       rej(e);
     });
-    server.listen(port, LOOPBACK_HOST, () => {
+    server.listen(port, bind.host, () => {
       const listenAt = Date.now();
       const bound = server.address()?.port ?? port;
       startupTimings.listen_ms = listenAt - startupTimings.process_started_at;
       noteBindTiming({ startedAtMs: startupTimings.process_started_at, listenAtMs: listenAt });
-      claimControlPlaneOwnership({
+      acquireControlPlaneOwnership({
         pid: process.pid,
         port: bound,
         worktree: process.cwd(),
         desktopOwned: process.env.VACILANDO_DESKTOP_OWNED === "1" || process.env.VACILANDO_OWNED === "1",
         executionProvider: process.env.VACILANDO_EXECUTION_PROVIDER || "auto",
       });
-      // Warm only after accepting — health answers immediately.
-      setImmediate(() => beginBackgroundWarm({ startedAtMs: startupTimings.process_started_at }));
-      res({ server, close, port: bound, startupTimings: getStartupTimings() });
+      let extraBind = null;
+      const finish = (tailscaleHost = null) => {
+        setImmediate(() => beginBackgroundWarm({ startedAtMs: startupTimings.process_started_at }));
+        const wrappedClose = () => {
+          try { extraBind?.close(); } catch { /* */ }
+          close();
+        };
+        res({ server, close: wrappedClose, port: bound, tailscaleHost, startupTimings: getStartupTimings() });
+      };
+      // Loopback must come up even if Tailscale's utun address is not bindable yet.
+      // Remote mode retries extra bind with a freshly discovered IPv4 — never 0.0.0.0.
+      if (gatewayRemoteMode()) {
+        extraBind = attachTailscaleListener({ server, port: bound });
+      }
+      finish(extraBind?.host || null);
     });
   });
 }
@@ -1639,8 +2193,17 @@ export function startVacilandoServer(port = DEFAULT_PORT) {
 if (process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url))) {
   const pIdx = process.argv.indexOf("--port");
   const port = pIdx > -1 ? Number(process.argv[pIdx + 1]) : DEFAULT_PORT;
-  startVacilandoServer(port).then(({ port }) => {
-    process.stdout.write(`Vacilando Runtime → http://${LOOPBACK_HOST}:${port}  (loopback only, read-only, Ctrl-C to stop)\n`);
+  startVacilandoServer(port).then(({ port, close, tailscaleHost }) => {
+    process.stdout.write(`Vacilando Runtime → http://${LOOPBACK_HOST}:${port}  (loopback)\n`);
+    if (tailscaleHost) {
+      process.stdout.write(`Vacilando Tailscale → http://${tailscaleHost}:${port}  (auth required, tailnet only)\n`);
+    }
+    const stop = () => {
+      try { close(); } catch { /* */ }
+      process.exit(0);
+    };
+    process.on("SIGINT", stop);
+    process.on("SIGTERM", stop);
   }).catch((e) => {
     process.stderr.write(`failed to bind ${LOOPBACK_HOST}:${port}: ${e.message}\n`);
     process.exit(1);

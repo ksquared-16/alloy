@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# vac — short UX alias for the host-wide validation broker.
+# vac — short UX alias for the host-wide validation broker + worker protocol.
 #   vac run typecheck|typecheck:tests|test|build|playwright|imports [--force]
+#   vac run-status <run_id> <state> [...]
+#   vac governed-action --run <id> --lane <lane> --json '{...}'
 #   vac status
 #   vac cancel <request_id>
 set -euo pipefail
@@ -11,6 +13,9 @@ usage() {
   cat <<'EOF'
 Usage:
   vac run <kind> [--force]     Run a heavy validation kind in this worktree (brokered)
+  vac run-status <run_id> <state>   Report Execution Run state (not the validation broker)
+  vac governed-action --run <id> --lane <lane> --json '{...}'
+                           Report a Director-owned governed action (not the validation broker)
   vac status                   Show active lease + FIFO queue
   vac cancel <request_id>      Cancel a waiter or signal the holder
 
@@ -27,6 +32,14 @@ case "${1:-}" in
   cancel)
     shift
     exec "$SCRIPT_DIR/alloy-validate" cancel "$@"
+    ;;
+  run-status)
+    shift
+    exec node "$SCRIPT_DIR/vac-run-status.mjs" "$@"
+    ;;
+  governed-action)
+    shift
+    exec node "$SCRIPT_DIR/vac-governed-action.mjs" "$@"
     ;;
   run)
     shift

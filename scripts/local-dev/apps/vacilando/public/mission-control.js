@@ -335,6 +335,7 @@
     });
     // Apply deferred revision shortly after an overlay closes.
     document.addEventListener("click", () => {
+      if (document.getElementById("gw-login") && !document.getElementById("gw-login").hidden) return;
       queueMicrotask(() => V2.flushPendingPresentationRevision());
     }, true);
     // First sync shortly after boot.
@@ -2851,6 +2852,20 @@ We'll capture the context automatically.</p>
           ` : ""}
         </article>
         <article class="mc-card" style="margin-top:12px">
+          <div class="mc-card-h"><b>Director capabilities</b><span class="mc-pill ${diag?.directorCapabilities?.healthy ? "ok" : (diag?.directorCapabilities?.state === "refreshing" ? "warn" : (diag?.directorCapabilities?.stale ? "warn" : "muted"))}">${esc(diag?.directorCapabilities?.copy?.headline || diag?.directorCapabilities?.state || (diag ? "Current" : "Checking…"))}</span></div>
+          <p class="muted">Whether Director has loaded the current governed-action catalog. Operators never restart a process by hand.</p>
+          ${diag?.directorCapabilities ? `
+          <div class="mc-stat-grid" style="margin-top:8px">
+            <div class="mc-stat"><div class="mc-stat-k">State</div><div class="mc-stat-v">${esc(diag.directorCapabilities.state || "—")}</div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Loaded catalog</div><div class="mc-stat-v"><code>${esc(diag.directorCapabilities.loaded_fingerprint || "—")}</code></div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Current catalog</div><div class="mc-stat-v"><code>${esc(diag.directorCapabilities.current_fingerprint || "—")}</code></div></div>
+            <div class="mc-stat"><div class="mc-stat-k">Last refresh</div><div class="mc-stat-v">${esc(diag.directorCapabilities.last_refresh_at || "—")}</div></div>
+          </div>
+          ${(diag.directorCapabilities.current_action_keys || []).length ? `<p class="muted" style="margin-top:8px">Current actions: ${(diag.directorCapabilities.current_action_keys || []).map((k) => `<code>${esc(k)}</code>`).join(" ")}</p>` : ""}
+          ${diag.directorCapabilities.operator_action ? `<button class="btn" type="button" data-mc-refresh-director>Refresh Director</button>` : ""}
+          ` : ""}
+        </article>
+        <article class="mc-card" style="margin-top:12px">
           <div class="mc-card-h"><b>Desktop notifications</b><span class="mc-pill ${typeof Notification === "undefined" ? "bad" : (Notification.permission === "granted" ? "ok" : Notification.permission === "denied" ? "bad" : "warn")}">${esc(typeof Notification === "undefined" ? "Unavailable" : Notification.permission === "granted" ? "Enabled" : Notification.permission === "denied" ? "Blocked" : "Not enabled")}</span></div>
           <p class="muted">Alerts when Needs You changes — decisions, approvals, and failed silent recoveries. Dock badge mirrors the Needs You count.</p>
           ${typeof Notification !== "undefined" && Notification.permission !== "granted"
@@ -3499,6 +3514,7 @@ We'll capture the context automatically.</p>
   }
 
   document.addEventListener("click", async (ev) => {
+    if (ev.target.closest("#gw-login")) return;
     if (ev.target.closest("#improve-vacilando-btn") || ev.target.closest("[data-ci-open]")) {
       openImproveDialog();
       return;
@@ -3778,7 +3794,7 @@ We'll capture the context automatically.</p>
       }
     }
 
-    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-open-next-wave],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
+    const t = ev.target.closest("[data-mc-answer],[data-mc-ask],[data-mc-reject],[data-mc-certify],[data-mc-reject-completion],[data-mc-reopen-work],[data-mc-park-outcome],[data-mc-open-next-wave],[data-mc-advance],[data-mc-review-outcome],[data-mc-dispatch],[data-mc-resume-stalled],[data-mc-server-start],[data-mc-server-stop],[data-mc-day-start],[data-mc-day-stop],[data-mc-refresh-director],[data-mc-kickoff-paste],[data-mc-kickoff-md],[data-mc-kickoff-ingest],[data-mc-kickoff-start],[data-mc-kickoff-reset],[data-legacy-nav],[data-mc-retry],[data-mc-review-findings],[data-mc-provide-feedback],[data-mc-feedback-dismiss],[data-mc-feedback-save],[data-mc-collab-save],[data-mc-collab-status]");
     if (!t) return;
 
     if (t.hasAttribute("data-mc-review-findings")) {
@@ -3972,6 +3988,13 @@ We'll capture the context automatically.</p>
       );
       if (!ok) return;
       runDayOps("stop");
+      return;
+    }
+    if (t.hasAttribute("data-mc-refresh-director")) {
+      post("/api/v2/director/refresh", { reason: "operator_refresh_director" }).then(() => {
+        V2.state.runtimeDiagnostics = null;
+        V2.fetchRuntimeDiagnostics?.();
+      }).catch(() => {});
       return;
     }
 

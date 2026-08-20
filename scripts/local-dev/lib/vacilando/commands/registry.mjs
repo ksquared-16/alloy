@@ -195,6 +195,136 @@ const COMMANDS = {
     refresh: [],
   },
 
+  "lane.list": {
+    key: "lane.list",
+    title: "List development lanes",
+    risk: "low",
+    execution: "internal",
+    confirmation: "none",
+    input: {},
+    resolveTarget: () => target("runtime", "development lanes", null),
+    eligibility: () => ({ eligible: true }),
+    preview: () => ({
+      summary: "List persistent Development Lanes (durable identity + live substrate).",
+      authoritative_target: "Vacilando durable lane store + tmux list-panes (read-only) + workspace-facts git",
+      effects: [
+        "Read-only. Does not attach, send keys, spawn Claude, or use tmux session name as durable lane identity.",
+      ],
+    }),
+    run: async () => {
+      const { listDevelopmentLanes } = await import("../lanes.mjs");
+      const { attachLaneInstructions } = await import("../lane-runtime.mjs");
+      const { attachLaneRuns } = await import("../execution-run.mjs");
+      const { attachLaneResourceWaits } = await import("../execution-resource.mjs");
+      const { attachLaneRecovery } = await import("../execution-recovery.mjs");
+      const { attachLaneAgentSessions } = await import("../agent-session-lifecycle.mjs");
+      const out = await listDevelopmentLanes();
+      if (out.lanes) out.lanes = attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes), undefined, { includeInstruction: false }))));
+      return out;
+    },
+    refresh: [],
+  },
+
+  "lane.inspect": {
+    key: "lane.inspect",
+    title: "Inspect development lane",
+    risk: "low",
+    execution: "internal",
+    confirmation: "none",
+    input: { lane_id: { type: "id", required: true } },
+    resolveTarget: (v) => target("lane", v.lane_id, { lane_id: v.lane_id }),
+    eligibility: (t, snap, v) => (v.lane_id ? { eligible: true } : { eligible: false, reason: "lane_id required" }),
+    preview: (v) => ({
+      summary: `Show the Development Lane projection for ${v.lane_id}.`,
+      authoritative_target: `durable Development Lane ${v.lane_id} → current runtime binding → git facts`,
+      effects: ["Read-only. Does not attach or mutate the session."],
+    }),
+    run: async (v) => {
+      const { getDevelopmentLane } = await import("../lanes.mjs");
+      const { attachLaneInstructions } = await import("../lane-runtime.mjs");
+      const { attachLaneRuns } = await import("../execution-run.mjs");
+      const { attachLaneResourceWaits } = await import("../execution-resource.mjs");
+      const { attachLaneRecovery } = await import("../execution-recovery.mjs");
+      const { attachLaneAgentSessions } = await import("../agent-session-lifecycle.mjs");
+      const out = await getDevelopmentLane(v.lane_id);
+      if (out.lane) out.lane = attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true }))))[0];
+      return out;
+    },
+    refresh: [],
+  },
+
+  "lane.output": {
+    key: "lane.output",
+    title: "Read development lane output",
+    risk: "low",
+    execution: "internal",
+    confirmation: "none",
+    input: { lane_id: { type: "id", required: true } },
+    resolveTarget: (v) => target("lane", v.lane_id, { lane_id: v.lane_id }),
+    eligibility: (t, snap, v) => (v.lane_id ? { eligible: true } : { eligible: false, reason: "lane_id required" }),
+    preview: (v) => ({
+      summary: `Read the currently visible pane output for Development Lane ${v.lane_id}.`,
+      authoritative_target: `tmux capture-pane -p of the server-resolved pane for ${v.lane_id}`,
+      effects: [
+        "Read-only. Does not attach, send keys, spawn Claude, or accept a client tmux target.",
+      ],
+    }),
+    run: async (v) => {
+      const { getLaneOutput } = await import("../lanes.mjs");
+      return getLaneOutput(v.lane_id);
+    },
+    refresh: [],
+  },
+
+  "lane.send_instruction": {
+    key: "lane.send_instruction",
+    title: "Send instruction to development lane",
+    risk: "consequential",
+    execution: "internal",
+    confirmation: "required",
+    input: {
+      lane_id: { type: "id", required: true },
+      instruction: { type: "text", required: true, max: 24000 },
+    },
+    resolveTarget: (v) => target("lane", v.lane_id, { lane_id: v.lane_id }),
+    eligibility: (t, snap, v) => (v.lane_id ? { eligible: true } : { eligible: false, reason: "lane_id required" }),
+    preview: (v) => ({
+      summary: `Paste a ${String(v.instruction || "").length}-character instruction into the existing process for Development Lane ${v.lane_id} and submit once.`,
+      authoritative_target: `tmux load-buffer/paste-buffer of the server-resolved pane for ${v.lane_id}`,
+      effects: [
+        "Delivers the instruction as literal terminal input (data), then one Enter.",
+        "Does not attach, spawn Claude, run claude -p, or accept a client tmux target or key sequence.",
+        "Proves delivery only — not that Claude finished responding.",
+      ],
+    }),
+    run: async (v) => {
+      const { deliverManagedLaneInstruction } = await import("../execution-run-send.mjs");
+      return deliverManagedLaneInstruction(v.lane_id, v.instruction);
+    },
+    refresh: [],
+  },
+
+  "execution_run.inspect": {
+    key: "execution_run.inspect",
+    title: "Inspect execution run",
+    risk: "low",
+    execution: "internal",
+    confirmation: "none",
+    input: { lane_id: { type: "id", required: true } },
+    resolveTarget: (v) => target("lane", v.lane_id, { lane_id: v.lane_id }),
+    eligibility: (t, snap, v) => (v.lane_id ? { eligible: true } : { eligible: false, reason: "lane_id required" }),
+    preview: (v) => ({
+      summary: `Show the current Execution Run for Development Lane ${v.lane_id}.`,
+      authoritative_target: `Vacilando execution-run store for ${v.lane_id}`,
+      effects: ["Read-only. Does not mutate run state or deliver an instruction."],
+    }),
+    run: async (v) => {
+      const { inspectLaneRun } = await import("../execution-run.mjs");
+      return inspectLaneRun(v.lane_id);
+    },
+    refresh: [],
+  },
+
   "worker.doctor": {
     key: "worker.doctor",
     title: "Diagnose worker health",

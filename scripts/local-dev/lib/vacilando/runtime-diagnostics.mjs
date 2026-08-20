@@ -129,7 +129,13 @@ export async function buildRuntimeDiagnostics() {
     && (configured === "auto" || configured === "claude" || configured === "cursor")
     && configured !== "mock";
 
-  return {
+  let directorCapabilities = null;
+  try {
+    const { directorCapabilitiesDiagnostics } = await import("./director-capability-freshness.mjs");
+    directorCapabilities = directorCapabilitiesDiagnostics();
+  } catch { /* optional */ }
+
+  const payload = {
     ok: true,
     kind: "vacilando.runtime_diagnostics.v1",
     execution: {
@@ -168,5 +174,7 @@ export async function buildRuntimeDiagnostics() {
     pid: process.pid,
     port: Number(process.env.VACILANDO_CONTROL_PLANE_PORT || owner?.port || 0) || null,
     at: new Date().toISOString(),
+    directorCapabilities,
   };
+  return payload;
 }
