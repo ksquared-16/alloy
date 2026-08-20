@@ -28,6 +28,7 @@ import {
     type PreferenceFieldKey,
 } from "@/lib/communications/v2/communicationPreferenceLabels";
 import type { PersonPreferenceProfile } from "@/lib/communications/v2/familyWorkspace/types";
+import { summarizeRecipientPreferences } from "@/lib/communications/v2/recipientPreferenceSummary";
 
 type Props = {
     personId: string;
@@ -39,10 +40,17 @@ type Props = {
     onChange?: (personId: string, field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
 };
 
-/** Anything blocked is worth showing without a click. Silence is not consent. */
+/**
+ * Anything blocked is worth showing without a click. Silence is not consent.
+ *
+ * Counted from the CHANNEL SUMMARY rather than from the rows, because a row saying
+ * `opted_out` does not always mean anything is blocked — essential categories are exempt,
+ * and counting them lit the badge for a state the platform ignores. See
+ * `recipientPreferenceSummary.ts`.
+ */
 function blockedCount(profile: PersonPreferenceProfile | null): number {
     if (!profile) return 0;
-    return PREFERENCE_FIELD_DEFS.filter((f) => operatorStatusLabel(profile[f.key]) === "Blocked").length;
+    return summarizeRecipientPreferences(profile).blockedChannelCount;
 }
 
 export default function RecipientPreferenceAffordance({
@@ -73,6 +81,10 @@ export default function RecipientPreferenceAffordance({
     }, [open]);
 
     const blocked = blockedCount(profile);
+    // The evaluator's own consequence, in one sentence per channel. An operator should be
+    // able to read WHY a channel will refuse without opening a management panel — the count
+    // alone told them something was wrong and nothing about what.
+    const summary = summarizeRecipientPreferences(profile);
 
     return (
         <div className="relative inline-flex" ref={rootRef} data-cc-recipient-preferences={personId}>
@@ -110,14 +122,46 @@ export default function RecipientPreferenceAffordance({
                         must never read as the household's. */}
                     <div className="mt-0.5 truncate text-[11px] font-medium text-alloy-midnight">{displayName}</div>
 
+                    {/* WHY, before WHAT. The evaluator already produces an operator-safe
+                        consequence; repeating a row's raw state here would be the same
+                        untruth the old "Email messages" control encoded. */}
+                    <ul className="mt-2 space-y-1" data-cc-preference-reasons={personId}>
+                        {[summary.email, summary.sms].map((c) => (
+                            <li
+                                key={c.channel}
+                                data-cc-preference-reason={`${personId}:${c.channel}`}
+                                className={`text-[11px] leading-snug ${
+                                    c.state === "blocked" ? "text-alloy-ember"
+                                    : c.state === "restricted" ? "text-alloy-midnight/60"
+                                    : "text-alloy-juniper"
+                                }`}
+                            >
+                                {c.reason}
+                            </li>
+                        ))}
+                    </ul>
+
                     {profile ? (
                         <ul className="mt-2 space-y-1">
                             {PREFERENCE_FIELD_DEFS.map((field) => {
                                 const status = operatorStatusLabel(profile[field.key]);
+                                // A category the platform exempts gets no switch. Rendering
+                                // one that cannot take effect is exactly the defect this
+                                // pass closes — see EDITABLE_PREFERENCE_FIELDS.
+                                const editable = field.control !== "always_allowed";
                                 return (
                                     <li key={field.key} className="flex items-center justify-between gap-2">
-                                        <span className="text-[11px] text-alloy-midnight/70">{field.label}</span>
-                                        {canEdit && status !== "Unknown" ? (
+                                        <span className="text-[11px] text-alloy-midnight/70" title={field.description}>
+                                            {field.label}
+                                        </span>
+                                        {!editable ? (
+                                            <span
+                                                data-cc-preference-always-allowed={`${personId}:${field.key}`}
+                                                className="rounded-full bg-alloy-stone/15 px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/55"
+                                            >
+                                                Always allowed
+                                            </span>
+                                        ) : canEdit && status !== "Unknown" ? (
                                             <button
                                                 type="button"
                                                 disabled={saving}

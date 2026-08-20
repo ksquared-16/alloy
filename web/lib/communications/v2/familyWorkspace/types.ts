@@ -4,10 +4,19 @@
 export const FAMILY_WORKSPACE_RESOLVER_VERSION = "5a" as const;
 
 export type ConsentState = "opted_in" | "opted_out" | "unset";
+/**
+ * Every category the evaluator consults, so the operator surface can be complete.
+ *
+ * `*_operational` was always evaluated on every send and was absent from this profile,
+ * which is why the one category that actually stops routine communication was invisible
+ * to the people expected to manage it.
+ */
 export type PersonPreferenceProfile = {
     email_transactional: ConsentState;
-    sms_transactional: ConsentState;
+    email_operational: ConsentState;
     email_marketing: ConsentState;
+    sms_transactional: ConsentState;
+    sms_operational: ConsentState;
     sms_marketing: ConsentState;
 };
 export type ComposerChannel = "email" | "sms" | "note";
