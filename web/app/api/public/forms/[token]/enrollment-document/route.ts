@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
+import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { renderParticipantEnrollmentDocument } from "@/lib/enrollment/participantRuntime/renderParticipantEnrollmentDocument";
 
 function plaintextToken(raw: string): string {
@@ -26,18 +27,22 @@ function plaintextToken(raw: string): string {
 }
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const timing = startParticipantTiming();
+    const tokenStart = timing.now();
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return publicErr("Server misconfiguration", 500);
 
     const { token: rawToken } = await params;
     const supabase = createServiceRoleClient();
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    timing.mark("token", tokenStart);
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
             code: access.error.code,
         });
     }
 
+    const renderStart = timing.now();
     const rendered = await renderParticipantEnrollmentDocument(supabase, {
         orgId: access.value.orgId,
         sessionId: access.value.sessionId,
@@ -51,6 +56,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         );
     }
 
+    timing.mark("render", renderStart);
     return new NextResponse(Buffer.from(rendered.bytes), {
         status: 200,
         headers: {
@@ -58,6 +64,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             "content-disposition": "inline",
             // The render reflects live session state — a cached copy would show a corrected value's past.
             "cache-control": "no-store",
+            "server-timing": timing.header(),
         },
     });
 }

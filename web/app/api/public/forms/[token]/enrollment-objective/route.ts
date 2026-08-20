@@ -17,6 +17,7 @@ import {
     recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjectiveWithContext,
 } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 
@@ -29,6 +30,8 @@ function plaintextToken(raw: string): string {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const timing = startParticipantTiming();
+    const tokenStart = timing.now();
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         return publicErr("Server misconfiguration", 500);
     }
@@ -37,6 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const supabase = createServiceRoleClient();
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    timing.mark("token", tokenStart);
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
             code: access.error.code,
@@ -49,6 +53,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // Canonical record and objective context are independent reads — one wave. The needs
     // projection DOES depend on canonical values, so the objective is re-assembled purely (zero
     // queries) once both are in hand.
+    const parallelStart = timing.now();
     const [canonical, resolved] = await Promise.all([
         resolveParticipantCanonicalContext(supabase, {
             orgId: access.value.orgId,
@@ -59,6 +64,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             processInstanceId: access.value.processInstanceId,
         }),
     ]);
+    timing.mark("objective", parallelStart);
     if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
     const objective = {
         ok: true as const,
@@ -70,5 +76,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Narrowed for the wire: a participant surface never receives org ids, revision internals or
     // requirement plumbing it has no use for.
-    return publicOk(participantObjectiveWireModel(objective.value, { subjectDisplayName: canonical.subjectDisplayName }));
+    const response = publicOk(participantObjectiveWireModel(objective.value, { subjectDisplayName: canonical.subjectDisplayName }));
+    response.headers.set("Server-Timing", timing.header());
+    return response;
 }

@@ -29,6 +29,7 @@ import { applyParticipantTurnResponse } from "@/lib/enrollment/participantRuntim
 import { interpretParticipantResponseDeterministically } from "@/lib/enrollment/participantRuntime/deterministicCandidateInterpreter";
 import { interpretParticipantResponseViaTrust } from "@/lib/trust/consumers/participantConversationInterpretation";
 import { participantProviderReasoningPermitted } from "@/lib/enrollment/participantRuntime/participantProviderAuthorization";
+import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 
@@ -41,6 +42,8 @@ function plaintextToken(raw: string): string {
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const timing = startParticipantTiming();
+    const tokenStart = timing.now();
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         return publicErr("Server misconfiguration", 500);
     }
@@ -49,6 +52,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const supabase = createServiceRoleClient();
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    timing.mark("token", tokenStart);
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
             code: access.error.code,
@@ -66,6 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // question the objective has already moved past. Canonical record and objective context are
     // independent reads — one wave; the objective is then re-assembled purely with the canonical
     // values, and the context carries them forward for the post-write recompute.
+    const parallelStart = timing.now();
     const [canonical, resolved] = await Promise.all([
         resolveParticipantCanonicalContext(supabase, {
             orgId: access.value.orgId,
@@ -76,6 +81,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             processInstanceId: access.value.processInstanceId,
         }),
     ]);
+    timing.mark("objective", parallelStart);
     if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
     const currentContext = { ...resolved.context, canonicalValues: canonical.values };
     const current = {
@@ -102,7 +108,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // The client supplied WORDS. The turn, the need, the semantic key and the command target are all
     // resolved server-side from the objective — the browser never names the field being answered.
     let clarificationPrompt: string | null = null;
+    let providerRan = false;
+    const interpretStart = timing.now();
     if (candidate.kind === "clarification_needed" && text) {
+        providerRan = true;
         const governed = await interpretParticipantResponseViaTrust({
             org_id: access.value.orgId,
             turn: current.value.next_turn,
@@ -123,7 +132,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (governed.candidate) candidate = governed.candidate;
         clarificationPrompt = governed.clarification_prompt;
     }
+    if (providerRan) timing.mark("interpret", interpretStart);
+    timing.provider(providerRan);
 
+    const writeStart = timing.now();
     const applied = await applyParticipantTurnResponse(supabase, {
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
@@ -137,9 +149,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // nothing it already knows and recomputes the objective purely from post-write state.
         current: { objective: current.value, context: current.context },
     });
+    timing.mark("write_recompute", writeStart);
     if (!applied.ok) return publicErr(applied.refusal.detail, 409, { code: applied.refusal.code });
 
-    return publicOk({
+    const response = publicOk({
         // A refusal is reported, not hidden: the participant is told plainly and asked again.
         outcome: applied.disposition.action,
         ...(applied.disposition.action === "refused" ? { reason: applied.disposition.reason } : {}),
@@ -151,4 +164,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             : {}),
         objective: participantObjectiveWireModel(applied.objective, { subjectDisplayName: canonical.subjectDisplayName }),
     });
+    response.headers.set("Server-Timing", timing.header());
+    return response;
 }
