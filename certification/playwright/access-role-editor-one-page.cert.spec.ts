@@ -198,7 +198,30 @@ test.describe("W-57 — one page per role", () => {
     });
 });
 
+/**
+ * **This block WRITES, and that is why it is gated.**
+ *
+ * Every other test in this file is a navigation and a read, safe against any environment. This one
+ * creates a role, grants it a capability and stands it down again — which is the only way to certify
+ * that a level an operator changes is authority the server actually holds.
+ *
+ * Against `alloy-cert` that is fine: the tenant is disposable and this spec cleans up after itself.
+ * Against **staging** it is not. Staging is a shared, promoted environment, and a certification run
+ * that mutates it is indistinguishable from an operator doing so — it would write a role into the
+ * same `role_definitions` the product serves, and a failure between the grant and the stand-down
+ * would leave authority behind. That already happened twice on the cert tenant, which is why the
+ * stand-down moved into `afterAll`.
+ *
+ * So the write is OPT-IN. It runs when `CERT_ALLOW_WRITES=1`, and otherwise records why it did not.
+ * Read-only certification of staging stays complete and honest; the write half is a deliberate
+ * decision someone makes about a specific environment, not a side effect of pointing the suite at a
+ * new URL.
+ */
+const WRITES_ALLOWED = process.env.CERT_ALLOW_WRITES === "1";
+
 test.describe("W-57 — a level the operator changes is authority the server holds", () => {
+    test.skip(!WRITES_ALLOWED, "write certification is opt-in (CERT_ALLOW_WRITES=1) — it creates and edits a role");
+
     /**
      * The tenant is shared. An assertion that fails mid-test must not leave a role holding
      * authority nobody asked for, so the stand-down runs in `afterAll` rather than only on the
