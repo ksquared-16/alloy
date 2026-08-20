@@ -1,6 +1,7 @@
 ---
 owner: platform
-status: decision-packet
+status: proposed
+status_note: A decision packet: the audit and the architecture it argues for, not a built thing.
 last_reviewed: 2026-08-18
 supersedes_candidate: INBOUND-EMAIL-PRIVACY-POSTURE.md (see §0 — requires Director decision)
 sources: official Google Workspace / Gmail API, Microsoft Graph, and Resend documentation, fetched 2026-08-18

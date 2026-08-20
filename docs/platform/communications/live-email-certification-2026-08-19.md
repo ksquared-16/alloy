@@ -1,6 +1,7 @@
 ---
 owner: platform
-status: certified
+status: sprint
+status_note: A dated record of one certification run, produced during this sprint.
 last_reviewed: 2026-08-19
 tenant: Firefly (hosted) · org 93667019-bd28-49b5-a688-acc9bb1e0a19
 method: read-only inspection of the hosted database and provider state

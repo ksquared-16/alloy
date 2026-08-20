@@ -1,6 +1,7 @@
 ---
 owner: platform
-status: parked
+status: proposed
+status_note: PARKED. Deliberately not built in this sprint; kept so the reasoning survives.
 last_reviewed: 2026-08-19
 parked_by: Director, 2026-08-19
 supersedes: []
