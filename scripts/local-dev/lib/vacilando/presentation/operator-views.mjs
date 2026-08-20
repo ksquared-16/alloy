@@ -839,7 +839,7 @@ export function listNeedsYou({ bypassCache = false } = {}) {
     const posture = deriveMissionPosture(missionId);
     if (!posture.needsYou) continue;
     // Decisions already covered above
-    if (posture.id === "decision_required") continue;
+    if (posture.id === "decision_required" || posture.id === "governed_action_approval") continue;
 
     if (posture.id === "deliverable_review") {
       pushUnique(needsYouItemVm({

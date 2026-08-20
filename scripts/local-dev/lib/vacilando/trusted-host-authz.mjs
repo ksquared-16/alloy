@@ -160,9 +160,17 @@ export function findAuthorization({
   const auths = listAuthorizations(missionId)
     .filter((a) => a.status === "active")
     .filter((a) => a.actionType === actionType)
-    .filter((a) => a.databaseTarget === databaseTarget)
+    .filter((a) => a.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS || a.databaseTarget === databaseTarget)
     .filter((a) => !isExpired(a, nowMs))
-    .filter((a) => !a.queryHash || !queryHash || a.queryHash === queryHash)
+    .filter((a) => {
+      // Merge authorization is SHA-bound. Approving one expected head
+      // must not auto-execute a later pin of the same PR.
+      if (actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+        || actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+        return Boolean(queryHash) && a.queryHash === queryHash;
+      }
+      return !a.queryHash || !queryHash || a.queryHash === queryHash;
+    })
     .filter((a) => a.scope !== "single_action" || !a.actionRequestId || a.actionRequestId === actionRequestId || !a.used_at);
 
   // Prefer mission-scoped, then unused single-action

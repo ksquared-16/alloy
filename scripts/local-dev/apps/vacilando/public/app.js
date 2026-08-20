@@ -221,14 +221,17 @@ function legacyMode() {
 function parseRoute() {
   const raw = location.hash.replace(/^#\/?/, "");
   const [pathPart, queryPart] = raw.split("?");
-  const p = (pathPart || "").split("/").filter(Boolean);
+  const p = (pathPart || "").split("/").filter(Boolean).map((seg) => {
+    try { return decodeURIComponent(seg); } catch { return seg; }
+  });
   const qs = new URLSearchParams(queryPart || "");
-  return { name: p[0] || "missions", sub: p[1], param: p[2], query: qs };
+  return { name: p[0] || "lanes", sub: p[1], param: p[2], query: qs };
 }
 function route() { return parseRoute().name; }
 function go(r) { location.hash = "#/" + r; }
 const CRUMBS = {
-  workspaces: "Missions", workspace: "Missions",
+  lanes: "Development Lanes",
+  workspaces: "Missions (legacy)", workspace: "Missions (legacy)",
   missions: "Mission Control", "needs-you": "Needs You", timeline: "Timeline", workers: "Workers",
   decisions: "Decisions", evidence: "Evidence", kickoff: "Mission Brief", improvements: "Improvements",
   settings: "Settings",
@@ -237,16 +240,16 @@ const CRUMBS = {
 };
 function setActiveNav(name) {
   const r = parseRoute();
-  const missionId = (r.name === "workspaces" || r.name === "workspace") ? (r.sub || null) : null;
-  document.querySelectorAll("#mission-rail .mission-rail-item").forEach((a) => {
+  const laneId = r.name === "lanes" ? (r.sub || null) : null;
+  document.querySelectorAll("#lane-rail .mission-rail-item").forEach((a) => {
     const route = a.dataset.route || "";
-    const mid = route.split("/")[1] || "";
-    a.classList.toggle("active", Boolean(missionId && mid === missionId));
+    const id = route.split("/")[1] || "";
+    a.classList.toggle("active", Boolean(laneId && id === laneId) || (route === "lanes" && !laneId && name === "lanes"));
   });
   document.querySelectorAll(".ruser[data-route]").forEach((a) => {
     a.classList.toggle("active", a.dataset.route === name);
   });
-  $("#crumb").textContent = CRUMBS[name] || "Missions";
+  $("#crumb").textContent = name === "lanes" && r.sub ? "Lane" : (CRUMBS[name] || "Development Lanes");
 }
 
 function escRail(s) {
@@ -354,6 +357,7 @@ window.renderMissionRail = function renderMissionRail(missions) {
 
 async function fetchMissionRail() {
   try {
+    if (parseRoute().name === "lanes") return;
     const r = await fetch("/api/v2/views/mission-rail", { cache: "no-store" });
     const j = await r.json();
     if (j?.missions) window.renderMissionRail(j.missions);
@@ -362,27 +366,27 @@ async function fetchMissionRail() {
 window.fetchMissionRail = fetchMissionRail;
 
 /**
- * Cutover: empty hash lands on Identity conversation (V3-4).
+ * Cutover: empty hash lands on Development Lanes (Gateway V2).
  */
 const LEGACY_HOME_ROUTES = new Set(["director", "command", "history", "policies", "trust"]);
-const V3_HOME = "#/workspaces/msn_f74ed02c126c88d7ff";
+const GATEWAY_HOME = "#/lanes";
 function enforceMissionControlHome() {
   const hash = location.hash || "";
   const empty = !hash || hash === "#" || hash === "#/";
   if (empty) {
-    location.hash = V3_HOME;
+    location.hash = GATEWAY_HOME;
     return;
   }
   if (legacyMode()) return;
   const r = parseRoute();
   if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) {
-    location.hash = V3_HOME;
+    location.hash = GATEWAY_HOME;
   }
 }
 window.addEventListener("hashchange", () => {
   if (legacyMode()) return;
   const r = parseRoute();
-  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = V3_HOME;
+  if (LEGACY_HOME_ROUTES.has(r.name) && !r.sub) location.hash = GATEWAY_HOME;
 });
 
 let lastKey = null;
@@ -433,6 +437,17 @@ function render(force) {
   if (document.querySelector(".ov")) return;
   const r = parseRoute();
   const V2 = window.VacilandoV2;
+
+  if (r.name === "lanes") {
+    setActiveNav("lanes");
+    const gw = window.VacilandoGateway;
+    if (!gw?.show) return;
+    const same = gw._state?.visible && gw._state.selected === (r.sub || null);
+    if (same && !force) gw.paint();
+    else gw.show(r);
+    return;
+  }
+  if (window.VacilandoGateway?.hide) window.VacilandoGateway.hide();
 
   // Mission Control is the authoritative shell — never wait on board compose.
   if (V2?.enabled && MC_ROUTES.has(r.name)) {
@@ -1257,7 +1272,15 @@ async function fetchPr(sp) { if (!sp?.worktree) return; try { const r = await fe
 async function fetchAudit() { try { const r = await fetch("/api/audit"); state._audit = (await r.json()).events; render(true); } catch {} }
 async function fetchCommands() { try { const r = await fetch("/api/commands"); state._cmds = (await r.json()).commands; render(true); } catch {} }
 async function fetchPolicies() { try { const r = await fetch("/api/policies"); state._pol = await r.json(); render(true); } catch {} }
-async function fetchResources() { try { const r = await fetch("/api/resources"); state.res = await r.json(); render(); } catch {} }
+async function fetchResources() {
+  try {
+    const r = await fetch("/api/resources");
+    state.res = await r.json();
+    window.__vacilandoResources = state.res;
+    if (window.VacilandoGateway?._state?.visible) window.VacilandoGateway.paint();
+    else render();
+  } catch {}
+}
 async function fetchDashboard() { try { const r = await fetch("/api/dashboard"); state._dash = await r.json(); render(true); } catch {} }
 async function diskReclaim() {
   toast("idle", "Reclaiming disk…", "merged + clean worktrees only — safe");
@@ -1971,6 +1994,7 @@ function directorSendBack(id, verdict, cid) {
 }
 
 document.addEventListener("click", (e) => {
+  if (e.target.closest("#gw-login")) return;
   const t = (a) => e.target.closest(a);
   let n;
   if ((n = t("[data-dcap]"))) {
@@ -2060,6 +2084,11 @@ document.addEventListener("click", (e) => {
       return;
     }
     go(n.dataset.route);
+    const gw = window.VacilandoGateway;
+    if (gw?.show && (n.dataset.route || "").startsWith("lanes")) {
+      const next = "#/" + n.dataset.route;
+      if (location.hash === next) gw.show({ name: "lanes", sub: n.dataset.gwLane || n.dataset.route.split("/")[1] || null });
+    }
     return;
   }
   if ((n = t("[data-sel]"))) { select(Number(n.dataset.sel)); return; }
@@ -2159,8 +2188,8 @@ function adoptSnapshot(s) {
 function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
-  // On Mission Control routes, board SSE must not thrash #view — debounce revision sync.
   const r = parseRoute();
+  if (r.name === "lanes") return;
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
     const now = Date.now();
     const last = window.VacilandoV2.state?._lastSseRevisionSync || 0;
@@ -2171,7 +2200,17 @@ function onSnap(s) {
   }
   render();
 }
-async function poll() { try { const r = await fetch("/api/state", { cache: "no-store" }); onSnap(await r.json()); setLive(sseOk ? "live" : "polling"); } catch { setLive("offline"); } }
+async function poll() {
+  try {
+    if (parseRoute().name === "lanes") {
+      setLive(sseOk ? "live" : "polling");
+      return;
+    }
+    const r = await fetch("/api/state", { cache: "no-store" });
+    onSnap(await r.json());
+    setLive(sseOk ? "live" : "polling");
+  } catch { setLive("offline"); }
+}
 function connect() { try { const es = new EventSource("/api/events"); es.addEventListener("snapshot", (ev) => { try { onSnap(JSON.parse(ev.data)); } catch {} sseOk = true; setLive("live"); }); es.addEventListener("hello", () => { sseOk = true; setLive("live"); }); es.onerror = () => { sseOk = false; }; } catch { sseOk = false; } }
 function isWorkspaceRoute() {
   try {
@@ -2182,12 +2221,11 @@ function isWorkspaceRoute() {
     return false;
   }
 }
+window.__vacilandoStart = function startControlRoom() {
 enforceMissionControlHome();
-if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = V3_HOME;
-fetchMissionRail();
-// First Mission Control / Workspace paint immediately (shell interactive before board hydrate).
+if (!location.hash || location.hash === "#" || location.hash === "#/") location.hash = GATEWAY_HOME;
+if (typeof window.fetchMissionRail === "function") fetchMissionRail();
 render(true);
-// Board telemetry contends on the single-threaded control plane — defer on Workspace Runtime.
 if (isWorkspaceRoute()) {
   setTimeout(() => { connect(); poll(); fetchResources(); }, 5000);
 } else {
@@ -2195,6 +2233,8 @@ if (isWorkspaceRoute()) {
   poll();
   fetchResources();
 }
+};
+if (window.VacilandoGateway) window.__vacilandoStart();
 // Human-visible Director cadence. Sub-4s polls previously stacked on SSE and
 // forced overlapping alloy-ro / du work on the control plane.
 setInterval(poll, 15000);
@@ -2216,6 +2256,8 @@ function setNativeDockBadge(count) {
 }
 
 function ensureNotifyPermission() {
+  const h = String(location.hash || "");
+  if (!h || h === "#" || h === "#/" || h.startsWith("#/lanes")) return;
   if (typeof Notification === "undefined") return;
   if (Notification.permission === "default") {
     try { Notification.requestPermission().catch(() => {}); } catch { /* */ }

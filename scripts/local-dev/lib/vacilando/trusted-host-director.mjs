@@ -50,6 +50,8 @@ export async function tryFulfillViaTrustedHost({
   assignmentId,
   executionSessionId = null,
   dreq = {},
+  queryArtifactPath = null,
+  worktreePath = null,
   actor = "director",
   nowMs,
 } = {}) {
@@ -70,6 +72,8 @@ export async function tryFulfillViaTrustedHost({
   const out = fulfillDatabaseCensusForMission(missionId, {
     assignmentId,
     executionSessionId,
+    queryArtifactPath: queryArtifactPath || undefined,
+    worktreePath,
     actor,
     nowMs,
   });

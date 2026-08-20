@@ -22,6 +22,11 @@ import {
   ensureDeliverableReviewsForMission,
   getOpenDeliverableReview,
 } from "./deliverable-review.mjs";
+import {
+  pendingGovernedActionForMission,
+  latestGovernedActionForMission,
+  isRecoverableStaleRegistryFailure,
+} from "./governed-action-request.mjs";
 
 const LIVE_SESSION = new Set([
   "running", "starting", "recovering", "recovered", "producing_evidence", "waiting_for_operator",
@@ -198,6 +203,27 @@ export function deriveMissionPosture(missionId) {
   }
 
   if (topDecision) {
+    const censusDecision = topDecision.defaultAction === "approve_governed_census"
+      || /census|read-only census|database\.read_census/i.test(`${topDecision.title || ""} ${topDecision.situation || ""}`);
+    if (censusDecision) {
+      return {
+        ...base,
+        id: "governed_action_approval",
+        status: "decision_required",
+        label: "Needs approval",
+        detail: topDecision.title || "Read-only database census",
+        next: "Approve the read-only census or tell Director to use cert only.",
+        needsYou: true,
+        primaryAction: action("answer_decision", "Authorize census", {
+          href: `decisions/${topDecision.decisionId}`,
+          decisionId: topDecision.decisionId,
+          missionId,
+          optionId: "authorize_mission_census",
+        }),
+        secondaryAction: action("ask_director", "Ask Director", { missionId, decisionId: topDecision.decisionId }),
+        governedAction: pendingGovernedActionForMission(missionId),
+      };
+    }
     return {
       ...base,
       id: "decision_required",
@@ -211,6 +237,96 @@ export function deriveMissionPosture(missionId) {
         decisionId: topDecision.decisionId,
         missionId,
       }),
+    };
+  }
+
+  const pendingGoverned = pendingGovernedActionForMission(missionId);
+  if (pendingGoverned?.status === "awaiting_control_plane_refresh") {
+    return {
+      ...base,
+      id: "governed_action_director_refresh",
+      status: "executing",
+      label: "Updating Director",
+      detail: pendingGoverned.mission_need || "Vacilando is updating Director so it can run this governed action.",
+      next: pendingGoverned.title || pendingGoverned.action_key,
+      needsYou: false,
+      busy: true,
+      primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+      governedAction: pendingGoverned,
+    };
+  }
+  if (pendingGoverned && ["requested", "awaiting_director", "executing"].includes(pendingGoverned.status)) {
+    const migrationPrep = pendingGoverned.action_key === "database.apply_migration";
+    return {
+      ...base,
+      id: "governed_action_director",
+      status: "executing",
+      label: migrationPrep ? "Preparing staging schema promotion" : "Director executing",
+      detail: pendingGoverned.mission_need
+        || (migrationPrep
+          ? "Preparing staging schema promotion"
+          : `${pendingGoverned.title || pendingGoverned.action_key} — Director is handling a governed action the lane cannot run.`),
+      next: migrationPrep
+        ? "Waiting on Director — staging schema promotion"
+        : `Running ${pendingGoverned.action_key} on the trusted host`,
+      needsYou: false,
+      busy: true,
+      primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+      governedAction: pendingGoverned,
+    };
+  }
+  if (pendingGoverned?.status === "awaiting_operator") {
+    return {
+      ...base,
+      id: "governed_action_approval",
+      status: "decision_required",
+      label: "Needs approval",
+      detail: pendingGoverned.mission_need || pendingGoverned.title || "Read-only database census",
+      next: pendingGoverned.detail || "Authorize the read-only census or deny it.",
+      needsYou: true,
+      primaryAction: action("answer_decision", pendingGoverned.approve_label || "Authorize census", {
+        href: pendingGoverned.decision_id ? `decisions/${pendingGoverned.decision_id}` : `missions/${missionId}`,
+        missionId,
+        decisionId: pendingGoverned.decision_id,
+        requestId: pendingGoverned.request_id,
+        optionId: pendingGoverned.action_key === "repository.merge_pull_request"
+          ? "authorize_staging_merge"
+          : pendingGoverned.action_key === "database.apply_migration"
+            ? "authorize_staging_migrations"
+            : "authorize_mission_census",
+      }),
+      secondaryAction: action("ask_director", "Ask Director", { missionId }),
+      governedAction: pendingGoverned,
+    };
+  }
+  const latestGoverned = latestGovernedActionForMission(missionId);
+  if (latestGoverned && isRecoverableStaleRegistryFailure(latestGoverned)) {
+    return {
+      ...base,
+      id: "governed_action_director_refresh",
+      status: "executing",
+      label: "Updating Director",
+      detail: "Vacilando is updating Director so it can continue this governed action. You do not need to restart anything.",
+      next: latestGoverned.title || latestGoverned.action_key,
+      needsYou: false,
+      busy: true,
+      primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+      governedAction: latestGoverned,
+    };
+  }
+  if (latestGoverned?.status === "failed") {
+    return {
+      ...base,
+      id: "governed_action_blocked",
+      status: "blocked",
+      label: latestGoverned.failure_code === "approval_denied" || latestGoverned.failure_code === "policy_denied"
+        ? "Blocked / denied"
+        : "Blocked / governed action failed",
+      detail: latestGoverned.failure_reason || latestGoverned.failure_code || "Governed action failed.",
+      next: "Director will not ask the lane to retry this capability.",
+      needsYou: true,
+      primaryAction: action("open_mission", "Open mission", { href: `missions/${missionId}`, missionId }),
+      governedAction: latestGoverned,
     };
   }
 

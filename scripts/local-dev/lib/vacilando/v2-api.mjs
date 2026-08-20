@@ -129,14 +129,22 @@ import {
   getVacilandoApiToken,
   apiAuthRequired,
   tokenFingerprint,
+  isPublicApiPath,
+  gatewayRemoteMode,
 } from "./vacilando-api-auth.mjs";
 import { RECHECK_SEMANTICS, CERTIFY_NOTE_SEMANTICS } from "./deliverable-director-loop.mjs";
 
 function authGate(path, method, headers) {
+  if (!apiAuthRequired()) return { ok: true };
+  if (gatewayRemoteMode()) {
+    if (isPublicApiPath(path, method)) return { ok: true };
+    const auth = authorizeV2Request(headers || {}, { mutation: method === "POST" });
+    if (!auth.ok) return { ok: false, status: auth.status, body: { ok: false, error: auth.error } };
+    return { ok: true, actor: auth.actor };
+  }
   const protectedDeliverable = path.startsWith("/api/v2/deliverable-reviews")
     || path.startsWith("/api/v2/director/messages");
   if (!protectedDeliverable) return { ok: true };
-  if (!apiAuthRequired()) return { ok: true };
   const auth = authorizeV2Request(headers || {}, { mutation: method === "POST" });
   if (!auth.ok) return { ok: false, status: auth.status, body: { ok: false, error: auth.error } };
   return { ok: true, actor: auth.actor };
@@ -148,6 +156,242 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   if (!gate.ok) return { status: gate.status, body: gate.body };
   const actorDefault = gate.actor || v.actor || "operator";
   const idempotencyKey = v.idempotency_key || v.idempotencyKey || headers["x-idempotency-key"] || headers["X-Idempotency-Key"] || null;
+
+  if (path === "/api/v2/lanes/create" || path === "/api/v2/lane/create") {
+    const { createNewLaneRequest } = await import("./lane-identity-api.mjs");
+    return createNewLaneRequest(v, { actor: actorDefault });
+  }
+  if (path === "/api/v2/lanes/connect" || path === "/api/v2/lane/connect") {
+    const { connectExistingWorkRequest } = await import("./lane-identity-api.mjs");
+    return connectExistingWorkRequest(v, { actor: actorDefault });
+  }
+  if (path === "/api/v2/lane/rename" || path === "/api/v2/lanes/rename") {
+    const id = v.lane_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { renameLaneRequest } = await import("./lane-identity-api.mjs");
+    return renameLaneRequest(id, v, { actor: actorDefault });
+  }
+  if (path === "/api/v2/lane/mission/bind" || path === "/api/v2/lanes/mission/bind") {
+    const id = v.lane_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const missionId = v.mission_id || v.missionId;
+    if (!missionId) return { status: 400, body: { ok: false, error: "missing_mission_id" } };
+    const { bindLaneMission, publicDurableLane } = await import("./development-lane.mjs");
+    const out = bindLaneMission(id, missionId, {
+      origin: "operator",
+      requireExisting: v.require_existing !== false,
+    });
+    const status = out.ok ? 200 : (out.error === "lane_not_found" || out.error === "mission_not_found" ? 404 : 400);
+    return { status, body: { ...out, lane: out.lane ? publicDurableLane(out.lane) : null } };
+  }
+  if (path === "/api/v2/development-resources/exclusive/release") {
+    const { emergencyReleaseExclusive } = await import("./execution-exclusive.mjs");
+    const out = emergencyReleaseExclusive({
+      confirm: v.confirm === true,
+      actor: actorDefault,
+      origin: "operator",
+    });
+    const status = out.ok ? 200 : (out.error === "confirm_required" || out.error === "no_exclusive_window" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  if (path === "/api/v2/lane/admission/prioritize" || path === "/api/v2/lanes/admission/prioritize") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { admissionForLane, prioritizeAdmission } = await import("./execution-admission.mjs");
+    const rec = admissionForLane(laneId);
+    if (!rec) return { status: 404, body: { ok: false, error: "admission_not_found" } };
+    const out = prioritizeAdmission(rec.admission_id, { origin: "operator", expectedLaneId: laneId });
+    const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
+    return { status, body: out };
+  }
+  if (path === "/api/v2/lane/instruction" || path === "/api/v2/lanes/instruction") {
+    const id = v.lane_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const forbidden = ["session", "pane", "pane_id", "paneId", "target", "tmux_target", "command", "argv", "cwd", "executable", "keys", "key_sequence"];
+    const extra = forbidden.filter((k) => v[k] != null && v[k] !== "");
+    if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
+    const { deliverManagedLaneInstruction, laneInstructionHttpStatus } = await import("./execution-run-send.mjs");
+    const out = await deliverManagedLaneInstruction(id, v.instruction, { actor: actorDefault });
+    return { status: laneInstructionHttpStatus(out), body: out };
+  }
+
+  if (path === "/api/v2/lane/run/close-stale" || path === "/api/v2/lanes/run/close-stale") {
+    const id = v.lane_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { closeStaleExecutionRun } = await import("./execution-stale.mjs");
+    const { activeRunForLane } = await import("./execution-run.mjs");
+    const runId = v.run_id || v.runId || activeRunForLane(id)?.run_id;
+    if (!runId) return { status: 404, body: { ok: false, error: "run_not_found" } };
+    const out = closeStaleExecutionRun(runId, { origin: "operator" });
+    const status = out.ok ? 200 : (out.error === "run_still_active" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  if (path === "/api/v2/lane/run/report" || path === "/api/v2/lanes/run/report") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { reportRunState, activeRunForLane } = await import("./execution-run.mjs");
+    const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+    if (!found.ok) {
+      const status = found.error === "invalid_lane_id" ? 400 : 404;
+      return { status, body: { ok: false, error: found.error } };
+    }
+    const runId = v.run_id || v.runId || activeRunForLane(laneId)?.run_id;
+    if (!runId) return { status: 404, body: { ok: false, error: "run_not_found" } };
+    const out = reportRunState(runId, v.state, {
+      reason: v.reason || null,
+      summary: v.summary || null,
+      resource: v.resource || null,
+      resource_event: v.resource_event || v.resourceEvent || null,
+      origin: "agent",
+      cwd: found.lane?.worktree?.path || null,
+      expectedLaneId: laneId,
+      checkpoint_ready: v.checkpoint_ready,
+      checkpoint_summary: v.checkpoint_summary || null,
+    });
+    const status = out.ok ? 200 : (out.error === "illegal_transition" || out.error === "worktree_mismatch" || out.error === "lane_mismatch" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  if (path === "/api/v2/director/refresh" || path === "/api/v2/control-plane/refresh") {
+    const { refreshDirectorCapabilities } = await import("./director-capability-freshness.mjs");
+    const { recoverMisclassifiedStaleGovernedRequests, tickGovernedActions } = await import("./governed-action-request.mjs");
+    const out = await refreshDirectorCapabilities({
+      reason: v.reason || "operator_refresh_director",
+    });
+    const recovered = recoverMisclassifiedStaleGovernedRequests();
+    tickGovernedActions();
+    return {
+      status: out.ok ? 200 : 409,
+      body: {
+        ok: out.ok,
+        refreshing: out.scheduled || out.mode === "test_handler",
+        mode: out.mode,
+        recovered: recovered.length,
+        operator_action: out.operator_action || null,
+      },
+    };
+  }
+
+  if (path === "/api/v2/lane/governed-action" || path === "/api/v2/lanes/governed-action" || path === "/api/v2/governed-actions") {
+    const { requestGovernedAction } = await import("./governed-action-request.mjs");
+    const laneId = v.lane_id || v.laneId || v.id;
+    const out = requestGovernedAction({
+      ...v,
+      lane_id: laneId,
+      mission_id: v.mission_id || v.missionId,
+      run_id: v.run_id || v.runId,
+      action_key: v.action_key || v.actionKey,
+    }, { processNow: true });
+    const status = out.ok ? 200 : (out.error === "request_not_found" ? 404 : 409);
+    return { status, body: out };
+  }
+  if (path === "/api/v2/governed-actions/approve") {
+    const { approveGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const id = v.request_id || v.requestId;
+    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    try {
+      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, { actor: actorDefault }));
+      return { status: out.ok ? 200 : 409, body: out };
+    } catch (e) {
+      return {
+        status: 409,
+        body: { ok: false, error: "approve_failed", detail: String(e && e.message || e) },
+      };
+    }
+  }
+  if (path === "/api/v2/governed-actions/deny") {
+    const { denyGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const id = v.request_id || v.requestId;
+    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    const out = denyGovernedAction(id || pending?.request_id, {
+      actor: actorDefault,
+      reason: v.reason || "approval_denied",
+      code: v.code || "approval_denied",
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+
+  if (path === "/api/v2/lane/agent-session/handoff" || path === "/api/v2/lanes/agent-session/handoff") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { acceptHandoffReport } = await import("./agent-session-lifecycle.mjs");
+    const { activeRunForLane } = await import("./execution-run.mjs");
+    const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+    if (!found.ok) {
+      const status = found.error === "invalid_lane_id" ? 400 : 404;
+      return { status, body: { ok: false, error: found.error } };
+    }
+    const runId = v.run_id || v.runId || activeRunForLane(laneId)?.run_id;
+    const out = acceptHandoffReport({
+      laneId,
+      runId,
+      handoff: v,
+      cwd: found.lane?.worktree?.path || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+
+  if (path === "/api/v2/lane/agent-session/oriented" || path === "/api/v2/lanes/agent-session/oriented") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { acceptOrientationReport } = await import("./agent-session-lifecycle.mjs");
+    const { activeRunForLane } = await import("./execution-run.mjs");
+    const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
+    if (!found.ok) {
+      const status = found.error === "invalid_lane_id" ? 400 : 404;
+      return { status, body: { ok: false, error: found.error } };
+    }
+    const runId = v.run_id || v.runId || activeRunForLane(laneId)?.run_id;
+    const out = acceptOrientationReport({
+      laneId,
+      runId,
+      orientation: v,
+      cwd: found.lane?.worktree?.path || null,
+    });
+    return { status: out.ok ? 200 : 409, body: out };
+  }
+
+  if (path === "/api/v2/lane/agent-session/start" || path === "/api/v2/lanes/agent-session/start") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { unexpectedLaneControlFields } = await import("./lanes.mjs");
+    const extra = unexpectedLaneControlFields(v);
+    if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
+    const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+    const out = await startLaneAgentSession({ laneId });
+    const status = out.ok ? 200
+      : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  if (path === "/api/v2/lane/agent-session/refresh" || path === "/api/v2/lanes/agent-session/refresh") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { requestSessionRotation } = await import("./agent-session-lifecycle.mjs");
+    const out = await requestSessionRotation({
+      laneId,
+      origin: "operator",
+      confirm: v.confirm === true,
+    });
+    const status = out.ok ? 200 : (out.error === "confirm_required" || out.error === "unsafe_checkpoint" ? 409 : 400);
+    return { status, body: out };
+  }
+
+  if (path === "/api/v2/lane/resource-request/prioritize" || path === "/api/v2/lanes/resource-request/prioritize") {
+    const laneId = v.lane_id || v.id;
+    const requestId = v.request_id || v.requestId;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    if (!requestId) return { status: 400, body: { ok: false, error: "missing_request_id" } };
+    const { prioritizeResourceRequest } = await import("./execution-resource.mjs");
+    const out = prioritizeResourceRequest(requestId, { origin: "operator", expectedLaneId: laneId });
+    const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
+    return { status, body: out };
+  }
 
   if (path === "/api/v2/missions/brief/ingest") {
     try {
@@ -443,7 +687,9 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     });
     if (out.ok && mid) {
       // Mission-scoped Trusted Host authorization — execute then resume (no Terminal).
-      if (chosen === "authorize_mission_census" || chosen === "retry_trusted_host") {
+      if (chosen === "authorize_mission_census" || chosen === "retry_trusted_host"
+          || chosen === "deny_production_reads" || chosen === "use_cert_only"
+          || chosen === "approve_read_only_census") {
         setTimeout(async () => {
           try {
             const { grantMissionAuthorization } = await import("./trusted-host-authz.mjs");
@@ -458,6 +704,9 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
                 note: "Operator authorized read-only database census for this mission.",
               });
             }
+            const { handleGovernedDecisionAnswer } = await import("./governed-action-request.mjs");
+            const governed = await handleGovernedDecisionAnswer(mid, chosen, { actor: v.actor || "operator" });
+            if (governed?.ok) return;
             const fulfilled = fulfillDatabaseCensusForMission(mid, {
               assignmentId: (out.decision?.affectedAssignments || [])[0] || null,
               actor: "director",
@@ -754,14 +1003,15 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
 
   if (path === "/api/v2/session") {
     const required = apiAuthRequired();
+    const auth = authorizeV2Request(headers || {}, { mutation: false });
     const token = required ? getVacilandoApiToken() : null;
     return {
       status: 200,
       body: {
         ok: true,
         authRequired: required,
-        token: required ? token : null,
-        tokenFingerprint: required ? tokenFingerprint(token) : null,
+        authenticated: Boolean(auth.ok && auth.mode !== "open" ? true : !required),
+        tokenFingerprint: required && auth.ok ? tokenFingerprint(token) : null,
         isolation: {
           boundary: "missionId",
           organizations: "n/a — Vacilando control plane is single-tenant/local",
@@ -786,6 +1036,21 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
   if (path === "/api/v2/trusted-host/diagnostics" || path === "/api/v2/views/trusted-host/diagnostics") {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
     return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
+  }
+  if (path === "/api/v2/governed-actions") {
+    const { listGovernedActions, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
+    const mid = q("mission_id") || q("id");
+    const laneId = q("lane_id");
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        requests: listGovernedActions({ missionId: mid, laneId }),
+        pending: mid
+          ? pendingGovernedActionForMission(mid)
+          : (laneId ? pendingGovernedActionForLane(laneId) : null),
+      },
+    };
   }
   if (path === "/api/v2/revision" || path === "/api/v2/views/revision") {
     const { computePresentationRevision } = await import("./presentation-revision.mjs");
@@ -1130,6 +1395,119 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
       ? listEvidence(tel.missionId, { assignmentId: tel.assignmentId })
       : [];
     return { status: 200, body: { ok: true, telemetry: tel, assignment, evidence } };
+  }
+
+  if (path === "/api/v2/lanes" || path === "/api/v2/views/lanes") {
+    const { listDevelopmentLanes } = await import("./lanes.mjs");
+    const { attachLaneInstructions } = await import("./lane-runtime.mjs");
+    const { attachLaneRuns } = await import("./execution-run.mjs");
+    const { attachLaneResourceWaits, developmentResourceSnapshot } = await import("./execution-resource.mjs");
+    const { attachLaneRecovery } = await import("./execution-recovery.mjs");
+    const { attachLaneAgentSessions } = await import("./agent-session-lifecycle.mjs");
+    const { attachLaneAdmissions } = await import("./execution-admission.mjs");
+    const { attachLaneSourceControl } = await import("./source-control.mjs");
+    const { attachLaneRunLifecycle } = await import("./execution-stale.mjs");
+    try {
+      const { evaluateExclusiveWindow } = await import("./execution-exclusive.mjs");
+      evaluateExclusiveWindow();
+    } catch { /* */ }
+    try {
+      const { maybeReconcileGovernor } = await import("./execution-reconcile.mjs");
+      await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" });
+    } catch { /* */ }
+    const out = await listDevelopmentLanes();
+    const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    return { status: out.ok ? 200 : 503, body: { ...out, lanes, development_resources: developmentResourceSnapshot() } };
+  }
+  if (path === "/api/v2/lanes/candidates" || path === "/api/v2/lane/candidates") {
+    const { listAdoptionCandidates } = await import("./lane-identity-api.mjs");
+    const out = await listAdoptionCandidates();
+    return { status: 200, body: out };
+  }
+  if (path === "/api/v2/development-resources") {
+    const { developmentResourceSnapshot } = await import("./execution-resource.mjs");
+    return { status: 200, body: developmentResourceSnapshot() };
+  }
+  if (path === "/api/v2/lane" || path === "/api/v2/views/lane") {
+    const id = q("id") || q("lane_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { attachLaneInstructions } = await import("./lane-runtime.mjs");
+    const { attachLaneRuns } = await import("./execution-run.mjs");
+    const { attachLaneResourceWaits } = await import("./execution-resource.mjs");
+    const { attachLaneRecovery } = await import("./execution-recovery.mjs");
+    const { attachLaneAgentSessions, maybeAdvanceSessionRotation } = await import("./agent-session-lifecycle.mjs");
+    const out = await getDevelopmentLane(id);
+    if (!out.ok) {
+      const status = out.error === "lane_not_found" || out.error === "unknown_lane" ? 404 : 503;
+      return { status, body: out };
+    }
+    if (out.lane) {
+      try { await maybeAdvanceSessionRotation(out.lane); } catch { /* */ }
+      const { attachLaneAdmissions } = await import("./execution-admission.mjs");
+      const { attachLaneSourceControl } = await import("./source-control.mjs");
+      const { attachLaneRunLifecycle } = await import("./execution-stale.mjs");
+      try {
+        const { maybeReconcileGovernor } = await import("./execution-reconcile.mjs");
+        await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" });
+      } catch { /* */ }
+      out.lane = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true })))))))[0];
+    }
+    return { status: 200, body: out };
+  }
+  if (path === "/api/v2/lane/run" || path === "/api/v2/lanes/run") {
+    const id = q("id") || q("lane_id");
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { inspectLaneRun } = await import("./execution-run.mjs");
+    const { attachLaneResourceWaits } = await import("./execution-resource.mjs");
+    const { attachLaneRecovery } = await import("./execution-recovery.mjs");
+    const { attachLaneAgentSessions } = await import("./agent-session-lifecycle.mjs");
+    const { attachLaneAdmissions } = await import("./execution-admission.mjs");
+    const { attachLaneSourceControl } = await import("./source-control.mjs");
+    const out = inspectLaneRun(id);
+    if (out.execution_run) {
+      out.execution_run = attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits([{ lane_id: id, execution_run: out.execution_run }])))))[0].execution_run;
+    }
+    return { status: out.ok ? 200 : 400, body: out };
+  }
+  if (path === "/api/v2/lane/output" || path === "/api/v2/lanes/output") {
+    const id = q("id") || q("lane_id");
+    if (!id) return { status: 400, body: { ok: false, available: false, error: "missing_lane_id" } };
+    const linesRaw = q("lines");
+    const lines = linesRaw != null && /^\d+$/.test(String(linesRaw)) ? Number(linesRaw) : undefined;
+    const mode = q("mode") || undefined;
+    const { getLaneOutput } = await import("./lanes.mjs");
+    const { enrichOutputRuntime } = await import("./lane-runtime.mjs");
+    const out = enrichOutputRuntime(await getLaneOutput(id, {
+      ...(lines != null ? { maxLines: lines } : {}),
+      ...(mode ? { mode } : {}),
+    }));
+    if (!out.ok) {
+      const status = out.error === "invalid_lane_id" || out.error === "missing_lane_id" ? 400
+        : out.error === "pane_unavailable" ? 503
+        : 404;
+      return { status, body: out };
+    }
+    return { status: 200, body: out };
+  }
+  if (path === "/api/v2/lane/telemetry" || path === "/api/v2/lanes/telemetry") {
+    const id = q("id") || q("lane_id");
+    if (!id) return { status: 400, body: { ok: false, available: false, error: "missing_lane_id" } };
+    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { getLaneAgentTelemetry, peekLaneTelemetryCache } = await import("./lane-telemetry.mjs");
+    const { maybeAdvanceSessionRotation } = await import("./agent-session-lifecycle.mjs");
+    const cached = peekLaneTelemetryCache(id);
+    const found = await getDevelopmentLane(id, { includeGitFacts: false });
+    if (!found.ok) {
+      const status = found.error === "invalid_lane_id" ? 400 : 404;
+      return { status, body: { ok: false, available: false, error: found.error } };
+    }
+    const out = cached || await getLaneAgentTelemetry(found.lane);
+    try {
+      found.lane.agent_telemetry = out;
+      await maybeAdvanceSessionRotation(found.lane);
+    } catch { /* rotation must not fail telemetry */ }
+    return { status: 200, body: out };
   }
 
   return null;

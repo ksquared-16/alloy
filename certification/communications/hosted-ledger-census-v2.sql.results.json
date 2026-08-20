@@ -1,0 +1,332 @@
+{
+  "trusted_host_action_id": "tha_a1c8ef021cdd39",
+  "query_hash": "7a00fb97198ede0053209256ef8bf7d4d2614df79ffaeb402cdaa2b0241fdb90",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-20T16:52:56.682Z",
+    "question_ids": [
+      "ledger",
+      "ledger_count",
+      "ledger_max",
+      "privilege"
+    ],
+    "questions": {
+      "ledger": {
+        "question_id": "ledger",
+        "row_count": null,
+        "rows": [
+          {
+            "version": "20260817170000"
+          },
+          {
+            "version": "20260818120000"
+          },
+          {
+            "version": "20260818123000"
+          },
+          {
+            "version": "20260818140000"
+          },
+          {
+            "version": "20260818160000"
+          },
+          {
+            "version": "20260818170000"
+          },
+          {
+            "version": "20260818180000"
+          },
+          {
+            "version": "20260818190000"
+          },
+          {
+            "version": "20260818200000"
+          },
+          {
+            "version": "20260819200000"
+          },
+          {
+            "version": "20260820120000"
+          }
+        ]
+      },
+      "ledger_count": {
+        "question_id": "ledger_count",
+        "row_count": null,
+        "rows": [
+          {
+            "total": 349
+          }
+        ]
+      },
+      "ledger_max": {
+        "question_id": "ledger_max",
+        "row_count": null,
+        "rows": [
+          {
+            "max_version": "20260820120000"
+          }
+        ]
+      },
+      "privilege": {
+        "question_id": "privilege",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "anon",
+            "priv": "DELETE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "anon",
+            "priv": "INSERT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "anon",
+            "priv": "SELECT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "anon",
+            "priv": "UPDATE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "authenticated",
+            "priv": "DELETE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "authenticated",
+            "priv": "INSERT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "authenticated",
+            "priv": "SELECT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "authenticated",
+            "priv": "UPDATE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "service_role",
+            "priv": "DELETE",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "service_role",
+            "priv": "INSERT",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "service_role",
+            "priv": "SELECT",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_ingress_routes",
+            "role": "service_role",
+            "priv": "UPDATE",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "anon",
+            "priv": "DELETE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "anon",
+            "priv": "INSERT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "anon",
+            "priv": "SELECT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "anon",
+            "priv": "UPDATE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "authenticated",
+            "priv": "DELETE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "authenticated",
+            "priv": "INSERT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "authenticated",
+            "priv": "SELECT",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "authenticated",
+            "priv": "UPDATE",
+            "granted": false,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "service_role",
+            "priv": "DELETE",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "service_role",
+            "priv": "INSERT",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "service_role",
+            "priv": "SELECT",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.communication_provider_bindings",
+            "role": "service_role",
+            "priv": "UPDATE",
+            "granted": true,
+            "control": "target"
+          },
+          {
+            "table": "public.persons",
+            "role": "anon",
+            "priv": "DELETE",
+            "granted": false,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "anon",
+            "priv": "INSERT",
+            "granted": false,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "anon",
+            "priv": "SELECT",
+            "granted": false,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "anon",
+            "priv": "UPDATE",
+            "granted": false,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "authenticated",
+            "priv": "DELETE",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "authenticated",
+            "priv": "INSERT",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "authenticated",
+            "priv": "SELECT",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "authenticated",
+            "priv": "UPDATE",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "service_role",
+            "priv": "DELETE",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "service_role",
+            "priv": "INSERT",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "service_role",
+            "priv": "SELECT",
+            "granted": true,
+            "control": "positive_control"
+          },
+          {
+            "table": "public.persons",
+            "role": "service_role",
+            "priv": "UPDATE",
+            "granted": true,
+            "control": "positive_control"
+          }
+        ]
+      }
+    },
+    "row_count": 49
+  }
+}
