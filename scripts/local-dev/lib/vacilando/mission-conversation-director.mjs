@@ -27,6 +27,7 @@ import {
   peekNextImplementationPhase,
   isBeyondRegisterObjective,
 } from "./mission-advance.mjs";
+import { pendingGovernedActionForMission, latestGovernedActionForMission } from "./governed-action-request.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
@@ -54,7 +55,11 @@ export function classifyMissionComposerIntent(text) {
     || /\bnext\s+wave\b/i.test(lower)
     || /\b(open|start|begin|launch|dispatch|run)\b.{0,40}\b(wave|w-?\d+)\b/i.test(lower)
     || /\b(wave\s*\d+|w-?\d+)\b.{0,20}\b(open|start|begin|launch)\b/i.test(lower)
-    || /^(go|do it|ship it|approve|certify)\.?$/i.test(raw);
+    || /^(go|do it|ship it|approve|certify)\.?$/i.test(raw)
+    || /\b(approve|run|authorize).{0,40}(census|read-only|read only|production read|merge|migration|staging)\b/i.test(lower)
+    || /\b(refresh director|update director|retry the promotion|retry promotion|fix it)\b/i.test(lower)
+    || /\b(don'?t allow|deny|refuse).{0,40}(production|census|read|merge|migration|this)\b/i.test(lower)
+    || /\buse cert only\b/i.test(lower);
 
   if (isQuestion && !isAction) {
     return { mode: "question", kind: "ask", persistGuidance: false };
@@ -151,6 +156,8 @@ export function buildMissionDirectorContext(missionId, { recentLimit = 8 } = {})
     recentTimeline,
     recentDirector,
     evidence,
+    pendingGovernedAction: pendingGovernedActionForMission(missionId),
+    latestGovernedAction: latestGovernedActionForMission(missionId),
     builtAt: iso(),
   };
 }
@@ -166,6 +173,92 @@ export function composeMissionDirectorResponse(ctx, { operatorText, intent } = {
   const q = String(operatorText || "").trim();
   const lower = q.toLowerCase();
   const mode = intent?.mode || "question";
+  const pending = ctx.pendingGovernedAction;
+  const pendingKey = pending?.action_key || "";
+  const isMergePending = pendingKey === "repository.merge_pull_request" || /merge_pull_request/.test(pendingKey);
+  const isMigrationPending = pendingKey === "database.apply_migration" || /apply_migration/.test(pendingKey);
+  const wantsDirectorRefresh = /\b(refresh director|update director|retry the promotion|retry promotion|fix it)\b/i.test(lower)
+    || /^(fix it|retry)\.?$/i.test(q);
+
+  if (wantsDirectorRefresh && (pending || ctx.latestGovernedAction)) {
+    return {
+      summary: line([
+        "Vacilando is updating Director so it can continue this governed action.",
+        "You do not need a terminal, a process id, or a manual restart.",
+        "If approval is still required after the update, the merge authorization will appear here.",
+      ]),
+      proposedAction: { kind: "refresh_director", label: "Refresh Director", missionId: ctx.missionId },
+      mode: "action",
+      autoRefreshDirector: true,
+    };
+  }
+
+  if (pending && /\bwhy.{0,60}(access|census|need|credential|database|merge|migration|approval)\b/i.test(lower)) {
+    return {
+      summary: line([
+        pending.purpose || pending.detail || "The originating worker needs a governed action the Development Lane cannot perform.",
+        pending.reason_worker_cannot_execute,
+        `Requested action: ${pending.action_key}${pending.target ? ` on ${pending.target}` : ""}.`,
+        "Credentials stay on the trusted host. Approving runs this specific registered action; denying does not send the worker back to retry it.",
+      ]),
+      proposedAction: ctx.primaryAction || null,
+      mode: "question",
+    };
+  }
+
+  if (pending && (
+    (isMergePending && /\b(approve|run|authorize).{0,40}merge\b/i.test(lower))
+    || (isMigrationPending && /\b(approve|run|authorize|apply).{0,40}(migration|schema|staging)\b/i.test(lower))
+    || /\b(approve|run|authorize).{0,40}(census|read-only|read only|production read)\b/i.test(lower)
+    || /^(approve|go|do it)\.?$/i.test(q)
+  )) {
+    const label = pending.approve_label
+      || (isMergePending ? "Authorize merge" : isMigrationPending ? "Authorize staging migrations" : "Authorize census");
+    const what = isMergePending ? "staging merge" : isMigrationPending ? "staging migrations" : "read-only census";
+    return {
+      summary: line([
+        `Approving the ${what}.`,
+        `Director will run ${pending.action_key} against ${pending.target || "the trusted host"} and resume ${pending.lane_id} with the result.`,
+        "The worker will not receive credentials.",
+      ]),
+      proposedAction: { kind: "approve_governed_action", label, missionId: ctx.missionId, requestId: pending.request_id },
+      mode: "action",
+      autoApproveGoverned: true,
+      governedRequestId: pending.request_id,
+    };
+  }
+
+  if (pending && (
+    /\buse cert only\b/i.test(lower)
+    || /\b(don'?t allow|deny|refuse).{0,40}(production|census|read|merge|migration|this)\b/i.test(lower)
+    || /^deny(\s+this)?\.?$/i.test(q)
+  )) {
+    const certOnly = /\buse cert only\b/i.test(lower);
+    return {
+      summary: line([
+        certOnly
+          ? "Understood — no deployed-primary read. Director will not run database.read_census against alloy_deployed_primary."
+          : (isMergePending
+            ? "Understood — the staging merge is denied."
+            : isMigrationPending
+              ? "Understood — staging schema promotion is denied."
+              : "Understood — production reads are denied."),
+        "I will not send the originating lane back to retry this capability.",
+      ]),
+      proposedAction: null,
+      mode: "action",
+      autoDenyGoverned: true,
+      governedRequestId: pending.request_id,
+      denyCode: certOnly ? "policy_denied" : "approval_denied",
+      denyReason: certOnly
+        ? "Operator required certification-only; deployed primary read denied."
+        : (isMergePending
+          ? "Operator denied the staging merge."
+          : isMigrationPending
+            ? "Operator denied staging schema promotion."
+            : "Operator denied production reads."),
+    };
+  }
 
   // Recall prior guidance
   if (/\b(what (feedback|guidance|did i)|what did i (ask|say|request)|my feedback)\b/i.test(lower)) {
@@ -553,6 +646,28 @@ export function executeMissionDirectorTurn(missionId, {
       scheduleDispatchAfterKickoff(missionId, { actor: "director" });
     }).catch(() => {});
     dispatch = { ok: true, scheduled: true };
+  }
+  if (composed.autoRefreshDirector) {
+    import("./director-capability-freshness.mjs").then(async ({ refreshDirectorCapabilities }) => {
+      await refreshDirectorCapabilities({ reason: "operator_refresh_director", root: undefined });
+      const { recoverMisclassifiedStaleGovernedRequests, tickGovernedActions } = await import("./governed-action-request.mjs");
+      recoverMisclassifiedStaleGovernedRequests();
+      tickGovernedActions();
+    }).catch(() => {});
+  }
+  if (composed.autoApproveGoverned && composed.governedRequestId) {
+    import("./governed-action-request.mjs").then(({ approveGovernedAction }) => {
+      approveGovernedAction(composed.governedRequestId, { actor: "operator" });
+    }).catch(() => {});
+  }
+  if (composed.autoDenyGoverned && composed.governedRequestId) {
+    import("./governed-action-request.mjs").then(({ denyGovernedAction }) => {
+      denyGovernedAction(composed.governedRequestId, {
+        actor: "operator",
+        code: composed.denyCode || "approval_denied",
+        reason: composed.denyReason || "approval_denied",
+      });
+    }).catch(() => {});
   }
 
   return {

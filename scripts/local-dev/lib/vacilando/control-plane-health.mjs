@@ -5,7 +5,7 @@
  * slow to bind, accepting, hydrated, unresponsive, screenshot stalled,
  * recovering, recovered, failed. Recovery only targets an owned process.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import os from "node:os";
 import { join, dirname } from "node:path";
@@ -77,6 +77,63 @@ export function claimControlPlaneOwnership({
 
 export function readControlPlaneOwner() {
   try { return JSON.parse(readFileSync(OWNER_FILE, "utf8")); } catch { return null; }
+}
+
+export function controlPlaneOwnerPath() {
+  return OWNER_FILE;
+}
+
+export function controlPlaneRuntimeRoot() {
+  return RUNTIME_ROOT;
+}
+
+export function pidAlive(pid) {
+  const n = Number(pid);
+  if (!Number.isInteger(n) || n <= 0) return false;
+  try {
+    process.kill(n, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One Vacilando HTTP process per ALLOY_RUNTIME_ROOT.
+ * Isolated roots (tests, Gateway daemon) do not conflict with Electron's
+ * default ~/.local/state/alloy-dev owner file.
+ *
+ * Alive foreign pid → refuse. Dead/stale pid → replace. Same pid → refresh.
+ */
+export function acquireControlPlaneOwnership(opts = {}) {
+  const existing = readControlPlaneOwner();
+  const myPid = opts.pid ?? process.pid;
+  if (existing?.pid && Number(existing.pid) !== Number(myPid) && pidAlive(existing.pid)) {
+    return {
+      ok: false,
+      error: "control_plane_owned",
+      message: `Runtime root already owned by pid ${existing.pid} on :${existing.port}`,
+      owner: existing,
+      runtime_root: RUNTIME_ROOT,
+    };
+  }
+  const owner = claimControlPlaneOwnership({ ...opts, pid: myPid });
+  return {
+    ok: true,
+    owner,
+    runtime_root: RUNTIME_ROOT,
+    replaced_stale: Boolean(existing?.pid && Number(existing.pid) !== Number(myPid)),
+  };
+}
+
+export function releaseControlPlaneOwnership({ pid = process.pid } = {}) {
+  const existing = readControlPlaneOwner();
+  if (!existing) return { ok: true, released: false };
+  if (Number(existing.pid) !== Number(pid)) {
+    return { ok: false, error: "not_owner", owner: existing };
+  }
+  try { unlinkSync(OWNER_FILE); } catch { /* already gone */ }
+  return { ok: true, released: true };
 }
 
 export function getControlPlaneHealth() {

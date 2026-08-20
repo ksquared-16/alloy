@@ -2,9 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vacilando Runtime — Control Plane</title>
-<link rel="stylesheet" href="styles.css?v=v38dm">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Vacilando — Development Gateway</title>
+<meta name="theme-color" content="#15402c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Vacilando">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -28,12 +34,16 @@
 
 <div class="app">
   <aside class="rail">
-    <div class="brand"><div class="word">Vacilando<b>OS</b></div><div class="sub">Engineering Operating System</div></div>
-    <nav class="nav nav-missions" id="nav" aria-label="Missions">
-      <div class="nav-missions-label">Missions</div>
-      <div id="mission-rail" class="mission-rail">
-        <a class="mission-rail-item" data-route="workspaces/msn_f74ed02c126c88d7ff"><span class="mission-rail-title">Identity Platform</span></a>
-      </div>
+    <div class="brand"><div class="word">Vacilando</div><div class="sub">Development Gateway</div></div>
+    <nav class="nav nav-missions" id="nav" aria-label="Development Lanes">
+      <div class="nav-missions-label">Development Lanes</div>
+      <div id="lane-rail" class="mission-rail"></div>
+      <details class="nav-more">
+        <summary>More</summary>
+        <a data-route="settings">Settings</a>
+        <a data-route="workspaces/msn_f74ed02c126c88d7ff">Missions (legacy)</a>
+        <a data-route="command">Legacy board</a>
+      </details>
     </nav>
     <!-- Portfolio / Needs You / Workers / Improvements stay reachable via hash routes; not primary rail chrome. -->
     <span id="nb-needs" class="badge" hidden aria-hidden="true">0</span>
@@ -56,7 +66,7 @@
 
   <main class="main">
     <div class="topbar">
-      <div class="crumb" id="crumb">Missions</div>
+      <div class="crumb" id="crumb">Development Lanes</div>
       <div class="spacer"></div>
       <div class="search">Search…</div>
       <button class="btn ghost" type="button" id="improve-vacilando-btn" title="Capture friction without leaving this mission">Improve Vacilando</button>
@@ -68,7 +78,18 @@
   </main>
 </div>
 
-<script src="mission-control.js?v=v38dm"></script>
-<script src="app.js?v=v38dm"></script>
+<script src="mission-control.js"></script>
+<script src="app.js"></script>
+<script type="module" src="gateway.js"></script>
+<div id="gw-login" class="gw-login" hidden>
+  <form class="gw-login-card" data-gw-login action="/api/gateway/session" method="post">
+    <h1>Vacilando</h1>
+    <p>Private Development Gateway. Paste the token from this Mac’s gateway token file. It is stored as an HttpOnly cookie — not in the URL.</p>
+    <label for="gw-token">Gateway token</label>
+    <input id="gw-token" name="gateway_token" type="text" inputmode="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" required>
+    <p class="gw-login-err" data-gw-login-err hidden></p>
+    <button class="btn primary" type="submit" data-gw-login-submit>Continue</button>
+  </form>
+</div>
 </body>
 </html>

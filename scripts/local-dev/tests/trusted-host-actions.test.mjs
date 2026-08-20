@@ -28,7 +28,22 @@ const {
   getTrustedHostAction,
   reconcileTrustedHostActionsOnBoot,
   trustedHostDiagnostics,
+  parseTrustedHostSqlOutput,
 } = await import("../lib/vacilando/trusted-host-actions.mjs");
+
+const labeled = parseTrustedHostSqlOutput([
+  "BEGIN",
+  "Q15-A1|row_count|{\"row_count\": 0}",
+  "Q15-A1|row|{\"legacy_role\":\"admin\",\"principals\":2}",
+  "Q15-D1|row_count|{\"row_count\": 1}",
+  "COMMIT",
+].join("\n"));
+assert.equal(labeled.format, "q15_labeled_rows");
+assert.equal(labeled.questions["Q15-A1"].row_count, 0);
+assert.equal(labeled.questions["Q15-A1"].rows[0].principals, 2);
+assert.deepEqual(labeled.question_ids, ["Q15-A1", "Q15-D1"]);
+assert.equal(parseTrustedHostSqlOutput("{\"org_count\": 3}").org_count, 3);
+assert.equal(parseTrustedHostSqlOutput(""), null);
 
 function sha(s) {
   return createHash("sha256").update(s, "utf8").digest("hex");
@@ -205,5 +220,6 @@ console.log(JSON.stringify({
     "diagnostics_no_secrets",
     "restart_reconcile",
     "auth_required_path",
+    "q15_labeled_row_parse",
   ],
 }, null, 2));
