@@ -3675,7 +3675,20 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
             ? Promise.resolve({ data: null as null, error: null as null })
             : supabase
                   .from("work_units")
-                  .select("id")
+                  /**
+                   * Selects the WHOLE row, not just `id`, so the per-work-unit summary below can be
+                   * handed its queue definition instead of fetching its own.
+                   *
+                   * `workUnitPreloadById` already existed for exactly this and no caller supplied
+                   * it, so every work unit issued its own single-row SELECT. Measured on a cold
+                   * Work Unit load: `work_units.queue_definition_row` x7, 355-757ms each, ~3.4s —
+                   * inside a `work-unit-queue-summaries` response that took 4,960ms of real server
+                   * time and is the largest single item on the cold critical path.
+                   *
+                   * These columns come from the row this query already reads; widening the select
+                   * costs one row-width, not one round trip.
+                   */
+                  .select("id, queue_definition, metadata, department_id, key")
                   .eq("org_id", params.orgId)
                   .eq("department_id", params.departmentId)
                   .order("sort_order", { ascending: true }),
@@ -3700,6 +3713,39 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     if (!ids.length) {
         return { work_units: [] };
     }
+    /**
+     * Build the preload from the rows just fetched, unless the caller supplied its own (dept
+     * bootstrap). A row whose `queue_definition` is null is deliberately left OUT: the consumer
+     * only takes the preload branch when `queue_definition != null`, so such a work unit falls
+     * through to `loadWorkUnitQueueDefinitionWithMeta` and its existing not-configured error
+     * handling, exactly as before.
+     */
+    const derivedPreloadById =
+        params.workUnitPreloadById ??
+        (skipWuListQuery
+            ? undefined
+            : new Map(
+                  (wuListRes.data ?? [])
+                      .map((r) => r as {
+                          id?: unknown;
+                          queue_definition?: unknown;
+                          metadata?: unknown;
+                          department_id?: unknown;
+                          key?: unknown;
+                      })
+                      .filter((r) => typeof r.id === "string" && r.queue_definition != null)
+                      .map((r) => [
+                          String(r.id),
+                          {
+                              queue_definition: r.queue_definition,
+                              metadata: r.metadata ?? null,
+                              department_id: typeof r.department_id === "string" ? r.department_id : null,
+                              departmentMetadata: null,
+                              key: typeof r.key === "string" ? r.key : null,
+                          },
+                      ])
+              ));
+
     const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
     const wuConc = clampLimit(params.workUnitConcurrency ?? DEPARTMENT_WU_SUMMARY_CONCURRENCY, 1, 8);
 
@@ -3708,7 +3754,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
         (workUnitId) => async (): Promise<DepartmentWorkUnitQueueSummaryRow> => {
             const tWu0 = Date.now();
             try {
-                const preload = params.workUnitPreloadById?.get(workUnitId);
+                const preload = derivedPreloadById?.get(workUnitId);
                 const { queues, work_unit_scope_total, work_unit_scope_queue_key } = await getWorkUnitQueueSummaries({
                     orgId: params.orgId,
                     workUnitId,

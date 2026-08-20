@@ -15,9 +15,21 @@ import { homedir } from "os";
 import { join } from "path";
 import fs from "fs";
 
-const STORAGE = join(homedir(), ".local/state/alloy-dev/auth/slot3/storage-state.json");
-const BASE = "http://127.0.0.1:3013";
-const URL_ = `${BASE}/workspace/work-unit/lifecycle_wu_lead?subject_id=b29921ca-b4d2-4cf4-b26c-2b9bd7263d78`;
+/**
+ * RE-PINNED 2026-08-20. This file was still hardcoded to slot 3, port 3013, and a subject from
+ * another tenant — the exact hazard QUIET-HOST-RUNBOOK §0 describes. Only the cold-load harness
+ * was ever re-pinned, so running this from slot 5 measured a refused connection or a 404, either
+ * of which yields a complete and entirely plausible waterfall.
+ */
+const SLOT = process.env.PE3_SLOT ?? "5";
+const PORT = process.env.PE3_PORT ?? String(3010 + Number(SLOT));
+const STORAGE = process.env.PE3_STORAGE ?? join(homedir(), `.local/state/alloy-dev/auth/slot${SLOT}/storage-state.json`);
+const BASE = process.env.PE3_BASE ?? `http://127.0.0.1:${PORT}`;
+const SLUG = process.env.PE3_SLUG ?? "waitlist";
+const SUBJECT = process.env.PE3_SUBJECT ?? "";
+const URL_ = SUBJECT
+    ? `${BASE}/workspace/work-unit/${SLUG}?subject_id=${SUBJECT}`
+    : `${BASE}/workspace/work-unit/${SLUG}`;
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ storageState: STORAGE, viewport: { width: 1440, height: 960 } });
