@@ -159,6 +159,7 @@ import {
     buildStageAttentionStatusKeyOrBranches,
     resolveStageAttentionCandidateStatusKeys,
 } from "@/lib/lifecycle/resolveStageAttentionCandidateStatusKeys";
+import { processMap } from "@/lib/perf/processCache";
 
 type JobRowPreview = {
     id: string;
@@ -2415,7 +2416,7 @@ type WorkUnitQueueDefinitionCacheEntry = {
     departmentId: string | null;
     workUnitKey: string | null;
 };
-const WU_QUEUE_DEF_CACHE = new Map<string, WorkUnitQueueDefinitionCacheEntry>();
+const WU_QUEUE_DEF_CACHE = processMap<string, WorkUnitQueueDefinitionCacheEntry>("wu_queue_def");
 const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 

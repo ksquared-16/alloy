@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
-const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>();
+const STATUS_EFFECTIVE_CACHE = processMap<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>("status_effective");
 /** Process + upstream data cache TTL; overlaps with Next `unstable_cache` revalidate below. */
 const STATUS_EFFECTIVE_TTL_MS = 90_000;
 const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
@@ -98,6 +98,7 @@ export {
     parseLifecycleStageFromMetadata,
     type OpportunityLifecycleStage,
 } from "@/lib/admin/statusDefinitionLifecycle";
+import { processMap } from "@/lib/perf/processCache";
 
 const STATUS_DEF_COLUMNS =
     "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata";
