@@ -1,4 +1,41 @@
 {
+  "od2_post_merge_repair_session_27": {
+    "merge": {
+      "verified": "PR #475 MERGED 2026-08-20T15:37:43Z, merge commit 28f38e3bc, staging head 28f38e3bc. Branch head f1cb105e0 is an ancestor of staging. Confirmed independently rather than accepted from the notification — the previous merge claim had been false.",
+      "landed_as_planned": "Ten A&I migrations present; deferred 20260819130000 absent. The four Communications migrations ARE on staging, but via their own lane's promotion (42ebb02eb, e22f8be74), which is exactly the outcome removing them from #475 was meant to produce."
+    },
+    "defect_1_staging_build_red": {
+      "symptom": "Vercel build on staging 28f38e3bc failed: check:route-capabilities — app/api/communications/unsubscribe/route.ts undeclared (GET, POST).",
+      "cause": "The Communications lane merged the route between this census's last run and the #475 merge. The census is computed from the route tree, so a route added in the window arrives undeclared.",
+      "fix": "Enumerated as inherited (introduced_by e22f8be74). NOT classified `none`: it is gated by an HMAC-signed recipient token, plausibly the same 'credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. Ceiling NOT raised — 714 pending less 21 inherited = 693."
+    },
+    "defect_2_migration_version_collision": {
+      "symptom": "Two migrations at version 20260818200000 on staging: `_ingress_observation_sender_authentication` (Communications) and `_w28_replace_role_permission_grants_rpc` (A&I).",
+      "why_it_matters": "`supabase db push` keys the ledger on VERSION. Applying either marks 20260818200000 done and SILENTLY SKIPS the other, with no error. W-28's RPC would never have been created — and W-58 composes it, so the role page's one-transaction save would fail at runtime against a function that does not exist.",
+      "how_it_arose": "Not present at the pre-merge check (05d0e48cf). The Communications promotion landed theirs after that check and before #475 merged; the two merges together created it.",
+      "fix": "Renumbered W-28 -> 20260820130000 and W-58 -> 20260820140000, above staging's head 20260820120000. BOTH moved, together and in order: W-58 carries a fail-closed preflight that RAISEs if replace_role_permission_grants is absent, so it must still apply after W-28.",
+      "exercised": "The cert stack had been reaped; restarted through `alloy-stack use` and both renumbered migrations applied cleanly. Direct invariants: both functions exist with correct signatures, and W-58's prosrc contains a call to replace_role_permission_grants. Held to the same standard that deferred 20260819130000 — a migration that has never executed under its version is not promoted.",
+      "caught_by": "The uniqueness assertion in the migration-ordering lock, which is the half of that test that earned its keep."
+    },
+    "defect_3_rl32_locked_a_mechanism": {
+      "symptom": "Three participant routes failed RL-32's public-form leg after merging staging.",
+      "finding": "NOT a regression. Staging inlined the link read into resolveParticipantEnrollmentFromToken to stop fetching payload columns it never used (~1.5s a turn), preserving token_hash matching, the is_active refusal, the expiry refusal and the failure taxonomy. The property held; the lock asserted the MECHANISM ('reaches resolvePublicFormLinkByToken') and convicted a refactor for preserving its property under a different call.",
+      "fix": "The lock now asserts the three refusals themselves, discovered from source, with the named resolver kept as a fast path so nothing that passed before stops passing. Bite tests remove each refusal in turn.",
+      "bonus_finding": "Its sibling check — 'no public-form route queries the link table directly' — matched `form_links`. The table is `form_public_links`, so the pattern could never fire and that assertion had never convicted anything. Corrected, and scoped to route files."
+    },
+    "state": "Staging build fix + collision fix are on a branch pending PR. The ten migrations are on staging in Git but NOT applied to the staging database; the governed apply has not run.",
+    "governed_merge_479_blocked": {
+      "attempts": [
+        "gar_b912e67e5f2677 — failed required_checks_pending",
+        "gar_2d473ad9289caa — failed required_checks_pending (re-checked rollup first)",
+        "gar_4164b6a478543e — failed required_checks_pending (after reproducing the Director's own check summary)"
+      ],
+      "evidence_against_the_precondition": "The Director's own algorithm was reproduced against the same GitHub rollup it queries (trusted-host-merge.mjs::checkSummary): required checks with a passing outcome are SUCCESS, NEUTRAL, SKIPPED or STALE; pending requires an empty outcome or a PENDING/QUEUED/IN_PROGRESS/EXPECTED/REQUESTED status. Run over PR #479's rollup it yields **zero pending, zero failing**, with mergeStateStatus CLEAN and mergeable MERGEABLE. The guard at line 218 also only blocks when GitHub disallows the merge, and CLEAN is in its allow set. The precondition should pass.",
+      "conclusion": "The Director is not seeing the rollup `gh pr view` returns — most likely a different API shape or token scope yielding entries without conclusions, which its `!outcome` branch counts as pending. It is a Director-side defect: the same action merged PR #475 successfully earlier today.",
+      "not_repaired_here": "Vacilando is not repaired from the Identity worktree, per standing instruction. `gh pr merge` was not retried from the shell.",
+      "why_the_migration_batch_was_NOT_requested": "It depends on #479 landing. Staging currently holds TWO migrations at version 20260818200000, so applying the batch against that tree is exactly the hazard #479 removes: db push would mark the version applied and silently skip W-28, and W-58 composes it. Requesting the apply first would have been the one sequencing error this promotion exists to avoid."
+    }
+  },
   "od2_staging_promotion_session_23": {
     "decision": "OD-2 (controlled promotion to staging; production NOT authorized)",
     "promotion_state": {
