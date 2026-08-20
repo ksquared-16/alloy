@@ -96,8 +96,12 @@ export function validateCandidateValue(
         case "select":
         case "multiselect": {
             // CLOSED vocabulary. A model cannot invent an option that the operator never authored.
-            const allowed = field?.static_options?.length
-                ? field.static_options.map((o) => o.value)
+            // Re-narrowed explicitly: `controlType` may come from the occurrence, so TS no longer
+            // narrows `field` to the select variant on its own.
+            const selectField =
+                field && (field.type === "select" || field.type === "multiselect") ? field : null;
+            const allowed = selectField?.static_options?.length
+                ? selectField.static_options.map((o) => o.value)
                 : (need.occurrences[0]?.options ?? []).map(String);
             if (allowed.length === 0) return { ok: true, value };
             return allowed.includes(String(value))
