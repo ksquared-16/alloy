@@ -131,6 +131,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
         if (governed.candidate) candidate = governed.candidate;
         clarificationPrompt = governed.clarification_prompt;
+        if (!governed.candidate && governed.skipped_reason) {
+            // Operational evidence for the fallback rate: WHY the provider path was not used.
+            // Reason codes and gate names only — never the participant's words.
+            console.warn("[participant-turn] governed interpretation skipped:", governed.skipped_reason);
+        }
     }
     if (providerRan) timing.mark("interpret", interpretStart);
     timing.provider(providerRan);

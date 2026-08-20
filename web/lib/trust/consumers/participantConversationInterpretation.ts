@@ -23,7 +23,8 @@
  * @see lib/trust/capabilities/participantConversationInterpretation/informationSpec.ts — what is sent
  */
 
-import { PARTICIPANT_CONVERSATION_ADMISSION_POLICY_KEY } from "@/lib/trust/capabilities/participantConversationInterpretation/keys";
+import {
+    PARTICIPANT_CONVERSATION_INTERPRETATION_INFORMATION_KEY, PARTICIPANT_CONVERSATION_ADMISSION_POLICY_KEY } from "@/lib/trust/capabilities/participantConversationInterpretation/keys";
 import { PARTICIPANT_CONVERSATION_INTERPRETATION_PROVIDER_BACKED_CLASS_KEY } from "@/lib/trust/capabilities/participantConversationInterpretation/keys";
 import {
     participantInterpretationInformationSpec,
@@ -82,8 +83,8 @@ const NOT_ATTEMPTED = (reason: string): ParticipantInterpretationOutcome => ({
 });
 
 /** A human-readable statement of the value's shape, for the model. Closed vocabulary only. */
-function valueConstraintFor(field: FormField | null): string | null {
-    switch (field?.type) {
+function valueConstraintFor(field: FormField | null, occurrenceType?: string | null): string | null {
+    switch (field?.type ?? occurrenceType ?? null) {
         case "date":
             return "ISO calendar date (YYYY-MM-DD)";
         case "number":
@@ -122,10 +123,13 @@ export async function interpretParticipantResponseViaTrust(
 
     // 3. The bounded current-turn facts. Assembled HERE from the deterministic turn, never from a
     //    request body: the client supplies words, and the platform supplies everything they mean.
+    // The authored field when the caller has it; otherwise the need's own occurrence — the same
+    // fallback the validator applies, so the model is TOLD the shape validation will demand.
+    const occurrenceType = request.turn.need?.occurrences[0]?.field_type ?? null;
     const source: ParticipantInterpretationSource = {
         turn_kind: request.turn.kind,
         need_field_key: eligibility.field_key,
-        value_type: request.field?.type ?? "text",
+        value_type: request.field?.type ?? occurrenceType ?? "text",
         allowed_values: allowedValuesFor(request.field),
         proposed_value:
             request.turn.proposed_value === null || request.turn.proposed_value === undefined
@@ -133,7 +137,7 @@ export async function interpretParticipantResponseViaTrust(
                 : String(request.turn.proposed_value),
         participant_response_text: text,
         allowed_candidate_kinds: [],
-        value_constraint: valueConstraintFor(request.field),
+        value_constraint: valueConstraintFor(request.field, occurrenceType),
     };
 
     const built = buildInformationPackage({
@@ -171,7 +175,20 @@ export async function interpretParticipantResponseViaTrust(
     const execution = await executeDecisionContract({
         contract: contractResult.contract,
         eligibleReasoningInput: eligibleInput.input,
-        resolvedInformation: {},
+        /**
+         * The class's `required_information` is checked for PRESENCE against this map before
+         * anything else runs (the same seam the attention-enrichment consumer documents). The
+         * value is a minimal descriptor of the turn — never the participant's words, which travel
+         * only through the governed package where privacy applies to them. Live certification
+         * found this empty: every real execution refused `refused_insufficient_information`
+         * while the intercepted tests, which enter at the strategy, never crossed the seam.
+         */
+        resolvedInformation: {
+            [PARTICIPANT_CONVERSATION_INTERPRETATION_INFORMATION_KEY]: {
+                turn_kind: request.turn.kind,
+                need_field_key: eligibility.field_key,
+            },
+        },
         semanticMap: {},
         nowIso: request.nowIso,
         repository: request.repository,
@@ -189,7 +206,7 @@ export async function interpretParticipantResponseViaTrust(
         return {
             candidate: null,
             decision_package: decision,
-            skipped_reason: `Governed interpretation was not accepted (${decision.outcome}).`,
+            skipped_reason: `Governed interpretation was not accepted (${decision.outcome}): ${decision.explanation ?? ""}`,
             clarification_prompt: null,
         };
     }
@@ -201,10 +218,26 @@ export async function interpretParticipantResponseViaTrust(
     // 6. Mapped into the EXISTING candidate type through the EXISTING parser, so the same
     //    structural drop applies to a provider's output as to anything else: a field key, a
     //    command or a requirement id cannot survive the trip.
-    const candidate = parseStructuredCandidate({
+    let candidate = parseStructuredCandidate({
         kind: recommendation?.interpretation,
         ...(recommendation?.value !== undefined ? { value: recommendation.value } : {}),
     });
+
+    /**
+     * A provider may never CONFIRM on the participant's behalf.
+     *
+     * Structural, not statistical: any text that reaches this consumer was already unreadable to
+     * the deterministic interpreter — an unambiguous "yes" never gets here. So a provider result
+     * of "confirmed" is always an inference about intent, and live certification measured it
+     * failing exactly the wrong way (an explicit "Actually, it's August 21st." confirmed the OLD
+     * value on 1 of 3 runs at minimal effort). Demoting it to clarification costs the parent one
+     * extra tap in the rare genuine case; accepting it silently records agreement the parent
+     * never gave. Corrections still flow — they carry the participant's own value and are
+     * validated downstream.
+     */
+    if (candidate?.kind === "confirmed") {
+        candidate = { kind: "clarification_needed" };
+    }
 
     // The clarifying question rides beside the candidate, never on it — and only when the
     // interpretation actually was a clarification. The strategy's parser already sanitized and

@@ -30,6 +30,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
+
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import {
     resolveEnrollmentParticipantProgress,
@@ -244,11 +246,17 @@ export async function resolveEnrollmentInformationNeeds(
 
     const [versionsResult, packetItemsResult] = await Promise.all([
         versionIds.length
-            ? supabase
-                  .from("form_definition_versions")
-                  .select("id, form_definition_id, schema_json")
-                  .eq("org_id", input.orgId)
-                  .in("id", versionIds)
+            ? // D-94 pinned versions are IMMUTABLE (trigger-certified), so reading one by id is a
+              // cacheable fact — the same owner and TTL the pinned revision payload already uses.
+              cachedConfigRead(`needs:versions:${input.orgId}:${[...versionIds].sort().join(",")}`, async () => {
+                  const res = await supabase
+                      .from("form_definition_versions")
+                      .select("id, form_definition_id, schema_json")
+                      .eq("org_id", input.orgId)
+                      .in("id", versionIds);
+                  if (res.error) throw new Error(res.error.message);
+                  return { data: res.data, error: null };
+              })
             : Promise.resolve({ data: [], error: null }),
         packetItemIds.length && !input.preloaded
             ? supabase

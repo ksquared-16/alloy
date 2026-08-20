@@ -32,7 +32,15 @@ import type { ValidationPolicyV1 } from "@/lib/trust/validation/validationOrches
  * cannot hold the participant's request open — it simply loses, and the deterministic interpreter
  * answers instead.
  */
-const PARTICIPANT_INTERPRETATION_DEADLINE_MS = 8_000;
+/**
+ * 15s, raised from 8s by live measurement: the wall covers the WHOLE governed execution — Trust's
+ * own repository persistence included — and that persistence alone costs several seconds when the
+ * database is seconds away (the local certification path). The model answers in ~2s at minimal
+ * reasoning effort; production-adjacent totals are ~2.5s. The wall is a fallback boundary, not a
+ * UX promise — the participant sees the honest thinking state and keeps the deterministic
+ * controls throughout.
+ */
+const PARTICIPANT_INTERPRETATION_DEADLINE_MS = 15_000;
 
 const PARTICIPANT_CONVERSATION_INTERPRETATION_CLASS: DecisionClassDefinitionV1 = {
     key: PARTICIPANT_CONVERSATION_INTERPRETATION_PROVIDER_BACKED_CLASS_KEY,
@@ -63,7 +71,14 @@ const PARTICIPANT_CONVERSATION_INTERPRETATION_CLASS: DecisionClassDefinitionV1 =
      */
     review_requirement: "automatic",
     learning_policy_key: "none_v1",
-    economic_policy: { max_latency_ms: PARTICIPANT_INTERPRETATION_DEADLINE_MS, max_escalation_level: 1 },
+    /**
+     * `max_escalation_level: 3` is `small_reasoning`'s index on the strategy ladder — the same
+     * convention the attention-enrichment provider class documents. V1.1 shipped this as 1, which
+     * FORBADE the only strategy the class prefers: every live execution refused `refused_budget`
+     * while the intercepted tests, entering at the strategy, never crossed the selection seam.
+     * 3 admits exactly small_reasoning; large_reasoning (4) and human_review (5) stay above it.
+     */
+    economic_policy: { max_latency_ms: PARTICIPANT_INTERPRETATION_DEADLINE_MS, max_escalation_level: 3 },
     /**
      * Provider participation is gated by the platform's AI feature policy, like every other class
      * that leaves the process. An org without it keeps the deterministic path and loses nothing it

@@ -583,3 +583,23 @@ describe("a correction is itself a confirmation — the John Peters loop", () =>
         expect(reopened.state).toBe("known_requires_confirmation");
     });
 });
+
+describe("typed validation holds without an authored FormField", () => {
+    it('a provider-corrected "August 21" is refused for a DATE need even with field: null', async () => {
+        // Live certification caught this: the turn route passes no FormField, and the untyped
+        // switch accepted a non-ISO string as a date of birth. The need\'s occurrence knows the type.
+        const world = freshWorld();
+        world.sharedValues[DOB_KEY] = "2021-05-04";
+        const before = await objective(world);
+        expect(before.next_turn.need?.occurrences[0]?.field_type).toBe("date");
+        const applied = await applyParticipantTurnResponse(fakeSupabase(world), {
+            orgId: ORG,
+            processInstanceId: PI,
+            candidate: { kind: "corrected_value", value: "August 21" },
+            nowIso: NOW,
+        });
+        if (!applied.ok) throw new Error("apply failed");
+        expect(applied.disposition.action).toBe("refused");
+        expect(world.sharedValues[DOB_KEY]).toBe("2021-05-04");
+    });
+});
