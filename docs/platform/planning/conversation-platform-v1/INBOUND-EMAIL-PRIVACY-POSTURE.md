@@ -61,3 +61,14 @@ unless a runtime requirement proves it necessary; no such requirement exists tod
 
 Provider credentials are provisioned by the deployment and selected by reference —
 never entered by a user. See `providerCredentialCatalog.ts`.
+
+## Related — the separate authorization this posture anticipated
+
+`EMAIL-INGRESS-V2-CAPABILITY-AUDIT.md` (2026-08-18) is the Gmail/Graph capability audit
+this document called for. **It does not change the posture.** Its recommendation requires
+no Gmail or Outlook OAuth, no mailbox scope and no stored provider credential, and it
+tightens the boundary rather than relaxing it: it adds a deterministic admission gate to a
+runtime where "addressed to a configured identity" currently implies "ingest everything".
+
+Any future proposal for a mailbox connector must be recorded as its own decision, against
+the evidence in §1–§2 of that audit.

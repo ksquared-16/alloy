@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type {
     ComposerChannel,
@@ -62,12 +63,10 @@ export type FamilyRuntimeTimelineMessage = {
     delivered_at?: string | null;
 };
 
-const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = {
-    email_transactional: "unset",
-    sms_transactional: "unset",
-    email_marketing: "unset",
-    sms_marketing: "unset",
-};
+// Built from the one place the categories are declared, not restated. This literal listed
+// four of them and silently went stale the moment the operational pair was added — a second
+// copy of a closed vocabulary is a copy that will disagree.
+const UNSET_PREFERENCE_PROFILE: PersonPreferenceProfile = emptyPreferenceProfile();
 
 export function familyWorkspaceFromPreview(
     preview: FamilyCommunicationWorkspacePreviewVM

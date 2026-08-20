@@ -3,6 +3,7 @@ import { assembleFamilyWorkspace } from "@/lib/communications/v2/familyWorkspace
 import { resolveWorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
 import type { FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { RawFamilyWorkspaceData } from "@/lib/communications/v2/familyWorkspace/loadFamilyWorkspaceData";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 
 function minimalVm(overrides: Partial<FamilyCommunicationWorkspaceVM> = {}): FamilyCommunicationWorkspaceVM {
     return {
@@ -12,7 +13,7 @@ function minimalVm(overrides: Partial<FamilyCommunicationWorkspaceVM> = {}): Fam
         eligibleRecipients: [],
         disabledRecipients: [],
         selectedRecipients: [],
-        consentSummary: { byContact: {}, household: { email: "unset", sms: "unset", marketing: "unset" }, preferenceProfile: { email_transactional: "unset", sms_transactional: "unset", email_marketing: "unset", sms_marketing: "unset" }, preferenceProfilesByContact: {}, displayFlags: { email: true, sms: true, marketing: true } },
+        consentSummary: { byContact: {}, household: { email: "unset", sms: "unset", marketing: "unset" }, preferenceProfile: emptyPreferenceProfile(), preferenceProfilesByContact: {}, displayFlags: { email: true, sms: true, marketing: true } },
         composerDraft: {
             channel: "email",
             recipientContactIds: [],

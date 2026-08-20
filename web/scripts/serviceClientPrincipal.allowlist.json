@@ -17,10 +17,10 @@
     "ceiling is a violation; under it is stale, because a ceiling left above a fallen floor hands",
     "out that many free exceptions. Both must be re-tightened whenever the floor moves."
   ],
-  "reviewed": "2026-08-14",
-  "reviewed_by": "PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
+  "reviewed": "2026-08-19",
+  "reviewed_by": "WS8 V1 preference boundary (Communications final hardening) — added the recipient unsubscribe capability-token route; previously PR #416 staging build fix (tour book + confirm-attendance moved to guardTourActionRoute advisory model); previously assignment asg_91e144a61569e4 (mission msn_f74ed02c126c88d7ff, W-4 reopen re-execution, 2026-08-06); previously the same assignment's 2026-08-04 re-verification; originally asg_d203f547736c16 (mission msn_2d054741a54698fa4c)",
   "ratchet": {
-    "max_subject_unresolved": 19,
+    "max_subject_unresolved": 20,
     "max_transitive_only_unresolved": 12,
     "history": [
       "2026-07-31: unresolved 26 (initial baseline), advisory 3.",
@@ -35,7 +35,8 @@
       "2026-08-16: unresolved raised 14 → 16 for the two Participant Runtime V1 routes (`enrollment-objective`, `enrollment-turn`). Not a loosening: both sit on the SAME capability-token model and the SAME `resolvePublicFormLinkByToken` gate as the four `public/forms/[token]` routes already listed, and the turn route additionally re-resolves the current turn server-side so the caller supplies a value but never a target.",
       "2026-08-18: unresolved raised 16 → 17 for `enrollment-edit` (compiled artifact review corrections). Same capability-token gate as its two siblings; the caller names a field id but the shared key it writes to is resolved server-side from the PINNED schema, and unbound fields are refused — the request carries a value, never a target.",
       "2026-08-19: unresolved raised 17 → 18 for `enrollment-document` (original-document artifact vertical). Read-only render of the participant's own filled document; the whole selection chain (session → pinned version → mapped source document → sha-pinned bytes) is server-derived from the token.",
-      "2026-08-19: unresolved raised 18 → 19 for `enrollment-signature-asset` (artifact-positioned signing). Same gate; the request carries PNG bytes (magic-verified, 300KB cap) and NO target — the asset attaches to the D-95 anchor's own subject, resolved server-side."
+      "2026-08-19: unresolved raised 18 → 19 for `enrollment-signature-asset` (artifact-positioned signing). Same gate; the request carries PNG bytes (magic-verified, 300KB cap) and NO target — the asset attaches to the D-95 anchor's own subject, resolved server-side.",
+      "2026-08-19: unresolved raised 19 → 20 for the recipient Email unsubscribe route (`communications/unsubscribe`). Not a loosening. It is the same capability-token model as the `public/forms/[token]` and Participant Runtime entries, and it is the narrowest instance of that model on the list: the caller supplies NO target and NO value — Person, org and category are all signed claims, and the only reachable mutation is a single preference category to `opted_out` through the canonical write authority. Required because an unsubscribe link that demands a session is not an unsubscribe link; WS8 V1 needs recipient-initiated Email opt-out."
     ]
   },
   "exceptions": [
@@ -133,6 +134,11 @@
       "route": "app/api/vendor-application/route.ts",
       "model": "public-intake-create + env-pinned-org",
       "reason": "Unauthenticated vendor application intake. Org pinned to ALLOY_PUBLIC_ORG_ID and 500s without it (:33-37). Creates only — it selects no existing row by a caller-supplied id."
+    },
+    {
+      "route": "app/api/communications/unsubscribe/route.ts",
+      "model": "capability-token",
+      "reason": "Recipient-initiated Email unsubscribe; public by necessity (an unsubscribe link that requires a login is not an unsubscribe link). EVERY target is a signed claim, not a caller-supplied selector: the Person, the organization and the single mutable category all come out of the HMAC-verified token (`verifyUnsubscribeToken`, lib/communications/preferences/unsubscribeToken.ts:150-190), and applyUnsubscribe.ts:60-90 reads nothing from the request. The caller therefore supplies no value the mutation uses at all — strictly narrower than the enrollment-turn precedent, where the caller supplies a value but never a target. The token cannot switch categories (`c` is signed), cannot cross tenants (`o` is signed, and persons is re-checked on the pair), and the only reachable write is toState=\"opted_out\" through the canonical persistCommunicationPreference authority."
     }
   ],
   "baseline": [],

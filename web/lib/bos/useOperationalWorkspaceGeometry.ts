@@ -2,6 +2,8 @@
 
 import { useEffect, useLayoutEffect } from "react";
 
+import { createOperationalGeometryScheduler } from "@/lib/bos/operationalGeometryScheduler";
+
 import { BOS_ACTION_WORKSPACE_OPEN_ATTR } from "@/lib/bos/bosRailPresentationFlags";
 import { BOS_PRESENTATION_ATTR } from "@/lib/bos/bosPresentationState";
 import {
@@ -32,7 +34,11 @@ export function useOperationalWorkspaceGeometry(enabled: boolean): void {
     useEffect(() => {
         if (!enabled || typeof window === "undefined") return;
 
-        const remeasure = () => measureAndApplyOperationalWorkspaceGeometry();
+        // One measurement per frame, and none in response to our own write. See the header.
+        const scheduler = createOperationalGeometryScheduler(() =>
+            measureAndApplyOperationalWorkspaceGeometry()
+        );
+        const remeasure = scheduler.request;
 
         window.addEventListener("resize", remeasure);
 
@@ -59,6 +65,7 @@ export function useOperationalWorkspaceGeometry(enabled: boolean): void {
             window.removeEventListener("resize", remeasure);
             ro?.disconnect();
             mo.disconnect();
+            scheduler.cancel();
         };
     }, [enabled]);
 }

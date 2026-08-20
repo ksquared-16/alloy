@@ -109,10 +109,31 @@ export function outboundEmailHeaders(params: {
     messageId: string | null;
     inReplyTo: string | null;
     references: string | null;
+    /** Absolute unsubscribe URL, for categories a recipient may opt out of. */
+    unsubscribeUrl?: string | null;
 }): Record<string, string> {
     const out: Record<string, string> = {};
     if (params.messageId) out["Message-ID"] = params.messageId;
     if (params.inReplyTo) out["In-Reply-To"] = params.inReplyTo;
     if (params.references) out["References"] = params.references;
+
+    // UNSUBSCRIBE HEADERS ARE ADDITIVE AND ORTHOGONAL.
+    //
+    // They are emitted alongside the threading headers, never instead of them, and they
+    // touch no value threading depends on. That separation is the point: the live
+    // certification proved an Alloy `Message-ID` survives a Gmail forwarding hop and
+    // correlates by `References`, and an unsubscribe feature that quietly rewrote or
+    // dropped either would break the round trip while looking like a deliverability
+    // improvement.
+    //
+    // RFC 8058: `List-Unsubscribe-Post` is what makes a mail client offer one-click, and it
+    // is only honoured together with an HTTPS `List-Unsubscribe` URL. Emitting the POST
+    // header without a URL would advertise a capability that does not exist, so both are
+    // written together or neither is.
+    const unsubscribe = String(params.unsubscribeUrl ?? "").trim();
+    if (unsubscribe) {
+        out["List-Unsubscribe"] = `<${unsubscribe}>`;
+        out["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click";
+    }
     return out;
 }
