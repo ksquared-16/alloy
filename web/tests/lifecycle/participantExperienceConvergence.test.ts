@@ -111,8 +111,11 @@ describe("known facts are confirmed, not asked for", () => {
 
     it("asks the parent to confirm, in their own words, with the value spelled out", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
+        // "birthday", the way a specialist would say it — and "still right?", which is what you ask
+        // about something already on file. The child is called by their FIRST name: the
+        // conversation is with a parent about their child, not about a record.
         expect(participantQuestion(wire)).toBe(
-            "I have Test Process's date of birth as May 15, 2022. Is that correct?",
+            "I have Test's birthday as May 15, 2022. Is that still right?",
         );
         // NOT the internal prompt, and never the column heading.
         expect(participantQuestion(wire)).not.toContain("Child Dob");
@@ -128,8 +131,10 @@ describe("known facts are confirmed, not asked for", () => {
     it("opens by telling the parent what the conversation will do", () => {
         const wire = participantObjectiveWireModel(objective(), { subjectDisplayName: "Test Process" });
         const intro = participantIntro(wire);
-        expect(intro).toContain("Welcome to Enrollment for Test Process");
-        expect(intro).toContain("only ask for what's missing");
+        // Specialist voice: what Alloy already has, and what it still needs. Not a welcome banner.
+        // First name, same as every other line of the conversation.
+        expect(intro).toContain("I already have most of Test's information");
+        expect(intro).toContain("ask for anything I'm missing");
     });
 });
 
@@ -166,16 +171,17 @@ describe("controls are semantic, not one text box", () => {
                 label: "Preferred start date note",
                 options: [],
                 optional: false,
+                field_ids: [],
             }),
         ).toMatchObject({ kind: "value", inputType: "text" });
     });
 
     it("boolean and closed-enum needs get their own controls", () => {
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "boolean", label: "Consent", options: [], optional: false, field_ids: [] }),
         ).toMatchObject({ kind: "boolean" });
         expect(
-            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false }),
+            controlForTurn({ kind: "collect_missing_value", prompt: "", proposed_value: null, resolves_occurrences: 1, input_type: "select", label: "Program", options: ["AM", "PM"], optional: false, field_ids: [] }),
         ).toMatchObject({ kind: "options", options: ["AM", "PM"] });
     });
 
@@ -198,7 +204,7 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
         expect(host).toContain("sharedCollectionInProgress");
         expect(host).toContain('=== "shared_collection"');
         // Deferred, never bypassed: values still reach the Form through the existing prefill path.
-        expect(host).toContain("enrollmentObjective != null");
+        expect(host).toContain("participantPhase === \"shared_collection\"");
     });
 
     it("phase is derived from outstanding shared needs, and reported on every turn", () => {
@@ -227,8 +233,11 @@ describe("one interaction per unique need, and no raw form beneath it", () => {
             }),
             { subjectDisplayName: "Test Process" },
         );
-        expect(participantQuestion(wire)).toContain("review");
-        expect(progressLine(wire)).toContain("review and sign");
+        expect(participantQuestion(wire)).toContain("I filled out");
+        // The instruction lives on the [Review paperwork] action, not in the sentence.
+        expect(participantQuestion(wire)).toContain("that's everything I needed");
+        // No progress line at all during review — the artifact itself is the context.
+        expect(progressLine(wire)).toBe("");
     });
 });
 

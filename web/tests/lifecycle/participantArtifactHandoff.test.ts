@@ -145,6 +145,7 @@ describe("an authored date cannot degrade into a text box", () => {
                 label,
                 options: [],
                 optional: false,
+                field_ids: [],
             });
             expect(control).toMatchObject({ kind: "value", inputType: "date" });
         }
@@ -200,7 +201,7 @@ describe("Continue, not Saving", () => {
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
         expect(card).not.toContain("Saving…");
         expect(card).not.toContain("Saving your answer");
-        expect(card).toContain('{"Continue"}');
+        expect(card).toContain(">\n                    Continue\n                </button>");
         // Persistence stays an implementation detail; the guard is the in-flight ref, not the copy.
         expect(card).toContain("inFlight.current");
     });

@@ -51,10 +51,39 @@ export type ParticipantObjectiveWire = {
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
         readonly optional: boolean;
+        /**
+         * The artifact fields this single answer fills.
+         *
+         * Already visible to the participant — they are the ids of controls on their own form — and
+         * they are what lets the surface show the answer in the paperwork the instant it is given,
+         * rather than leaving a field the parent just answered looking empty until a reload.
+         */
+        readonly field_ids: readonly string[];
     };
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
 };
+
+/**
+ * The child's name as the CONVERSATION currently knows it.
+ *
+ * The canonical record's display name is only the starting point: a parent who corrects the name
+ * mid-conversation must be spoken to with the name they just gave, not the record they corrected —
+ * "I have John's birthday…", never "Test Process4's" after the parent said John Peters. The needs
+ * projection already resolves that precedence (session shared value over canonical), so the wire
+ * reads the resolved `child_full_name` need and falls back to the record only when no such need
+ * carries a value.
+ */
+function resolvedSubjectDisplayName(
+    objective: ParticipantEnrollmentObjective,
+    fallback: string | null | undefined,
+): string | null {
+    const nameNeed = objective.needs.needs.find(
+        (n) => n.identity.shared_value_key === "child_full_name" && typeof n.current_value === "string",
+    );
+    const resolved = ((nameNeed?.current_value as string | undefined) ?? "").trim();
+    return resolved || ((fallback ?? "").trim() || null);
+}
 
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
@@ -63,20 +92,29 @@ export function participantObjectiveWireModel(
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
 
-    // Shared collection is over when no need that can be answered ONCE for every artifact is still
-    // waiting. What is left after that is artifact-specific by construction — Slice 2.4 gives those
-    // needs a null shared key — so the phase is derived, never tracked.
-    const sharedOutstanding =
-        (objective.known_requiring_confirmation ?? []).length + (objective.missing ?? []).length;
-    const phase: ParticipantPhase = turn.kind === "complete"
-        ? "complete"
-        : sharedOutstanding > 0
-          ? "shared_collection"
-          : "artifact_review";
+    /**
+     * PHASE IS DERIVED FROM THE TURN — one authority, not two.
+     *
+     * It used to be derived independently, from `known_requiring_confirmation.length + missing.length`.
+     * That produced a state the product must never reach: the turn selector skips a need that does
+     * not require participant action, so an OPTIONAL missing fact left the turn at
+     * `complete_artifact` while the phase still said `shared_collection`. The card rendered
+     * "review and finish it below" because it reads the turn; the host suppressed the artifact
+     * because it reads the phase. The parent got a handoff with nothing beneath it.
+     *
+     * Two readers of the same situation disagreed because they asked different questions. Now the
+     * turn — which is the deterministic runtime's own answer to "what next" — decides both.
+     */
+    const phase: ParticipantPhase =
+        turn.kind === "complete"
+            ? "complete"
+            : turn.kind === "complete_artifact"
+              ? "artifact_review"
+              : "shared_collection";
 
     return {
         stage_key: objective.stage_key,
-        subject_display_name: (context?.subjectDisplayName ?? "").trim() || null,
+        subject_display_name: resolvedSubjectDisplayName(objective, context?.subjectDisplayName),
         phase,
         progress: {
             total: objective.progress.total_requirements,
@@ -95,6 +133,7 @@ export function participantObjectiveWireModel(
             label: firstOccurrence?.label ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
+            field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         complete: turn.kind === "complete",
     };

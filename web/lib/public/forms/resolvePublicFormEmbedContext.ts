@@ -1,3 +1,4 @@
+import { resolveParticipantCanonicalValues } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
@@ -60,6 +61,35 @@ export type PublicEmbedResolved = {
         shared_prefill_by_field_id?: Record<string, unknown>;
     };
 };
+
+/**
+ * What the artifact should already contain when the parent first looks at it.
+ *
+ * "I filled out the paperwork for you" is only true if the paperwork is actually filled — and the
+ * organization's own record is most of it, before the parent has said a word. So canonical values
+ * are the base layer and the session's own shared values are laid over them.
+ *
+ * That precedence matches the needs projection exactly: a session value is what the PARTICIPANT has
+ * settled and must outrank a record the operator entered months ago. Inverting it would let a stale
+ * record overwrite what a parent just told us.
+ *
+ * It also repairs a real gap in existing journeys. A confirmation recorded before the runtime wrote
+ * confirmed values into the session left evidence but no value, so a date of birth the parent had
+ * already agreed to rendered blank. Reading the record as the base layer fixes the class, not just
+ * those rows.
+ */
+export async function participantPrefillValues(
+    supabase: SupabaseClient,
+    orgId: string,
+    session: { shared_values?: unknown; process_instance_id?: string | null },
+): Promise<Record<string, unknown>> {
+    const shared = (session.shared_values ?? {}) as Record<string, unknown>;
+    const processInstanceId = String(session.process_instance_id ?? "").trim();
+    if (!processInstanceId) return shared;
+
+    const canonical = await resolveParticipantCanonicalValues(supabase, { orgId, processInstanceId });
+    return { ...canonical, ...shared };
+}
 
 export async function resolvePublicFormEmbedContext(
     supabase: SupabaseClient,
@@ -211,7 +241,7 @@ export async function resolvePublicFormEmbedContext(
                 step_summaries: stepSummaries ?? undefined,
                 shared_prefill_by_field_id: sharedValuesToFieldIds(
                     envelope.schemaJson as never,
-                    (session.shared_values ?? {}) as Record<string, unknown>,
+                    await participantPrefillValues(supabase, v.orgId, session),
                 ),
             },
         },

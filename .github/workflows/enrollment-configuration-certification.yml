@@ -67,6 +67,20 @@
 # the artifact being RENDERED. It also holds requiredness with the Form, proves an authored date
 # cannot degrade into a text box, and proves one theme owner brands both phases.
 #
+# `participantDeterministicJourney` certifies the experience Director QA rejected: typed controls
+# including the CORRECTION path (a confirm turn now carries the authored control, so "Change" is a
+# date picker rather than a text box), settled sections that stay on screen, immediate
+# acknowledgement with rollback, and the review invariant. That last one is the sharp edge — phase
+# used to be derived independently of the turn, so an OPTIONAL missing need left the card offering
+# "review below" while the host suppressed the artifact. Phase now comes from the turn.
+#
+# `compiledParticipantArtifact` pins the artifact model the review is built on. The gap it closes:
+# `FormEngineRenderer` takes `mode: "edit" | "readonly"` and that mode is per-FORM, so the only
+# thing the runtime could hand a parent after the conversation was the whole form as inputs —
+# including the facts they had just settled. The missing piece was a CLASSIFICATION, not a document
+# model, and the controls hold the invariant it exists for: nothing the conversation resolved may
+# reappear as unresolved work.
+#
 # NOTE: this job is not a REQUIRED check until it is added to branch protection, which
 # is a repository setting rather than something this file can assert.
 
@@ -118,4 +132,8 @@ jobs:
             tests/lifecycle/startEnrollmentIdempotentReuse.test.ts \
             tests/lifecycle/participantSurfaceHookOrder.test.ts \
             tests/lifecycle/participantExperienceConvergence.test.ts \
-            tests/lifecycle/participantArtifactHandoff.test.ts
+            tests/lifecycle/participantArtifactHandoff.test.ts \
+            tests/lifecycle/participantDeterministicJourney.test.ts \
+            tests/lifecycle/compiledParticipantArtifact.test.ts \
+            tests/forms/pdf/fidelityEngine.test.ts \
+            tests/forms/pdf/fidelityMappingVertical.test.ts

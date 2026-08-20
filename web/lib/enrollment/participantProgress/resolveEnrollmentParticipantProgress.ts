@@ -132,13 +132,30 @@ async function loadRealizedFormItems(
     return out;
 }
 
+/**
+ * What progress LOADED on the way to its projection — the session row, its items, the realized
+ * form identities and the journey's subject. The needs resolver reads the same rows; handing them
+ * over removes four duplicate query waves from every objective resolution.
+ */
+export type EnrollmentProgressLoaded = {
+    readonly session: { id: string; shared_values?: unknown; metadata?: unknown } | null;
+    readonly items: readonly SessionItemRow[];
+    readonly formBySessionItem: ReadonlyMap<string, string>;
+    readonly subjectId: string | null;
+};
+
 export async function resolveEnrollmentParticipantProgress(
     supabase: SupabaseClient,
-    input: { orgId: string; processInstanceId: string },
+    input: {
+        orgId: string;
+        processInstanceId: string;
+        /** Receives the loaded rows on the success path, for callers that read them next. */
+        captureLoaded?: (loaded: EnrollmentProgressLoaded) => void;
+    },
 ): Promise<EnrollmentParticipantProgressResult> {
     const { data, error } = await supabase
         .from(PROCESS_INSTANCES_TABLE)
-        .select("id, org_id, process_key, context_type, context_id, stage_key, metadata, business_process_revision_id")
+        .select("id, org_id, process_key, subject_id, context_type, context_id, stage_key, metadata, business_process_revision_id")
         .eq("id", input.processInstanceId)
         .eq("org_id", input.orgId)
         .maybeSingle();
@@ -169,12 +186,19 @@ export async function resolveEnrollmentParticipantProgress(
               ? await departmentForOpportunityContext(supabase, input.orgId, instance.context_id)
               : null;
 
-    const configuration = await resolveProcessInstanceConfiguration({
-        supabase,
-        orgId: input.orgId,
-        processInstance: instance,
-        departmentId,
-    });
+    // The pinned configuration and the anchored session depend only on the instance — one wave.
+    const [configuration, sessionResolution] = await Promise.all([
+        resolveProcessInstanceConfiguration({
+            supabase,
+            orgId: input.orgId,
+            processInstance: instance,
+            departmentId,
+        }),
+        resolveCurrentEnrollmentSession(supabase, {
+            orgId: input.orgId,
+            processInstanceId: instance.id,
+        }),
+    ]);
 
     /**
      * B1a. A journey that has not been moved yet has `stage_key = NULL` — process-start semantics
@@ -202,16 +226,20 @@ export async function resolveEnrollmentParticipantProgress(
               ?.requirements ?? [])
         : [];
 
-    const { session, items, error: sessionError } = await resolveCurrentEnrollmentSession(supabase, {
-        orgId: input.orgId,
-        processInstanceId: instance.id,
-    });
+    const { session, items, error: sessionError } = sessionResolution;
     if (sessionError) {
         return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };
     }
 
     const realized = await loadRealizedFormItems(supabase, input.orgId, items as SessionItemRow[]);
     const projected = projectRequirementsProgress(requirements, realized);
+
+    input.captureLoaded?.({
+        session: (session ?? null) as EnrollmentProgressLoaded["session"],
+        items: items as SessionItemRow[],
+        formBySessionItem: new Map(realized.map((r) => [r.session_item_id, r.form_definition_id])),
+        subjectId: String((instance as { subject_id?: string | null }).subject_id ?? "").trim() || null,
+    });
 
     return {
         ok: true,

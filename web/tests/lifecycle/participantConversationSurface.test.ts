@@ -54,6 +54,7 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             label: "Date of Birth",
             options: [],
             optional: false,
+            field_ids: [],
         },
         complete: false,
         ...overrides,
@@ -70,7 +71,9 @@ describe("turn rendering", () => {
         expect(control.kind).toBe("choice_or_text");
         if (control.kind !== "choice_or_text") return;
         expect(control.affirm).toContain("Yes");
-        expect(control.deny).toContain("No");
+        // "Change" — a correction is not a denial, and the button leads to a TYPED control.
+        expect(control.deny).toBe("Change");
+        expect(control.correction).toMatchObject({ kind: "value", inputType: "date" });
     });
 
     it("5. a collect turn gets a field-appropriate deterministic input", () => {
@@ -148,8 +151,9 @@ describe("3. progress is deterministic and truthful", () => {
     it("counts things still requiring the participant, not requirements", () => {
         // Parent-centric wording: these are questions left to answer, not Form controls. The old
         // "8 to add · 1 to sign or upload" described the implementation to someone who cannot see it.
-        expect(progressLine(wire({ things_remaining: 3 }))).toBe("3 things left to check");
-        expect(progressLine(wire({ things_remaining: 1 }))).toBe("1 thing left to check");
+        // Subtle, conversational, and never a stepper — "Step 2 of 3" describes the machine's plan.
+        expect(progressLine(wire({ things_remaining: 3 }))).toBe("Just 3 things left");
+        expect(progressLine(wire({ things_remaining: 1 }))).toBe("Just one more thing");
     });
 
     it("offers no percentage over a denominator a parent cannot see", () => {

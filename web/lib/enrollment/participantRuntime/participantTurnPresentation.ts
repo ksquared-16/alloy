@@ -22,12 +22,38 @@ import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRunti
  * without any model at all.
  */
 export type ParticipantTurnControl =
-    | { readonly kind: "choice_or_text"; readonly affirm: string; readonly deny: string }
-    | { readonly kind: "value"; readonly inputType: "date" | "email" | "tel" | "number" | "text"; readonly label: string }
-    | { readonly kind: "boolean"; readonly affirm: string; readonly deny: string; readonly label: string }
-    | { readonly kind: "options"; readonly options: readonly string[]; readonly label: string }
+    /**
+     * A confirm turn. `correction` is the control the parent meets after "Change" — the SAME typed
+     * control the authored Form uses, so correcting a date of birth is a date picker and not a text
+     * box that happens to be next to a date.
+     */
+    | {
+          readonly kind: "choice_or_text";
+          readonly affirm: string;
+          readonly deny: string;
+          readonly correction: ParticipantValueControl;
+      }
+    | ParticipantValueControl
     | { readonly kind: "handoff" }
     | { readonly kind: "done" };
+
+/** The controls that actually collect a value. Shared by collection and by correction. */
+export type ParticipantValueControl =
+    | {
+          readonly kind: "value";
+          readonly inputType: "date" | "email" | "tel" | "number" | "text";
+          readonly label: string;
+          /** Long prose gets a textarea rather than a single line. */
+          readonly multiline?: boolean;
+      }
+    | { readonly kind: "boolean"; readonly affirm: string; readonly deny: string; readonly label: string }
+    | {
+          readonly kind: "options";
+          readonly options: readonly string[];
+          readonly label: string;
+          /** More than one choice may be selected. */
+          readonly multiple?: boolean;
+      };
 
 /**
  * Field-appropriate deterministic input, chosen from the need's canonical key.
@@ -39,9 +65,24 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
     if (turn.kind === "complete") return { kind: "done" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
-        return { kind: "choice_or_text", affirm: "Yes, that's right", deny: "No, change it" };
+        return {
+            kind: "choice_or_text",
+            affirm: "Yes, that's right",
+            deny: "Change",
+            correction: valueControlForTurn(turn),
+        };
     }
 
+    return valueControlForTurn(turn);
+}
+
+/**
+ * The typed control for a need, from the AUTHORED field type.
+ *
+ * One function, used for both collecting a missing value and correcting a known one — a date of
+ * birth is a date whichever way the parent arrives at it.
+ */
+export function valueControlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantValueControl {
     const label = turn.label?.trim() || "your answer";
     /**
      * The AUTHORED control leads. It is what the parent would have met on the Form itself, so
@@ -61,6 +102,12 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
     }
     if ((authored === "select" || authored === "radio") && turn.options.length > 0) {
         return { kind: "options", options: turn.options, label };
+    }
+    if ((authored === "multiselect" || authored === "checkbox_group") && turn.options.length > 0) {
+        return { kind: "options", options: turn.options, label, multiple: true };
+    }
+    if (authored === "textarea" || authored === "long_text") {
+        return { kind: "value", inputType: "text", label, multiline: true };
     }
     // An authored TEXT field is a decision, not an absence: the operator chose free text, and a
     // label containing the word "date" must not override them.
@@ -86,7 +133,19 @@ export function optionalSkipLabel(objective: ParticipantObjectiveWire): string |
     if (!objective.next_turn.optional) return null;
     const label = naturalFieldLabel(objective.next_turn.label).toLowerCase();
     if (label.includes("allerg")) return "No known allergies";
-    return "Skip — nothing to add";
+    return "Nothing to add";
+}
+
+/**
+ * The affirmative half of an optional question.
+ *
+ * A specialist asks a yes/no question and only reaches for the form when the answer is yes. This is
+ * the "yes" — it reveals the authored control rather than submitting anything, so a parent who has
+ * something to tell us is not typing into a box they never asked for.
+ */
+export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string | null {
+    if (!objective.next_turn.optional) return null;
+    return "Yes — I'll tell you";
 }
 
 /**
@@ -148,32 +207,60 @@ export function displayValue(value: unknown): string {
  * which is written for the runtime. A confirm turn states what is on file and asks whether it is
  * right; a collect turn asks for the one thing that is missing, named the way a parent would.
  */
+/**
+ * The name a specialist would USE at the table — the child's first name.
+ *
+ * The full display name identifies the record; the conversation is with a parent about their
+ * child, and "I have John's birthday…" is how that sentence is said. Derived from the resolved
+ * subject name, so a mid-conversation correction changes what the child is called immediately.
+ */
+function familiarName(objective: ParticipantObjectiveWire): string {
+    const subject = (objective.subject_display_name ?? "").trim();
+    return subject.split(/\s+/)[0] ?? "";
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
-    const subject = (objective.subject_display_name ?? "").trim();
+    const subject = familiarName(objective);
     // Always `'s`, including for names ending in s — "Test Process's", the way the parent would say
     // it. The plural-possessive rule does not apply to a personal name.
     const possessive = subject ? `${subject}'s` : "your child's";
+    const them = subject || "your child";
     const label = naturalFieldLabel(turn.label);
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
+        // "birthday", not "date of birth" — a specialist sitting next to a parent does not read
+        // them the column name.
+        const spoken = label === "date of birth" ? "birthday" : label;
         return shown
-            ? `I have ${possessive} ${label} as ${shown}. Is that correct?`
-            : `Is ${possessive} ${label} still correct?`;
+            ? `I have ${possessive} ${spoken} as ${shown}. Is that still right?`
+            : `Is ${possessive} ${spoken} still right?`;
     }
     if (turn.kind === "collect_missing_value") {
+        // Allergies is the reference case: a specialist ASKS whether there are any. They do not
+        // present a field called Allergies and wait for the parent to work out what to type.
+        if (label.includes("allerg")) {
+            return `Does ${them} have any allergies we should know about?`;
+        }
         return `What is ${possessive} ${label}?`;
     }
     if (turn.kind === "complete_artifact") {
+        // The instruction lives on the [Review paperwork] action, not in the sentence — the
+        // conversation ends by saying what was done, and the button says what happens next.
         return subject
-            ? `I have everything I need for ${subject}'s paperwork. Please review and finish it below.`
-            : "I have everything I need. Please review and finish the paperwork below.";
+            ? `Great — that's everything I needed. I filled out ${subject}'s enrollment paperwork.`
+            : "Great — that's everything I needed. I filled out the enrollment paperwork.";
     }
     if (turn.kind === "complete") {
         return "That's everything — thank you.";
     }
     return turn.prompt;
+}
+
+/** The line that introduces the signature, once the paperwork has been reviewed. */
+export function participantSignaturePrompt(): string {
+    return "Everything look right? One last step — sign below.";
 }
 
 /**
@@ -184,10 +271,10 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
  */
 export function participantIntro(objective: ParticipantObjectiveWire): string | null {
     if (objective.phase !== "shared_collection") return null;
-    const subject = (objective.subject_display_name ?? "").trim();
+    const subject = familiarName(objective);
     return subject
-        ? `Welcome to Enrollment for ${subject}. I already have some information on file, so I'll confirm that first and only ask for what's missing.`
-        : "I already have some information on file, so I'll confirm that first and only ask for what's missing.";
+        ? `I already have most of ${subject}'s information, so I'll just check it with you and ask for anything I'm missing.`
+        : "I already have most of your child's information, so I'll just check it with you and ask for anything I'm missing.";
 }
 
 /**
@@ -201,13 +288,12 @@ export function participantIntro(objective: ParticipantObjectiveWire): string | 
 export function progressLine(objective: ParticipantObjectiveWire): string {
     if (objective.complete) return "All done — thank you.";
     const remaining = objective.things_remaining;
-    if (objective.phase === "artifact_review") {
-        return "Just the paperwork left to review and sign.";
-    }
-    if (remaining <= 0) return "Almost there — one last step.";
+    if (objective.phase === "artifact_review") return "";
+    if (remaining <= 0) return "";
     // Parent-centric, and true: these are the questions left, not Form controls or upload slots.
     // "8 to add · 1 to sign or upload" described the implementation to someone who cannot see it.
-    return remaining === 1 ? "1 thing left to check" : `${remaining} things left to check`;
+    // Subtle, and never a stepper: "Step 2 of 3" describes the machine's plan, not the parent's.
+    return remaining === 1 ? "Just one more thing" : `Just ${remaining} things left`;
 }
 
 /**

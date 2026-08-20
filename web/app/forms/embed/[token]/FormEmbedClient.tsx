@@ -1,8 +1,9 @@
 "use client";
 
+import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCase/formDraft/questionResolutionModel";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import type { FormSchemaV1 } from "@/lib/forms/schema";
+import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -24,6 +25,15 @@ import {
 } from "@/lib/forms/familyGuidedPlan";
 import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 import { EnrollmentConversationCard } from "./EnrollmentConversationCard";
+import { CompiledArtifactReview } from "./CompiledArtifactReview";
+import { ParticipantDocumentCanvas } from "./ParticipantDocumentCanvas";
+import { SemanticFactEditor } from "./SemanticFactEditor";
+import { SignatureCaptureDialog, type CapturedSignature } from "./SignatureCaptureDialog";
+import {
+    compileParticipantArtifact,
+    type CompiledArtifactControl,
+} from "@/lib/enrollment/participantRuntime/compileParticipantArtifact";
+import { participantSignaturePrompt } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import type { ParticipantBrand } from "@/lib/public/forms/participantBrandTheme";
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import {
@@ -60,6 +70,28 @@ type ResolvePacketMeta = {
  * Without this the review step showed empty boxes for facts that were sitting in the session — the
  * value existed, keyed correctly, and nothing read it.
  */
+/**
+ * Strip operator-facing authoring notes from a schema before a PARENT sees it.
+ *
+ * "Needs destination configuration" is the form builder's own placeholder, telling an operator that
+ * a field has no canonical destination yet. It was rendering to parents as guidance underneath
+ * "Child Full Name" — an internal to-do presented as an instruction to someone who cannot act on it.
+ *
+ * Referenced by its constant rather than matched as a string, so the day the builder rewords it this
+ * follows rather than silently stops working. The FIELD still renders; only the note is removed.
+ */
+function withoutAuthoringNotes(schema: FormSchemaV1): FormSchemaV1 {
+    const strip = (fields: FormField[]): FormField[] =>
+        fields.map((f) => {
+            const next =
+                f.description?.trim() === PROCESSING_NEEDS_DESTINATION_DESCRIPTION
+                    ? { ...f, description: undefined }
+                    : f;
+            return next.type === "group" ? { ...next, fields: strip(next.fields) } : next;
+        });
+    return { ...schema, fields: strip(schema.fields) };
+}
+
 function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | null | undefined): FormPayload {
     const shared = packet?.shared_prefill_by_field_id;
     if (!shared || Object.keys(shared).length === 0) return payload;
@@ -73,10 +105,25 @@ function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | nul
     return { ...payload, values: merged };
 }
 
+/**
+ * A sub-schema for rendering ONE compiled control (or the final acknowledge-and-sign group) through
+ * the Forms engine, inside the compiled review.
+ *
+ * Title and section titles are stripped deliberately: the review owns the document's presentation,
+ * and on the certification form the authored section titles are OCR page markers ("Page 1") that
+ * must not resurface as headings beside a single input. The FIELDS are untouched — type, options,
+ * validation and signature semantics all remain the Form's.
+ */
+function reviewControlSubSchema(schema: FormSchemaV1, fieldIds: string[]): FormSchemaV1 {
+    const sub = subSchemaForFieldsGrouped(schema, fieldIds, "");
+    return { ...sub, sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })) };
+}
+
 type ResolveOk = {
     ok: true;
     data: {
         schema_json: unknown | null;
+        pdf_mapping_json?: unknown | null;
         packet_terminal?: boolean;
         packet?: ResolvePacketMeta | null;
         brand?: ParticipantBrand | null;
@@ -85,6 +132,21 @@ type ResolveOk = {
         link?: { metadata?: Record<string, unknown> };
     };
 };
+
+/**
+ * Whether the pinned version carries an ORIGINAL document (a `fidelity_v1` mapping).
+ *
+ * A duck check on the resolve payload, deliberately: the full contract lives server-side (it pulls
+ * crypto and storage), and this flag only chooses PRESENTATION. The document route re-validates
+ * everything; if it refuses, the viewer reports unavailable and the semantic review stands.
+ */
+function hasOriginalDocument(pdfMappingJson: unknown): boolean {
+    return (
+        !!pdfMappingJson &&
+        typeof pdfMappingJson === "object" &&
+        (pdfMappingJson as { engine?: unknown }).engine === "fidelity_v1"
+    );
+}
 
 type ApiErr = {
     ok: false;
@@ -179,6 +241,40 @@ export function FormEmbedClient({
      * notice would leave them looking at a finished conversation and no paperwork.
      */
     const [enrollmentPhase, setEnrollmentPhase] = useState<ParticipantObjectiveWire["phase"] | null>(null);
+    /**
+     * Original-document presentation state.
+     *
+     * `originalDocument` mirrors the pinned version's fidelity mapping; `documentRev` is the
+     * refresh contract — bumping it re-fetches the render, which is how a corrected fact reaches
+     * the document; `documentUnavailable` is the honest fallback: if the document cannot render,
+     * the semantic review stands and the parent is never shown a blank.
+     */
+    const [originalDocument, setOriginalDocument] = useState(false);
+    const [documentRev, setDocumentRev] = useState(0);
+    const [documentUnavailable, setDocumentUnavailable] = useState(false);
+    const documentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /**
+     * The participant's place in the review: conversation completion hands off to REVIEW (the
+     * document alone), MAKE A CHANGE opens the semantic facts, EVERYTHING LOOKS GOOD moves to
+     * SIGN. Distinct states, one token route, no step numbers — the parent sees pages, not a
+     * wizard.
+     */
+    const [reviewStep, setReviewStep] = useState<"handoff" | "review" | "edit" | "sign">("handoff");
+    const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
+    /** What the parent captured, for previewing the mark ON the document before submitting. */
+    const [capturedSignature, setCapturedSignature] = useState<{
+        typedName?: string;
+        drawnDataUrl?: string;
+    } | null>(null);
+    /** The version's authored signature placement — where on the document signing happens. */
+    const [signaturePlacement, setSignaturePlacement] = useState<{
+        field_id: string;
+        page: number;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    } | null>(null);
     const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
@@ -254,7 +350,36 @@ export function FormEmbedClient({
                 setMessage("Invalid form schema");
                 return;
             }
-            setSchema(parsedSchema);
+            setSchema(withoutAuthoringNotes(parsedSchema));
+            setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
+            setDocumentUnavailable(false);
+            setDocumentRev(0);
+            setReviewStep("handoff");
+            setCapturedSignature(null);
+            {
+                // The authored placement, straight off the version's mapping — a duck read for the
+                // same reason as `hasOriginalDocument`: the server re-validates everything.
+                const placements = (json.data.pdf_mapping_json as {
+                    signature_placements?: Array<{
+                        field_id?: string;
+                        page?: number;
+                        x?: number;
+                        y?: number;
+                        width?: number;
+                        height?: number;
+                    }>;
+                } | null)?.signature_placements;
+                const first = Array.isArray(placements) ? placements[0] : null;
+                setSignaturePlacement(
+                    first &&
+                        typeof first.field_id === "string" &&
+                        [first.page, first.x, first.y, first.width, first.height].every(
+                            (n) => typeof n === "number",
+                        )
+                        ? (first as NonNullable<typeof signaturePlacement>)
+                        : null,
+                );
+            }
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
@@ -518,11 +643,22 @@ export function FormEmbedClient({
                 packetName={packetProgress?.packet_name}
                 previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
             >
-                <IntakeCompletion
-                    title="All done — thank you."
-                    body="You've finished every form in this packet. Our staff will review your submissions and follow up if anything else is needed."
-                    hint="You can close this window."
-                />
+                {/* An enrollment journey ends in the journey's own words — the parent finished
+                    their child's enrollment paperwork, not "a packet". The generic packet copy
+                    stays for every non-enrollment link, byte-identical. */}
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        title="All done — thank you."
+                        body="You've finished every form in this packet. Our staff will review your submissions and follow up if anything else is needed."
+                        hint="You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
@@ -538,23 +674,52 @@ export function FormEmbedClient({
     if (submitted) {
         return (
             <IntakeFrame brand={brand} previewBanner={showPreviewBanner ? <PreviewBanner /> : null}>
-                <IntakeCompletion
-                    title="Thank you — your form was submitted."
-                    body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."
-                    hint="You can close this window."
-                />
+                {enrollmentObjective ? (
+                    <IntakeCompletion
+                        title="You're all set."
+                        body={`${enrollmentObjective.subject_display_name}'s enrollment paperwork has been submitted. Our staff will review it and follow up if anything else is needed.`}
+                        hint="You can close this window."
+                    />
+                ) : (
+                    <IntakeCompletion
+                        title="Thank you — your form was submitted."
+                        body="Your answers were received. Our staff will review your submission and follow up if anything else is needed."
+                        hint="You can close this window."
+                    />
+                )}
             </IntakeFrame>
         );
     }
 
     // Only an ENROLLMENT token can suppress the form, and only while shared facts remain. An
     // ordinary public Form link has no objective, so this is false and nothing about it changes.
-    const sharedCollectionInProgress =
-        enrollmentObjective != null && (enrollmentPhase ?? enrollmentObjective.phase) === "shared_collection";
+    const participantPhase = enrollmentObjective ? (enrollmentPhase ?? enrollmentObjective.phase) : null;
+    const sharedCollectionInProgress = participantPhase === "shared_collection";
+
+    /**
+     * THE REVIEW INVARIANT: review is only reachable when there is something to review.
+     *
+     * A schema with fields is the renderable artifact. Without this the runtime could tell a parent
+     * "please review and finish it below" with nothing below — which is what happened when the turn
+     * and the phase were derived independently and disagreed. The phase now comes from the turn, so
+     * that specific contradiction is gone; this is the guard that makes the empty state impossible
+     * rather than merely unlikely.
+     */
+    const artifactRenderable = schema != null && schema.fields.length > 0;
+    const reviewWithoutArtifact = participantPhase === "artifact_review" && !artifactRenderable;
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
     // Guided intake (packets only): schema-generated steps, each rendered by field type.
-    const guided = packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
+    /**
+     * The guided WIZARD is for packets the participant fills from scratch.
+     *
+     * An Enrollment journey has already had its conversation: the shared facts are settled and the
+     * artifact arrives populated. Walking that same parent through "Confirm what we already have →
+     * A few details we still need → Sign & upload" re-asks what they just answered and re-frames a
+     * review as data entry. So when the runtime owns the journey, the artifact is reviewed WHOLE.
+     */
+    const enrollmentJourney = enrollmentObjective != null;
+    const guided = !enrollmentJourney && packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
     const guidedSteps = guidedPlan?.steps ?? [];
     const stepIdx = guided ? Math.min(guidedStepIdx, guidedSteps.length - 1) : 0;
     const guidedStep = guided ? guidedSteps[stepIdx] : null;
@@ -602,7 +767,7 @@ export function FormEmbedClient({
     };
 
     const summaries = packetProgress?.step_summaries ?? [];
-    const showPacketChecklist = packetProgress != null && summaries.length > 0;
+    const showPacketChecklist = !enrollmentJourney && packetProgress != null && summaries.length > 0;
     const famPhase = famStep
         ? famStep.kind === "household"
             ? "Household"
@@ -610,6 +775,151 @@ export function FormEmbedClient({
               ? "Sign"
               : (famStep.child?.label ?? "Child")
         : undefined;
+
+    /**
+     * THE COMPILED REVIEW — "here is your completed paperwork", not "here is a form".
+     *
+     * When the runtime owns the journey and shared collection is done, the artifact is presented as
+     * the compiled model: settled facts read as facts with Edit beside them, only genuinely
+     * outstanding controls appear as inputs, and acknowledgment + signature follow the content as
+     * the final phase. The raw Form in edit mode — every control an input, including the two facts
+     * the parent settled seconds ago — is exactly what this replaces.
+     *
+     * Compiled from the SAME schema and payload the Form would render, on every render: an edit or
+     * a late-settled conversation value reclassifies immediately, because the classification is
+     * derived state, not a snapshot.
+     */
+    const enrollmentReview = enrollmentJourney && participantPhase === "artifact_review" && artifactRenderable;
+    const compiled = enrollmentReview
+        ? compileParticipantArtifact(schema, (payload.values ?? {}) as Record<string, unknown>)
+        : null;
+    /**
+     * Acknowledgment, then signature — STRUCTURALLY, not by document order.
+     *
+     * On the QA form the authored order happens to agree, but the contract is the participant's:
+     * you confirm you have reviewed the content, and signing is the last thing you do. Rendering
+     * the two classifications as separate phases makes that ordering independent of where an OCR'd
+     * document happened to place its controls.
+     */
+    const ackFieldIds = compiled ? compiled.acknowledgments.map((c) => c.field_id) : [];
+    const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
+    const showDocument = originalDocument && !documentUnavailable;
+    /** The document-first participant progression applies; otherwise the semantic fallback. */
+    const documentFlow = enrollmentReview && compiled != null && showDocument;
+    const allowTypedSignature =
+        (schema.fields.find((f) => f.type === "signature") as { signature?: { require_drawn_asset?: boolean } } | undefined)
+            ?.signature?.require_drawn_asset !== true;
+
+    /**
+     * An edit at review writes THROUGH the shared-value mechanism, never into one artifact.
+     *
+     * Locally the value lands on every control carrying the same canonical key — the same fact must
+     * not read as two values on one page. Durably it goes to `enrollment-edit`, which merges it into
+     * the session's `shared_values` by the same path a conversational answer takes. D-99 needs no
+     * invalidation call: a confirmation is bound to a value fingerprint, so the changed value simply
+     * stops matching it, and the recomputed objective in the response tells this surface if the
+     * runtime now wants the conversation back.
+     *
+     * Optimistic with rollback, matching the conversation card: the fact reads as corrected the
+     * moment the parent commits it, and if the platform refuses, the previous value returns — the
+     * optimism never outlives the truth.
+     */
+    /**
+     * Refresh the rendered document shortly after an artifact-specific answer changes.
+     *
+     * Debounced past the draft PATCH so the render (which reads the draft server-side) sees the
+     * typed value. Presentation-only: the value's persistence is `persistDraft`'s, and a lagging
+     * frame is corrected by the next refresh or by submit.
+     */
+    const scheduleDocumentRefresh = () => {
+        if (!originalDocument || documentUnavailable) return;
+        if (documentRefreshTimer.current) clearTimeout(documentRefreshTimer.current);
+        documentRefreshTimer.current = setTimeout(() => setDocumentRev((r) => r + 1), 1500);
+    };
+
+    const handleReviewEdit = (control: CompiledArtifactControl, value: unknown) => {
+        if (!compiled) return;
+        const targets = control.shared_key
+            ? compiled.sections
+                  .flatMap((s) => s.controls)
+                  .filter((c) => c.shared_key === control.shared_key)
+                  .map((c) => c.field_id)
+            : [control.field_id];
+        const previous = payload;
+        const values = { ...((payload.values ?? {}) as Record<string, unknown>) };
+        for (const id of targets) values[id] = value;
+        const next = { ...payload, values };
+        setMessage(null);
+        setValidationErrors(null);
+        setPayload(next);
+        void persistDraft(next);
+        void (async () => {
+            try {
+                const res = await fetch(`/api/public/forms/${encToken}/enrollment-edit`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ field_id: control.field_id, value }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    data?: { objective?: ParticipantObjectiveWire };
+                };
+                if (!json.ok) throw new Error("edit not accepted");
+                if (json.data?.objective) {
+                    setEnrollmentObjective(json.data.objective);
+                    setEnrollmentPhase(json.data.objective.phase);
+                }
+                // The shared value changed durably — regenerate the document so every occurrence
+                // on the paperwork shows the corrected fact.
+                setDocumentRev((r) => r + 1);
+            } catch {
+                setPayload(previous);
+                void persistDraft(previous);
+                setMessage("That change didn't save — please try again.");
+            }
+        })();
+    };
+
+    /**
+     * A captured signature becomes the Forms-owned payload shape and nothing else.
+     *
+     * Drawn: the PNG is persisted through the token-scoped asset route and the evidence carries
+     * `drawn_document_id`; typed carries the name. Exclusive kinds, exactly as `validateSubmission`
+     * enforces — the dialog is presentation over the same authority.
+     */
+    const handleSignatureCaptured = async (captured: CapturedSignature) => {
+        if (!signaturePlacement) return;
+        setSignatureDialogOpen(false);
+        const acknowledgedAt = new Date().toISOString();
+        let entry: Record<string, unknown>;
+        if (captured.kind === "drawn") {
+            try {
+                const res = await fetch(`/api/public/forms/${encToken}/enrollment-signature-asset`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ png_base64: captured.pngBase64 }),
+                });
+                const json = (await res.json()) as { ok?: boolean; data?: { document_id?: string } };
+                if (!json.ok || !json.data?.document_id) throw new Error("asset refused");
+                entry = { kind: "drawn", drawn_document_id: json.data.document_id, acknowledged_at: acknowledgedAt };
+                setCapturedSignature({ drawnDataUrl: `data:image/png;base64,${captured.pngBase64}` });
+            } catch {
+                setMessage("Your signature didn't save — please try again.");
+                return;
+            }
+        } else {
+            entry = { kind: "typed", typed_full_name: captured.typedName, acknowledged_at: acknowledgedAt };
+            setCapturedSignature({ typedName: captured.typedName });
+        }
+        const next = {
+            ...payload,
+            signatures: { ...((payload as { signatures?: Record<string, unknown> }).signatures ?? {}), [signaturePlacement.field_id]: entry },
+        } as FormPayload;
+        setMessage(null);
+        setValidationErrors(null);
+        setPayload(next);
+        void persistDraft(next);
+    };
 
     return (
         <IntakeFrame
@@ -628,13 +938,35 @@ export function FormEmbedClient({
               * where the parent continues — conversation handles shared facts, Forms stay
               * authoritative for review, signatures and acknowledgments.
               */}
-            {enrollmentObjective ? (
+            {enrollmentObjective && (!documentFlow || reviewStep === "handoff") ? (
+                // In the document flow the conversation is its OWN state: it ends with a handoff
+                // and the review is a fresh page, not more scroll below the transcript.
                 <div className="mb-6">
                     <EnrollmentConversationCard
                         token={token}
                         initialObjective={enrollmentObjective}
                         onPhaseChange={setEnrollmentPhase}
+                        artifactRenderable={artifactRenderable}
+                        onValueSettled={(fieldIds, value) => {
+                            // Merge into the rendered artifact immediately. The session already
+                            // holds this; the paperwork should not wait for a reload to agree.
+                            setPayload((prev) => {
+                                const values = { ...((prev.values ?? {}) as Record<string, unknown>) };
+                                for (const id of fieldIds) values[id] = value;
+                                return { ...prev, values };
+                            });
+                        }}
                     />
+                    {documentFlow && reviewStep === "handoff" ? (
+                        <button
+                            type="button"
+                            onClick={() => setReviewStep("review")}
+                            className="mt-4 w-full rounded-xl bg-alloy-midnight px-5 py-3.5 text-[16px] font-medium text-white"
+                            data-review-paperwork="true"
+                        >
+                            Review paperwork
+                        </button>
+                    ) : null}
                 </div>
             ) : null}
             {/**
@@ -652,7 +984,254 @@ export function FormEmbedClient({
              */}
             {sharedCollectionInProgress ? null : (
             <>
-            {familyMode && famStep ? (
+            {enrollmentReview && compiled ? (
+                documentFlow ? (
+                    /* THE DOCUMENT-FIRST PROGRESSION — conversation, review, sign: distinct
+                       participant states under one token. The handoff state renders nothing here;
+                       the conversation card above owns that screen and its [Review paperwork]. */
+                    reviewStep === "handoff" ? null : reviewStep === "edit" ? (
+                        <IntakeCard>
+                            <IntakeHeading
+                                title="Make a change"
+                                subtitle="Update anything that isn’t right — the paperwork refreshes automatically."
+                            />
+                            {/* FACTS, not destinations: one row per semantic value. Editing goes
+                                through the shared-value command, so every place the document shows
+                                the fact changes together. */}
+                            <SemanticFactEditor
+                                artifact={compiled}
+                                onEditValue={handleReviewEdit}
+                                renderInput={(control) => (
+                                    <div className="[&_header]:hidden">
+                                        <FormEngineRenderer
+                                            schema={reviewControlSubSchema(schema, [control.field_id])}
+                                            payload={payload}
+                                            onChange={(next) => {
+                                                setValidationErrors(null);
+                                                setMessage(null);
+                                                setPayload(next);
+                                                void persistDraft(next);
+                                                scheduleDocumentRefresh();
+                                            }}
+                                            mode="edit"
+                                            optionValuesByFieldId={optionValuesByFieldId}
+                                            optionChoicesByFieldId={optionChoicesByFieldId}
+                                            variant="embed"
+                                            validationErrors={validationErrors ?? undefined}
+                                        />
+                                    </div>
+                                )}
+                                onBack={() => setReviewStep("review")}
+                            />
+                        </IntakeCard>
+                    ) : reviewStep === "sign" ? (
+                        <IntakeCard>
+                            {/* Acknowledge, then sign AT the document’s own signature line. */}
+                            {ackFieldIds.length > 0 ? (
+                                <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
+                                    <p className="pb-3 text-[15px] text-alloy-midnight">
+                                        Please confirm you&rsquo;ve reviewed the information above.
+                                    </p>
+                                    <FormEngineRenderer
+                                        schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                        payload={payload}
+                                        onChange={(next) => {
+                                            setValidationErrors(null);
+                                            setMessage(null);
+                                            setPayload(next);
+                                            void persistDraft(next);
+                                        }}
+                                        mode="edit"
+                                        optionValuesByFieldId={optionValuesByFieldId}
+                                        optionChoicesByFieldId={optionChoicesByFieldId}
+                                        variant="embed"
+                                        validationErrors={validationErrors ?? undefined}
+                                    />
+                                </div>
+                            ) : null}
+                            <p className="pb-4 text-[15px] text-alloy-midnight" data-artifact-final-phase="signature">
+                                {participantSignaturePrompt()}
+                            </p>
+                            {signaturePlacement ? (
+                                <ParticipantDocumentCanvas
+                                    url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                    signature={{
+                                        page: signaturePlacement.page,
+                                        x: signaturePlacement.x,
+                                        y: signaturePlacement.y,
+                                        width: signaturePlacement.width,
+                                        height: signaturePlacement.height,
+                                        focus: true,
+                                        preview: capturedSignature
+                                            ? {
+                                                  typedName: capturedSignature.typedName ?? null,
+                                                  drawnPngDataUrl: capturedSignature.drawnDataUrl ?? null,
+                                              }
+                                            : undefined,
+                                        onActivate: () => setSignatureDialogOpen(true),
+                                    }}
+                                    onUnavailable={() => setDocumentUnavailable(true)}
+                                />
+                            ) : (
+                                /* No authored placement on this version — the Forms control stands. */
+                                <div className="[&_header]:hidden">
+                                    <FormEngineRenderer
+                                        schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                        payload={payload}
+                                        onChange={(next) => {
+                                            setValidationErrors(null);
+                                            setMessage(null);
+                                            setPayload(next);
+                                            void persistDraft(next);
+                                        }}
+                                        mode="edit"
+                                        optionValuesByFieldId={optionValuesByFieldId}
+                                        optionChoicesByFieldId={optionChoicesByFieldId}
+                                        variant="embed"
+                                        validationErrors={validationErrors ?? undefined}
+                                    />
+                                </div>
+                            )}
+                            <IntakeFooter
+                                errorLines={errorLines}
+                                message={message}
+                                onBack={() => setReviewStep("review")}
+                                primaryLabel={submitting ? "Finishing…" : "Sign and finish"}
+                                onPrimary={() => void handleSubmit()}
+                                primaryDisabled={
+                                    submitting || !submissionId || (signaturePlacement != null && !capturedSignature)
+                                }
+                                primaryBusy={submitting}
+                            />
+                        </IntakeCard>
+                    ) : (
+                        /* REVIEW — the actual filled document, alone. The parent reviews their
+                           paperwork; the machinery stays out of sight. */
+                        <IntakeCard>
+                            <ParticipantDocumentCanvas
+                                url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
+                                onUnavailable={() => setDocumentUnavailable(true)}
+                            />
+                            {message ? (
+                                <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-[13px] text-amber-950">
+                                    {message}
+                                </p>
+                            ) : null}
+                            <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] pt-5">
+                                <span className="text-[14px] text-alloy-midnight/55">Something not right?</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setReviewStep("edit")}
+                                    className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight"
+                                    data-make-a-change="true"
+                                >
+                                    Make a change
+                                </button>
+                                <span className="flex-1" />
+                                <button
+                                    type="button"
+                                    onClick={() => setReviewStep("sign")}
+                                    className="rounded-xl bg-alloy-midnight px-5 py-2.5 text-[15px] font-medium text-white"
+                                    data-everything-looks-good="true"
+                                >
+                                    Everything looks good
+                                </button>
+                            </div>
+                        </IntakeCard>
+                    )
+                ) : (
+                <IntakeCard>
+                    {/* SEMANTIC FALLBACK — no original document on this version, or it could not
+                        render. The compiled review is the whole review, exactly as before the
+                        document flow existed. */}
+                    <IntakeHeading title={schema.title ?? "Your paperwork"} />
+                    <CompiledArtifactReview
+                        artifact={compiled}
+                        onEditValue={handleReviewEdit}
+                        renderInput={(control) => (
+                            // Still the participant’s to do, and still the Form’s control: the same
+                            // engine renders it, so type, options and validation stay authored.
+                            <div className="[&_header]:hidden">
+                                <FormEngineRenderer
+                                    schema={reviewControlSubSchema(schema, [control.field_id])}
+                                    payload={payload}
+                                    onChange={(next) => {
+                                        setValidationErrors(null);
+                                        setMessage(null);
+                                        setPayload(next);
+                                        void persistDraft(next);
+                                        scheduleDocumentRefresh();
+                                    }}
+                                    mode="edit"
+                                    optionValuesByFieldId={optionValuesByFieldId}
+                                    optionChoicesByFieldId={optionChoicesByFieldId}
+                                    variant="embed"
+                                    validationErrors={validationErrors ?? undefined}
+                                />
+                            </div>
+                        )}
+                    />
+                    {ackFieldIds.length > 0 ? (
+                        <div
+                            className="mt-8 border-t border-alloy-midnight/[0.08] pt-6 [&_header]:hidden"
+                            data-artifact-final-phase="acknowledgment"
+                        >
+                            <p className="pb-3 text-[15px] text-alloy-midnight">
+                                Please confirm you&rsquo;ve reviewed the information above.
+                            </p>
+                            <FormEngineRenderer
+                                schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                payload={payload}
+                                onChange={(next) => {
+                                    setValidationErrors(null);
+                                    setMessage(null);
+                                    setPayload(next);
+                                    void persistDraft(next);
+                                }}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        </div>
+                    ) : null}
+                    {signatureFieldIds.length > 0 ? (
+                        <div
+                            className="mt-8 border-t border-alloy-midnight/[0.08] pt-6 [&_header]:hidden"
+                            data-artifact-final-phase="signature"
+                        >
+                            <p className="pb-3 text-[15px] text-alloy-midnight">
+                                {participantSignaturePrompt()}
+                            </p>
+                            <FormEngineRenderer
+                                schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                payload={payload}
+                                onChange={(next) => {
+                                    setValidationErrors(null);
+                                    setMessage(null);
+                                    setPayload(next);
+                                    void persistDraft(next);
+                                }}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        </div>
+                    ) : null}
+                    <IntakeFooter
+                        errorLines={errorLines}
+                        message={message}
+                        primaryLabel={submitting ? "Finishing…" : "Sign and finish"}
+                        onPrimary={() => void handleSubmit()}
+                        primaryDisabled={submitting || !submissionId}
+                        primaryBusy={submitting}
+                    />
+                </IntakeCard>
+                )
+            ) : familyMode && famStep ? (
                 <div key={`fam-${famIdx}`} className="parent-intake-step-in">
                     <IntakeProgress phaseLabel={famPhase} stepIndex={famIdx} total={familySteps.length} />
                     {showPacketChecklist ? (
@@ -698,7 +1277,7 @@ export function FormEmbedClient({
                         />
                     </IntakeCard>
                 </div>
-            ) : packetProgress && !guidedPlan ? (
+            ) : !enrollmentJourney && packetProgress && !guidedPlan ? (
                 <IntakeNotice>Preparing your steps…</IntakeNotice>
             ) : guided && guidedStep ? (
                 <div key={`guided-${stepIdx}`} className="parent-intake-step-in">
@@ -761,7 +1340,15 @@ export function FormEmbedClient({
                     <IntakeFooter
                         errorLines={errorLines}
                         message={message}
-                        primaryLabel={submitting ? "Submitting…" : "Submit"}
+                        primaryLabel={
+                            enrollmentJourney
+                                ? submitting
+                                    ? "Finishing…"
+                                    : "Sign and finish"
+                                : submitting
+                                  ? "Submitting…"
+                                  : "Submit"
+                        }
                         onPrimary={() => void handleSubmit()}
                         primaryDisabled={submitting || !submissionId}
                         primaryBusy={submitting}
@@ -770,6 +1357,13 @@ export function FormEmbedClient({
             )}
             </>
             )}
+            {signatureDialogOpen ? (
+                <SignatureCaptureDialog
+                    allowTyped={allowTypedSignature}
+                    onDone={(captured) => void handleSignatureCaptured(captured)}
+                    onCancel={() => setSignatureDialogOpen(false)}
+                />
+            ) : null}
         </IntakeFrame>
     );
 }

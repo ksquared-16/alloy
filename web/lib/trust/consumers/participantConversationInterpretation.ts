@@ -65,12 +65,20 @@ export type ParticipantInterpretationOutcome = {
     readonly decision_package: DecisionPackageV1 | null;
     /** Why the provider path was not used. Null on success. */
     readonly skipped_reason: string | null;
+    /**
+     * A bounded clarifying QUESTION the provider offered alongside `clarification_needed` —
+     * presentation only. It rides the outcome, never the candidate: nothing that flows into
+     * validation or disposition carries it, so it cannot become a value, cannot advance the
+     * objective, and disappears entirely when the execution was anything but a validated success.
+     */
+    readonly clarification_prompt: string | null;
 };
 
 const NOT_ATTEMPTED = (reason: string): ParticipantInterpretationOutcome => ({
     candidate: null,
     decision_package: null,
     skipped_reason: reason,
+    clarification_prompt: null,
 });
 
 /** A human-readable statement of the value's shape, for the model. Closed vocabulary only. */
@@ -182,11 +190,12 @@ export async function interpretParticipantResponseViaTrust(
             candidate: null,
             decision_package: decision,
             skipped_reason: `Governed interpretation was not accepted (${decision.outcome}).`,
+            clarification_prompt: null,
         };
     }
 
     const recommendation = (decision.recommendation ?? undefined) as
-        | { interpretation?: unknown; value?: unknown }
+        | { interpretation?: unknown; value?: unknown; clarification_prompt?: unknown }
         | undefined;
 
     // 6. Mapped into the EXISTING candidate type through the EXISTING parser, so the same
@@ -197,5 +206,15 @@ export async function interpretParticipantResponseViaTrust(
         ...(recommendation?.value !== undefined ? { value: recommendation.value } : {}),
     });
 
-    return { candidate, decision_package: decision, skipped_reason: null };
+    // The clarifying question rides beside the candidate, never on it — and only when the
+    // interpretation actually was a clarification. The strategy's parser already sanitized and
+    // capped it; a non-string here is dropped, not coerced.
+    const clarification_prompt =
+        candidate?.kind === "clarification_needed" &&
+        typeof recommendation?.clarification_prompt === "string" &&
+        recommendation.clarification_prompt.trim()
+            ? recommendation.clarification_prompt.trim()
+            : null;
+
+    return { candidate, decision_package: decision, skipped_reason: null, clarification_prompt };
 }
