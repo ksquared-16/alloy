@@ -141,6 +141,17 @@ function makeStore(seed: Partial<Record<string, Row[]>> = {}) {
     return { tables, client };
 }
 
+/**
+ * An ACQUISITION identity, deliberately.
+ *
+ * These cases certify ownership, correlation, exactly-once and field storage — none of
+ * which depend on what an address is FOR. Since the runtime began refusing unrecognised
+ * senders at `conversation` identities, a fixture at that role would make every one of them
+ * a test of admission instead of the thing it was written for. An acquisition identity
+ * admits unknown senders by design (that is the whole point of the role), so these keep
+ * measuring what they always measured. Admission itself is certified separately, against
+ * a conversation identity, in `conversationIdentityAdmission.test.ts`.
+ */
 function activeBinding(over: Row = {}): Row {
     return {
         id: "bind-a",
@@ -150,6 +161,7 @@ function activeBinding(over: Row = {}): Row {
         status: "active",
         inbound_address: RECEIVING,
         location_id: null,
+        intake_role: "acquisition",
         ...over,
     };
 }

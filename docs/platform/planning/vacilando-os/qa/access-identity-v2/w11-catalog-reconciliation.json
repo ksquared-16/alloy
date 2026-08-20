@@ -20,8 +20,9 @@
     "not_a_live_measurement": "This is the tree, not the database. Live catalog width, live grant counts, and any key seeded on the target outside the tree are M5 preflight subjects (§11)."
   },
   "catalog_width": 57,
-  "enforced_count": 21,
-  "deletion_candidate_count": 36,
+  "enforced_count": 22,
+  "deletion_candidate_count": 35,
+  "w13_restatement": "Enforced was 21 and the deletion list 36 until W-13/AD-22 removed the `portalEligible` role literal from `requirePortalOrUsersRolesManageAuth`, which gave `settings.users_roles.read` its first enforcement site. Catalog width is unchanged at 57 — one key moved between the two sets, and it moved OUT of the deletion list, which is the only such movement this initiative has recorded.",
   "addition_candidate_count": 1,
   "discovery": {
     "finding": "The catalog is 57 keys. Every static instrument in this workstream measured 35, because the parser they shared was pinned to one INSERT column order.",
@@ -86,7 +87,8 @@
     { "key": "sections.manage", "sites": ["web/lib/agent/configLayoutAssist/configurationProposalAccess.ts", "web/lib/agent/configLayoutAssist/configurationProposalPermissions.ts", "web/lib/agent/configLayoutAssist/configurationProposalV1.ts"], "note": "proposal-only" },
     { "key": "settings.manage", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
     { "key": "settings.read", "sites": ["web/app/api/admin/configuration/programs/route.ts"] },
-    { "key": "settings.users_roles", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"] }
+    { "key": "settings.users_roles", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"] },
+    { "key": "settings.users_roles.read", "sites": ["web/lib/admin/canManageUsersAndRoles.ts"], "note": "W-13/AD-22 — acquired an enforcement site when `requirePortalOrUsersRolesManageAuth` stopped admitting on `portalEligible` and started reading the RBAC catalog read capability. Moved here from `deletion_candidates`: it was inert only because the gate above it was a role literal." }
   ],
   "deletion_candidates": [
     "admin.roles.read",
@@ -123,8 +125,7 @@
     "ops.workflows.read",
     "ops.workflows.write",
     "scheduling.read",
-    "scheduling.write",
-    "settings.users_roles.read"
+    "scheduling.write"
   ],
   "deletion_candidates_by_vocabulary": {
     "legacy_ops_fin_admin_seed_set": {
@@ -134,10 +135,11 @@
       "keys": ["admin.roles.read", "admin.roles.write", "admin.users.read", "admin.users.write", "fin.read", "fin.write", "ops.contacts.read", "ops.contacts.write", "ops.customers.read", "ops.customers.write", "ops.jobs.read", "ops.jobs.write", "ops.locations.read", "ops.locations.write", "ops.messaging.read", "ops.opportunities.read", "ops.opportunities.write", "ops.schedules.read", "ops.schedules.write", "ops.workflows.read", "ops.workflows.write"]
     },
     "grid_vocabulary": {
-      "count": 11,
+      "count": 10,
       "seeded_by": "20260505164000_permission_grid_keys.sql, re-seeded by 20260729120000_…phase0….sql",
       "operator_meaning": "These are the ones that will surprise. They have been operator-visible controls with real labels — 'Billing / payments', 'Customers / families', 'Scheduling' — since the grid shipped. An operator may have set one to None believing it removed access.",
-      "keys": ["billing.read", "billing.write", "communications.read", "crm.customers.read", "crm.customers.write", "crm.opportunities.read", "crm.opportunities.write", "documents.write", "scheduling.read", "scheduling.write", "settings.users_roles.read"]
+      "w13_departure": "`settings.users_roles.read` left this group when W-13/AD-22 gave it an enforcement site. It is the one deletion candidate this initiative has RECOVERED rather than deleted, and the reason generalises: a key can be inert because nothing needs it, or inert because the gate that should have read it was reading a role literal instead. Only the first kind is a deletion candidate, and the two are indistinguishable until the literal is removed.",
+      "keys": ["billing.read", "billing.write", "communications.read", "crm.customers.read", "crm.customers.write", "crm.opportunities.read", "crm.opportunities.write", "documents.write", "scheduling.read", "scheduling.write"]
     },
     "declared_per_feature_but_inert": {
       "count": 4,
@@ -162,12 +164,13 @@
   ],
   "residual_gap_after_w11": {
     "statement": "The plan's exit requires the residual gap to be a written number rather than an unknown. It is written here.",
-    "if_all_36_are_deleted_and_the_1_addition_is_seeded": {
-      "catalog_width": 22,
-      "keys_enforced_by_a_route_or_helper": 21,
+    "if_all_35_are_deleted_and_the_1_addition_is_seeded": {
+      "catalog_width": 23,
+      "keys_enforced_by_a_route_or_helper": 22,
       "keys_enforced_by_nothing": 0,
       "keys_grantable_but_unbindable": 1,
-      "note": "communications.send.emergency is the one. It is the residual gap, and it is one key, named."
+      "note": "communications.send.emergency is the one. It is the residual gap, and it is one key, named.",
+      "w13_restatement": "Was 36 deleted / width 22 / 21 enforced. `settings.users_roles.read` is now enforced rather than deleted, so the surviving catalog is one key wider. OD-3's review list is correspondingly one key shorter — and had that review been executed before W-13, the key would have been deleted out from under the gate that now reads it."
     },
     "what_this_does_not_close": "'Enforced' here means a product source names the key. It does not mean a route declares it, and it does not mean the enforcement is reachable — 8 of the 21 gate config-assist proposals only, and 1 is env-conditional. The declared-route-capability set does not exist until W-14, and the standing check that every catalog key resolves to ≥1 enforcement site is W-50/RL-35. W-11 makes those checks authorable; it does not perform them."
   },

@@ -48,7 +48,12 @@ export default function TourInternalRecipientsMultiSelect({
         () =>
             options.map((row) => ({
                 id: row.user_id,
-                label: row.email?.trim() || row.label,
+                // W14-F1. This read `row.email?.trim() || row.label` — the exact expression the
+                // disclosure half removed from the sibling picker. `/api/admin/users` no longer
+                // hands an address to a caller without `settings.users_roles`, so the field is gone
+                // from the option type and preferring it here would have put the organisation's
+                // address book back on screen for everyone the portal admits.
+                label: row.label,
             })),
         [options],
     );

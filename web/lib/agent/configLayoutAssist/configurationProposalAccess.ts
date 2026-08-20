@@ -50,12 +50,11 @@ export function hasConfigLayoutAssistPermission(
         key === "layouts.manage" ||
         key === "option_sets.manage"
     ) {
-        return access.roleKeys.includes("admin") || access.roleKeys.includes("owner");
+        return access.roleKeys.includes("admin");
     }
     if (key === CONFIG_ASSIST_PERMISSION_REVIEW || key === "data_quality.view") {
         return (
             access.roleKeys.includes("admin") ||
-            access.roleKeys.includes("owner") ||
             access.roleKeys.includes("ops")
         );
     }

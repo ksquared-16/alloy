@@ -19,6 +19,21 @@ export type AccessLandingVm = {
     }[];
 };
 
+/**
+ * W-45 — these shapes used to type certainty into the model.
+ *
+ * `authenticationMethod: "password"` and `accountState: "active"` were **singleton literal types**:
+ * the contract could not express a user who had been invited an hour ago, and a projection that
+ * satisfied it was obliged to assert `Active`. `IA-1` counted four such assertions in the Users
+ * chapter. A view model whose type admits only one answer is where that begins, so the lifecycle
+ * and authentication states now come from `lib/access/memberIdentityProjection.ts`, which derives
+ * them from the auth record and carries `unknown` **with a reason**.
+ */
+import type {
+    MemberAuthenticationProjection,
+    MemberLifecycleState,
+} from "@/lib/access/memberIdentityProjection";
+
 /** Users collection rail row. */
 export type UsersCollectionVm = {
     users: {
@@ -28,8 +43,8 @@ export type UsersCollectionVm = {
         roleLabel: string;
         locationSummary: string;
         departmentSummary: string;
-        authenticationMethod: "password";
-        accountState: "active";
+        authentication: MemberAuthenticationProjection;
+        accountState: MemberLifecycleState;
     }[];
 };
 
@@ -41,11 +56,10 @@ export type UserAccessWorkspaceVm = {
     /** Human label — never the raw role_key in primary UI. */
     roleLabel: string;
     roleKey: string;
-    isActive: boolean;
+    accountState: MemberLifecycleState;
     locationSummary: string;
     departmentSummary: string;
-    /** Only "password" is real today; other methods are Planned. */
-    authenticationMethod: "password";
+    authentication: MemberAuthenticationProjection;
 };
 
 export type UserOverviewVm = {
@@ -80,18 +94,20 @@ export type UserRolesVm = {
 
 export type UserScopeVm = {
     userId: string;
-    locationScope: "all" | "selected";
+    /** W-47: `unset` — no access profile row — is not `all`, and the type must be able to say so. */
+    locationScope: "all" | "selected" | "unset";
     locationLabels: string[];
-    departmentScope: "all" | "selected";
+    departmentScope: "all" | "selected" | "unset";
     departmentLabels: string[];
 };
 
 export type UserSecurityVm = {
     userId: string;
-    accountState: "active";
+    accountState: MemberLifecycleState;
     authenticationMethods: AuthenticationMethodsVm;
-    passwordResetAvailable: true;
-    mfa: "planned";
+    passwordResetAvailable: boolean;
+    /** Factor presence is read; factor *policy* is Planned until W-36. */
+    mfa: MemberAuthenticationProjection["mfa"];
     sessions: "planned";
 };
 

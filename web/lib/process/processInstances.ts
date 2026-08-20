@@ -259,9 +259,36 @@ export async function createEnrollmentProcessInstance(
         .select("id")
         .maybeSingle();
     if (error) return { id: null, error: error.message };
-    // `ignoreDuplicates` means a conflict returns no row: nothing was created, so nothing was
-    // pinned, and the existing instance keeps the revision it started under.
-    return data ? { id: String((data as { id: string }).id), ...pinResult } : { id: null };
+    if (data) return { id: String((data as { id: string }).id), ...pinResult };
+
+    /**
+     * `ignoreDuplicates` means a conflict returns NO ROW. That is not a failure — the journey this
+     * call asked for already exists — but returning `{ id: null }` made it indistinguishable from
+     * one, and every caller treats a null id as "could not start the enrollment process". Pressing
+     * Start Enrollment twice therefore produced a red error on a child whose journey was fine, which
+     * is exactly what live QA saw.
+     *
+     * So the existing row is resolved and reported as a REUSE, the same shape the context-free
+     * branch above has always returned. The two branches now answer the same question the same way.
+     *
+     * No pin is reported, deliberately: nothing was created, so the freshly resolved revision does
+     * NOT govern this instance. Claiming it would assert a governance fact that is not true of the
+     * journey the caller just got back.
+     */
+    const { data: existingRow, error: existingError } = await supabase
+        .from(PROCESS_INSTANCES_TABLE)
+        .select("id")
+        .eq("org_id", args.orgId)
+        .eq("process_key", ENROLLMENT_PROCESS_KEY)
+        .eq("subject_id", args.subjectId)
+        .eq("context_id", contextId)
+        .maybeSingle();
+    if (existingError) return { id: null, error: existingError.message };
+    if (existingRow) return { id: String((existingRow as { id: string }).id), reused: true };
+
+    // Conflict reported, yet nothing to reuse. Rather than return a bare null the caller would
+    // render as "could not start", say what happened.
+    return { id: null, error: "The enrollment journey could not be created or resolved for this child." };
 }
 
 /**

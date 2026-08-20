@@ -14,8 +14,23 @@
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 
+/**
+ * Which part of the experience the participant is in.
+ *
+ * `shared_collection` — confirming and supplying facts that populate every artifact at once. The raw
+ * Form must NOT be presented underneath: a parent who has just answered a question should not then
+ * find the same box below it.
+ * `artifact_review` — shared facts are settled; what remains belongs to a specific document
+ * (acknowledgment, signature, an artifact-only field). This is where the populated artifact is shown.
+ * `complete` — nothing remains.
+ */
+export type ParticipantPhase = "shared_collection" | "artifact_review" | "complete";
+
 export type ParticipantObjectiveWire = {
     readonly stage_key: string | null;
+    /** The child this Enrollment is about, for participant copy. Never an internal identifier. */
+    readonly subject_display_name: string | null;
+    readonly phase: ParticipantPhase;
     readonly progress: {
         readonly total: number;
         readonly satisfied: number;
@@ -32,19 +47,75 @@ export type ParticipantObjectiveWire = {
         /** The control type to render when a deterministic input is needed. */
         readonly input_type: string | null;
         readonly label: string | null;
+        /** Closed option set, when the authored control has one. Empty otherwise. */
+        readonly options: readonly string[];
+        /** The authored Form permits leaving this unanswered — offer a real way past it. */
+        readonly optional: boolean;
+        /**
+         * The artifact fields this single answer fills.
+         *
+         * Already visible to the participant — they are the ids of controls on their own form — and
+         * they are what lets the surface show the answer in the paperwork the instant it is given,
+         * rather than leaving a field the parent just answered looking empty until a reload.
+         */
+        readonly field_ids: readonly string[];
     };
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
 };
 
+/**
+ * The child's name as the CONVERSATION currently knows it.
+ *
+ * The canonical record's display name is only the starting point: a parent who corrects the name
+ * mid-conversation must be spoken to with the name they just gave, not the record they corrected —
+ * "I have John's birthday…", never "Test Process4's" after the parent said John Peters. The needs
+ * projection already resolves that precedence (session shared value over canonical), so the wire
+ * reads the resolved `child_full_name` need and falls back to the record only when no such need
+ * carries a value.
+ */
+function resolvedSubjectDisplayName(
+    objective: ParticipantEnrollmentObjective,
+    fallback: string | null | undefined,
+): string | null {
+    const nameNeed = objective.needs.needs.find(
+        (n) => n.identity.shared_value_key === "child_full_name" && typeof n.current_value === "string",
+    );
+    const resolved = ((nameNeed?.current_value as string | undefined) ?? "").trim();
+    return resolved || ((fallback ?? "").trim() || null);
+}
+
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
+    context?: { readonly subjectDisplayName?: string | null },
 ): ParticipantObjectiveWire {
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
 
+    /**
+     * PHASE IS DERIVED FROM THE TURN — one authority, not two.
+     *
+     * It used to be derived independently, from `known_requiring_confirmation.length + missing.length`.
+     * That produced a state the product must never reach: the turn selector skips a need that does
+     * not require participant action, so an OPTIONAL missing fact left the turn at
+     * `complete_artifact` while the phase still said `shared_collection`. The card rendered
+     * "review and finish it below" because it reads the turn; the host suppressed the artifact
+     * because it reads the phase. The parent got a handoff with nothing beneath it.
+     *
+     * Two readers of the same situation disagreed because they asked different questions. Now the
+     * turn — which is the deterministic runtime's own answer to "what next" — decides both.
+     */
+    const phase: ParticipantPhase =
+        turn.kind === "complete"
+            ? "complete"
+            : turn.kind === "complete_artifact"
+              ? "artifact_review"
+              : "shared_collection";
+
     return {
         stage_key: objective.stage_key,
+        subject_display_name: resolvedSubjectDisplayName(objective, context?.subjectDisplayName),
+        phase,
         progress: {
             total: objective.progress.total_requirements,
             satisfied: objective.progress.satisfied_requirements,
@@ -60,6 +131,9 @@ export function participantObjectiveWireModel(
             // unavailable — the fallback has to be renderable from this payload alone.
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
+            options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
+            optional: turn.need?.optional === true,
+            field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         complete: turn.kind === "complete",
     };
@@ -78,5 +152,17 @@ function inputTypeForNeed(
     const need = objective.next_turn.need;
     if (!need) return null;
     const occurrence = need.occurrences.find((o) => o.form_field_id === formFieldId);
-    return occurrence ? "text" : null;
+    // The authored type, not "text". This returned a constant, which is why a date of birth and a
+    // free-text note reached the participant as the same undifferentiated box.
+    return occurrence ? occurrence.field_type : null;
+}
+
+/** The authored option set for the current need, when the control is a closed one. */
+function optionsForNeed(
+    objective: ParticipantEnrollmentObjective,
+    formFieldId: string,
+): readonly string[] {
+    const need = objective.next_turn.need;
+    if (!need) return [];
+    return need.occurrences.find((o) => o.form_field_id === formFieldId)?.options ?? [];
 }

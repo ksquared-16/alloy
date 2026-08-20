@@ -8,7 +8,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
-import WeekPicker from "@/components/workspace/WeekPicker";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import {
     staffingChipChrome,
@@ -132,7 +131,6 @@ export default function SchedulingRoster({
     onSelectRoom,
     onWeekChange,
     onSelectWeek,
-    rangeControl,
     weekChangePending = false,
     lastWeekLoadMs = null,
 }: {
@@ -149,7 +147,6 @@ export default function SchedulingRoster({
     onWeekChange?: (dir: -1 | 1 | 0) => void;
     onSelectWeek?: (weekStart: string) => void;
     /** Roster's Day/Week control, rendered into this surface's toolbar by its host. */
-    rangeControl?: React.ReactNode;
     /** True the instant a week nav click fires, until the new week's data is ready (optimistic feedback). */
     weekChangePending?: boolean;
     /** Dev-only click→ready timing for the most recent week change, for perf inspection. */
@@ -239,20 +236,14 @@ export default function SchedulingRoster({
             data-roster-week-change-pending={weekChangePending ? "true" : "false"}
             data-roster-last-load-ms={lastWeekLoadMs ?? undefined}
         >
-            {/* Toolbar */}
+            {/*
+              * Range, lens and the WEEK PICKER moved to `RosterControlBand`.
+              *
+              * This toolbar rendered them on the LEFT while the day surface rendered its own on the
+              * right and the ledger rendered its own right-aligned — three placements of one idea.
+              * What remains here is supporting text about this board's own content.
+              */}
             <div className="flex flex-wrap items-center gap-2">
-                {rangeControl}
-                <WeekPicker
-                    weekStart={data?.weekStart}
-                    weekLabel={weekLabel}
-                    pending={weekChangePending}
-                    onPrev={() => onWeekChange?.(-1)}
-                    onNext={() => onWeekChange?.(1)}
-                    onSelectWeek={(ws) => {
-                        if (onSelectWeek) onSelectWeek(ws);
-                        else onWeekChange?.(0);
-                    }}
-                />
                 <p className="ml-auto text-[11px] text-alloy-slate">
                     {rooms.length > 0 ? `${rooms.length} ${rooms.length === 1 ? "room" : "rooms"} · ${siteName}` : siteName}
                     {totalPlanned > 0 ? (

@@ -543,3 +543,63 @@ describe("deterministic selection is stable", () => {
         expect(after.needs.needs[0]!.occurrences[0]!.form_definition_version_id).toBe(VERSION);
     });
 });
+
+describe("a correction is itself a confirmation — the John Peters loop", () => {
+    beforeEach(() => __clearConfigReadCacheForTests());
+
+    it("correcting a confirm turn settles the need once, with evidence, and is never re-asked", async () => {
+        const world = freshWorld();
+        // A known DOB awaiting its one D-100 confirmation — the exact state the parent corrects.
+        world.sharedValues[DOB_KEY] = "2021-05-04";
+        const before = await objective(world);
+        expect(before.next_turn.kind).toBe("confirm_known_value");
+        expect(before.next_turn.need?.identity.canonical_key).toBe(DOB_KEY);
+
+        // The parent says "no, it's actually this" — ONE correction, through the turn command.
+        const corrected = await applyParticipantTurnResponse(fakeSupabase(world), {
+            orgId: ORG,
+            processInstanceId: PI,
+            candidate: { kind: "corrected_value", value: "2021-05-06" },
+            nowIso: NOW,
+        });
+        if (!corrected.ok) throw new Error("correction failed");
+        expect(corrected.disposition.action).toBe("write_shared_value");
+        expect(world.sharedValues[DOB_KEY]).toBe("2021-05-06");
+
+        // The write carried its own D-99 evidence: supplying a value IS confirming it. Without
+        // this, the recompute re-opened the need and the runtime asked the parent to confirm the
+        // value they had typed seconds earlier — observed live as the John Peters loop.
+        expect(Object.keys(world.metadata)).toContain(ENROLLMENT_CONFIRMATIONS_METADATA_KEY);
+        const dob = corrected.objective.needs.needs.find((n) => n.identity.canonical_key === DOB_KEY)!;
+        expect(dob.state).toBe("confirmed");
+        expect(dob.requires_participant_action).toBe(false);
+        expect(corrected.objective.next_turn.need?.identity.canonical_key).not.toBe(DOB_KEY);
+
+        // And a LATER change still re-opens it — the fingerprint binds to the corrected value,
+        // never to "this need was once answered".
+        world.sharedValues[DOB_KEY] = "2020-01-01";
+        const drifted = await objective(world);
+        const reopened = drifted.needs.needs.find((n) => n.identity.canonical_key === DOB_KEY)!;
+        expect(reopened.state).toBe("known_requires_confirmation");
+    });
+});
+
+describe("typed validation holds without an authored FormField", () => {
+    it('a provider-corrected "August 21" is refused for a DATE need even with field: null', async () => {
+        // Live certification caught this: the turn route passes no FormField, and the untyped
+        // switch accepted a non-ISO string as a date of birth. The need\'s occurrence knows the type.
+        const world = freshWorld();
+        world.sharedValues[DOB_KEY] = "2021-05-04";
+        const before = await objective(world);
+        expect(before.next_turn.need?.occurrences[0]?.field_type).toBe("date");
+        const applied = await applyParticipantTurnResponse(fakeSupabase(world), {
+            orgId: ORG,
+            processInstanceId: PI,
+            candidate: { kind: "corrected_value", value: "August 21" },
+            nowIso: NOW,
+        });
+        if (!applied.ok) throw new Error("apply failed");
+        expect(applied.disposition.action).toBe("refused");
+        expect(world.sharedValues[DOB_KEY]).toBe("2021-05-04");
+    });
+});

@@ -22,7 +22,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 
 export type ParticipantEnrollmentAccess = {
     readonly orgId: string;
@@ -43,19 +43,55 @@ export async function resolveParticipantEnrollmentFromToken(
     | { ok: true; value: ParticipantEnrollmentAccess }
     | { ok: false; error: ParticipantEnrollmentAccessFailure }
 > {
-    const link = await resolvePublicFormLinkByToken(supabase, plaintextToken);
-    if (!link.ok) {
-        // The existing failure taxonomy is deliberately NOT widened here. A participant learns that
-        // their link does not work, not which of several internal reasons applied.
-        return { ok: false, error: { code: "INVALID_LINK", message: link.error.message } };
+    /**
+     * The LEAN access read. The full public-form resolver loads the form definition, the pinned
+     * version and its whole schema — none of which this access decision consumes, and each of
+     * which was a serial round trip on EVERY participant request (measured: the token phase alone
+     * was ~1.5s of a turn). The doctrine is unchanged: the same token hash, the same
+     * active/expiry/archived checks, the same failure taxonomy (every link failure is
+     * INVALID_LINK). Only the unread payloads stopped being fetched.
+     */
+    const token_hash = hashFormLinkToken(plaintextToken.trim());
+    const { data: linkRow, error: linkError } = await supabase
+        .from("form_public_links")
+        .select("id, org_id, form_definition_id, is_active, expires_at")
+        .eq("token_hash", token_hash)
+        .maybeSingle();
+    const link = linkRow as {
+        id: string;
+        org_id: string;
+        form_definition_id: string;
+        is_active: boolean;
+        expires_at: string | null;
+    } | null;
+    if (linkError || !link || !link.is_active) {
+        return { ok: false, error: { code: "INVALID_LINK", message: "Invalid or unknown link" } };
+    }
+    if (link.expires_at) {
+        const exp = new Date(link.expires_at).getTime();
+        if (!Number.isNaN(exp) && exp < Date.now()) {
+            return { ok: false, error: { code: "INVALID_LINK", message: "This form link has expired" } };
+        }
     }
 
-    const { data, error } = await supabase
-        .from("form_packet_sessions")
-        .select("id, process_instance_id")
-        .eq("org_id", link.value.orgId)
-        .eq("started_via_public_link_id", link.value.linkId)
-        .maybeSingle();
+    // The archived-form gate and the session hop are independent — one wave.
+    const [{ data: formDef }, { data, error }] = await Promise.all([
+        supabase
+            .from("form_definitions")
+            .select("id, is_active")
+            .eq("id", link.form_definition_id)
+            .eq("org_id", link.org_id)
+            .maybeSingle(),
+        supabase
+            .from("form_packet_sessions")
+            .select("id, process_instance_id")
+            .eq("org_id", link.org_id)
+            .eq("started_via_public_link_id", link.id)
+            .maybeSingle(),
+    ]);
+    if (!formDef || (formDef as { is_active?: boolean }).is_active === false) {
+        return { ok: false, error: { code: "INVALID_LINK", message: "Invalid or unknown link" } };
+    }
     if (error || !data) {
         return {
             ok: false,
@@ -80,8 +116,8 @@ export async function resolveParticipantEnrollmentFromToken(
     return {
         ok: true,
         value: {
-            orgId: link.value.orgId,
-            linkId: link.value.linkId,
+            orgId: link.org_id,
+            linkId: link.id,
             sessionId: row.id,
             processInstanceId,
         },

@@ -15,6 +15,7 @@ import {
 } from "@/lib/communications/v2/familyWorkspace/composerBodyMarkup";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import { deliverQueuedEmailHtml } from "@/lib/communications/deliverQueuedEmailHtml";
+import { decideEmailSubject } from "@/lib/communications/email/replySubject";
 
 /**
  * POST /api/admin/communications/family-send — UI-5G.
@@ -33,6 +34,37 @@ function contentToken(body: string, subject: string | null): string {
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The subject of the conversation a reply is going into, ORG-SCOPED.
+ *
+ * The org filter is the tenant boundary, not decoration: `reply_to_thread_id`
+ * arrives from a client, so naming a thread is never the same as being allowed
+ * to read it. A thread in another organization simply yields nothing, and the
+ * reply is then treated as having no subject to inherit.
+ *
+ * The FIRST email message in the conversation names it. Taking the most recent
+ * would let a parent's mail client rename an Alloy conversation just by editing
+ * the subject line on one reply.
+ */
+async function loadConversationSubject(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    threadId: string
+): Promise<string | null> {
+    const { data } = await supabase
+        .from("communication_messages")
+        .select("subject")
+        .eq("org_id", orgId)
+        .eq("thread_id", threadId)
+        .eq("channel", "email")
+        .not("subject", "is", null)
+        .order("created_at", { ascending: true })
+        .limit(1);
+    const first = (data ?? [])[0] as { subject?: string | null } | undefined;
+    const subject = String(first?.subject ?? "").trim();
+    return subject || null;
+}
 
 export async function POST(req: Request) {
     if (!isCommsV2FlagEnabled("comms_v2_command_center")) {
@@ -71,15 +103,29 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "channel must be email or sms (note send is not supported by family-send in 5G)" }, { status: 400 });
     }
     const channel = channelRaw as FamilySendChannel;
-    const subject = typeof body.subject === "string" ? body.subject : null;
+    const suppliedSubject = typeof body.subject === "string" ? body.subject : null;
     const messageRaw = String(body.body ?? "").trim();
     if (!messageRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
-    if (channel === "email" && !(subject && subject.trim())) return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
     const confirm = body.confirm === true;
     const clientToken = typeof body.client_token === "string" ? body.client_token : null;
-    const replyToThreadId = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id : null;
+    const replyToThreadIdRaw = typeof body.reply_to_thread_id === "string" ? body.reply_to_thread_id.trim() : "";
+    const replyToThreadId = UUID_RE.test(replyToThreadIdRaw) ? replyToThreadIdRaw : null;
     const opportunityIdRaw = typeof body.opportunity_id === "string" ? body.opportunity_id.trim() : "";
     const opportunityId = UUID_RE.test(opportunityIdRaw) ? opportunityIdRaw : null;
+
+    // ---- SUBJECT, PART 1: the refusal that needs no database ---------------
+    // A NEW email with no subject is refused on the request alone. Deciding it
+    // here rather than after the customer lookup keeps the cheapest validation
+    // the cheapest, and means the refusal cannot be masked by an unrelated 404.
+    // The REPLY case genuinely needs a read, and waits until the tenant boundary
+    // below has been proven.
+    const isReply = replyToThreadId !== null;
+    if (channel === "email" && !isReply) {
+        const decision = decideEmailSubject({ supplied: suppliedSubject, isReply: false });
+        if (decision.kind === "subject_required") {
+            return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+        }
+    }
 
     let message = messageRaw;
     let bodyIsHtml = false;
@@ -98,6 +144,28 @@ export async function POST(req: Request) {
     const supabase = createAdminClient();
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
     if (!orgCheck.ok) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+
+    // ---- SUBJECT, PART 2: what a reply inherits -----------------------------
+    // Only reachable once the customer resolved, so the inheritance read sits
+    // inside a proven tenant boundary. A new email's subject was already settled
+    // above and is simply re-derived here from the same authority.
+    let subject: string | null = null;
+    if (channel === "email") {
+        const decision = decideEmailSubject({
+            supplied: suppliedSubject,
+            conversationSubject: replyToThreadId
+                ? await loadConversationSubject(supabase, ctx.orgId, replyToThreadId)
+                : null,
+            isReply,
+        });
+        if (decision.kind === "subject_required") {
+            return NextResponse.json({ error: "subject is required for email" }, { status: 400 });
+        }
+        // `inherit_unavailable` deliberately proceeds with a null subject: the
+        // operator was never shown a field, and the RFC threading headers carry
+        // the correlation regardless.
+        subject = decision.kind === "subject" ? decision.subject : null;
+    }
 
     const enforceConsent = isCommsV2FlagEnabled("comms_v2_compliance");
 

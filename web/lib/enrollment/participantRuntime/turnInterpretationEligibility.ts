@@ -48,6 +48,34 @@ export const D101_ELIGIBLE_FIELD_KEYS: ReadonlySet<string> = new Set([
     "child:dob",
     "child:first_name",
     "child:last_name",
+    /**
+     * SHARED-ALIAS spellings of the same admitted child-identity facts.
+     *
+     * The D-100 confirmation policy learned this exact lesson first: a form binds either by
+     * `entity_type` + `field_key` or by a `shared_value_key` alias, and `canonicalKeyFor` keys the
+     * need by whichever it finds. Firefly's Enrollment form uses the aliases — so the live
+     * governed path refused "Actually, it's August 21st." with `child_date_of_birth not on the
+     * D-101 admitted list` while `child:dob` sat admitted above. Same domains, second spelling;
+     * listed rather than normalized, for the same reason as D-100.
+     */
+    "child_date_of_birth",
+    "child_first_name",
+    "child_last_name",
+    "child_full_name",
+    "guardian_first_name",
+    "guardian_last_name",
+    "guardian_email",
+    "guardian_phone",
+    /**
+     * The bounded ALLERGY FACT — admitted by Director direction in the AI-conversation mission,
+     * whose required live proofs are the utterances "No allergies" and "Peanuts only" and whose
+     * own example is "He has a peanut allergy but nothing else." This is the short factual answer
+     * the enrollment form already collects, interpreted only against the allergy question the
+     * deterministic runtime selected. Health and medical NARRATIVE remains refused as a class
+     * (`health_information` below) — `customer_member:medical_notes` and its kin stay off this
+     * list.
+     */
+    "customer_member:allergies",
     // Ordinary contact
     "person:first_name",
     "person:last_name",

@@ -17,6 +17,8 @@ export type RawPreferenceRow = { person_id: string; category: string; state: str
 
 const EMAIL_TX: PreferenceCategory = "email_transactional";
 const SMS_TX: PreferenceCategory = "sms_transactional";
+const EMAIL_OPS: PreferenceCategory = "email_operational";
+const SMS_OPS: PreferenceCategory = "sms_operational";
 const EMAIL_MKT: PreferenceCategory = "email_marketing";
 const SMS_MKT: PreferenceCategory = "sms_marketing";
 
@@ -40,8 +42,10 @@ export function personPreferenceProfileFromRows(rows: RawPreferenceRow[], person
     };
     return {
         email_transactional: stateFor(EMAIL_TX),
-        sms_transactional: stateFor(SMS_TX),
+        email_operational: stateFor(EMAIL_OPS),
         email_marketing: stateFor(EMAIL_MKT),
+        sms_transactional: stateFor(SMS_TX),
+        sms_operational: stateFor(SMS_OPS),
         sms_marketing: stateFor(SMS_MKT),
     };
 }

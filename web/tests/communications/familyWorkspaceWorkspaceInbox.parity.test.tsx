@@ -10,6 +10,7 @@ import {
     seedDrawerFamilyWorkspaceCacheForTests,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import type { FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,12 +60,8 @@ function buildVm(body: string): FamilyCommunicationWorkspaceVM {
         consentSummary: {
             byContact: {},
             household: { email: "unset", sms: "unset", marketing: "unset" },
-            preferenceProfile: {
-                email_transactional: "unset",
-                sms_transactional: "unset",
-                email_marketing: "unset",
-                sms_marketing: "unset",
-            },
+            preferenceProfile: emptyPreferenceProfile(),
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: {
@@ -221,21 +218,32 @@ describe("family workspace workspace_inbox parity", () => {
             await Promise.resolve();
         });
         await flush();
-        expect(el.textContent).toContain("Ready to send");
-        expect(el.querySelector("[data-cc-send-confirm-dialog='true']")).toBeTruthy();
+        /*
+         * The confirmation dialog PORTALS to `document.body` — asserted here
+         * rather than assumed. Rendered in place it lived inside the Focus
+         * Panel's stacking context, so the panel body dimmed while the panel
+         * HEADER stayed bright and its controls stayed live behind a modal that
+         * was supposedly blocking. Escaping the stacking context is the fix; no
+         * z-index could have been, which is why this test now looks outside the
+         * mounted subtree instead of raising a number.
+         */
+        const overlayRoot = document.body;
+        expect(el.querySelector("[data-cc-send-confirm-dialog='true']")).toBeNull();
+        expect(overlayRoot.querySelector("[data-cc-send-confirm-dialog='true']")).toBeTruthy();
+        expect(overlayRoot.textContent).toContain("Ready to send");
 
         await act(async () => {
-            buttonByText(el, "Confirm send").click();
+            buttonByText(overlayRoot as unknown as HTMLElement, "Confirm send").click();
             await Promise.resolve();
             await Promise.resolve();
         });
         await flush();
 
-        expect(el.textContent).toMatch(/Message sent|Tour invitation sent/);
-        expect(el.querySelector("[data-cc-send-success='true']")).toBeTruthy();
+        expect(overlayRoot.textContent).toMatch(/Message sent|Tour invitation sent/);
+        expect(overlayRoot.querySelector("[data-cc-send-success='true']")).toBeTruthy();
 
         await act(async () => {
-            buttonByText(el, "Done").click();
+            buttonByText(overlayRoot as unknown as HTMLElement, "Done").click();
             await Promise.resolve();
         });
         await flush();

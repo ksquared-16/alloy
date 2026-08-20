@@ -69,7 +69,39 @@ export type NormalizedInboundEmail = ResendReceivedEvent & {
     htmlFormat: string | null;
     inReplyTo: string | null;
     references: string | null;
+    /**
+     * What the receiving transport was able to prove about the sender, read from the
+     * headers it stamped — `Authentication-Results`, falling back to `Received-SPF`.
+     *
+     * Metadata, and derived rather than trusted: these headers are added by the receiving
+     * infrastructure, so they mean something, but only the ones the RECEIVER stamped do.
+     * `unknown` is the honest value when nothing was reported, and every consumer must
+     * treat it as a failure wherever authentication is load-bearing — an unreported check
+     * is not a passed check.
+     *
+     * Nothing in the certified routing or correlation path reads this. It exists so the
+     * ingress eligibility gate can tell a genuine sender from a forged `From` without
+     * being handed a body.
+     */
+    authentication: SenderAuthenticationResult;
+    /**
+     * WHICH check spoke, not what it said.
+     *
+     * `dmarc` is the only class that ties the visible `From` to an authenticated identity;
+     * `spf` authenticates the envelope sender, which a forward routinely rewrites; `none`
+     * means the transport reported nothing. Kept beside the result because "unknown" and
+     * "unknown because nobody asked" are the same value with different meanings, and the
+     * historical corpus proved that distinction is the difference between a policy finding
+     * and an evidence gap.
+     */
+    authenticationEvidence: SenderAuthenticationEvidence;
 };
+
+/** Whether the transport asserted the sender is who the `From` header claims. */
+export type SenderAuthenticationResult = "pass" | "fail" | "unknown";
+
+/** Which check produced the result. The class only — never the raw signature material. */
+export type SenderAuthenticationEvidence = "dmarc" | "spf" | "none";
 
 function str(value: unknown): string | null {
     return typeof value === "string" && value.trim() ? value.trim() : null;
@@ -218,7 +250,50 @@ export function combineInboundEmail(
         htmlFormat: retrieved?.htmlFormat ?? null,
         inReplyTo: headerValue(retrieved?.headers, "in-reply-to"),
         references: headerValue(retrieved?.headers, "references"),
+        authentication: parseSenderAuthentication(retrieved?.headers).result,
+        authenticationEvidence: parseSenderAuthentication(retrieved?.headers).evidence,
     };
+}
+
+/**
+ * Read the transport's verdict on the sender out of the headers it stamped.
+ *
+ * DMARC is the only check that ties the visible `From` to an authenticated identity, so it
+ * decides whenever it is reported. SPF alone authenticates the ENVELOPE sender, which a
+ * forwarded message routinely changes — so a bare `Received-SPF: pass` is accepted only
+ * when DMARC said nothing at all, and it is the weakest thing here.
+ *
+ * Anything unparseable yields `unknown` rather than a guess. The gate treats `unknown`
+ * exactly as it treats `fail`, so being unable to read a header can never be safer than
+ * reading one that failed.
+ */
+export function parseSenderAuthentication(headers: unknown): {
+    result: SenderAuthenticationResult;
+    evidence: SenderAuthenticationEvidence;
+} {
+    const results = headerValue(headers, "authentication-results");
+    if (results) {
+        const dmarc = /\bdmarc\s*=\s*([a-z]+)/i.exec(results);
+        if (dmarc) {
+            const verdict = dmarc[1]!.toLowerCase();
+            if (verdict === "pass") return { result: "pass", evidence: "dmarc" };
+            if (verdict === "fail" || verdict === "quarantine" || verdict === "reject") {
+                return { result: "fail", evidence: "dmarc" };
+            }
+            // DMARC spoke and said something else (`none`, `temperror`). It spoke, so the
+            // evidence class is dmarc; it proved nothing, so the result is unknown.
+            return { result: "unknown", evidence: "dmarc" };
+        }
+    }
+    const spf = headerValue(headers, "received-spf");
+    if (spf) {
+        const verdict = spf.trim().toLowerCase();
+        if (verdict.startsWith("pass")) return { result: "pass", evidence: "spf" };
+        if (verdict.startsWith("fail") || verdict.startsWith("softfail")) {
+            return { result: "fail", evidence: "spf" };
+        }
+    }
+    return { result: "unknown", evidence: "none" };
 }
 
 /**

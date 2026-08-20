@@ -1,0 +1,47 @@
+{
+  "$comment": [
+    "W-40 (S-1) — reviewed exemption register for the unauthenticated side-effect check.",
+    "Enforced by web/scripts/checkUnauthenticatedSideEffects.mjs; locked by",
+    "web/tests/access/unauthenticatedSideEffectSender.test.ts (RL-30).",
+    "",
+    "An entry here says: this route exports a side-effecting method, the check can prove no",
+    "sender authentication, and a human has looked at it and named what holds instead.",
+    "Adding one is a security decision. Name the model and cite the line that enforces it.",
+    "",
+    "The list may only shrink. A stale entry fails the check. The `ratchet` ceiling is",
+    "ENFORCED BY THE CHECK, not only by the lock — over it is a violation, under it is stale,",
+    "because a ceiling left above a fallen floor hands out that many free exemptions.",
+    "",
+    "ALL THREE CURRENT ENTRIES ARE THE SAME CLASS, and it is worth stating plainly rather than",
+    "burying in three reasons: they are PUBLIC INTAKE. There is no sender to authenticate — an",
+    "anonymous prospect holds no credential and never will — so S-1's first two legs (signature,",
+    "hashed token) do not apply and the invariant's own third leg, 'an explicit, reviewed",
+    "exemption', is the correct disposition. What SHOULD bound them is abuse control, which is",
+    "`S-2` / `W-35` ('abuse control becomes a declared property', needs `AD-14`) and is NOT BUILT:",
+    "none of the three has a rate limit, a captcha, or any other volume control. Each entry",
+    "records the specific unbounded side effect so W-35 inherits a sized list rather than a class",
+    "name. These are exemptions from 'authenticate the sender', NOT from 'be bounded'."
+  ],
+  "reviewed": "2026-08-11",
+  "reviewed_by": "assignment asg_fdf10a529525f5 (mission msn_f74ed02c126c88d7ff, W-40 session 11, 2026-08-11)",
+  "ratchet": {
+    "max_unauthenticated_side_effect_routes": 3
+  },
+  "exemptions": [
+    {
+      "route": "app/api/marketing/demo-request/route.ts",
+      "model": "public-intake-notify",
+      "reason": "Unauthenticated marketing demo form. POST validates name/organization/email (:22-31) and then POSTs to https://api.resend.com/emails (:45) delivering to the fixed MARKETING_DEMO_INBOX (:4). There is no sender to authenticate. The side effect is OUTBOUND EMAIL, not a database write: the route touches no Supabase client of any kind, which is exactly why W-4's service-client census could never see it — this route is the concrete proof that W-4's subject and S-1's subject are different sets. UNBOUNDED, and specifically: no rate limit, so an anonymous caller can drive arbitrary volume through the org's Resend account to a single inbox; `reply_to` is caller-supplied (:54) and the subject and body embed caller text (:55-62). W-35's work, sized. Also logs the full payload including the submitter's email at :41 — noted for the same lane, not a separate finding."
+    },
+    {
+      "route": "app/api/vendor-application/route.ts",
+      "model": "public-intake-create + env-pinned-org",
+      "reason": "Unauthenticated vendor application intake. There is no sender to authenticate. What holds instead is the pair W-4 already reviewed and this check re-verifies: the org is pinned to ALLOY_PUBLIC_ORG_ID from the environment and the route 500s without it (:33-37), never taking an org from the caller; and the handler CREATES ONLY — it selects no existing row by a caller-supplied id, so there is no object it can be pointed at. That is the property whose absence froze W-4's book-v2 baseline. UNBOUNDED: no rate limit, so the side effect is unlimited anonymous row creation in the pinned org. W-35's work."
+    },
+    {
+      "route": "app/api/leads/gutters/route.ts",
+      "model": "public-intake-create",
+      "reason": "Public inbound gutter-lead intake, marked LEGACY_COMPAT in its own header. There is no sender to authenticate. Creates only — a contact upsert plus an opportunity create — so as with vendor-application there is no caller-supplied selector reaching an existing row. It reaches a service client through `@/lib/supabase` helpers rather than importing a constructor, which is why W-4 carries it under `advisory_transitive_only` rather than as an exception; it is a genuine S-1 subject either way. UNBOUNDED: no rate limit, no captcha. W-35's work, and W-15 separately holds the question of whether this legacy route should exist at all."
+    }
+  ]
+}

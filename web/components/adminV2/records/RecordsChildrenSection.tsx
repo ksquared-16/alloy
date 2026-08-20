@@ -32,6 +32,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import AddChildModal from "@/components/adminV2/records/AddChildModal";
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import DirectEnrollModal from "@/components/adminV2/records/DirectEnrollModal";
 import { ENROLLMENT_START_ACTION_KEY } from "@/lib/adminV2/actions/definitions/enrollmentActions";
 import { childNextActions } from "@/lib/adminV2/records/childNextActions";
@@ -65,6 +68,8 @@ export type ChildEntry = {
     participationStageKey: string | null;
     siteLocationId: string | null;
     siteLocationLabel: string | null;
+    /** Actor-scoped canonical photo from the platform's one projection. Null → initials. */
+    photoUrl?: string | null;
 };
 
 /** The child identity card key — the aspect a child gesture names. */
@@ -108,6 +113,14 @@ export default function RecordsChildrenSection({
     const [loadingMore, setLoadingMore] = useState(false);
     const [addOpen, setAddOpen] = useState(false);
     const [flash, setFlash] = useState<string | null>(null);
+    /**
+     * The parent link Start Enrollment produced, when it produced one.
+     *
+     * Held separately from the flash sentence because it is a THING the operator acts on, not prose:
+     * it has to be selectable and copyable. Null whenever the journey started without realizing a
+     * participant packet, which is a legitimate outcome and is said plainly rather than hidden.
+     */
+    const [participantLink, setParticipantLink] = useState<string | null>(null);
     /** Bumped after a write so the cohort is re-asked rather than spliced client-side. */
     const [reloadToken, setReloadToken] = useState(0);
     /** The child a direct enrollment is being collected for, if any. */
@@ -216,6 +229,7 @@ export default function RecordsChildrenSection({
     const startEnrollment = useCallback(
         async (customerMemberId: string, childName: string) => {
             setFlash(null);
+            setParticipantLink(null);
             setError(null);
             try {
                 const res = await fetch("/api/admin/actions/execute", {
@@ -242,12 +256,38 @@ export default function RecordsChildrenSection({
                 // Records states the OUTCOME the server reported and never names the acquisition
                 // record itself: this surface does not think in those terms, and a guard test
                 // holds that boundary. "On its own" is the operator-meaningful half anyway.
-                setFlash(
+                const context =
                     detail.context_outcome === "joined_live_episode"
                         ? `Enrollment started for ${childName}, inside the family's current enrolment.`
-                        : `Enrollment started for ${childName}, on its own — nothing else was created.`,
+                        : `Enrollment started for ${childName}, on its own.`;
+
+                // What Start Enrollment now realizes is a PARENT PACKET, so saying "nothing else was
+                // created" stopped being true the moment the launch landed. The two outcomes are
+                // reported as themselves: a link the operator can send, or a plain statement that
+                // the journey started with nothing to send yet — which happens whenever the
+                // governing configuration asks the participant for no Forms.
+                const launch = detail.participant_launch as
+                    | { realized?: boolean; participant_path?: string | null; outcome?: string }
+                    | undefined;
+                const path = typeof launch?.participant_path === "string" ? launch.participant_path : null;
+                setParticipantLink(path);
+                setFlash(
+                    launch?.realized
+                        ? `${context} ${
+                              launch.outcome === "resumed"
+                                  ? "Their parent packet was already open — same link."
+                                  : "Their parent packet is ready to send."
+                          }`
+                        : `${context} There is nothing for the parent to complete yet.`,
                 );
                 setReloadToken((n) => n + 1);
+                // This list is not the only surface derived from what just changed. Metric tiles,
+                // process counts and work-unit queues are mounted elsewhere and were reading stale
+                // numbers until the operator refreshed the browser. The shared refresh bus already
+                // exists for exactly this; a child mutation has no Opportunity subject, so it
+                // broadcasts, and `enrollment.start` is registered as membership-changing so
+                // listeners refetch counts rather than patching a row that may not be on screen.
+                broadcastWorkspaceMutation(ENROLLMENT_START_ACTION_KEY);
             } catch (e) {
                 setError(e instanceof Error ? e.message : "Could not start enrollment");
             }
@@ -279,7 +319,7 @@ export default function RecordsChildrenSection({
     );
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col" data-records-children="true">
+        <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col xl:max-w-[80rem]" data-records-children="true">
             <RecordsCohortBar
                 cohorts={cohorts}
                 activeCohortKey={cohortKey}
@@ -309,6 +349,20 @@ export default function RecordsChildrenSection({
                     data-child-flash="true"
                 >
                     {flash}
+                    {participantLink ? (
+                        <>
+                            {" "}
+                            <a
+                                href={participantLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="font-medium underline underline-offset-2"
+                                data-child-participant-link="true"
+                            >
+                                Open the parent link
+                            </a>
+                        </>
+                    ) : null}
                 </p>
             ) : null}
             {error ? (
@@ -330,6 +384,23 @@ export default function RecordsChildrenSection({
                                 ? "Add a child to a household. Alloy reuses an existing record when one already matches, and adding a child starts no enrollment."
                                 : "This is a real answer for the cohort, not a filter problem."}
                         </p>
+                        {/*
+                         * The empty state REPEATS the command, and only when the population itself is
+                         * empty. On a filtered no-match the honest next move is to change the filter,
+                         * and a second button there would compete with the canonical one still in the
+                         * bar above. Text treatment rather than a second primary: one obvious primary
+                         * action, restated where someone is most likely to be looking for it.
+                         */}
+                        {isDefaultView ? (
+                            <button
+                                type="button"
+                                className="mt-3 text-[12px] font-semibold text-alloy-bend-pine"
+                                onClick={() => setAddOpen(true)}
+                                data-child-add-open-empty="true"
+                            >
+                                Add child
+                            </button>
+                        ) : null}
                     </div>
                 ) : (
                     <ul
@@ -345,12 +416,34 @@ export default function RecordsChildrenSection({
                                 <li key={c.customerMemberId}>
                                     <button
                                         type="button"
-                                        className="flex w-full items-center justify-between gap-4 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
+                                        className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-alloy-stone/[0.06]"
                                         onClick={() => openChild(c.customerMemberId)}
+                                        /*
+                                         * Warm the record the operator is ABOUT to open. Hover
+                                         * intent runs 200–600ms ahead of the click, the record
+                                         * surface reads through the same TTL primitive, and the
+                                         * click then joins this flight instead of starting one.
+                                         */
+                                        onMouseEnter={() => {
+                                            void dedupeAdminFetchWithTtl(
+                                                `/api/admin/durable-record?subject_type=child&subject_id=${encodeURIComponent(c.customerMemberId)}`,
+                                                { credentials: "include" },
+                                                15_000,
+                                            ).catch(() => {});
+                                        }}
                                         data-child-member={c.customerMemberId}
                                         data-child-row="true"
                                     >
-                                        <span className="min-w-0">
+                                        {/* The CANONICAL avatar — same resolver, same photo, as
+                                            Work Views, Search and the Focus Panel. */}
+                                        <CardAvatar
+                                            name={c.displayName}
+                                            imageUrl={c.photoUrl ?? null}
+                                            size={28}
+                                            role="child"
+                                            recordId={c.customerMemberId}
+                                        />
+                                        <span className="min-w-0 flex-1">
                                             <span className="block truncate text-[13px] font-medium text-alloy-midnight">
                                                 {c.displayName}
                                             </span>
@@ -444,6 +537,7 @@ export default function RecordsChildrenSection({
                     );
                     setLastAdded({ id: r.customerMemberId, name: r.displayName });
                     setReloadToken((n) => n + 1);
+                    broadcastWorkspaceMutation("child.add");
                 }}
                 onOpenRecord={(customerMemberId) => {
                     setAddOpen(false);

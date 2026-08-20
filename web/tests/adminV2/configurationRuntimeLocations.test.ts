@@ -295,7 +295,14 @@ describe("Configuration Runtime — Locations", () => {
             "/api/admin/settings/users-roles/members",
         );
         expect(panels).toContain("/access-scope");
-        expect(panels).toContain("department_scope: member.department_scope");
+        // The invariant is that granting a location does not silently decide the DEPARTMENT
+        // dimension — the PATCH carries the member's existing one. W-47 made `unset` (no access
+        // profile row) representable, which `member.department_scope` can now hold and the
+        // access-scope PATCH does not accept, so W-49 routes it through `enforcedDepartmentScope`.
+        // For any member with a profile that helper returns `member.department_scope` unchanged;
+        // for an `unset` one it returns what the platform enforces today instead of an invalid
+        // value. Same invariant, expressed against a wider union.
+        expect(panels).toContain("department_scope: enforcedDepartmentScope(member)");
         expect(panels).toContain("PriorityRuleOrderEditor");
         expect(panels).toContain("Sibling — this location");
         expect(panels).toContain("Employee");

@@ -59,6 +59,16 @@ export type EnrollmentNeedOccurrence = {
     readonly form_field_id: string;
     readonly label: string;
     readonly required: boolean;
+    /**
+     * The AUTHORED control type — `date`, `boolean`, `select`, `text`, `signature`, …
+     *
+     * Carried because the conversational surface must offer the same kind of control the Form does:
+     * a date need deserves a date picker whether or not a model is available, and deriving it from
+     * the label was the reason every need rendered as an undifferentiated text box.
+     */
+    readonly field_type: string;
+    /** Closed option set for `select`-shaped controls. Empty when the field is open-ended. */
+    readonly options: readonly string[];
 };
 
 export type EnrollmentInformationNeed = {
@@ -69,6 +79,13 @@ export type EnrollmentInformationNeed = {
     /** How many Form controls resolve to this one need. The ask-once ratio. */
     readonly occurrence_count: number;
     readonly occurrences: readonly EnrollmentNeedOccurrence[];
+    /**
+     * The authored Form says this may be left unanswered.
+     *
+     * Surfaced to the participant, but never counted as blocking work and always offered a real
+     * resolution — "None" or "Skip" — rather than forcing an untrue answer.
+     */
+    readonly optional?: boolean;
     /** Distinct governing requirements that caused this need to exist. */
     readonly requirement_ids: readonly string[];
     readonly has_value: boolean;

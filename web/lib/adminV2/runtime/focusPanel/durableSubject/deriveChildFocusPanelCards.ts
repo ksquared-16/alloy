@@ -1,26 +1,39 @@
 /**
  * CHILD-GRAIN CARD MODELS.
  *
- * One card, `child_identity`, and it renders through the EXISTING generic path: a `profile`
- * archetype with `payload.profileFields`, which `ArchetypeCardBody` + `UniversalCard` already
- * render. No new component, no new renderer branch, no parallel Child runtime — the smallest
- * canonical Child card the brief asked for.
+ * The card that answers "who is this child" is `children` — the platform's CONFIGURED child card,
+ * whose fields, labels, order, visibility and edit affordance come from the tenant's Children
+ * Surface. It is the same card, from the same producer, that a Work Unit's Focus Panel and a Search
+ * destination render, and it reaches this grain because the registry declares that it can.
  *
- * ── WHY NOT REUSE THE `children` CARD ──
+ * ── WHY THIS FILE NO LONGER LEADS WITH `child_identity` ──
  *
- * `children` is a case-grain ROSTER: "who are this family's children", read-only, composed on the
- * opportunity panel. It mentions children; it does not answer "who is this child". Reusing it here
- * would put a family's whole roster on one child's record and would make the child's own identity a
- * row inside a list of itself.
+ * `children` looked like a family ROSTER, so a durable child record was given a small card of its
+ * own instead. The result was two platform answers to one question: a child opened from a case
+ * showed photo, gender, allergies, medical notes and special instructions with an Edit action, and
+ * the same child opened from a record showed four fields and no way to change any of them. Which
+ * one an operator saw depended on how they had arrived.
  *
- * ── WHAT IS DELIBERATELY NOT ON IT ──
+ * The card was never really a roster — its content is a child's own field vocabulary and its focused
+ * perspective renders exactly one child. The collection was the container, not the subject. A
+ * durable child composes itself as the one member of its own collection
+ * (`durableChildCollectionRow`), so the card composes from real truth here, and `ChildrenCard` reads
+ * the grain and opens on that member rather than on a roster of one.
  *
- * Program, room, schedule type, start date, readiness. All ENROLLMENT-scoped, all requiring an
- * enrollment the durable record must open without. They are Workstream E's enrichment, driven by
- * operational context, and putting them here would rebuild the coupling this program removed.
+ * `child_identity` remains as an INTERNAL FALLBACK for a composition that resolves no Children
+ * Surface at all. It is not a presentation choice, and routing a host to it to avoid wiring the
+ * configured card is how the two answers appeared in the first place.
+ *
+ * ── WHAT IS DELIBERATELY NOT FILLED IN ──
+ *
+ * Program, room, schedule type, start date, readiness. All ENROLLMENT-scoped, all requiring a
+ * participation the durable record must open without. The configured card still RENDERS those rows,
+ * in their configured order, reading unset. Fabricating them from the child record would be
+ * inventing participation, which is exactly the coupling the durable grain removed.
  */
 
 import { cardAppliesToGrain, cardTitle } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
+import { buildChildrenCardModel } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { system5ArchetypeForCard } from "@/lib/adminV2/runtime/focusPanel/system5CardArchetypes";
 import { system5IconForCard } from "@/lib/adminV2/runtime/focusPanel/system5OperationalSurfaceSpec";
 import type {
@@ -115,6 +128,20 @@ export function deriveChildFocusPanelCards(
     input: DeriveChildFocusPanelCardsInput,
 ): Map<FocusPanelCardKey, FocusPanelCardModel> {
     const cards = new Map<FocusPanelCardKey, FocusPanelCardModel>();
+
+    /*
+     * The configured child card, built from the SAME producer the case panel uses, against the
+     * subject's own truth. `buildChildrenCardModel` reads the canonical child collection through
+     * `normalizeFocusPanelChildrenRowsFromTruth`, which admits the durable key — so this composes
+     * the child themselves, not a family's roster borrowed for the occasion.
+     */
+    if (cardAppliesToGrain("children", "child")) {
+        cards.set("children", buildChildrenCardModel(input.subject.truth));
+        return cards;
+    }
+
+    // Fallback only: a runtime that has withdrawn the `children` declaration still identifies the
+    // child rather than composing nothing.
     if (cardAppliesToGrain("child_identity", "child")) {
         cards.set("child_identity", deriveChildIdentityCard(input.subject, input.now));
     }

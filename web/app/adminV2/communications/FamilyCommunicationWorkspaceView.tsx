@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, Underline, List, Link2, Smile, Paperclip, FileText, Send, Clock, Check, UserPlus, ChevronDown, Plus } from "lucide-react";
 import { relTime, messageDeliveryDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
-import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
+import RecipientPreferenceAffordance from "@/components/admin/communications/RecipientPreferenceAffordance";
 import type { PersonPreferenceProfile, RecipientVM, ThreadVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
 import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
+import { useOrgSendingIdentity } from "@/lib/communications/identity/useOrgSendingIdentity";
 import type { WorkspaceMode, WorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
 import type { RelatedTaskBrief } from "@/lib/communications/v2/familyWorkspace/types";
 import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
@@ -158,7 +159,9 @@ export type FamilyCommunicationWorkspaceViewProps = {
     preferenceProfile?: PersonPreferenceProfile;
     canEditPreferences?: boolean;
     preferenceSaving?: boolean;
-    onPreferenceChange?: (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
+    onPreferenceChange?: (personId: string, field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
+    /** Per-person granular profiles, keyed by person id. Never a household roll-up. */
+    preferenceProfilesByContact?: Record<string, PersonPreferenceProfile>;
     attentionLabel?: string | null;
     onTriage?: (action: TriageActionKey) => void;
     triageBusy?: boolean;
@@ -223,7 +226,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const {
         selected, detail, childNames, stageLabel, healthTone, healthDot, healthLabel, recordLinks, onOpenRecordLink,
         showClaim = false, workspaceMode = "email", onWorkspaceModeChange, workspaceModeAvailability,
-        relatedTasks = [], preferenceProfile, canEditPreferences = false, preferenceSaving = false, onPreferenceChange,
+        relatedTasks = [], preferenceProfilesByContact = {}, canEditPreferences = false, preferenceSaving = false, onPreferenceChange,
         attentionLabel, onTriage, triageBusy = false,
         noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
         taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
@@ -239,6 +242,26 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const isWorkspaceInbox = surfaceVariant === "workspace_inbox";
     const usesReplyLifecycle = isActivityEmbed || isWorkspaceInbox;
     const isNewMessageMode = usesReplyLifecycle && selectedThreadId == null;
+    /**
+     * Composing a NEW email — the only act that authors a Subject.
+     *
+     * `!usesReplyLifecycle` is included because surfaces outside the reply
+     * lifecycle have no thread to inherit from, so every send there is a new
+     * conversation.
+     */
+    const isNewEmailComposition = workspaceMode !== "sms" && (!usesReplyLifecycle || isNewMessageMode);
+    const subjectFieldVisible = isNewEmailComposition;
+    /**
+     * The organization's visible Email identity — what the operator is sending
+     * AS, and therefore the address the parent will see and reply to.
+     *
+     * Fetched only while composing email. Never a transport address: the hook
+     * projects through the visible-identity authority, so an ingress destination
+     * resolves to nothing rather than being displayed as somebody's address.
+     */
+    const { identity: sendingIdentity } = useOrgSendingIdentity(workspaceMode === "email");
+    /** A new email with no Subject is refused by the server. Say so before the trip. */
+    const subjectMissingForNewEmail = isNewEmailComposition && !subjectDraft.trim();
     const [replyComposerExpanded, setReplyComposerExpanded] = useState(false);
     const [recipientPickerOpen, setRecipientPickerOpen] = useState(false);
     const [showCcBcc, setShowCcBcc] = useState(false);
@@ -336,7 +359,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         window.requestAnimationFrame(() => bodyTextareaRef.current?.focus());
     }, []);
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
-    const resolvedPreferenceProfile = preferenceProfile ?? detail?.preferenceProfile;
     const familyLink = recordLinks?.find((l) => l.type === "customers");
     const contactLink = recordLinks?.find((l) => l.type === "persons");
     const opportunityLink = recordLinks?.find((l) => l.type === "opportunities");
@@ -351,6 +373,45 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
         tasks: { available: false, reason: "No enrollment opportunity is linked to this family." },
     };
     const noteMessages = messages.filter((m) => m.kind === "note");
+    /*
+     * EMAIL SHOWS EMAIL. SMS SHOWS SMS.
+     *
+     * The aggregated "all messages" view returns every channel for the family, so
+     * selecting Email could show a text message sitting between two emails. That
+     * is not a filter preference — it misrepresents the medium. An operator
+     * reading an email thread and seeing an SMS inside it cannot tell what the
+     * parent actually received, or what a reply would be sent as.
+     *
+     * Done in PRESENTATION, on the `channel` each message already carries. The
+     * runtime's loading, the provider path and the live-certified SMS behaviour
+     * are untouched — this decides what is displayed, not what is fetched.
+     *
+     * Notes and system entries are channel-less by nature and belong to the
+     * family rather than to a transport, so they are kept in both views.
+     */
+    /*
+     * EMAIL IS A SET OF SUBJECT THREADS, NOT ONE RUNNING CHANNEL.
+     *
+     * SMS is a single chronological exchange with a person, so a flat timeline is
+     * the right shape for it. Email is not: "Tour availability" and "Tuition
+     * question" are separate conversations that happen to share a correspondent,
+     * and flattening them loses the only thing that tells an operator which
+     * discussion they are continuing — and which subject a reply will inherit.
+     */
+    const emailSubjectThreads = (threads ?? [])
+        .filter((t) => String(t.channel ?? "").trim().toLowerCase() === "email" && t.messageCount > 0)
+        .sort((a, b) => String(b.lastActivityAt ?? "").localeCompare(String(a.lastActivityAt ?? "")));
+
+    const channelScopedMessages =
+        workspaceMode === "email" || workspaceMode === "sms"
+            ? messages.filter((m) => {
+                  const kind = String(m.kind ?? "message");
+                  if (kind !== "message") return true;
+                  const channel = String(m.channel ?? "").trim().toLowerCase();
+                  if (!channel) return true;
+                  return channel === workspaceMode;
+              })
+            : messages;
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
     const activityPrimaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_PRIMARY_BTN_CLASS : `${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm`;
     const activitySecondaryBtnClass = isActivityEmbed ? COMMS_ACTIVITY_SECONDARY_BTN_CLASS : `${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`;
@@ -542,20 +603,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     ))
                                 : null}
                             </div>
-                            {resolvedPreferenceProfile ? (
-                                <div data-cc-ws-section="preferences" className={`mt-2 ${COMMS_UTILITY_CARD_CLASS}`}>
-                                    <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
-                                    <div className="mt-1.5">
-                                        <CommunicationPreferencesEditor
-                                            profile={resolvedPreferenceProfile}
-                                            canEdit={canEditPreferences}
-                                            saving={preferenceSaving}
-                                            onChange={onPreferenceChange}
-                                            compact
-                                        />
-                                    </div>
-                                </div>
-                            ) : null}
+                            {/*
+                              * The always-open "Communication preferences" block
+                              * used to sit here. It showed ONE household profile
+                              * beside several people's names, which is not a
+                              * layout problem but a truthfulness one: preferences
+                              * are Person-owned and two adults may differ. It is
+                              * replaced by an affordance on each recipient's own
+                              * name in the composer, which can say whose answer it
+                              * is. See `RecipientPreferenceAffordance`.
+                              */}
                         </div>
                         {showClaim ? (
                             <button
@@ -576,11 +633,17 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
     );
 
-    const messageListBody = messages.length === 0 ? (
-                        <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
+    const messageListBody = channelScopedMessages.length === 0 ? (
+                        <div className="text-[11px] text-alloy-midnight/45">
+                            {workspaceMode === "email"
+                                ? "No email yet."
+                                : workspaceMode === "sms"
+                                  ? "No text messages yet."
+                                  : "No communication yet."}
+                        </div>
                     ) : (
-                        <ol data-cc-timeline className="space-y-3">
-                            {messages.map((m, i) => {
+                        <ol data-cc-timeline data-cc-timeline-channel={workspaceMode} className="space-y-3">
+                            {channelScopedMessages.map((m, i) => {
                                 const isSystem = m.kind === "system";
                                 const isNote = m.kind === "note";
                                 const out = m.direction === "outbound";
@@ -673,7 +736,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     : "px-4 py-3"
             }`}
         >
-                <div data-cc-composer-channels className={`inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
+                {/* `shrink-0` is load-bearing. This strip is a flex child of a
+                    `flex-col` composer column, so without it the browser squeezes
+                    it to make room for whatever else the column holds. Adding the
+                    From line and the recipient-preferences row below collapsed it
+                    to EIGHT PIXELS: still "visible" to a test, still reporting the
+                    right aria state, and completely unclickable — an operator
+                    could not switch the composer from SMS to Email at all. */}
+                <div data-cc-composer-channels className={`inline-flex w-fit shrink-0 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm ${isActivityEmbed && !isNewMessageMode ? "hidden" : ""}`}>
                     {renderModeTab("email", "Email")}
                     {renderModeTab("sms", "SMS")}
                     {!isActivityEmbed ? renderModeTab("note", "Notes") : null}
@@ -682,6 +752,31 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 {activeModeReason ? (
                     <div data-cc-mode-unavailable className={`mt-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
                         {activeModeReason}
+                    </div>
+                ) : null}
+
+                {/* WHAT THE PARENT WILL SEE.
+                    The operator's own Email identity, stated rather than left to
+                    be inferred from a settings page. Without it there is no
+                    surface in the send path that answers "which address will this
+                    arrive from, and where will the reply go" — and under
+                    selective routing those are exactly the questions that need a
+                    visible, checkable answer. This is always the VISIBLE
+                    identity; the delivery destination is transport and does not
+                    appear in Communications at all. */}
+                {workspaceMode === "email" && sendingIdentity ? (
+                    <div
+                        data-cc-compose-from="true"
+                        className="mt-2 flex shrink-0 flex-wrap items-baseline gap-1.5 text-[11px] text-alloy-midnight/60"
+                    >
+                        <span className="font-medium text-alloy-midnight/45">From</span>
+                        {sendingIdentity.displayName ? (
+                            <span className="font-medium text-alloy-midnight/80">{sendingIdentity.displayName}</span>
+                        ) : null}
+                        <span data-cc-compose-from-address className="text-alloy-midnight/70">
+                            {sendingIdentity.displayName ? "· " : ""}
+                            {sendingIdentity.address}
+                        </span>
                     </div>
                 ) : null}
 
@@ -903,13 +998,49 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 )}
 
-                <input
-                    aria-label="Subject"
-                    placeholder="Subject"
-                    value={subjectDraft}
-                    onChange={(e) => onSubjectChange(e.target.value)}
-                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" || (usesReplyLifecycle && !isNewMessageMode) ? "hidden" : ""}`}
-                />
+                {/*
+                  * WHO THIS IS GOING TO, AND WHAT THEY HAVE AGREED TO.
+                  *
+                  * One affordance per SELECTED recipient, carrying that person's
+                  * own preferences. This is where the old household-wide block
+                  * went: attached to a name, so it can be truthful about whose
+                  * answer it states. Two recipients with different preferences
+                  * show two different summaries, side by side.
+                  */}
+                {LIVE_WORKSPACE && composeMode && selectedRecipientRows.length > 0 ? (
+                    <div data-cc-recipient-preferences-row className="mt-2 flex shrink-0 flex-wrap items-center gap-1.5">
+                        <span className="text-[10px] font-medium text-alloy-midnight/45">Preferences</span>
+                        {selectedRecipientRows.map((r) => (
+                            <RecipientPreferenceAffordance
+                                key={r.id}
+                                personId={r.id}
+                                displayName={r.displayName}
+                                profile={preferenceProfilesByContact[r.id] ?? null}
+                                canEdit={canEditPreferences}
+                                saving={preferenceSaving}
+                                onChange={onPreferenceChange}
+                            />
+                        ))}
+                    </div>
+                ) : null}
+
+                {/* Subject belongs to a NEW email only. A reply inherits the
+                    conversation's subject on the server, so the field is not
+                    rendered at all — not merely hidden. An operator must not be
+                    able to rename a parent's conversation by typing here, and a
+                    field that exists in the DOM invisibly is a field that can
+                    still hold stale draft text. */}
+                {subjectFieldVisible ? (
+                    <input
+                        aria-label="Subject"
+                        placeholder="Subject"
+                        data-cc-subject-input="true"
+                        required
+                        value={subjectDraft}
+                        onChange={(e) => onSubjectChange(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
+                    />
+                ) : null}
 
                 <div
                     className={`mt-2 flex min-h-0 flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${
@@ -1050,7 +1181,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     />
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5" data-cc-composer-footer>
-                    <button type="button" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    <button type="button" data-cc-send-button="true" disabled={sending || Boolean(sendResult) || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim() || subjectMissingForNewEmail))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${activityPrimaryBtnClass} disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : isNewMessageMode ? "Send" : "Send reply"}</button>
+                    {LIVE_WORKSPACE && subjectMissingForNewEmail && bodyDraft.trim() ? (
+                        <span data-cc-subject-required className="text-[10px] font-medium text-alloy-midnight/55">Add a subject to send</span>
+                    ) : null}
                     {/* Send later + BOS are canonical composer controls in EVERY mode (incl. new
                         message), matching Activity mode. Wired to the shared schedule/enhance modals. */}
                     <button type="button" aria-label="Send later" onClick={() => setScheduleOpen(true)} className={`inline-flex shrink-0 items-center gap-1.5 ${activitySecondaryBtnClass}`}><Clock className="h-3.5 w-3.5" />Send later</button>
@@ -1277,6 +1411,48 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
                             <span>Viewing one thread</span>
                             <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
+                        </div>
+                    ) : null}
+                    {isWorkspaceInbox && workspaceMode === "email" && emailSubjectThreads.length > 0 ? (
+                        <div data-cc-email-subject-list className="mb-3 space-y-1">
+                            <div className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
+                                Email
+                            </div>
+                            {emailSubjectThreads.map((thread) => {
+                                const isActive = thread.id === selectedThreadId;
+                                const participants = resolveThreadRecipients(thread, timelineMessages, allLiveRecipients);
+                                const who = formatThreadParticipantNames(participants);
+                                return (
+                                    <button
+                                        key={thread.id}
+                                        type="button"
+                                        data-cc-email-subject={thread.id}
+                                        aria-pressed={isActive}
+                                        onClick={() => onOpenThread?.(thread.id)}
+                                        className={`w-full rounded-lg border px-2.5 py-1.5 text-left transition ${
+                                            isActive
+                                                ? "border-alloy-juniper/45 bg-alloy-juniper/[0.07]"
+                                                : "border-alloy-stone/18 bg-white hover:border-alloy-stone/30"
+                                        }`}
+                                    >
+                                        <div className="flex items-baseline justify-between gap-2">
+                                            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-alloy-midnight">
+                                                {threadDisplayTitle(thread, timelineMessages)}
+                                            </span>
+                                            {thread.unread > 0 ? (
+                                                <span className="shrink-0 rounded-full bg-alloy-juniper px-1.5 text-[9px] font-bold text-white">
+                                                    {thread.unread}
+                                                </span>
+                                            ) : null}
+                                        </div>
+                                        <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">
+                                            {[thread.lastActivityAt ? relTime(thread.lastActivityAt) : null, who]
+                                                .filter(Boolean)
+                                                .join(" · ")}
+                                        </div>
+                                    </button>
+                                );
+                            })}
                         </div>
                     ) : null}
                     {messageListBody}

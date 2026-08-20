@@ -113,7 +113,7 @@ export type GrantStatement = {
     /** True when the statement reads a catalog relation for any purpose. */
     readsCatalog: boolean;
     /** How the key set is determined. */
-    binding: "literal" | "loop-values" | "blanket";
+    binding: "literal" | "loop-values" | "parameter-bound" | "blanket";
 };
 
 /**
@@ -142,6 +142,20 @@ export function discoverGrantStatements(): GrantStatement[] {
                 } else if (loop.keys.length > 0 && loop.variables.some((v) => selectsBareVariable(statement, v))) {
                     binding = "loop-values";
                     boundingKeys = loop.keys;
+                } else if (parameterBound(statement) && !readsCatalog) {
+                    // The key set comes from an ARRAY the caller supplied, unnested into the
+                    // projection. That is not a blanket and is the opposite of `G5`'s defect: such a
+                    // statement can only ever write keys its caller named, and it cannot reach the
+                    // catalog's contents at all — asserted, not assumed, by requiring `!readsCatalog`
+                    // on this same statement.
+                    //
+                    // Distinguishing this matters because W-28's replacement function validates keys
+                    // against `permission_definitions` in a SEPARATE statement of the same function
+                    // body. Reading the body as one region would see a grant write and a catalog read
+                    // together and call it a blanket — reachability standing in for behaviour, which
+                    // is the error the census was retired for.
+                    binding = "parameter-bound";
+                    boundingKeys = [];
                 } else {
                     binding = "blanket";
                     boundingKeys = [];
@@ -159,6 +173,17 @@ export function discoverGrantStatements(): GrantStatement[] {
  * loop-values case: a blanket that merely happens to sit in a region containing an unrelated loop
  * must not be excused by it.
  */
+/**
+ * Does this INSERT take its permission keys from an unnested array rather than from a relation?
+ * `FROM unnest(<identifier>)` with that alias projected is the shape; a literal array spelled in the
+ * statement would already have been caught as `literal`.
+ */
+function parameterBound(statement: string): boolean {
+    const m = statement.match(/\bFROM\s+unnest\s*\(\s*([a-z_][a-z0-9_]*)\s*\)\s*(?:AS\s+)?([a-z_][a-z0-9_]*)/i);
+    if (!m) return false;
+    return selectsBareVariable(statement, m[2]!);
+}
+
 function selectsBareVariable(statement: string, variable: string): boolean {
     const select = statement.slice(statement.search(/\bSELECT\b/i));
     return new RegExp(`(?:,|\\bSELECT)\\s*${variable}\\s*(?:,|\\bFROM\\b)`, "i").test(select);

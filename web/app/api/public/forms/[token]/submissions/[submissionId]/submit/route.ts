@@ -22,6 +22,7 @@ import {
     validatePublicSubmissionLifecycleRequirements,
 } from "@/lib/forms/lifecycle/validatePublicSubmissionLifecycleRequirements";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
+import { persistSignedEnrollmentArtifact } from "@/lib/forms/pdf/persistSignedEnrollmentArtifact";
 import {
     emitFormPacketCompletedSafe,
     emitFormSignedSafe,
@@ -200,10 +201,10 @@ export async function POST(
         };
     }
 
-    let personId = sub.person_id;
-    let customerId = sub.customer_id;
-    let customerMemberId = sub.customer_member_id;
-    let opportunityId = sub.opportunity_id;
+    const personId = sub.person_id;
+    const customerId = sub.customer_id;
+    const customerMemberId = sub.customer_member_id;
+    const opportunityId = sub.opportunity_id;
     let processingCaseId: string | null = null;
     let formIntakeMeta: FormIntakeMeta | null = null;
 
@@ -449,6 +450,26 @@ export async function POST(
     );
     if (adv.error) {
         console.error("[public submit] packet advance failed:", adv.error.message);
+    }
+
+    /**
+     * The COMPLETED COPY — original document, filled with the submitted values, signed, flattened,
+     * stored against the child's record. Presentation of a fact that already happened: the
+     * canonical submission above is the satisfaction authority, so a failure here is logged and
+     * never fails the participant's submit; the operator generate path can rebuild it by the same
+     * idempotency key.
+     */
+    try {
+        const artifact = await persistSignedEnrollmentArtifact(supabase, {
+            orgId: ctx.orgId,
+            submissionId,
+            nowIso: new Date().toISOString(),
+        });
+        if (!artifact.ok) {
+            console.error("[public submit] signed artifact persistence failed:", artifact.error);
+        }
+    } catch (e) {
+        console.error("[public submit] signed artifact persistence threw:", e);
     }
 
     if (ctx.packet && adv.result) {

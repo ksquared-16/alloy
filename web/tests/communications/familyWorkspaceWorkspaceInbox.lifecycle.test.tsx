@@ -20,6 +20,7 @@ import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 import {
     resetDrawerFamilyWorkspacePrefetchCacheForTests,
     seedDrawerFamilyWorkspaceCacheForTests,
@@ -87,7 +88,8 @@ function buildVm(messages: TimelineEventVM[]): FamilyCommunicationWorkspaceVM {
         consentSummary: {
             byContact: {},
             household: { email: "unset", sms: "unset", marketing: "unset" },
-            preferenceProfile: { email_transactional: "unset", sms_transactional: "unset", email_marketing: "unset", sms_marketing: "unset" },
+            preferenceProfile: emptyPreferenceProfile(),
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: { channel: "email", recipientContactIds: ["person-1"], subject: null, body: "", availableChannels: { email: true, sms: true, note: false, reasons: {} }, consentBlockers: [] },

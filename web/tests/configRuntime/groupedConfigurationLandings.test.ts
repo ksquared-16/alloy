@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { buildAccessLandingModel } from "@/lib/configRuntime/accessLandingModel";
+import { ACCESS_WORKSPACE_CHAPTERS } from "@/lib/access/accessChapterRoutes";
 import { buildFinancialsLandingSections } from "@/lib/financials/financialsLandingModel";
 import { buildProgramsLocationsLandingTiles } from "@/lib/configRuntime/programsLocationsLandingModel";
 
@@ -56,7 +57,7 @@ describe("grouped configuration landing simplification", () => {
     });
 
     it("Access landing has empty summaryCards and four launch destinations", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         expect(model.summaryCards).toEqual([]);
         expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
         expect(model.tiles.find((t) => t.id === "users")?.label).toBe("Users");

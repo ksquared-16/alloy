@@ -1,13 +1,23 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import {
+    canManageUsersAndRoles,
+    requirePortalOrUsersRolesManageAuth,
+    requireUsersRolesManageAuth,
+} from "@/lib/admin/canManageUsersAndRoles";
+import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
 
 export type AdminUserRow = {
     user_id: string;
+    /**
+     * The member's address, or `null` — withheld from callers without `settings.users_roles`.
+     * See `lib/access/memberDirectoryProjection.ts` (W14-F1, disclosure half).
+     */
     email: string | null;
+    /** A name safe to show to any portal-admitted caller. Always present. */
+    label: string;
     /** Sorted unique role_keys for this member in the current org */
     role_keys: string[];
     /**
@@ -18,14 +28,55 @@ export type AdminUserRow = {
     created_at: string;
 };
 
-/** GET: list org members (one row per user; roles aggregated). Admin + ops can read. */
+/**
+ * GET: list org members (one row per user; roles aggregated).
+ *
+ * **`OD-8` / `W-15` — this gate reads a capability. It used to read admission.**
+ *
+ * The roster was gated on portal eligibility: `admin` OR `ops`, a role literal evaluated in
+ * application code. `W-15`'s burndown converts non-capability gates to the canonical capability
+ * under `OD-7`, and this handler was the one recorded exception — not for want of a decision, but
+ * because it failed the no-widening test. `settings.users_roles.read` is resolved WITHOUT requiring
+ * `portalEligible`, so a principal holding the key through a custom role would have gained a read
+ * they did not have, and `OD-7` rule 6 forbids closing that gap with an ad-hoc secondary role check.
+ *
+ * **The `Q15` census answered it with real-tenant evidence, and both halves were needed.**
+ *
+ *   * `C1 = 0` — no deployed role outside `admin`/`ops` holds `settings.users_roles.read`. The
+ *     widening population the exception was written against is EMPTY, so the conversion admits
+ *     nobody new. This is the fact that could only come from the deployed database; a fixture
+ *     asserting it would have been the census answering itself.
+ *   * `B4` — `ops` was missing the key in 2 organizations, so converting first would have NARROWED.
+ *     `20260819140000` grants it and REFUSES to complete while any org defining `ops` is uncovered.
+ *
+ * Hence `preserve → verify → convert`, and hence the migration lands before this code. `W-8` is this
+ * initiative's own record of what an unannounced narrowing costs.
+ *
+ * **No secondary check survives.** `requirePortalOrUsersRolesManageAuth` resolves
+ * `settings.users_roles.read` OR the managing key and consults `portalEligible` nowhere. Re-adding a
+ * portal test to mimic the old shape is exactly the pattern `OD-7` rejects, and it would reinstate
+ * the fifth authority layer `W-13` removed — `OD-8` states plainly that it does not reopen
+ * `I-35`ᴮ.
+ *
+ * **Scope is unchanged and still enforced**: the query is bounded to `access.orgId`, which is the
+ * membership's org. Capability decides whether the roster may be read; it does not decide whose.
+ *
+ * **The disclosure half is untouched.** Addresses are still projected against
+ * {@link canManageUsersAndRoles} — the MANAGING key — so this conversion does not hand the ops
+ * population anything it lacked. `OD-8` does not authorize `settings.users_roles`.
+ */
 export async function GET() {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    const auth = await requirePortalOrUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
+
+    // W14-F1. The MANAGING capability, read from the same resolved context the gate used — not a
+    // second auth pass, and not a different predicate that happens to agree today.
+    const mayReadEmail = canManageUsersAndRoles(access);
 
     const supabase = createAdminClient();
 
-    const { data: rows, error: rolesError } = await supabase.from("user_roles").select("user_id, role").eq("org_id", ctx.orgId).order("user_id", { ascending: true });
+    const { data: rows, error: rolesError } = await supabase.from("user_roles").select("user_id, role").eq("org_id", access.orgId).order("user_id", { ascending: true });
 
     if (rolesError) {
         return NextResponse.json({ error: rolesError.message }, { status: 500 });
@@ -54,7 +105,8 @@ export async function GET() {
 
         result.push({
             user_id,
-            email,
+            email: projectMemberEmail(email, mayReadEmail),
+            label: memberDirectoryLabel(email, user_id),
             role_keys,
             role,
             created_at,

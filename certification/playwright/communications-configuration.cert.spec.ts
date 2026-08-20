@@ -99,10 +99,56 @@ test.describe("Organization Communications — the five questions", () => {
     });
 
     test("Q3 and Q4 sending and receiving are separate, visible answers", async ({ page }) => {
+        /*
+         * ASSERTS THE LINK, NOT A FIXED STRING.
+         *
+         * An earlier version expected the literal "Routing setup required". That
+         * is the correct answer only on a tenant where nothing has ever been
+         * received — and this suite runs on both pristine and inherited tenants,
+         * so the literal made a truthful page fail whenever a message had
+         * legitimately arrived.
+         *
+         * What actually needs proving is that the page never disagrees with the
+         * readiness authority, and that `ready` is reachable ONLY through observed
+         * arrival. Both hold in either tenant state, and both are stronger than
+         * the string was.
+         */
+        const { bindings } = await loadBindings(page);
+        const email = bindings.find((b) => b.channel === "email" && b.inbound_address === ACTIVE_EMAIL);
+        expect(email, "the seeded active email binding exists").toBeTruthy();
+
         await page.goto(PAGE);
         await expect(page.getByTestId("communications-email-sending-state")).toHaveText("Ready");
-        await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Ready");
+
+        const receiveState = email!.readiness.receive.state;
+        // Configuration is never enough. Whatever the state is, it is NOT "ready"
+        // unless the detail carries evidence of an actual arrival.
+        if (receiveState === "ready") {
+            expect(email!.readiness.receive.detail).toContain("Last inbound verified");
+            // "Connected", not "Ready": email receiving states that mail has
+            // ACTUALLY ARRIVED, where "Ready" would read as a capability. SMS
+            // below keeps the shared vocabulary, because its readiness is one.
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText("Connected");
+        } else if (receiveState === "awaiting_routed_email") {
+            // A destination exists and nothing has come through it yet.
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
+                "Waiting for routed email"
+            );
+        } else {
+            expect(receiveState).toBe("routing_setup_required");
+            await expect(page.getByTestId("communications-email-receiving-state")).toHaveText(
+                "Routing setup required"
+            );
+            // And it says so beside the address, so the row cannot be misread as
+            // "Alloy is already collecting that mailbox."
+            await expect(page.getByTestId("organization-communications-page")).toContainText("Not routed to Alloy");
+        }
+
         await expect(page.getByTestId("communications-sms-sending-state")).toHaveText("Ready");
+        // SMS is deliberately UNAFFECTED by the email routing model: its inbound
+        // arrives on a signed webhook at a provider-owned number, with no third
+        // party holding a rule that could silently disappear. Regression guard on
+        // the live-certified SMS runtime.
         await expect(page.getByTestId("communications-sms-receiving-state")).toHaveText("Ready");
     });
 

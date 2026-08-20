@@ -1,0 +1,3800 @@
+{
+  "reviewed": "2026-08-10 — W-14 initial issuance (assignment asg_0232d36df9694c)",
+  "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
+  "ratchet": {
+    "max_pending": 693,
+    "$comment": "Lowered 694 -> 693 by OD-8's conversion of admin/users GET. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
+  },
+  "inherited": {
+    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
+    "frozen": "2026-08-20",
+    "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal eligibility, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
+    "handlers": [
+      {
+        "route": "app/api/admin/communications/bindings/route.ts",
+        "method": "POST",
+        "introduced_by": "b15146314",
+        "program": "fix(comms): an organization's own connection must read as connected"
+      },
+      {
+        "route": "app/api/admin/communications/ingress-routes/route.ts",
+        "method": "GET",
+        "introduced_by": "8b80393ed",
+        "program": "test(cert): certify self-service receiving setup; keep the panel after connect"
+      },
+      {
+        "route": "app/api/admin/communications/ingress-routes/route.ts",
+        "method": "POST",
+        "introduced_by": "8b80393ed",
+        "program": "test(cert): certify self-service receiving setup; keep the panel after connect"
+      },
+      {
+        "route": "app/api/admin/communications/provider-connection/route.ts",
+        "method": "DELETE",
+        "introduced_by": "33e3d2c9e",
+        "program": "feat(comms): Resend self-service — connect your own account, verified before connected"
+      },
+      {
+        "route": "app/api/admin/communications/provider-connection/route.ts",
+        "method": "POST",
+        "introduced_by": "33e3d2c9e",
+        "program": "feat(comms): Resend self-service — connect your own account, verified before connected"
+      },
+      {
+        "route": "app/api/admin/debug/certification/inbound-email/route.ts",
+        "method": "POST",
+        "introduced_by": "02b4e0d3f",
+        "program": "feat(comms): certify the email operator loop, and converge the last speculative inbound code"
+      },
+      {
+        "route": "app/api/admin/debug/inbound-ingress/route.ts",
+        "method": "GET",
+        "introduced_by": "186823355",
+        "program": "feat(comms): support can find an unattributable message without reading it"
+      },
+      {
+        "route": "app/api/admin/durable-record/route.ts",
+        "method": "GET",
+        "introduced_by": "7bb31bcd8",
+        "program": "feat(attention): durable record destination — client intent, surface, browser-certified"
+      },
+      {
+        "route": "app/api/admin/employment-positions/route.ts",
+        "method": "GET",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/admin/employment-positions/route.ts",
+        "method": "POST",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/admin/operator-focus/resolve/route.ts",
+        "method": "POST",
+        "introduced_by": "1f899b686",
+        "program": "feat(runtime): one adapter turns an operator record gesture into an attention movement"
+      },
+      {
+        "route": "app/api/admin/records/bootstrap/route.ts",
+        "method": "GET",
+        "introduced_by": "27f4a8181",
+        "program": "feat(records): Records Workspace V1 — Staff + Children durable record management"
+      },
+      {
+        "route": "app/api/admin/records/child-identity/route.ts",
+        "method": "POST",
+        "introduced_by": "9f763d014",
+        "program": "feat(records): Records -> Children -> Add child"
+      },
+      {
+        "route": "app/api/admin/records/children/route.ts",
+        "method": "GET",
+        "introduced_by": "27f4a8181",
+        "program": "feat(records): Records Workspace V1 — Staff + Children durable record management"
+      },
+      {
+        "route": "app/api/admin/records/households/route.ts",
+        "method": "GET",
+        "introduced_by": "9f763d014",
+        "program": "feat(records): Records -> Children -> Add child"
+      },
+      {
+        "route": "app/api/admin/records/schedule-patterns/route.ts",
+        "method": "GET",
+        "introduced_by": "ac5c286b3",
+        "program": "feat(records): offer the two enrollment paths, gated on the child's real state"
+      },
+      {
+        "route": "app/api/admin/roster/route.ts",
+        "method": "GET",
+        "introduced_by": "f894ddec6",
+        "program": "feat(roster): Combined Daily Roster — children and staff on one room·date cell"
+      },
+      {
+        "route": "app/api/admin/staff/directory/route.ts",
+        "method": "GET",
+        "introduced_by": "c254e3a9f",
+        "program": "feat(staff): operator-visible Add Staff at /organization/staff"
+      },
+      {
+        "route": "app/api/admin/staff/resolve-person/route.ts",
+        "method": "POST",
+        "introduced_by": "77483a577",
+        "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/communications/unsubscribe/route.ts",
+        "method": "GET",
+        "introduced_by": "e22f8be74",
+        "program": "feat(comms): make the Email preference model truthful, and let recipients leave"
+      },
+      {
+        "route": "app/api/communications/unsubscribe/route.ts",
+        "method": "POST",
+        "introduced_by": "e22f8be74",
+        "program": "feat(comms): make the Email preference model truthful, and let recipients leave"
+      }
+    ]
+  },
+  "w15_classification": {
+    "$comment": "W-15's classification under OD-7, kept beside the table it describes so it cannot drift from it. tests/access/routeCapabilityDeclaration.test.ts asserts these counts against the LIVE gate inventory, so a stale figure here is a failing test rather than a stale document.",
+    "policy": "OD-7: a non-capability gate converts to the canonical capability representing the operation it protects, and the conversion MUST NOT widen admission.",
+    "reviewed": "2026-08-19",
+    "access_owned": {
+      "total": 15,
+      "declared": 13,
+      "none": 1,
+      "exceptions": 1,
+      "state": "EXHAUSTED. Every Access-owned handler is declared, reviewed `none`, or a recorded exception. OD-8 resolved the admin/users GET exception with deployed Q15 evidence, leaving ONE — send-password-reset POST, which is decision-gated for a reason other than OD-7."
+    },
+    "conversion_exceptions": [
+      {
+        "route": "app/api/admin/send-password-reset/route.ts",
+        "method": "POST",
+        "reason": "Decision-gated for a reason OTHER than OD-7. This is W-38's subject — the credential-mail primitive bounded by the caller's org — which the plan gates on AD-15. OD-7 does not release it.",
+        "needs": "AD-15"
+      }
+    ],
+    "systemic_finding_blocking_the_remaining_backlog": "The 292 gate-helper handlers are NOT mechanically convertible under OD-7 alone, and the reason is structural rather than per-route. `requireAdminOrOps` resolves through getAdminOrgContextLight, which refuses unless `portalEligible` — it admits by ROLE, not by grant. So a pure capability swap admits capability holders who are not portal-eligible, which WIDENS (rule 6), while `portal AND capability` NARROWS for any portal principal whose org lacks the grant. Choosing between them, and proving which applies, needs per-org grant coverage from a real tenant — the same class of evidence the Q15 gate names, which the seeded certification tenant cannot supply because it defines only admin and ops.",
+    "remaining_by_ownership": "694 owned pending handlers across 142 route families — forms, communications, commercial, analytics, departments, processing, financials, jobs, opportunities, schedules, workflows and others. Every one carries another program's domain semantics, so the canonical capability for each is that domain's call, not Access's. OD-7 scopes this burndown to Access-owned sites and those are exhausted.",
+    "resolved_exceptions": [
+      {
+        "route": "app/api/admin/users/route.ts",
+        "method": "GET",
+        "resolved_by": "OD-8",
+        "resolved_on": "2026-08-19",
+        "capability": "settings.users_roles.read",
+        "evidence": "Q15 census, deployed tenant, trusted-host action tha_e1d6bbd4b62a79. C1 = 0 rows (no widening population); B4 = ops missing the key in 2 orgs (the narrowing the preservation grant prevents).",
+        "preservation": "supabase/migrations/20260819140000_od8_ops_users_roles_read_preservation.sql — narrow to one role and one capability, fails closed on coverage AND on any ops holding settings.users_roles."
+      }
+    ]
+  },
+  "routes": {
+    "app/api/action-links/consume-accept-job/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Admission is the action-link token in the request, which IS the credential. There is no org principal to hold a capability: the recipient is a vendor or contact acting on a link mailed to them, and requiring a capability would make the route unusable by everyone it exists for. The token is the authorization boundary, and its strength is a token-lifecycle question (W-36's surface), not a capability question."
+      }
+    },
+    "app/api/action-links/consume-reschedule/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Action-link token, as consume-accept-job. Bearer admission by design; no org principal exists to carry a capability."
+      }
+    },
+    "app/api/action-links/resolve/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Action-link token, as consume-accept-job. Resolves what the link refers to before the recipient acts on it; the token scopes the answer."
+      }
+    },
+    "app/api/action/[token]/consume/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token is in the path and is the credential. Same class as action-links, different generation of the same feature — the duplication is real and is IA-8's territory, not a capability question."
+      }
+    },
+    "app/api/action/[token]/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Resolves what the path token refers to, before the recipient acts on it. Bearer admission by the token, as action/[token]/consume."
+      }
+    },
+    "app/api/admin/access-scope-debug/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Self-inspection only. The handler reads the CALLER'S OWN resolved scope — every query is filtered by `gate.userId` and `gate.orgId` from the caller's own gate — and returns it. It discloses nothing about any other principal and mutates nothing, so there is no operation for a capability to protect. Admission (loadAdminRouteGate) is what bounds it, which is admission used to DENY, not to authorize."
+      }
+    },
+    "app/api/admin/action-definitions/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/action-placements/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/action-placements/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/definition-catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/eligibility/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/execute/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/inventory/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/preflight/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/right-rail-bundle/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/actions/workspace-root-bundle/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/activity/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/addons/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/addons/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/agent/v0/queue-definition/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/agent/v1/activity/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/agent/v1/record-overview-layout/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/agent/v2/field-visibility/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/config-layout-assist/capabilities/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Reports the CALLER'S OWN config-assist capabilities as three booleans, computed from the caller's own access context (route.ts:14-23). It discloses no other principal's data and no org data, and gating a capability projection on the capability it projects would make the UI unable to tell a user what they cannot do. Admission (W-13 portal.access) is still required upstream. This is a reviewed assertion, not an absence."
+      }
+    },
+    "app/api/admin/ai/config-layout-assist/field-setup/confirm/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/config-layout-assist/field-setup/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/config-layout-assist/propose/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/enrich-attention-suggestion/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/task-assist/apply/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed"
+      }
+    },
+    "app/api/admin/ai/task-assist/entity-search/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/task-assist/proposals/[id]/approve/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/task-assist/proposals/[id]/reject/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/task-assist/proposals/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/task-assist/propose/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/workflow-assist/apply/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/workflow-assist/capabilities/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/workflow-assist/explain/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/ai/workflow-assist/propose/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/[id]/copy/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/[id]/preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/[id]/snapshot/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/[id]/trend/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/metrics/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/placements/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/placements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/render/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/rollups/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/rollups/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/snapshots/run/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/surfaces/[surface]/doc/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/surfaces/[surface]/placements/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/surfaces/operational-intelligence/doc/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/visualizations/[id]/copy/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/visualizations/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/analytics/visualizations/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/assignment-types/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/assignment-types/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/business-process-layout-assignments/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/business-process/configuration/publish/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/business-process/configuration/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/business-process/configuration/validate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-enrollment-agreements/[id]/cancel/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-enrollment-agreements/[id]/ended/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-enrollment-agreements/[id]/ending/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-enrollment-agreements/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-enrollment-agreements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-participation/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/child-placements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/childcare-attendance/actual-compliance/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/childcare-attendance/expected-vs-actual/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/childcare-attendance/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commands/[commandKey]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/addons/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/addons/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/billing-cadences/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/categories/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/categories/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/deposits/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/deposits/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/execution/preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/fees/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/fees/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/policies/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/policies/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/products/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/products/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/revenue-categories/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/revenue-categories/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/tuition-rates/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/commercial/tuition-rates/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communication-scheduled-sends/[id]/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed"
+      }
+    },
+    "app/api/admin/communication-scheduled-sends/process-due/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communication-scheduled-sends/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/cancel/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/recipient-preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/schedule/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/[id]/targets/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/recipient-preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/announcements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/bindings/[bindingId]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/bindings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/conversations/[id]/assign/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/conversations/[id]/triage/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/conversations/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/deliverability/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/drawer-recipients/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/family-note/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/family-send/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed"
+      }
+    },
+    "app/api/admin/communications/family-workspace/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/health/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/identities/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/ingress-routes/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/messages/mark-read/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/person-search/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/preferences/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/provider-connection/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/send/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed",
+        "note": "Legacy alias ops.messaging.write also satisfies."
+      }
+    },
+    "app/api/admin/communications/status-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/templates/[id]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/templates/[id]/preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/templates/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/templates/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/threads/[threadId]/messages/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/threads/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/communications/unread-count/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config-layout-assist/proposals/[id]/apply/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config-layout-assist/proposals/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config-layout-assist/proposals/[id]/state/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config-layout-assist/proposals/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config/field-definition-visibility/route.ts": {
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config/layout-integrity/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/config/record-overview-layout/route.ts": {
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/configuration/programs/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.read",
+        "helper": "canReadProgramPublication",
+        "note": "settings.manage also satisfies."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.manage",
+        "helper": "canManageProgramPublication",
+        "note": "Was declared as 'canWriteProgramPublication', a function that does not exist anywhere in the repository. The gate itself was real and correct — POST has always called canManageProgramPublication, which requires settings.manage — but the table named an enforcement site a reviewer could not follow. Corrected when the W-15 binding join made the claim checkable."
+      }
+    },
+    "app/api/admin/contact-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/contacts/[id]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/contacts/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/contacts/[id]/unarchive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/contacts/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-member-contact-roles/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-member-contacts/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-member-contacts/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-member-relationship-types/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-members/[id]/ensure-person/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-members/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-members/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-person-role-types/[id]/route.ts": {
+      "DELETE": {
+        "status": "none",
+        "reason": "The handler is an unconditional 405: it takes no parameters, reads no request, touches no client and returns NOT_IMPLEMENTED on every call. There is no action to authorize. This is the state's intended use — 'no gate' as an auditable assertion rather than an absence — and it is reviewable from six lines of source, which is why it is settled here instead of waiting on W-15's product decisions."
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customer-person-role-types/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customers/[id]/household-primary-contact/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customers/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/customers/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/db-relationships/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/debug/certification/inbound-email/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/debug/context/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/debug/inbound-ingress/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/debug/platform-perf-trace/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/deletion-eligibility/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-actions-matrix/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-activation/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-activation/validate/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-builder/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-queue-filter-audit/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/lifecycle-requirements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/operational-bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/opportunity-attention-preview/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/opportunity-lifecycle-kpis/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/persistence-audit/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/pipeline-exact-count/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/departments/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/dev/create-org/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/discount-code-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/discount-redemptions/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/discounts/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/discounts/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/document-field-definitions/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/document-field-definitions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/documents/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/documents/[id]/signed-url/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess"
+      }
+    },
+    "app/api/admin/documents/entity-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/documents/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/documents/upload/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/durable-record/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/employment-positions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-process/form-coverage/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-process/stage-actions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-process/stage-runtime-config/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-process/stage-work-unit/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-process/status-stages/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-status-transition/context/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-status-transition/execute/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment-status-transition/preflight/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/enrollment/assignment-quote/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-labels/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/[id]/duplicate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/[id]/publish/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/[id]/rollback/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/effective/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/field-catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/focus-panel-summary/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity-layouts/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/entity/[type]/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-definitions/[id]/delete-safety/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-definitions/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-definitions/batch-placement/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-definitions/ensure-platform-field/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-definitions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-sections/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/field-sections/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial-charge-preview/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial-config/opportunity/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/charge-templates/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/charge-templates/simulate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/consumption/obligations/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/consumption/simulate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/gl-config/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/policies/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/rate-config/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/rate-plans/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/rate-rules/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/seed-demo/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financial/services/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/accounts/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/accounts/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/job/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/journal-entries/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/journal-entries/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/ledger/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/ledger/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/schedule/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/snapshot/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/statements/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/financials/tuition-plans/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/duplicate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/lifecycle-coverage/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/outcome-labels/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/public-links/[linkId]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/public-links/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/versions/[versionId]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/versions/[versionId]/publish/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/versions/[versionId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/[formId]/versions/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/blank/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/crm-entity-search/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-definitions/[packetDefId]/items/route.ts": {
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-definitions/[packetDefId]/public-links/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-definitions/[packetDefId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-definitions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-links/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-sessions/[packetSessionId]/review-insight/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-sessions/[packetSessionId]/review-rollup/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-sessions/[packetSessionId]/review/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-sessions/[packetSessionId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/packet-sessions/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/preview-payload/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/[submissionId]/confirm-linkage/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/[submissionId]/generate-document/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/[submissionId]/manual-link/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/[submissionId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/[submissionId]/submit/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/forms/submissions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/global-search/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/inbox/threads/[threadId]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/inbox/threads/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/industries/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/industries/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/intake/record-resolution/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/intelligence/operational/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "reports.read",
+        "helper": "requireAnalyticsReadAccess",
+        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+      }
+    },
+    "app/api/admin/job-statuses/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/apply-vendor-to-upcoming/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/assign-vendor/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/charges/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/location/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/payment-collect-context/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/payments/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/payout/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/unarchive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/[id]/vendors-for-assign/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/jobs/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-proof/opportunities/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-proof/opportunity-drawer-shadow/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-proof/waitlist-candidates/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/child-drawer-body/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/opportunity-drawer-body/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/opportunity-drawer-shadow/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/opportunity-queue-layout/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/opportunity-queue-row-shadow/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/layout-runtime/person-drawer-body/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/complete-stage-work/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/family-close/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/participant-decisions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/process-participation/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/process-work-views/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/queue-membership-status-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/stage-bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-builder/stage-work-outcomes/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/attach-records/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/cleanup-test/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/delete/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/repair-work-units/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/repair/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle-catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/lifecycle/action-intake-spec/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/location-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/location-program-categories/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/location-types/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/locations/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/locations/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/kpi-targets/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/oi-config/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/oi-org-calc-measurements/[id]/observe/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/oi-org-calc-measurements/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/oi-org-calc-measurements/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/resolve/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "reports.read",
+        "helper": "requireAnalyticsReadAccess",
+        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+      }
+    },
+    "app/api/admin/metrics/snapshots/write/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/metrics/trends/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "reports.read",
+        "helper": "requireAnalyticsReadAccess",
+        "note": "reports.write also satisfies; portal-eligible passes unconditionally (W-13)."
+      }
+    },
+    "app/api/admin/mutations/execute/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-config-rules/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-config/capacity-rules/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-config/operating-windows/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-config/ratio-rules/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-config/schedule-rules/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-enrollment/summary/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-expectations/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-questions/answer/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-questions/bos/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-questions/configure/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-questions/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-tasks/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operational-tasks/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/operator-focus/resolve/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/activity-signal/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/delete-preview/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/delete/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/delivery-subjects/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/drawer-operational-bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/eligible-enrollment-children/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/enrollment-packet-launch/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "communications.send",
+        "helper": "assertCommunicationsSendAllowed"
+      }
+    },
+    "app/api/admin/opportunities/[id]/enrollment-packets/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/form-deliver/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/form-send/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/intake-source/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/lead-location/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/placement-candidates/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunities/[id]/stage-transition-reconciliation/preflight/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunity-customer-members/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunity-customer-members/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/opportunity-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/option-sets/[setKey]/items/[itemId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/option-sets/[setKey]/items/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/option-sets/[setKey]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/option-sets/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/org-settings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/org/industry/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/bind-runtime/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/evaluate/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/publish/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/restore/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-calculations/runtime/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-populations/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/organization-weightings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/payments/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/payments/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/payments/run/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-child-relationships/[id]/roles/[roleKey]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-child-relationships/[id]/roles/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-child-relationships/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-child-relationships/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-relationship-type-settings/[id]/route.ts": {
+      "DELETE": {
+        "status": "none",
+        "reason": "An unconditional 405, identical in shape to customer-person-role-types DELETE: no parameters, no request read, no client, NOT_IMPLEMENTED on every call. Deactivation goes through PATCH is_active=false, which stays pending because it does act."
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/person-relationship-type-settings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/persons/[id]/profile-photo/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess",
+        "note": "Recorded, not imposed. This handler already calls the very assertDocumentAccess that documents/[id]/signed-url and vendors/[id]/documents/signed-url both declare as documents.read, and already refuses on decision.outcome !== 'allowed' before the URL is minted. The table was under-reporting: it sat 'pending' while enforcing. Declaring it changes who may call this route by nothing at all, which is what makes it Director-ownable where the rest of W-15 is not. The check runs inside `if (doc)` because that is the only branch that discloses anything — the no-document fall-through returns metadata the person read already carries. POST and DELETE stay pending deliberately: they gate on ctx.role !== 'admin', which is a gate but not a capability gate, and which key replaces a raw role check is W-15's product call."
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/persons/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/persons/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pipeline-stages/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pipeline-stages/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pipelines/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pipelines/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/placement-candidates/[candidateId]/manual-position/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/placement-candidates/[candidateId]/overrides/[overrideId]/release/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/placement-candidates/[candidateId]/overrides/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/documents/[id]/extracted-text/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/documents/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/documents/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/[packetDefinitionId]/projection/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/compose/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/from-template/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/requirements/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/roster/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pos/packets/sessions/[sessionId]/participant-projection/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-dimension-values/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-dimension-values/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-dimensions/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-dimensions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-modes/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing-modes/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/first-clean-prices/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/first-clean-prices/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/matrix/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/matrix/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/recurring-prices/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/pricing/recurring-prices/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/approve/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/archive/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/classification/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/form-draft/apply-discovery/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/form-draft/create/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/form-draft/discovery-decisions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/form-draft/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/form-draft/save/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/approve/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/correction/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/execute/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/plan/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/resolution/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/identity/review/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/recommendation/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/commit/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/related-record-proposals/[proposalId]/preview/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/cases/[caseId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/dev-cleanup/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/processing/queue/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/programs/offerings/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/programs/offerings/[id]/variants/[variantId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/programs/offerings/[id]/variants/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/programs/offerings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/queue-row-layout/[surfaceId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/queue-view-totals/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/queues/[workUnitId]/[queueKey]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/queues/stage-membership-ack/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/quote-intake/catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/rbac/grants/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles.read",
+        "helper": "requirePortalOrUsersRolesManageAuth",
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+      },
+      "PUT": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/rbac/permissions/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles.read",
+        "helper": "requirePortalOrUsersRolesManageAuth",
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+      }
+    },
+    "app/api/admin/rbac/roles/[role_key]/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/rbac/roles/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles.read",
+        "helper": "requirePortalOrUsersRolesManageAuth",
+        "note": "OD-7 read/write rule: a READ surface converts to its canonical `.read` capability. The gate is `requirePortalOrUsersRolesManageAuth`, which accepts `settings.users_roles.read` as well as the manage key — so declaring the manage key here UNDER-DESCRIBED the gate. No code changed and no admission moved; the declaration now names what the handler actually enforces."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/record-actions/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-field-placements/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-order/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-drawer-layouts/opportunity-workflow-v1-sections/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-layouts/effective-preview/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-layouts/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/record-overview-layouts/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/child-identity/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/children/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/households/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/records/schedule-patterns/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/related/[entity]/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/relationship-actions/add-emergency-contact/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/relationship-actions/execute/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/roster/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedule-assignments/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedule-patterns/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedule-patterns/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedule-statuses/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/assign/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/assignment/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/cancel/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/location/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/post-completion/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/post-customer-payment/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/post-vendor-payout/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/reschedule/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/[id]/vendors-for-assign/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/schedules/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/scheduling/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/send-password-reset/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/service-frequency-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/service-offerings/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/service-offerings/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/service-plan-templates/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/service-plan-templates/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/settings/users-roles/members/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/staff/directory/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/staff/resolve-person/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/status-definitions/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/status-definitions/inventory/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/status-definitions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/status-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/status-transition-rules/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/subscriptions/[id]/generate-next/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/subscriptions/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/surface-layouts/registry/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/surfaces/work-unit-header/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/surfaces/workspace-header/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/surfaces/workspace-processes/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tenant-bootstrap/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/availability-rules/[ruleId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/availability-rules/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/[bookingId]/cancel/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/[bookingId]/complete/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/[bookingId]/confirm/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/[bookingId]/no-show/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/[bookingId]/reschedule/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/bookings/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/opportunities/[opportunityId]/bookings/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/tours/slots/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/users/[userId]/access-scope/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      },
+      "PATCH": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/users/[userId]/remove/route.ts": {
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/users/[userId]/role/route.ts": {
+      "PATCH": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/users/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "settings.users_roles.read",
+        "helper": "requirePortalOrUsersRolesManageAuth",
+        "note": "OD-8 closed this W-15 exception. It was `pending` not for want of a decision but because it failed OD-7's no-widening test: settings.users_roles.read resolves WITHOUT portalEligible, so a custom-role holder would have gained the roster read, and rule 6 forbids closing that with a secondary role check. Q15 answered both halves on the deployed tenant — C1 = 0 (no role outside admin/ops holds the key, so the widening population is empty) and B4 (ops lacked it in 2 orgs, so converting first would have NARROWED). Sequence: 20260819140000 grants ops the read key and fails closed on coverage, then the gate converted. The DISCLOSURE half is unchanged — addresses are still projected against canManageUsersAndRoles, and OD-8 does not authorize settings.users_roles."
+      },
+      "POST": {
+        "status": "declared",
+        "capability": "settings.users_roles",
+        "helper": "requireUsersRolesManageAuth"
+      }
+    },
+    "app/api/admin/v2/view-models/drawer/child/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/v2/view-models/drawer/opportunity/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/v2/view-models/drawer/person/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendor-options/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendor-statuses/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/contacts/[contactId]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/contacts/available/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/contacts/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/documents/signed-url/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "documents.read",
+        "helper": "assertDocumentAccess"
+      }
+    },
+    "app/api/admin/vendors/[id]/payout-policy/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/payout/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vendors/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/vertical-bootstrap/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/verticals/[id]/route.ts": {
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/verticals/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/view-models/drawer/child/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/view-models/drawer/opportunity/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/view-models/drawer/opportunity/[id]/stage-work/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/view-models/drawer/person/[id]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/lane-previews/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/operational-bootstrap/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/opportunity-attention-queue/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/opportunity-queue/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/provisioning-answer/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/queues/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/by-slug/[workUnitSlug]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/work-units/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflow-events/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflow-runs/[runId]/action-runs/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflow-runs/[runId]/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflow-runs/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/[id]/actions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/[id]/conditions/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "PUT": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/[id]/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/[id]/run/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/debug-vendor-enrichment/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/field-catalog/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workflows/summary/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workspace-kpi-placements/route.ts": {
+      "DELETE": {
+        "status": "pending"
+      },
+      "GET": {
+        "status": "pending"
+      },
+      "PATCH": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/admin/workspace/site-filter/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/build-info/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Build metadata. Reads no database and no caller — there is nothing tenant-scoped to authorize."
+      }
+    },
+    "app/api/communications/unsubscribe/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/leads/gutters/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Public inbound lead capture: an anonymous marketing form creates a lead. Unauthenticated by design — the whole purpose is to hear from someone who has no account. RESIDUAL RISK, recorded rather than resolved here: an unauthenticated write with no rate limit is an abuse surface. That is a throttling concern, not an authorization one — there is no principal to authorize — so it does not belong in this table and is not silently closed by this entry."
+      }
+    },
+    "app/api/marketing/demo-request/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Public inbound demo request, same class and same residual risk as leads/gutters."
+      }
+    },
+    "app/api/public/booking-config/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Renders the public booking form for the single org named by ALLOY_PUBLIC_ORG_ID. The org is taken from environment, never from the request, so a caller cannot steer it at another tenant — which is what would make an unauthenticated read dangerous here. Pricing and catalog data intended for anonymous display."
+      }
+    },
+    "app/api/public/field-definitions/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The custom fields flagged for public booking, for the ALLOY_PUBLIC_ORG_ID org. Same shape as booking-config: the org comes from environment rather than the request, and the projection is restricted to fields explicitly marked public. Service-role access with an org filter the caller cannot influence."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-document/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-edit/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-objective/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-signature-asset/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the fourteen sibling public routes already reviewed rather than left seeded `pending`: the family has a settled answer, and three identical routes sitting in the backlog would inflate it with items that are not open questions. Arrived on staging while this branch was frozen; reviewed at the OD-2 reconciliation."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-turn/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+      }
+    },
+    "app/api/public/forms/[token]/resolve/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Resolves the form schema the path token names, so a respondent can render it. Token-scoped; the respondent holds no org membership."
+      }
+    },
+    "app/api/public/forms/[token]/submissions/[submissionId]/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Public form fill by opaque token: the token in the path is the credential and scopes the submission. The respondent is a family or applicant with no org membership, so there is no principal to hold a capability — requiring one would make the form unfillable by everyone it is for."
+      },
+      "PATCH": {
+        "status": "none",
+        "reason": "The respondent saving their own in-progress answers, admitted by the same path token as the GET. A write, but a write to the record the token names."
+      }
+    },
+    "app/api/public/forms/[token]/submissions/[submissionId]/submit/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The respondent submitting the form the path token names. Token-scoped, as the rest of the public forms surface."
+      }
+    },
+    "app/api/public/forms/[token]/submissions/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Starts a submission against the form the path token names. Token-scoped."
+      }
+    },
+    "app/api/public/tour-booking/[token]/book/route.ts": {
+      "POST": {
+        "status": "pending"
+      }
+    },
+    "app/api/public/tour-booking/[token]/cancel-intent/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "A prospective family acting on the tour link mailed to them. The path token is the credential and scopes the booking; the family holds no org membership, so there is no capability for them to hold. NOTE — `book` and `slots` on this same surface are deliberately NOT declared here: they classified into other gate-evidence buckets and were never measured as ungated, and declaring a route this session did not examine is the inference this table exists to refuse."
+      }
+    },
+    "app/api/public/tour-booking/[token]/cancel/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The family cancelling the booking their path token names. Token-scoped admission, as cancel-intent; no org membership exists to carry a capability."
+      }
+    },
+    "app/api/public/tour-booking/[token]/confirm-attendance/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+      }
+    },
+    "app/api/public/tour-booking/[token]/confirm/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The family confirming the booking their path token names. Token-scoped admission, as cancel-intent."
+      }
+    },
+    "app/api/public/tour-booking/[token]/decline/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The family declining the booking their path token names. Token-scoped admission, as cancel-intent."
+      }
+    },
+    "app/api/public/tour-booking/[token]/reschedule/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The family rescheduling the booking their path token names. Token-scoped admission, as cancel-intent."
+      }
+    },
+    "app/api/public/tour-booking/[token]/resolve/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Resolves the booking the path token names, so the family can see what they are acting on. Token-scoped."
+      }
+    },
+    "app/api/public/tour-booking/[token]/slots/route.ts": {
+      "GET": {
+        "status": "pending"
+      }
+    },
+    "app/api/runtime-info/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Runtime metadata. Reads no database and no caller, as build-info."
+      }
+    },
+    "app/api/vendor-application/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Public inbound vendor application, same class and same residual risk as leads/gutters."
+      }
+    },
+    "app/api/verticals/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The platform vertical catalog — not tenant data and not org-scoped. Read through the service-role client because the list is platform-level, and there is no caller to scope it to."
+      }
+    },
+    "app/api/webhooks/resend/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Provider callback from Resend. Admission is the Svix signature, verified against RESEND_WEBHOOK_SECRET, and the handler FAILS CLOSED — 503 when the secret is unconfigured, 400 when the signature headers are absent. The caller is a delivery provider, not a principal; there is no membership and therefore no capability. The signature is the boundary."
+      }
+    },
+    "app/api/webhooks/twilio/sms-status/[binding_id]/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Twilio delivery-status callback, scoped to one provider binding. The binding's secret_ref resolves the verification token, falling back to the global TWILIO_AUTH_TOKEN, and the handler fails closed with 503 when no token resolves. Signature admission, as resend."
+      }
+    },
+    "app/api/webhooks/twilio/sms-status/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The unscoped form of the same Twilio callback, verified against the global TWILIO_AUTH_TOKEN and failing closed identically."
+      }
+    }
+  }
+}

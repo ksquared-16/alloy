@@ -22,6 +22,7 @@ vi.mock("@/contexts/AdminAuthContext", () => ({
 }));
 
 import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 import {
     resetDrawerFamilyWorkspacePrefetchCacheForTests,
     seedDrawerFamilyWorkspaceCacheForTests,
@@ -126,12 +127,8 @@ function buildVm(messages: TimelineEventVM[]): FamilyCommunicationWorkspaceVM {
         consentSummary: {
             byContact: {},
             household: { email: "unset", sms: "unset", marketing: "unset" },
-            preferenceProfile: {
-                email_transactional: "unset",
-                sms_transactional: "unset",
-                email_marketing: "unset",
-                sms_marketing: "unset",
-            },
+            preferenceProfile: emptyPreferenceProfile(),
+            preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
         composerDraft: {

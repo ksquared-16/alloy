@@ -29,6 +29,36 @@ export type ReadinessState =
     /** Configured, but not yet turned on: `pending_verification`, or provider-side
      *  domain verification that Alloy cannot perform on the operator's behalf. */
     | "verification_required"
+    /**
+     * EMAIL RECEIVING ONLY. A visible identity exists and no inbound has ever
+     * actually been observed arriving for it.
+     *
+     * Its own state rather than `verification_required`, because the outstanding
+     * work is neither Alloy's nor the provider's: an administrator must create an
+     * address-level routing rule at the organization's OWN mail provider. Folding
+     * it into "verification required" sent them to the Resend console, where there
+     * is nothing for them to do.
+     *
+     * It is emphatically not `ready`. An address in a database is not evidence
+     * that an external forwarding rule exists, and for an externally routed
+     * primary-domain identity Alloy cannot continuously prove that one still does.
+     */
+    | "routing_setup_required"
+    /**
+     * EMAIL RECEIVING ONLY. A hidden destination EXISTS and nothing has arrived
+     * through it yet.
+     *
+     * Distinct from `routing_setup_required` because the outstanding action is
+     * different and so is who performs it. There, Alloy has nowhere to receive
+     * and the administrator finishes setup in Alloy. Here, Alloy is ready and
+     * waiting on a forwarding rule at the organization's own mail provider —
+     * telling them to "set up mail routing" again would send them to redo work
+     * they have already done.
+     *
+     * Emphatically still NOT ready. Creating a destination proves Alloy has
+     * somewhere to receive; it proves nothing about whether mail reaches it.
+     */
+    | "awaiting_routed_email"
     /** The operator switched this binding off. Not a fault. */
     | "disabled"
     /** No runtime exists for this provider on this channel. Not fixable by config. */
@@ -178,6 +208,24 @@ export function evaluateBindingReadiness(
          * exactly the kind of dead branch that reads as covered and is not.
          */
         credentialRejected?: boolean;
+        /**
+         * The delivery destination behind this binding's visible identity, from
+         * `communication_ingress_routes`. Null/absent means none is on file.
+         *
+         * EMAIL ONLY. SMS inbound arrives on a signed webhook at a number the
+         * provider owns end to end, so there is no third party in the path who
+         * could silently remove a forwarding rule; its readiness is unchanged.
+         */
+        ingress?: IngressRouteObservation | null;
+        /**
+         * When inbound was last actually observed for this binding, from
+         * canonical history rather than the route row.
+         *
+         * Supplied separately so that introducing the route model does not report
+         * a working direct-delivery configuration as unproven. A message that
+         * genuinely arrived is evidence whichever table recorded it.
+         */
+        observedInboundAt?: string | null;
     },
 ): BindingReadiness {
     const channel = channelOf(binding);
@@ -238,7 +286,14 @@ export function evaluateBindingReadiness(
     return {
         providerConnection,
         send: evaluateSend({ binding, channel, credentialed, pending }),
-        receive: evaluateReceive({ binding, channel, credentialed, pending }),
+        receive: evaluateReceive({
+            binding,
+            channel,
+            credentialed,
+            pending,
+            ingress: options?.ingress ?? null,
+            observedInboundAt: options?.observedInboundAt ?? null,
+        }),
     };
 }
 
@@ -345,13 +400,45 @@ function evaluateSend(params: {
     return { state: "ready", detail: "Ready to send." };
 }
 
+/**
+ * The delivery destination behind a visible identity, and whether mail has ever
+ * actually been seen arriving through it.
+ *
+ * Supplied by the caller because it lives in `communication_ingress_routes`,
+ * which this pure function cannot read. `undefined` means "no route on file" and
+ * is NOT the same as a route that has never seen traffic — the first is "nothing
+ * is set up", the second is "set up, unproven".
+ */
+export type IngressRouteObservation = {
+    /**
+     * Where the provider delivers. Equal to the visible address for direct
+     * delivery; an opaque provider destination under selective routing. Never
+     * rendered by this module — readiness detail is operator-facing copy.
+     */
+    destination: string;
+    /** ISO timestamp of the last observed inbound, or null if never. */
+    lastInboundAt: string | null;
+};
+
 function evaluateReceive(params: {
     binding: BindingSummary & { inbound_address?: string | null };
     channel: string;
     credentialed: boolean;
     pending: boolean;
+    ingress?: IngressRouteObservation | null;
+    /**
+     * Inbound observed for this binding in canonical history, even where no route
+     * row has been stamped yet.
+     *
+     * This exists so introducing the route model does not report a WORKING
+     * direct-delivery configuration as unproven. A message that actually arrived
+     * is evidence regardless of which table recorded it, and refusing to count it
+     * would be a second kind of lie — pessimistic rather than optimistic, but
+     * equally not what happened.
+     */
+    observedInboundAt?: string | null;
 }): DirectionReadiness {
-    const { binding, channel, credentialed, pending } = params;
+    const { binding, channel, credentialed, pending, ingress } = params;
     const identity = receivingIdentity(binding);
 
     if (!identity) {
@@ -388,12 +475,45 @@ function evaluateReceive(params: {
         };
     }
 
+    // SMS is unchanged. Its inbound arrives on a signed webhook at a number the
+    // provider owns end to end, so the destination existing IS the arrangement —
+    // there is no third party in the path who could silently remove a rule. The
+    // live-certified SMS runtime must not be disturbed by an email problem.
+    if (channel !== "email") {
+        return { state: "ready", detail: `Receiving messages sent to ${identity}.` };
+    }
+
+    // ---- EMAIL: READINESS IS OBSERVED, NEVER INFERRED -----------------------
+    //
+    // THIS IS THE LIE THIS MODULE WAS BUILT TO PREVENT AND WAS TELLING ANYWAY.
+    // Until now an email binding reported "Ready" to receive as soon as
+    // `inbound_address` was populated. That column is configuration. It says an
+    // administrator typed an address; it says nothing about whether their mail
+    // provider forwards it anywhere, whether MX points at Resend, or whether a
+    // rule someone created last year still exists.
+    //
+    // The file's own stated rule is that readiness is derived from what the
+    // runtime would do — and what the runtime does with inbound is ACCEPT
+    // something that arrives. So the evidence is arrival. Nothing else is
+    // promoted to proof.
+    const lastInboundAt = params.observedInboundAt ?? ingress?.lastInboundAt ?? null;
+    if (lastInboundAt) {
+        return {
+            state: "ready",
+            detail: `Connected — replies to ${identity} are reaching Alloy. Last inbound verified ${lastInboundAt}.`,
+        };
+    }
+
+    if (ingress) {
+        return {
+            state: "awaiting_routed_email",
+            detail: `A private destination is ready for ${identity}, and no mail has arrived through it yet. Add the routing rule at your mail provider, then send one test message — this turns to Connected when Alloy actually receives it.`,
+        };
+    }
+
     return {
-        state: "ready",
-        detail:
-            channel === "email"
-                ? `Receiving mail addressed to ${identity}.`
-                : `Receiving messages sent to ${identity}.`,
+        state: "routing_setup_required",
+        detail: `Routing setup required. Alloy has no delivery destination for ${identity} yet, so replies cannot reach it. Set one up here, then forward this address to it at your mail provider.`,
     };
 }
 
@@ -406,6 +526,10 @@ export function readinessLabel(state: ReadinessState): string {
             return "Setup required";
         case "verification_required":
             return "Verification required";
+        case "routing_setup_required":
+            return "Routing setup required";
+        case "awaiting_routed_email":
+            return "Waiting for routed email";
         case "disabled":
             return "Disabled";
         case "provider_unavailable":

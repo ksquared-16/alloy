@@ -1,3 +1,4 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { redirect } from "next/navigation";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 
@@ -12,7 +13,7 @@ export default async function ActionLinkPage({
     const supabase = createServiceRoleClient();
     const sel = "token, short_code, action_type, entity_type, entity_id, consumed_at, expires_at, metadata" as const;
     let row: Record<string, unknown> | null = null;
-    const byToken = await supabase.from("action_links").select(sel).eq("token", token).maybeSingle();
+    const byToken = await supabase.from("action_links").select(sel).eq("token_hash", hashFormLinkToken(token)).maybeSingle();
     if (byToken.data && !byToken.error) {
         row = byToken.data as Record<string, unknown>;
     } else {

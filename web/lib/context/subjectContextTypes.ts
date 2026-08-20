@@ -37,9 +37,25 @@
 export type SubjectContextKind =
     | "process"
     | "schedule"
+    /**
+     * The subject's FAMILY — a durable relationship, not a lifecycle position.
+     *
+     * Declared here from the beginning and unemitted until Operations needed to offer it. It is a
+     * context in the honest sense: "what do you want to see about Lennon" legitimately answers
+     * "his household", and the platform already owns a Household card to answer it with.
+     */
     | "relationship"
     | "placement"
-    | "employment";
+    | "employment"
+    /**
+     * The record's OWN information — "Child", and eventually "Person".
+     *
+     * Listed BESIDE the other contexts rather than framing them. That is the whole correction: a
+     * durable record used to open as an identity page with contexts arranged underneath, which made
+     * identity the frame and everything else an accessory. An operator opening Lennon is as likely
+     * to want his schedule as his date of birth, and the chooser should not decide that for them.
+     */
+    | "identity";
 
 /**
  * One configured Work View this subject ACTUALLY belongs to, and can actually compose in.

@@ -72,7 +72,7 @@ async function openRoom(page: Page) {
             JSON.stringify({ section: "attendance" }),
         );
     });
-    await page.locator('[data-adminv2-sidebar-modal-nav="roster"]').click();
+    await page.locator('[data-adminv2-sidebar-modal-nav="operations"]').click();
     await expect(page.locator(SCHEDULING)).toBeVisible({ timeout: SETTLE });
 
     const sitePicker = page.locator('button[aria-label="Site"]').first();

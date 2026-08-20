@@ -49,10 +49,14 @@ export type LocationAccessMembersSnapshot = {
         email: string | null;
         display_name: string | null;
         role_keys: string[];
-        department_scope: "all" | "restricted";
+        /** W-47: `unset` — no `user_access_profiles` row — is a representable state now. */
+        department_scope: "all" | "restricted" | "unset";
         department_ids: string[];
-        site_scope: "all" | "restricted";
+        site_scope: "all" | "restricted" | "unset";
         site_location_ids: string[];
+        /** What `ABSENT_PROFILE_ENFORCEMENT` yields for this membership. Use for reach questions. */
+        effective_department_scope?: "all" | "restricted";
+        effective_site_scope?: "all" | "restricted";
     }>;
     siteLocationIds: string[];
     fetchedAtMs: number;
@@ -227,13 +231,21 @@ async function fetchOwnedSetupNetwork(
                     members?: {
                         role_keys?: string[];
                         site_scope?: string;
+                        effective_site_scope?: string;
                         site_location_ids?: string[];
                     }[];
                 };
+                // W-47: `site_scope` gained a third value, `unset` — a membership with no access
+                // profile row. This question is "does an admin actually reach this location",
+                // which is an enforcement question, so it reads `effective_site_scope` (what
+                // `ABSENT_PROFILE_ENFORCEMENT` yields) and not the configured value. Reading the
+                // configured value here would silently narrow setup-completeness on the same
+                // commit that made absence representable.
                 return (json.members ?? []).some(
                     (member) =>
                         member.role_keys?.includes("admin")
-                        && (member.site_scope === "all" || member.site_location_ids?.includes(locationId)),
+                        && ((member.effective_site_scope ?? member.site_scope) === "all"
+                            || member.site_location_ids?.includes(locationId)),
                 );
             })
             .catch(() => null),

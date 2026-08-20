@@ -190,10 +190,27 @@ const CHANNEL_LABELS: Record<ChannelKey, string> = { email: "Email", sms: "SMS" 
 /** Providers named the way their own product names itself. */
 const PROVIDER_LABELS: Record<string, string> = { resend: "Resend", twilio: "Twilio" };
 
-/** Which readiness is "better" when choosing the row that speaks for a channel. */
+/**
+ * Which readiness is "better" when choosing the row that speaks for a channel.
+ *
+ * `routing_setup_required` ranks just under `verification_required`: both mean
+ * "configured and not working yet", and neither is broken — but the routing one
+ * is further from done, because the outstanding step is at the organization's own
+ * mail provider rather than at Alloy or the provider console.
+ *
+ * The map is exhaustive over `ReadinessState` by type, which is what caught this:
+ * widening the union without adding a rank left the lookup returning `undefined`,
+ * and a binding with an unranked state would have scored `NaN` and could have
+ * become the face of the channel over a working one.
+ */
 const READINESS_RANK: Record<ReadinessState, number> = {
     ready: 5,
     verification_required: 4,
+    // Both mean "configured, not working yet". Awaiting a routed email is
+    // FURTHER along than needing setup — Alloy has a destination and is waiting
+    // on someone else's forwarding rule.
+    awaiting_routed_email: 3.75,
+    routing_setup_required: 3.5,
     setup_required: 3,
     provider_unavailable: 2,
     disabled: 1,

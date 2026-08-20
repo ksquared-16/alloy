@@ -4,10 +4,19 @@
 export const FAMILY_WORKSPACE_RESOLVER_VERSION = "5a" as const;
 
 export type ConsentState = "opted_in" | "opted_out" | "unset";
+/**
+ * Every category the evaluator consults, so the operator surface can be complete.
+ *
+ * `*_operational` was always evaluated on every send and was absent from this profile,
+ * which is why the one category that actually stops routine communication was invisible
+ * to the people expected to manage it.
+ */
 export type PersonPreferenceProfile = {
     email_transactional: ConsentState;
-    sms_transactional: ConsentState;
+    email_operational: ConsentState;
     email_marketing: ConsentState;
+    sms_transactional: ConsentState;
+    sms_operational: ConsentState;
     sms_marketing: ConsentState;
 };
 export type ComposerChannel = "email" | "sms" | "note";
@@ -121,6 +130,17 @@ export type ConsentSummary = {
     household: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
     /** Primary-contact granular preference profile for edit UI. */
     preferenceProfile: PersonPreferenceProfile;
+    /**
+     * The granular profile for EACH contact, keyed by person id.
+     *
+     * Preferences are Person-owned: two adults in one household may differ, and
+     * one of them saying STOP says nothing about the other. `preferenceProfile`
+     * above collapses the household to its primary contact, which is right for a
+     * one-line summary and wrong for anything an operator acts on — showing the
+     * primary's answer beside a different recipient's name is a plain untruth
+     * about who agreed to what.
+     */
+    preferenceProfilesByContact: Record<string, PersonPreferenceProfile>;
     displayFlags: { email: boolean; sms: boolean; marketing: boolean };
 };
 

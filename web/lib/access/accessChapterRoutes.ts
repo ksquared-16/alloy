@@ -30,6 +30,18 @@ export const ACCESS_WORKSPACE_CHAPTER_META: Record<AccessWorkspaceChapter, { lab
     },
 };
 
+/**
+ * **W49-F1.** Controls inside an admitted chapter whose route enforces something *other* than the
+ * capability that admitted the chapter — `Send password reset` is gated on the portal `admin` role.
+ *
+ * The vocabulary lives here, beside the chapter keys, rather than in `lib/access/surfaceCapabilities`
+ * where the resolver does: that module reaches `canManageUsersAndRoles` and is server-only, and the
+ * three components that carry this list down to the control are all `"use client"`. A `import type`
+ * from a server module is erased today and a runtime import the moment someone drops the `type`
+ * keyword, which is too quiet a way to break a client bundle.
+ */
+export type AccessCommandKey = "password-reset";
+
 /** Canonical base for the Access workspace. */
 export const ACCESS_WORKSPACE_BASE_HREF = CANONICAL_ORGANIZATION_ACCESS_HREF;
 

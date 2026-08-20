@@ -26,7 +26,7 @@ export async function PATCH(
             { status: ctx.status },
         );
     }
-    if (!["owner", "admin", "ops"].includes(ctx.role)) {
+    if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -191,7 +191,7 @@ export async function DELETE(
             { status: ctx.status },
         );
     }
-    if (!["owner", "admin"].includes(ctx.role)) {
+    if (!["admin"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden — admin required" }, { status: 403 });
     }
 

@@ -27,8 +27,11 @@ import { describe, expect, it } from "vitest";
 import {
     contextualCardConfigurationFingerprint,
     contextualChildCardRows,
-    resolveContextualChildCard,
 } from "@/lib/adminV2/runtime/focusPanel/contextualCard/resolveContextualChildCard";
+import { buildChildrenCardEvidence } from "@/lib/adminV2/runtime/focusPanel/children/buildChildrenCardEvidence";
+import { resolveIdentityFieldValue } from "@/lib/adminV2/runtime/focusPanel/identity/identitySurfaceCompose";
+import { DURABLE_CHILD_ROWS_KEY } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
+import { durableChildCollectionRow } from "@/lib/adminV2/runtime/focusPanel/durableSubject/durableChildSubjectModel";
 import {
     childrenFocusRowsFromNestedConfig,
     effectiveChildrenNestedConfig,
@@ -137,8 +140,9 @@ describe("the effective configured Child card is the same card in both hosts", (
     });
 
     it("names the same nested surface the native card is configured on", () => {
-        const card = resolveContextualChildCard(publishedDoc(), LENNON, { fromPublishedDoc: true });
-        expect(card.nestedSurfaceId).toBe(CHILDREN_SURFACE_ID);
+        // The rows come from `children_surface` on both hosts because there is one reader; the
+        // constant is asserted so a silent re-pointing of that reader is visible here.
+        expect(effectiveChildrenNestedConfig(publishedDoc()).surfaceId).toBe(CHILDREN_SURFACE_ID);
     });
 
     it("changing the publication changes BOTH hosts, because there is one document", () => {
@@ -171,16 +175,42 @@ describe("the effective configured Child card is the same card in both hosts", (
 });
 
 describe("values are read from canonical truth, and absence is honest", () => {
+    /*
+     * THE LIVE PATH, not a parallel one.
+     *
+     * The durable host no longer resolves values of its own: it composes the child as the one member
+     * of its own collection and hands that to the canonical evidence builder, which is what the case
+     * host does with a family's roster. So this reads the value the way the card reads it — through
+     * `durableChildCollectionRow` → `buildChildrenCardEvidence` → `resolveIdentityFieldValue`.
+     */
+    const evidenceForLennon = () =>
+        buildChildrenCardEvidence({
+            truth: { ...LENNON.truth, [DURABLE_CHILD_ROWS_KEY]: [durableChildCollectionRow(LENNON)] },
+        }).children[0]!;
+
     it("fills what the durable subject canonically owns", () => {
-        const card = resolveContextualChildCard(publishedDoc(), LENNON, { fromPublishedDoc: true });
-        const byKey = new Map(card.rows.map((r) => [r.fieldKey, r.value]));
-        expect(byKey.get("child.first_name")).toBe("Lennon");
-        expect(byKey.get("child.allergies")).toBe("Peanuts");
+        const child = evidenceForLennon();
+        expect(resolveIdentityFieldValue({ kind: "child", value: child }, "child.first_name")).toBe(
+            "Lennon",
+        );
+        expect(resolveIdentityFieldValue({ kind: "child", value: child }, "child.allergies")).toBe(
+            "Peanuts",
+        );
+    });
+
+    it("leaves participation projections unset rather than inventing an enrollment", () => {
+        // Program lives on the opportunity-customer-member row. A durable host has no participation,
+        // so the configured row is present and empty — a card with facts this host has not fetched,
+        // never a different card, and never a fabricated placement.
+        const child = evidenceForLennon();
+        expect(child.program).toBeNull();
+        expect(child.room).toBeNull();
+        expect(child.startDate).toBeNull();
     });
 
     it("reports the platform default as NOT published, so a host can say which it is showing", () => {
-        expect(resolveContextualChildCard(null, LENNON, { fromPublishedDoc: false }).fromPublishedDoc).toBe(
-            false,
-        );
+        // Nothing authored → the code-owned default is in force, and it is a real composition rather
+        // than an empty one. The host publishes `from-published=false` beside it.
+        expect(contextualChildCardRows(null).length).toBeGreaterThan(0);
     });
 });

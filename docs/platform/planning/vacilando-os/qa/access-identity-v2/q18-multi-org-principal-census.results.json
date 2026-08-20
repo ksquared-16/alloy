@@ -1,0 +1,57 @@
+{
+  "trusted_host_action_id": "tha_f2f89635241cea",
+  "query_hash": "5e2bc20b9f7a24eb97fe22a7ce56a190ffb609183628c7ee2362785512e39a94",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-19T22:58:32.498Z",
+    "question_ids": [
+      "Q18-A1",
+      "Q18-A2",
+      "Q18-B1",
+      "Q18-C1"
+    ],
+    "questions": {
+      "Q18-A1": {
+        "question_id": "Q18-A1",
+        "row_count": 1,
+        "rows": [
+          {
+            "principals_total": 6,
+            "multi_org_principals": 0
+          }
+        ]
+      },
+      "Q18-A2": {
+        "question_id": "Q18-A2",
+        "row_count": 1,
+        "rows": [
+          {
+            "multi_org_custom_only": 0,
+            "multi_org_in_portal_roles": 0
+          }
+        ]
+      },
+      "Q18-B1": {
+        "question_id": "Q18-B1",
+        "row_count": 1,
+        "rows": [
+          {
+            "principals": 6,
+            "organizations": 1
+          }
+        ]
+      },
+      "Q18-C1": {
+        "question_id": "Q18-C1",
+        "row_count": 1,
+        "rows": [
+          {
+            "multi_org_principals_examined": 0,
+            "discards_a_portal_role_elsewhere": 0
+          }
+        ]
+      }
+    },
+    "row_count": 8
+  }
+}

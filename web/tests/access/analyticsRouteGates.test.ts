@@ -107,7 +107,21 @@ function bundle(partial: { portalEligible: boolean; roleKeys: string[]; permissi
 /** The exposure W-1 closes: an authenticated org member the portal refuses to admit. */
 const SCHOOL_DIRECTOR = bundle({ portalEligible: false, roleKeys: ["school_director"] });
 const REGIONAL_LEAD = bundle({ portalEligible: false, roleKeys: ["regional_lead"] });
-const ADMIN = bundle({ portalEligible: true, roleKeys: ["admin"] });
+/**
+ * A real admin. Carries `reports.read` because a real admin HOLDS it — the catalog seeds it and
+ * `seed_default_rbac` enumerates it, verified against the certification tenant.
+ *
+ * It used to carry `portalEligible` alone, and passed because `canReadAnalytics` opened with
+ * `if (portalEligible) return true`. That leg was `I-35`ᴮ's last violation — an admission predicate
+ * satisfying a capability gate — and W-13 removed it. The fixture was modelling admission as
+ * authorization; the invariant it was protecting ("today's operators keep analytics") is preserved,
+ * but by the GRANT (`20260819120000`), not by the code.
+ */
+const ADMIN = bundle({
+    portalEligible: true,
+    roleKeys: ["admin"],
+    permissionKeys: [ANALYTICS_READ_PERMISSION],
+});
 
 const routeParams = { params: Promise.resolve({ id: "metric-1" }) };
 
@@ -200,8 +214,21 @@ beforeEach(() => {
 });
 
 describe("canReadAnalytics", () => {
-    it("admits a portal-eligible principal with no analytics grant (behaviour preserved)", () => {
-        expect(canReadAnalytics({ portalEligible: true, permissionKeys: [] })).toBe(true);
+    it("REFUSES a portal-eligible principal with no analytics grant (I-35ᴮ)", () => {
+        // This assertion is inverted from what it was, deliberately. Admission may deny, never
+        // authorize: `portalEligible` is a fact about reaching the portal's front door, not about
+        // being allowed to read org-wide analytics. `04…:752` — half-answering AD-22 means "the
+        // fifth layer survives under a new name".
+        //
+        // No real operator loses anything: `admin` already held `reports.read`, and
+        // `20260819120000` granted it to `ops` for every org before this leg was removed. What is
+        // refused here is a principal that no longer exists in the data.
+        expect(canReadAnalytics({ portalEligible: true, permissionKeys: [] })).toBe(false);
+    });
+
+    it("admits a portal-eligible principal who HOLDS the grant — today's operators", () => {
+        expect(canReadAnalytics({ portalEligible: true, permissionKeys: [ANALYTICS_READ_PERMISSION] })).toBe(true);
+        expect(canReadAnalytics({ portalEligible: true, permissionKeys: [ANALYTICS_MANAGE_PERMISSION] })).toBe(true);
     });
 
     it("refuses an org member who is neither portal-eligible nor granted (G2 — the exposure)", () => {

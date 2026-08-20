@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, Send } from "lucide-react";
+
+import { ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z } from "@/components/admin/Drawer";
 
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import { buildContactFamilySendSuccessMessage } from "@/lib/communications/v2/familyWorkspace/contactFamilySendComplete";
@@ -57,6 +60,13 @@ export default function FamilySendConfirmationDialog({
     const isPreflight = mode === "preflight";
     const isSuccess = mode === "sent";
 
+    // `document` does not exist during the server render, so the portal target is
+    // claimed after mount.
+    const [portalReady, setPortalReady] = useState(false);
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
+
     useEffect(() => {
         if (!open) return;
         const onKey = (e: KeyboardEvent) => {
@@ -68,7 +78,7 @@ export default function FamilySendConfirmationDialog({
         return () => window.removeEventListener("keydown", onKey);
     }, [open, isPreflight, isSuccess, sending, onBackToEdit, onDone]);
 
-    if (!open) return null;
+    if (!open || !portalReady) return null;
 
     const channelLine = buildFamilySendConfirmChannelLine({ channel, recipientLabel });
     const bodyPreview = composerMarkupToPlainText(bodyDraft).trim() || "(Empty message)";
@@ -84,9 +94,26 @@ export default function FamilySendConfirmationDialog({
             ?? null,
     });
 
-    return (
+    /*
+     * PORTALED TO `document.body`, AT THE PLATFORM CONSTANT.
+     *
+     * This dialog previously rendered in place, inside the composer subtree, with
+     * a raw `z-[120]`. A z-index only orders siblings within the stacking context
+     * it lives in, so the backdrop could never rise above the Focus Panel that
+     * contains it — the panel body dimmed and the panel HEADER stayed bright,
+     * which reads to an operator as a half-applied overlay and leaves header
+     * controls live behind a modal that is supposedly blocking.
+     *
+     * A larger number could not have fixed that; escaping the stacking context is
+     * the only thing that can. `ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z` is the
+     * platform's answer for exactly this class of overlay and carries the same
+     * ordering guarantees the rest of adminV2 relies on, which a page-local
+     * `z-[120]` does not.
+     */
+    return createPortal(
         <div
-            className="fixed inset-0 z-[120] flex items-center justify-center bg-alloy-midnight/40 px-3 py-6"
+            className="fixed inset-0 flex items-center justify-center bg-alloy-midnight/40 px-3 py-6"
+            style={{ zIndex: ADMINV2_WORKSPACE_BOS_NESTED_OVERLAY_Z }}
             data-cc-send-confirm-dialog="true"
             data-cc-send-confirm-phase={isPreflight ? "preflight" : isSuccess ? "success" : "error"}
         >
@@ -216,6 +243,7 @@ export default function FamilySendConfirmationDialog({
                     ) : null}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     );
 }

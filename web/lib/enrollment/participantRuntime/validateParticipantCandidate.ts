@@ -71,7 +71,15 @@ export function validateCandidateValue(
         return { ok: false, reason: "That does not look like an email address." };
     }
 
-    switch (field?.type) {
+    /**
+     * The control type comes from the authored field when the caller has it, and otherwise from
+     * the need's OWN occurrence — the platform's identity for what is being asked. Live
+     * certification caught the gap this closes: the turn route supplies no FormField, so a
+     * provider-corrected "August 21" reached a DATE need, fell through an untyped switch, and a
+     * non-ISO string was persisted as a date of birth. The occurrence has always known the type.
+     */
+    const controlType = field?.type ?? need.occurrences[0]?.field_type ?? null;
+    switch (controlType) {
         case "date":
             return isValidIsoDate(value)
                 ? { ok: true, value }
@@ -88,7 +96,13 @@ export function validateCandidateValue(
         case "select":
         case "multiselect": {
             // CLOSED vocabulary. A model cannot invent an option that the operator never authored.
-            const allowed = (field.static_options ?? []).map((o) => o.value);
+            // Re-narrowed explicitly: `controlType` may come from the occurrence, so TS no longer
+            // narrows `field` to the select variant on its own.
+            const selectField =
+                field && (field.type === "select" || field.type === "multiselect") ? field : null;
+            const allowed = selectField?.static_options?.length
+                ? selectField.static_options.map((o) => o.value)
+                : (need.occurrences[0]?.options ?? []).map(String);
             if (allowed.length === 0) return { ok: true, value };
             return allowed.includes(String(value))
                 ? { ok: true, value }

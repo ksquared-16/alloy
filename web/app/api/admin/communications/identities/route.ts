@@ -4,14 +4,34 @@ import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight
 import { buildBosDiscoverySnapshot } from "@/lib/communications/identity/bosDiscoverySignals";
 import { loadIdentityResolutionContext } from "@/lib/communications/identity/loadIdentityContext";
 import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
+import { visibleEmailAddress } from "@/lib/communications/identity/visibleEmailIdentity";
 
 function sanitizeIdentity(row: Record<string, unknown>) {
+    /*
+     * An identity's address must never be a transport destination.
+     *
+     * This surface answers "what address does this organization communicate as",
+     * and its answer reaches the composer's From line and the operator's own
+     * identity display. A provider ingress address arriving here — written into
+     * the wrong field, or migrated from a configuration that overloaded one
+     * column for both jobs — would be presented to an operator as their email
+     * address, and they may then give it to a parent.
+     *
+     * Withheld rather than substituted: `null` sends someone to the setting,
+     * while a plausible wrong address teaches them something false.
+     */
+    const channel = String(row.channel ?? "").trim().toLowerCase();
+    const canonicalAddress =
+        channel === "email"
+            ? visibleEmailAddress(row.canonical_address as string | null | undefined)
+            : (row.canonical_address as unknown);
+
     return {
         id: row.id,
         channel: row.channel,
         identity_type: row.identity_type,
         display_name: row.display_name ?? null,
-        canonical_address: row.canonical_address,
+        canonical_address: canonicalAddress,
         status: row.status,
         verification_state: row.verification_state,
         health_status: row.health_status,

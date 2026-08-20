@@ -1,0 +1,48 @@
+{
+  "trusted_host_action_id": "tha_40bb8364f3eac5",
+  "query_hash": "b943a33929bc3d148fd12c107ba285a1e64e21025de1027c60c3ed83eed4149e",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-20T17:45:25.518Z",
+    "question_ids": [
+      "comms_columns",
+      "comms_columns_control",
+      "w28_function_control"
+    ],
+    "questions": {
+      "comms_columns": {
+        "question_id": "comms_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "column_name": "sender_authentication_evidence",
+            "data_type": "text"
+          },
+          {
+            "column_name": "sender_authentication",
+            "data_type": "text"
+          }
+        ]
+      },
+      "comms_columns_control": {
+        "question_id": "comms_columns_control",
+        "row_count": null,
+        "rows": [
+          {
+            "total_columns_on_table": 21
+          }
+        ]
+      },
+      "w28_function_control": {
+        "question_id": "w28_function_control",
+        "row_count": null,
+        "rows": [
+          {
+            "public_functions": 162
+          }
+        ]
+      }
+    },
+    "row_count": 4
+  }
+}

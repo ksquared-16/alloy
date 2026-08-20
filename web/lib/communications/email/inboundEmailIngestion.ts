@@ -52,13 +52,29 @@ import {
     surrogateEmailSenderAnchor,
 } from "@/lib/communications/email/inboundEmailAnchor";
 import type { ResendRetrievalResult } from "@/lib/communications/email/resendReceivingClient";
+import { observeEmailIngressEligibility } from "@/lib/communications/ingress/observeEmailIngressEligibility";
+import {
+    evaluateConversationIdentityAdmission,
+    INELIGIBLE_DISPOSITION,
+} from "@/lib/communications/ingress/conversationIdentityAdmission";
 
 export const EMAIL_PROVIDER = "resend";
 
 export type InboundEmailIngestionDeps = {
     supabase: SupabaseClient;
-    /** Fetches full content; the caller supplies the credential resolution. */
-    retrieve: (emailId: string) => Promise<ResendRetrievalResult>;
+    /**
+     * Fetches full content, for a message whose OWNER is already known.
+     *
+     * The owning organization and its binding's credential reference are passed in rather
+     * than looked up by the fetcher, because retrieval must run under the credential of the
+     * tenant that owns the message. Resolving a key before ownership — or without it, from
+     * the environment — is how an organization that had connected its own Resend account
+     * still failed with `missing_api_key` while its credential sat unread in Vault.
+     */
+    retrieve: (
+        emailId: string,
+        owner: { orgId: string; secretRef: string | null }
+    ) => Promise<ResendRetrievalResult>;
     now?: () => string;
 };
 
@@ -75,7 +91,10 @@ export type InboundEmailIngestionOutcome =
     /** Already fully processed. The webhook is acknowledged; nothing repeats. */
     | { status: "duplicate"; messageId: string | null }
     /** Ownership could not be proven. Retained at provider authority. */
-    | { status: "quarantined"; disposition: "no_attributable_org" | "cross_org_ambiguous" }
+    | {
+          status: "quarantined";
+          disposition: "no_attributable_org" | "cross_org_ambiguous" | "ineligible_unrecognized_sender";
+      }
     /** Content not yet available. The receipt waits; the webhook should be retried. */
     | { status: "retrieval_pending"; reason: string; retryable: true }
     /** Nothing usable and nothing to wait for. */
@@ -142,19 +161,113 @@ async function markReceipt(
     await deps.supabase.from("communication_inbound_ingress").update(patch).eq("id", receiptId);
 }
 
-/** Active email bindings whose inbound address could own this message. */
+/**
+ * Active email bindings that could own this message — by the address the parent
+ * wrote to, OR by the destination the provider actually delivered to.
+ *
+ * Both lookups are needed and neither is redundant. Under DIRECT delivery the
+ * provider reports the organization's own address and `inbound_address` matches.
+ * Under SELECTIVE ROUTING the organization keeps its own MX and forwards one
+ * mailbox onward, so the provider reports an opaque ingress destination and
+ * `inbound_address` matches nothing — every such message would be quarantined as
+ * unattributable.
+ *
+ * Ownership is still decided from the BINDING. A route only says which binding a
+ * destination belongs to; it is never itself an owner.
+ */
 async function loadCandidateBindings(
     deps: InboundEmailIngestionDeps,
     addresses: string[]
 ): Promise<InboundEmailBinding[]> {
     const normalized = addresses.map(normalizeEmailAddress).filter((a): a is string => a !== null);
     if (normalized.length === 0) return [];
-    const { data } = await deps.supabase
+
+    const { data: direct } = await deps.supabase
         .from("communication_provider_bindings")
-        .select("id, org_id, channel, provider, status, inbound_address, location_id")
+        .select("id, org_id, channel, provider, status, inbound_address, location_id, secret_ref")
         .eq("channel", "email")
         .in("inbound_address", normalized);
-    return (data ?? []) as InboundEmailBinding[];
+
+    const { data: routes } = await deps.supabase
+        .from("communication_ingress_routes")
+        .select("communication_provider_binding_id, destination")
+        .in("destination", normalized);
+
+    const byBindingId = new Map<string, InboundEmailBinding>();
+    for (const row of direct ?? []) {
+        const binding = row as InboundEmailBinding;
+        byBindingId.set(String(binding.id), { ...binding, ingress_destinations: [] });
+    }
+
+    const routedIds = [
+        ...new Set(
+            (routes ?? []).map((r) =>
+                String(
+                    (r as { communication_provider_binding_id: string }).communication_provider_binding_id
+                )
+            )
+        ),
+    ];
+    const missing = routedIds.filter((id) => !byBindingId.has(id));
+    if (missing.length > 0) {
+        const { data: routed } = await deps.supabase
+            .from("communication_provider_bindings")
+            .select("id, org_id, channel, provider, status, inbound_address, location_id, secret_ref")
+            .eq("channel", "email")
+            .in("id", missing);
+        for (const row of routed ?? []) {
+            const binding = row as InboundEmailBinding;
+            byBindingId.set(String(binding.id), { ...binding, ingress_destinations: [] });
+        }
+    }
+
+    for (const raw of routes ?? []) {
+        const r = raw as { communication_provider_binding_id: string; destination: string };
+        const binding = byBindingId.get(String(r.communication_provider_binding_id));
+        if (!binding) continue;
+        const destination = normalizeEmailAddress(r.destination);
+        if (destination && !binding.ingress_destinations!.includes(destination)) {
+            binding.ingress_destinations!.push(destination);
+        }
+    }
+
+    return [...byBindingId.values()];
+}
+
+/**
+ * Record that mail actually ARRIVED at this destination.
+ *
+ * This stamp is the entire basis on which receiving may be reported as working
+ * (see `bindingReadiness.ts`). No configuration produces it and no administrator
+ * can set it by hand — only a message getting through does.
+ *
+ * Deliberately NOT fatal. By this point the message is attributed and persisted;
+ * failing the ingestion because a readiness timestamp could not be written would
+ * lose a parent's message to bookkeeping. Readiness also derives from canonical
+ * history, which already holds this message, so a failure here costs the fast
+ * path and not the evidence.
+ */
+async function stampInboundObservation(
+    deps: InboundEmailIngestionDeps,
+    orgId: string,
+    destinations: string[],
+    observedAt: string
+): Promise<void> {
+    const normalized = destinations.map(normalizeEmailAddress).filter((a): a is string => a !== null);
+    if (normalized.length === 0) return;
+    try {
+        await deps.supabase
+            .from("communication_ingress_routes")
+            .update({
+                last_inbound_at: observedAt,
+                verification_state: "inbound_observed",
+                updated_at: observedAt,
+            })
+            .eq("org_id", orgId)
+            .in("destination", normalized);
+    } catch {
+        /* see above — never fatal */
+    }
 }
 
 /**
@@ -297,6 +410,51 @@ async function findOrCreateThread(
 }
 
 /**
+ * Record what the gate would have decided, on every path that reaches an owning tenant.
+ *
+ * One helper rather than two call sites so the refused population and the ingested
+ * population are observed identically — the moment they diverge, the corpus stops being a
+ * fair comparison and the enforced class becomes the one nobody can audit.
+ *
+ * The envelope handed over is metadata only. `email.text` and `email.html` are in scope at
+ * both call sites and are deliberately not passed: the gate must remain a function of what
+ * a provider discloses WITHOUT body access.
+ */
+async function observeInboundEmail(
+    deps: InboundEmailIngestionDeps,
+    event: ResendReceivedEvent,
+    email: NormalizedInboundEmail,
+    orgId: string,
+    senderAddress: string,
+    alloyThreadEvidenceId: string | null
+): Promise<void> {
+    await observeEmailIngressEligibility(
+        {
+            orgId,
+            provider: EMAIL_PROVIDER,
+            providerMessageId: event.emailId,
+            envelope: {
+                recipients: ownershipCandidateAddresses(event),
+                sender: senderAddress,
+                messageId: email.messageId,
+                inReplyTo: email.inReplyTo,
+                references: email.references,
+                subject: email.subject,
+                hasAttachments: email.attachments.length > 0,
+                // Derived from the headers the receiving transport stamped, and `unknown`
+                // whenever it stamped none — which the gate treats exactly as a failure
+                // wherever authentication is load-bearing. Reporting `pass` by default to
+                // make Lane B look better would be inventing an assurance.
+                authentication: email.authentication,
+            },
+            authenticationEvidence: email.authenticationEvidence,
+            resolvedAlloyThreadId: alloyThreadEvidenceId,
+        },
+        deps
+    );
+}
+
+/**
  * Ingest one verified `email.received` event.
  *
  * Every exit is deliberate: the caller turns `retrieval_pending` into a webhook
@@ -336,7 +494,11 @@ export async function ingestResendInboundEmail(
     const receivingAddress = ownership.receivingAddress;
 
     // 3 — retrieval. The webhook never carried the body or the headers.
-    const retrieval = await deps.retrieve(event.emailId);
+    // Ownership is settled above; the credential is resolved from the owning binding.
+    const retrieval = await deps.retrieve(event.emailId, {
+        orgId,
+        secretRef: ownership.binding.secret_ref ?? null,
+    });
     if (!retrieval.ok) {
         if (retrieval.retryable) {
             await markReceipt(deps, claim.row.id, {
@@ -379,6 +541,56 @@ export async function ingestResendInboundEmail(
         referencesThreadIds,
         endpointCandidateThreadIds: endpointThreadIds,
     });
+
+    // Lane A evidence for the observe-only gate, taken from the lookup that just ran.
+    //
+    // Only the header-derived candidates count. `endpointCandidateThreadIds` is
+    // sender/recipient provenance — the weakest evidence in the correlation model, and
+    // explicitly NOT proof that this is a reply to something Alloy sent. Passing it would
+    // inflate Lane A with messages that merely share an endpoint with an old conversation.
+    const alloyThreadEvidenceId = inReplyToThreadIds[0] ?? referencesThreadIds[0] ?? null;
+
+    // 4b — ADMISSION. The one refusal this runtime enforces.
+    //
+    // Placed after correlation because Lane A is the evidence that matters most here and it
+    // lives in headers the webhook never carried — an unrecognised sender REPLYING to an
+    // Alloy conversation must never be refused, and only retrieval can prove that. Placed
+    // before identity and persistence because refusing after them would already have
+    // created the conversation and the unread work this exists to prevent.
+    //
+    // Scope is one reason code at one identity role: a stranger, at a mixed human address,
+    // with no Alloy ancestry. Everything else — every lane, every review, every other
+    // refusal — falls through untouched. See `conversationIdentityAdmission.ts`.
+    const admission = await evaluateConversationIdentityAdmission(deps, {
+        orgId,
+        envelope: {
+            recipients: ownershipCandidateAddresses(event),
+            sender: senderAddress,
+            messageId: email.messageId,
+            inReplyTo: email.inReplyTo,
+            references: email.references,
+            subject: email.subject,
+            hasAttachments: email.attachments.length > 0,
+            authentication: email.authentication,
+        },
+        resolvedAlloyThreadId: alloyThreadEvidenceId,
+    });
+    if (admission.refuse) {
+        // Quarantined at the receipt, not destroyed. The provider event stays auditable and
+        // recoverable; what it does not become is a conversation, unread family work, or
+        // canonical history.
+        await markReceipt(deps, claim.row.id, {
+            routing_disposition: INELIGIBLE_DISPOSITION,
+            resolved_org_id: orgId,
+            resolution_note: `ineligible:${admission.reasonCode}`,
+        });
+        // OBSERVED EVEN THOUGH REFUSED. The refused population is precisely the one the
+        // corpus needs to keep measuring — a refusal that leaves no observation would make
+        // the enforced class the only class nobody can audit, which is the opposite of why
+        // the gate was built observe-first.
+        await observeInboundEmail(deps, event, email, orgId, senderAddress, alloyThreadEvidenceId);
+        return { status: "quarantined", disposition: "ineligible_unrecognized_sender" };
+    }
 
     // 5 — identity. Unchanged from SMS: exactly one match, or nobody.
     const person = await resolvePersonByEmail(deps, orgId, senderAddress);
@@ -546,6 +758,27 @@ export async function ingestResendInboundEmail(
         resolved_message_id: messageId,
         resolution_note: `correlated:${resolution.method}`,
     });
+
+    // Mail got through. That — and only that — is what lets the configuration
+    // surface say receiving works. Stamped after persistence so the claim can
+    // never outrun the message it is claiming about.
+    await stampInboundObservation(deps, orgId, ownershipCandidateAddresses(event), email.receivedAt);
+
+    // 8 — OBSERVE-ONLY. What the deterministic ingress eligibility gate WOULD have
+    // decided about this message, recorded as evidence and acting on nothing.
+    //
+    // LAST, deliberately. Everything above has already happened: the message is
+    // persisted, the receive event is emitted, the receipt is resolved, and the return
+    // value below is already determined by state this call cannot touch. Observe-only is
+    // therefore a property of WHERE this sits, not of the try/catch inside it — there is
+    // no subsequent statement for a failure to reach, and no future edit can quietly
+    // change that without moving this line.
+    //
+    // The envelope handed over is metadata only. `email.text` and `email.html` are in
+    // scope right here and are deliberately not passed: the gate must remain a function
+    // of what a provider discloses WITHOUT body access, or the observations would measure
+    // a policy that could never be enforced pre-retrieval.
+    await observeInboundEmail(deps, event, email, orgId, senderAddress, alloyThreadEvidenceId);
 
     return {
         status: "persisted",
