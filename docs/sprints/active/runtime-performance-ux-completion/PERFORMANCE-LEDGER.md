@@ -69,6 +69,45 @@ Commit `6cbce4b99`. **Ceiling not reached** — several still resolve more than 
 
 ---
 
+## 4. CLOSED — the queue-definition preload existed and no caller passed it
+
+| | |
+|---|---|
+| **Baseline** | `work_units.queue_definition_row` **x7, 355–757ms each, ~3.4s** on a cold Work Unit load, inside a `work-unit-queue-summaries` response of **4,960ms real server TTFB** — the largest single item on the cold critical path |
+| **Root cause** | `getDepartmentWorkUnitQueueSummaries` accepts and consumes `workUnitPreloadById` ("avoids per-WU queue_definition refetch"). No caller supplied it, so each work unit ran its own single-row SELECT. The function already queries `work_units` for the department — it just selected `id`. |
+| **Fix** | widen that one select to the columns the preload needs and build the map in the shared owner, so every caller benefits |
+| **After** | `queue_definition_row` **x7 → x0**; summaries cold **4,500ms → 3,611ms (−20%)**; warm unchanged (~2.8s) |
+| **Certification** | /workspace counts unchanged (Waitlist 15, All 1, rest 0), 15 rows, 7 pills, 5 cards, same subject, no 5xx |
+
+Commit `6aaa05578`. Warm is unchanged because `WU_QUEUE_DEF_CACHE` already absorbed loads 2+. It
+matters more in production than locally: on serverless the process cache often does not survive
+between requests, so those 7 round trips were paid far more often there.
+
+## 5. CLOSED by evidence — D-3 / R-018 sibling prewarm is NOT a critical-path cost
+
+The prewarm is real and confirmed: Work Unit entry fetches **5 sibling provisioning answers**
+(`new_leads`, `new_work_view_2/3/5/6`), 10KB each plus one at 106KB.
+
+**They fire at 28,677ms. `wu_surface` is at 15,560ms.** The prewarm begins ~13 seconds *after* the
+surface is usable — it is an idle prefetch with **zero critical-path cost**. The mission's rule is
+to keep prefetch whose benefit exceeds its critical-path cost; that cost is zero here.
+
+**No A/B was run and none is warranted.** Removing it could only lose the warm benefit the
+historical note recorded (~46ms on record-switch) and could not recover critical-path time that is
+not being spent. D-3 / R-018 is closed against current production evidence, not deferred.
+
+## 6. CLOSED by evidence — D-4 `family-workspace` x2 is two scopes, not a duplicate
+
+Both calls are real (36KB each), but they carry **different cache keys**: one unscoped, one
+thread-scoped (`thread_id`). The unscoped fetch lands at 15,549ms (before the surface); the
+thread-scoped one at 20,080ms (**after** it). This is "load the workspace, then load it scoped to
+the selected thread", which is a product behaviour, not accidental duplication.
+
+`metrics/resolve` x2 on `/workspace` remains genuine waste: two callers request overlapping key
+sets, re-resolving 3 of 4 keys. Kept open as O-4.
+
+---
+
 ## Combined effect
 
 **Warm API request** (same probe, same host, prod build, 30 requests) — this is the operator's
@@ -117,10 +156,8 @@ depends on the work-units result).
 | # | Item | Current evidence |
 |---|---|---|
 | O-1 | `auth.cached_user_hydrate` ~490ms **per load** | `loadAdminAuth` calls `getCachedAuthUser()` purely to populate `user` after it already holds `userId`. Repo-wide only `.id` (22 sites) and `.email` (12) are ever read — both present in the already-verified claims. A remote round trip per load for two fields we hold. |
-| O-2 | `work_units.queue_definition_row` **x7, 2.9–3.4s** on cold load | One single-row `SELECT` per work unit. Cache is effective after load 1 (7 → 0), so this is a cold-process N+1: 7 round trips where one `in (…)` would do. |
-| O-3 | **D-3 / R-018 CONFIRMED in production** | Work Unit entry fetches **4 sibling provisioning answers** (`work_view_id=new_leads, new_work_view_2/3/5`), **38KB**, for work views the workspace reports as containing **0 rows**. A/B against reduced speculation not yet run. |
-| O-4 | **D-4 partially confirmed** | `communications/family-workspace` fetched **twice, 36KB each**, differing only by a trailing query param. `metrics/resolve` x2 on `/workspace` with overlapping key sets (3 of 4 keys re-resolved) — not a strict duplicate, still waste. |
-| O-5 | Drawer opportunity VM = **178KB** | Larger than the 128KB carried figure. Single biggest payload on the Focus Panel critical path. Transfer/parse/compose split not yet attributed, per the mission's instruction not to optimise on size alone. |
+| O-4 | `metrics/resolve` x2 on `/workspace` | Two callers request overlapping key sets; 3 of 4 keys are re-resolved. See §6 — the `family-workspace` half of D-4 is closed. |
+| O-5 | Drawer opportunity VM = **173–178KB, 11.5s** | Larger than the 128KB carried figure, and it starts at `wu_surface` and lands ~11.5s later, so it gates Focus Panel content. Now the single biggest remaining critical-path item. Compose/transfer/parse split still unattributed. |
 | O-6 | Two AI capability probes on the cold critical path | `ai/workflow-assist/capabilities` and `ai/config-layout-assist/capabilities`, 2.1–3.2s each, gating nothing the operator needs |
 | O-7 | Card focus produces **CLS 0.225** | Clicking the `active-work` card shifts layout by 0.225 — "poor" by web-vitals thresholds. Surface 11 (motion) evidence; no timing fix will mask it. |
 | O-8 | `/workspace` issues **19 API requests** to first useful state | Includes both `metrics/resolve` calls and two `departments/{id}/…` calls |
