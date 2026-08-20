@@ -266,18 +266,22 @@ describe("observe-only: ingestion behaviour is unchanged", () => {
         expect(broken.tables[OBSERVATIONS]).toHaveLength(0);
     });
 
-    it("a WOULD_REJECT message is still ingested, threaded and attributed exactly as before", async () => {
-        // A bank: addressed to the Director's general identity, no relationship, no thread.
+    it("the ONE enforced refusal quarantines instead of ingesting — and is still observed", async () => {
+        // This case used to assert that a WOULD_REJECT message was ingested unchanged,
+        // because the gate was purely observational. One class is now enforced: an
+        // unrecognised sender at a `conversation` identity. It becomes a quarantined
+        // receipt rather than a conversation — and it is still observed, because the
+        // refused population is exactly the one the corpus must keep measuring.
         const store = makeStore({ communication_provider_bindings: [binding()] });
         const outcome = await ingestResendInboundEmail(
             event({ from: "statements@bank.example", email_id: "resend-bank-1" }),
             deps(store.client())
         );
 
-        expect(outcome.status).toBe("persisted");
-        expect(store.tables.communication_messages).toHaveLength(1);
-        expect(store.tables.communication_threads).toHaveLength(1);
-        expect(store.tables.workflow_events).toHaveLength(1);
+        expect(outcome).toEqual({ status: "quarantined", disposition: "ineligible_unrecognized_sender" });
+        expect(store.tables.communication_messages).toHaveLength(0);
+        expect(store.tables.communication_threads).toHaveLength(0);
+        expect(store.tables.workflow_events).toHaveLength(0);
 
         const observation = store.tables[OBSERVATIONS]![0]!;
         expect(observation).toMatchObject({
@@ -285,6 +289,7 @@ describe("observe-only: ingestion behaviour is unchanged", () => {
             lane: "none",
             reason_code: "REJECT_NO_ADMITTING_EVIDENCE",
             confidence_basis: "deterministic",
+            evaluation_mode: "live_observed",
         });
     });
 
@@ -798,13 +803,12 @@ describe("blast radius: the gate reaches email and nothing else", () => {
         }
     });
 
-    it("ingestion calls the gate exactly once, and only after the receipt is resolved", () => {
+    it("the gate is invoked through ONE helper, on the ingested and refused paths alike", () => {
+        // Two call sites now — the tail of a successful ingest, and the enforced refusal —
+        // but only one place that builds the envelope. If those ever diverge, the refused
+        // and ingested populations stop being comparable and the corpus quietly lies.
         const source = readSource("lib/communications/email/inboundEmailIngestion.ts");
-        const calls = source.split("await observeEmailIngressEligibility(").length - 1;
-        expect(calls).toBe(1);
-        // Everything that produces canonical state happens before it.
-        expect(source.indexOf("await observeEmailIngressEligibility(")).toBeGreaterThan(
-            source.lastIndexOf("await markReceipt(")
-        );
+        expect(source.split("await observeEmailIngressEligibility(").length - 1).toBe(1);
+        expect(source.split("await observeInboundEmail(").length - 1).toBe(2);
     });
 });

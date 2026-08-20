@@ -190,9 +190,40 @@ export function measureAndApplyOperationalWorkspaceGeometry(
         viewportWidth: window.innerWidth,
     });
 
-    root.style.setProperty(OPERATIONAL_WORKSPACE_LEFT_CSS_VAR, `${bounds.left}px`);
-    root.style.setProperty(OPERATIONAL_WORKSPACE_WIDTH_CSS_VAR, `${bounds.width}px`);
-    root.style.setProperty(OPERATIONAL_WORKSPACE_RIGHT_CSS_VAR, `${bounds.right}px`);
-
+    // IDEMPOTENT WRITE — the first half of breaking the pinned-BOS feedback loop.
+    //
+    // These vars size the operational surface, and when BOS is PINNED that surface shares a
+    // flex row with the rail this module measures. Writing unconditionally therefore resizes
+    // an element a ResizeObserver is watching, which re-enters this function inside the same
+    // frame. Writing only on an actual change lets the system settle after one pass instead
+    // of oscillating; `applyOperationalWorkspaceGeometryVars` reports whether it changed so
+    // the caller can stop scheduling more work.
+    applyOperationalWorkspaceGeometryVars(root, bounds);
     return bounds;
+}
+
+/**
+ * Write the band vars, and report whether anything actually changed.
+ *
+ * Exported for the hook and for tests: "did this write change the layout" is the signal
+ * that decides whether another measurement pass is worth running, and a boolean is far
+ * easier to assert against than a spy on `style.setProperty`.
+ */
+export function applyOperationalWorkspaceGeometryVars(
+    root: HTMLElement,
+    bounds: OperationalWorkspaceBounds,
+): boolean {
+    const next: Array<[string, string]> = [
+        [OPERATIONAL_WORKSPACE_LEFT_CSS_VAR, `${bounds.left}px`],
+        [OPERATIONAL_WORKSPACE_WIDTH_CSS_VAR, `${bounds.width}px`],
+        [OPERATIONAL_WORKSPACE_RIGHT_CSS_VAR, `${bounds.right}px`],
+    ];
+    let changed = false;
+    for (const [name, value] of next) {
+        if (root.style.getPropertyValue(name) !== value) {
+            root.style.setProperty(name, value);
+            changed = true;
+        }
+    }
+    return changed;
 }

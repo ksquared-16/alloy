@@ -53,6 +53,10 @@ import {
 } from "@/lib/communications/email/inboundEmailAnchor";
 import type { ResendRetrievalResult } from "@/lib/communications/email/resendReceivingClient";
 import { observeEmailIngressEligibility } from "@/lib/communications/ingress/observeEmailIngressEligibility";
+import {
+    evaluateConversationIdentityAdmission,
+    INELIGIBLE_DISPOSITION,
+} from "@/lib/communications/ingress/conversationIdentityAdmission";
 
 export const EMAIL_PROVIDER = "resend";
 
@@ -87,7 +91,10 @@ export type InboundEmailIngestionOutcome =
     /** Already fully processed. The webhook is acknowledged; nothing repeats. */
     | { status: "duplicate"; messageId: string | null }
     /** Ownership could not be proven. Retained at provider authority. */
-    | { status: "quarantined"; disposition: "no_attributable_org" | "cross_org_ambiguous" }
+    | {
+          status: "quarantined";
+          disposition: "no_attributable_org" | "cross_org_ambiguous" | "ineligible_unrecognized_sender";
+      }
     /** Content not yet available. The receipt waits; the webhook should be retried. */
     | { status: "retrieval_pending"; reason: string; retryable: true }
     /** Nothing usable and nothing to wait for. */
@@ -403,6 +410,51 @@ async function findOrCreateThread(
 }
 
 /**
+ * Record what the gate would have decided, on every path that reaches an owning tenant.
+ *
+ * One helper rather than two call sites so the refused population and the ingested
+ * population are observed identically — the moment they diverge, the corpus stops being a
+ * fair comparison and the enforced class becomes the one nobody can audit.
+ *
+ * The envelope handed over is metadata only. `email.text` and `email.html` are in scope at
+ * both call sites and are deliberately not passed: the gate must remain a function of what
+ * a provider discloses WITHOUT body access.
+ */
+async function observeInboundEmail(
+    deps: InboundEmailIngestionDeps,
+    event: ResendReceivedEvent,
+    email: NormalizedInboundEmail,
+    orgId: string,
+    senderAddress: string,
+    alloyThreadEvidenceId: string | null
+): Promise<void> {
+    await observeEmailIngressEligibility(
+        {
+            orgId,
+            provider: EMAIL_PROVIDER,
+            providerMessageId: event.emailId,
+            envelope: {
+                recipients: ownershipCandidateAddresses(event),
+                sender: senderAddress,
+                messageId: email.messageId,
+                inReplyTo: email.inReplyTo,
+                references: email.references,
+                subject: email.subject,
+                hasAttachments: email.attachments.length > 0,
+                // Derived from the headers the receiving transport stamped, and `unknown`
+                // whenever it stamped none — which the gate treats exactly as a failure
+                // wherever authentication is load-bearing. Reporting `pass` by default to
+                // make Lane B look better would be inventing an assurance.
+                authentication: email.authentication,
+            },
+            authenticationEvidence: email.authenticationEvidence,
+            resolvedAlloyThreadId: alloyThreadEvidenceId,
+        },
+        deps
+    );
+}
+
+/**
  * Ingest one verified `email.received` event.
  *
  * Every exit is deliberate: the caller turns `retrieval_pending` into a webhook
@@ -497,6 +549,48 @@ export async function ingestResendInboundEmail(
     // explicitly NOT proof that this is a reply to something Alloy sent. Passing it would
     // inflate Lane A with messages that merely share an endpoint with an old conversation.
     const alloyThreadEvidenceId = inReplyToThreadIds[0] ?? referencesThreadIds[0] ?? null;
+
+    // 4b — ADMISSION. The one refusal this runtime enforces.
+    //
+    // Placed after correlation because Lane A is the evidence that matters most here and it
+    // lives in headers the webhook never carried — an unrecognised sender REPLYING to an
+    // Alloy conversation must never be refused, and only retrieval can prove that. Placed
+    // before identity and persistence because refusing after them would already have
+    // created the conversation and the unread work this exists to prevent.
+    //
+    // Scope is one reason code at one identity role: a stranger, at a mixed human address,
+    // with no Alloy ancestry. Everything else — every lane, every review, every other
+    // refusal — falls through untouched. See `conversationIdentityAdmission.ts`.
+    const admission = await evaluateConversationIdentityAdmission(deps, {
+        orgId,
+        envelope: {
+            recipients: ownershipCandidateAddresses(event),
+            sender: senderAddress,
+            messageId: email.messageId,
+            inReplyTo: email.inReplyTo,
+            references: email.references,
+            subject: email.subject,
+            hasAttachments: email.attachments.length > 0,
+            authentication: email.authentication,
+        },
+        resolvedAlloyThreadId: alloyThreadEvidenceId,
+    });
+    if (admission.refuse) {
+        // Quarantined at the receipt, not destroyed. The provider event stays auditable and
+        // recoverable; what it does not become is a conversation, unread family work, or
+        // canonical history.
+        await markReceipt(deps, claim.row.id, {
+            routing_disposition: INELIGIBLE_DISPOSITION,
+            resolved_org_id: orgId,
+            resolution_note: `ineligible:${admission.reasonCode}`,
+        });
+        // OBSERVED EVEN THOUGH REFUSED. The refused population is precisely the one the
+        // corpus needs to keep measuring — a refusal that leaves no observation would make
+        // the enforced class the only class nobody can audit, which is the opposite of why
+        // the gate was built observe-first.
+        await observeInboundEmail(deps, event, email, orgId, senderAddress, alloyThreadEvidenceId);
+        return { status: "quarantined", disposition: "ineligible_unrecognized_sender" };
+    }
 
     // 5 — identity. Unchanged from SMS: exactly one match, or nobody.
     const person = await resolvePersonByEmail(deps, orgId, senderAddress);
@@ -684,30 +778,7 @@ export async function ingestResendInboundEmail(
     // scope right here and are deliberately not passed: the gate must remain a function
     // of what a provider discloses WITHOUT body access, or the observations would measure
     // a policy that could never be enforced pre-retrieval.
-    await observeEmailIngressEligibility(
-        {
-            orgId,
-            provider: EMAIL_PROVIDER,
-            providerMessageId: event.emailId,
-            envelope: {
-                recipients: ownershipCandidateAddresses(event),
-                sender: senderAddress,
-                messageId: email.messageId,
-                inReplyTo: email.inReplyTo,
-                references: email.references,
-                subject: email.subject,
-                hasAttachments: email.attachments.length > 0,
-                // Derived from the headers the receiving transport stamped, and `unknown`
-                // whenever it stamped none — which the gate treats exactly as a failure
-                // wherever authentication is load-bearing. Reporting `pass` by default to
-                // make Lane B look better would be inventing an assurance.
-                authentication: email.authentication,
-            },
-            authenticationEvidence: email.authenticationEvidence,
-            resolvedAlloyThreadId: alloyThreadEvidenceId,
-        },
-        deps
-    );
+    await observeInboundEmail(deps, event, email, orgId, senderAddress, alloyThreadEvidenceId);
 
     return {
         status: "persisted",
