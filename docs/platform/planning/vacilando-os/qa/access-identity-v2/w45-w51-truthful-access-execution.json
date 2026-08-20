@@ -1,4 +1,29 @@
 {
+  "STAGING_LEDGER_IS_WRONG_session_30": {
+    "severity": "HIGH — staging has a ledger that claims ten migrations applied when four ran, one of those failed, and six never executed at all.",
+    "evidence": "Director tmp artifacts under trusted-host-actions/tmp/. Execution output (.out/.err) exists for FOUR versions only; ledger-<version>.out shows BEGIN/<version>/COMMIT for ALL TEN.",
+    "per_migration_truth": {
+      "20260818170000_w13_collapse_portal_eligible": "EXECUTED ok — INSERT 0 1 / 0 2 / 0 4, empty stderr",
+      "20260818180000_w61_role_key_fk_restrict": "EXECUTED ok — benign NOTICE on a DROP IF EXISTS",
+      "20260818190000_w16_user_roles_role_foreign_key": "EXECUTED ok — empty stderr",
+      "20260818220000_s3_action_link_token_hash": "FAILED — 'ERROR: column \"token\" does not exist' at the backfill; only the ALTER TABLE ran. LEDGER STILL COMMITTED.",
+      "20260818230000_s3_action_link_token_drop_plaintext": "NEVER EXECUTED — no .sql staged. LEDGER COMMITTED.",
+      "20260818240000_w60_m20_drop_catalog_compatibility_views": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260819120000_w13_i35b_analytics_read_preservation": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260819140000_od8_ops_users_roles_read_preservation": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260820130000_w28_replace_role_permission_grants_rpc": "NEVER EXECUTED — no .sql, no .out, no .err. LEDGER COMMITTED.",
+      "20260820140000_w58_save_role_definition_and_grants": "NEVER EXECUTED. LEDGER COMMITTED."
+    },
+    "live_consequences_on_staging": [
+      "THE PRESERVATION GRANTS NEVER LANDED. ops holds neither reports.read nor settings.users_roles.read, while W-13's admission collapse and OD-8's admin/users conversion ARE deployed in code. The grant->convert order this whole promotion was sequenced around is inverted in production-like staging: ops operators have lost roster and analytics access they had before the merge.",
+      "W-28's RPC does not exist, so W-58's composed save has nothing to compose. The role editor's Save is broken on staging.",
+      "S-3 is half-applied: token_hash exists, the backfill did not run, and the plaintext-column drop never ran.",
+      "W-60's compatibility views were never dropped."
+    ],
+    "worst_part": "The ledger claims all ten applied, so `supabase db push` will SKIP all six that never ran. They cannot be applied through the normal path again until the false ledger rows are removed. A re-run of the governed batch will report success and change nothing.",
+    "director_defect": "stopOnFailure halted EXECUTION after the failure at 20260818220000 — correctly — but the ledger rows for that failed migration and for all six that never executed were committed anyway. Ledger writing is not gated on execution success. This is the exact hazard the A&I migration discipline was built to avoid, and it is why `evidence: []` on the action mattered: the action reported `completed` with no per-migration results while four of ten had actually run.",
+    "not_attempted": "No repair. This lane holds no staging credential, and removing false ledger rows is a privileged write requiring operator authority."
+  },
   "od2_staging_schema_blocked_session_28": {
     "staging_verified": "Head 63aa211ce, PR #479 present. All seven pre-request checks proven: no duplicate migration versions anywhere in the tree; 20260818200000 is uniquely Communications'; W-28 exists only at 20260820130000 and W-58 follows at 20260820140000; the ten A&I migrations are unique and ordered; deferred 20260819130000 absent; the four Communications migrations present via their own promotion path.",
     "batch_requested": "gar_af93c87065a488 — database.apply_migration, staging, expectedSha 63aa211ce, ten migrations in version order (which satisfies every dependency, including W-28 before W-58), stopOnFailure.",
