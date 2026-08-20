@@ -6,7 +6,7 @@
       "code_complete": "28 of 63 workstreams have code on this branch",
       "reconciled_with_staging": "YES — merged origin/staging cb5ff22d2 (102 commits) at 0df6d19c6",
       "validated": "YES — 778/778 tests/access + resolver suites, all four prebuild gates, and ALL CI CHECKS GREEN on PR #475 at 834ea9a01 (Production graph, Full graph, four certification gates, docs lint)",
-      "merged_to_staging": "NO — the merge action was refused by the execution environment's permission classifier. Not a branch protection, not a CI failure.",
+      "merged_to_staging": "NO — the operator performs the final merge. This lane prepared the promotion set and does not merge.",
       "staging_schema_applied": "NO — depends on the merge; also outside this lane, which holds no deployed credential",
       "staging_runtime_certified": "NO",
       "staging_browser_certified": "NO — the 17/17 in this branch is against alloy-cert and is NOT staging certification",
@@ -19,9 +19,13 @@
       "claimActionLink's structural parameter required Promise where Supabase returns a thenable PostgrestBuilder; three action-link routes failed typecheck. Widened to PromiseLike.",
       "prebuild caught a Vercel-deploy-breaker CI does not run: verify:module-imports read a fixture's template-literal `@/lib/membership` as a real import."
     ],
-    "migration_plan": "docs/platform/planning/access-identity-v2/od2-staging-promotion-plan.md — 15 migrations, all sorting above staging's head 20260817170000, no collision, no interleave. 11 A&I + 4 Communications carried for cert-ledger parity and flagged rather than promoted silently. Two are grant->convert preservations whose dependent code is in the same PR.",
+    "migration_plan": "docs/platform/planning/access-identity-v2/od2-staging-promotion-plan.md — FINAL SET: ten A&I migrations, 20260818170000 through 20260819140000, every one absent from staging, required by the promoted code, and already applied to alloy-cert. All sort above staging's head 20260817170000: append-only, no collision, no interleave. Three are grant->convert preservations whose dependent code is in the same PR (#1 W-13, #9 analytics, #10 admin/users).",
     "blocked_on": "The merge itself. There is no sanctioned Director path for the remainder either: the trusted-host action registry holds only `database.read_census` (read-only), and the toolkit has no promotion script.",
-    "infrastructure": "Execution run erun_6641af4d56b804e2 was again reaped as orphaned_pre_protocol_run while this work was active. Repository and promotion state preserved; not repaired from this worktree, per the run instruction."
+    "infrastructure": "Execution run erun_6641af4d56b804e2 was again reaped as orphaned_pre_protocol_run while this work was active. Repository and promotion state preserved; not repaired from this worktree, per the run instruction.",
+    "removed_from_promotion": {
+      "communications_migrations": "20260818120000, 20260818123000, 20260818140000, 20260818160000 — REMOVED. Carried for cert-ledger parity, not required by the Access code. Verified before removal: no A&I migration and no promoted application code references communication_provider_bindings or communication_ingress_eligibility_observations, and the one test naming the eligibility table came from staging, stubs it in memory, and passes on staging where these migrations do not exist. Contents unmodified; nothing recreated under Access. They stay applied to alloy-cert, so that ledger still holds four versions with no file in pushed history — the Communications lane's orphan to close, and no worse than before this branch carried them.",
+      "w20_handle_new_user_drop": "20260819130000 — DEFERRED. Nothing in the promoted runtime depends on it: no application code references handle_new_user, no promoted behaviour changes with or without it, no test asserts its absence. Applied to no database; exercised only in a rolled-back transaction. Deferred under the promotion rule against promoting an unexercised migration no promoted behavior needs. W-20's ENFORCED half is unaffected — the fallback is deleted from both resolvers and RL-12 locks it."
+    }
   },
   "od8_admin_users_conversion_session_22": {
     "decision": "OD-8 (capability home; and the bounded admin/users conversion)",
