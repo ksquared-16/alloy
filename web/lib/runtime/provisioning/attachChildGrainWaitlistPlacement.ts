@@ -189,6 +189,18 @@ export async function attachChildGrainWaitlistPlacement(params: {
     }
 
     try {
+        /**
+         * Org-scoped category config does not depend on this org's placement candidates, yet it sat
+         * third in a strictly serial chain. Start it here and join below so the step costs the max
+         * of the two branches, not the sum.
+         */
+        const tLpc = Date.now();
+        const locationProgramCategoriesPromise = loadLocationProgramCategoriesForOrg(
+            params.supabase,
+            params.orgId,
+        );
+        void locationProgramCategoriesPromise.catch(() => {});
+
         const tCand = Date.now();
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
@@ -206,12 +218,8 @@ export async function attachChildGrainWaitlistPlacement(params: {
         });
         logDbTiming("waitlist.household_facts", Date.now() - tHh, {});
 
-        const tLpc = Date.now();
-        const locationProgramCategories = await loadLocationProgramCategoriesForOrg(
-            params.supabase,
-            params.orgId,
-        );
-        logDbTiming("waitlist.location_categories", Date.now() - tLpc, {});
+        const locationProgramCategories = await locationProgramCategoriesPromise;
+        logDbTiming("waitlist.location_categories", Date.now() - tLpc, { concurrent: true });
         const waitlistCategoryContext = { categories: locationProgramCategories };
 
         const oppRows: Array<Record<string, unknown>> = opportunityIds.map((id) => ({
