@@ -20,7 +20,26 @@
       "admin_users_without_read": "NOT RUN — the negative control for the same conversion."
     },
     "product_review": "ALL SIX captures failed (users, user_effective_access, roles, role_editor, scope, security) — artifact null, status capture_failed. No operator-facing product review evidence was produced.",
-    "honest_status": "Staging is certified READ-ONLY with five named authority gaps and no product-review artifacts. It is not fully certified."
+    "honest_status": "Staging is certified READ-ONLY with five named authority gaps and no product-review artifacts. It is not fully certified.",
+    "product_review_second_delivery": {
+      "artifacts": "Six PNGs now exist and capture.json marks all six `captured`.",
+      "what_they_actually_show": "The Access SHELL on staging, mid-load, with the BOS panel open over the content region. Every one reads 'Loading Users / Fetching org memberships' or 'Loading Roles / Fetching role catalog'. No user list, no role list, no role editor, no effective-access card, no level controls.",
+      "roles_and_role_editor_are_the_same_image": "md5 ab5907a7ab5821dc92224ea92ee073f7 for both — the role editor was never opened.",
+      "capture_script_crashed": "capture.stderr: TypeError: Cannot read properties of undefined (reading 'launch') in trusted-host-certify-product-review.mjs:43 — the chromium import is undefined. That is why the first delivery reported capture_failed.",
+      "third_evidence_defect": "capture.json reports status `captured` for all six despite the crash, despite two artifacts being the same image, and despite every image showing a loading state. `captured` means a file exists, not that the intended view was captured — the same family of defect as the earlier `evidence: []`.",
+      "what_IS_established_by_them": [
+        "/organization/access renders on staging with the four chapters: Users, Roles, Access Scopes, Security.",
+        "The shipped A&I copy is live: 'Permission sets that define what operators may do', 'A role is a bundle of responsibilities. Everyone assigned this role can do what it says here', 'People who can sign in to Alloy, their assigned role, and their data access.'",
+        "Scope is a SEPARATE chapter (Access Scopes) beside Roles — W-57/RL-53's sibling relationship is visibly live.",
+        "Invite User and New Role affordances are present."
+      ],
+      "NOT_established": "Every substantive product-review item: Users list, effective-access explanation, responsibility-bundle role editor, No access/View/Manage, truthful Limited state, progressive disclosure of capability keys.",
+      "capture_fixes_needed": [
+        "wait for content, not just navigation",
+        "dismiss or exclude the BOS panel",
+        "actually navigate into the role editor for role_editor.png"
+      ]
+    }
   },
   "program_reconciliation_session_33": {
     "landed": "42 workstreams: W-0..W-16, W-20, W-22, W-28, W-30, W-32, W-40, W-42..W-47, W-49..W-52, W-54..W-62.",
