@@ -34,6 +34,13 @@
       "conclusion": "The Director is not seeing the rollup `gh pr view` returns — most likely a different API shape or token scope yielding entries without conclusions, which its `!outcome` branch counts as pending. It is a Director-side defect: the same action merged PR #475 successfully earlier today.",
       "not_repaired_here": "Vacilando is not repaired from the Identity worktree, per standing instruction. `gh pr merge` was not retried from the shell.",
       "why_the_migration_batch_was_NOT_requested": "It depends on #479 landing. Staging currently holds TWO migrations at version 20260818200000, so applying the batch against that tree is exactly the hazard #479 removes: db push would mark the version applied and silently skip W-28, and W-58 composes it. Requesting the apply first would have been the one sequencing error this promotion exists to avoid."
+    },
+    "pr_479_merged": {
+      "verified_independently": "staging 63aa211ce, PR #479 MERGED 2026-08-20T17:57:11Z, merge commit 63aa211ce. 746316ad7 is an ancestor of staging. Checked against GitHub rather than accepted from the notification, whose payload was again all-null with census boilerplate.",
+      "defect_1_build": "FIXED on staging. app/api/communications/unsubscribe is declared; running the gate against staging's own table gives 'every exported API handler is declared', 21 inherited, ceiling 693 unraised.",
+      "defect_2_collision": "FIXED on staging. No duplicate versions anywhere in the tree; 20260818200000 is uniquely Communications' _ingress_observation_sender_authentication; W-28 is 20260820130000 and W-58 is 20260820140000, in order and above the staging head.",
+      "ten_migrations_present": "yes — w13_collapse, w61, w16, s3 x2, w60, w13_i35b, od8, w28, w58",
+      "schema_state": "NOT APPLIED. No A&I migration has run against the staging database. The governed batch was not requested: the completion notification directed 'Stop after merge.'"
     }
   },
   "od2_staging_promotion_session_23": {
