@@ -38,6 +38,14 @@ artifact is physically present on hosted.
 
 ## 2. Transferred debt
 
+> **Update, same day.** Access & Identity acted on the transfer below: W-28 was renumbered
+> `20260818200000` → `20260820130000` and W-58 `20260818210000` → `20260820140000`, both
+> byte-identical renames. The collision is resolved, duplicate versions across the tree are
+> **0**, and `20260818200000` now belongs uniquely to the Communications file — which is what
+> the hosted ledger already recorded. See
+> [`COMMUNICATIONS-V1-CLOSEOUT.md`](COMMUNICATIONS-V1-CLOSEOUT.md) §3 for the current state.
+> The text below is preserved as the record of what was true when the census ran.
+
 ### To Access & Identity V2 — immediate
 
 **W-28's RPC is absent from production and nothing will re-apply it.** The ledger records

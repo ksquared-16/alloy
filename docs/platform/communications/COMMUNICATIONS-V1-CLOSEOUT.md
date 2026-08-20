@@ -122,22 +122,41 @@ Recorded so the reasoning survives. None of these are started, and none reopen V
 
 ## 3. Transferred debt
 
-**Migration collision at version `20260818200000`.** Two files claimed it: the Communications
-observation migration and Access & Identity's W-28. The ledger records a *version*, not a
-*file*, so only the physical schema could say which body ran.
+**Migration collision at version `20260818200000` — RESOLVED.** Two files claimed it: the
+Communications observation migration and Access & Identity's W-28. The ledger records a
+*version*, not a *file*, so only the physical schema could say which body ran.
 
 - **The Communications body physically executed.** Both `sender_authentication` and
   `sender_authentication_evidence` exist on
   `communication_ingress_eligibility_observations`. There is **no Communications migration
   debt**.
-- **Access & Identity's W-28 body did not.** `public.replace_role_permission_grants` does not
-  exist on hosted. The sharp edge: the ledger marks the version applied, so `supabase db push`
-  will **never** re-run it. A latent fix exists — W-58 (`20260818210000`) defines the same
-  function — but it is pending.
-- **W-28 debt is transferred to Access & Identity V2.** Not repaired here.
-- **Other-lane pending migrations are not Communications debt**: `20260818210000`,
-  `20260818220000`, `20260818230000`, `20260818240000`, `20260819120000`, `20260819140000`.
-  The first four carry `w##` naming; the last two are unattributed rather than guessed at.
+- **Access & Identity's W-28 body did not.** `public.replace_role_permission_grants` did not
+  exist on hosted, and because the ledger marked the version applied, `supabase db push`
+  would never have re-run it — the defect was invisible to the normal promotion path.
+- **Access & Identity resolved it by renumbering their own files**, which is the correct
+  side to move: `20260818200000_w28…` → **`20260820130000`** and `20260818210000_w58…` →
+  **`20260820140000`** (both byte-identical renames). No Communications migration was
+  renamed or re-applied.
+- **Two things follow.** `20260818200000` now belongs uniquely to the Communications file,
+  which is exactly what the hosted ledger recorded — so **the ledger is now truthful**. And
+  both renumbered files sort *above* the hosted head `20260820120000`, so an ordinary push
+  applies them and the "will never re-run" trap is defused.
+- **Duplicate migration versions across the merged tree: 0.**
+
+**Other-lane pending migrations — not Communications debt.** Seven versions are in the repo
+and absent from the hosted ledger. Every one carries a non-Communications workstream marker:
+
+| version | file | owner |
+| --- | --- | --- |
+| `20260818220000` | `s3_action_link_token_hash` | S-3 |
+| `20260818230000` | `s3_action_link_token_drop_plaintext` | S-3 |
+| `20260818240000` | `w60_m20_drop_catalog_compatibility_views` | W-60 · Access & Identity |
+| `20260819120000` | `w13_i35b_analytics_read_preservation` | W-13 · Access & Identity |
+| `20260819140000` | `od8_ops_users_roles_read_preservation` | OD-8 · Operations |
+| `20260820130000` | `w28_replace_role_permission_grants_rpc` | W-28 · Access & Identity |
+| `20260820140000` | `w58_save_role_definition_and_grants` | W-58 · Access & Identity |
+
+Hosted orphans: **0**.
 
 **Baseline test debt.** `familyWorkspaceWorkspaceInbox.lifecycle.test.tsx` → *"failed send
 preserves draft and keeps the composer expanded"* fails on a textarea that is not found.
