@@ -189,12 +189,23 @@ describe("RL-7 — one catalog, one FK (W-9, tier A)", () => {
         expect(fk.onDelete).toBe("RESTRICT");
     });
 
-    it("exactly one catalog TABLE exists; the deprecated names are views", () => {
+    it("exactly one catalog object exists, and the deprecated names are gone", () => {
+        // W-9 collapsed three catalog tables into one and kept the deprecated names as
+        // `security_invoker` VIEWS so readers would not break. W-60/M20 retired those views once the
+        // audit it opens with was done and `S-13` had locked the anon-grant pattern shut — `01…§39`
+        // calls them migration residue, not a model concept.
+        //
+        // The assertion therefore moved from "the deprecated names are views" to "they do not
+        // exist". That is a tightening, not a relaxation: a future migration recreating either name
+        // as a table OR as a view now fails here, where before a view was acceptable.
         const kinds = replayCatalogObjectKinds();
 
         expect(kinds.get(CANONICAL)).toBe("table");
         for (const name of DEPRECATED) {
-            expect(kinds.get(name), `${name} must not be a table`).toBe("view");
+            // "absent" rather than undefined, deliberately: the replay distinguishes an object that
+            // was explicitly DROPPED from one it never saw. Asserting undefined would also pass if
+            // the scan stopped matching these names at all.
+            expect(kinds.get(name), `${name} must not exist — W-60/M20 retired it`).toBe("absent");
         }
     });
 
@@ -247,7 +258,15 @@ describe("RL-7 — one catalog, one FK (W-9, tier A)", () => {
     });
 
     it("every writer of role_permission_grants validates against the table the FK names", () => {
-        const writers = productSources().filter((s) => GRANTS_WRITE.test(s.text));
+        // The subject spans BOTH trees now. W-28 moved the grant replacement out of the route and
+        // into `replace_role_permission_grants`, so scanning product sources alone would find zero
+        // writers and the non-vacuity guard below would be the only thing that noticed. A writer
+        // that moves to SQL has not stopped being a writer.
+        const productWriters = productSources().filter((s) => GRANTS_WRITE.test(s.text));
+        const sqlWriters = migrations()
+            .filter((m) => /INSERT\s+INTO\s+(?:public\.)?role_permission_grants\b/i.test(m.sql))
+            .map((m) => ({ path: m.name, text: m.sql }));
+        const writers = [...productWriters, ...sqlWriters];
 
         // Non-vacuity: if this finds nothing, the regex has drifted, not the code.
         expect(writers.length).toBeGreaterThanOrEqual(1);

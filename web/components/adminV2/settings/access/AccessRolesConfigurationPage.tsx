@@ -1,25 +1,57 @@
 "use client";
 
 /**
- * Access → Roles. Collection rail (role catalog) + Selected workspace (Overview / Permissions /
- * Users / Experience Access / History). Permission grants render through an operator-facing grid
- * **projected from the permission catalog** (W-10) — raw `permission_key` strings never appear as
- * primary UI text, and no permission key is named in this file. The grid's rows are whatever
- * `GET /api/admin/rbac/permissions` returns, so a capability added to the catalog appears here with
- * no change to this component.
+ * Access → Roles. **One page per role** (`W-57`).
+ *
+ * Plan: `docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` §46.
+ *
+ * **What W-57 merged.** The surface had six levels of navigation and the operator has four nouns.
+ * Level 4 — a five-tab bar inside the selected role (Overview / Permissions / Users / Experience
+ * Access / History) — is gone. Overview became this page's head, Permissions became the named
+ * *Access* section, Users folded in below it, and the two tabs whose entire content was a
+ * `data-capability="planned"` sentence left navigation rather than continuing to occupy a third of
+ * the role's tab bar. `RL-52`: no planned element is the sole content of a tab panel, at most one
+ * tab bar exists in the Access tree, and depth to a capability control is now four — workspace,
+ * chapter, role, control.
+ *
+ * **`OD-8`: Access is the canonical home for capability configuration.** So the capability section
+ * lives here, on the role, rather than being distributed to Enrollment, Communications, Billing or a
+ * Settings subsection. What OD-8 did *not* do is make Access the owner of what a capability means:
+ * every area, label and level in this file is projected from `permission_definitions` via
+ * `buildPermissionGridRows` (`W-10`), and server enforcement remains authoritative. No permission
+ * key is named in this component, and a capability absent from the catalog cannot be displayed.
+ *
+ * **Three things this workstream must not do**, each a prohibition the corpus states by name:
+ *
+ * - **It does not fold the Scopes chapter into the role.** That would *"put scope inside the role
+ *   object and encode the category error `I-27` exists to forbid"*. Scope is presented here as a
+ *   sibling of capability — a pointer to the chapter that owns it — and this component reads and
+ *   writes no scope table. `RL-53`.
+ * - **It does not present the four nouns as a left-to-right sequence.** *"A four-item list read left
+ *   to right is a five-link chain with one link hidden."* Membership, Role, Capability and Scope are
+ *   trunk-then-branches: the role is the subject, capability and scope are siblings hanging off it.
+ * - **It does not let the level collapse strip out-of-grid keys.** `H2` holds because
+ *   `applyGridRowSelection` touches only the edited row's keys and the submit sends the union. The
+ *   seed grants `admin` every active key, of which the grid represents a subset — without `H2`,
+ *   opening this section and pressing Save would delete the remainder. `RL-48` now tests it.
+ *
+ * **`IA-13`'s caveat bounds the copy.** The grid derives one level per area, so a grant set that is
+ * not No-access/View/Manage has no representation. Until `W-10` lands, this section is *legible*,
+ * not *the vocabulary* — so it never tells the operator that these areas are what capability is,
+ * and the advanced disclosure below every area shows the catalog keys the level stands for.
  */
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Plus, Search, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
 import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
     ConfigurationSecondaryButton,
     ConfigurationShell,
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
-import { ConfigWorkspaceCard, ConfigWorkspaceTabBar } from "@/components/adminV2/settings/configurationRuntime/workspace";
+import { ConfigWorkspaceCard } from "@/components/adminV2/settings/configurationRuntime/workspace";
 import {
     QUEUE_ROW_CARD_IDLE_BORDER_CLASS,
     QUEUE_ROW_CARD_SELECTED_BORDER_CLASS,
@@ -30,15 +62,42 @@ import {
     applyGridRowSelection,
     buildPermissionGridRows,
     levelFromGrantedKeys,
-    levelsForRow,
+    offerableLevelsForRow,
+    rowEnforcement,
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
+import {
+    OPERATOR_LEVEL_LABEL,
+    areaAuthorityLabel,
+    buildRoleAuthorityAreas,
+    heldAuthorityAreas,
+} from "@/lib/access/roleAuthoritySummary";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
-
-type RoleTab = "overview" | "permissions" | "users" | "experience" | "history";
+import {
+    AUTHORITY_SET_LOADING,
+    type AuthoritySetLoad,
+    authoritySetFailed,
+    authoritySetIsWritable,
+    authoritySetKeysForDisplay,
+    authoritySetLoaded,
+    authoritySetWriteRefusal,
+} from "@/lib/access/authoritySetLoad";
+import { heldRoleKeys, memberHoldsRole } from "@/lib/access/memberRoleAssignment";
 
 type RoleRow = { role_key: string; role_label: string; is_system: boolean; is_active: boolean; created_at: string | null };
-type MemberRow = { user_id: string; email: string | null; display_name: string | null; primary_role: string };
+/**
+ * W-51 / `IA-7`. `role_keys` is the union `user_roles` stores; `primary_role` is the collapsed
+ * display value. Both are carried because the shape must not quietly drop the authority half — a
+ * hand-written member type that omitted `role_keys` is exactly how this chapter came to count
+ * members by the survivor of the collapse.
+ */
+type MemberRow = {
+    user_id: string;
+    email: string | null;
+    display_name: string | null;
+    role_keys: string[];
+    primary_role: string;
+};
 type PermissionRow = { key: string; group_key: string; label: string };
 
 function memberDisplayName(m: MemberRow): string {
@@ -47,6 +106,9 @@ function memberDisplayName(m: MemberRow): string {
     return (m.email ?? "").trim() || "Unnamed user";
 }
 
+const CHIP_CLASS =
+    "rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide whitespace-nowrap";
+
 export default function AccessRolesConfigurationPage() {
     const searchParams = useSearchParams();
     const initialRoleKey = searchParams.get("roleKey");
@@ -54,19 +116,32 @@ export default function AccessRolesConfigurationPage() {
     const [roles, setRoles] = useState<RoleRow[]>([]);
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [permissions, setPermissions] = useState<PermissionRow[]>([]);
-    const [grantKeys, setGrantKeys] = useState<Set<string>>(new Set());
+    /**
+     * W-56 / `T-22`. The grants read is a LOAD, not a set. It was `Set<string>`, and both failure
+     * paths collapsed to `new Set()` — so an unreadable role and a role with no grants were the same
+     * value, the section rendered all-*No access* for both, and Save wrote the empty set over the real one.
+     */
+    const [grantLoad, setGrantLoad] = useState<AuthoritySetLoad>(AUTHORITY_SET_LOADING);
+    const grantKeys = useMemo(() => authoritySetKeysForDisplay(grantLoad), [grantLoad]);
+    const grantWriteRefusal = authoritySetWriteRefusal(grantLoad);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
 
     const [search, setSearch] = useState("");
     const [selectedRoleKey, setSelectedRoleKey] = useState<string | null>(initialRoleKey);
-    const [tab, setTab] = useState<RoleTab>("overview");
 
     const [roleLabel, setRoleLabel] = useState("");
     const [roleActive, setRoleActive] = useState(true);
-    const [roleSaving, setRoleSaving] = useState(false);
-    const [grantsSaving, setGrantsSaving] = useState(false);
+    const [saving, setSaving] = useState(false);
+    /**
+     * Editing is intentional. The identity fields are a read-out until the operator asks to change
+     * them — a permanently-live text input beside a role's name reads as a form, and a role page
+     * that always looks mid-edit is the database-admin feeling this workstream is removing.
+     */
+    const [editingIdentity, setEditingIdentity] = useState(false);
+    /** Progressive disclosure. The catalog keys are diagnostics, not the normal experience. */
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     const [newRoleOpen, setNewRoleOpen] = useState(false);
     const [newRoleKey, setNewRoleKey] = useState("");
@@ -105,10 +180,19 @@ export default function AccessRolesConfigurationPage() {
         if (initialRoleKey) setSelectedRoleKey(initialRoleKey);
     }, [initialRoleKey]);
 
+    /**
+     * W-51 / `IA-7`, locked by `W-55` / `RL-51`. A member counts toward **every** role they hold, not
+     * the one that survived `displayRoleForAdminPicker`. Counting the collapsed value reported zero
+     * for any role that is never anyone's primary — `regional_lead` beside `admin` is the plan's own
+     * example — so the Roles chapter told the operator a role had no holders while the resolver was
+     * unioning its grants into live requests.
+     */
     const memberCountByRole = useMemo(() => {
         const map = new Map<string, number>();
         for (const m of members) {
-            map.set(m.primary_role, (map.get(m.primary_role) ?? 0) + 1);
+            for (const roleKey of heldRoleKeys(m)) {
+                map.set(roleKey, (map.get(roleKey) ?? 0) + 1);
+            }
         }
         return map;
     }, [members]);
@@ -125,17 +209,25 @@ export default function AccessRolesConfigurationPage() {
         [roles, selectedRoleKey],
     );
 
+    /**
+     * W-56. Every exit from this function sets a state that says what happened. The two that used to
+     * say nothing — `!res.ok` and `catch` — now record a FAILED load, which disables the save and
+     * renders. `T-22`: *"a failed read becomes a silent total revocation on the next save."*
+     */
     const fetchGrants = useCallback(async (roleKey: string) => {
+        setGrantLoad(AUTHORITY_SET_LOADING);
         try {
             const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(roleKey)}`);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) {
-                setGrantKeys(new Set());
+                setGrantLoad(
+                    authoritySetFailed(typeof json.error === "string" ? json.error : "Failed to load permissions."),
+                );
                 return;
             }
-            setGrantKeys(new Set((json as { permission_keys?: string[] }).permission_keys ?? []));
-        } catch {
-            setGrantKeys(new Set());
+            setGrantLoad(authoritySetLoaded((json as { permission_keys?: string[] }).permission_keys ?? []));
+        } catch (err) {
+            setGrantLoad(authoritySetFailed(err));
         }
     }, []);
 
@@ -143,7 +235,8 @@ export default function AccessRolesConfigurationPage() {
         if (!selected) {
             setRoleLabel("");
             setRoleActive(true);
-            setGrantKeys(new Set());
+            // No role selected is not a failed read: there is nothing to know, and nothing to save.
+            setGrantLoad(authoritySetLoaded([]));
             return;
         }
         setRoleLabel(selected.role_label);
@@ -159,23 +252,21 @@ export default function AccessRolesConfigurationPage() {
 
     /**
      * W-10 — the grid *is* the catalog. No row is authored here; every row is derived from what the
-     * permissions endpoint returned, so the grid cannot name a key that does not exist.
+     * permissions endpoint returned, so this page cannot name a capability that does not exist.
      */
     const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
 
-    const capabilitySummary = useMemo(() => {
-        return gridRows
-            .filter((row) => levelFromGrantedKeys(row, grantKeys) !== "none")
-            .map((row) => ({
-                id: row.id,
-                label: row.label,
-                level: levelFromGrantedKeys(row, grantKeys),
-            }));
-    }, [gridRows, grantKeys]);
+    /**
+     * W-57. The role read as a responsibility bundle: catalog groups, each with the operator's verb.
+     * The summary never travels without its rows — see `roleAuthoritySummary.ts` for why collapsing
+     * a disagreeing area to one word would be an authority misstatement rather than a simplification.
+     */
+    const authorityAreas = useMemo(() => buildRoleAuthorityAreas(gridRows, grantKeys), [gridRows, grantKeys]);
+    const heldAreas = useMemo(() => heldAuthorityAreas(authorityAreas), [authorityAreas]);
 
     const selectRole = (roleKey: string) => {
         setSelectedRoleKey(roleKey);
-        setTab("overview");
+        setEditingIdentity(false);
         setMessage(null);
         setError(null);
     };
@@ -210,73 +301,86 @@ export default function AccessRolesConfigurationPage() {
         }
     };
 
-    const saveRoleMeta = async () => {
+    /**
+     * W-58 / `RM-11` — ONE submit for the role page.
+     *
+     * `01…§40` records the defect this replaces: role meta and grants were two independent save
+     * paths with no dirty-state tracking between them, so *"an operator who edits the label and the
+     * grid and presses one button silently discards the other edit"*. Both edits now travel in one
+     * request, and `save_role_definition_and_grants` writes them in ONE transaction — a failure in
+     * the grants half rolls the label back rather than leaving the page half-saved.
+     *
+     * `W-56`'s refusal still runs FIRST and still refuses the whole submit. That ordering is
+     * deliberate: combining the two saves must not let an unknown grant set reach the write just
+     * because the operator also happened to edit the label.
+     *
+     * **`H2`/`RL-48` lives in what this sends.** `grantKeys` is the whole set the load returned,
+     * mutated only where a control fired — never a set rebuilt from the rows this page can draw. A
+     * role holding keys outside the grid keeps them across an untouched save.
+     */
+    const saveRole = async () => {
         if (!selected) return;
-        setRoleSaving(true);
+        if (!authoritySetIsWritable(grantLoad)) {
+            setMessage(null);
+            setError(grantWriteRefusal);
+            return;
+        }
+        setSaving(true);
         setMessage(null);
         setError(null);
         try {
             const res = await fetch(`/api/admin/rbac/roles/${encodeURIComponent(selected.role_key)}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role_label: roleLabel, is_active: roleActive }),
+                body: JSON.stringify({
+                    role_label: roleLabel,
+                    is_active: roleActive,
+                    permission_keys: [...grantKeys],
+                }),
             });
             const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role update failed");
+            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Save failed");
+            // The response carries what the database committed, so the section re-renders the
+            // committed set rather than the set this client hoped for.
+            if (Array.isArray(json.permission_keys)) {
+                setGrantLoad(authoritySetLoaded(json.permission_keys as string[]));
+            }
             setMessage("Role saved.");
+            setEditingIdentity(false);
             await reload();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Role update failed.");
+            setError(err instanceof Error ? err.message : "Save failed.");
         } finally {
-            setRoleSaving(false);
+            setSaving(false);
         }
     };
 
-    const saveGrants = async () => {
-        if (!selected) return;
-        setGrantsSaving(true);
-        setMessage(null);
-        setError(null);
-        try {
-            const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(selected.role_key)}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ permission_keys: [...grantKeys] }),
-            });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Permissions save failed");
-            setMessage("Permissions saved.");
-        } catch (err) {
-            setError(err instanceof Error ? err.message : "Permissions save failed.");
-        } finally {
-            setGrantsSaving(false);
-        }
-    };
-
+    /**
+     * W-56. An edit against a not-known set would manufacture a `loaded` state out of a failed read
+     * — the operator would touch one control and the rest of the keys would become a confident empty
+     * set. Editing is refused for the same reason saving is.
+     */
     const setGridLevel = (rowId: string, level: PermissionGridLevel) => {
         const row = gridRows.find((r) => r.id === rowId);
         if (!row) return;
-        setGrantKeys((prev) => applyGridRowSelection({ row, level, granted: prev }));
+        if (grantLoad.status !== "loaded") return;
+        const granted = grantLoad.keys;
+        setGrantLoad(authoritySetLoaded(applyGridRowSelection({ row, level, granted: new Set(granted) })));
     };
 
+    /** Everyone who holds this role — the same predicate as the count, so the two cannot disagree. */
     const usersWithRole = useMemo(
-        () => (selected ? members.filter((m) => m.primary_role === selected.role_key) : []),
+        () => (selected ? members.filter((m) => memberHoldsRole(m, selected.role_key)) : []),
         [members, selected],
     );
 
-    const tabs = [
-        { key: "overview" as const, label: "Overview" },
-        { key: "permissions" as const, label: "Permissions" },
-        { key: "users" as const, label: "Users" },
-        { key: "experience" as const, label: "Experience Access" },
-        { key: "history" as const, label: "History" },
-    ];
+    const writable = authoritySetIsWritable(grantLoad);
 
     return (
         <div data-testid="access-roles-page">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-xs leading-snug text-alloy-midnight/55">
-                    Roles control what people can do. Permission grants apply to every user assigned this role.
+                    A role is a bundle of responsibilities. Everyone assigned this role can do what it says here.
                 </p>
                 <ConfigurationPrimaryButton className="gap-1" onClick={openNewRole} data-testid="access-roles-new">
                     <Plus className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
@@ -361,42 +465,61 @@ export default function AccessRolesConfigurationPage() {
                                 <ConfigurationEmptyState
                                     testId="access-roles-no-selection"
                                     title="Choose a role"
-                                    description="Choose a role to review its capability summary, permissions, and assigned users."
+                                    description="Choose a role to see what it can do, where that authority applies, and who holds it."
                                 />
                             :   <div className="space-y-4" data-testid="access-role-selected-workspace">
-                                    <section className="process-config-setup-card p-5">
+                                    {/*
+                                      * 1 — ROLE. The page head, not a tab. `W-55`/`RL-51` is what makes
+                                      * the assigned-user count safe to promote here: it is computed
+                                      * from the membership union, so it is not wrong for multi-role
+                                      * members. §1.7 forbids promoting a value that has not been
+                                      * corrected, and this one has been.
+                                      */}
+                                    <section className="process-config-setup-card p-5" data-testid="access-role-identity">
                                         <div className="flex flex-wrap items-start justify-between gap-3">
                                             <div className="min-w-0">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex flex-wrap items-center gap-2">
                                                     <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">
                                                         {selected.role_label}
                                                     </h2>
                                                     {selected.is_system ?
-                                                        <span className="rounded-full border border-alloy-stone/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                        <span
+                                                            className={`${CHIP_CLASS} border-alloy-stone/30 text-alloy-midnight/45`}
+                                                        >
                                                             System
+                                                        </span>
+                                                    :   null}
+                                                    {selected.is_active === false ?
+                                                        <span className={`${CHIP_CLASS} border-alloy-stone/30 text-alloy-midnight/45`}>
+                                                            Inactive
                                                         </span>
                                                     :   null}
                                                 </div>
                                                 <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {selected.is_active === false ? "Inactive" : "Active"} ·{" "}
-                                                    {usersWithRole.length} {usersWithRole.length === 1 ? "user assigned" : "users assigned"}
+                                                    {usersWithRole.length}{" "}
+                                                    {usersWithRole.length === 1 ? "person holds" : "people hold"} this role
+                                                    {heldAreas.length > 0 ?
+                                                        <> · authority in {heldAreas.length}{" "}
+                                                        {heldAreas.length === 1 ? "area" : "areas"}</>
+                                                    :   null}
                                                 </p>
                                             </div>
+                                            {!editingIdentity ?
+                                                <ConfigurationSecondaryButton
+                                                    className="gap-1"
+                                                    onClick={() => setEditingIdentity(true)}
+                                                    data-testid="access-role-edit-identity"
+                                                >
+                                                    <Pencil className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+                                                    Edit
+                                                </ConfigurationSecondaryButton>
+                                            :   null}
                                         </div>
-                                        <ConfigWorkspaceTabBar
-                                            tabs={tabs}
-                                            activeSection={tab}
-                                            onSectionChange={setTab}
-                                            ariaLabel="Role sections"
-                                            testIdPrefix="access-role-tab"
-                                        />
-                                    </section>
 
-                                    {tab === "overview" ?
-                                        <div className="grid gap-4 md:grid-cols-2" data-testid="access-role-overview">
-                                            <ConfigWorkspaceCard title="Role Snapshot" testId="access-role-overview-snapshot">
+                                        {editingIdentity ?
+                                            <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,22rem)_auto] sm:items-end">
                                                 <label className="block">
-                                                    <span className="config-typo-field-label">Label</span>
+                                                    <span className="config-typo-field-label">Name</span>
                                                     <input
                                                         value={roleLabel}
                                                         onChange={(event) => setRoleLabel(event.target.value)}
@@ -404,7 +527,7 @@ export default function AccessRolesConfigurationPage() {
                                                         data-testid="access-role-label-input"
                                                     />
                                                 </label>
-                                                <label className="mt-3 flex items-center gap-2 text-sm text-alloy-midnight/70">
+                                                <label className="flex items-center gap-2 pb-2 text-sm text-alloy-midnight/70">
                                                     <input
                                                         type="checkbox"
                                                         checked={roleActive}
@@ -415,196 +538,248 @@ export default function AccessRolesConfigurationPage() {
                                                     Active
                                                 </label>
                                                 {selected.is_system ?
-                                                    <p className="mt-1 text-[11px] text-alloy-midnight/45">
+                                                    <p className="text-[11px] text-alloy-midnight/45 sm:col-span-2">
                                                         System roles cannot be deactivated.
                                                     </p>
                                                 :   null}
-                                                <ConfigurationSecondaryButton
-                                                    className="mt-3"
-                                                    disabled={roleSaving}
-                                                    onClick={() => void saveRoleMeta()}
-                                                    data-testid="access-role-save-meta"
-                                                >
-                                                    {roleSaving ? "Saving…" : "Save role"}
-                                                </ConfigurationSecondaryButton>
-                                            </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard title="Capability Summary" testId="access-role-overview-capabilities">
-                                                {capabilitySummary.length === 0 ?
-                                                    <p className="text-sm text-alloy-midnight/55">
-                                                        This role has no capability grants yet.
-                                                    </p>
-                                                :   <ul className="space-y-1.5 text-sm">
-                                                        {capabilitySummary.map((c) => (
-                                                            <li key={c.id} className="flex items-center justify-between gap-2">
-                                                                <span className="text-alloy-midnight/80">{c.label}</span>
-                                                                <span className="text-[11px] font-medium uppercase tracking-wide text-alloy-bend-pine/80">
-                                                                    {c.level === "write" ? "Write" : "Read"}
-                                                                </span>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                }
-                                            </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard
-                                                title="Assigned Users"
-                                                testId="access-role-overview-assigned-users"
-                                                className="md:col-span-2"
+                                            </div>
+                                        :   null}
+                                    </section>
+
+                                    {/*
+                                      * 2 — CAPABILITY. OD-8's canonical home, as a named section of the
+                                      * role rather than a fifth chapter: a capability set with no role
+                                      * holding it grants nothing to nobody and has no row to live in.
+                                      */}
+                                    <ConfigWorkspaceCard
+                                        title="Access"
+                                        description="What someone with this role can do. Grouped by the areas the platform defines."
+                                        testId="access-role-access-section"
+                                    >
+                                        {/**
+                                         * W-56 / `T-22`. A failed grants read used to render as a
+                                         * legitimate all-*No access* state. It now says so, in place, and
+                                         * the save below is disabled — an unknown authority state must
+                                         * never be presented as an empty one.
+                                         */}
+                                        {grantLoad.status === "failed" ?
+                                            <p
+                                                data-testid="access-role-permissions-load-error"
+                                                role="alert"
+                                                className="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800"
                                             >
-                                                <p className="text-sm text-alloy-midnight/70">
-                                                    <span className="font-semibold text-alloy-midnight">{usersWithRole.length}</span>{" "}
-                                                    {usersWithRole.length === 1 ? "user has" : "users have"} this role assigned today.
-                                                </p>
-                                            </ConfigWorkspaceCard>
-                                        </div>
-                                    : tab === "permissions" ?
-                                        <ConfigWorkspaceCard testId="access-role-permissions" title="Permissions">
-                                            <p className="text-sm text-alloy-midnight/55">
-                                                No access, Read, or Write/Manage per capability area. Write includes Read.
-                                                Every area below is a capability the platform defines — this grid is
-                                                generated from the permission catalog, not maintained by hand.
+                                                {grantWriteRefusal}
                                             </p>
-                                            <div className="mt-3 overflow-hidden rounded-lg border border-alloy-stone/20 bg-white/40">
-                                                <table className="w-full min-w-[640px] text-left text-xs">
-                                                    <thead className="bg-alloy-stone/10 text-alloy-midnight/65">
-                                                        <tr>
-                                                            <th className="px-3 py-2 font-semibold">Capability area</th>
-                                                            <th className="px-3 py-2 font-semibold">No access</th>
-                                                            <th className="px-3 py-2 font-semibold">Read</th>
-                                                            <th className="px-3 py-2 font-semibold">Write / Manage</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {gridRows.length === 0 ?
-                                                            <tr>
-                                                                <td
-                                                                    colSpan={4}
-                                                                    className="px-3 py-3 text-sm text-alloy-midnight/55"
-                                                                    data-testid="access-role-permissions-empty"
-                                                                >
-                                                                    No capabilities are defined in the permission catalog.
-                                                                </td>
-                                                            </tr>
-                                                        :   null}
-                                                        {gridRows.map((row, index) => {
-                                                            const level = levelFromGrantedKeys(row, grantKeys);
-                                                            const offered = levelsForRow(row);
-                                                            const readHint = row.readKeys
-                                                                .map((k) => permissionLabelByKey.get(k) ?? "")
-                                                                .filter(Boolean)
-                                                                .join(", ");
-                                                            const writeHint = row.writeKeys
-                                                                .map((k) => permissionLabelByKey.get(k) ?? "")
-                                                                .filter(Boolean)
-                                                                .join(", ");
-                                                            const startsGroup =
-                                                                index === 0 || gridRows[index - 1]!.groupLabel !== row.groupLabel;
-                                                            return (
-                                                                <Fragment key={row.id}>
-                                                                    {startsGroup ?
-                                                                        <tr
-                                                                            className="border-t border-alloy-stone/15 bg-alloy-stone/5"
-                                                                            data-permission-group={row.groupKey}
-                                                                        >
-                                                                            <th
-                                                                                colSpan={4}
-                                                                                scope="colgroup"
-                                                                                className="px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50"
+                                        :   null}
+
+                                        {gridRows.length === 0 ?
+                                            <p className="text-sm text-alloy-midnight/55" data-testid="access-role-permissions-empty">
+                                                No capabilities are defined in the platform catalog.
+                                            </p>
+                                        :   <div className="space-y-3" data-testid="access-role-areas">
+                                                {authorityAreas.map((area) => (
+                                                    <section
+                                                        key={area.groupKey}
+                                                        className="overflow-hidden rounded-lg border border-alloy-stone/20 bg-white/40"
+                                                        data-testid={`access-role-area-${area.groupKey}`}
+                                                        data-authority={area.authority}
+                                                    >
+                                                        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-alloy-stone/15 bg-alloy-stone/5 px-3 py-2">
+                                                            <h3 className="text-[12px] font-semibold text-alloy-midnight">
+                                                                {area.groupLabel}
+                                                            </h3>
+                                                            <span
+                                                                className={`${CHIP_CLASS} ${
+                                                                    area.authority === "manage" ?
+                                                                        "border-alloy-bend-pine/35 text-alloy-bend-pine"
+                                                                    : area.authority === "view" ?
+                                                                        "border-alloy-stone/35 text-alloy-midnight/70"
+                                                                    : area.authority === "limited" ?
+                                                                        "border-alloy-stone/35 text-alloy-midnight/60"
+                                                                    :   "border-alloy-stone/25 text-alloy-midnight/40"
+                                                                }`}
+                                                                data-testid={`access-role-area-${area.groupKey}-authority`}
+                                                            >
+                                                                {areaAuthorityLabel(area)}
+                                                            </span>
+                                                        </header>
+
+                                                        <ul className="divide-y divide-alloy-stone/12">
+                                                            {area.rows.map((row) => {
+                                                                const level = levelFromGrantedKeys(row, grantKeys);
+                                                                // W-50 / IA-R8. `offered` is the enforced
+                                                                // subset: a level nothing consults renders
+                                                                // no control, because a control that
+                                                                // changes nothing is T-6's revocation
+                                                                // theatre.
+                                                                const offered = offerableLevelsForRow(row);
+                                                                const enforcement = rowEnforcement(row);
+                                                                const inert = enforcement.inert || offered.length <= 1;
+                                                                return (
+                                                                    <li
+                                                                        key={row.id}
+                                                                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2"
+                                                                        data-permission-row={row.id}
+                                                                        data-capability={inert ? "planned" : undefined}
+                                                                    >
+                                                                        <div className="min-w-0">
+                                                                            <div
+                                                                                className={`text-[13px] ${
+                                                                                    inert ?
+                                                                                        "text-alloy-midnight/45"
+                                                                                    :   "font-medium text-alloy-midnight"
+                                                                                }`}
                                                                             >
-                                                                                {row.groupLabel}
-                                                                            </th>
-                                                                        </tr>
-                                                                    :   null}
-                                                                    <tr className="border-t border-alloy-stone/15" data-permission-row={row.id}>
-                                                                        <td className="px-3 py-2">
-                                                                            <div className="font-medium text-alloy-midnight">{row.label}</div>
-                                                                            {readHint || writeHint ?
-                                                                                <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
-                                                                                    {readHint ? `Read: ${readHint}` : null}
-                                                                                    {readHint && writeHint ? " · " : null}
-                                                                                    {writeHint ? `Write: ${writeHint}` : null}
+                                                                                {row.label}
+                                                                            </div>
+                                                                            {showAdvanced ?
+                                                                                <div
+                                                                                    className="mt-0.5 font-mono text-[10px] text-alloy-midnight/45"
+                                                                                    data-testid={`access-role-keys-${row.id}`}
+                                                                                >
+                                                                                    {[...row.readKeys, ...row.writeKeys]
+                                                                                        .map(
+                                                                                            (k) =>
+                                                                                                `${k}${
+                                                                                                    permissionLabelByKey.get(k) ?
+                                                                                                        ""
+                                                                                                    :   " (uncatalogued)"
+                                                                                                }`,
+                                                                                        )
+                                                                                        .join("  ·  ")}
                                                                                 </div>
                                                                             :   null}
-                                                                        </td>
-                                                                        {(["none", "read", "write"] as const).map((opt) => (
-                                                                            <td key={opt} className="px-3 py-2 align-top">
-                                                                                {offered.includes(opt) ?
-                                                                                    <label className="inline-flex items-center gap-2">
-                                                                                        <input
-                                                                                            type="radio"
-                                                                                            name={`access-perm-${row.id}`}
-                                                                                            checked={level === opt}
-                                                                                            onChange={() => setGridLevel(row.id, opt)}
-                                                                                            data-testid={`access-role-permission-${row.id}-${opt}`}
-                                                                                        />
-                                                                                        <span className="sr-only">{opt}</span>
-                                                                                    </label>
-                                                                                :   <span
-                                                                                        className="text-alloy-midnight/30"
-                                                                                        aria-label="Not available for this capability"
-                                                                                        data-testid={`access-role-permission-${row.id}-${opt}-unavailable`}
-                                                                                    >
-                                                                                        —
-                                                                                    </span>
-                                                                                }
-                                                                            </td>
-                                                                        ))}
-                                                                    </tr>
-                                                                </Fragment>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
+                                                                        </div>
+
+                                                                        {inert ?
+                                                                            <span
+                                                                                className="text-[11px] text-alloy-midnight/45"
+                                                                                data-testid={`access-role-permission-${row.id}-unenforced`}
+                                                                            >
+                                                                                Not enforced yet — granting this would change nothing
+                                                                            </span>
+                                                                        :   <div
+                                                                                role="radiogroup"
+                                                                                aria-label={`${row.label} access level`}
+                                                                                className="flex shrink-0 items-center gap-1 rounded-md border border-alloy-stone/25 bg-white/70 p-0.5"
+                                                                            >
+                                                                                {(["none", "read", "write"] as const)
+                                                                                    .filter((opt) => offered.includes(opt))
+                                                                                    .map((opt) => (
+                                                                                        <label
+                                                                                            key={opt}
+                                                                                            className={`cursor-pointer rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                                                                                                level === opt ?
+                                                                                                    "bg-alloy-bend-pine/12 text-alloy-bend-pine"
+                                                                                                :   "text-alloy-midnight/55 hover:text-alloy-midnight"
+                                                                                            }`}
+                                                                                        >
+                                                                                            <input
+                                                                                                type="radio"
+                                                                                                className="sr-only"
+                                                                                                name={`access-perm-${row.id}`}
+                                                                                                checked={level === opt}
+                                                                                                disabled={!writable}
+                                                                                                onChange={() => setGridLevel(row.id, opt)}
+                                                                                                data-testid={`access-role-permission-${row.id}-${opt}`}
+                                                                                            />
+                                                                                            {OPERATOR_LEVEL_LABEL[opt]}
+                                                                                        </label>
+                                                                                    ))}
+                                                                            </div>
+                                                                        }
+                                                                    </li>
+                                                                );
+                                                            })}
+                                                        </ul>
+                                                    </section>
+                                                ))}
                                             </div>
+                                        }
+
+                                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                                             {/*
-                                              * The grid is now a projection, so a failed catalog read renders an
-                                              * empty grid rather than a stale one. H2 keeps that non-destructive —
-                                              * an untouched save PUTs the grants exactly as fetched — but an
-                                              * operator must not be invited to save a surface showing nothing.
-                                              * The full S-11 remedy (surface the read failure, disable on unknown
-                                              * state) is T-22's and is not taken here.
+                                              * Progressive disclosure. `IA-13`: until W-10 lands, these
+                                              * areas are legible but are not the vocabulary — so the
+                                              * catalog keys stay reachable for diagnostics without
+                                              * dominating the normal experience.
                                               */}
+                                            <label className="flex items-center gap-2 text-[11px] text-alloy-midnight/55">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={showAdvanced}
+                                                    onChange={(event) => setShowAdvanced(event.target.checked)}
+                                                    data-testid="access-role-advanced-toggle"
+                                                />
+                                                Show capability keys
+                                            </label>
                                             <ConfigurationPrimaryButton
-                                                className="mt-3"
-                                                disabled={grantsSaving || gridRows.length === 0}
-                                                onClick={() => void saveGrants()}
-                                                data-testid="access-role-permissions-save"
+                                                disabled={saving || !writable}
+                                                onClick={() => void saveRole()}
+                                                data-testid="access-role-save"
                                             >
-                                                {grantsSaving ? "Saving…" : "Save permissions"}
+                                                {saving ? "Saving…" : "Save role"}
                                             </ConfigurationPrimaryButton>
-                                        </ConfigWorkspaceCard>
-                                    : tab === "users" ?
-                                        <ConfigWorkspaceCard testId="access-role-users" title="Users with this role">
-                                            {usersWithRole.length === 0 ?
-                                                <p className="text-sm text-alloy-midnight/55">No users have this role assigned yet.</p>
-                                            :   <ul className="space-y-2 text-sm">
-                                                    {usersWithRole.map((m) => (
-                                                        <li key={m.user_id} className="flex items-center justify-between gap-2">
-                                                            <span className="text-alloy-midnight">{memberDisplayName(m)}</span>
-                                                            <Link
-                                                                href={accessWorkspaceChapterHref("users", { userId: m.user_id })}
-                                                                className="text-xs font-medium text-alloy-bend-pine hover:underline"
-                                                                data-testid={`access-role-open-user-${m.user_id}`}
-                                                            >
-                                                                Open user
-                                                            </Link>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            }
-                                        </ConfigWorkspaceCard>
-                                    : tab === "experience" ?
-                                        <ConfigWorkspaceCard testId="access-role-experience" title="Experience Access">
-                                            <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                                                Derived from permission grants. Planned projection.
-                                            </p>
-                                        </ConfigWorkspaceCard>
-                                    :   <ConfigWorkspaceCard testId="access-role-history" title="History">
-                                            <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                                                A verified change history for this role is planned. No events are
-                                                fabricated for display.
-                                            </p>
-                                        </ConfigWorkspaceCard>
-                                    }
+                                        </div>
+                                    </ConfigWorkspaceCard>
+
+                                    {/*
+                                      * 3 — SCOPE, as a SIBLING of capability and never a field of the
+                                      * role. `06…` : folding the Scopes chapter in here is *"the single
+                                      * change in this whole area that would change the access
+                                      * architecture — it would put scope inside the role object and
+                                      * encode the category error I-27 exists to forbid"*. So this states
+                                      * the separation and points at the chapter that owns it. `RL-53`
+                                      * asserts no role-editing component reads or writes a scope table,
+                                      * and this card is the reason that stays easy to obey.
+                                      */}
+                                    <ConfigWorkspaceCard
+                                        title="Where this authority applies"
+                                        testId="access-role-scope-sibling"
+                                    >
+                                        <p className="text-sm text-alloy-midnight/70">
+                                            Scope is set per person, not on the role. Two people with this role can hold it
+                                            organization-wide and at selected locations respectively — the role says what they
+                                            may do, their scope says where.
+                                        </p>
+                                        <Link
+                                            href={accessWorkspaceChapterHref("scopes")}
+                                            className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-alloy-bend-pine hover:underline"
+                                            data-testid="access-role-open-scopes"
+                                        >
+                                            Open Access Scopes
+                                            <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} aria-hidden />
+                                        </Link>
+                                    </ConfigWorkspaceCard>
+
+                                    {/*
+                                      * 4 — MEMBERSHIP, from this role's side. Folded in from the tab
+                                      * (`05…§5A.6` item 3) because `W-55`/`RL-51` corrected the value
+                                      * first: the list is `memberHoldsRole` over the union, the same
+                                      * predicate as the rail's count, so the two cannot disagree.
+                                      */}
+                                    <ConfigWorkspaceCard title="Who holds this role" testId="access-role-users">
+                                        {usersWithRole.length === 0 ?
+                                            <p className="text-sm text-alloy-midnight/55">No one holds this role yet.</p>
+                                        :   <ul className="divide-y divide-alloy-stone/12 text-sm">
+                                                {usersWithRole.map((m) => (
+                                                    <li
+                                                        key={m.user_id}
+                                                        className="flex items-center justify-between gap-2 py-1.5 first:pt-0 last:pb-0"
+                                                    >
+                                                        <span className="text-alloy-midnight">{memberDisplayName(m)}</span>
+                                                        <Link
+                                                            href={accessWorkspaceChapterHref("users", { userId: m.user_id })}
+                                                            className="text-xs font-medium text-alloy-bend-pine hover:underline"
+                                                            data-testid={`access-role-open-user-${m.user_id}`}
+                                                        >
+                                                            Open user
+                                                        </Link>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        }
+                                    </ConfigWorkspaceCard>
                                 </div>
                             }
                         </main>

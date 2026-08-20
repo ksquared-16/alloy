@@ -98,7 +98,7 @@ export async function POST(
             { status: ctx.status },
         );
     }
-    if (!["owner", "admin", "ops"].includes(ctx.role)) {
+    if (!["admin", "ops"].includes(ctx.role)) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

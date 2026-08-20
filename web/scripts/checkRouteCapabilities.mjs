@@ -1,0 +1,1159 @@
+/**
+ * W-14 — Declared route capability table (I-24), regression lock RL-10.
+ *
+ * Plan: `docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md` §8.
+ *
+ * **What this replaces.** `auditAuthorityPaths.mjs` classified a route by grepping its import
+ * closure for authority primitives. C1 records the result: the census over-reported enforcement
+ * by ~30×, because *mentioning* `permissionKeys` and *branching on* it are indistinguishable to
+ * a text search. Its `/permissionKeys\b/` primitive credited 440 routes to a module that only
+ * resolves and returns the bundle. A census that infers a gate cannot be made sound; the plan's
+ * answer is to stop inferring. Every route **declares** the capability it requires as a value,
+ * and conformance becomes a lookup.
+ *
+ * **The declaration grain is the exported HTTP method, not the file.** `05…§9`'s first limit:
+ * one `route.ts` may export `GET`, `POST`, `PATCH` and `DELETE` with different gates, and a
+ * file-grained table would inherit — and make structural — the single largest weakness of the
+ * static census it replaces.
+ *
+ * **The subject is discovered, never enumerated.** The route set comes from disk on every run.
+ * A new `route.ts`, or a new method on an existing one, is a violation on the commit that adds
+ * it. That is RL-10, and it is the only form of the exit criterion that survives drift: the
+ * plan sized this workstream against 539 routes, the M2 amendment re-measured 559, and this
+ * check counts what is actually there today. A criterion phrased as a number is already stale
+ * when it is read.
+ *
+ * **Three declaration states**, because "no gate" must be an auditable assertion rather than an
+ * absence:
+ *   - `declared` — the method requires `capability`, a key the permission catalog holds.
+ *   - `none`     — the method legitimately requires no capability, and `reason` says why. This
+ *                  is a reviewed assertion; it is what makes an ungated route auditable.
+ *   - `pending`  — not yet reviewed. This is W-15's burndown backlog, and it is ratcheted: the
+ *                  count may shrink and may never grow. W-14 delivers the mechanism and the
+ *                  pilot slice; W-15's exit criterion is that `pending` reaches zero.
+ *
+ * **W-15 prerequisite — a declaration is a CLAIM, and the claim is now checked against the source.**
+ * As W-14 shipped it, `{"status":"declared","capability":"settings.users_roles"}` asserted nothing
+ * about the handler. A refactor that deleted the guard left the table green and lying, and the
+ * mission's requirement is that the declaration *become* enforcement. Driving 725 `pending` entries
+ * to `declared` against an unbound table would have produced 751 unfalsifiable claims instead of 25.
+ * So each `declared` entry naming a `helper` must now survive three joins:
+ *
+ *   1. the exported handler's own body calls that helper — method grain, not file grain, so a guard
+ *      on `GET` cannot vouch for `DELETE` in the same file;
+ *   2. if the helper's verdict is bound to an identifier, the handler TESTS it — a returned verdict
+ *      nobody branches on is not a gate;
+ *   3. the module the helper is imported from names the declared capability on an executable line.
+ *
+ * This is not the reachability inference the census got wrong (see below), and the difference is the
+ * direction of travel. The census read source and *inferred a gate*. This reads a stated claim and
+ * tries to *falsify* it. Inference invents authorization that was never written; falsification can
+ * only ever remove a claim the table already makes. Where the census over-reported by ~30×, an
+ * unfalsifiable declaration here fails loudly and names the join it broke.
+ *
+ * Run: node web/scripts/checkRouteCapabilities.mjs [--json] [--pending] [--suggest] [--seed]
+ */
+
+import { readFileSync, writeFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { join, dirname, resolve, relative } from "node:path";
+
+const WEB = resolve(import.meta.dirname, "..");
+const API_ROOT = join(WEB, "app", "api");
+const TABLE_PATH = join(WEB, "scripts", "routeCapabilities.declared.json");
+const MAX_DEPTH = 6;
+
+/** The HTTP verbs Next.js treats as route handlers. */
+const HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
+
+// ---------------------------------------------------------------------------
+// Source access
+// ---------------------------------------------------------------------------
+
+const sourceCache = new Map();
+function read(file) {
+    let src = sourceCache.get(file);
+    if (src === undefined) {
+        src = readFileSync(file, "utf8");
+        sourceCache.set(file, src);
+    }
+    return src;
+}
+
+/**
+ * Comments are stripped before any declaration or capability literal is read. The permission
+ * catalog discovery module paid for this lesson already: a key named only in a doc comment is
+ * not an enforcement site, and W-8's own removal left doc-comment references behind that a
+ * naive scan still counts.
+ */
+function stripComments(source) {
+    return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(^|[^:])\/\/[^\n]*/g, "$1 ");
+}
+
+function walkRoutes(dir, out = []) {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) walkRoutes(p, out);
+        else if (/^route\.tsx?$/.test(entry.name)) out.push(p);
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// Method discovery
+// ---------------------------------------------------------------------------
+
+/**
+ * Exported HTTP handlers, in every form Next.js accepts:
+ *   export async function GET(…)      export function GET(…)
+ *   export const GET = …              export { GET }      export { handler as POST }
+ *
+ * A verb that appears only in a string, a comment, or a local (unexported) helper is not a
+ * handler. Over-reporting here would inflate the table with methods that do not exist and make
+ * the stale check noisy; under-reporting would leave a real handler undeclared, which is the
+ * failure this workstream exists to prevent — so the aliased `export { x as POST }` form is
+ * matched explicitly rather than assumed absent.
+ */
+function exportedMethods(file) {
+    const src = stripComments(read(file));
+    const found = new Set();
+
+    for (const m of src.matchAll(/export\s+(?:async\s+)?function\s+([A-Z]+)\b/g)) {
+        if (HTTP_METHODS.includes(m[1])) found.add(m[1]);
+    }
+    for (const m of src.matchAll(/export\s+(?:const|let|var)\s+([A-Z]+)\s*[:=]/g)) {
+        if (HTTP_METHODS.includes(m[1])) found.add(m[1]);
+    }
+    for (const block of src.matchAll(/export\s*\{([^}]*)\}/g)) {
+        for (const clause of block[1].split(",")) {
+            const parts = clause.trim().split(/\s+as\s+/);
+            const exported = (parts[1] ?? parts[0] ?? "").trim();
+            if (HTTP_METHODS.includes(exported)) found.add(exported);
+        }
+    }
+    return [...found].sort();
+}
+
+// ---------------------------------------------------------------------------
+// Declaration binding — the three joins that turn a claim into evidence
+// ---------------------------------------------------------------------------
+
+/**
+ * A length-preserving source skeleton: comment and string bodies become spaces.
+ *
+ * Length preservation is what lets an offset found here be used against the ORIGINAL source, so a
+ * violation can quote real code. Blanking matters for two reasons: an identifier inside a string is
+ * not a call, and a brace inside a string would derail the handler-body match.
+ *
+ * `stripComments` above is regex-based and guards `https://` with a `[^:]` lookbehind — adequate for
+ * counting keys, not for offset arithmetic. This is a real one-pass tokenizer with a mode stack, so
+ * a template literal nested inside another's `${…}` is handled rather than approximated. That case
+ * is not hypothetical: `documents/entity-options` writes
+ * `` `Visit ${start}${r.job_id ? ` · job ${…}` : ""}` ``, and a scanner that takes the first backtick
+ * it sees as the closing one loses brace balance for the rest of the file — which is exactly how
+ * that route's GET became unreadable.
+ *
+ * Template TEXT is blanked; interpolated `${…}` is executable code and survives, contributing a
+ * balanced brace pair. String DELIMITERS survive too — blanking the quotes as well as the contents
+ * erases the token structure that tells an import statement from prose.
+ */
+export function skeleton(source) {
+    const n = source.length;
+    const out = source.split("");
+    const blank = (from, to) => {
+        for (let k = from; k < to && k < n; k += 1) if (out[k] !== "\n") out[k] = " ";
+    };
+
+    const stack = [];
+    let i = 0;
+    while (i < n) {
+        const mode = stack[stack.length - 1];
+        const c = source[i];
+        const d = source[i + 1];
+
+        if (mode && mode.type === "template") {
+            if (c === "\\") {
+                blank(i, i + 2);
+                i += 2;
+                continue;
+            }
+            if (c === "$" && d === "{") {
+                stack.push({ type: "interp", depth: 1 });
+                i += 2;
+                continue;
+            }
+            if (c === "`") {
+                stack.pop();
+                i += 1;
+                continue;
+            }
+            blank(i, i + 1);
+            i += 1;
+            continue;
+        }
+
+        if (c === "/" && d === "/") {
+            let j = i;
+            while (j < n && source[j] !== "\n") j += 1;
+            blank(i, j);
+            i = j;
+            continue;
+        }
+        if (c === "/" && d === "*") {
+            let j = i + 2;
+            while (j < n && !(source[j] === "*" && source[j + 1] === "/")) j += 1;
+            j = Math.min(n, j + 2);
+            blank(i, j);
+            i = j;
+            continue;
+        }
+        if (c === '"' || c === "'") {
+            let j = i + 1;
+            while (j < n) {
+                if (source[j] === "\\") {
+                    j += 2;
+                    continue;
+                }
+                if (source[j] === c || source[j] === "\n") break;
+                j += 1;
+            }
+            const end = Math.min(j + 1, n);
+            blank(i + 1, end - 1);
+            i = end;
+            continue;
+        }
+        if (c === "`") {
+            stack.push({ type: "template" });
+            i += 1;
+            continue;
+        }
+        if (mode && mode.type === "interp") {
+            if (c === "{") mode.depth += 1;
+            else if (c === "}") {
+                mode.depth -= 1;
+                if (mode.depth === 0) {
+                    stack.pop();
+                    i += 1;
+                    continue;
+                }
+            }
+        }
+        i += 1;
+    }
+    return out.join("");
+}
+
+/** The block opened by the `{` at `open`, and the index just past its match. */
+function matchBlock(skel, open) {
+    if (open < 0 || skel[open] !== "{") return null;
+    let depth = 0;
+    for (let k = open; k < skel.length; k += 1) {
+        if (skel[k] === "{") depth += 1;
+        else if (skel[k] === "}") {
+            depth -= 1;
+            if (depth === 0) return { start: open, end: k + 1 };
+        }
+    }
+    return null;
+}
+
+/**
+ * The function BODY following a signature that starts at `from`.
+ *
+ * The first `{` after a handler's name is very often not its body: `GET(request, { params })`
+ * destructures in the parameter list, and taking that brace yields a two-token "body" that contains
+ * no gate — which is exactly how a guarded route would be convicted of being unguarded. So the body
+ * is the first `{` at paren-depth zero. A `;` at depth zero means the declaration ended without a
+ * body at all (`export const GET = handler;`), which is reported rather than searched past.
+ *
+ * **A RETURN TYPE is the second brace that is not a body.** The parameter fix above is not the whole
+ * problem: `async function f(): Promise<{ ok: true } | { ok: false; response: NextResponse }> { … }`
+ * closes its parameter list and then opens two braces at paren depth zero before the body ever
+ * starts. Taking the first of them yields a fragment of a type annotation — no calls, no gate — so a
+ * helper that authenticates in its first statement reads as one that does nothing.
+ *
+ * This is the identical failure to the destructured-parameter case, one syntactic position later,
+ * and it stayed hidden because route handlers are typed `Promise<NextResponse>` and have no braces
+ * to trip on. It surfaced only when the same reader was pointed at LIBRARY helpers, whose inline
+ * union return types are ordinary. `loadConfigLayoutAssistAdminContext` is the case that found it:
+ * it calls `getAdminContextCached` in its first line, and seven config-layout-assist handlers were
+ * being reported as carrying no authorization because of a brace in its signature.
+ *
+ * A type block is told from a body by what FOLLOWS it: a body ends the declaration, while a type
+ * block is continued by `|`, `&`, `>` or `,`, or is immediately followed by the real body's `{`.
+ * Scanning past those is what makes the last brace at depth zero the right one.
+ */
+function bodyBlock(skel, from) {
+    let paren = 0;
+    for (let k = from; k < skel.length; k += 1) {
+        const ch = skel[k];
+        if (ch === "(") paren += 1;
+        else if (ch === ")") paren -= 1;
+        else if (ch === "{" && paren <= 0) {
+            const block = matchBlock(skel, k);
+            if (!block) return null;
+            const next = /\S/.exec(skel.slice(block.end));
+            if (next && "{|&>,=".includes(next[0])) {
+                k = block.end - 1;
+                continue;
+            }
+            return block;
+        } else if (ch === ";" && paren <= 0) return null;
+    }
+    return null;
+}
+
+/**
+ * The body of one exported handler, at method grain.
+ *
+ * Every export form `exportedMethods` recognises is resolved, including the aliased
+ * `export { handler as POST }` — which is followed back to the local declaration, because a handler
+ * reached through an alias is no less a handler. A form that cannot be resolved is reported as a
+ * violation rather than skipped: "I could not read this one" must never be indistinguishable from
+ * "this one is fine", which is the exact confusion §10.2 records.
+ */
+export function handlerBody(file, method, seen = new Set()) {
+    if (seen.has(file)) return null;
+    seen.add(file);
+    const skel = skeleton(read(file));
+
+    // `export { GET } from "@/app/api/…"` — the handler is real, its body simply lives elsewhere.
+    // Three v2 drawer routes are pure re-exports of their v1 counterparts. Refusing to follow them
+    // would report a gated handler as unreadable, and an unreadable handler is a reviewer's problem
+    // rather than an author's.
+    for (const stmt of skel.matchAll(/export\s*\{([^}]*)\}\s*from/g)) {
+        const names = stmt[1].split(",").map((clause) => {
+            const parts = clause.trim().split(/\s+as\s+/);
+            return { local: (parts[0] ?? "").trim(), exported: (parts[1] ?? parts[0] ?? "").trim() };
+        });
+        const hit = names.find((x) => x.exported === method);
+        if (!hit) continue;
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target) return handlerBody(target, hit.local, seen);
+    }
+
+    const direct = new RegExp(`export\\s+(?:async\\s+)?function\\s+${method}\\b`).exec(skel);
+    if (direct) {
+        const block = bodyBlock(skel, direct.index + direct[0].length);
+        if (block) return skel.slice(block.start, block.end);
+    }
+
+    const assigned = new RegExp(`export\\s+(?:const|let|var)\\s+${method}\\s*[:=]`).exec(skel);
+    if (assigned) {
+        const block = bodyBlock(skel, assigned.index + assigned[0].length);
+        if (block) return skel.slice(block.start, block.end);
+    }
+
+    // export { local as METHOD } — resolve `local`, then read its declaration.
+    for (const block of skel.matchAll(/export\s*\{([^}]*)\}/g)) {
+        for (const clause of block[1].split(",")) {
+            const parts = clause.trim().split(/\s+as\s+/);
+            const exported = (parts[1] ?? parts[0] ?? "").trim();
+            const local = (parts[0] ?? "").trim();
+            if (exported !== method || !local) continue;
+            const decl = new RegExp(`(?:async\\s+)?function\\s+${local}\\b|(?:const|let|var)\\s+${local}\\s*[:=]`).exec(skel);
+            if (!decl) continue;
+            const body = bodyBlock(skel, decl.index + decl[0].length);
+            if (body) return skel.slice(body.start, body.end);
+        }
+    }
+
+    return null;
+}
+
+/**
+ * The file a handler's body actually lives in.
+ *
+ * `handlerBody` already follows `export { GET } from "…"` across files, and returns the right SOURCE.
+ * What it cannot return is the file that source came from — and a body must be read against its own
+ * file's imports. The three v2 drawer routes are the whole of their file:
+ *
+ *     export { GET } from "@/app/api/admin/view-models/drawer/child/[id]/route";
+ *
+ * so the body correctly arrived carrying `loadAdminRouteGate(…)`, and was then matched against the
+ * v2 file's import list, which is EMPTY. Every identifier failed to resolve and three gated routes
+ * were reported as carrying no authorization at all.
+ *
+ * This is not a missing inference; it is a body and an import table taken from two different files.
+ * Pairing them is a correction, not a widening.
+ */
+function originFile(file, method, seen = new Set()) {
+    if (seen.has(file)) return file;
+    seen.add(file);
+    const skel = skeleton(read(file));
+    for (const stmt of skel.matchAll(/export\s*\{([^}]*)\}\s*from/g)) {
+        const names = stmt[1].split(",").map((clause) => {
+            const parts = clause.trim().split(/\s+as\s+/);
+            return { local: (parts[0] ?? "").trim(), exported: (parts[1] ?? parts[0] ?? "").trim() };
+        });
+        const hit = names.find((x) => x.exported === method);
+        if (!hit) continue;
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target && existsSync(target)) return originFile(target, hit.local, seen);
+    }
+    return file;
+}
+
+/**
+ * The module that DECLARES `name`, following barrel re-exports.
+ *
+ * `lib/pos/processingIdentity/operator` is a directory barrel: the six processing-identity handlers
+ * import `resolveOperatorRoute` from it, and it declares nothing — it re-exports from
+ * `operatorRouteContext.ts`, where the function calls `getAdminContextCached` in its first line.
+ * Asking the barrel whether it authenticates gets "no", and six authenticated handlers were reported
+ * as carrying no gate evidence.
+ *
+ * A barrel is a pass-through rather than a hop: following one does not read a second implementation,
+ * it finds the first. The walk is bounded to `MAX_BARREL` so a re-export cycle cannot spin, and it
+ * follows only NAMED re-exports and `export *` — never an import, which is what would turn this back
+ * into the closure walk the census was retired for.
+ */
+const MAX_BARREL = 3;
+
+function declaringModule(mod, name, depth = 0, seen = new Set()) {
+    if (!mod || !existsSync(mod) || seen.has(mod) || depth > MAX_BARREL) return null;
+    seen.add(mod);
+    const skel = skeleton(read(mod));
+    const declared = new RegExp(
+        `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:export\\s+)?(?:const|let|var)\\s+${name}\\s*[:=]`
+    ).test(skel);
+    if (declared) return mod;
+
+    const raw = read(mod);
+    for (const stmt of skel.matchAll(/export\s*(\*|\{[^}]*\})\s*from/g)) {
+        const clause = stmt[1];
+        if (clause !== "*") {
+            const names = clause.replace(/[{}]/g, " ").split(",").map((c) => {
+                const parts = c.trim().split(/\s+as\s+/);
+                return (parts[1] ?? parts[0] ?? "").trim();
+            });
+            if (!names.includes(name)) continue;
+        }
+        const spec = /from\s*["']([^"']+)["']/.exec(raw.slice(stmt.index, stmt.index + stmt[0].length + 200));
+        const target = spec ? resolveImport(spec[1], mod) : null;
+        const found = declaringModule(target, name, depth + 1, seen);
+        if (found) return found;
+    }
+    return null;
+}
+
+/**
+ * The source a reviewer would read to answer "what does this handler check?" — the exported
+ * handler's body, plus the bodies of same-file functions it calls.
+ *
+ * A handler is frequently a thin shell over its implementation: `jobs` exports
+ * `GET(request) { if (!adminPerfEnabled()) return getJobsImpl(request); … }`, and `getJobsImpl`
+ * carries both the context load and the scope resolution. Reading only the exported body reports
+ * that handler as carrying no gate evidence at all — a false `none` on one of the most heavily
+ * guarded routes in the tree.
+ *
+ * Session 4 taught `handlerBody` to follow a re-export ACROSS files for exactly this reason. This
+ * is the same defect one hop shorter, and the same answer: a delegation is not an absence.
+ *
+ * **One hop, same file, and advisory only.** The hop is not transitive — one hop is what keeps the
+ * answer checkable by reading a single file — and this feeds `gateInventory` alone. The pass/fail
+ * join in `bindDeclaration` deliberately keeps reading the exported body and nothing else: a
+ * declared route that hides its guard behind a delegation should fail that join and be rewritten or
+ * re-declared. Loosening a lock and sharpening a measurement are opposite moves, and only one of
+ * them is safe to make here.
+ */
+function handlerEvidenceBody(file, method) {
+    const own = handlerBody(file, method);
+    if (own === null) return null;
+
+    const skel = skeleton(read(originFile(file, method)));
+    let evidence = own;
+    for (const m of own.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) {
+        const name = m[1];
+        if (HTTP_METHODS.includes(name)) continue;
+        const decl = new RegExp(
+            `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:const|let|var)\\s+${name}\\s*[:=]`
+        ).exec(skel);
+        if (!decl) continue;
+        const block = bodyBlock(skel, decl.index + decl[0].length);
+        if (block) evidence += `\n${skel.slice(block.start, block.end)}`;
+    }
+    return evidence;
+}
+
+/**
+ * The primitives that resolve a caller's identity and access bundle — the seed, and the ONLY
+ * hand-authored names in the gate vocabulary.
+ *
+ * The list they replace was the whole vocabulary, and that is why `loadAdminRouteGate` was invisible
+ * to it. That helper resolves the access bundle and refuses a caller who is not portal-eligible with
+ * a 403; every route entering through it — the newer, preferred entry point this initiative itself
+ * introduced — was being reported as carrying no gate evidence. An enumerated vocabulary makes the
+ * *better* code look worse, which inverts the signal.
+ *
+ * So the roots stay small and auditable and the second layer is DISCOVERED: a helper counts as an
+ * authority entry when the declaration it is imported from CALLS a root. That is the same question
+ * this initiative has had to ask three times now — does the check discover, or does it enumerate?
+ * (W-5's locks, session 3's backing routes, and this.)
+ */
+const AUTHORITY_ROOTS =
+    /\b(?:getAdmin\w*Context\w*|loadAdminAccessBundle\w*|requireAuth\w*|getServerUser\w*|auth\s*\.\s*getUser)\s*\(/;
+
+const authorityHelperCache = new Map();
+
+/**
+ * Does `name`, as declared in `mod`, resolve caller authority?
+ *
+ * The question is asked of the helper's OWN declaration rather than of the module, because a module
+ * that authenticates somewhere is not a module whose every export authenticates. Crediting a route
+ * for calling an unrelated formatter that happens to live beside a gate is the retired census's
+ * error — reachability standing in for enforcement — and it is avoided by reading one declaration.
+ */
+function declarationResolvesAuthority(mod, name) {
+    const key = `${mod}::${name}`;
+    const cached = authorityHelperCache.get(key);
+    if (cached !== undefined) return cached;
+
+    let answer = false;
+    const home = declaringModule(mod, name);
+    if (home) {
+        const skel = skeleton(read(home));
+        const decl = new RegExp(
+            `(?:export\\s+)?(?:async\\s+)?function\\s+${name}\\b|(?:export\\s+)?(?:const|let|var)\\s+${name}\\s*[:=]`
+        ).exec(skel);
+        if (decl) {
+            const block = bodyBlock(skel, decl.index + decl[0].length);
+            if (block) answer = AUTHORITY_ROOTS.test(skel.slice(block.start, block.end));
+        }
+    }
+    authorityHelperCache.set(key, answer);
+    return answer;
+}
+
+/** The identifier a call's verdict is bound to, if it is bound at all. */
+function verdictBinding(body, helper) {
+    const m = new RegExp(`(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(?:await\\s+)?${helper}\\s*\\(`).exec(body);
+    return m ? m[1] : null;
+}
+
+/**
+ * The module a helper enters the route from — an import if it is imported, otherwise the route file
+ * itself, since a route may define its own gate (`canReadProgramPublication` does).
+ */
+function helperModule(file, helper) {
+    const skel = skeleton(read(file));
+    for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
+        if (!new RegExp(`\\b${helper}\\b`).test(stmt[1])) continue;
+        // The specifier lives in the ORIGINAL source: the skeleton blanked its contents.
+        const spec = /from\s*["']([^"']+)["']/.exec(read(file).slice(stmt.index, stmt.index + stmt[0].length + 2));
+        const target = spec ? resolveImport(spec[1], file) : null;
+        if (target) return target;
+    }
+    if (new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${helper}\\b|(?:const|let|var)\\s+${helper}\\s*[:=]`).test(skel)) {
+        return file;
+    }
+    return null;
+}
+
+/**
+ * The three joins, for one declared handler. Returns the violations it fails, and the evidence it
+ * passes on — the evidence is what makes a green run reviewable rather than merely quiet.
+ */
+export function bindDeclaration(file, route, method, decl) {
+    const violations = [];
+    const helper = decl.helper;
+    if (!helper) {
+        // A `declared` entry with no named helper cannot be bound to anything. It is a claim about
+        // enforcement with no address, and W-15 may not add more of them.
+        return { violations: [{ route, kind: "unaddressed-declaration", detail: `${method} declares ${decl.capability} but names no helper to bind it to` }], evidence: null };
+    }
+
+    const body = handlerBody(file, method);
+    if (body === null) {
+        return { violations: [{ route, kind: "unresolvable-handler", detail: `${method} is declared but its body could not be located to verify the ${helper} gate` }], evidence: null };
+    }
+
+    // Join 1 — this handler, not merely this file, calls the helper.
+    const calls = new RegExp(`\\b${helper}\\s*\\(`).test(body);
+    if (!calls) {
+        violations.push({ route, kind: "unbound-declaration", detail: `${method} declares capability ${decl.capability} via ${helper}, but ${method}'s body never calls ${helper}` });
+    }
+
+    // Join 2 — a verdict that is bound must be tested. A helper that throws binds nothing and needs
+    // no test; one that returns `{ok:false, response}` and is ignored is a gate in name only.
+    const bound = calls ? verdictBinding(body, helper) : null;
+    if (bound && !new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+        violations.push({ route, kind: "untested-verdict", detail: `${method} calls ${helper} and binds its verdict to '${bound}', but never tests '${bound}' — the verdict is discarded` });
+    }
+
+    // Join 3 — the helper's module actually names the declared capability.
+    const mod = helperModule(file, helper);
+    if (!mod) {
+        violations.push({ route, kind: "unresolvable-helper", detail: `${method} names helper ${helper}, which is neither imported nor defined in the route` });
+        return { violations, evidence: null };
+    }
+    const modSource = stripComments(read(mod));
+    if (!modSource.includes(`"${decl.capability}"`) && !modSource.includes(`'${decl.capability}'`)) {
+        violations.push({
+            route,
+            kind: "capability-not-enforced",
+            detail: `${method} declares ${decl.capability}, but ${relative(WEB, mod).split("\\").join("/")} (which defines ${helper}) never names that key on an executable line`,
+        });
+    }
+
+    return { violations, evidence: { route, method, helper, capability: decl.capability, enforcedIn: relative(WEB, mod).split("\\").join("/") } };
+}
+
+/**
+ * W-15's burndown, discovered rather than hand-listed.
+ *
+ * A `pending` handler whose body already calls one of the helpers the table uses elsewhere is a
+ * route that is *enforced but undeclared* — the table under-reporting rather than over-reporting.
+ * `persons/[id]/profile-photo` is the case that motivated this: all three of its methods sat
+ * `pending` while calling the very `assertDocumentAccess` that `documents/[id]/signed-url` declares
+ * as `documents.read`. This is advisory output, never a pass/fail input — the capability such a
+ * route requires is still a reviewed decision, and inferring it is the mistake this file replaces.
+ */
+export function pendingWithKnownGates(table) {
+    const helpers = new Map();
+    for (const methods of Object.values(table.routes ?? {})) {
+        for (const decl of Object.values(methods)) {
+            if (decl.status === "declared" && decl.helper) helpers.set(decl.helper, decl.capability);
+        }
+    }
+
+    const found = [];
+    for (const [route, methods] of Object.entries(table.routes ?? {})) {
+        const abs = join(WEB, route);
+        if (!existsSync(abs)) continue;
+        for (const [method, decl] of Object.entries(methods)) {
+            if (decl.status !== "pending") continue;
+            const body = handlerBody(abs, method);
+            if (!body) continue;
+            for (const [helper, capability] of helpers) {
+                if (new RegExp(`\\b${helper}\\s*\\(`).test(body)) {
+                    found.push({ route, method, helper, capabilityElsewhere: capability });
+                    break;
+                }
+            }
+        }
+    }
+    return found;
+}
+
+/**
+ * The permission catalog, discovered from the migration tree by REGION rather than by tuple shape.
+ *
+ * This mirrors `tests/access/permissionCatalogDiscovery.ts`, which carries the full reasoning: a
+ * parser pinned to one `INSERT` shape found 35 keys where the catalog holds 57, because
+ * `seed_default_rbac` transposes `label`/`group_key` and the wave-C migration seeds through a
+ * `FOR … IN VALUES` loop whose keys are variables. Discovery is therefore by region — find every
+ * part of a migration that can write a catalog row, take every key-shaped literal in it.
+ *
+ * Duplicating that helper would be the drift hazard this initiative has already paid for twice, so
+ * `routeCapabilityDeclaration.test.ts` asserts the two implementations return the SAME key set. The
+ * copy exists only because this file is `.mjs` and runs in `prebuild`, where the TypeScript test
+ * helper cannot be imported; the lock is what makes the copy safe.
+ */
+export function discoverCatalogKeys() {
+    const dir = join(WEB, "..", "supabase", "migrations");
+    const keys = new Set();
+    if (!existsSync(dir)) return keys;
+
+    const CATALOG_WRITE = /INSERT\s+INTO\s+(?:public\.)?(?:permission_definitions|permission_keys|permissions)\b/i;
+    const SQL_STRING = /'((?:[^']|'')*)'/g;
+
+    for (const file of readdirSync(dir).sort()) {
+        if (!file.endsWith(".sql")) continue;
+        const sql = readFileSync(join(dir, file), "utf8")
+            .replace(/\/\*[\s\S]*?\*\//g, " ")
+            .replace(/--[^\n]*/g, " ");
+
+        const regions = [];
+        const dollarQuoted = /(?:DO|AS)\s+(\$[a-zA-Z_]*\$)([\s\S]*?)\1/g;
+        for (const block of sql.matchAll(dollarQuoted)) {
+            if (CATALOG_WRITE.test(block[2])) regions.push(block[2]);
+        }
+        for (const statement of sql.replace(dollarQuoted, " ").split(";")) {
+            if (CATALOG_WRITE.test(statement)) regions.push(statement);
+        }
+
+        for (const region of regions) {
+            for (const literal of region.matchAll(SQL_STRING)) {
+                const key = literal[1].replace(/''/g, "'");
+                if (PERMISSION_KEY_GRAMMAR.test(key)) keys.add(key);
+            }
+        }
+    }
+    return keys;
+}
+
+/**
+ * W-15 sizing — what gate evidence, if any, each `pending` handler carries.
+ *
+ * **This is not the census returning.** `auditAuthorityPaths.mjs` was retired because it classified
+ * a route as ENFORCED by walking its import closure, and over-reported enforcement by ~30×. The
+ * difference here is the direction of the error, and it is deliberate:
+ *
+ *   - the census's load-bearing output was "this route is protected" — a claim that is unsafe when
+ *     wrong, because it retires scrutiny;
+ *   - this function's load-bearing output is `none`: handlers where NO gate evidence was found.
+ *     That claim is conservative when wrong. A false `none` costs a reviewer five minutes; a false
+ *     "enforced" costs an exposure nobody looks for again.
+ *
+ * So the buckets other than `none` are explicitly NOT enforcement verdicts. They say what a reviewer
+ * will find when they open the file, which is how 725 undifferentiated entries become a lane with a
+ * shape. Nothing here feeds pass/fail; `runRouteCapabilityCheck` never calls it.
+ *
+ * Evidence is read from the handler's OWN body at method grain, and imported identifiers are
+ * resolved exactly one hop — never a closure walk. One hop is what makes an answer checkable by
+ * opening two files.
+ */
+export function gateInventory(table, catalogKeys = discoverCatalogKeys()) {
+    const buckets = { capability: [], gateHelper: [], role: [], authenticated: [], none: [], unreadable: [] };
+
+    for (const [route, methods] of Object.entries(table.routes ?? {})) {
+        const abs = join(WEB, route);
+        if (!existsSync(abs)) continue;
+
+        // The import table is resolved PER METHOD, from the file that method's body actually lives
+        // in. A pure re-export route (`export { GET } from "…"`) has no imports of its own, so
+        // matching a borrowed body against the borrowing file's table resolves nothing at all.
+        const importsOf = (from) => {
+            const skel = skeleton(read(from));
+            const map = new Map();
+            for (const stmt of skel.matchAll(/import\s+([\s\S]*?)\s+from\s*["']([^"']*)["']/g)) {
+                const spec = /from\s*["']([^"']+)["']/.exec(
+                    read(from).slice(stmt.index, stmt.index + stmt[0].length + 2)
+                );
+                const target = spec ? resolveImport(spec[1], from) : null;
+                if (!target) continue;
+                for (const name of stmt[1].replace(/[{}]/g, " ").split(/[,\s]+/)) {
+                    const id = name.trim().replace(/^type$/, "");
+                    if (id && /^[A-Za-z_$][\w$]*$/.test(id)) map.set(id, target);
+                }
+            }
+            return map;
+        };
+
+        for (const [method, decl] of Object.entries(methods)) {
+            if (decl.status !== "pending") continue;
+            const imported = importsOf(originFile(abs, method));
+            const body = handlerEvidenceBody(abs, method);
+            if (body === null) {
+                buckets.unreadable.push({ route, method });
+                continue;
+            }
+
+            const called = new Set();
+            for (const m of body.matchAll(/\b([A-Za-z_$][\w$]*)\s*\(/g)) called.add(m[1]);
+
+            let capabilityVia = null;
+            let gateVia = null;
+            let authorityVia = null;
+            for (const id of called) {
+                const mod = imported.get(id);
+                if (!mod || !existsSync(mod)) continue;
+                // A key must be one the CATALOG actually holds. The grammar alone matches
+                // `customer_id.is.null` and `person.email` — supabase filters and column paths —
+                // and bucketing on it credited 80 handlers with capability gates most of which had
+                // none. That is precisely the retired census's error at small scale, so the
+                // grammar is a prefilter and the catalog is the judge.
+                const keys = [...new Set([...stripComments(read(mod)).matchAll(TS_KEY_LITERAL)]
+                    .map((k) => k[1])
+                    .filter((k) => catalogKeys.has(k)))].sort();
+                if (keys.length) {
+                    capabilityVia = { helper: id, module: relative(WEB, mod).split("\\").join("/"), keys };
+                    break;
+                }
+                // A first-party `require*`/`assert*`/`ensure*`/`can*` whose verdict this handler
+                // tests IS a gate — it simply is not a CAPABILITY gate. Without this signal the
+                // `none` bucket over-claimed: analytics/placements calls
+                // requireAnalyticsV2AdminContext and was being reported as ungated. Converting
+                // these to declared capabilities is the substance of W-15, so they need their own
+                // bucket rather than being lost in either direction.
+                if (!gateVia && /^(require|assert|ensure|can)[A-Z]/.test(id)) {
+                    const bound = verdictBinding(body, id);
+                    if (!bound || new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+                        gateVia = { helper: id, module: relative(WEB, mod).split("\\").join("/") };
+                    }
+                }
+                // An authority entry the handler never branches on is not a gate. `const ctx =
+                // await getAdminContextCached();` followed by a read of `ctx.orgId` and no test of
+                // `ctx.ok` establishes nothing and must fall through to `none`, where a reviewer
+                // will see it — the same rule `gateVia` already applies, asked of the roots too.
+                if (!authorityVia && (AUTHORITY_ROOTS.test(`${id}(`) || declarationResolvesAuthority(mod, id))) {
+                    const bound = verdictBinding(body, id);
+                    if (!bound || new RegExp(`if\\s*\\([^)]*\\b${bound}\\b`).test(body)) {
+                        authorityVia = { helper: id, module: relative(WEB, mod).split("\\").join("/") };
+                    }
+                }
+            }
+
+            const roleGate = /\brole\s*[!=]==?|\broleKeys\b|\bpermissionKeys\b/.test(body);
+
+            if (capabilityVia) buckets.capability.push({ route, method, ...capabilityVia });
+            else if (gateVia) buckets.gateHelper.push({ route, method, ...gateVia });
+            else if (roleGate) buckets.role.push({ route, method });
+            // A DERIVED authority helper lands here rather than in `gateHelper`, even when it
+            // refuses callers: `loadAdminRouteGate` does enforce portal eligibility, but deciding
+            // that from source is inference, and inference is what the retired census did. The
+            // weaker claim — "this handler establishes who is calling" — is the one the source
+            // supports, and under-claiming is the only safe direction for a bucket whose purpose is
+            // to concentrate risk. W-15 still has to rule on every one of these.
+            else if (authorityVia) buckets.authenticated.push({ route, method, ...authorityVia });
+            else buckets.none.push({ route, method });
+        }
+    }
+
+    return buckets;
+}
+
+// ---------------------------------------------------------------------------
+// Capability-key evidence (advisory — for authoring the table, never for passing it)
+// ---------------------------------------------------------------------------
+
+/** A permission key: lowercase dotted segments. Matches the catalog's own grammar. */
+const PERMISSION_KEY_GRAMMAR = /^[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+$/;
+const TS_KEY_LITERAL = /["'`]([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)["'`]/g;
+
+function resolveImport(spec, fromFile) {
+    let base;
+    if (spec.startsWith("@/")) base = join(WEB, spec.slice(2));
+    else if (spec.startsWith(".")) base = resolve(dirname(fromFile), spec);
+    else return null;
+    for (const cand of [base, `${base}.ts`, `${base}.tsx`, `${base}.mjs`, join(base, "index.ts"), join(base, "index.tsx")]) {
+        if (existsSync(cand) && statSync(cand).isFile()) return cand;
+    }
+    return null;
+}
+
+const IMPORT_SPEC = /(?:from\s*|import\s*\(\s*)["']([^"']+)["']/g;
+
+/**
+ * Capability keys reachable from a route by first-party imports.
+ *
+ * This is EVIDENCE FOR A HUMAN AUTHORING THE TABLE, and it is deliberately not consulted by the
+ * check. Wiring it into pass/fail would rebuild exactly the inference the census got wrong —
+ * reachability is not enforcement. `--suggest` prints it; nothing else reads it.
+ */
+function reachableCapabilityKeys(file, seen = new Set(), depth = 0) {
+    if (depth > MAX_DEPTH || seen.has(file)) return new Set();
+    seen.add(file);
+    const src = stripComments(read(file));
+    const keys = new Set();
+    for (const m of src.matchAll(TS_KEY_LITERAL)) {
+        if (PERMISSION_KEY_GRAMMAR.test(m[1])) keys.add(m[1]);
+    }
+    for (const m of src.matchAll(IMPORT_SPEC)) {
+        const target = resolveImport(m[1], file);
+        if (!target) continue;
+        for (const k of reachableCapabilityKeys(target, seen, depth + 1)) keys.add(k);
+    }
+    return keys;
+}
+
+// ---------------------------------------------------------------------------
+// The check
+// ---------------------------------------------------------------------------
+
+/**
+ * @param tablePath - override, used only by the negative fixtures in RL-10. They must be able to
+ *   prove this check FAILS without mutating the committed table: a run killed between the mutation
+ *   and its restore would otherwise leave the repository dirty and the ratchet wrong.
+ */
+export function runRouteCapabilityCheck(tablePath = TABLE_PATH) {
+    const table = JSON.parse(readFileSync(tablePath, "utf8"));
+    const declared = table.routes ?? {};
+
+    const onDisk = new Map();
+    for (const abs of walkRoutes(API_ROOT).sort()) {
+        onDisk.set(relative(WEB, abs).split("\\").join("/"), exportedMethods(abs));
+    }
+
+    const violations = [];
+    const counts = { routes: onDisk.size, methods: 0, declared: 0, none: 0, pending: 0, bound: 0 };
+    const bindings = [];
+
+    for (const [route, methods] of onDisk) {
+        const entry = declared[route];
+        if (!entry) {
+            violations.push({
+                route,
+                kind: "undeclared-route",
+                detail: `route file is not in the declared table (methods: ${methods.join(", ") || "none exported"})`,
+            });
+            continue;
+        }
+        for (const method of methods) {
+            counts.methods += 1;
+            const decl = entry[method];
+            if (!decl) {
+                violations.push({ route, kind: "undeclared-method", detail: `${method} is exported but not declared` });
+                continue;
+            }
+            if (decl.status === "declared") {
+                counts.declared += 1;
+                if (!decl.capability || !PERMISSION_KEY_GRAMMAR.test(decl.capability)) {
+                    violations.push({
+                        route,
+                        kind: "malformed-capability",
+                        detail: `${method} is status 'declared' but capability ${JSON.stringify(decl.capability)} is not a catalog key`,
+                    });
+                } else {
+                    // The claim is checked against the source. A declaration that survives this is
+                    // evidence; one that does not is a route the table describes and the code does
+                    // not implement.
+                    const bind = bindDeclaration(join(WEB, route), route, method, decl);
+                    violations.push(...bind.violations);
+                    if (bind.evidence && bind.violations.length === 0) {
+                        counts.bound += 1;
+                        bindings.push(bind.evidence);
+                    }
+                }
+            } else if (decl.status === "none") {
+                counts.none += 1;
+                // The plan's clause: `capability: null` is only auditable if it carries a stated
+                // reason. An empty or perfunctory reason is the same hole with a nicer shape.
+                if (!decl.reason || decl.reason.trim().length < 40) {
+                    violations.push({
+                        route,
+                        kind: "unreasoned-none",
+                        detail: `${method} declares no capability but gives no substantive reason`,
+                    });
+                }
+            } else if (decl.status === "pending") {
+                counts.pending += 1;
+            } else {
+                violations.push({
+                    route,
+                    kind: "unknown-status",
+                    detail: `${method} has status ${JSON.stringify(decl.status)} (expected declared | none | pending)`,
+                });
+            }
+        }
+        // A declaration for a method the file no longer exports is dead weight that hides the
+        // method's later return. The lists may only shrink.
+        for (const method of Object.keys(entry)) {
+            if (!methods.includes(method)) {
+                violations.push({ route, kind: "stale-method", detail: `${method} is declared but not exported` });
+            }
+        }
+    }
+
+    for (const route of Object.keys(declared)) {
+        if (!onDisk.has(route)) {
+            violations.push({ route, kind: "stale-route", detail: "declared but no such route file exists" });
+        }
+    }
+
+    // Handlers this program did not introduce. A frozen branch rejoining a base that moved by 459
+    // commits grows the DENOMINATOR without anyone backsliding on the backlog, which the one-way
+    // ceiling alone cannot express: raising it would forfeit the ratchet, and holding it would make
+    // the gate permanently red for work no Access session performed. So growth is admitted only by
+    // ENUMERATION, at route#method grain, and every entry has to keep earning its place.
+    //
+    // Nothing here weakens a claim. An inherited handler is still `pending` — still W-15 backlog,
+    // still awaiting OD-7 — it is merely not counted against a ceiling that predates it.
+    const inheritedRaw = Array.isArray(table.inherited?.handlers) ? table.inherited.handlers : [];
+    const inheritedSeen = new Set();
+    let inheritedLive = 0;
+    for (const entry of inheritedRaw) {
+        const route = entry?.route;
+        const method = entry?.method;
+        const key = `${route}#${method}`;
+        if (!route || !method) {
+            violations.push({ route: String(route ?? "(inherited)"), kind: "malformed-inherited", detail: `inherited entry needs both route and method: ${JSON.stringify(entry)}` });
+            continue;
+        }
+        if (inheritedSeen.has(key)) {
+            violations.push({ route, kind: "duplicate-inherited", detail: `${method} is listed twice; one handler, one entry` });
+            continue;
+        }
+        inheritedSeen.add(key);
+        // Three ways an entry goes stale, all of them failures until it is removed. This is what
+        // makes the allowance self-expiring rather than a permanent widening.
+        if (!onDisk.has(route)) {
+            violations.push({ route, kind: "stale-inherited", detail: `${method} is inherited but no such route file exists; remove it from inherited` });
+            continue;
+        }
+        if (!onDisk.get(route).includes(method)) {
+            violations.push({ route, kind: "stale-inherited", detail: `${method} is inherited but no longer exported; remove it from inherited` });
+            continue;
+        }
+        const status = declared[route]?.[method]?.status;
+        if (status !== "pending") {
+            violations.push({
+                route,
+                kind: "classified-inherited",
+                detail: `${method} is inherited but now declares ${JSON.stringify(status ?? "nothing")}; a classified handler is no longer backlog — remove it from inherited so the ceiling absorbs the gain`,
+            });
+            continue;
+        }
+        inheritedLive += 1;
+    }
+    counts.inherited = inheritedLive;
+
+    // The pending backlog is ratcheted so W-15 can only make progress. Without this, the table
+    // passes forever by declaring every new route `pending`. The bound is over the backlog this
+    // program OWNS: total pending, less the enumerated handlers other programs introduced.
+    const ceiling = table.ratchet?.max_pending;
+    const owned = counts.pending - inheritedLive;
+    if (typeof ceiling === "number" && owned > ceiling) {
+        violations.push({
+            route: "(ratchet)",
+            kind: "ratchet-pending",
+            detail: `${counts.pending} pending less ${inheritedLive} inherited = ${owned} program-owned, which exceeds the ceiling of ${ceiling}; lower the ceiling as routes are reviewed, never raise it — a handler another program introduced belongs in inherited, named`,
+        });
+    }
+
+    return {
+        ok: violations.length === 0,
+        counts,
+        ratchet: { max_pending: ceiling ?? null, inherited: inheritedLive, owned_pending: owned },
+        violations,
+        bindings,
+        onDisk: [...onDisk],
+    };
+}
+
+/** Route → methods → suggested capability evidence. Authoring aid only. */
+export function suggestCapabilities() {
+    return walkRoutes(API_ROOT)
+        .sort()
+        .map((abs) => ({
+            route: relative(WEB, abs).split("\\").join("/"),
+            methods: exportedMethods(abs),
+            reachableKeys: [...reachableCapabilityKeys(abs)].sort(),
+        }));
+}
+
+/**
+ * Rewrite the table from disk, preserving every existing declaration and adding `pending` for
+ * anything new. Never downgrades a reviewed entry — seeding is additive by construction, so a
+ * careless `--seed` cannot silently erase a `declared` or `none` decision.
+ */
+export function seedTableForGeneration() {
+    return seedTable();
+}
+
+function seedTable() {
+    const table = existsSync(TABLE_PATH)
+        ? JSON.parse(readFileSync(TABLE_PATH, "utf8"))
+        : { reviewed: "", note: "", ratchet: { max_pending: 0 }, routes: {} };
+    const routes = {};
+    let pending = 0;
+
+    for (const abs of walkRoutes(API_ROOT).sort()) {
+        const rel = relative(WEB, abs).split("\\").join("/");
+        const prior = table.routes?.[rel] ?? {};
+        const entry = {};
+        for (const method of exportedMethods(abs)) {
+            entry[method] = prior[method] ?? { status: "pending" };
+            if (entry[method].status === "pending") pending += 1;
+        }
+        routes[rel] = entry;
+    }
+
+    table.routes = routes;
+    table.ratchet = { ...(table.ratchet ?? {}), max_pending: Math.min(table.ratchet?.max_pending ?? Infinity, pending) };
+    writeFileSync(TABLE_PATH, `${JSON.stringify(table, null, 2)}\n`);
+    return { routes: Object.keys(routes).length, pending };
+}
+
+// ---------------------------------------------------------------------------
+// CLI
+// ---------------------------------------------------------------------------
+
+const invokedDirectly = process.argv[1] && process.argv[1].endsWith("checkRouteCapabilities.mjs");
+if (invokedDirectly) {
+    if (process.argv.includes("--seed")) {
+        const { routes, pending } = seedTable();
+        console.log(`seeded ${routes} routes into scripts/routeCapabilities.declared.json (${pending} pending)`);
+        process.exit(0);
+    }
+    if (process.argv.includes("--suggest")) {
+        console.log(JSON.stringify(suggestCapabilities(), null, 2));
+        process.exit(0);
+    }
+
+    let report;
+    try {
+        report = runRouteCapabilityCheck();
+    } catch (e) {
+        console.error("[route-capabilities] check failed to run:", e);
+        process.exit(2);
+    }
+
+    if (process.argv.includes("--json")) {
+        const { onDisk, ...rest } = report;
+        console.log(JSON.stringify(rest, null, 2));
+    } else {
+        const c = report.counts;
+        console.log(`Declared route capability table (W-14 · I-24) — ${c.routes} API routes, ${c.methods} handlers\n`);
+        console.log(`  declared (requires a capability)   ${String(c.declared).padStart(4)}`);
+        console.log(`    ↳ bound to source (3 joins)      ${String(c.bound).padStart(4)}`);
+        console.log(`  none (reviewed, reason recorded)   ${String(c.none).padStart(4)}`);
+        console.log(`  pending (W-15 backlog)             ${String(c.pending).padStart(4)}`);
+        console.log(`    ↳ inherited from other programs  ${String(report.ratchet.inherited).padStart(4)}   enumerated, not counted against the ceiling`);
+        console.log(`    ↳ program-owned backlog          ${String(report.ratchet.owned_pending).padStart(4)}   ceiling ${report.ratchet.max_pending}`);
+
+        if (process.argv.includes("--pending")) {
+            console.log(`\n--- pending ---`);
+            const table = JSON.parse(readFileSync(TABLE_PATH, "utf8"));
+            for (const [route, entry] of Object.entries(table.routes ?? {})) {
+                const methods = Object.entries(entry)
+                    .filter(([, d]) => d.status === "pending")
+                    .map(([m]) => m);
+                if (methods.length) console.log(`  ${route}  [${methods.join(", ")}]`);
+            }
+        }
+
+        if (process.argv.includes("--gate-inventory")) {
+            const table = JSON.parse(readFileSync(TABLE_PATH, "utf8"));
+            const inv = gateInventory(table);
+            const total = Object.values(inv).reduce((n, b) => n + b.length, 0);
+            console.log(`\n--- W-15 sizing: gate evidence in the ${total} pending handlers ---`);
+            console.log(`  capability evidence (helper module names a key)  ${String(inv.capability.length).padStart(4)}`);
+            console.log(`  gate helper, but NOT a capability gate          ${String(inv.gateHelper.length).padStart(4)}`);
+            console.log(`  role / permissionKeys comparison in the body     ${String(inv.role.length).padStart(4)}`);
+            console.log(`  authenticated context loaded, no gate found      ${String(inv.authenticated.length).padStart(4)}`);
+            console.log(`  NO gate evidence discovered — review first       ${String(inv.none.length).padStart(4)}`);
+            console.log(`  body unreadable by this scanner                  ${String(inv.unreadable.length).padStart(4)}`);
+            console.log(`\n  Only the last two are claims. The first four say what a reviewer will find,`);
+            console.log(`  not that the handler is enforced — see gateInventory's contract.`);
+            console.log(`  The last three total ${inv.authenticated.length + inv.none.length + inv.unreadable.length}: handlers with no discovered authorization beyond`);
+            console.log(`  authentication. That is W-15's risk concentration, not its 725.`);
+            if (process.argv.includes("--verbose")) {
+                for (const [bucket, rows] of Object.entries(inv)) {
+                    console.log(`\n  [${bucket}]`);
+                    for (const r of rows) {
+                        const via = r.helper ? `  via ${r.helper}${r.keys ? ` (${r.keys.join(", ")})` : ""}` : "";
+                        console.log(`    ${r.route}  ${r.method}${via}`);
+                    }
+                }
+            }
+        }
+
+        if (process.argv.includes("--enforced-but-pending")) {
+            // W-15's burndown, ordered by evidence rather than by directory listing.
+            const table = JSON.parse(readFileSync(TABLE_PATH, "utf8"));
+            const found = pendingWithKnownGates(table);
+            console.log(`\n--- pending handlers that already call a known gate (${found.length}) ---`);
+            for (const f of found) {
+                console.log(`  ${f.route}  ${f.method}  calls ${f.helper}  (declared elsewhere as ${f.capabilityElsewhere})`);
+            }
+        }
+
+        if (report.violations.length) {
+            console.log(`\n✗ ${report.violations.length} violation(s):`);
+            for (const v of report.violations) console.log(`    [${v.kind}] ${v.route} — ${v.detail}`);
+            console.log(
+                `\n  Every exported handler under web/app/api must appear in\n` +
+                    `  scripts/routeCapabilities.declared.json with status 'declared', 'none' (with a reason),\n` +
+                    `  or 'pending'. Run with --seed to add newly-added routes as pending.`
+            );
+        } else {
+            console.log(`\n✓ every exported API handler is declared.`);
+        }
+    }
+
+    process.exit(report.ok ? 0 : 1);
+}

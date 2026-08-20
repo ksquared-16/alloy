@@ -53,7 +53,7 @@ export function canReadProgramPublication(context: {
     return (
         context.permissionKeys.includes("settings.read")
         || context.permissionKeys.includes("settings.manage")
-        || context.roleKeys.some((role) => ["owner", "admin", "ops", "manager"].includes(role))
+        || context.roleKeys.some((role) => ["admin", "ops"].includes(role))
     );
 }
 
@@ -63,7 +63,7 @@ export function canManageProgramPublication(context: {
 }): boolean {
     return (
         context.permissionKeys.includes("settings.manage")
-        || context.roleKeys.some((role) => ["owner", "admin", "ops"].includes(role))
+        || context.roleKeys.some((role) => ["admin", "ops"].includes(role))
     );
 }
 

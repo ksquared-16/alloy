@@ -1,0 +1,198 @@
+{
+  "title": "Access & Identity V2 — promotion / certification reconciliation, second issuance",
+  "supersedes": "promotion-certification-reconciliation.json (2026-08-10 08:42, head 242865b3b)",
+  "why_this_file_exists": "The first issuance concluded 'nothing is deployed' and 'promotion is blocked'. Both are now false. Between that report and this one the branch was merged to origin/staging as PR #396. The tranche's CODE shipped; its MIGRATIONS did not, and no pipeline stage ever applies them. That ordering is inverted relative to what the plan requires, and it has taken two operator-facing capabilities offline. This file records what re-derived, by what instrument.",
+  "mission": {
+    "mission_id": "msn_f74ed02c126c88d7ff",
+    "mission_version": 1,
+    "content_hash": "3c36b58117e46b2363ef602b385409e7",
+    "phase": "Access & Identity V2 — promotion, certification, remaining plan",
+    "worktree": "/Users/Kelly/Code/alloy-worktrees/wt6-director-experience-dx5-5-continuation",
+    "branch": "agent/cursor/6-vacilando-v3-4-conversational-director",
+    "head_at_report": "08e9dd878",
+    "origin_staging_at_report": "e26cb49db",
+    "generated": "2026-08-10"
+  },
+
+  "correction_1_the_tranche_is_deployed": {
+    "first_issuance_said": "'None of it. The branch is 36 commits ahead of origin/staging and 160 behind; not one access commit is on staging.'",
+    "now_verified": "FALSE as of e26cb49db. The whole W-0…W-12 tranche is an ancestor of origin/staging.",
+    "method": [
+      "git merge-base --is-ancestor 242865b3b origin/staging → true (the W-8/W-10 recovery commit)",
+      "git merge-base --is-ancestor 242865b3b HEAD → true",
+      "origin/staging e26cb49db = 'Merge pull request #396 from ksquared-16/agent/cursor/6-vacilando-v3-4-conversational-director'",
+      "Access commits reachable from origin/staging include e4aecbe87 (W-6), 448ca9d9f (W-7 dual-read), ab9c5730b (W-5), 0dd598e7a (W-4), ef45cf2ff (W-9), 210abac6a (W-11), e057f23b5 (W-12), 242865b3b (W-8+W-10)."
+    ],
+    "code_marker_confirmation": [
+      "web/lib/admin/accessScope.ts on staging exports no PORTAL_DEPARTMENT_SCOPE_BYPASS_ROLES, no portalAdminBypassesDepartmentScope, no effectiveDepartmentScopeDimensions — only a historical comment at :48. W-8 landed.",
+      "web/lib/admin/permissionGrid.ts on staging holds no PERMISSION_GRID_ROWS — only a historical comment at :5. W-10 landed."
+    ],
+    "consequence": "The branch carrying the Vacilando Director work also carried the entire access tranche. The access tranche was promoted as a passenger of an unrelated PR, not through the plan's own promotion gate. Nothing in the acceptance path noticed."
+  },
+
+  "correction_2_the_ordering_is_inverted": {
+    "severity": "S1 — operator-visible availability regression, live now",
+    "statement": "W-5 rerouted every membership write through two Postgres RPCs. Those RPCs are defined only in migration M2, which is merged to staging and applied nowhere. The code that calls them is deployed. The functions it calls do not exist.",
+    "the_dependency": {
+      "caller": "web/lib/admin/membershipWithProfile.ts:46 supabase.rpc('create_membership_with_access_profile', …)",
+      "caller_2": "web/lib/admin/membershipWithProfile.ts:66 supabase.rpc('replace_membership_with_access_profile', …)",
+      "defined_only_in": "supabase/migrations/20260807090000_membership_profile_atomic_create.sql (M2, W-5)",
+      "also_referenced_by": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql (M1, W-6)",
+      "m2_on_staging": "yes — blob c45391278131cb16bd77c87adc84359a3bc23e3b",
+      "m2_applied": "no — see correction_3; no channel has ever existed to apply it"
+    },
+    "blast_radius_production_call_sites": [
+      { "route": "POST /api/admin/users", "site": "web/app/api/admin/users/route.ts:105", "operator_capability": "add a user / create a membership in an org", "expected_behaviour_now": "fails" },
+      { "route": "web/app/api/admin/users/[userId]/role/route.ts:42", "site": "PATCH member role", "operator_capability": "change an existing member's role", "expected_behaviour_now": "fails" },
+      { "route": "POST /api/admin/dev/create-org", "site": "web/lib/dev/createOrgAndAssignAdmin.ts:76", "operator_capability": "dev tenant spinup", "expected_behaviour_now": "fails, but env-gated behind DEV_TENANT_SPINUP_ENABLED" }
+    ],
+    "failure_mode": "FAILS CLOSED, and this matters. PostgREST answers an undefined function with an error, membershipWithProfile.ts:52 classify()s it to kind:'error', and the route returns 400 without writing. No partial membership, no profile-less user_roles row, no privilege granted. This is an AVAILABILITY regression, not a privilege-escalation or data-integrity one. G4's invariant is not breached by the outage — it is breached only if someone 'fixes' this by restoring a direct user_roles insert.",
+    "why_the_pipeline_does_not_heal_it": [
+      "No GitHub workflow runs 'supabase db push', 'supabase migration up', or any equivalent — grep over .github/workflows returns nothing.",
+      "vercel.json sets git.deploymentEnabled.staging = true, so the merge deployed the code automatically.",
+      "web/package.json prebuild runs verify:module-imports and check:service-client-principal only — no migration step.",
+      "Therefore code deploys on merge and migrations never do. The gap does not close on its own and will not close on the next deploy."
+    ]
+  },
+
+  "correction_3_migration_state": {
+    "authored_and_now_on_staging": 3,
+    "applied_to_target": 0,
+    "register": [
+      { "id": "M1", "workstream": "W-6", "file": "supabase/migrations/20260807140000_backfill_membership_access_profiles.sql", "on_staging": true, "applied": false, "note": "Operator-authorized 2026-08-07. Preflight ok (w6-m1-preflight.json, census run 3, 2 rows on pairs_without_profile, 0 orphan profiles). Still no channel." },
+      { "id": "M2", "workstream": "W-5", "file": "supabase/migrations/20260807090000_membership_profile_atomic_create.sql", "on_staging": true, "applied": false, "note": "NOW LOAD-BEARING. Its absence is the S1 in correction_2. SECURITY INVOKER, EXECUTE revoked from PUBLIC before grant." },
+      { "id": "M5", "workstream": "W-11", "file": null, "on_staging": false, "applied": false, "status": "not_authored — operator review of the 36-key deletion list is a precondition (OD-3)" },
+      { "id": "M6", "workstream": "W-12", "file": "supabase/migrations/20260807170000_w12_seed_default_rbac_enumerated_grants.sql", "on_staging": true, "applied": false, "note": "Still never parsed by any PostgreSQL. A syntax error would surface only on first apply." },
+      { "id": "M7", "workstream": "W-13", "file": null, "status": "not_started" },
+      { "id": "M9", "workstream": "W-16", "file": null, "status": "not_started" },
+      { "id": "M10", "workstream": "W-19", "file": null, "status": "not_started", "note": "conditional on D4=b" }
+    ],
+    "struck_or_discharged": ["M3 — discharged out-of-track by Phase 0", "M4 — struck, no retired catalog tables exist", "M8 — struck, W-0 Q3 = 0"]
+  },
+
+  "correction_4_no_write_channel_still": {
+    "verified": "scripts/local-dev/lib/vacilando/trusted-host-action-registry.mjs ACTION_TYPES contains exactly one member: DATABASE_READ_CENSUS = 'database.read_census'. No apply_migration, no database.write, no migration.apply anywhere under scripts/local-dev/lib/vacilando/.",
+    "worker_read_access": "Also unavailable in practice — no command under scripts/local-dev/lib/vacilando/commands/ dispatches the census. It is Director-side, and artifact-pinned.",
+    "consequence": "This session could not independently confirm the applied-migration state of alloy_deployed_primary. The 'applied: false' entries above rest on: the register, the first issuance's finding, and the structural fact that no actor in the system has ever had a write path. A census read would make it airtight and is the first thing to do under any option below."
+  },
+
+  "correction_5_operator_directive_discharged": {
+    "directive": "[revision_request] Role hierarchy is still too deep — reduce to four layers.",
+    "verdict": "DISCHARGED — in specification and now in code.",
+    "specification": "docs/platform/planning/access-identity-v2/02-canonical-access-identity-model.md §1.3 'The authority chain is four layers deep, not five' (:155), restated as four layers / two branches (M2-16). §846: 'Reduce to four layers is discharged in §1.3.'",
+    "implementation": "§1107-1115 names the ONE place a fifth layer actually existed in the platform: portalAdminBypassesDepartmentScope making a role an input to the scope branch (accessScope.ts, wired at adminRouteGate.ts:64). W-8 deleted it, and W-8 is on staging (242865b3b). adminRouteGate.ts now derives dim solely via scopeDimensionsFromAccess(access) — no role input to the scope branch. I-27 holds in code.",
+    "residual": "One instance remains and it is surface-only: the operator roster collapses L2's membership set into a single displayed role (§17.7), presenting L3 as a property of L2. Owned by W-17, Wave 5, unstarted. It is a presentation defect, not an authority-chain defect.",
+    "cosmetic_defect_found": "web/lib/admin/adminRouteGate.ts:25 still carries the doc comment 'Department scope after portal admin/ops bypass', contradicted two lines later by W-8's own replacement note. Stale prose, no behaviour. Left unedited this session to keep the tree identical to staging for certification."
+  },
+
+  "correction_6_rl11_is_not_a_defect": {
+    "first_issuance_said": "'RL-11 subject incomplete — a helper-mediated user_roles writer, lib/dev/createOrgAndAssignAdmin.ts behind POST /api/admin/dev/create-org, remains open.'",
+    "now_verified": "Not a self-elevation defect. Downgraded to closed-with-note.",
+    "evidence": [
+      "The helper already routes through createMembershipWithAccessProfile (createOrgAndAssignAdmin.ts:76) — it is on the atomic W-5 path, so G4 is not reopened by it.",
+      "The route is triple-gated: DEV_TENANT_SPINUP_ENABLED === 'true' (route.ts:22), a valid admin context (:26-27), and ctx.role === 'admin' (:28-30).",
+      "The admin membership it writes is for an org inserted in the same call (createOrgAndAssignAdmin.ts:55-70), so no pre-existing principal's authority is widened. Org-creator-becomes-org-admin is provisioning, not elevation."
+    ],
+    "residual_note": "It is a service-role (createAdminClient) path taking a caller-supplied admin_user_id, so an admin may provision a new org administered by a different user. That is within an admin's authority and is cross-org, not self-elevation. Worth a declared route capability under W-14; not a defect today."
+  },
+
+  "certification_matrix": {
+    "scope_note": "Tiers A and B are static / pure-function and were executed against a tree that is the staging tree for every access file. Tier C is fixture-principal integration against the shared target and remains structurally unavailable — correction_4.",
+    "executed": {
+      "command": "npx vitest run tests/access tests/admin/permissionGrid.test.ts tests/admin/resolveAdminAccessCore.absentProfileDenies.test.ts tests/lifecycle/lifecycleAdminScopeAndPersistence.test.ts tests/lifecycle/lifecycleWorkspaceDepartmentAccess.test.ts",
+      "cwd": "web",
+      "at_commit": "08e9dd878",
+      "result": "13 files passed, 1 skipped; 200 tests passed, 0 failed, 6 skipped",
+      "exit_code": 0,
+      "duration_s": 92.69,
+      "the_6_skips": "web/tests/access/membershipProfileInvariant.integration.test.ts — RL-4 tier C. describe.skipIf(!SUPABASE_SERVICE_ROLE_KEY); that variable is absent from every worktree env file by two-tier-env design.",
+      "method_note": "A first attempt with --reporter=basic did not run at all: the reporter failed to load (ERR_LOAD_URL) and the shell reported exit 0 because the pipeline ended in `tail`. Rerun without the flag, reading vitest's own exit code. Recording this because it is the same class as the program's other four record-vs-instrument failures."
+    },
+    "requirements": [
+      { "requirement": "organization isolation", "verdict": "NOT CERTIFIED", "reason": "I-6 asserted by static means only; cross-org denial needs two real principals in the shared tenant — tier C." },
+      { "requirement": "membership / profile integrity", "verdict": "REGRESSED", "reason": "Tier A+B green: no code path writes user_roles outside the atomic RPC. But the RPC does not exist on the target, so the seam those tests certify is non-functional in the deployed environment. The invariant holds; the capability does not." },
+      { "requirement": "role grants", "verdict": "PARTIAL", "reason": "RL-8 green over all 315 migrations — 14 grant statements in 9 files, 10 bounded, 4 blanket, all four superseded history. M6 unapplied, so grants are not enumerated on the target." },
+      { "requirement": "scope enforcement", "verdict": "NOT ENFORCED", "reason": "resolveAdminAccessCore.ts:36 ABSENT_PROFILE_ENFORCEMENT = 'legacy-all' — on staging. Absent profiles still resolve 'all'. RL-5 proves the deny answer is computable, not enforced. Correctly withheld: throwing it before M1 applies locks out every profile-less principal." },
+      { "requirement": "self-elevation prevention", "verdict": "CERTIFIED (tree only)", "reason": "RL-11 green over its three routes; the fourth path is verified gated and out of subject — correction_6." },
+      { "requirement": "disabled / revoked access behaviour", "verdict": "NOT IMPLEMENTED", "reason": "Wave 6 (W-24…W-28) unstarted. GAP-1 remains the program's only S1 design defect: a principal can act after an operator was told revocation worked." },
+      { "requirement": "permission catalog integrity", "verdict": "CERTIFIED (live)", "reason": "RL-7 green — one FK, named, ON DELETE RESTRICT. The one requirement whose subject is genuinely live, because Phase 0's 20260729120000 migration is applied." },
+      { "requirement": "direct-route / API enforcement", "verdict": "NOT CERTIFIED", "reason": "RL-1 green over 92 of 570 routes that resolve a raw access context. W-14 route capability table and W-15 enforcement sweep unstarted." },
+      { "requirement": "action / command enforcement", "verdict": "NOT CERTIFIED", "reason": "05-command-enforcement-census.md is discovery only. No workstream in W-0…W-12 enforces at the command layer." },
+      { "requirement": "service-client principal discipline", "verdict": "CERTIFIED (tree only)", "reason": "RL-15 in prebuild; ceilings in web/scripts/serviceClientPrincipal.allowlist.json enforced over and under." },
+      { "requirement": "authority chain depth (operator directive)", "verdict": "CERTIFIED (tree only)", "reason": "Four layers, two branches. W-8 removed the only real fifth layer and is on staging — correction_5." }
+    ],
+    "typecheck": {
+      "status": "INFERRED, NOT VERIFIED HERE",
+      "detail": "The branch merged as PR #396 and staging carries two required unfiltered checks (runtime + DB certification), so CI presumably ran and passed on the merged tree. This session could not confirm it: `gh` is not permitted in this session, and npm run typecheck remains the unbrokered raw-compiler pattern that exit-144s on this host. CI remains the only typecheck authority."
+    }
+  },
+
+  "progress": {
+    "basis": "verified product state against the plan of record's own denominators (63 workstreams, 15 waves), not assignment completion",
+    "overall_percent": 14,
+    "headline": "Code promotion moved from 0 to 13 workstreams on staging. Effective enforcement did not move with it, because 0 of 7 migrations are applied — and the gap between those two facts is now an S1 outage rather than merely unfinished work.",
+    "areas": [
+      { "area": "Specification", "status": "complete", "percent": 100, "note": "Docs 00–07 plus the M2 rewrite. Includes the four-layer directive, discharged. The only area genuinely done." },
+      { "area": "Waves 0–1 foundation", "status": "shipped to staging", "percent": 95, "note": "W-0…W-4 on staging. RL-11's fourth path verified out-of-subject, not a defect." },
+      { "area": "Scope / membership", "status": "SHIPPED BROKEN", "percent": 30, "note": "W-5 code live, its RPC absent — two operator capabilities down. M1 authorized, unappliable. W-7 switch correctly not thrown. W-8 landed and discharges the four-layer directive." },
+      { "area": "Catalog / vocabulary", "status": "partly live, M5 awaiting review", "percent": 60, "note": "W-9 live via Phase 0's migration; W-10 on staging; W-11 measured (57 keys, 36 deletions); M6 authored, unapplied, still unparsed." },
+      { "area": "Admission", "status": "not started", "percent": 0, "note": "Wave 4 — W-13, W-14, W-15. W-13 needs D2/AD-2. W-14 is the critical path's long pole." },
+      { "area": "Enforcement", "status": "not started", "percent": 5, "note": "RL-1 covers 92 of 570 routes. W-15 (sized L) untouched." },
+      { "area": "Role-model cleanup", "status": "directive discharged, workstreams unstarted", "percent": 10, "note": "Four-layer chain certified in spec and code. W-16…W-22 unstarted; need D3 and D4. §17.7 roster (W-17) is the last five-deep surface." },
+      { "area": "Authentication / revocation", "status": "not started", "percent": 0, "note": "Waves 6 and 8 — W-24…W-28 and W-30…W-37, thirteen workstreams. GAP-1 is the program's only S1 design defect. Six AD decisions gate wave 8; until answered the plan states it cannot be sized." },
+      { "area": "Migration promotion", "status": "blocked — no channel exists, and code shipped ahead of it", "percent": 0, "note": "0 of 7 applied. Three now sit on staging beneath deployed code that needs them." },
+      { "area": "Runtime certification", "status": "tiers A+B green", "percent": 40, "note": "200 passed / 0 failed / 6 skipped at 08e9dd878. Tier C structurally unavailable. Typecheck inferred from CI, not verified here." },
+      { "area": "Product certification", "status": "not achievable in current state", "percent": 0, "note": "4 of 11 matrix requirements certified tree-only, 1 live, 1 regressed. 0 certified against the shared environment end-to-end." }
+    ]
+  },
+
+  "operator_decisions_required": [
+    {
+      "id": "OD-6",
+      "title": "How to close the W-5 code/migration inversion now live on staging",
+      "new_this_issuance": true,
+      "supersedes_in_urgency": "OD-1 — this is OD-1 with a live outage attached",
+      "blocks": "membership creation, role change, and any certification of the membership seam",
+      "why_operator_owned": "Both remedies are operator-owned. Applying M2 to the shared tenant is an irreversible shared-data write through a channel that does not exist. Guarding the call sites means shipping a fallback that either degrades the capability or reopens G4 — the invariant W-5 exists to close. A worker may not choose between an availability outage and an integrity invariant."
+    },
+    {
+      "id": "OD-1",
+      "title": "How does an authorized migration reach the shared database?",
+      "blocks": "M1, M2, M6 — and every §11 preflight for M5, M7, M9",
+      "status": "unchanged and now load-bearing",
+      "why_operator_owned": "Only remedies: the operator applies the SQL, or a database.apply_migration trusted-host action is built. The latter is a new privileged-write host capability against the tenant every managed worktree shares — a doctrine change and an irreversible shared-data operation."
+    },
+    {
+      "id": "OD-2",
+      "title": "Run W-8's Q6 identity query",
+      "status": "DOWNGRADED — W-8 already shipped without it",
+      "note": "The census was meant to run BEFORE W-8 landed, to tell whether the one admin/ops principal configured department_scope='restricted' is narrowed or locked out entirely. W-8 is on staging. The query is now a live-incident check, not a preflight."
+    },
+    {
+      "id": "OD-3",
+      "title": "Review the 36-key catalog deletion list so M5 can be authored",
+      "blocks": "M5, W-11 exit, RL-35's authorability",
+      "why_operator_owned": "Deleting 36 of 57 capability keys is a product decision about vocabulary. Enumerated in w11-catalog-reconciliation.json."
+    },
+    {
+      "id": "OD-4",
+      "title": "Which document is the plan of record?",
+      "blocks": "any honest completion percentage; the scope of 'Access & Identity V2'",
+      "status": "still open — registered as X-2 / DR-4 / QE-15",
+      "why_operator_owned": "The canonical copy scopes 63 workstreams across fifteen waves; the copy every assignment points at scopes 23 across six. Every percentage in this file uses the canonical denominators."
+    },
+    {
+      "id": "OD-5",
+      "title": "Promotion authority",
+      "status": "OVERTAKEN BY EVENTS",
+      "note": "Resolved in practice, not by decision: the tranche merged as a passenger of PR #396. The governance question it raised is now sharper — an access tranche reached staging without its own promotion gate, and without its migrations."
+    }
+  ],
+
+  "what_this_session_changed": [
+    "This file. No code edit, no push, no merge, no PR, no migration applied, no shared-environment write.",
+    "Certification suite re-executed at 08e9dd878: 200 passed, 0 failed, 6 skipped, exit 0.",
+    "Three of the first issuance's findings corrected against instruments: the tranche IS deployed; RL-11's open item is not a defect; the four-layer directive is discharged in code.",
+    "One new S1 identified: deployed code calling migrations that were never applied."
+  ]
+}

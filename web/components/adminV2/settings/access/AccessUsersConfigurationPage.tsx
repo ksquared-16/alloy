@@ -26,16 +26,49 @@ import { LocationMultiSelect } from "@/components/adminV2/settings/configuration
 
 type AccessUserTab = "overview" | "roles" | "access" | "security" | "history";
 
+import {
+    authenticationMethodLabel,
+    scopeSummary,
+    MEMBER_LIFECYCLE_LABEL,
+    type MemberAuthenticationProjection,
+    type MemberLifecycleProjection,
+    type ConfiguredScope,
+} from "@/lib/access/memberIdentityProjection";
+import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import type { AccessCommandKey } from "@/lib/access/accessChapterRoutes";
+import {
+    heldRoleKeys,
+    replacementIsNoOp,
+    roleAssignmentLabel,
+    rolesDiscardedByReplacement,
+} from "@/lib/access/memberRoleAssignment";
+import { buildPermissionGridRows } from "@/lib/admin/permissionGrid";
+import { areaAuthorityLabel } from "@/lib/access/roleAuthoritySummary";
+import {
+    explainEffectiveAccess,
+    explanationIsAnswerable,
+    managedAreas,
+    partialAreas,
+    scopeStatementForMember,
+    type RoleGrantLoad,
+} from "@/lib/access/effectiveAccessExplanation";
+
 type MemberRow = {
     user_id: string;
     email: string | null;
     display_name: string | null;
     role_keys: string[];
     primary_role: string;
-    department_scope: "all" | "restricted";
-    site_scope: "all" | "restricted";
+    department_scope: ConfiguredScope;
+    site_scope: ConfiguredScope;
+    has_access_profile: boolean;
+    effective_department_scope: "all" | "restricted";
+    effective_site_scope: "all" | "restricted";
+    effective_divergence_reason: string | null;
     department_ids: string[];
     site_location_ids: string[];
+    lifecycle: MemberLifecycleProjection;
+    authentication: MemberAuthenticationProjection;
 };
 
 type DeptOpt = { id: string; name: string | null; key: string | null };
@@ -49,29 +82,57 @@ function displayName(m: MemberRow): string {
     return (m.email ?? "").trim() || "Unnamed user";
 }
 
-function locationSummary(m: MemberRow, siteLocations: SiteLocOpt[]): string {
-    if (m.site_scope === "all") return "All locations";
-    const n = m.site_location_ids.length;
-    if (n === 0) return "No locations selected";
-    if (n === 1) {
-        const label = siteLocations.find((s) => s.id === m.site_location_ids[0])?.label;
-        return label ?? "1 location";
-    }
-    return `${n} locations`;
+/**
+ * W-45 / W-47 — these summaries used to open with `if (scope === "all") return "All locations"`,
+ * and an absent access profile reached that branch because the projection defaulted it to `all`.
+ * The rule now lives in `scopeSummary`, which returns the certainty alongside the label so an
+ * unconfigured scope renders as its own state rather than as a reassurance (`IA-R3`).
+ */
+function locationSummary(m: MemberRow, siteLocations: SiteLocOpt[]) {
+    return scopeSummary({
+        configured: m.site_scope,
+        ids: m.site_location_ids,
+        labelFor: (id) => siteLocations.find((s) => s.id === id)?.label ?? null,
+        allLabel: "All locations",
+        noneLabel: "No locations selected",
+        unitSingular: "location",
+        unitPlural: "locations",
+    });
 }
 
-function departmentSummary(m: MemberRow, departments: DeptOpt[]): string {
-    if (m.department_scope === "all") return "All departments";
-    const n = m.department_ids.length;
-    if (n === 0) return "No departments selected";
-    if (n === 1) {
-        const dept = departments.find((d) => d.id === m.department_ids[0]);
-        return (dept?.name ?? dept?.key) || "1 department";
-    }
-    return `${n} departments`;
+function departmentSummary(m: MemberRow, departments: DeptOpt[]) {
+    return scopeSummary({
+        configured: m.department_scope,
+        ids: m.department_ids,
+        labelFor: (id) => {
+            const dept = departments.find((d) => d.id === id);
+            return (dept?.name ?? dept?.key) || null;
+        },
+        allLabel: "All departments",
+        noneLabel: "No departments selected",
+        unitSingular: "department",
+        unitPlural: "departments",
+    });
 }
 
-export default function AccessUsersConfigurationPage() {
+/** Status pill class — a state the platform did not read must not borrow the "active" styling. */
+function lifecyclePillClass(state: MemberLifecycleProjection["state"]): string {
+    return state === "active" ?
+            "locations-collection-row__status locations-collection-row__status--active"
+        :   "locations-collection-row__status";
+}
+
+export default function AccessUsersConfigurationPage({
+    commands,
+}: {
+    /**
+     * W49-F1. The commands this principal can actually invoke, resolved on the server from each
+     * route's own predicate. Required and defaulted nowhere: a default would restore the state this
+     * fixed, where the control was drawn for everyone and the 403 arrived on click.
+     */
+    commands: readonly AccessCommandKey[];
+}) {
+    const canSendPasswordReset = commands.includes("password-reset");
     const router = useRouter();
     const searchParams = useSearchParams();
     const initialUserId = searchParams.get("userId");
@@ -80,6 +141,13 @@ export default function AccessUsersConfigurationPage() {
     const [departments, setDepartments] = useState<DeptOpt[]>([]);
     const [siteLocations, setSiteLocations] = useState<SiteLocOpt[]>([]);
     const [roles, setRoles] = useState<RoleRow[]>([]);
+    const [permissions, setPermissions] = useState<{ key: string; group_key: string; label: string }[]>([]);
+    /**
+     * OD-8 — per-role grant sets for the selected member, keyed by role. A value of `null` is a
+     * FAILED read, kept distinct from an empty set: the explanation refuses to be an answer when any
+     * role's capabilities are unknown, and collapsing the two here would remove its ability to.
+     */
+    const [roleGrants, setRoleGrants] = useState<Map<string, Set<string> | null>>(new Map());
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [message, setMessage] = useState<string | null>(null);
@@ -95,9 +163,21 @@ export default function AccessUsersConfigurationPage() {
 
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
+    /**
+     * `M2-17`. Acknowledgement that a replacement will delete the other roles this membership
+     * holds. It starts false and is reset by any change of selection or of the target role, so an
+     * acknowledgement can never outlive the statement it was given for.
+     */
+    const [confirmRoleReplace, setConfirmRoleReplace] = useState(false);
 
-    const [deptScope, setDeptScope] = useState<"all" | "restricted">("all");
-    const [siteScope, setSiteScope] = useState<"all" | "restricted">("all");
+    /**
+     * W-47: the editor's scope state carries `unset` too. Prefilling `all` for a membership that
+     * has no access profile would let the operator save a grant the product invented — §1.7's
+     * *"a simplification MUST NOT promote a value it has not corrected"*, in the one place where
+     * the promotion would be written back to the database.
+     */
+    const [deptScope, setDeptScope] = useState<ConfiguredScope>("all");
+    const [siteScope, setSiteScope] = useState<ConfiguredScope>("all");
     const [selDeptIds, setSelDeptIds] = useState<string[]>([]);
     const [selSiteIds, setSelSiteIds] = useState<string[]>([]);
     const [accessSaving, setAccessSaving] = useState(false);
@@ -105,6 +185,7 @@ export default function AccessUsersConfigurationPage() {
     const [resetBusy, setResetBusy] = useState(false);
     const [removeBusy, setRemoveBusy] = useState(false);
     const [confirmRemove, setConfirmRemove] = useState(false);
+    /** The route's truthful refusal (`T-19`), held so the operator can acknowledge and proceed. */
     const [actionsOpen, setActionsOpen] = useState(false);
 
     const reload = useCallback(async () => {
@@ -121,6 +202,13 @@ export default function AccessUsersConfigurationPage() {
             const rJson = await rRes.json().catch(() => ({}));
             if (!rRes.ok) throw new Error(typeof rJson.error === "string" ? rJson.error : "Failed to load roles");
             setRoles((rJson as { roles?: RoleRow[] }).roles ?? []);
+
+            // The capability catalog. `W-10`: the areas an explanation may name are whatever this
+            // returns, so a capability absent from the platform cannot be explained into existence.
+            const pRes = await fetch("/api/admin/rbac/permissions");
+            const pJson = await pRes.json().catch(() => ({}));
+            if (!pRes.ok) throw new Error(typeof pJson.error === "string" ? pJson.error : "Failed to load capabilities");
+            setPermissions((pJson as { permissions?: { key: string; group_key: string; label: string }[] }).permissions ?? []);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load users.");
         } finally {
@@ -147,20 +235,106 @@ export default function AccessUsersConfigurationPage() {
         [roleLabelByKey],
     );
 
+    /**
+     * W-51 / `IA-7`. Every role the membership holds, labelled — `null` when it holds none, which
+     * the callers render as an explicit unknown rather than a plausible word.
+     */
+    const rolesLabelFor = useCallback(
+        (member: MemberRow) => roleAssignmentLabel(member, roleLabelFor),
+        [roleLabelFor],
+    );
+
     const visibleMembers = useMemo(() => {
         const query = search.trim().toLowerCase();
         return members
             .filter((m) => {
                 if (!query) return true;
-                const haystack = `${displayName(m)} ${m.email ?? ""} ${roleLabelFor(m.primary_role)}`.toLowerCase();
+                // Searching a role the operator can see must find the people who hold it. Against
+                // the collapsed value, a member holding {admin, regional_lead} was unfindable by
+                // "regional lead" — the union is searched, not the survivor.
+                const haystack = `${displayName(m)} ${m.email ?? ""} ${rolesLabelFor(m) ?? ""}`.toLowerCase();
                 return haystack.includes(query);
             })
             .sort((a, b) => displayName(a).localeCompare(displayName(b)));
-    }, [members, search, roleLabelFor]);
+    }, [members, search, rolesLabelFor]);
 
     const selected = useMemo(
         () => (selectedUserId ? members.find((m) => m.user_id === selectedUserId) ?? null : null),
         [members, selectedUserId],
+    );
+
+    /** The union this membership actually holds. Empty is a real answer and is rendered as one. */
+    const selectedHeldRoles = useMemo(() => (selected ? heldRoleKeys(selected) : []), [selected]);
+
+    const gridRows = useMemo(() => buildPermissionGridRows(permissions), [permissions]);
+
+    /**
+     * OD-8 — load each held role's grants when the selection changes.
+     *
+     * One request per role rather than a union endpoint, because attribution needs to know WHICH
+     * role explains an area. A union would answer "what can they do" and lose "why", and "why" is
+     * the question this chapter exists to answer.
+     *
+     * A rejected or non-ok response stores `null`, not an empty set. That is the whole reason the
+     * state is a Map of nullable sets: the explanation must be able to say it does not know.
+     */
+    useEffect(() => {
+        if (!selected || selectedHeldRoles.length === 0) {
+            setRoleGrants(new Map());
+            return;
+        }
+        let cancelled = false;
+        const keys = [...selectedHeldRoles];
+        void (async () => {
+            const entries = await Promise.all(
+                keys.map(async (roleKey): Promise<[string, Set<string> | null]> => {
+                    try {
+                        const res = await fetch(`/api/admin/rbac/grants?role_key=${encodeURIComponent(roleKey)}`);
+                        if (!res.ok) return [roleKey, null];
+                        const json = (await res.json().catch(() => ({}))) as { permission_keys?: string[] };
+                        if (!Array.isArray(json.permission_keys)) return [roleKey, null];
+                        return [roleKey, new Set(json.permission_keys)];
+                    } catch {
+                        return [roleKey, null];
+                    }
+                }),
+            );
+            if (!cancelled) setRoleGrants(new Map(entries));
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [selected, selectedHeldRoles]);
+
+    /** The four layers composed. `null` until a member is selected — there is nothing to explain. */
+    const explanation = useMemo(() => {
+        if (!selected) return null;
+        const heldRoles: RoleGrantLoad[] = selectedHeldRoles.map((roleKey) => ({
+            roleKey,
+            roleLabel: roleLabelByKey.get(roleKey) ?? null,
+            // A role whose grants have not been fetched yet is UNKNOWN, exactly like a failed read.
+            // Rendering an in-flight load as "no capabilities" is the same defect as rendering a
+            // failed one that way, and it is the state an operator is most likely to see.
+            keys: roleGrants.has(roleKey) ? roleGrants.get(roleKey)! : null,
+        }));
+        return explainEffectiveAccess({
+            heldRoles,
+            gridRows,
+            scope: scopeStatementForMember(selected, {
+                departmentName: (id) => departments.find((d) => d.id === id)?.name ?? null,
+                siteName: (id) => siteLocations.find((sl) => sl.id === id)?.label ?? null,
+            }),
+        });
+    }, [selected, selectedHeldRoles, roleLabelByKey, roleGrants, gridRows, departments, siteLocations]);
+
+    /**
+     * `M2-17`. The roles the replacement `PATCH` would delete if submitted as it stands. The write
+     * replaces every role row for the pair, so this is *everything held except the selection* —
+     * and until it is empty or acknowledged, the save does not fire.
+     */
+    const rolesLostBySave = useMemo(
+        () => (selected ? rolesDiscardedByReplacement(selected, editRole) : []),
+        [selected, editRole],
     );
 
     useEffect(() => {
@@ -178,8 +352,24 @@ export default function AccessUsersConfigurationPage() {
         setSelDeptIds([...selected.department_ids]);
         setSelSiteIds([...selected.site_location_ids]);
         setConfirmRemove(false);
+        setConfirmRoleReplace(false);
         setActionsOpen(false);
     }, [selected]);
+
+    /**
+     * The scope editor is hidden for a membership with no access profile until the operator asks
+     * for it. `LocationMultiSelect` has two modes, so simply rendering it for an `unset` scope
+     * would show one radio already chosen — a choice nobody made, one click from being written.
+     */
+    const scopeEditorVisible = (selected?.has_access_profile ?? false) || deptScope !== "unset" || siteScope !== "unset";
+
+    /** Starts from the closed direction: restricted with nothing selected, never org-wide. */
+    const beginScopeConfiguration = () => {
+        setDeptScope("restricted");
+        setSiteScope("restricted");
+        setSelDeptIds([]);
+        setSelSiteIds([]);
+    };
 
     const selectMember = (userId: string) => {
         setSelectedUserId(userId);
@@ -220,6 +410,11 @@ export default function AccessUsersConfigurationPage() {
 
     const saveRole = async () => {
         if (!selected) return;
+        // M2-17, asserted rather than assumed. The button is already disabled in both cases, but a
+        // destructive replacement must not be reachable from a stale render or a programmatic
+        // click either — the guard that matters is the one in front of the write.
+        if (replacementIsNoOp(selected, editRole)) return;
+        if (rolesDiscardedByReplacement(selected, editRole).length > 0 && !confirmRoleReplace) return;
         setRoleSaving(true);
         setMessage(null);
         setError(null);
@@ -227,11 +422,19 @@ export default function AccessUsersConfigurationPage() {
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/role`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role: editRole }),
+                /**
+                 * W-54 / `I-34`ᴬ. The set this surface actually rendered travels with the write, so
+                 * the route can tell an acknowledged replacement from one submitted against a
+                 * collapsed view. Sent from `heldRoleKeys(selected)` — the same predicate the screen
+                 * displayed and the confirmation itemized — rather than re-derived, or the
+                 * acknowledgement would attest to a set the operator was never shown.
+                 */
+                body: JSON.stringify({ role: editRole, expected_role_keys: heldRoleKeys(selected) }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
             setMessage("Role updated.");
+            setConfirmRoleReplace(false);
             await reload();
             /** Re-run settings layout server props so `AdminAuthProvider` roleKeys match fresh `user_roles`. */
             router.refresh();
@@ -248,6 +451,11 @@ export default function AccessUsersConfigurationPage() {
         setMessage(null);
         setError(null);
         try {
+            // Refused rather than coerced: an `unset` dimension has no value to write, and
+            // choosing one here is exactly the fabrication W-47 removes from the read path.
+            if (deptScope === "unset" || siteScope === "unset") {
+                throw new Error("Choose a location and department scope before saving.");
+            }
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/access-scope`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -290,6 +498,19 @@ export default function AccessUsersConfigurationPage() {
         }
     };
 
+    /**
+     * `W-20`/`T-19`, on the canonical surface. Removal deletes a MEMBERSHIP; whether the person
+     * loses ACCESS depends on the legacy identity fallback, and the route is what knows. When it
+     * answers 409 with `acknowledgeable`, it is refusing truthfully: the membership row would go
+     * and the principal would still be admitted. The operator must be able to see that and proceed
+     * deliberately — a surface that cannot send the acknowledgement turns a truthful refusal into
+     * an operator with no way to remove the member at all.
+     *
+     * This surface previously had neither half. `W-20` hardened the two legacy removal surfaces and
+     * never reached this one, because the Tier A scan that would have caught it walked `app/` only
+     * and this component lives under `components/`. `W-59` deleted those two surfaces, which is how
+     * the gap became visible: the blind spot was the lock's, not the workstream's.
+     */
     const removeUser = async () => {
         if (!selected) return;
         setRemoveBusy(true);
@@ -298,9 +519,13 @@ export default function AccessUsersConfigurationPage() {
         try {
             const res = await fetch(`/api/admin/users/${encodeURIComponent(selected.user_id)}/remove`, {
                 method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
             });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Could not remove user");
+            const json = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) {
+                throw new Error(typeof json.error === "string" ? json.error : "Could not remove user");
+            }
             setMessage(`${displayName(selected)} removed from this organization.`);
             setSelectedUserId(null);
             setConfirmRemove(false);
@@ -397,12 +622,20 @@ export default function AccessUsersConfigurationPage() {
                                                 <span className="locations-collection-row__name">{displayName(m)}</span>
                                                 <span className="locations-collection-row__place">{m.email ?? "No email on file"}</span>
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
-                                                    {roleLabelFor(m.primary_role)} · {locationSummary(m, siteLocations)} ·{" "}
-                                                    {departmentSummary(m, departments)}
+                                                    {rolesLabelFor(m) ?? "No role assigned"} ·{" "}
+                                                    {locationSummary(m, siteLocations).label} ·{" "}
+                                                    {departmentSummary(m, departments).label}
                                                 </span>
                                             </span>
-                                            <span className="locations-collection-row__status locations-collection-row__status--active">
-                                                Active
+                                            <span
+                                                className={lifecyclePillClass(m.lifecycle.state)}
+                                                data-testid={`access-user-status-${m.user_id}`}
+                                                data-lifecycle-state={m.lifecycle.state}
+                                                {...(m.lifecycle.state === "unknown" ?
+                                                    { "data-capability": "unknown", title: m.lifecycle.unknown_reason ?? undefined }
+                                                :   {})}
+                                            >
+                                                {MEMBER_LIFECYCLE_LABEL[m.lifecycle.state]}
                                             </span>
                                         </button>
                                     );
@@ -435,13 +668,24 @@ export default function AccessUsersConfigurationPage() {
                                                     <h2 className="config-typo-workspace-title text-xl text-alloy-midnight">
                                                         {displayName(selected)}
                                                     </h2>
-                                                    <span className="locations-collection-row__status locations-collection-row__status--active">
-                                                        Active
+                                                    <span
+                                                        className={lifecyclePillClass(selected.lifecycle.state)}
+                                                        data-testid="access-user-selected-status"
+                                                        data-lifecycle-state={selected.lifecycle.state}
+                                                        {...(selected.lifecycle.state === "unknown" ?
+                                                            {
+                                                                "data-capability": "unknown",
+                                                                title: selected.lifecycle.unknown_reason ?? undefined,
+                                                            }
+                                                        :   {})}
+                                                    >
+                                                        {MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
                                                     </span>
                                                 </div>
                                                 <p className="mt-1 text-sm text-alloy-midnight/55">
-                                                    {roleLabelFor(selected.primary_role)} · {locationSummary(selected, siteLocations)} ·{" "}
-                                                    Password sign-in
+                                                    {rolesLabelFor(selected) ?? "No role assigned"} ·{" "}
+                                                    {locationSummary(selected, siteLocations).label} ·{" "}
+                                                    {authenticationMethodLabel(selected.authentication)}
                                                 </p>
                                             </div>
                                             <div className="relative flex flex-wrap gap-2">
@@ -472,9 +716,20 @@ export default function AccessUsersConfigurationPage() {
                                                                 Remove from organization
                                                             </button>
                                                         :   <div className="space-y-2 px-2 py-1">
+                                                                {/*
+                                                                  * `T-19`/`W-20`: this once read "They will lose access to this
+                                                                  * organization", which was false while the legacy identity
+                                                                  * fallback could still admit them — so the copy was narrowed to
+                                                                  * state only what the action performs. The fallback is now
+                                                                  * deleted and membership is the single source, but the copy
+                                                                  * stays as it is: `RL-54` requires removal copy to name what
+                                                                  * the command does, and "remove the membership" is what it
+                                                                  * does. The acknowledgement branch that sat here is gone with
+                                                                  * the residual it acknowledged.
+                                                                  */}
                                                                 <p className="text-xs text-alloy-midnight/70">
-                                                                    Remove {displayName(selected)}? They will lose access to this
-                                                                    organization.
+                                                                    Remove {displayName(selected)}&apos;s membership in this
+                                                                    organization?
                                                                 </p>
                                                                 <div className="flex gap-2">
                                                                     <button
@@ -511,19 +766,157 @@ export default function AccessUsersConfigurationPage() {
 
                                     {tab === "overview" ?
                                         <div className="grid gap-4 md:grid-cols-2" data-testid="access-user-overview">
+                                            {/*
+                                              * OD-8 / AD-25 — effective access, explained.
+                                              *
+                                              * The chapter's product goal is one sentence an
+                                              * administrator can act on: what this person can do,
+                                              * where, and because of which role. Every clause comes
+                                              * from a different layer, and each can be unknown
+                                              * independently — so the card states the whole answer
+                                              * or states that it cannot, and never a confident
+                                              * half. An explanation is exactly where a plausible
+                                              * wrong answer does the most damage, because the
+                                              * operator acts on it.
+                                              */}
+                                            <ConfigWorkspaceCard
+                                                title="Effective access"
+                                                testId="access-user-effective-access"
+                                                className="md:col-span-2"
+                                            >
+                                                {!explanation ? null
+                                                : !explanation.capabilitiesKnown ?
+                                                    <p
+                                                        className="text-sm text-alloy-midnight/70"
+                                                        data-testid="access-user-effective-unknown"
+                                                        role="status"
+                                                    >
+                                                        What this person can do could not be established — one or
+                                                        more of their roles&apos; capabilities could not be read.
+                                                        Nothing is shown rather than a partial answer.
+                                                    </p>
+                                                : explanation.areas.length === 0 ?
+                                                    <p className="text-sm text-alloy-midnight/70" data-testid="access-user-effective-none">
+                                                        {explanation.roles.length === 0 ?
+                                                            "No role is assigned, so this person holds no operator capabilities."
+                                                        :   "Their roles grant no capabilities the platform acts on."}
+                                                    </p>
+                                                :   <div className="space-y-3" data-testid="access-user-effective-summary">
+                                                        <ul className="space-y-1.5 text-sm">
+                                                            {[...managedAreas(explanation), ...partialAreas(explanation)].map((area) => (
+                                                                <li
+                                                                    key={area.groupKey}
+                                                                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5"
+                                                                    data-testid={`access-user-effective-area-${area.groupKey}`}
+                                                                >
+                                                                    <span className="font-medium text-alloy-midnight">
+                                                                        {area.groupLabel}
+                                                                    </span>
+                                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-bend-pine/80">
+                                                                        {areaAuthorityLabel(area)}
+                                                                    </span>
+                                                                    {/*
+                                                                      * Attribution names EVERY contributing role.
+                                                                      * Naming one would make the other invisible to
+                                                                      * an operator asking which assignment to change.
+                                                                      */}
+                                                                    <span className="text-xs text-alloy-midnight/55">
+                                                                        because of {area.from.map((r) => r.roleLabel).join(" and ")}
+                                                                    </span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                        <p className="text-sm text-alloy-midnight/70" data-testid="access-user-effective-scope">
+                                                            {explanation.scope.kind === "organization" ?
+                                                                "Across the whole organization."
+                                                            : explanation.scope.kind === "selected" ?
+                                                                `At ${[...explanation.scope.sites, ...explanation.scope.departments].join(", ")}.`
+                                                            :   `Where this applies is not established: ${explanation.scope.reason}`}
+                                                        </p>
+                                                        {explanation.unlabelledRoleKeys.length > 0 ?
+                                                            <p
+                                                                className="text-[11px] text-alloy-midnight/45"
+                                                                data-testid="access-user-effective-unlabelled"
+                                                            >
+                                                                {explanation.unlabelledRoleKeys.length}{" "}
+                                                                {explanation.unlabelledRoleKeys.length === 1 ? "role is" : "roles are"}{" "}
+                                                                held that this organization does not define, so they explain nothing
+                                                                here.
+                                                            </p>
+                                                        :   null}
+                                                        {!explanationIsAnswerable(explanation) ?
+                                                            <p className="text-[11px] text-alloy-midnight/45">
+                                                                This is a partial account — read it with the note above.
+                                                            </p>
+                                                        :   null}
+                                                    </div>
+                                                }
+                                            </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard title="Account Snapshot" testId="access-user-overview-account">
                                                 <dl className="grid gap-3 text-sm">
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Email</dt>
                                                         <dd className="mt-0.5">{selected.email ?? "No email on file"}</dd>
                                                     </div>
+                                                    {/*
+                                                      * W-51 / IA-7. The label follows the record: a membership
+                                                      * holding two roles is titled "Roles", because `user_roles`
+                                                      * is keyed on (user_id, org_id, role) and a singular heading
+                                                      * over a union states a model the schema does not have.
+                                                      */}
                                                     <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">Role</dt>
-                                                        <dd className="mt-0.5">{roleLabelFor(selected.primary_role)}</dd>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            {selectedHeldRoles.length > 1 ? "Roles" : "Role"}
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-roles">
+                                                            {rolesLabelFor(selected) ?? (
+                                                                <UnknownValue
+                                                                    reason="This membership has no role rows in this organization."
+                                                                    testId="access-user-overview-roles-none"
+                                                                />
+                                                            )}
+                                                        </dd>
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Status</dt>
-                                                        <dd className="mt-0.5">Active</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-status">
+                                                            {selected.lifecycle.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.lifecycle.unknown_reason ??
+                                                                        "This state was not read."
+                                                                    }
+                                                                />
+                                                            :   MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Invited
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-invited">
+                                                            {selected.lifecycle.invited_at ?
+                                                                new Date(selected.lifecycle.invited_at).toLocaleString()
+                                                            :   <UnknownValue
+                                                                    label="No invitation recorded"
+                                                                    reason="The authentication record carries no invitation timestamp for this membership."
+                                                                />
+                                                            }
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Last sign-in
+                                                        </dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-last-sign-in">
+                                                            {selected.lifecycle.last_sign_in_at ?
+                                                                new Date(selected.lifecycle.last_sign_in_at).toLocaleString()
+                                                            :   <UnknownValue
+                                                                    label="Never signed in"
+                                                                    reason="The authentication record carries no sign-in timestamp for this membership."
+                                                                />
+                                                            }
+                                                        </dd>
                                                     </div>
                                                 </dl>
                                             </ConfigWorkspaceCard>
@@ -532,13 +925,63 @@ export default function AccessUsersConfigurationPage() {
                                                 testId="access-user-overview-effective-access"
                                                 className="opacity-90"
                                             >
-                                                <p
-                                                    className="text-sm leading-6 text-alloy-midnight/55"
-                                                    data-capability="planned"
-                                                    data-testid="access-user-effective-access-planned"
+                                                {/*
+                                                  * W-47: the scope half of effective access is readable today, so it is
+                                                  * shown. `effective_*` comes from the enforcing resolver
+                                                  * (`resolveScopeAnswerFromProfile` under `ABSENT_PROFILE_ENFORCEMENT`),
+                                                  * not from a second rule — `IA-R4`'s "MUST NOT have a second
+                                                  * implementation" applied where it already costs nothing.
+                                                  *
+                                                  * The capability half is still Planned: W-48 binds it to the resolver
+                                                  * after W-41/W-42, and computing it here would be the second
+                                                  * implementation that workstream exists to prevent.
+                                                  */}
+                                                <dl
+                                                    className="grid gap-3 text-sm"
+                                                    data-testid="access-user-effective-scope"
                                                 >
-                                                    Computed effective access will appear here when available.
-                                                </p>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Locations
+                                                        </dt>
+                                                        <dd
+                                                            className="mt-0.5"
+                                                            data-scope-configured={selected.site_scope}
+                                                            data-scope-effective={selected.effective_site_scope}
+                                                        >
+                                                            {locationSummary(selected, siteLocations).label}
+                                                        </dd>
+                                                    </div>
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
+                                                            Departments
+                                                        </dt>
+                                                        <dd
+                                                            className="mt-0.5"
+                                                            data-scope-configured={selected.department_scope}
+                                                            data-scope-effective={selected.effective_department_scope}
+                                                        >
+                                                            {departmentSummary(selected, departments).label}
+                                                        </dd>
+                                                    </div>
+                                                    {selected.effective_divergence_reason ?
+                                                        <div
+                                                            className="rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[12px] leading-5 text-amber-900"
+                                                            data-testid="access-user-effective-scope-divergence"
+                                                            role="note"
+                                                        >
+                                                            {selected.effective_divergence_reason}
+                                                        </div>
+                                                    :   null}
+                                                    <p
+                                                        className="text-[12px] leading-5 text-alloy-midnight/55"
+                                                        data-capability="planned"
+                                                        data-testid="access-user-effective-access-planned"
+                                                    >
+                                                        Capability-level effective access — what this person may do, not
+                                                        only where — is planned and is not computed yet.
+                                                    </p>
+                                                </dl>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard
                                                 title="Security Summary"
@@ -546,22 +989,67 @@ export default function AccessUsersConfigurationPage() {
                                                 className="md:col-span-2"
                                             >
                                                 <p className="text-sm text-alloy-midnight/70">
-                                                    Password · Reset available via the Security tab.
+                                                    {selected.authentication.state === "unknown" ?
+                                                        <UnknownValue
+                                                            label="Sign-in method unknown"
+                                                            reason={
+                                                                selected.authentication.unknown_reason ??
+                                                                "The authentication record was not read."
+                                                            }
+                                                            testId="access-user-overview-auth-unknown"
+                                                        />
+                                                    :   `${authenticationMethodLabel(selected.authentication)} · Reset available via the Security tab.`
+                                                    }
                                                 </p>
                                             </ConfigWorkspaceCard>
                                         </div>
                                     : tab === "roles" ?
-                                        <ConfigWorkspaceCard testId="access-user-roles" title="Assigned Role">
+                                        <ConfigWorkspaceCard
+                                            testId="access-user-roles"
+                                            title={selectedHeldRoles.length > 1 ? "Assigned Roles" : "Assigned Role"}
+                                        >
+                                            {/*
+                                              * W-51 / IA-7. The card previously stated "One role is supported per
+                                              * user today." `user_roles` is keyed on (user_id, org_id, role) and
+                                              * the resolver unions every row, so that sentence described the
+                                              * PICKER, not the platform — and the picker is the thing at fault.
+                                              */}
                                             <p className="text-sm text-alloy-midnight/60">
-                                                This user receives the permissions of their assigned role. One role is
-                                                supported per user today.
+                                                This user receives the permissions of every role they hold.
                                             </p>
+                                            <div className="mt-3" data-testid="access-user-roles-held">
+                                                <span className="config-typo-field-label">
+                                                    {selectedHeldRoles.length > 1 ? "Roles held" : "Role held"}
+                                                </span>
+                                                {selectedHeldRoles.length === 0 ?
+                                                    <p className="mt-1">
+                                                        <UnknownValue
+                                                            reason="This membership has no role rows in this organization."
+                                                            testId="access-user-roles-held-none"
+                                                        />
+                                                    </p>
+                                                :   <ul className="mt-1 flex flex-wrap gap-1.5">
+                                                        {selectedHeldRoles.map((roleKey) => (
+                                                            <li
+                                                                key={roleKey}
+                                                                className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
+                                                                data-testid={`access-user-role-held-${roleKey}`}
+                                                            >
+                                                                {roleLabelFor(roleKey)}
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                }
+                                            </div>
                                             <label className="mt-3 block max-w-sm">
-                                                <span className="config-typo-field-label">Role</span>
+                                                <span className="config-typo-field-label">Replace with</span>
                                                 <select
                                                     className="config-runtime-select mt-1"
                                                     value={editRole}
-                                                    onChange={(event) => setEditRole(event.target.value)}
+                                                    onChange={(event) => {
+                                                        setEditRole(event.target.value);
+                                                        setConfirmRoleReplace(false);
+                                                    }}
                                                     data-testid="access-user-role-select"
                                                 >
                                                     {activeRoles.map((r) => (
@@ -571,9 +1059,60 @@ export default function AccessUsersConfigurationPage() {
                                                     ))}
                                                 </select>
                                             </label>
+                                            {/*
+                                              * M2-17. `PATCH …/role` replaces every role row for the pair, so a
+                                              * membership holding {admin, regional_lead} loses `regional_lead` the
+                                              * moment the visible role changes. The loss was silent because the
+                                              * screen never showed the second role. It is now named, itemized, and
+                                              * requires a deliberate acknowledgement before the save can fire.
+                                              * W-17 makes the write additive and retires this block.
+                                              */}
+                                            {rolesLostBySave.length > 0 ?
+                                                <div
+                                                    className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
+                                                    role="note"
+                                                    data-testid="access-user-role-replace-warning"
+                                                >
+                                                    <p className="font-medium">
+                                                        Saving removes{" "}
+                                                        {rolesLostBySave.length === 1 ? "another role" : (
+                                                            `${rolesLostBySave.length} other roles`
+                                                        )}
+                                                        .
+                                                    </p>
+                                                    <p className="mt-1">
+                                                        This control replaces the whole assignment rather than adding
+                                                        to it. These would be removed:{" "}
+                                                        <span className="font-medium">
+                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}
+                                                        </span>
+                                                        .
+                                                    </p>
+                                                    <label className="mt-2 flex items-start gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="mt-0.5"
+                                                            checked={confirmRoleReplace}
+                                                            onChange={(event) =>
+                                                                setConfirmRoleReplace(event.target.checked)
+                                                            }
+                                                            data-testid="access-user-role-replace-confirm"
+                                                        />
+                                                        <span>
+                                                            Remove{" "}
+                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}{" "}
+                                                            and leave only {roleLabelFor(editRole)}.
+                                                        </span>
+                                                    </label>
+                                                </div>
+                                            :   null}
                                             <ConfigurationPrimaryButton
                                                 className="mt-3"
-                                                disabled={roleSaving || editRole === selected.primary_role}
+                                                disabled={
+                                                    roleSaving ||
+                                                    replacementIsNoOp(selected, editRole) ||
+                                                    (rolesLostBySave.length > 0 && !confirmRoleReplace)
+                                                }
                                                 onClick={() => void saveRole()}
                                                 data-testid="access-user-role-save"
                                             >
@@ -582,6 +1121,31 @@ export default function AccessUsersConfigurationPage() {
                                         </ConfigWorkspaceCard>
                                     : tab === "access" ?
                                         <div className="space-y-4" data-testid="access-user-access">
+                                            {!selected.has_access_profile ?
+                                                <div
+                                                    className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
+                                                    data-testid="access-user-access-no-profile"
+                                                    role="note"
+                                                >
+                                                    <p className="font-medium">No access profile exists for this user.</p>
+                                                    <p className="mt-1">
+                                                        {selected.effective_divergence_reason}
+                                                    </p>
+                                                    <p className="mt-1">
+                                                        Nothing is pre-selected, because nothing has been configured.
+                                                        Start configuring to choose a scope and create the profile.
+                                                    </p>
+                                                    <ConfigurationSecondaryButton
+                                                        className="mt-2"
+                                                        onClick={beginScopeConfiguration}
+                                                        data-testid="access-user-access-configure"
+                                                    >
+                                                        Configure access scope
+                                                    </ConfigurationSecondaryButton>
+                                                </div>
+                                            :   null}
+                                            {scopeEditorVisible ?
+                                            <>
                                             <ConfigWorkspaceCard testId="access-user-access-locations" title="Locations">
                                                 <LocationMultiSelect
                                                     testId="access-user-access-locations-select"
@@ -613,12 +1177,14 @@ export default function AccessUsersConfigurationPage() {
                                                 />
                                             </ConfigWorkspaceCard>
                                             <ConfigurationPrimaryButton
-                                                disabled={accessSaving}
+                                                disabled={accessSaving || deptScope === "unset" || siteScope === "unset"}
                                                 onClick={() => void saveAccess()}
                                                 data-testid="access-user-access-save"
                                             >
                                                 {accessSaving ? "Saving…" : "Save access"}
                                             </ConfigurationPrimaryButton>
+                                            </>
+                                            :   null}
                                         </div>
                                     : tab === "security" ?
                                         <div className="space-y-4" data-testid="access-user-security">
@@ -626,25 +1192,82 @@ export default function AccessUsersConfigurationPage() {
                                                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Account</dt>
-                                                        <dd className="mt-0.5">Active</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-security-status">
+                                                            {selected.lifecycle.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.lifecycle.unknown_reason ??
+                                                                        "This state was not read."
+                                                                    }
+                                                                />
+                                                            :   MEMBER_LIFECYCLE_LABEL[selected.lifecycle.state]}
+                                                            {selected.lifecycle.deactivated_until ?
+                                                                <span className="ml-1 text-[11px] text-alloy-midnight/50">
+                                                                    until{" "}
+                                                                    {new Date(
+                                                                        selected.lifecycle.deactivated_until,
+                                                                    ).toLocaleString()}
+                                                                </span>
+                                                            :   null}
+                                                        </dd>
                                                     </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Authentication</dt>
-                                                        <dd className="mt-0.5">Password</dd>
+                                                        <dd className="mt-0.5" data-testid="access-user-security-auth">
+                                                            {selected.authentication.state === "unknown" ?
+                                                                <UnknownValue
+                                                                    reason={
+                                                                        selected.authentication.unknown_reason ??
+                                                                        "The authentication record was not read."
+                                                                    }
+                                                                />
+                                                            :   authenticationMethodLabel(selected.authentication)}
+                                                        </dd>
                                                     </div>
                                                 </dl>
-                                                <ConfigurationSecondaryButton
-                                                    className="mt-3"
-                                                    disabled={resetBusy || !selected.email}
-                                                    onClick={() => void sendPasswordReset()}
-                                                    data-testid="access-user-security-reset"
-                                                >
-                                                    {resetBusy ? "Sending…" : "Send password reset"}
-                                                </ConfigurationSecondaryButton>
+                                                {/*
+                                                  * W49-F1: the reset route enforces the portal `admin`
+                                                  * role, not the capability that admitted this chapter.
+                                                  * Offering the button to a grant-holder who is not org
+                                                  * admin produced a 403 on click. Withdrawing it grants
+                                                  * nothing — the route's gate is unchanged — it stops
+                                                  * the surface promising a command that was never live.
+                                                  */}
+                                                {canSendPasswordReset ?
+                                                    <ConfigurationSecondaryButton
+                                                        className="mt-3"
+                                                        disabled={resetBusy || !selected.email}
+                                                        onClick={() => void sendPasswordReset()}
+                                                        data-testid="access-user-security-reset"
+                                                    >
+                                                        {resetBusy ? "Sending…" : "Send password reset"}
+                                                    </ConfigurationSecondaryButton>
+                                                :   null}
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard testId="access-user-security-mfa" title="Multi-factor authentication">
-                                                <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                                                    Multi-factor authentication is planned and not yet available.
+                                                {/*
+                                                  * W-46: factor *presence* is readable from the auth record, so it is
+                                                  * reported. MFA *policy* — who must enrol — has no source until W-36,
+                                                  * and that half stays marked Planned rather than implied by the first.
+                                                  */}
+                                                <p className="text-sm" data-testid="access-user-security-mfa-state">
+                                                    {selected.authentication.mfa === "unknown" ?
+                                                        <UnknownValue
+                                                            reason={
+                                                                selected.authentication.mfa_unknown_reason ??
+                                                                "Factor enrolment was not read."
+                                                            }
+                                                        />
+                                                    : selected.authentication.mfa === "enrolled" ?
+                                                        "A verified second factor is enrolled on this account."
+                                                    :   "No second factor is enrolled on this account."}
+                                                </p>
+                                                <p
+                                                    className="mt-1.5 text-[12px] text-alloy-midnight/55"
+                                                    data-capability="planned"
+                                                >
+                                                    Requiring multi-factor authentication by role is planned and not yet
+                                                    available.
                                                 </p>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard testId="access-user-security-sessions" title="Sessions">

@@ -108,7 +108,18 @@ export async function requireAdmin(): Promise<NextResponse | null> {
 
 /**
  * Use in PATCH routes that both admin and ops can call (opportunities, jobs, contacts, customers, schedules).
- * Returns 401 if not logged in or no valid profile; 403 if role not in (admin, ops); otherwise null.
+ *
+ * **Does not check a role, and does not call `getAdminAuth`.** It resolves through
+ * `getAdminOrgContextLightCached` → `resolveAdminPortalOrgCore` — a *different* resolver from the
+ * one `requireAdmin` and `getAdminContextCached` use (`M2-13`: two gates in one request can
+ * disagree about the same principal; `W-41` consolidates them and needs `AD-12`).
+ *
+ * Returns **401** with no session, **403** when the principal is not portal-eligible, otherwise
+ * `null`. The name reflects "portal user allowed", not "verify ops" — it never branches on the
+ * compatibility `role` string.
+ *
+ * The comment this replaces claimed "403 if role not in (admin, ops)", a gate that is nowhere in
+ * this body. Prefer `loadAdminRouteGate` for new routes, which resolves capabilities and scope too.
  */
 export async function requireAdminOrOps(): Promise<NextResponse | null> {
     const ctx = await getAdminOrgContextLightCached();

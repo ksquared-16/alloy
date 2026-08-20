@@ -39,7 +39,9 @@ import {
     loadLocationPlacementPolicy,
     peekLocationAccessMembers,
     peekLocationPlacementPolicy,
+    type LocationAccessMembersSnapshot,
 } from "@/lib/locations/locationConcernCache";
+import { projectMemberScope, scopeSummary } from "@/lib/access/memberIdentityProjection";
 import {
     projectLocationConcernTransition,
     shouldApplyLocationConcernResponse,
@@ -514,16 +516,51 @@ export function LocationPlacementPanel({
     );
 }
 
-type MemberRow = {
-    user_id: string;
-    email: string | null;
-    display_name: string | null;
-    role_keys: string[];
-    department_scope: "all" | "restricted";
-    department_ids: string[];
-    site_scope: "all" | "restricted";
-    site_location_ids: string[];
-};
+/**
+ * **W-47 consumer correction.** This was a hand-written duplicate of the cache snapshot's member
+ * shape, and it went stale the moment `unset` became representable: the panel still declared
+ * `"all" | "restricted"`, so it did not compile against the projection that now emits three values.
+ * Deriving it from the snapshot means there is one shape, and a fourth state would reach here as a
+ * type error rather than as a wrong roster.
+ */
+type MemberRow = LocationAccessMembersSnapshot["members"][number];
+
+/**
+ * What the platform enforces for a membership with **no access profile row** — obtained by *calling*
+ * the projection with an absent row, never by restating `ABSENT_PROFILE_ENFORCEMENT` here. `IA-R4`:
+ * effective access "MUST NOT have a second implementation". When `W-7` flips that constant from
+ * `legacy-all` to `deny`, this panel follows without an edit.
+ */
+const ABSENT_PROFILE_ENFORCED = projectMemberScope({
+    profileRow: null,
+    departmentIds: [],
+    siteLocationIds: [],
+});
+
+/**
+ * Does this member actually *reach* this location today?
+ *
+ * The question is about enforcement, so it reads `effective_site_scope` — the enforcing resolver's
+ * answer — and not `site_scope`, which is what an operator configured. Before `W-47` the two were
+ * the same value; they are not any more, and for an `unset` membership they disagree: nothing is
+ * configured, and legacy enforcement grants everything.
+ *
+ * `effective_site_scope` is optional only because a cache entry written by an older build predates
+ * it. In that case the configured value is used when it is definite, and an `unset` membership
+ * falls back to the enforced answer above.
+ */
+function enforcedSiteScope(member: MemberRow): "all" | "restricted" {
+    if (member.effective_site_scope) return member.effective_site_scope;
+    return member.site_scope === "unset" ? ABSENT_PROFILE_ENFORCED.effective_site_scope : member.site_scope;
+}
+
+/** As {@link enforcedSiteScope}, for the department dimension the access-scope PATCH must preserve. */
+function enforcedDepartmentScope(member: MemberRow): "all" | "restricted" {
+    if (member.effective_department_scope) return member.effective_department_scope;
+    return member.department_scope === "unset" ?
+            ABSENT_PROFILE_ENFORCED.effective_department_scope
+        :   member.department_scope;
+}
 
 export function LocationAccessPanel({
     orgId,
@@ -611,7 +648,7 @@ export function LocationAccessPanel({
     }, [loadMembers]);
 
     const membersWithAccess = members.filter(
-        (member) => member.site_scope === "all" || member.site_location_ids.includes(locationId),
+        (member) => enforcedSiteScope(member) === "all" || member.site_location_ids.includes(locationId),
     );
     const adminCount = membersWithAccess.filter((member) => member.role_keys.includes("admin")).length;
 
@@ -625,12 +662,13 @@ export function LocationAccessPanel({
     });
 
     const updateLocationAccess = async (member: MemberRow, grant: boolean) => {
-        const currentlyHasAccess = member.site_scope === "all" || member.site_location_ids.includes(locationId);
+        const currentSiteScope = enforcedSiteScope(member);
+        const currentlyHasAccess = currentSiteScope === "all" || member.site_location_ids.includes(locationId);
         if (currentlyHasAccess === grant) return;
 
         const nextSiteIds =
             grant ? [...new Set([...member.site_location_ids, locationId])]
-            : member.site_scope === "all" ? siteLocationIds.filter((id) => id !== locationId)
+            : currentSiteScope === "all" ? siteLocationIds.filter((id) => id !== locationId)
             : member.site_location_ids.filter((id) => id !== locationId);
 
         if (nextSiteIds.length === 0) {
@@ -648,7 +686,12 @@ export function LocationAccessPanel({
                 credentials: "include",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    department_scope: member.department_scope,
+                    // `member.department_scope` may now be `unset`, which is not a value the
+                    // access-scope PATCH accepts — sending it would either be rejected or persist a
+                    // configuration the operator never chose. Granting a location must not silently
+                    // decide the department dimension, so this writes back what is *enforced* today,
+                    // leaving that dimension's behaviour exactly as it was.
+                    department_scope: enforcedDepartmentScope(member),
                     site_scope: "restricted",
                     department_ids: member.department_scope === "restricted" ? member.department_ids : [],
                     site_location_ids: nextSiteIds,
@@ -736,7 +779,21 @@ export function LocationAccessPanel({
                         <ul className="divide-y divide-alloy-forge/10 rounded-lg border border-alloy-forge/10">
                             {members.map((member) => {
                                 const hasAccess =
-                                    member.site_scope === "all" || member.site_location_ids.includes(locationId);
+                                    enforcedSiteScope(member) === "all" ||
+                                    member.site_location_ids.includes(locationId);
+                                // W-47 reached this label too: `site_scope === "all" ? … : "Selected
+                                // locations"` renders a membership with *no profile row* as
+                                // "Selected locations", which is a configuration nobody made. The
+                                // projection's own summary is used so the three states stay three.
+                                const scopeLine = scopeSummary({
+                                    configured: member.site_scope,
+                                    ids: member.site_location_ids,
+                                    labelFor: () => null,
+                                    allLabel: "All locations",
+                                    noneLabel: "No locations",
+                                    unitSingular: "location",
+                                    unitPlural: "locations",
+                                });
                                 return (
                                     <li
                                         key={member.user_id}
@@ -746,9 +803,21 @@ export function LocationAccessPanel({
                                             <p className="text-sm font-medium text-alloy-midnight/80">
                                                 {member.display_name ?? member.email ?? "Team member"}
                                             </p>
-                                            <p className="config-typo-meta">
-                                                {member.role_keys.join(", ") || "Member"} ·{" "}
-                                                {member.site_scope === "all" ? "All locations" : "Selected locations"}
+                                            <p
+                                                className="config-typo-meta"
+                                                data-capability={scopeLine.certainty === "unset" ? "unset" : undefined}
+                                            >
+                                                {member.role_keys.join(", ") || "Member"} · {scopeLine.label}
+                                                {scopeLine.certainty === "unset" ?
+                                                    <span className="text-alloy-midnight/45">
+                                                        {" "}
+                                                        (currently enforced as{" "}
+                                                        {enforcedSiteScope(member) === "all" ?
+                                                            "all locations"
+                                                        :   "selected locations"}
+                                                        )
+                                                    </span>
+                                                :   null}
                                             </p>
                                         </div>
                                         <ConfigurationSecondaryButton

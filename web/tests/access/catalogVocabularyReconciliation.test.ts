@@ -107,13 +107,15 @@ describe("W-11 — catalog against enforcement, both directions", () => {
     it("the enforced set is exactly the artifact's", () => {
         const enforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length > 0);
         expect(enforced.sort()).toEqual([...artifactEnforced].sort());
-        expect(enforced.length).toBe(21);
+        // 21 until W-13/AD-22 gave `settings.users_roles.read` an enforcement site.
+        expect(enforced.length).toBe(22);
     });
 
     it("the deletion list is exactly the catalog keys no product source names", () => {
         const unenforced = [...catalog.keys()].filter((k) => (scan.sitesByKey.get(k) ?? []).length === 0);
         expect(unenforced.sort()).toEqual([...artifact.deletion_candidates].sort());
-        expect(unenforced.length).toBe(36);
+        // 36 until W-13/AD-22 recovered `settings.users_roles.read` from the deletion list.
+        expect(unenforced.length).toBe(35);
     });
 
     it("C13 resolves against the measurement: nothing enforces a workflows key", () => {

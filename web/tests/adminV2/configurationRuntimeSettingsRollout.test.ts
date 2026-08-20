@@ -14,7 +14,9 @@ function read(rel: string): string {
 const ROLLOUT_PAGES = [
     "app/adminV2/settings/fields/page.tsx",
     "app/adminV2/settings/actions/page.tsx",
-    "app/adminV2/settings/users-roles/page.tsx",
+    // IA-8: the Access workspace's single renderer.
+    "app/adminV2/settings/organization/access/page.tsx",
+    "app/adminV2/settings/organization/communications/page.tsx",
     "app/adminV2/settings/entities/page.tsx",
 ] as const;
 
@@ -26,7 +28,7 @@ describe("Configuration Runtime settings rollout", () => {
         }
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
-        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
+        expect(read("app/adminV2/settings/organization/access/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/organization/communications/page.tsx")).toContain(
             "OrganizationCommunicationsPage",
         );

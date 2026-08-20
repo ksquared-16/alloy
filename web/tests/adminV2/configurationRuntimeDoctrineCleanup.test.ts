@@ -85,7 +85,8 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(shell).toContain("ConfigurationContext");
         expect(shell).toContain("ConfigurationShell");
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain("dataModelSectionHref");
-        expect(read("app/adminV2/settings/users-roles/page.tsx")).toContain("UsersRolesConfigurationPage");
+        // IA-8: the Access workspace has one renderer, and it is the `/organization/access` page.
+        expect(read("app/adminV2/settings/organization/access/page.tsx")).toContain("UsersRolesConfigurationPage");
         expect(read("app/adminV2/settings/organization/communications/page.tsx")).toContain(
             "OrganizationCommunicationsPage",
         );
@@ -93,7 +94,7 @@ describe("Configuration Mode doctrine cleanup", () => {
         expect(read("app/adminV2/settings/actions/page.tsx")).toContain("SettingsConfigurationSurfaceShell");
         for (const path of [
             "app/adminV2/settings/fields/page.tsx",
-            "app/adminV2/settings/users-roles/page.tsx",
+            "app/adminV2/settings/organization/access/page.tsx",
             "app/adminV2/settings/organization/communications/page.tsx",
             "app/adminV2/settings/entities/page.tsx",
             "app/adminV2/settings/actions/page.tsx",

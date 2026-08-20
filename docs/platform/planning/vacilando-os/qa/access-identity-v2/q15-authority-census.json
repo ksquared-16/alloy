@@ -1,0 +1,144 @@
+{
+  "artifact": "q15-authority-census",
+  "title": "Q15 \u2014 real-tenant authority census for W-20 removal and the OD-7 conversion burndown",
+  "plan_of_record": "docs/platform/planning/access-identity-v2/03-implementation-qa-sequence.md",
+  "plan_section": "\u00a79 (W-20, lockout class L4) and \u00a78 (W-15, OD-7)",
+  "worktree": "wt1-access-identity-v2",
+  "branch": "agent/claude/1-access-identity-v2",
+  "prepared_at": "2026-08-19",
+  "prepared_by": "Access & Identity V2 lane",
+  "status": "PREPARED \u2014 NOT EXECUTED. No worker-side channel to database.read_census exists in this lane; see access_request.",
+  "$comment": "A DEDICATED artifact, deliberately not an amendment to wave0-authority-census.json. Promoting amended SQL into that file inherits its stored query_hash and fails query_hash_mismatch \u2014 a trap this program has already paid for once. This file carries no query_hash for the same reason: the executing channel should hash what it runs.",
+  "target": "alloy_deployed_primary",
+  "read_only": true,
+  "read_only_basis": "Every statement is a single SELECT. No INSERT/UPDATE/DELETE/ALTER/CREATE/DROP/GRANT, no DO block, no function call that writes. Validated against the local certification database purely to prove the statements parse and return \u2014 those results are NOT the census and are not recorded here.",
+  "combined_query": "WITH legacy AS (\n  SELECT u.id AS user_id,\n         COALESCE(\n           NULLIF(lower(btrim(up.role::text)), ''),\n           NULLIF(lower(btrim(au1.role::text)), ''),\n           NULLIF(lower(btrim(au2.role::text)), '')\n         ) AS legacy_role\n  FROM auth.users u\n  LEFT JOIN public.user_profiles up ON up.id = u.id\n  LEFT JOIN public.app_users au1 ON au1.id = u.id\n  LEFT JOIN public.app_users au2 ON au2.auth_user_id = u.id\n),\na1 AS (\n  SELECT l.legacy_role, count(*) AS principals\n  FROM legacy l\n  WHERE l.legacy_role IS NOT NULL\n    AND NOT EXISTS (\n      SELECT 1 FROM public.user_roles ur\n      WHERE ur.user_id = l.user_id\n        AND NULLIF(lower(btrim(ur.role::text)), '') IS NOT NULL\n    )\n  GROUP BY l.legacy_role\n),\na2 AS (\n  SELECT l.legacy_role,\n         count(*) AS principals,\n         count(*) FILTER (\n           WHERE EXISTS (\n             SELECT 1 FROM public.user_roles ur\n             WHERE ur.user_id = l.user_id\n               AND lower(btrim(ur.role::text)) = l.legacy_role\n           )\n         ) AS canonical_role_matches,\n         count(*) FILTER (\n           WHERE NOT EXISTS (\n             SELECT 1 FROM public.user_roles ur\n             WHERE ur.user_id = l.user_id\n               AND lower(btrim(ur.role::text)) = l.legacy_role\n           )\n         ) AS canonical_role_differs\n  FROM legacy l\n  WHERE l.legacy_role IS NOT NULL\n    AND EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = l.user_id)\n  GROUP BY l.legacy_role\n),\na3 AS (\n  SELECT DISTINCT l.legacy_role,\n         EXISTS (\n           SELECT 1 FROM public.role_definitions rd WHERE rd.role_key = l.legacy_role\n         ) AS is_a_defined_role\n  FROM legacy l\n  WHERE l.legacy_role IS NOT NULL\n),\na4 AS (\n  SELECT count(*) AS legacy_only_principals,\n         count(*) FILTER (WHERE au.org_id IS NULL) AS legacy_row_without_org\n  FROM auth.users u\n  JOIN public.app_users au ON au.id = u.id OR au.auth_user_id = u.id\n  WHERE NULLIF(lower(btrim(au.role::text)), '') IS NOT NULL\n    AND NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id)\n),\nb1 AS (\n  SELECT lower(btrim(ur.role::text)) AS role_key,\n         count(*) AS memberships,\n         count(DISTINCT ur.org_id) AS orgs\n  FROM public.user_roles ur\n  GROUP BY 1\n),\nb2 AS (\n  SELECT g.role_key,\n         g.permission_key,\n         count(DISTINCT g.org_id) AS orgs_granting,\n         (SELECT count(DISTINCT rd.org_id)\n            FROM public.role_definitions rd\n           WHERE rd.role_key = g.role_key) AS orgs_defining_role\n  FROM public.role_permission_grants g\n  WHERE g.allowed\n  GROUP BY g.role_key, g.permission_key\n),\nb3 AS (\n  SELECT g.role_key,\n         g.permission_key,\n         count(DISTINCT g.org_id) AS orgs_granting,\n         (SELECT count(*) FROM public.user_roles ur\n           WHERE lower(btrim(ur.role::text)) = g.role_key) AS memberships_holding_role\n  FROM public.role_permission_grants g\n  WHERE g.allowed\n    AND g.role_key NOT IN ('admin', 'ops')\n  GROUP BY g.role_key, g.permission_key\n),\nb4 AS (\n  SELECT rd.role_key,\n         pd.key AS permission_key,\n         count(*) AS orgs_defining_role_without_grant\n  FROM public.role_definitions rd\n  CROSS JOIN public.permission_definitions pd\n  WHERE rd.role_key IN ('admin', 'ops')\n    AND pd.is_active\n    AND NOT EXISTS (\n      SELECT 1 FROM public.role_permission_grants g\n      WHERE g.org_id = rd.org_id\n        AND g.role_key = rd.role_key\n        AND g.permission_key = pd.key\n        AND g.allowed\n    )\n  GROUP BY rd.role_key, pd.key\n  HAVING count(*) > 0\n),\nc1 AS (\n  SELECT g.role_key,\n         count(DISTINCT g.org_id) AS orgs_granting,\n         (SELECT count(*) FROM public.user_roles ur\n           WHERE lower(btrim(ur.role::text)) = g.role_key\n             AND ur.org_id IN (\n               SELECT g2.org_id FROM public.role_permission_grants g2\n               WHERE g2.allowed\n                 AND g2.permission_key IN ('settings.users_roles.read', 'settings.users_roles')\n                 AND g2.role_key = g.role_key\n             )) AS memberships_newly_admitted\n  FROM public.role_permission_grants g\n  WHERE g.allowed\n    AND g.permission_key IN ('settings.users_roles.read', 'settings.users_roles')\n    AND g.role_key NOT IN ('admin', 'ops')\n  GROUP BY g.role_key\n),\nd1 AS (\n  SELECT count(*) AS memberships,\n         count(*) FILTER (WHERE p.user_id IS NULL) AS without_access_profile,\n         count(*) FILTER (WHERE p.department_scope = 'restricted') AS department_restricted,\n         count(*) FILTER (WHERE p.site_scope = 'restricted') AS site_restricted\n  FROM public.user_roles ur\n  LEFT JOIN public.user_access_profiles p\n    ON p.user_id = ur.user_id AND p.org_id = ur.org_id\n),\nanswered AS (\n  SELECT 'Q15-A1' AS question_id, (SELECT count(*) FROM a1) AS row_count\n  UNION ALL SELECT 'Q15-A2', (SELECT count(*) FROM a2)\n  UNION ALL SELECT 'Q15-A3', (SELECT count(*) FROM a3)\n  UNION ALL SELECT 'Q15-A4', (SELECT count(*) FROM a4)\n  UNION ALL SELECT 'Q15-B1', (SELECT count(*) FROM b1)\n  UNION ALL SELECT 'Q15-B2', (SELECT count(*) FROM b2)\n  UNION ALL SELECT 'Q15-B3', (SELECT count(*) FROM b3)\n  UNION ALL SELECT 'Q15-B4', (SELECT count(*) FROM b4)\n  UNION ALL SELECT 'Q15-C1', (SELECT count(*) FROM c1)\n  UNION ALL SELECT 'Q15-D1', (SELECT count(*) FROM d1)\n)\nSELECT question_id, kind, payload\nFROM (\n  SELECT ans.question_id, 'row_count' AS kind,\n         jsonb_build_object('row_count', ans.row_count) AS payload\n  FROM answered ans\n  UNION ALL SELECT 'Q15-A1', 'row', to_jsonb(a1) FROM a1\n  UNION ALL SELECT 'Q15-A2', 'row', to_jsonb(a2) FROM a2\n  UNION ALL SELECT 'Q15-A3', 'row', to_jsonb(a3) FROM a3\n  UNION ALL SELECT 'Q15-A4', 'row', to_jsonb(a4) FROM a4\n  UNION ALL SELECT 'Q15-B1', 'row', to_jsonb(b1) FROM b1\n  UNION ALL SELECT 'Q15-B2', 'row', to_jsonb(b2) FROM b2\n  UNION ALL SELECT 'Q15-B3', 'row', to_jsonb(b3) FROM b3\n  UNION ALL SELECT 'Q15-B4', 'row', to_jsonb(b4) FROM b4\n  UNION ALL SELECT 'Q15-C1', 'row', to_jsonb(c1) FROM c1\n  UNION ALL SELECT 'Q15-D1', 'row', to_jsonb(d1) FROM d1\n) census\nORDER BY question_id, kind, payload::text;",
+  "combined_query_basis": "The trusted-host action reads ONE field from a JSON artifact \u2014 trusted-host-action-registry.mjs takes j.combined_query || j.sql || j.query and rejects the artifact with json_missing_sql if none is present, then requires a SINGLE statement beginning WITH or SELECT. The nine per-question statements below are the readable form and remain the authority for what each question means; this field is their executable projection and must stay semantically identical to them. Proven, not asserted: validateReadOnlySql returns {ok:true,kind:'with_select'}, and the statement was executed against a real PostgreSQL to prove it parses and returns. Those cert-tenant numbers are NOT the census and are recorded nowhere.",
+  "combined_query_shape": "Rows are (question_id, kind, payload). Every question emits exactly one kind='row_count' row even when it matches nothing, so 'this question returned zero' is distinguishable from 'this question never ran' \u2014 the decision rules below turn on zero/non-zero, and a silently skipped query would read as a clean result. kind='row' rows carry that question's own columns as jsonb.",
+  "combined_query_hash_absent_deliberately": "No hash is stored, for the reason in $comment: the validator compares a stored query_hash against what it is about to run and fails query_hash_mismatch on any drift. The executing channel should hash what it runs.",
+  "data_minimization": {
+    "returns": "role keys, capability keys, aggregate counts, boolean coverage, mismatch categories",
+    "never_returns": "names, emails, phone numbers, child or family data, communications, operational records",
+    "identifier_policy": "No query selects a name or address column. A1 and C1 return counts only; if an anomaly needs a specific principal, re-run that one query with a user_id projection as a follow-up rather than widening these."
+  },
+  "resolver_facts_the_sql_mirrors": {
+    "legacy_is_a_FALLBACK_not_a_parallel_path": "resolveAdminAccessCore consults user_profiles/app_users ONLY when chooseOrgAndRoleKeysFromMembershipRows returns null \u2014 i.e. when the principal has no usable user_roles row. So the lockout population is exactly: legacy role present AND no usable canonical membership. A principal with both is unaffected by removal, because the fallback is never reached for them.",
+    "three_legacy_reads": "user_profiles.role by id; app_users.role/org_id by id; app_users.role/org_id by auth_user_id. The third exists because the two tables key differently, and a census that checked only the first two would under-count.",
+    "normalization": "normalizeRoleKey trims and lowercases, so the SQL uses lower(btrim(role)) rather than raw equality \u2014 a row holding 'Admin ' authorizes today and a raw comparison would miss it.",
+    "portal_roles": "portalEligible is roleKeys \u2229 {admin, ops}. requireAdminOrOps admits on that set by ROLE, never by grant, which is why B3/B4 are the load-bearing queries for OD-7.",
+    "role_column_types": "user_profiles.role is the ENUM app_role, not text, so btrim() rejects it without a cast \u2014 caught by validating these statements against a real PostgreSQL rather than by reading them. Every role column is cast ::text before normalization; casting text to text is a no-op, so the same SQL is correct whichever type a given deployment carries."
+  },
+  "questions": [
+    {
+      "id": "Q15-A1",
+      "question": "How many principals would LOSE all authority if the two legacy reads were removed? (legacy role present, no usable canonical membership)",
+      "gates": [
+        "W-20",
+        "L4"
+      ],
+      "classifies": "missing canonical membership",
+      "decides": "W-20 removal is safe only if this is 0.",
+      "sql": "WITH legacy AS (\n  SELECT u.id AS user_id,\n         COALESCE(\n           NULLIF(lower(btrim(up.role::text)), ''),\n           NULLIF(lower(btrim(au1.role::text)), ''),\n           NULLIF(lower(btrim(au2.role::text)), '')\n         ) AS legacy_role\n  FROM auth.users u\n  LEFT JOIN public.user_profiles up ON up.id = u.id\n  LEFT JOIN public.app_users au1 ON au1.id = u.id\n  LEFT JOIN public.app_users au2 ON au2.auth_user_id = u.id\n)\nSELECT l.legacy_role,\n       count(*) AS principals\nFROM legacy l\nWHERE l.legacy_role IS NOT NULL\n  AND NOT EXISTS (\n    SELECT 1 FROM public.user_roles ur\n    WHERE ur.user_id = l.user_id\n      AND NULLIF(lower(btrim(ur.role::text)), '') IS NOT NULL\n  )\nGROUP BY l.legacy_role\nORDER BY principals DESC;"
+    },
+    {
+      "id": "Q15-A2",
+      "question": "How many legacy values are REDUNDANT \u2014 a canonical membership exists, so the fallback is never consulted?",
+      "gates": [
+        "W-20"
+      ],
+      "classifies": "redundant legacy value",
+      "sql": "WITH legacy AS (\n  SELECT u.id AS user_id,\n         COALESCE(\n           NULLIF(lower(btrim(up.role::text)), ''),\n           NULLIF(lower(btrim(au1.role::text)), ''),\n           NULLIF(lower(btrim(au2.role::text)), '')\n         ) AS legacy_role\n  FROM auth.users u\n  LEFT JOIN public.user_profiles up ON up.id = u.id\n  LEFT JOIN public.app_users au1 ON au1.id = u.id\n  LEFT JOIN public.app_users au2 ON au2.auth_user_id = u.id\n)\nSELECT l.legacy_role,\n       count(*) AS principals,\n       count(*) FILTER (\n         WHERE EXISTS (\n           SELECT 1 FROM public.user_roles ur\n           WHERE ur.user_id = l.user_id\n             AND lower(btrim(ur.role::text)) = l.legacy_role\n         )\n       ) AS canonical_role_matches,\n       count(*) FILTER (\n         WHERE NOT EXISTS (\n           SELECT 1 FROM public.user_roles ur\n           WHERE ur.user_id = l.user_id\n             AND lower(btrim(ur.role::text)) = l.legacy_role\n         )\n       ) AS canonical_role_differs\nFROM legacy l\nWHERE l.legacy_role IS NOT NULL\n  AND EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = l.user_id)\nGROUP BY l.legacy_role\nORDER BY principals DESC;"
+    },
+    {
+      "id": "Q15-A3",
+      "question": "How many legacy values are STALE \u2014 naming a role no org actually defines?",
+      "gates": [
+        "W-20",
+        "W-44"
+      ],
+      "classifies": "stale/dead legacy value",
+      "note": "A legacy role that is not a role_definitions key anywhere cannot become a capability holder, so removing it cannot narrow anything. This also re-tests W-44's premise against real data rather than seed data.",
+      "sql": "WITH legacy AS (\n  SELECT DISTINCT COALESCE(\n           NULLIF(lower(btrim(up.role::text)), ''),\n           NULLIF(lower(btrim(au1.role::text)), ''),\n           NULLIF(lower(btrim(au2.role::text)), '')\n         ) AS legacy_role\n  FROM auth.users u\n  LEFT JOIN public.user_profiles up ON up.id = u.id\n  LEFT JOIN public.app_users au1 ON au1.id = u.id\n  LEFT JOIN public.app_users au2 ON au2.auth_user_id = u.id\n)\nSELECT l.legacy_role,\n       EXISTS (SELECT 1 FROM public.role_definitions rd WHERE rd.role_key = l.legacy_role) AS is_a_defined_role\nFROM legacy l\nWHERE l.legacy_role IS NOT NULL\nORDER BY is_a_defined_role, l.legacy_role;"
+    },
+    {
+      "id": "Q15-A4",
+      "question": "For principals reachable only through the fallback, does the legacy org agree with any canonical org they hold?",
+      "gates": [
+        "W-20",
+        "W-22"
+      ],
+      "classifies": "canonical scope missing or different",
+      "sql": "SELECT count(*) AS legacy_only_principals,\n       count(*) FILTER (WHERE au.org_id IS NULL) AS legacy_row_without_org\nFROM auth.users u\nJOIN public.app_users au ON au.id = u.id OR au.auth_user_id = u.id\nWHERE NULLIF(lower(btrim(au.role::text)), '') IS NOT NULL\n  AND NOT EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = u.id);"
+    },
+    {
+      "id": "Q15-B1",
+      "question": "Which role keys exist, and how many memberships does each carry?",
+      "gates": [
+        "W-15",
+        "OD-7"
+      ],
+      "sql": "SELECT lower(btrim(ur.role::text)) AS role_key,\n       count(*) AS memberships,\n       count(DISTINCT ur.org_id) AS orgs\nFROM public.user_roles ur\nGROUP BY 1\nORDER BY memberships DESC;"
+    },
+    {
+      "id": "Q15-B2",
+      "question": "Role \u00d7 capability coverage \u2014 which canonical capabilities does each role actually receive?",
+      "gates": [
+        "W-15",
+        "OD-7"
+      ],
+      "sql": "SELECT g.role_key,\n       g.permission_key,\n       count(DISTINCT g.org_id) AS orgs_granting,\n       (SELECT count(DISTINCT rd.org_id) FROM public.role_definitions rd WHERE rd.role_key = g.role_key) AS orgs_defining_role\nFROM public.role_permission_grants g\nWHERE g.allowed\nGROUP BY g.role_key, g.permission_key\nORDER BY g.role_key, g.permission_key;"
+    },
+    {
+      "id": "Q15-B3",
+      "question": "WIDENING evidence \u2014 which NON admin/ops roles hold capabilities, and how many principals do they represent?",
+      "gates": [
+        "W-15",
+        "OD-7"
+      ],
+      "decides": "A pure capability conversion of a requireAdminOrOps gate admits exactly these principals in addition to today's. If this is empty, conversion is equal-admission; if not, it is wider and OD-7 rule 6 makes it an exception.",
+      "sql": "SELECT g.role_key,\n       g.permission_key,\n       count(DISTINCT g.org_id) AS orgs_granting,\n       (SELECT count(*) FROM public.user_roles ur\n         WHERE lower(btrim(ur.role::text)) = g.role_key) AS memberships_holding_role\nFROM public.role_permission_grants g\nWHERE g.allowed\n  AND g.role_key NOT IN ('admin', 'ops')\nGROUP BY g.role_key, g.permission_key\nORDER BY memberships_holding_role DESC, g.role_key, g.permission_key;"
+    },
+    {
+      "id": "Q15-B4",
+      "question": "NARROWING evidence \u2014 for each capability, which orgs define admin/ops WITHOUT granting it?",
+      "gates": [
+        "W-15",
+        "OD-7"
+      ],
+      "decides": "A capability conversion narrows for exactly these org/role pairs: the role is admitted by requireAdminOrOps today and would not hold the capability tomorrow. Non-zero means the conversion needs a preservation grant or is not the right target.",
+      "sql": "SELECT rd.role_key,\n       pd.key AS permission_key,\n       count(*) AS orgs_defining_role_without_grant\nFROM public.role_definitions rd\nCROSS JOIN public.permission_definitions pd\nWHERE rd.role_key IN ('admin', 'ops')\n  AND pd.is_active\n  AND NOT EXISTS (\n    SELECT 1 FROM public.role_permission_grants g\n    WHERE g.org_id = rd.org_id\n      AND g.role_key = rd.role_key\n      AND g.permission_key = pd.key\n      AND g.allowed\n  )\nGROUP BY rd.role_key, pd.key\nHAVING count(*) > 0\nORDER BY orgs_defining_role_without_grant DESC, rd.role_key, pd.key;"
+    },
+    {
+      "id": "Q15-C1",
+      "question": "admin/users EXCEPTION \u2014 do real principals hold settings.users_roles.read through a role that is NOT admin/ops?",
+      "gates": [
+        "W-15",
+        "W14-F1",
+        "OD-7"
+      ],
+      "decides": "These are exactly the principals who would GAIN roster read if admin/users GET converted from portal admission to settings.users_roles.read. Non-zero confirms the recorded widening is real rather than theoretical. Evidence only \u2014 the product decision is not this census's to make.",
+      "sql": "SELECT g.role_key,\n       count(DISTINCT g.org_id) AS orgs_granting,\n       (SELECT count(*) FROM public.user_roles ur\n         WHERE lower(btrim(ur.role::text)) = g.role_key\n           AND ur.org_id = ANY (array_agg(DISTINCT g.org_id))) AS memberships_newly_admitted\nFROM public.role_permission_grants g\nWHERE g.allowed\n  AND g.permission_key IN ('settings.users_roles.read', 'settings.users_roles')\n  AND g.role_key NOT IN ('admin', 'ops')\nGROUP BY g.role_key\nORDER BY orgs_granting DESC;"
+    },
+    {
+      "id": "Q15-D1",
+      "question": "Does scope remain independently enforced \u2014 how many memberships carry an access profile, and how many are restricted?",
+      "gates": [
+        "W-15",
+        "AD-25"
+      ],
+      "note": "Capability possession is not scope. This confirms the Scope layer is populated independently of Role, so a capability conversion cannot be read as granting org-wide reach.",
+      "sql": "SELECT count(*) AS memberships,\n       count(*) FILTER (WHERE p.user_id IS NULL) AS without_access_profile,\n       count(*) FILTER (WHERE p.department_scope = 'restricted') AS department_restricted,\n       count(*) FILTER (WHERE p.site_scope = 'restricted') AS site_restricted\nFROM public.user_roles ur\nLEFT JOIN public.user_access_profiles p\n  ON p.user_id = ur.user_id AND p.org_id = ur.org_id;"
+    }
+  ],
+  "decision_rules": {
+    "W-20_removal_safe_iff": "Q15-A1 returns zero principals. A non-zero result is a lockout population and W-20's removal half stays blocked regardless of how tidy the code would become.",
+    "OD-7_conversion_equal_iff": "Q15-B3 is empty for the capability in question (nobody outside admin/ops holds it) AND Q15-B4 is zero for that capability (no admin/ops org lacks it). Either alone is insufficient: B3 alone permits a silent narrowing, B4 alone permits a silent widening.",
+    "admin_users_exception_resolved_iff": "Q15-C1 returns zero. Non-zero keeps it a named exception and the reconciliation needs a product decision, not more evidence."
+  },
+  "access_request": {
+    "why_not_executed": "No worker-side channel to database.read_census exists in this lane. Established by inspection, not assumption: this worktree holds only web/.env.certification.local pointing at 127.0.0.1:54421; alloy-ro declares network=false and credential_access=false; vac brokers only typecheck/test/build/playwright/imports; the Vacilando control plane on 127.0.0.1:3020 is live but every endpoint returns 401 with auth_required=true, and no VACILANDO_* token is present in this lane's environment or filesystem.",
+    "minimal_ask": "Execute the questions in this file via the trusted-host database.read_census action against alloy_deployed_primary, and return the result rows.",
+    "sufficient_alternative": "A read-only connection string for a role with SELECT on public.user_roles, public.role_definitions, public.role_permission_grants, public.permission_definitions, public.user_access_profiles, public.user_profiles, public.app_users and auth.users. Nothing here writes, and nothing selects a name, address or contact column.",
+    "explicitly_refused_substitute": "The certification tenant. It defines only admin and ops with no custom roles, so it would report Q15-B3 and Q15-C1 as empty and Q15-A1 as zero \u2014 reading exactly like a clean bill of health while proving nothing about deployed authority. Substituting it would manufacture the answer the census exists to test."
+  }
+}

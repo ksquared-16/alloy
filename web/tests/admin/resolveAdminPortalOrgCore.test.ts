@@ -4,13 +4,26 @@ import { chooseOrgAndRoleKeysFromMembershipRows } from "@/lib/admin/resolveAdmin
 import { resolveAdminPortalOrgCore } from "@/lib/admin/resolveAdminPortalOrgCore";
 
 describe("resolveAdminPortalOrgCore (org pick parity)", () => {
-    it("chooseOrgAndRoleKeysFromMembershipRows picks admin/ops org lexicographically", () => {
-        const picked = chooseOrgAndRoleKeysFromMembershipRows([
-            { org_id: "org-b", role: "ops" },
-            { org_id: "org-a", role: "admin" },
-            { org_id: "org-a", role: "viewer" },
-        ]);
-        expect(picked).toEqual({ orgId: "org-a", roleKeys: ["admin", "viewer"] });
+    it("W-22 — the two resolvers refuse an ambiguous membership identically", () => {
+        // Parity is the point of this file, and W-22 changed what parity means: both resolvers call
+        // the same helper, so both now REFUSE a membership spanning two orgs rather than both
+        // sorting to `org-a`. Same fixture as before the inversion.
+        expect(
+            chooseOrgAndRoleKeysFromMembershipRows([
+                { org_id: "org-b", role: "ops" },
+                { org_id: "org-a", role: "admin" },
+                { org_id: "org-a", role: "viewer" },
+            ]),
+        ).toBeNull();
+
+        // …and the unambiguous case still resolves every role held there, so the refusal is not a
+        // resolver that stopped working.
+        expect(
+            chooseOrgAndRoleKeysFromMembershipRows([
+                { org_id: "org-a", role: "admin" },
+                { org_id: "org-a", role: "viewer" },
+            ]),
+        ).toEqual({ orgId: "org-a", roleKeys: ["admin", "viewer"] });
     });
 
     it("resolves org and portalEligible without querying grants or scope tables", async () => {

@@ -133,6 +133,23 @@ describe("RL-8 — grant seeds enumerate their grants (W-12 / G5)", () => {
             // fail upward, so a breach sat latent for three days.
             expect(blankets.length).toBe(HISTORICAL_BLANKET_CEILING);
         });
+
+        it("`parameter-bound` does not excuse a catalog blanket — the refinement did not weaken it", () => {
+            // W-28 added a fourth binding for an INSERT whose keys come from an unnested caller
+            // array. That must not become a hole: the same shape reading the CATALOG is still a
+            // blanket, because then the key set is the catalog's contents and not the caller's.
+            // Proved against the classifier's own inputs rather than asserted in prose.
+            const parameterBound = statements.filter((s) => s.binding === "parameter-bound");
+            expect(parameterBound.length).toBeGreaterThan(0);
+            for (const s of parameterBound) {
+                expect(s.readsCatalog, `${s.file}: a parameter-bound write must not read the catalog`).toBe(false);
+            }
+            // And every statement that DOES read the catalog is still classified blanket or literal —
+            // never excused by the new binding.
+            for (const s of statements.filter((s) => s.readsCatalog)) {
+                expect(s.binding).not.toBe("parameter-bound");
+            }
+        });
     });
 
     describe("behaviour preservation", () => {

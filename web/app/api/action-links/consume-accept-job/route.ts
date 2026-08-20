@@ -1,9 +1,11 @@
+import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { NextRequest, NextResponse } from "next/server";
 import {
     loadBookingPersonForJobWorkflow,
     loadJobScheduleAndLocationForActionLink,
 } from "@/lib/actionLinkDisplayDetails";
 import { formatBookingStartForSms, resolveBookingSmsTimeZone } from "@/lib/bookingConfirmationSms";
+import { claimActionLink } from "@/lib/actionLinks";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { executeWorkflowRun } from "@/lib/workflowRun";
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
     const { data: row, error: fetchErr } = await supabase
         .from("action_links")
         .select("id, action_type, entity_type, entity_id, expires_at, consumed_at, metadata, org_id")
-        .eq("token", token)
+        .eq("token_hash", hashFormLinkToken(token))
         .single();
 
     if (fetchErr || !row) {
@@ -121,6 +123,22 @@ export async function POST(request: NextRequest) {
     if (!vendorId) {
         return NextResponse.json({ ok: false, reason: "missing_vendor_id" }, { status: 400 });
     }
+    // `RL-32` — claim before the assignment, so ONE atomic write decides who proceeds.
+    //
+    // The claim deliberately moved ahead of the `jobs` update rather than staying behind it. Both
+    // writes are individually atomic, so leaving them in the old order left two independent races
+    // that a single request could split: the caller that won the assignment could lose the claim to
+    // the caller that lost the assignment, and then neither would run the workflows — the job
+    // silently assigned with no vendor notification. Claiming first makes the link the single
+    // authority, and everything after this point belongs to exactly one caller.
+    //
+    // Vendor resolution above is a pure read, so nothing has been changed yet if the claim is lost.
+    const now = new Date().toISOString();
+    const { claimed } = await claimActionLink(supabase, r.id);
+    if (!claimed) {
+        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 410 });
+    }
+
     const { data: updatedJob, error: updateErr } = await supabase
         .from("jobs")
         .update({ assigned_vendor_id: vendorId })
@@ -135,19 +153,18 @@ export async function POST(request: NextRequest) {
 
     const accepted = !!updatedJob;
     const acceptResult = accepted ? "accepted" : "already_assigned";
-    const mergedMetadata = { ...metadata, accept_result: acceptResult };
-    const now = new Date().toISOString();
 
-    const { error: consumeErr } = await supabase
+    // Bookkeeping, NOT a gate — the claim above already decided this caller proceeds. A failure to
+    // record the outcome must not undo an assignment that has already happened, so it is not fatal.
+    const { error: metadataErr } = await supabase
         .from("action_links")
-        .update({
-            consumed_at: now,
-            metadata: mergedMetadata,
-        })
+        .update({ metadata: { ...metadata, accept_result: acceptResult } })
         .eq("id", r.id);
-
-    if (consumeErr) {
-        return NextResponse.json({ ok: false, reason: "invalid" }, { status: 500 });
+    if (metadataErr) {
+        console.error("[CONSUME_ACCEPT_JOB] accept_result not recorded", {
+            link_id: r.id,
+            accept_result: acceptResult,
+        });
     }
 
     let assignedVendorId: string;

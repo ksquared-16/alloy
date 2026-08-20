@@ -19,15 +19,35 @@ function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
+/** Block and line comments removed, so an assertion cannot be satisfied by a file's own prose. */
+export function stripComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+}
+
+function executableSource(rel: string): string {
+    return stripComments(read(rel));
+}
+
 describe("Access landing model", () => {
     it("exposes exactly the four Access chapters as tiles with no conceptual summary cards", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
         expect(model.summaryCards).toEqual([]);
     });
 
+    // W-49: the tiles are navigation, so they filter from the chapter list the page admitted on.
+    // Without this the landing offers a chapter the route refuses — `07/AE-4`'s failure in the one
+    // place an operator is most likely to click.
+    it("offers only the chapters it is given, and nothing when given none", () => {
+        expect(buildAccessLandingModel(["users", "security"]).tiles.map((t) => t.id)).toEqual([
+            "users",
+            "security",
+        ]);
+        expect(buildAccessLandingModel([]).tiles).toEqual([]);
+    });
+
     it("routes every tile at /organization/access with the matching ?section=", () => {
-        const model = buildAccessLandingModel();
+        const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         for (const tile of model.tiles) {
             expect(tile.href).toContain("/organization/access?section=");
             expect(tile.href).toContain(`section=${tile.id}`);
@@ -81,21 +101,26 @@ describe("Permission grid operator labels", () => {
 });
 
 describe("Access product UI wiring", () => {
-    it("routes /organization/access (users-roles page) to the landing when no section is set, and to the workspace otherwise", () => {
-        const page = read("app/adminV2/settings/users-roles/page.tsx");
+    it("routes /organization/access to the landing when no section is set, and to the workspace otherwise", () => {
+        // IA-8 removed the second renderer; the parenthetical "(users-roles page)" this assertion
+        // used to carry named it. There is one page now, and it is this one.
+        const page = read("app/adminV2/settings/organization/access/page.tsx");
         expect(page).toContain("OrganizationDomainLanding");
         expect(page).toContain("buildAccessLandingModel");
         expect(page).toContain("UsersRolesConfigurationPage");
         expect(page).toContain("normalizeAccessWorkspaceChapter");
     });
 
-    it("Access workspace surface renders all four chapter pages behind a canManage gate", () => {
+    // W-49 changed this assertion's subject. The surface used to render an in-shell denial notice
+    // (`access-permission-denied`) for a principal it had already admitted; the gate moved to the
+    // route boundary, so that notice is gone and its absence is the property worth locking.
+    it("Access workspace surface renders all four chapter pages and no in-shell denial notice", () => {
         const surface = read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx");
         expect(surface).toContain("AccessUsersConfigurationPage");
         expect(surface).toContain("AccessRolesConfigurationPage");
         expect(surface).toContain("AccessScopesPage");
         expect(surface).toContain("AccessSecurityPage");
-        expect(surface).toContain("access-permission-denied");
+        expect(surface).not.toContain("access-permission-denied");
         expect(surface).toContain("data-testid=\"access-workspace-surface\"");
     });
 
@@ -120,13 +145,36 @@ describe("Access product UI wiring", () => {
     });
 
     it("Planned surfaces render calm static copy and are marked with data-capability, not live fetches", () => {
+        // W-57 changed how this assertion has to be written, and the reason is worth keeping.
+        //
+        // It used to look for the literal `data-capability="planned"`. When W-57 replaced the two
+        // placeholder TABS with a marked ROW, the attribute became the expression
+        // `data-capability={inert ? "planned" : undefined}` — and the test still passed, because the
+        // workstream's own doc comment quotes the old literal. It was agreeing with prose.
+        //
+        // That is the same failure `admissionDoesNotAuthorize` and W-20's fixture already cost this
+        // program: a scan that cannot tell what it matched is not evidence. So the source is
+        // comment-stripped first, and the property asserted is the one that matters — the surface
+        // marks unbuilt capability *somehow* — rather than one particular spelling of it.
         for (const file of [
             "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
             "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx",
             "components/adminV2/settings/access/AccessSecurityPage.tsx",
         ]) {
-            const src = read(file);
-            expect(src).toContain('data-capability="planned"');
+            const src = executableSource(file);
+            expect(src, `${file} no longer marks planned capability in code`).toMatch(
+                /data-capability=(?:"planned"|\{[^}]*"planned"[^}]*\})/,
+            );
         }
+    });
+
+    it("the strip is real — a marking that exists only in a comment does not count", () => {
+        // Non-vacuity on the stripper itself, proved against an input built for the purpose rather
+        // than by asserting something about a real file.
+        const prose = '/** the old shape was: data-capability="planned" */\nconst x = 1;';
+        expect(stripComments(prose)).not.toMatch(/data-capability/);
+        expect(stripComments('<li data-capability={inert ? "planned" : undefined}>')).toMatch(
+            /data-capability=\{[^}]*"planned"/,
+        );
     });
 });

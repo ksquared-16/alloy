@@ -64,7 +64,8 @@ describe("settings legacy field alignment", () => {
 describe("settings legacy closeout", () => {
     it("priority hybrid pages use Platform Configuration shell, not rollout placeholders", () => {
         for (const [path, component] of [
-            ["app/adminV2/settings/users-roles/page.tsx", "UsersRolesConfigurationPage"],
+            // IA-8: one renderer for the Access workspace. `/settings/users-roles` redirects here.
+            ["app/adminV2/settings/organization/access/page.tsx", "UsersRolesConfigurationPage"],
             ["app/adminV2/settings/organization/communications/page.tsx", "OrganizationCommunicationsPage"],
             ["app/adminV2/settings/entities/page.tsx", "dataModelSectionHref"],
             ["app/adminV2/settings/actions/page.tsx", "SettingsConfigurationSurfaceShell"],
@@ -76,10 +77,15 @@ describe("settings legacy closeout", () => {
     });
 
     it("superseded legacy-admin system routes redirect to Platform Configuration", () => {
+        // `access-control` and `roles` are absent by design, not oversight: W-59 deleted those two
+        // page.tsx files with the surfaces behind them, and their redirect moved into
+        // `next.config.ts`, which Next evaluates BEFORE the filesystem. The destination an operator
+        // reaches is unchanged and is asserted in the browser
+        // (`certification/playwright/access-role-surface-reachability.cert.spec.ts`) and over the
+        // redirect table (`tests/access/roleEditorSingleSurface.test.ts`). A page-level redirect is
+        // one mechanism for this invariant, not the invariant itself.
         const redirects: Array<[string, string]> = [
             ["app/legacy-admin/system/page.tsx", 'redirect("/settings")'],
-            ["app/legacy-admin/system/access-control/page.tsx", 'redirect("/settings/users-roles")'],
-            ["app/legacy-admin/system/roles/page.tsx", 'redirect("/settings/users-roles")'],
             ["app/legacy-admin/system/departments/page.tsx", 'redirect("/settings/departments")'],
             ["app/legacy-admin/system/work-units/page.tsx", 'redirect("/settings/work-units")'],
             ["app/legacy-admin/system/pipelines/page.tsx", 'redirect("/settings/processes")'],
