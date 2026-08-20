@@ -23,7 +23,18 @@
       "fix": "The lock now asserts the three refusals themselves, discovered from source, with the named resolver kept as a fast path so nothing that passed before stops passing. Bite tests remove each refusal in turn.",
       "bonus_finding": "Its sibling check — 'no public-form route queries the link table directly' — matched `form_links`. The table is `form_public_links`, so the pattern could never fire and that assertion had never convicted anything. Corrected, and scoped to route files."
     },
-    "state": "Staging build fix + collision fix are on a branch pending PR. The ten migrations are on staging in Git but NOT applied to the staging database; the governed apply has not run."
+    "state": "Staging build fix + collision fix are on a branch pending PR. The ten migrations are on staging in Git but NOT applied to the staging database; the governed apply has not run.",
+    "governed_merge_479_blocked": {
+      "attempts": [
+        "gar_b912e67e5f2677 — failed required_checks_pending",
+        "gar_2d473ad9289caa — failed required_checks_pending (re-checked rollup first)",
+        "gar_4164b6a478543e — failed required_checks_pending (after reproducing the Director's own check summary)"
+      ],
+      "evidence_against_the_precondition": "The Director's own algorithm was reproduced against the same GitHub rollup it queries (trusted-host-merge.mjs::checkSummary): required checks with a passing outcome are SUCCESS, NEUTRAL, SKIPPED or STALE; pending requires an empty outcome or a PENDING/QUEUED/IN_PROGRESS/EXPECTED/REQUESTED status. Run over PR #479's rollup it yields **zero pending, zero failing**, with mergeStateStatus CLEAN and mergeable MERGEABLE. The guard at line 218 also only blocks when GitHub disallows the merge, and CLEAN is in its allow set. The precondition should pass.",
+      "conclusion": "The Director is not seeing the rollup `gh pr view` returns — most likely a different API shape or token scope yielding entries without conclusions, which its `!outcome` branch counts as pending. It is a Director-side defect: the same action merged PR #475 successfully earlier today.",
+      "not_repaired_here": "Vacilando is not repaired from the Identity worktree, per standing instruction. `gh pr merge` was not retried from the shell.",
+      "why_the_migration_batch_was_NOT_requested": "It depends on #479 landing. Staging currently holds TWO migrations at version 20260818200000, so applying the batch against that tree is exactly the hazard #479 removes: db push would mark the version applied and silently skip W-28, and W-58 composes it. Requesting the apply first would have been the one sequencing error this promotion exists to avoid."
+    }
   },
   "od2_staging_promotion_session_23": {
     "decision": "OD-2 (controlled promotion to staging; production NOT authorized)",
