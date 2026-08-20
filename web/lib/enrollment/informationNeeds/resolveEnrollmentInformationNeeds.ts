@@ -67,6 +67,63 @@ type SessionItemRow = {
     resolved_form_definition_version_id: string | null;
 };
 
+/**
+ * Everything the needs projection derives from, loaded ONCE per request.
+ *
+ * The split exists for the participant turn's write path: after the runtime writes the session's
+ * shared values / D-99 evidence, every OTHER input here is unchanged within the request — the
+ * pinned schemas, the requirement set, the subject. Re-fetching them to recompute the objective
+ * was pure duplicate latency (measured: each objective resolution is ~8 serial query waves, and a
+ * turn used to run three of them). With the context in hand, the post-write recompute is pure
+ * computation — zero queries.
+ */
+export type EnrollmentNeedsContext = {
+    readonly prog: EnrollmentParticipantProgress;
+    readonly session: SessionRow | null;
+    readonly subjectId: string | null;
+    readonly forms: readonly PinnedRequirementForm[];
+};
+
+/** Assemble the needs value from a loaded context — PURE, reusable against a post-write session. */
+export function assembleEnrollmentInformationNeeds(
+    context: EnrollmentNeedsContext,
+    input: {
+        requiresConfirmation?: ReadonlySet<string>;
+        canonicalValues?: Readonly<Record<string, unknown>>;
+    },
+): EnrollmentInformationNeeds {
+    const { prog, session, subjectId, forms } = context;
+    if (!session || forms.length === 0) {
+        return {
+            process_instance_id: prog.process_instance_id,
+            session_id: session?.id ?? prog.session_id,
+            business_process_revision_id: prog.business_process_revision_id,
+            stage_key: prog.stage_key,
+            subject_id: subjectId,
+            total_needs: 0,
+            needs_requiring_action: 0,
+            needs: [],
+        };
+    }
+    const needs = projectEnrollmentInformationNeeds({
+        forms: [...forms],
+        subjectId,
+        sharedValues: (session.shared_values ?? {}) as Record<string, unknown>,
+        canonicalValues: input.canonicalValues,
+        confirmations: readEnrollmentNeedConfirmations(session.metadata),
+        requiresConfirmation: input.requiresConfirmation,
+    });
+    return {
+        process_instance_id: prog.process_instance_id,
+        session_id: session.id,
+        business_process_revision_id: prog.business_process_revision_id,
+        stage_key: prog.stage_key,
+        subject_id: subjectId,
+        ...summarizeEnrollmentInformationNeeds(needs),
+        needs,
+    };
+}
+
 export async function resolveEnrollmentInformationNeeds(
     supabase: SupabaseClient,
     input: {
@@ -89,6 +146,24 @@ export async function resolveEnrollmentInformationNeeds(
          * first one in removes it. Optional, so every other caller is unchanged.
          */
         progress?: EnrollmentParticipantProgressResult;
+        /**
+         * Receives the loaded context so the caller can recompute PURELY after a session write.
+         * Called exactly once, on the success path, with whatever was loaded — including the
+         * no-session and no-forms shapes, which recompute just as purely.
+         */
+        captureContext?: (context: EnrollmentNeedsContext) => void;
+        /**
+         * Rows the progress resolver already loaded this request — the session (with
+         * shared_values + metadata), its items and the realized form identities. Providing them
+         * removes the four duplicate reads this resolver otherwise repeats; only the pinned
+         * version schemas remain to fetch.
+         */
+        preloaded?: {
+            readonly session: { id: string; shared_values?: unknown; metadata?: unknown } | null;
+            readonly items: readonly SessionItemRow[];
+            readonly formBySessionItem: ReadonlyMap<string, string>;
+            readonly subjectId: string | null;
+        };
     },
 ): Promise<EnrollmentInformationNeedsResult> {
     const progress =
@@ -103,41 +178,38 @@ export async function resolveEnrollmentInformationNeeds(
     if (!prog.session_id) {
         // No participant objective launched yet. Requirements still project at the progress level;
         // there is simply nothing realized to derive needs from.
-        return {
-            ok: true,
-            value: {
-                process_instance_id: prog.process_instance_id,
-                session_id: null,
-                business_process_revision_id: prog.business_process_revision_id,
-                stage_key: prog.stage_key,
-                subject_id: null,
-                total_needs: 0,
-                needs_requiring_action: 0,
-                needs: [],
-            },
-        };
+        const context: EnrollmentNeedsContext = { prog, session: null, subjectId: null, forms: [] };
+        input.captureContext?.(context);
+        return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
     }
 
-    const [{ data: sessionData, error: sessionError }, { data: instanceData }] = await Promise.all([
-        supabase
-            .from("form_packet_sessions")
-            .select("id, shared_values, metadata")
-            .eq("id", prog.session_id)
-            .eq("org_id", input.orgId)
-            .maybeSingle(),
-        supabase
-            .from("process_instances")
-            .select("subject_id")
-            .eq("id", prog.process_instance_id)
-            .eq("org_id", input.orgId)
-            .maybeSingle(),
-    ]);
-    if (sessionError) {
-        return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };
+    let session: SessionRow | null;
+    let subjectId: string | null;
+    if (input.preloaded) {
+        session = (input.preloaded.session ?? null) as SessionRow | null;
+        subjectId = input.preloaded.subjectId;
+    } else {
+        const [{ data: sessionData, error: sessionError }, { data: instanceData }] = await Promise.all([
+            supabase
+                .from("form_packet_sessions")
+                .select("id, shared_values, metadata")
+                .eq("id", prog.session_id)
+                .eq("org_id", input.orgId)
+                .maybeSingle(),
+            supabase
+                .from("process_instances")
+                .select("subject_id")
+                .eq("id", prog.process_instance_id)
+                .eq("org_id", input.orgId)
+                .maybeSingle(),
+        ]);
+        if (sessionError) {
+            return { ok: false, refusal: { code: "read_failed", detail: sessionError.message } };
+        }
+        session = (sessionData ?? null) as SessionRow | null;
+        subjectId =
+            String((instanceData as { subject_id?: string | null } | null)?.subject_id ?? "").trim() || null;
     }
-    const session = (sessionData ?? null) as SessionRow | null;
-    const subjectId =
-        String((instanceData as { subject_id?: string | null } | null)?.subject_id ?? "").trim() || null;
 
     // Only requirements the participant can actually act on. `unrealized` has no pinned version and
     // no schema; `unsupported` is a non-form kind. Neither can produce a field need.
@@ -146,27 +218,22 @@ export async function resolveEnrollmentInformationNeeds(
             r.kind === "form" && (r.status === "outstanding" || r.status === "satisfied"),
     );
     if (actionable.length === 0 || !session) {
-        return {
-            ok: true,
-            value: {
-                process_instance_id: prog.process_instance_id,
-                session_id: prog.session_id,
-                business_process_revision_id: prog.business_process_revision_id,
-                stage_key: prog.stage_key,
-                subject_id: subjectId,
-                total_needs: 0,
-                needs_requiring_action: 0,
-                needs: [],
-            },
-        };
+        const context: EnrollmentNeedsContext = { prog, session, subjectId, forms: [] };
+        input.captureContext?.(context);
+        return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
     }
 
-    const { data: itemRows } = await supabase
-        .from("form_packet_session_items")
-        .select("id, packet_item_id, resolved_form_definition_version_id")
-        .eq("packet_session_id", session.id)
-        .order("sequence_index", { ascending: true });
-    const items = (itemRows ?? []) as SessionItemRow[];
+    let items: SessionItemRow[];
+    if (input.preloaded) {
+        items = [...input.preloaded.items];
+    } else {
+        const { data: itemRows } = await supabase
+            .from("form_packet_session_items")
+            .select("id, packet_item_id, resolved_form_definition_version_id")
+            .eq("packet_session_id", session.id)
+            .order("sequence_index", { ascending: true });
+        items = (itemRows ?? []) as SessionItemRow[];
+    }
 
     // The D-94 pin is the ONLY version consulted. A newer published version of the same form does
     // not reach an in-flight session, and asking this query for "latest" would silently undo that.
@@ -183,7 +250,7 @@ export async function resolveEnrollmentInformationNeeds(
                   .eq("org_id", input.orgId)
                   .in("id", versionIds)
             : Promise.resolve({ data: [], error: null }),
-        packetItemIds.length
+        packetItemIds.length && !input.preloaded
             ? supabase
                   .from("form_packet_items")
                   .select("id, form_definition_id")
@@ -220,7 +287,10 @@ export async function resolveEnrollmentInformationNeeds(
         const version = versionById.get(versionId);
         if (!version) continue;
 
-        const formDefinitionId = formByPacketItem.get(item.packet_item_id) ?? version.form_definition_id;
+        const formDefinitionId =
+            input.preloaded?.formBySessionItem.get(item.id) ??
+            formByPacketItem.get(item.packet_item_id) ??
+            version.form_definition_id;
         const requirementId = requirementByForm.get(formDefinitionId);
         // Realized but not required by the governing revision: it adds no question to this objective.
         if (!requirementId) continue;
@@ -241,25 +311,7 @@ export async function resolveEnrollmentInformationNeeds(
         });
     }
 
-    const needs = projectEnrollmentInformationNeeds({
-        forms,
-        subjectId,
-        sharedValues: (session.shared_values ?? {}) as Record<string, unknown>,
-        canonicalValues: input.canonicalValues,
-        confirmations: readEnrollmentNeedConfirmations(session.metadata),
-        requiresConfirmation: input.requiresConfirmation,
-    });
-
-    return {
-        ok: true,
-        value: {
-            process_instance_id: prog.process_instance_id,
-            session_id: session.id,
-            business_process_revision_id: prog.business_process_revision_id,
-            stage_key: prog.stage_key,
-            subject_id: subjectId,
-            ...summarizeEnrollmentInformationNeeds(needs),
-            needs,
-        },
-    };
+    const context: EnrollmentNeedsContext = { prog, session, subjectId, forms };
+    input.captureContext?.(context);
+    return { ok: true, value: assembleEnrollmentInformationNeeds(context, input) };
 }

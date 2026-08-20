@@ -13,7 +13,11 @@ import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { resolveParticipantEnrollmentFromToken } from "@/lib/public/forms/resolveParticipantEnrollmentFromToken";
-import { resolveParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import {
+    recomputeParticipantObjectiveFromContext,
+    resolveParticipantEnrollmentObjectiveWithContext,
+} from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 
@@ -26,6 +30,8 @@ function plaintextToken(raw: string): string {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    const timing = startParticipantTiming();
+    const tokenStart = timing.now();
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         return publicErr("Server misconfiguration", 500);
     }
@@ -34,6 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const supabase = createServiceRoleClient();
 
     const access = await resolveParticipantEnrollmentFromToken(supabase, plaintextToken(rawToken ?? ""));
+    timing.mark("token", tokenStart);
     if (!access.ok) {
         return publicErr(access.error.message, access.error.code === "INVALID_LINK" ? 404 : 409, {
             code: access.error.code,
@@ -43,19 +50,33 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     // What the organization already holds about this child. Without it every known fact arrives as
     // `missing`, and the participant is asked for information that is on file — which is exactly
     // what live QA hit.
-    const canonical = await resolveParticipantCanonicalContext(supabase, {
-        orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
-    });
-
-    const objective = await resolveParticipantEnrollmentObjective(supabase, {
-        orgId: access.value.orgId,
-        processInstanceId: access.value.processInstanceId,
-        canonicalValues: canonical.values,
-    });
-    if (!objective.ok) return publicErr(objective.refusal.detail, 409, { code: objective.refusal.code });
+    // Canonical record and objective context are independent reads — one wave. The needs
+    // projection DOES depend on canonical values, so the objective is re-assembled purely (zero
+    // queries) once both are in hand.
+    const parallelStart = timing.now();
+    const [canonical, resolved] = await Promise.all([
+        resolveParticipantCanonicalContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+        }),
+        resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+        }),
+    ]);
+    timing.mark("objective", parallelStart);
+    if (!resolved.ok) return publicErr(resolved.refusal.detail, 409, { code: resolved.refusal.code });
+    const objective = {
+        ok: true as const,
+        value: recomputeParticipantObjectiveFromContext(
+            { ...resolved.context, canonicalValues: canonical.values },
+            resolved.context.needsContext.session,
+        ),
+    };
 
     // Narrowed for the wire: a participant surface never receives org ids, revision internals or
     // requirement plumbing it has no use for.
-    return publicOk(participantObjectiveWireModel(objective.value, { subjectDisplayName: canonical.subjectDisplayName }));
+    const response = publicOk(participantObjectiveWireModel(objective.value, { subjectDisplayName: canonical.subjectDisplayName }));
+    response.headers.set("Server-Timing", timing.header());
+    return response;
 }

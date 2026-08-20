@@ -31,8 +31,10 @@ import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService"
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
+    recomputeParticipantObjectiveFromContext,
     resolveParticipantEnrollmentObjective,
     type ParticipantEnrollmentObjective,
+    type ParticipantObjectiveContext,
 } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import type { FormField } from "@/lib/forms/schema";
 import type {
@@ -67,9 +69,24 @@ export async function applyParticipantTurnResponse(
         /** Injected so the write stays deterministic and testable. */
         nowIso: string;
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /**
+         * The objective the CALLER already resolved this request, with its context.
+         *
+         * The route resolves the current turn to interpret the participant's words; resolving it
+         * again here was a full duplicate (~8 serial query waves), and the post-write recompute was
+         * a third. With the context, this function fetches nothing it already knows and recomputes
+         * the objective PURELY from post-write state. Omit it and the historical behavior stands —
+         * resolve fresh, recompute fresh.
+         */
+        current?: {
+            readonly objective: ParticipantEnrollmentObjective;
+            readonly context: ParticipantObjectiveContext;
+        };
     },
 ): Promise<ApplyTurnResult> {
-    const before = await resolveParticipantEnrollmentObjective(supabase, {
+    const before = input.current
+        ? ({ ok: true, value: input.current.objective } as const)
+        : await resolveParticipantEnrollmentObjective(supabase, {
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,
         canonicalValues: input.canonicalValues,
@@ -86,6 +103,8 @@ export async function applyParticipantTurnResponse(
     const sessionId = before.value.session_id;
     const needKey = turn.need?.identity.key ?? null;
     const sharedKey = turn.need?.identity.shared_value_key ?? null;
+    /** The session as it stands AFTER this turn's write — the pure recompute's one moving input. */
+    let postWrite: { shared_values: Record<string, unknown>; metadata: Record<string, unknown> } | null = null;
 
     if (sessionId && needKey && disposition.action !== "no_change" && disposition.action !== "refused") {
         const { data: sessionRow, error: readError } = await supabase
@@ -100,6 +119,10 @@ export async function applyParticipantTurnResponse(
         const row = (sessionRow ?? {}) as {
             shared_values?: Record<string, unknown> | null;
             metadata?: Record<string, unknown> | null;
+        };
+        postWrite = {
+            shared_values: (row.shared_values ?? {}) as Record<string, unknown>,
+            metadata: (row.metadata ?? {}) as Record<string, unknown>,
         };
 
         if (disposition.action === "confirm_value") {
@@ -139,6 +162,10 @@ export async function applyParticipantTurnResponse(
                     .eq("id", sessionId)
                     .eq("org_id", input.orgId);
                 if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+                postWrite = {
+                    shared_values: (patch.shared_values ?? postWrite?.shared_values ?? {}) as Record<string, unknown>,
+                    metadata: (patch.metadata ?? postWrite?.metadata ?? {}) as Record<string, unknown>,
+                };
             }
         }
 
@@ -170,10 +197,26 @@ export async function applyParticipantTurnResponse(
                 .eq("id", sessionId)
                 .eq("org_id", input.orgId);
             if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+            postWrite = {
+                shared_values,
+                metadata: (patch.metadata ?? postWrite?.metadata ?? {}) as Record<string, unknown>,
+            };
         }
     }
 
-    // ALWAYS recompute. The platform, not the conversation, decides what changed.
+    // ALWAYS recompute. The platform, not the conversation, decides what changed. With the
+    // caller's context in hand the recompute is PURE: the only input this turn can have moved is
+    // the session row, and the writer holds its post-write state. Without the context, the
+    // historical fresh resolution stands.
+    if (input.current) {
+        const baseSession = input.current.context.needsContext.session;
+        const session = postWrite && baseSession ? { ...baseSession, ...postWrite } : baseSession;
+        return {
+            ok: true,
+            disposition,
+            objective: recomputeParticipantObjectiveFromContext(input.current.context, session),
+        };
+    }
     const after = await resolveParticipantEnrollmentObjective(supabase, {
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,

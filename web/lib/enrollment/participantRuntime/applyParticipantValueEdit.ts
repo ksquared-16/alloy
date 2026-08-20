@@ -42,7 +42,15 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 
 export type ParticipantValueEditResult =
-    | { readonly ok: true; readonly sharedKey: string }
+    | {
+          readonly ok: true;
+          readonly sharedKey: string;
+          /** The session's post-write moving state, so the caller can recompute purely. */
+          readonly postWrite: {
+              readonly shared_values: Record<string, unknown>;
+              readonly metadata: Record<string, unknown>;
+          };
+      }
     | { readonly ok: false; readonly refusal: { readonly code: string; readonly detail: string } };
 
 /** The shared key a form field writes to, or null when the field is the artifact's own. */
@@ -109,5 +117,12 @@ export async function applyParticipantValueEdit(
         .eq("org_id", input.orgId);
     if (writeError) return { ok: false, refusal: { code: "write_failed", detail: writeError.message } };
 
-    return { ok: true, sharedKey: input.sharedKey };
+    return {
+        ok: true,
+        sharedKey: input.sharedKey,
+        postWrite: {
+            shared_values: patch.shared_values as Record<string, unknown>,
+            metadata: (patch.metadata ?? row.metadata ?? {}) as Record<string, unknown>,
+        },
+    };
 }

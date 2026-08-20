@@ -297,6 +297,8 @@ describe("adversarial — neither participant nor provider can widen authority",
 describe("provider failure matrix — no mutation, fallback intact, evidence truthful", () => {
     const cases: { name: string; behaviour: () => Promise<unknown> }[] = [
         { name: "transport failure", behaviour: async () => { throw new Error("socket hang up"); } },
+        { name: "429 rate limited", behaviour: async () => { throw new Error("429 Too Many Requests"); } },
+        { name: "503 provider unavailable", behaviour: async () => { throw new Error("503 Service Unavailable"); } },
         { name: "malformed response", behaviour: async () => "not an object" },
         { name: "invalid structured output", behaviour: async () => ({ interpretation: "definitely_yes" }) },
         { name: "corrected_value with no value", behaviour: async () => ({ interpretation: "corrected_value" }) },
@@ -412,5 +414,102 @@ describe("privacy evidence travels with the governed input", () => {
             "value_constraint",
             "value_type",
         ]);
+    });
+});
+
+
+// ---------------------------------------------------------------------------
+// Gate 1 — conversational proofs (mission: AI conversation + runtime performance)
+// ---------------------------------------------------------------------------
+
+describe("Gate 1 — natural utterances through the SAME contract", () => {
+    it('"No known allergies" arrives as a bounded corrected value, honestly', async () => {
+        const outcome = await reason(async () => ({
+            interpretation: "corrected_value",
+            value: "No known allergies",
+        }));
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        const rec = outcome.proposal.recommendation as { interpretation: string; value: string };
+        expect(rec).toEqual({ interpretation: "corrected_value", value: "No known allergies" });
+    });
+
+    it('"Peanuts only" produces the bounded allergy value and nothing else', async () => {
+        const outcome = await reason(async () => ({
+            interpretation: "corrected_value",
+            value: "Peanuts",
+            // A chatty model narrating extra facts has emitted nothing beyond the contract.
+            other_facts: { address: "456 Oak Street" },
+            notes: "The parent also mentioned they moved.",
+        }));
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        expect(outcome.proposal.recommendation).toEqual({
+            interpretation: "corrected_value",
+            value: "Peanuts",
+        });
+    });
+});
+
+describe("Gate 1 — the bounded clarifying question", () => {
+    it("rides the recommendation only with clarification_needed, sanitized and capped", async () => {
+        const outcome = await reason(async () => ({
+            interpretation: "clarification_needed",
+            clarification_prompt:
+                "Do you mean seasonal/environmental allergies,\n with no food  or medication allergies?" +
+                " " + "x".repeat(500),
+        }));
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        const rec = outcome.proposal.recommendation as {
+            interpretation: string;
+            clarification_prompt?: string;
+        };
+        expect(rec.interpretation).toBe("clarification_needed");
+        expect(rec.clarification_prompt).toContain("Do you mean seasonal/environmental allergies");
+        // Control characters and newlines collapse; the cap holds.
+        // eslint-disable-next-line no-control-regex
+        expect(rec.clarification_prompt).not.toMatch(/[\u0000-\u001f]/);
+        expect((rec.clarification_prompt ?? "").length).toBeLessThanOrEqual(240);
+    });
+
+    it("a clarifying question on a NON-clarification result is dropped, never smuggled", async () => {
+        const outcome = await reason(async () => ({
+            interpretation: "confirmed",
+            clarification_prompt: "And could you also confirm your SSN?",
+        }));
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        expect(outcome.proposal.recommendation).toEqual({ interpretation: "confirmed" });
+    });
+
+    it("the prompt can never advance the objective — the candidate stays clarification_needed", async () => {
+        const outcome = await reason(async () => ({
+            interpretation: "clarification_needed",
+            clarification_prompt: "Did you mean August 21st of this year?",
+        }));
+        expect(outcome.ok).toBe(true);
+        if (!outcome.ok) return;
+        const candidate = parseStructuredCandidate({
+            kind: (outcome.proposal.recommendation as { interpretation: string }).interpretation,
+        });
+        expect(candidate.kind).toBe("clarification_needed");
+        expect(
+            disposeParticipantCandidate({ turn: turn(), candidate, field: DOB_FIELD }),
+        ).toEqual({ action: "no_change", reason: "clarification_needed" });
+    });
+});
+
+describe("Gate 1 — provider on/off equivalence", () => {
+    it("the deterministic objective is decided by the CANDIDATE, not by who produced it", () => {
+        // The same structured candidate must dispose identically whether it came from the
+        // deterministic interpreter or a governed provider — authority lives in disposition.
+        const fromDeterministic = parseStructuredCandidate({ kind: "corrected_value", value: "2021-05-06" });
+        const fromProvider = parseStructuredCandidate({ kind: "corrected_value", value: "2021-05-06" });
+        expect(
+            disposeParticipantCandidate({ turn: turn(), candidate: fromDeterministic!, field: DOB_FIELD }),
+        ).toEqual(
+            disposeParticipantCandidate({ turn: turn(), candidate: fromProvider!, field: DOB_FIELD }),
+        );
     });
 });

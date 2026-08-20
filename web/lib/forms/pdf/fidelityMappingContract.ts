@@ -105,6 +105,16 @@ export type FidelitySourceResult =
     | { readonly ok: false; readonly code: "unknown_template" | "document_unavailable" | "sha_mismatch"; readonly detail: string };
 
 /**
+ * Source bytes cached by their sha256 — the one key that is safe BY CONSTRUCTION.
+ *
+ * The mapping pins the bytes' identity; a hit is only ever stored after verifying the hash, so a
+ * cached entry cannot drift from what the version pinned. Bounded: enrollment source documents are
+ * few and small, and an eviction merely costs one re-fetch.
+ */
+const SOURCE_BYTES_BY_SHA = new Map<string, Uint8Array>();
+const SOURCE_CACHE_MAX_ENTRIES = 16;
+
+/**
  * Resolve the mapping's source document to bytes, verifying the sha pin.
  *
  * A mismatch is a REFUSAL, not a fallback: rendering different bytes than the version pinned would
@@ -115,6 +125,17 @@ export async function resolveFidelitySourceBytes(
     orgId: string,
     mapping: FidelityPdfMapping,
 ): Promise<FidelitySourceResult> {
+    const cached = SOURCE_BYTES_BY_SHA.get(mapping.source_sha256);
+    if (cached) {
+        return {
+            ok: true,
+            bytes: cached,
+            sourceRef: mapping.template_key
+                ? `template:${mapping.template_key}`
+                : `document:${mapping.source_document_id}`,
+        };
+    }
+
     let bytes: Uint8Array | null = null;
     let sourceRef = "";
 
@@ -147,6 +168,12 @@ export async function resolveFidelitySourceBytes(
             detail: `Source bytes ${actual.slice(0, 12)}… do not match the pinned ${mapping.source_sha256.slice(0, 12)}…`,
         };
     }
+    // Verified against the pin — safe to remember by that pin.
+    if (SOURCE_BYTES_BY_SHA.size >= SOURCE_CACHE_MAX_ENTRIES) {
+        const oldest = SOURCE_BYTES_BY_SHA.keys().next().value;
+        if (oldest) SOURCE_BYTES_BY_SHA.delete(oldest);
+    }
+    SOURCE_BYTES_BY_SHA.set(mapping.source_sha256, bytes);
     return { ok: true, bytes, sourceRef };
 }
 

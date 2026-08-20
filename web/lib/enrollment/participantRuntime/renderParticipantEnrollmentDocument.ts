@@ -108,7 +108,16 @@ export async function renderParticipantEnrollmentDocument(
         readonly nowIso: string;
     },
 ): Promise<ParticipantDocumentRenderResult> {
-    const artifact = await resolveActiveArtifact(supabase, { orgId: input.orgId, sessionId: input.sessionId });
+    // The artifact chain and the session row are independent — one wave, not two.
+    const [artifact, sessionResult] = await Promise.all([
+        resolveActiveArtifact(supabase, { orgId: input.orgId, sessionId: input.sessionId }),
+        supabase
+            .from("form_packet_sessions")
+            .select("shared_values, process_instance_id")
+            .eq("id", input.sessionId)
+            .eq("org_id", input.orgId)
+            .maybeSingle(),
+    ]);
     if (!artifact.ok) return { ok: false, code: "unavailable", detail: artifact.detail };
 
     const mapping = parseFidelityPdfMapping(artifact.envelope.pdfMappingJson);
@@ -125,37 +134,32 @@ export async function renderParticipantEnrollmentDocument(
         return { ok: false, code: "unavailable", detail: "Pinned schema invalid." };
     }
 
-    const { data: sessionRow } = await supabase
-        .from("form_packet_sessions")
-        .select("shared_values, process_instance_id")
-        .eq("id", input.sessionId)
-        .eq("org_id", input.orgId)
-        .maybeSingle();
+    const sessionRow = sessionResult.data;
     if (!sessionRow) return { ok: false, code: "unavailable", detail: "Session not found." };
 
-    let draftValues: Record<string, unknown> = {};
-    if (artifact.formSubmissionId) {
-        const { data: sub } = await supabase
-            .from("form_submissions")
-            .select("payload")
-            .eq("org_id", input.orgId)
-            .eq("id", artifact.formSubmissionId)
-            .maybeSingle();
-        const payload = (sub as { payload?: { values?: Record<string, unknown> } } | null)?.payload;
-        draftValues = (payload?.values ?? {}) as Record<string, unknown>;
-    }
-
-    const prefill = await participantPrefillValues(
-        supabase,
-        input.orgId,
-        sessionRow as { shared_values?: unknown; process_instance_id?: string | null },
-    );
+    // Draft, canonical prefill and the sha-pinned source bytes have no ordering between them.
+    const [draftResult, prefill, source] = await Promise.all([
+        artifact.formSubmissionId
+            ? supabase
+                  .from("form_submissions")
+                  .select("payload")
+                  .eq("org_id", input.orgId)
+                  .eq("id", artifact.formSubmissionId)
+                  .maybeSingle()
+            : Promise.resolve({ data: null }),
+        participantPrefillValues(
+            supabase,
+            input.orgId,
+            sessionRow as { shared_values?: unknown; process_instance_id?: string | null },
+        ),
+        resolveFidelitySourceBytes(supabase, input.orgId, mapping),
+    ]);
+    const payload = (draftResult.data as { payload?: { values?: Record<string, unknown> } } | null)?.payload;
+    const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
     const values: Record<string, unknown> = {
         ...draftValues,
         ...sharedValuesToFieldIds(schema, prefill),
     };
-
-    const source = await resolveFidelitySourceBytes(supabase, input.orgId, mapping);
     if (!source.ok) return { ok: false, code: "unavailable", detail: source.detail };
 
     const filled = await fillPdfWithFidelity({
