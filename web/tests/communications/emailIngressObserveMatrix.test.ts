@@ -98,10 +98,20 @@ const staff: SenderRelationship = { kind: "staff", status: "active" };
  * hide the only false negatives worth arguing about.
  */
 function buildCorpus(authentication: SenderAuthentication): CorpusMessage[] {
-    const base = { recipient: DIRECTOR.address, relationships: [], personIds: [], resolvedAlloyThreadId: null, authentication } as const;
-    // `authentication` FIRST, so a message that names its own (the spoofed ones) keeps it.
-    const repeat = (n: number, m: Partial<CorpusMessage> & Omit<CorpusMessage, "authentication">): CorpusMessage[] =>
-        Array.from({ length: n }, () => ({ authentication, ...m }) as CorpusMessage);
+    // Annotated rather than `as const`: the const assertion froze the empty arrays to
+    // `readonly []`, which is not assignable to `SenderRelationship[]`, so every caller
+    // that relied on `base` for them failed to typecheck.
+    const base: Omit<CorpusMessage, "truth"> = {
+        recipient: DIRECTOR.address,
+        relationships: [],
+        personIds: [],
+        resolvedAlloyThreadId: null,
+        authentication,
+    };
+    // Each caller spreads `base` and then overrides, so a message that names its own
+    // authentication (the spoofed ones) keeps it.
+    const repeat = (n: number, m: CorpusMessage): CorpusMessage[] =>
+        Array.from({ length: n }, () => ({ ...m }));
 
     return [
         // --- 5% conversation continuity ------------------------------------------------

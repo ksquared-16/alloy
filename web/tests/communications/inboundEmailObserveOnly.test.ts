@@ -766,6 +766,7 @@ describe("the vocabulary bridge is declared, not implied", () => {
             },
             bindingId: null,
             unsupportedKinds: [],
+            evaluationMode: "live_observed",
             evaluatedAt: AT,
         });
         expect(JSON.stringify(row)).not.toContain(PARENT);

@@ -10,6 +10,7 @@ import {
     seedDrawerFamilyWorkspaceCacheForTests,
 } from "@/lib/communications/v2/drawerFamilyWorkspacePrefetchCache";
 import type { FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
+import { emptyPreferenceProfile } from "@/lib/communications/v2/communicationPreferenceLabels";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -59,12 +60,7 @@ function buildVm(body: string): FamilyCommunicationWorkspaceVM {
         consentSummary: {
             byContact: {},
             household: { email: "unset", sms: "unset", marketing: "unset" },
-            preferenceProfile: {
-                email_transactional: "unset",
-                sms_transactional: "unset",
-                email_marketing: "unset",
-                sms_marketing: "unset",
-            },
+            preferenceProfile: emptyPreferenceProfile(),
             preferenceProfilesByContact: {},
             displayFlags: { email: true, sms: true, marketing: true },
         },
