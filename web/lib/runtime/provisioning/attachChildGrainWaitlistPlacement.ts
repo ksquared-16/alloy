@@ -24,6 +24,7 @@ import type { PlacementCandidatesByOpportunityId } from "@/lib/orchestration/pla
 import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { formatCompactRelativeDurationIso } from "@/lib/format/formatCompactRelativeDuration";
+import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
 export type ChildProvisioningRowWithPlacement = ChildProvisioningRow & {
     /** Canonical waitlist candidate projection when a placement_candidate matches this child. */
@@ -146,6 +147,7 @@ export async function attachChildGrainWaitlistPlacement(params: {
     // Ensure placement_candidates exist for waitlisted PI children (idempotent) BEFORE the
     // placement-config gate. Missing candidates are the root cause of rank "—" — create via
     // the existing lifecycle hook even when ranking attach is later fail-open.
+    const tEnsure = Date.now();
     try {
         await Promise.all(
             rows.map(async (child) => {
@@ -162,6 +164,7 @@ export async function attachChildGrainWaitlistPlacement(params: {
     } catch {
         // Fail-open on ensure — ranking may still attach existing candidates below.
     }
+    logDbTiming("waitlist.ensure_candidates", Date.now() - tEnsure, { rows: rows.length });
 
     const queueKeys = params.placementQueueKeys?.length
         ? params.placementQueueKeys
@@ -186,23 +189,29 @@ export async function attachChildGrainWaitlistPlacement(params: {
     }
 
     try {
+        const tCand = Date.now();
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
             orgId: params.orgId,
             opportunityIds,
             activeOnly: false,
         });
+        logDbTiming("waitlist.bulk_candidates", Date.now() - tCand, { opportunities: opportunityIds.length });
 
+        const tHh = Date.now();
         const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
             supabase: params.supabase,
             orgId: params.orgId,
             candidatesByOpportunityId,
         });
+        logDbTiming("waitlist.household_facts", Date.now() - tHh, {});
 
+        const tLpc = Date.now();
         const locationProgramCategories = await loadLocationProgramCategoriesForOrg(
             params.supabase,
             params.orgId,
         );
+        logDbTiming("waitlist.location_categories", Date.now() - tLpc, {});
         const waitlistCategoryContext = { categories: locationProgramCategories };
 
         const oppRows: Array<Record<string, unknown>> = opportunityIds.map((id) => ({
