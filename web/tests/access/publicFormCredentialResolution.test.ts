@@ -78,20 +78,50 @@ function resolveImport(fromAbs: string, spec: string): string | null {
     return null;
 }
 
+/** The link table these routes authenticate against. */
+const LINK_TABLE = "form_public_links";
+
 /**
- * Does this route reach the resolver? Bounded import walk — the route itself, then the modules it
- * imports, then theirs. Bounded rather than unlimited because an unbounded walk credits a route for
- * anything transitively reachable, which is the ~30x over-reporting the census was retired for.
+ * Does this module perform the REFUSALS, rather than merely being the named resolver?
+ *
+ * `RL-32` owns a property — *an expired or deactivated link reaches no side effect* — and this used
+ * to assert a mechanism: "reaches `resolvePublicFormLinkByToken`". Staging then inlined the link
+ * read into `resolveParticipantEnrollmentFromToken` to stop fetching payload columns it never used
+ * (~1.5s a turn), keeping the token-hash lookup, the active check, the expiry check and the failure
+ * taxonomy. The property held; the mechanism assertion failed on three participant routes, two of
+ * which write.
+ *
+ * A lock that convicts a refactor for preserving its property under a different call is measuring
+ * the wrong thing. So the subject is the three refusals themselves:
+ *
+ *   1. the lookup matches on `token_hash`, never on the plaintext token;
+ *   2. an inactive link is refused;
+ *   3. an expired link is refused.
+ *
+ * The named resolver satisfies all three, so nothing that passed before stops passing.
  */
-function reachesResolver(routeAbs: string, maxDepth = 3): boolean {
-    const seen = new Set<string>();
-    const frontier: { abs: string; depth: number }[] = [{ abs: routeAbs, depth: 0 }];
+function performsLinkRefusals(src) {
+    const byTokenHash = /\.eq\(\s*["'`]token_hash["'`]/.test(src);
+    const refusesInactive = /!\s*\w+(?:\??\.)\w*is_active|is_active\s*===\s*false|!\s*\w+\.is_active/.test(src);
+    const refusesExpiry = /expires_at/.test(src) && /Date\.now\(\)|new Date\(/.test(src);
+    return byTokenHash && refusesInactive && refusesExpiry;
+}
+
+/**
+ * Does this route reach a refusing resolution? Bounded import walk — the route itself, then the
+ * modules it imports, then theirs. Bounded rather than unlimited because an unbounded walk credits
+ * a route for anything transitively reachable, which is the ~30x over-reporting the census was
+ * retired for.
+ */
+function reachesResolver(routeAbs, maxDepth = 3) {
+    const seen = new Set();
+    const frontier = [{ abs: routeAbs, depth: 0 }];
     while (frontier.length) {
-        const { abs, depth } = frontier.shift()!;
+        const { abs, depth } = frontier.shift();
         if (seen.has(abs) || depth > maxDepth) continue;
         seen.add(abs);
         const src = code(abs);
-        if (src.includes(RESOLVER)) return true;
+        if (src.includes(RESOLVER) || performsLinkRefusals(src)) return true;
         for (const [, spec] of src.matchAll(/from\s+["']([^"']+)["']/g)) {
             const next = resolveImport(abs, spec);
             if (next) frontier.push({ abs: next, depth: depth + 1 });
@@ -125,14 +155,29 @@ describe("RL-32 · public forms — an expired or deactivated link reaches no si
         },
     );
 
-    it("no public-form route queries the link table directly", () => {
+    it("no public-form ROUTE queries the link table directly", () => {
+        // This check was VACUOUS. It matched `form_links`; the table is `form_public_links`, so the
+        // pattern could never fire and the assertion had never convicted anything. Corrected to the
+        // real name — and scoped to route files, because the resolver modules read that table on
+        // purpose and are where the refusals live.
+        const DIRECT_LINK_READ = /from\(\s*["'`]form_public_links["'`]\s*\)/;
         const offenders = routeFilesUnder(PUBLIC_FORMS)
-            .filter((abs) => /from\(\s*["'`]form_links["'`]\s*\)/.test(code(abs)))
+            .filter((abs) => DIRECT_LINK_READ.test(code(abs)))
             .map((abs) => relative(webRoot, abs).split("\\").join("/"));
         expect(
             offenders,
-            "a direct read bypasses the is_active and expires_at refusals, and the token_hash lookup",
+            "a route reading the link table itself would have to re-perform the token_hash lookup and "
+                + "both refusals; the resolution modules exist so it does not",
         ).toEqual([]);
+    });
+
+    it("the refusal detector bites and acquits — non-vacuity on the property", () => {
+        const complete = 'const h = hash(t); await sb.from("form_public_links").select("is_active, expires_at").eq("token_hash", h); if (!link.is_active) return bad(); if (link.expires_at && new Date(link.expires_at).getTime() < Date.now()) return bad();';
+        expect(performsLinkRefusals(complete)).toBe(true);
+        // Each refusal removed in turn must fail it.
+        expect(performsLinkRefusals(complete.replace('.eq("token_hash", h)', '.eq("token", t)'))).toBe(false);
+        expect(performsLinkRefusals(complete.replace("if (!link.is_active) return bad();", ""))).toBe(false);
+        expect(performsLinkRefusals(complete.replace(/if \(link\.expires_at[^;]+;/, ""))).toBe(false);
     });
 
     it("the resolver still refuses both states, and refuses before returning a context", () => {

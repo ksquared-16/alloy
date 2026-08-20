@@ -6,8 +6,8 @@
     "$comment": "Lowered 694 -> 693 by OD-8's conversion of admin/users GET. The ratchet is TIGHT by test: the suite fails if the ceiling can be lowered further without producing a violation, so every conversion must bring it down and no conversion can be banked as slack."
   },
   "inherited": {
-    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them.",
-    "frozen": "2026-08-19",
+    "$comment": "Handlers that entered web/app/api from OTHER programs while this branch was frozen, and are therefore not part of the Access backlog `ratchet.max_pending` bounds. The effective assertion is `pending - inherited <= max_pending`, so the program-owned backlog stays ratcheted at its committed ceiling and the ceiling is NOT raised. Every entry must still exist, still be exported, and still be `pending`: a deleted route, a removed method, or a handler that has since been classified `declared` or `none` FAILS until it is removed from this list. The list may only shrink. Nothing here asserts anything about a handler's authorization - these are W-15 backlog items awaiting OD-7 exactly like every other `pending` entry, and none of them is exempt from it. Shape follows the sibling gate scripts/checkServiceClientPrincipal.mjs, whose `baseline` list is the same idea for the same backlog. 2026-08-19, OD-2 reconciliation: merging current origin/staging brought five handlers this table had never seen. Three are participant token routes and took the settled `none` classification of their fourteen siblings rather than being seeded pending. The two on app/api/admin/communications/ingress-routes are Communications' and are enumerated here — gated by requireAdminOrgContextLight, an admission helper, consulting no catalog capability, exactly like the seventeen before them. The ceiling was NOT raised to absorb them. 2026-08-20, post-merge staging repair: the Communications lane merged app/api/communications/unsubscribe between this census's last run and the PR #475 merge, so staging's build failed on an undeclared route. Enumerated here rather than classified `none`: it is gated by an HMAC-signed recipient token, which is plausibly the same 'the credential is in the request' doctrine as the public-form family, but no sibling carries a settled review for signed unsubscribe tokens and this census does not assert another program's authorization model on inference. The ceiling was NOT raised.",
+    "frozen": "2026-08-20",
     "frozen_by": "Access & Identity V2 recovery onto current staging. The recovered W-14 table was authored against the route tree at merge-base 08e9dd878; 459 staging commits later 20 handlers exist that it had never seen. Audited one by one: NONE consults a catalog capability, so none can be `declared`; 10 are gated by requireAdminOrOps (membership + portal eligibility, not authorization), 7 are authenticated-only org context, 3 are public token routes whose closest siblings are themselves pending. Classifying any of them is the OD-7 conversion decision, which a recovery does not make.",
     "handlers": [
       {
@@ -123,6 +123,18 @@
         "method": "POST",
         "introduced_by": "77483a577",
         "program": "feat(employment): employment service, identity-safe Add Staff, Person composition"
+      },
+      {
+        "route": "app/api/communications/unsubscribe/route.ts",
+        "method": "GET",
+        "introduced_by": "e22f8be74",
+        "program": "feat(comms): make the Email preference model truthful, and let recipients leave"
+      },
+      {
+        "route": "app/api/communications/unsubscribe/route.ts",
+        "method": "POST",
+        "introduced_by": "e22f8be74",
+        "program": "feat(comms): make the Email preference model truthful, and let recipients leave"
       }
     ]
   },
@@ -3604,6 +3616,14 @@
       "GET": {
         "status": "none",
         "reason": "Build metadata. Reads no database and no caller — there is nothing tenant-scoped to authorize."
+      }
+    },
+    "app/api/communications/unsubscribe/route.ts": {
+      "GET": {
+        "status": "pending"
+      },
+      "POST": {
+        "status": "pending"
       }
     },
     "app/api/leads/gutters/route.ts": {

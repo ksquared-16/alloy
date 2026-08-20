@@ -33,6 +33,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { readdirSync, readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join, relative } from "node:path";
 
 const orgId = "org-1";
@@ -625,51 +626,52 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
         }
     });
 
-    it("every authored-unapplied A&I migration sorts above everything already on staging", () => {
-        // A version at or below the remote head is refused by `supabase db push`, and an exact
-        // collision is silently skipped — this program has already paid for both.
+    it("no two migrations share a version — the collision that silently skips one", () => {
+        // THE assertion that earned its keep. `supabase db push` keys the ledger on VERSION, so two
+        // files at one version means applying either marks the version done and the other is
+        // SILENTLY SKIPPED — never applied, never reported.
         //
-        // Stated over the whole authored-unapplied TRANCHE, not over one file. The first form of
-        // this asserted that M21 "sorts last", which was true only while it was the newest; adding
-        // W-16's migration broke a lock that was describing a moment rather than the property. The
-        // property is: nothing this lane authored may sort below migrations it must apply after.
-        //
-        // It is also not a one-time check. `origin/staging` moved 93 commits between sessions and
-        // its migration head advanced past both files authored the day before, which is exactly how
-        // an authored migration becomes unapplyable while sitting still.
-        const AUTHORED_HERE = [
-            "w13_collapse_portal_eligible",
-            "w61_role_key_fk_restrict",
-            "w16_user_roles_role_foreign_key",
-            "w28_replace_role_permission_grants_rpc",
-            "w58_save_role_definition_and_grants",
-            "s3_action_link_token_hash",
-            "s3_action_link_token_drop_plaintext",
-            "w60_m20_drop_catalog_compatibility_views",
-            "w13_i35b_analytics_read_preservation",
-            "od8_ops_users_roles_read_preservation",
-        ];
-        const authored = AUTHORED_HERE.map((frag) => {
-            const file = MIGRATION_FILES.find((f) => f.includes(frag));
-            expect(file, `no migration matching ${frag}`).toBeTruthy();
-            return { frag, version: file!.split("_")[0] };
-        });
+        // It happened. The Communications lane merged `20260818200000_ingress_observation_sender_-
+        // authentication` after this branch's last pre-merge check, and PR #475 then merged
+        // `20260818200000_w28_replace_role_permission_grants_rpc`. Staging briefly held both. Had the
+        // batch been applied, W-28's RPC would have been skipped — and `W-58` composes it, so the
+        // role page's one-transaction save would have failed at runtime against a function that was
+        // never created. W-28 and W-58 were renumbered above staging's head to clear it, together,
+        // because W-58 aborts if W-28's function is absent.
         const versions = MIGRATION_FILES.map((f) => f.split("_")[0]);
+        const duplicates = [...new Set(versions.filter((v, i) => versions.indexOf(v) !== i))];
+        expect(
+            duplicates,
+            "two migrations at one version — db push applies one and skips the other with no error",
+        ).toEqual([]);
+    });
 
-        // Unique — an exact collision is the silent-skip failure.
-        for (const { frag, version } of authored) {
-            expect(versions.filter((v) => v === version), `${frag} version is not unique`).toHaveLength(1);
-        }
+    it("anything this lane has NOT yet merged sorts above the staging head", () => {
+        // The ordering half, re-pointed. It used to read "every authored-unapplied A&I migration
+        // sorts above everything already on staging", which was right while the whole tranche was
+        // unpushed. PR #475 merged it, so most of these versions are now ON staging and legitimately
+        // sort below migrations that landed after them — the old form convicted the branch for
+        // having been promoted.
+        //
+        // What still matters is the same rule applied to what is still in flight: a version at or
+        // below the remote head is refused by `db push`, and an exact collision is silently skipped.
+        const onStaging = new Set(
+            execSync("git ls-tree -r origin/staging --name-only -- supabase/migrations", {
+                cwd: join(MIGRATIONS_DIR, "..", ".."),
+                encoding: "utf8",
+            })
+                .split("\n")
+                .filter(Boolean)
+                .map((p) => p.split("/").pop()),
+        );
+        const stagingMax = [...onStaging].map((f) => f.split("_")[0]).sort().at(-1);
+        expect(stagingMax, "could not read the staging migration head").toBeTruthy();
 
-        // Above every migration this lane did NOT author, which is the set already on staging.
-        const foreignVersions = MIGRATION_FILES.filter(
-            (f) => !AUTHORED_HERE.some((frag) => f.includes(frag)),
-        ).map((f) => f.split("_")[0]);
-        const highestForeign = [...foreignVersions].sort().at(-1)!;
-        for (const { frag, version } of authored) {
+        const unmerged = MIGRATION_FILES.filter((f) => !onStaging.has(f));
+        for (const f of unmerged) {
             expect(
-                version > highestForeign,
-                `${frag} (${version}) sorts at or below ${highestForeign}, which db push refuses`,
+                f.split("_")[0] > stagingMax,
+                `${f} is not on staging and sorts at or below ${stagingMax}, which db push refuses`,
             ).toBe(true);
         }
     });
