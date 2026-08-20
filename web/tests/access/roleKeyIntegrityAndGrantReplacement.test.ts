@@ -662,15 +662,15 @@ describe("M21 — one role_key foreign key, and it refuses rather than cascades"
             })
                 .split("\n")
                 .filter(Boolean)
-                .map((p) => p.split("/").pop()),
+                .map((p) => p.split("/").pop()!),
         );
-        const stagingMax = [...onStaging].map((f) => f.split("_")[0]).sort().at(-1);
+        const stagingMax = [...onStaging].map((f) => f.split("_")[0]!).sort().at(-1);
         expect(stagingMax, "could not read the staging migration head").toBeTruthy();
 
         const unmerged = MIGRATION_FILES.filter((f) => !onStaging.has(f));
         for (const f of unmerged) {
             expect(
-                f.split("_")[0] > stagingMax,
+                f.split("_")[0]! > stagingMax!,
                 `${f} is not on staging and sorts at or below ${stagingMax}, which db push refuses`,
             ).toBe(true);
         }

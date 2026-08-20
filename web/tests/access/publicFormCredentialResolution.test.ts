@@ -100,7 +100,7 @@ const LINK_TABLE = "form_public_links";
  *
  * The named resolver satisfies all three, so nothing that passed before stops passing.
  */
-function performsLinkRefusals(src) {
+function performsLinkRefusals(src: string): boolean {
     const byTokenHash = /\.eq\(\s*["'`]token_hash["'`]/.test(src);
     const refusesInactive = /!\s*\w+(?:\??\.)\w*is_active|is_active\s*===\s*false|!\s*\w+\.is_active/.test(src);
     const refusesExpiry = /expires_at/.test(src) && /Date\.now\(\)|new Date\(/.test(src);
@@ -113,11 +113,11 @@ function performsLinkRefusals(src) {
  * a route for anything transitively reachable, which is the ~30x over-reporting the census was
  * retired for.
  */
-function reachesResolver(routeAbs, maxDepth = 3) {
-    const seen = new Set();
-    const frontier = [{ abs: routeAbs, depth: 0 }];
+function reachesResolver(routeAbs: string, maxDepth = 3): boolean {
+    const seen = new Set<string>();
+    const frontier: { abs: string; depth: number }[] = [{ abs: routeAbs, depth: 0 }];
     while (frontier.length) {
-        const { abs, depth } = frontier.shift();
+        const { abs, depth } = frontier.shift()!;
         if (seen.has(abs) || depth > maxDepth) continue;
         seen.add(abs);
         const src = code(abs);
