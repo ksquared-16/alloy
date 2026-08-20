@@ -62,3 +62,4 @@ web/test-results/
 # Local scoped typecheck helper (not product code)
 web/tsconfig.poscheck.json
 certification-tour/
+web/.metadata_never_index
