@@ -2,6 +2,8 @@ import { cache } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabaseServer";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
+import { getCachedJwks } from "@/lib/auth/jwksCache";
+import { getSupabaseAnonKeyForAuth, getSupabaseUrlForAuth } from "@/lib/supabase/auth-env";
 
 type AuthSessionState = {
     userId: string | null;
@@ -19,7 +21,14 @@ const resolveAuthSessionOnce = cache(async (): Promise<AuthSessionState> => {
     let source: AuthSessionState["authSource"] = "none";
     try {
         const supabase = await createClient();
-        const claimsRes = await supabase.auth.getClaims();
+        /**
+         * The key set must be supplied from the process cache. auth-js caches JWKS on the
+         * GoTrueClient INSTANCE, and `createClient()` builds a fresh one per request, so this
+         * "local" verification was refetching `/.well-known/jwks.json` from the remote Auth server
+         * on every request — measured at ~200ms each. See `lib/auth/jwksCache.ts`.
+         */
+        const jwks = await getCachedJwks(getSupabaseUrlForAuth() ?? "", getSupabaseAnonKeyForAuth() ?? "");
+        const claimsRes = await supabase.auth.getClaims(undefined, jwks ? { jwks } : undefined);
         if (!claimsRes.error && claimsRes.data?.claims) {
             const sub = (claimsRes.data.claims as { sub?: unknown }).sub;
             if (typeof sub === "string" && sub.length > 0) {

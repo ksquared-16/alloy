@@ -28,5 +28,12 @@ trap restore EXIT
 rm -rf .next/dev/types .next/types
 "$VAC" run build
 rc=$?
+
+# Spotlight indexes the hundreds of MB a build just wrote, and mds then runs at >100% CPU for
+# minutes — which disqualifies the host on the very gate you need to pass to REMEASURE the change
+# you just built. `.metadata_never_index` is honoured without sudo. Re-stamped after every build
+# because the marker does not survive a distDir that gets recreated.
+mkdir -p .next-prodcert .next
+touch .next-prodcert/.metadata_never_index .next/.metadata_never_index
 [ "$rc" -eq 0 ] && echo "PE3 prod build OK -> .next-prodcert" || echo "PE3 prod build FAILED rc=$rc"
 exit "$rc"
