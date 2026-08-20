@@ -1,4 +1,99 @@
 {
+  "staging_certified_read_only_session_33": {
+    "action": "application.certify_staging / tha_9f2937526a6719 / gar_1bcb1fcda29235",
+    "verified_locally": "Action record present, state completed, ONE evidence entry (not empty — the engine's evidence defect is fixed), status certified_read_only, source_sha 63aa211ce = PR #479's merge commit.",
+    "result": "16 passed / 0 failed / 1 skipped. The skip is this lane's own CERT_ALLOW_WRITES guard, which is what produced write_policy: read_only — the write-safety fix and the read-only certification are the same fact seen from two sides.",
+    "certified_on_staging": [
+      "membership resolves to one organization",
+      "no silent multi-org selection",
+      "role resolution",
+      "read vs manage distinction visible",
+      "capability chips follow SERVER authority, not a client guess",
+      "Role and Scope are siblings on the Access surface",
+      "admin/users opens for the seeded operator"
+    ],
+    "NOT_certified_five_named_gaps": {
+      "membership_missing_fails_closed": "not run — needs an isolated fixture mutation",
+      "location_department_restriction": "not run — needs a restricted-scope fixture",
+      "no_admin_ops_scope_bypass": "not run — needs a restricted-scope fixture",
+      "admin_users_ops_preserved_read": "NOT RUN — this is OD-8's core claim, that ops keeps roster read through the preservation grant. Proven in schema (0 missing) but never exercised through the running product on staging.",
+      "admin_users_without_read": "NOT RUN — the negative control for the same conversion."
+    },
+    "product_review": "ALL SIX captures failed (users, user_effective_access, roles, role_editor, scope, security) — artifact null, status capture_failed. No operator-facing product review evidence was produced.",
+    "honest_status": "Staging is certified READ-ONLY with five named authority gaps and no product-review artifacts. It is not fully certified."
+  },
+  "program_reconciliation_session_33": {
+    "landed": "42 workstreams: W-0..W-16, W-20, W-22, W-28, W-30, W-32, W-40, W-42..W-47, W-49..W-52, W-54..W-62.",
+    "remaining": 21,
+    "finding": "EVERY remaining workstream is decision-gated or blocked behind one that is. There is no independently READY A&I work left.",
+    "gates": {
+      "D2/I-10": [
+        "W-17"
+      ],
+      "D3": [
+        "W-18"
+      ],
+      "D4": [
+        "W-19"
+      ],
+      "AD-4": [
+        "W-44 SQL half",
+        "W-19"
+      ],
+      "AD-5": [
+        "W-26",
+        "W-33",
+        "W-37"
+      ],
+      "AD-6": [
+        "W-26"
+      ],
+      "AD-7": [
+        "W-33",
+        "W-36"
+      ],
+      "AD-8": [
+        "W-33"
+      ],
+      "AD-9": [
+        "W-29"
+      ],
+      "AD-10": [
+        "W-25"
+      ],
+      "AD-11": [
+        "W-24"
+      ],
+      "AD-12": [
+        "W-41",
+        "W-48 (after W-41)"
+      ],
+      "AD-13": [
+        "W-39"
+      ],
+      "AD-14": [
+        "W-35"
+      ],
+      "AD-15": [
+        "W-38"
+      ],
+      "AD-16": [
+        "W-27"
+      ],
+      "AD-17": [
+        "W-34"
+      ],
+      "OD-9": [
+        "W-31 — the plan header says 'no decision', but the product has NO server-side password write to enforce a policy at; establishing one is an authentication architecture change"
+      ],
+      "W-23 Q7": [
+        "W-53"
+      ],
+      "superseded": [
+        "W-21 — split into W-41 + W-48"
+      ]
+    }
+  },
   "STAGING_LEDGER_IS_WRONG_session_30": {
     "severity": "HIGH — staging has a ledger that claims ten migrations applied when four ran, one of those failed, and six never executed at all.",
     "evidence": "Director tmp artifacts under trusted-host-actions/tmp/. Execution output (.out/.err) exists for FOUR versions only; ledger-<version>.out shows BEGIN/<version>/COMMIT for ALL TEN.",
