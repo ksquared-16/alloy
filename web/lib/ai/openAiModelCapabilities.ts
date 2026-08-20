@@ -46,3 +46,21 @@ export function resolveOpenAiStructuredCompletionTemperature(model: string): num
     if (!supportsCustomTemperature(model)) return undefined;
     return readOptionalEnvTemperature() ?? 0.2;
 }
+
+/**
+ * `reasoning_effort` for structured single-fact requests, or **undefined** to omit the field.
+ *
+ * The gpt-5 family are reasoning models whose DEFAULT effort spends multiple seconds thinking —
+ * measured live: a one-sentence participant interpretation on `gpt-5-mini` overran Trust's 8s
+ * decision deadline and every governed execution failed as a timeout. The work these clients send
+ * is a bounded JSON extraction; `minimal` answers it in the sub-second range the deadline assumes.
+ *
+ * Models outside the gpt-5 family omit the field entirely — chat/completions rejects unknown
+ * parameters on models that do not reason, and the safest default is the API's own.
+ */
+export function resolveOpenAiReasoningEffort(model: string): string | undefined {
+    const m = normalizeModelId(model);
+    if (!m) return undefined;
+    if (m.startsWith("gpt-5")) return "minimal";
+    return undefined;
+}

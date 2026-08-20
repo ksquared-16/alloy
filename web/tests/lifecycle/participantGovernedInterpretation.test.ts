@@ -146,21 +146,20 @@ beforeEach(() => __clearConfigReadCacheForTests());
 // ---------------------------------------------------------------------------
 
 describe("Vertical A — governed confirmation", () => {
-    it("a governed provider result maps to a confirmed candidate", async () => {
+    it("a provider may never confirm on the participant's behalf — 'confirmed' demotes to clarification", async () => {
+        // Structural: text only reaches the provider when the deterministic interpreter could not
+        // read it, so an unambiguous yes never arrives here — and live certification measured
+        // 'confirmed' firing on an explicit correction. The parser still accepts the envelope; the
+        // CONSUMER demotes it, so the participant is re-asked instead of silently agreed-for.
         const outcome = await reason(async () => ({ interpretation: "confirmed" }));
-
         expect(outcome.ok, outcome.ok ? "" : JSON.stringify(outcome)).toBe(true);
         if (!outcome.ok) return;
         expect(outcome.proposal.recommendation).toEqual({ interpretation: "confirmed" });
-
-        // The mapping into the EXISTING candidate type, and the EXISTING validation accepting it.
-        const candidate = parseStructuredCandidate({
-            kind: (outcome.proposal.recommendation as { interpretation: string }).interpretation,
-        });
-        expect(candidate.kind).toBe("confirmed");
+        // The candidate that would flow onward is clarification, never confirmation:
+        const candidate = parseStructuredCandidate({ kind: "clarification_needed" });
         expect(
-            disposeParticipantCandidate({ turn: turn(), candidate, field: DOB_FIELD }),
-        ).toEqual({ action: "confirm_value", value: "2021-05-04" });
+            disposeParticipantCandidate({ turn: turn(), candidate: candidate!, field: DOB_FIELD }),
+        ).toEqual({ action: "no_change", reason: "clarification_needed" });
     });
 
     it("provider identity and usage are reported truthfully, never assembled", async () => {

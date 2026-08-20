@@ -46,7 +46,7 @@ import {
     getOpenAiModel,
     hasOpenAiStructuredCredentials,
 } from "@/lib/ai/aiEnrichmentEnv";
-import { resolveOpenAiStructuredCompletionTemperature } from "@/lib/ai/openAiModelCapabilities";
+import { resolveOpenAiReasoningEffort, resolveOpenAiStructuredCompletionTemperature } from "@/lib/ai/openAiModelCapabilities";
 import { sanitizeOpenAiSurfaceText } from "@/lib/ai/openAiHttpError";
 
 /** Default OpenAI origin. The one host we can honestly call `remote` without being told. */
@@ -158,6 +158,7 @@ export function buildChatCompletionsBody(input: {
     readonly request: GovernedProviderExecutionRequestV1;
 }): Record<string, unknown> {
     const temperature = resolveOpenAiStructuredCompletionTemperature(input.model);
+    const reasoningEffort = resolveOpenAiReasoningEffort(input.model);
     const body: Record<string, unknown> = {
         model: input.model,
         response_format: { type: "json_object" },
@@ -167,6 +168,8 @@ export function buildChatCompletionsBody(input: {
         ],
     };
     if (temperature !== undefined) body.temperature = temperature;
+    // Reasoning models must not out-think the decision deadline on a bounded JSON extraction.
+    if (reasoningEffort !== undefined) body.reasoning_effort = reasoningEffort;
     return body;
 }
 

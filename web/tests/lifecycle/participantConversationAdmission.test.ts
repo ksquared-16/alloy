@@ -183,11 +183,22 @@ describe("3. high-sensitivity and non-admitted turns never become eligible", () 
         if (!result.eligible) expect(result.reason).toContain("Artifact-specific");
     });
 
+    it("the bounded allergy FACT is admitted by Director direction; alias spellings match D-100", () => {
+        // The AI-conversation mission's required live proofs are "No allergies" / "Peanuts only",
+        // and its own example is a peanut allergy — direction from the policy owner. The fact is
+        // admitted; medical NARRATIVE below stays refused.
+        expect(D101_ELIGIBLE_FIELD_KEYS.has("customer_member:allergies")).toBe(true);
+        // The alias spellings Firefly's form actually binds — the D-100 lesson, applied here after
+        // the live governed path refused `child_date_of_birth` while `child:dob` sat admitted.
+        for (const alias of ["child_date_of_birth", "child_first_name", "child_last_name", "child_full_name"]) {
+            expect(D101_ELIGIBLE_FIELD_KEYS.has(alias)).toBe(true);
+        }
+    });
+
     it("government id, health narrative and consent are NOT on the admitted list", () => {
         for (const key of [
             "person:ssn",
             "customer_member:government_id",
-            "customer_member:allergies",
             "customer_member:medical_notes",
             "person:consent_text",
             "person:acknowledgment",
