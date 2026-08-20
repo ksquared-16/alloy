@@ -1,4 +1,14 @@
 {
+  "od2_staging_schema_blocked_session_28": {
+    "staging_verified": "Head 63aa211ce, PR #479 present. All seven pre-request checks proven: no duplicate migration versions anywhere in the tree; 20260818200000 is uniquely Communications'; W-28 exists only at 20260820130000 and W-58 follows at 20260820140000; the ten A&I migrations are unique and ordered; deferred 20260819130000 absent; the four Communications migrations present via their own promotion path.",
+    "batch_requested": "gar_af93c87065a488 — database.apply_migration, staging, expectedSha 63aa211ce, ten migrations in version order (which satisfies every dependency, including W-28 before W-58), stopOnFailure.",
+    "outcome": "FAILED `apply_failed`. Started and failed in the SAME millisecond (18:01:16.447), with trusted_host_action_id null and execution_ended_at null.",
+    "root_cause": "The Director resolves migration files from resolveCanonicalRepoRoot() — /Users/Kelly/Alloy. That checkout is on branch `staging` at cfe86b2b3, **429 commits behind origin/staging**, and contains NONE of the ten A&I migrations. `psql -f <missing file>` exits non-zero on the first entry, which is `apply_failed`. Note the failure code is NOT trusted_credential_unavailable, so the trusted host's credentials loaded correctly — this is purely a stale checkout.",
+    "nothing_was_applied": "The action produced no trusted-host action id and no end timestamp, and the FIRST file in the batch does not exist in the checkout it reads from, so the batch could not have progressed past entry one. There is no partial schema state to unwind.",
+    "why_not_fixed_here": "The remedy is to fast-forward /Users/Kelly/Alloy to origin/staging. HEAD is an ancestor so it would fast-forward cleanly — but the checkout carries 183 modified/staged/untracked files, including staged additions, which is someone's in-flight work. CLAUDE.md forbids modifying the canonical checkout during implementation, and pulling over 183 staged files from another lane is exactly the hazard that rule exists for.",
+    "operator_remedy": "Disposition the 183 dirty files in /Users/Kelly/Alloy, fast-forward it to origin/staging, then re-request the batch. No code change anywhere.",
+    "state": "Staging schema NOT applied. Runtime and browser certification unreachable — both depend on it."
+  },
   "od2_post_merge_repair_session_27": {
     "merge": {
       "verified": "PR #475 MERGED 2026-08-20T15:37:43Z, merge commit 28f38e3bc, staging head 28f38e3bc. Branch head f1cb105e0 is an ancestor of staging. Confirmed independently rather than accepted from the notification — the previous merge claim had been false.",
