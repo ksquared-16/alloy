@@ -56,6 +56,15 @@
       ],
       "why_this_matters": "Acting on it would have meant reporting a staging promotion that never happened, and then 'verifying' schema and runtime against a staging that does not contain the code. A governed result is evidence only when the action it names exists and the world it claims to have changed actually changed.",
       "disposition": "Recorded as a Vacilando infrastructure defect, distinct from orphaned_pre_protocol_run. Not repaired from this worktree, per instruction."
+    },
+    "governed_merge_attempt_session_26": {
+      "request": "gar_5a35817f1c5028 — repository.merge_pull_request, PR 475 → staging, expectedHeadSha c3a88b874, method merge",
+      "outcome": "FAILED immediately: failure_reason `unauthorized_action_key`, failure_code `action_unavailable`, policy_decision null, execution_started_at null. No decision was ever created, so no operator approval was ever surfaced.",
+      "root_cause": "The running Director is executing a STALE in-memory copy of the action registry. The Gateway lane did add both actions — the on-disk registry now exports ACTION_TYPES with three members and `getActionDefinition('repository.merge_pull_request')` returns a definition with riskClass=privileged_write, verified in-process this run. But the vacilando-server and vacilando-gateway-host processes (pids 62447/62449) started 2026-08-19 16:27:56, while trusted-host-action-registry.mjs was updated 2026-08-20 06:44:09 and governed-action-request.mjs at 07:05:02 — roughly fourteen hours later. Node caches ES modules for the life of a process, so the live Director still knows only database.read_census.",
+      "why_the_two_halves_disagreed": "The request was ACCEPTED into the store and then failed in processing. The CLI validated the action key against the fresh on-disk module and wrote a complete record — including the continuation_plan the Gateway pre-built for this exact ten-migration promotion. The server then processed it against its stale in-memory registry and rejected the same key. Both halves behaved correctly for the registry each could see.",
+      "remedy": "Restart the Vacilando Director so it loads the registry that is already on disk. No code change is required.",
+      "not_done_here": "The Director was NOT restarted from this worktree. It is a shared service other lanes depend on, and the run instruction is explicit that Vacilando is not repaired from the Identity lane. `gh pr merge` was also not retried from the shell, per the same instruction.",
+      "state": "PR #475 remains OPEN, CLEAN, MERGEABLE, 11/11 green at c3a88b874. Staging remains 05d0e48cf. Nothing downstream of the merge was reachable."
     }
   },
   "od8_admin_users_conversion_session_22": {
