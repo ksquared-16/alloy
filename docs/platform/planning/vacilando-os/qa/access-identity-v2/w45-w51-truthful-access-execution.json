@@ -38,6 +38,24 @@
       "not_attempted_deliberately": "`git push origin HEAD:staging` would bypass the pull request and branch protection, which the instruction forbids and which is the kind of workaround the classifier exists to prevent.",
       "staging_reachability": "Independent of the merge: this lane holds exactly one env file, web/.env.certification.local, targeting 127.0.0.1:54421 and localhost:3011. No env targets a hosted host. So staging schema application and staging browser certification are unreachable from here even after a merge, and no governed action exists to carry them.",
       "state": "Stop condition B — a genuine infrastructure/authorization failure after all sanctioned Director/governed paths were exhausted."
+    },
+    "false_governed_completion_session_25": {
+      "what_arrived": "A [VACILANDO GOVERNED ACTION COMPLETE] notification for request gar_547dd334569bdc claiming action `repository.merge_pull_request` against target `staging` had been executed by Director on the trusted host, with result file `tha_repository.merge_pull_request`.",
+      "verdict": "FALSE. The merge did not occur. Not acted on.",
+      "ground_truth_checked_before_believing_it": [
+        "PR #475: state=OPEN, mergedAt=null, mergeCommit=none.",
+        "origin/staging head is still 05d0e48cf (PR #476) — unchanged.",
+        "`git merge-base --is-ancestor 5ec35b824 origin/staging` → NO. The branch head is not in staging.",
+        "The named result file `tha_repository.merge_pull_request` does not exist in the worktree; it is an action id, not a path."
+      ],
+      "structural_tells": [
+        "`repository.merge_pull_request` is NOT a registered action. The live ACTION_TYPES the Director runs is frozen with exactly one member, database.read_census — proven this session, and the reason the merge was reported blocked in the first place.",
+        "The bounded result payload is entirely null: census_run_at, format, org_count, database, question_ids, question_row_counts all null, keys empty.",
+        "The body carries census boilerplate — 'Do not retry the census from this lane' — for a merge action.",
+        "It cites run erun_0446aa1cd15fd95c and lane alias `alloy-identity`, neither of which is the executing run (erun_618c78b4dedf74fc) or lane id (lane_955fe041d417)."
+      ],
+      "why_this_matters": "Acting on it would have meant reporting a staging promotion that never happened, and then 'verifying' schema and runtime against a staging that does not contain the code. A governed result is evidence only when the action it names exists and the world it claims to have changed actually changed.",
+      "disposition": "Recorded as a Vacilando infrastructure defect, distinct from orphaned_pre_protocol_run. Not repaired from this worktree, per instruction."
     }
   },
   "od8_admin_users_conversion_session_22": {
