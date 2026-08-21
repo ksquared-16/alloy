@@ -138,5 +138,6 @@ jobs:
             tests/lifecycle/participantConversationProductization.test.ts \
             tests/forms/loadPublishedFormEnvelope.test.ts \
             tests/forms/resolveActiveStepEnvelope.test.ts \
+            tests/forms/pdf/documentDestinationDateFormat.test.ts \
             tests/forms/pdf/fidelityEngine.test.ts \
             tests/forms/pdf/fidelityMappingVertical.test.ts
