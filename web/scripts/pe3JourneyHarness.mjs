@@ -25,8 +25,8 @@ await p.waitForFunction(() => document.querySelectorAll('a[href^="/workspace/wor
 const wsReady = Date.now() - t_ws;
 const preIdle = reqs.length;
 await p.waitForTimeout(IDLE);                      // let workspace idle preparation run
-const prepReqs = reqs.slice(preIdle).filter((r) => r.u.includes("provisioning-answer") || r.u.includes("view-models/drawer"));
-console.log(`workspace usable in ${wsReady}ms; during ${IDLE}ms idle: ${prepReqs.length} preparation requests`);
+const prepReqs = reqs.filter((r) => r.u.includes("provisioning-answer") || r.u.includes("view-models/drawer"));
+console.log(`workspace usable in ${wsReady}ms; preparation requests (whole page life): ${prepReqs.length}`);
 for (const r of prepReqs.slice(0, 8)) console.log(`   prep: ${r.u.slice(0, 110)}`);
 
 const read = () => p.evaluate(() => ({
