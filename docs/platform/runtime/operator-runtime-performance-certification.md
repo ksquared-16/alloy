@@ -133,7 +133,7 @@ Every one of these produced a **plausible but false** result during this program
 
 **Runtime debt**
 - Save server completion ~3.2 s (client UX already premium).
-- Operational workspace **shell** launch is uniform and premium (54–101 ms, constant height, clean Escape); the **data** grammar is not shared: Processing 3→0 and Work Items 4→0 requests on reopen (warm), but **Operations 7→7** and **Inbox/Communications 20→22**, with `templates` ×4 growing to ×6 on reopen and `status-options` ×4. Shell launch is uniform; data loading is not.
+- Operational workspace **shell** launch is uniform and premium (54–101 ms, constant height, clean Escape). The **data** lifecycle is classified below (§8) — two earlier readings of it were wrong and are corrected there.
 - Activity cold timeline 2.1 s; 11 requests on subject switch while Activity is open.
 - `QueueRowModel.entityType` is typed `"opportunity" | "job" | "schedule"` while the provisioning answer emits `"child"` — type/runtime divergence.
 - Queue rows 404 on `/view-models/drawer/opportunity/<row id>`: ~1.4 s of wasted server work per row click.
@@ -142,3 +142,47 @@ Every one of these produced a **plausible but false** result during this program
 
 **Not yet certified**
 - `/organization` operator interaction (Part 5), card/command destination readiness (Part 3), operational workspace resume semantics (product decision).
+
+
+---
+
+## 8. Operational workspace data lifecycle — classified
+
+Measured over four open/close cycles on a production build, keeping full URLs. **Shape, not a single
+count, is the diagnostic:** flat means a loader, rising means an accumulating effect.
+
+| workspace | requests per open | shape | classification |
+|---|---|---|---|
+| Processing | 3, 0, 0, 2 | warm + occasional refresh | **healthy** — warm reuse with explicit freshness |
+| Work Items | 4, 0, 0, 0 | warm after first | **healthy** |
+| Operations | 7, 7, 7, 7 | **flat** | **primary dataset, refetched per open** — no warm reuse, but no accumulation |
+| Inbox / Communications | 20, 22, 23, 22 | **plateau** | **genuine duplicate loader** — see below |
+
+### Two corrections to earlier reporting
+
+1. **Operations' "scheduling ×5 / roster ×2" are not duplicates.** With query strings retained they
+   are seven DISTINCT queries — `view=sites`, `view=roster`, `view=assignment_roster`, two `week_of`
+   values, two roster dates. **Legitimate distinct queries.** Stripping the query string is what made
+   them look like waste.
+2. **Communications is not an accumulating leak.** It plateaus at ~22; `templates` steps 4 → 6 once
+   and stays. Earlier described as "growing", which the four-cycle shape disproves.
+
+### Communications: duplicate loader ownership — HANDOFF
+
+Per open, five reference URLs are each fetched **twice, ~6.4 s apart**:
+`templates`, `templates?status=active`, `announcements`, `status-options?grain=family`,
+`status-options?grain=child`.
+
+`lib/communications/v2/communicationsWorkspaceWarmCache.ts` already provides a unified warm cache
+with a 90 s TTL and in-flight dedup, and `InboxModal` warms it at open (the +0 ms burst). But
+`app/adminV2/communications/TemplatesWorkspace.tsx` and `AnnouncementsWorkspace.tsx` **import that
+cache and also declare their own `TEMPLATES_API` / `ANNOUNCEMENTS_API` / `STATUS_OPTIONS_API`
+constants and fetch them directly** — the +6.4 s burst is the workspace components re-fetching
+through a second loader they own.
+
+**A bundle-scoping fix was hypothesised, implemented, measured, and DISPROVED** (routing the cache
+through `globalThis` changed nothing) — recorded so the wrong explanation is not retried. The cause
+is duplicate loader ownership, one of this program's named deprecation classes.
+
+**Owner: Communications.** Not fixed here to avoid colliding with that lane. The remedy is to route
+those components through the existing warm cache they already import.
