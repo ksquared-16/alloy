@@ -29,6 +29,8 @@ import { canonicalStageRequirements } from "@/lib/lifecycle/effectiveStageRequir
 import { resolveEffectiveStageKey } from "@/lib/lifecycle/processEntryStage";
 import { entryIntentFromProcessInstanceMetadata } from "@/lib/lifecycle/processEntryPointsV1";
 import { resolveCurrentEnrollmentSession } from "@/lib/pos/packet/enrollmentObjectiveSession";
+import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
+import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
 import { resolveProcessInstanceConfiguration } from "@/lib/process/resolveProcessInstanceConfiguration";
 import { departmentForOpportunityContext } from "@/lib/process/resolveEnrollmentBusinessProcessRevision";
 import { PROCESS_INSTANCES_TABLE } from "@/lib/process/processInstances";
@@ -89,11 +91,24 @@ async function loadRealizedFormItems(
 
     const [packetItemsResult, submissionsResult] = await Promise.all([
         packetItemIds.length
-            ? supabase
-                  .from("form_packet_items")
-                  .select("id, form_definition_id")
-                  .eq("org_id", orgId)
-                  .in("id", packetItemIds)
+            ? /**
+               * A packet item's FORM IDENTITY is published configuration, not participant data.
+               *
+               * `packet_item_id -> form_definition_id` changes only when an operator edits a packet
+               * definition, and a realized session item's own mapping is fixed for its lifetime.
+               * That is the same class of fact the pinned revision payload and the D-94 pinned form
+               * versions already read through this cache, and on the participant path it was the
+               * slowest query in the last wave. Live submission STATUS is deliberately not cached.
+               */
+              cachedConfigRead(`packetitems:${orgId}:${[...packetItemIds].sort().join(",")}`, async () => {
+                  const res = await supabase
+                      .from("form_packet_items")
+                      .select("id, form_definition_id")
+                      .eq("org_id", orgId)
+                      .in("id", packetItemIds);
+                  if (res.error) throw new Error(res.error.message);
+                  return { data: res.data, error: null };
+              })
             : Promise.resolve({ data: [], error: null }),
         submissionIds.length
             ? supabase
@@ -151,6 +166,12 @@ export async function resolveEnrollmentParticipantProgress(
         processInstanceId: string;
         /** Receives the loaded rows on the success path, for callers that read them next. */
         captureLoaded?: (loaded: EnrollmentProgressLoaded) => void;
+        /**
+         * A session row the caller already holds — the participant token resolver reads it to prove
+         * the link. Passed straight through to the one owner of "which session is current", which
+         * re-checks the predicate before using it.
+         */
+        preloadedSession?: PacketSessionRow | null;
     },
 ): Promise<EnrollmentParticipantProgressResult> {
     const { data, error } = await supabase
@@ -197,6 +218,7 @@ export async function resolveEnrollmentParticipantProgress(
         resolveCurrentEnrollmentSession(supabase, {
             orgId: input.orgId,
             processInstanceId: instance.id,
+            preloadedSession: input.preloadedSession ?? null,
         }),
     ]);
 
