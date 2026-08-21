@@ -108,6 +108,80 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 9 — CLS closed, Work View met, queue-subject blocker isolated
+
+### Priority 3 — initial-load CLS: CLOSED
+
+| path | CLS | entries |
+|---|---|---|
+| **prepared (operator journey)** | **0** | **0** |
+| direct URL entry | 0.1829 | 3 |
+
+**On the operator path there is no layout shift at all.** Readiness eliminated it.
+
+The direct-path 0.1829 is attributed, and it is not a surface-composition defect: **97% of it is one
+element**, `div.adminv2-bos-rail-overlay`, resizing at **t = 22,187ms** (244x716 → 164x740) — long
+after first usable. The remaining three entries total 0.005. Not shell, queue, Focus Panel, cards,
+avatars, or fonts.
+
+Classified **"other — late overlay geometry settle"**, on a path operators do not take, after the
+operator would already be working. Recorded for the rail's owner; no fix taken here, and no
+animation added to hide it.
+
+### Priority 6 — Work View readiness: TARGET ALREADY MET, no change needed
+
+Prepared entry, switching between the two views that hold data:
+
+| switch | pill | queue | identity | cards | hydrated | prep |
+|---|---|---|---|---|---|---|
+| → all | 265 | 265 | 265 | 265 | — | +0 |
+| → waitlist | 336 | 336 | 336 | 336 | **336** | +2 |
+| → all (warm) | 271 | 271 | 271 | 271 | — | +0 |
+| → waitlist (warm) | 347 | 347 | 347 | 347 | **347** | +0 |
+
+All inside the <500ms target, everything committing at the same instant (atomic reveal), and
+**`prep+0` on most switches** — the Workspace idle preparation already covers Work View answers,
+because the prepared destinations ARE the Work Views. **No new preloader was needed or added.**
+
+### Priority 7 — queue-subject readiness: BLOCKER ISOLATED, no fix kept
+
+Identity is premium everywhere. The gap is the child-scoped Mission card:
+
+| selection | T1 | T2 identity | T3 cards | Mission commit | reserved |
+|---|---|---|---|---|---|
+| rows[1] (near entry anchor) | 216 | 216 | 216 | **216** | no |
+| rows[5] | 143 | 143 | 143 | **7,293** | yes |
+| rows[6] (neighbour of 5) | 122 | 122 | 122 | **6,504** | yes |
+| rows[4] (neighbour of 5) | 152 | 152 | 152 | **7,329** | yes |
+
+Rows near the ENTRY anchor commit their Mission in ~216ms; everything else waits 6.5–7.3s. So
+neighbour preparation works — but the window never moves.
+
+Three defects were found and each was verified NOT to be the operative blocker:
+
+1. **The window is pinned to the entry anchor.** The anchor matches `selectedSubjectId` against the
+   row id *or* `drawer_open.entity_id`. On a child-grain queue every row shares one
+   `drawer_open.entity_id` (the family) and the settlement subject IS that family id, so the match
+   always lands on row 0.
+2. **Child-grain rows are excluded entirely.** The neighbour guard tests
+   `entityType === "opportunity"`, while the provisioning answer emits `entityType: "child"`.
+   (`QueueRowModel.entityType` is typed `"opportunity" | "job" | "schedule"` — a real type/runtime
+   divergence, recorded, not widened inside a performance sprint.)
+3. **The warm is dropped, not deferred.** `prewarmSubjectDestination` correctly refuses while the
+   primary reveal is active, but the effect fires once on an idle callback with no retry, so a
+   reveal in progress at that moment skips every neighbour permanently.
+
+Fixes for all three were implemented, built and measured. **None moved the number, and the
+subject-related request count never rose (24 → 24), meaning no additional preparation fires at
+all.** That points upstream — most likely `isWorkUnitPrimaryRevealActive()` never releasing on this
+path, since a child-grain switch reuses the family record runtime and may never run a begin/end
+cycle. **All three were reverted** rather than kept unproven; they are documented here so the next
+pass starts from evidence instead of repeating them.
+
+**Next step is to instrument the reveal flag itself**, not to add more preparation.
+
+---
+
 ## WAVE 8 — readiness policy settled; Surface 9 measured
 
 ### Priority 1 — readiness policy: KEEP the current bounded idle set
