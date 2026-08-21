@@ -103,6 +103,9 @@ justification, regression updates, and re-certification.
 22. **A workspace reopens to its last stable internal position, and never to transient state.** Stable navigation (section, mode, view, lens, filter, lane) is remembered; an editor, dialog, popover, half-completed form, selected record or command destination is not. The exclusion is STRUCTURAL: a position is a flat `Record<string, string>` of navigation identity, so transient state has no representation and cannot be committed by mistake. A remembered position is a hint, never an authority — anything that fails its workspace's validity guard falls back to the default rather than opening broken.
 23. **Reuse is only safe with an invalidation seam.** A TTL alone is not freshness. Every cached projection a command can change must be dropped by that command, at every layer that holds it. Caching a mutable projection without its seam is how a green toast leaves a stale board on screen.
 24. **Readiness follows resume.** Preparing the default destination for a workspace that reopens somewhere else prepares the wrong thing. Readiness reads the remembered position, and arms on nav intent (hover/focus) — warming inside the modal's own open effect runs at the same instant the workspace mounts and cannot shorten a serial chain.
+25. **The latest operator intent wins.** Two loads in flight, responses unordered: an older response may never overwrite a newer one. One gate per load — two loads sharing one gate cancel each other, which shows up as a green toast over a stale projection.
+26. **NO UNEXPLAINED PAGE REFRESH. Convergence is normal; refresh is exceptional.** A canonical mutation updates the SMALLEST affected authoritative projection through canonical invalidation owners. It never reloads the document, and it never re-renders a whole route to show a row that changed. A refresh is legitimate only for an auth transition (sign-out, idle logout, login), which is a navigation, not a data-freshness mechanism. Corollary: the same command must have the same blast radius from every surface that offers it — a command that converges from one surface and refreshes from another is a defect even when both "work".
+27. **A broadcast only converges COUNTS if its action key is registered as membership-changing.** Otherwise listeners patch the rows they can see and never refetch the ones they cannot, so totals stay stale while the visible row looks correct. Replacing a reload with a broadcast is only safe once the key is registered.
 
 ## 5. Invariant → guard matrix — SUPERSEDED BY §17
 
@@ -726,3 +729,66 @@ most flattering window.
 
 The 11 console errors observed during the smoke are the known speculative drawer-VM prefetch 404
 (§18, OPEN PLATFORM DEFECT) — unchanged by this promotion.
+
+
+---
+
+## 20. Unexpected page refresh — first wave
+
+**The report was "the app sometimes appears to randomly refresh".** Visual behaviour cannot separate a
+document reload from an RSC route refresh from a subtree remount, and those have different owners, so
+the symptom was classified before anything was changed (`scripts/rcRefreshDetector.mjs`, which
+appends every event to `sessionStorage` — an in-memory log dies with the document, which is exactly
+the evidence that matters).
+
+### What the detector proved
+
+Over canonical journeys plus idle dwell on a production build:
+
+| signal | count | reading |
+|---|---|---|
+| `DOCUMENT_REPLACED` | 3 | all three are the harness's own `goto`s |
+| RSC requests (`_rsc=`) | **0** | no `router.refresh()` fired |
+| `LOCATION_RELOAD_CALLED` | **0** | nothing reloaded the document |
+| page crashes | 0 | |
+
+**The refresh is NOT an idle or background phenomenon.** Passive operation does not refresh. It is
+**mutation-triggered**, which is why it appears random: it depends on what the operator did and from
+which surface.
+
+### Owners found and fixed
+
+1. **Both operator command rails omitted `invalidate`.** `applyRegistryResolvedActionClient`
+   documents `router.refresh()` as legacy behaviour for hosts that supply none. The record header
+   supplies one; `WorkspaceRightRailActions` and `WorkUnitRightRailActions` did not — so the SAME
+   command converged surgically from the header and re-rendered the whole route from a rail. Both now
+   use the canonical owners: the targeted scoped update when a record is selected (there is a row for
+   listeners to match), the surface-neutral broadcast when there is not.
+
+2. **`WaitlistPlacementAdjustControl` reloaded the DOCUMENT — sometimes.** Both fallbacks called
+   `window.location.reload()`, and whether they fired depended on whether attention happened to carry
+   a lens. That state-dependence is the whole explanation for "random". The reload was doing real
+   work (it guaranteed the operator saw the new order), so it was replaced by a signal carrying the
+   same guarantee — `placement_manual_order` is already registered as membership-changing, so
+   listeners refetch rows AND counts (law 27).
+
+Auth-transition refreshes (sign-out, idle logout, login) are deliberately untouched: they navigate to
+`/login` and are not a data-freshness mechanism.
+
+### Honest limit on this evidence
+
+**The rail path could not be exercised live on this tenant.** Both command rails render ZERO actions
+on the certification tenant at this route, so there is no before/after measurement of a rail command
+here — the defect and the fix are established by the code path (a host without `invalidate` reaches
+`else host.router.refresh()`) and frozen by guard, not by a live A/B. Stated rather than implied.
+
+Guards: `tests/runtime/noUnexplainedPageRefreshContract.test.ts` (5), including a positive control
+that the legacy fallback still exists (so the guard protects something) and one proving the
+comment-stripper cannot hide a real reload.
+
+### Still open in this area
+
+- `LifecycleActivationBoard.reloadConfiguration` (Organization) calls `window.location.reload()` as
+  an explicit stale-draft recovery. Operator-initiated rather than random, so it is Priority 6
+  ("convergence after save") rather than Priority 1.
+- `/legacy-admin/*` reloads are out of the canonical operator contract and were not touched.
