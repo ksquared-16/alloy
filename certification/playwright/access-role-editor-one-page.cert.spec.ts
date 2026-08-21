@@ -157,9 +157,14 @@ test.describe("W-57 — one page per role", () => {
         await expect(scope).toBeVisible();
         // It states the separation rather than leaving a silent absence.
         await expect(scope).toContainText(/not on the role/i);
-        // And points at the chapter that owns it — a link, never a control.
+        // And points at where scope is actually set — a link, never a control.
+        //
+        // That destination moved. The Access Scopes chapter is retired: it linked out to Locations
+        // and Departments and configured nothing, while scope is set per PERSON. So the link opens
+        // Users. Pinning the destination is still the point — a link to a chapter that no longer
+        // exists would state the separation and then fail to demonstrate it.
         const link = page.getByTestId("access-role-open-scopes");
-        await expect(link).toHaveAttribute("href", /section=scopes/);
+        await expect(link).toHaveAttribute("href", /section=users/);
         // No scope control exists inside the role page.
         await expect(scope.locator('input[type="checkbox"], input[type="radio"], select')).toHaveCount(0);
     });
