@@ -36,11 +36,10 @@ describe("organization domain landings", () => {
 
     it("builds Access tiles without inheritance vocabulary", () => {
         const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
-        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
+        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "security"]);
         expect(model.summaryCards).toEqual([]);
         expect(model.ownershipNote.toLowerCase()).toContain("not configuration inheritance");
         expect(model.tiles.find((t) => t.id === "users")?.href).toContain("section=users");
-        expect(model.tiles.find((t) => t.id === "scopes")?.href).toContain("section=scopes");
         expect(model.tiles.find((t) => t.id === "security")?.href).toContain("section=security");
     });
 

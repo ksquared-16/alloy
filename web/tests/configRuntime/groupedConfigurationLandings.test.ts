@@ -59,9 +59,8 @@ describe("grouped configuration landing simplification", () => {
     it("Access landing has empty summaryCards and four launch destinations", () => {
         const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
         expect(model.summaryCards).toEqual([]);
-        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
+        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "security"]);
         expect(model.tiles.find((t) => t.id === "users")?.label).toBe("Users");
-        expect(model.tiles.find((t) => t.id === "scopes")?.label).toBe("Access Scopes");
         expect(model.tiles.find((t) => t.id === "security")?.label).toBe("Security");
 
         const shared = read("components/adminV2/settings/organization/OrganizationDomainLanding.tsx");

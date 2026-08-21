@@ -3,7 +3,7 @@ import type { OrganizationDomainLandingModel } from "@/lib/configRuntime/organiz
 import type { AccessWorkspaceChapter } from "@/lib/access/accessChapterRoutes";
 
 /**
- * Access landing — Users, Roles, Access Scopes, Security. No conceptual KPI cards.
+ * Access landing — Users, Roles, Security. No conceptual KPI cards.
  *
  * **W-49.** The tiles *are* the navigation into the chapters, so they are the surface `05…§7.7`
  * means by *"navigation filters from the same declaration."* `chapters` is the list the page
@@ -27,8 +27,8 @@ export function buildAccessLandingModel(
             {
                 id: "users",
                 label: "Users",
-                summary: "People who can sign in, their roles, and their data access.",
-                capabilities: ["Member directory", "Invite", "Location & department scope"],
+                summary: "People who can sign in, their role, and where they may work.",
+                capabilities: ["Member directory", "Invite", "Location access"],
                 kind: "assignment",
                 postureLabel: "Users",
                 href: `${adminSettingsSubpathHref("users-roles")}?section=users`,
@@ -41,15 +41,6 @@ export function buildAccessLandingModel(
                 kind: "configuration",
                 postureLabel: "Roles",
                 href: `${adminSettingsSubpathHref("users-roles")}?section=roles`,
-            },
-            {
-                id: "scopes",
-                label: "Access Scopes",
-                summary: "Locations and departments used when assigning organizational visibility.",
-                capabilities: ["Departments catalog", "Locations (owned by Locations)", "Assignment context"],
-                kind: "assignment",
-                postureLabel: "Scopes",
-                href: `${adminSettingsSubpathHref("users-roles")}?section=scopes`,
             },
             {
                 id: "security",

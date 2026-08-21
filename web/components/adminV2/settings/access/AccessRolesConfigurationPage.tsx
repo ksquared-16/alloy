@@ -796,6 +796,11 @@ export default function AccessRolesConfigurationPage() {
                                       * the separation and points at the chapter that owns it. `RL-53`
                                       * asserts no role-editing component reads or writes a scope table,
                                       * and this card is the reason that stays easy to obey.
+                                      *
+                                      * The link used to open an Access Scopes chapter. That chapter is
+                                      * retired, and the destination is better for it: scope is set per
+                                      * person, so the link now opens the people it is set on rather
+                                      * than a catalog of the places.
                                       */}
                                     <ConfigWorkspaceCard
                                         title="Where this authority applies"
@@ -807,11 +812,11 @@ export default function AccessRolesConfigurationPage() {
                                             may do, their scope says where.
                                         </p>
                                         <Link
-                                            href={accessWorkspaceChapterHref("scopes")}
+                                            href={accessWorkspaceChapterHref("users")}
                                             className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-alloy-bend-pine hover:underline"
                                             data-testid="access-role-open-scopes"
                                         >
-                                            Open Access Scopes
+                                            Open Users
                                             <ArrowUpRight className="h-3 w-3" strokeWidth={2.25} aria-hidden />
                                         </Link>
                                     </ConfigWorkspaceCard>
