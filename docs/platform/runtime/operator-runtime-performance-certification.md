@@ -51,7 +51,7 @@ Production build, hosted Supabase, host qualified before and after each cell.
 | Dropdown → options | **25–30 ms warm**, 0 network | |
 | Save acknowledgement / convergence | **77–84 ms** | UI converges before the server responds |
 | **Save server authoritative completion** | **1,736–1,759 ms** | was 3,376 ms — see §14. Post-write readback removed |
-| **`/organization` warm navigation** | **17–55 ms** to destination commit | see §15. First cold entry to a route family 1,486–2,594 ms |
+| **`/organization` warm navigation** | **17–63 ms** to destination commit | see §15. First cold entry to a route family 1,486–2,594 ms |
 | CLS, prepared path | **0** | direct path 0.183, 97% one late overlay |
 
 ## 3. Readiness strategy (certified)
@@ -565,7 +565,7 @@ diagnostic routes were **not** entered.
 | Statuses (`data-model?section=statuses`) | 2 ms | — | 1,454–1,486 ms | same as commit | 0 |
 | Surfaces — **warm revisit** | 1 ms | **45 ms** | — | 45 ms | 0 |
 
-**Warm navigation is premium (17–55 ms). First entry to a route family costs ~1.5–2.6 s.** The
+**Warm navigation is premium (17–63 ms). First entry to a route family costs ~1.5–2.6 s.** The
 timeline is consistent across pages: the RSC payload arrives at 16–311 ms, the route's JS chunk is
 requested at ~1,474–2,033 ms, and commit follows it.
 
@@ -630,7 +630,7 @@ CI gate** — timing is measured deliberately, on a qualified host, never in a f
 | Dropdown (warm) | < 100 ms | 25–30 ms | — |
 | Save acknowledgement | < 150 ms | 74–83 ms | no-false-success contract (6) |
 | **Save authoritative completion** | **< 2,000 ms** | **1,736–1,759 ms** | no-false-success + span classification |
-| **Organization warm navigation** | **< 300 ms** | **17–55 ms** | — (browser-certified) |
+| **Organization warm navigation** | **< 300 ms** | **17–63 ms** | — (browser-certified) |
 | Organization first entry (cold) | *(no budget — true-cold class)* | 1,486–2,594 ms | — |
 | Prepared-path layout shift | 0 | 0 | BOS forbidden parking (5) |
 
@@ -704,3 +704,25 @@ silently stopped working entirely could not pass.
   (`/api/admin/view-models/drawer/opportunity/<id>`): readiness spending a request on a destination
   that does not resolve. Bounded and harmless, but it is measurable waste and it is the source of the
   console error seen during card/command measurement.
+
+
+---
+
+## 19. Post-merge verification
+
+Merged to staging as **`fab0b6fedc95c4cf1932d7066675683dd3f854ee`** (PR #482, 2026-08-21). The merged
+tree is byte-identical to the certified build, so the numbers in this document describe shipped
+behaviour rather than a pre-merge branch.
+
+Post-merge smoke on the shipped tree — **15/15 PASS** (`scripts/pe3PromotionSmoke.mjs`): Workspace →
+prepared Work Unit (5 cards, correct header) → Work View switch → Activity → Children (identity seam
+carries the selected member) → Assignment → Message → Send Form → Tour → queue child switch (identity
+follows the row) → operational workspace → resumed stable position → `/organization`.
+
+**One number corrected against shipped behaviour:** `/organization` warm navigation was recorded as
+17–55 ms; repeated post-merge runs observed up to 63 ms, so the range is now **17–63 ms**. Still
+comfortably inside the < 300 ms budget, but the document states what was measured rather than the
+most flattering window.
+
+The 11 console errors observed during the smoke are the known speculative drawer-VM prefetch 404
+(§18, OPEN PLATFORM DEFECT) — unchanged by this promotion.
