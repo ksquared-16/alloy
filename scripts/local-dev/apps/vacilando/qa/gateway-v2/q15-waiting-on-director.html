@@ -1,0 +1,150 @@
+<!doctype html><html><head>
+<meta charset="utf-8"/>
+<link rel="stylesheet" href="http://127.0.0.1:3020/styles.css"/>
+<style>body{margin:0;background:#0e1116}</style>
+</head><body><div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="alloy-identity">
+    <div class="gw-lanes" data-gw-lanes>
+    <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div><a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a></div>
+    <a class="gw-lane is-active" data-gw-lane="alloy-identity" href="#/lanes/alloy-identity">
+    <span class="gw-lane-title">Access Identity V2</span>
+    <span class="gw-lane-posture is-run">◷ Waiting on Director</span>
+    <span class="gw-lane-attn is-run">Q15 census requested</span>
+    
+    <span class="gw-lane-meta">Waiting on Director</span>
+    <span class="gw-lane-git">—</span>
+    <span class="gw-lane-ab">Unknown · ↑0 · ↓0</span>
+    
+  </a>
+  </div>
+    <section class="gw-main">
+      <div class="gw-lane-stage" data-gw-stage>
+        <div class="gw-stage-status" data-gw-stage-status>
+          <aside class="gw-work is-run" data-gw-work data-run-state="WAITING_RESOURCE" title="Continue Access &amp; Identity V2 — Q15 census then W-15/W-20">
+    <span class="gw-work-h">Current work</span>
+    <span class="gw-work-state">Waiting on Director</span>
+    <span class="gw-work-text">Continue Access &amp; Identity V2 — Q15 census then W-15/W-20</span>
+    <span class="gw-work-resource">Q15 census requested</span>
+    <span class="gw-work-reason">Worker cannot access deployed tenant credentials by design.</span>
+    <span class="gw-work-meta">Director is handling database.read_census.</span>
+    
+    
+    
+    
+    
+    
+  </aside>
+        </div>
+        <div class="gw-thread" data-gw-thread>
+          <div class="gw-output-h">
+            <span>Latest Claude Response</span>
+            <button type="button" class="btn gw-copy" data-gw-copy >Copy</button>
+          </div>
+          
+          <pre class="gw-output" data-gw-output tabindex="0">Worker: I need a governed read-only census against alloy_deployed_primary.</pre>
+        </div>
+        <div class="gw-claude-run" data-gw-claude-run data-running="0">
+    <span class="gw-claude-run-dot" aria-hidden="true"></span>
+    <span>Claude is not running</span>
+    
+  </div>
+        <form class="gw-composer" data-gw-composer>
+    <label class="gw-composer-h" for="gw-instruction">Instruction</label>
+    <textarea id="gw-instruction" name="instruction" rows="3" maxlength="24000"
+      placeholder="Write an instruction…" ></textarea>
+    <div class="gw-composer-row">
+      <span class="gw-count" data-gw-count></span>
+      <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
+      <button class="btn primary gw-send" type="submit" data-gw-send >Send</button>
+    </div>
+    
+  </form>
+      </div>
+      <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
+        <div class="gw-lane-top">
+          <div class="gw-lane-heading">
+            <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+            <header class="gw-lane-h">
+              <h1>Access Identity V2</h1>
+              <p class="gw-presence" data-gw-presence>Waiting on Director · Q15 census requested</p>
+              
+              <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="alloy-identity">Rename Lane</button>
+            </header>
+          </div>
+          <details class="gw-notify" data-gw-notify data-kind="off">
+    <summary class="gw-notify-sum" aria-label="Notifications">
+      <span class="gw-notify-mark" aria-hidden="true"></span>
+      Notify
+    </summary>
+    <div class="gw-notify-pop">
+      <p class="gw-notify-copy">Get notified when managed work completes or needs you.</p>
+      <button type="button" class="btn sm gw-notify-enable" data-gw-notify-enable>Enable notifications</button>
+    </div>
+  </details>
+        </div>
+        <div class="gw-aside-body">
+          <aside class="gw-runtime" data-gw-runtime data-posture="WAITING_ON_DIRECTOR">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">Waiting on Director</p>
+      <p class="gw-runtime-d">Worker cannot access deployed tenant credentials by design.</p>
+      <p class="gw-runtime-d">Director is handling database.read_census.</p>
+    </aside>
+          <aside class="gw-session-callout" data-gw-session-callout>
+    <div class="gw-work-h">Agent</div>
+    <p class="gw-lead">No agent session</p>
+    <p class="gw-session-callout-d">Existing worktree is connected. Start a persistent Claude session to continue queued work.</p>
+    <button type="button" class="btn primary" data-gw-session-start data-lane-id="alloy-identity">Start Session</button>
+  </aside>
+          
+          
+          <details class="gw-status" data-gw-status >
+    <summary class="gw-status-sum-row">
+      <span class="gw-status-h">Development Status</span>
+      <span class="gw-status-sum">Unknown · ↑0 · ↓0 · Session unavailable</span>
+    </summary>
+    <div class="gw-status-block" data-gw-capacity>
+    <div class="gw-status-h">Execution capacity</div>
+    <dl class="gw-kv">
+      <dt>Active</dt><dd>1 / 3</dd>
+      <dt>Running</dt><dd>Access Identity V2</dd>
+      <dt>Queued</dt><dd>None</dd>
+      <dt>Available</dt><dd>2</dd>
+    </dl>
+  </div>
+    <dl class="gw-kv">
+      <dt>Session</dt><dd>No agent session running</dd>
+      <dt>Branch</dt><dd>—</dd>
+      <dt>Worktree</dt><dd>—</dd>
+      <dt>Git</dt><dd>Unknown · ↑0 · ↓0</dd>
+      <dt>tmux</dt><dd>—</dd>
+      
+      
+    </dl>
+    
+    <div class="gw-status-block" data-gw-agent>
+    <div class="gw-status-h">Agent</div>
+    <dl class="gw-kv">
+      <dt>Provider</dt><dd>Claude Code</dd>
+      <dt>Session</dt><dd>—</dd>
+      <dt>Model</dt><dd>—</dd>
+      <dt>Context</dt><dd>—</dd>
+    </dl>
+    
+    <button type="button" class="btn gw-session-refresh" data-gw-session-refresh data-lane-id="alloy-identity">Refresh Claude Context</button>
+  </div>
+  <div class="gw-status-block" data-gw-usage>
+    <div class="gw-status-h">Usage</div>
+    <dl class="gw-kv">
+      <dt>Input</dt><dd>—</dd>
+      <dt>Output</dt><dd>—</dd>
+      <dt>Cache read</dt><dd>—</dd>
+      <dt>Cache write</dt><dd>—</dd>
+      <dt>Session cost</dt><dd>Not reported</dd>
+    </dl>
+  </div>
+  
+    
+  </details>
+        </div>
+      </aside>
+    </section>
+  </div></body></html>
