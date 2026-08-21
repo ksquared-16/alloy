@@ -167,6 +167,28 @@ const REGISTRY = Object.freeze([
     release_authority: "releaseControlPlaneOwnership",
     phase2_mutability: "KEEP; Gateway already isolated",
   },
+  {
+    key: "gateway_host_mutation",
+    aliases: ["gateway-host-mutation", "gateway_install", "host_control_plane_mutation"],
+    class: "EXCLUSIVE_NAMED",
+    label: "Gateway host mutation",
+    authority: "vacilando resource governor",
+    capacity: 1,
+    queueable: true,
+    governor_mutable: true,
+    wired: true,
+    stale_source: "owner run terminal or released by cleanupRunResources",
+    release_authority: "releaseResourceRequest / run termination",
+    phase2_mutability: "request/queue/grant through the ordinary governor; no separate lock",
+    resume_state: "EXECUTING",
+    notes:
+      "Serializes mutation of SHARED HOST Gateway configuration: installing or "
+      + "reinstalling the Gateway, rewriting the launchd plist, service "
+      + "deployment/rebinding, and Tailscale Serve where Vacilando governs it. "
+      + "Distinct from control_plane, which is process ownership of one runtime "
+      + "root, not the right to change the host's installation. Two lanes each "
+      + "ran the installer and silently undid each other; this is that invariant.",
+  },
 ]);
 
 const ALIAS = new Map();
@@ -459,6 +481,12 @@ function defaultGrant(rec) {
   if (rec.resource_key === EXCLUSIVE_RESOURCE_KEY) {
     return { ok: false, error: "exclusive_requires_quietness" };
   }
+  // The governor is its own authority here: there is no external lease to take.
+  // Mutual exclusion comes from tryGrantHead refusing a second grant while one
+  // is held, which is exactly the invariant two competing installers violated.
+  if (rec.resource_key === "gateway_host_mutation") {
+    return { ok: true, holder: rec.holder || governorHolder(rec.run_id) };
+  }
   if (rec.resource_key !== "browser_certification") {
     return { ok: false, error: "not_grantable" };
   }
@@ -476,6 +504,8 @@ function defaultRelease(rec, root, nowMs) {
   if (rec.resource_key === EXCLUSIVE_RESOURCE_KEY) {
     return exclusiveGrantRelease(rec, root, nowMs);
   }
+  // Nothing external is held, so releasing is just dropping the grant — which
+  // cleanupRunResources already does on terminal run states, ABANDONED included.
   if (rec.resource_key !== "browser_certification") {
     return { ok: true };
   }
@@ -519,7 +549,15 @@ function syncRunProjection(rec, root) {
 
 function reevaluateGovernor(root, nowMs) {
   evaluateExclusiveWindow(root, nowMs);
-  tryGrantHead("browser_certification", root, nowMs);
+  // Promote the head of EVERY queueable governor-mutable resource, not one
+  // named key. Hardcoding "browser_certification" here silently stranded the
+  // queue of any other queueable resource: the holder released, and the next
+  // lane stayed QUEUED forever because nothing re-evaluated its key.
+  for (const def of REGISTRY) {
+    if (!def.queueable || !def.governor_mutable) continue;
+    if (def.key === EXCLUSIVE_RESOURCE_KEY) continue; // handled by the window above
+    tryGrantHead(def.key, root, nowMs);
+  }
 }
 
 export function evaluateResourceQueue(resourceKey, root = runtimeRoot(), nowMs = Date.now()) {

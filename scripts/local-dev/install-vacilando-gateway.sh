@@ -20,6 +20,27 @@ HOST_JS="${HERE}/lib/vacilando-gateway-host.mjs"
 NODE_BIN="${NODE_BIN:-$(command -v node)}"
 PORT="${VACILANDO_PORT:-3020}"
 
+# ---------------------------------------------------------------------------
+# Shared-host mutation guard. Two lanes each ran this installer and silently
+# undid one another: one installed from the canonical toolkit, the other
+# rewrote the plist back to a sprint worktree minutes later. Rewriting the
+# plist and re-bootstrapping launchd is shared HOST state, so it is serialized
+# by the ordinary resource governor (`gateway_host_mutation`, capacity 1).
+#
+# Fails closed: if another Execution Run holds it, this refuses rather than
+# overwriting. An unowned host still installs normally, so operating the
+# machine by hand is unaffected. VACILANDO_SKIP_HOST_MUTATION_GUARD=1 is an
+# explicit operator override, never a default.
+# ---------------------------------------------------------------------------
+GUARD_JS="${HERE}/lib/vacilando/gateway-host-mutation.mjs"
+if [ "${VACILANDO_SKIP_HOST_MUTATION_GUARD:-0}" != "1" ] && [ -f "$GUARD_JS" ]; then
+  if ! "$NODE_BIN" "$GUARD_JS" check ${VACILANDO_RUN_ID:+--run "$VACILANDO_RUN_ID"}; then
+    echo "install-vacilando-gateway: refusing to mutate shared Gateway host state." >&2
+    echo "  Another Execution Run holds gateway_host_mutation. Wait for release." >&2
+    exit 3
+  fi
+fi
+
 mkdir -p "$BIN_DIR" "$LOG_DIR" "${HOME_DIR}/Library/LaunchAgents"
 
 cat > "$WRAPPER" <<EOF
