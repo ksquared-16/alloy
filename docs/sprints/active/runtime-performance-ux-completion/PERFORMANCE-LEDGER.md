@@ -108,6 +108,98 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 5 — the confirming cell, and what it corrected
+
+### CORRECTION: route_meta improved; first usable did NOT
+
+The wave-4 cell was taken with a passing PRE gate and a failing POST gate, and I reported first
+usable at ~11.1s (−4.9%) from it. **That was noise.** The confirming cell, bracketed by two
+qualified gates, n=4, max/med 1.05:
+
+| phase | baseline `c9ce324fa` | wave 3 | wave 4 CONFIRMED | total |
+|---|---|---|---|---|
+| TTFB | 4,360ms | 3,915ms | 3,894ms | −10.7% |
+| route_meta | 2,473ms | 2,102ms | **1,615ms** | **−34.7%** |
+| stream (TTFB → responseEnd) | — | 7,660ms | 7,712ms | — |
+| **first usable** | **16,200ms** | **11,666ms** | **11,708ms** | **−27.7%** |
+| fully hydrated | 30,298ms | 24,175ms | 24,066ms | −20.6% |
+
+**route_meta is real and confirmed (−487ms). First usable did not move.** `mw_to_layout` was flat
+(1,640 → 1,651) and TTFB moved 21ms while route_meta dropped 487ms — the saving was absorbed.
+
+**So route_meta was never the gate.** First usable is gated by the **7.7s stream**, i.e. the seeded
+provisioning compose, and nothing else. The department-embed change is kept as counted
+round-trip removal, not as a first-usable win.
+
+### Priority 4 — payload decomposed; serialization is NOT the cost
+
+Provisioning answer, 203KB:
+
+| section | KB | share |
+|---|---|---|
+| `rows` (15 queue rows, ~7KB each) | 101 | 49.5% |
+| `focusPanelStageWork` | 65 | 32.2% |
+| — of which `published_stage_inputs` | 62 | 30.6% |
+| — — `departmentMetadata` | 27 | 13.5% |
+| — — `process` | 24 | 11.9% |
+| — — `commandProjection` | 9 | 4.3% |
+| `focusPanelSummaryDoc` | 27 | 13.1% |
+
+**Client `JSON.parse` of the whole answer: 0.96ms.** Payload size, serialization and client parse
+are NOT the critical path — trimming bytes cannot move first usable. ~51KB (25%) is department and
+process CONFIGURATION identical on every load and for every child, which is a tidiness finding, not
+a latency one.
+
+The cost is **dependent DB round trips**, warm:
+
+```
+child_grain_members 1,396  →  [ensure 355 → bulk_candidates 1,065 → household_facts 1,043]  →  inquiry 700
+                              ≈ 4,559ms of essentially serial remote round trips (~13 RTTs at WAN latency)
+```
+
+Cold adds ~2.1s more from org-config cache misses on a fresh process (the stream is 7.7s cold vs a
+5.6s warm answer).
+
+### REVERTED — one candidates read instead of two
+
+Hypothesis: the bulk-ensure reads `placement_candidates` for seed keys and `bulk_candidates` reads
+the same table again; one read could serve both.
+
+* **Attempt 1** — feed the preloaded seed keys to the ensure. Removed the round trip but put the
+  full-row load on the serial path in FRONT of the ensure: ensure 588ms → 1,784ms, composition
+  3,860ms → 4,230ms, total +400ms. **Worse.**
+* **Attempt 2** — keep the preload concurrent, let the ensure keep its own cheap read. `reused:
+  true` confirmed the second read was gone, but the wait merely moved: composition 3,562–3,913ms
+  against wave-3's 3,833–3,888ms — inside run-to-run variance.
+
+**Reverted.** It removes a real read, but for no measured gain at the cost of a preload promise, a
+reuse condition tied to `created === 0`, a gate reorder and a new hook parameter. Recorded so the
+idea is not retried blind.
+
+---
+
+## ARCHITECTURAL DECISION NEEDED — cold first usable below ~11.7s
+
+Every safe, semantics-preserving win in the compose has now been taken (avatar concurrency, org
+category cache + parallelism, bulk ensure, department embed). What remains in the chain is
+**genuinely dependent**: candidates cannot be ranked before they are loaded, and household facts
+cannot be derived before the customers are known.
+
+Moving cold materially below ~11.7s requires one of:
+
+1. **Reduce what the seeded answer must contain before the document flushes.** The layout AWAITS
+   the compose deliberately — a pending RSC promise crashes hydration in Next 16, and a
+   client-gated stream cannot deliver the seed earlier; both were measured and reverted previously.
+   Revisiting that is a runtime-architecture decision.
+2. **Precompute or denormalize placement ranking** so the read path does not chain three dependent
+   reads. That is a data-model decision with write-path consequences.
+3. **Accept cold at ~11.7s** and treat warm as the operator's real experience — warm interaction is
+   already strong (T2 identity 126–185ms, warm API p50 383ms).
+
+This is Kelly's call. Nothing further should be changed in the compose without it.
+
+---
+
 ## WAVE 4 — the child-mission reveal contract, and route identity
 
 ## 12. CLOSED — a child's What's Next may not outlive its subject
