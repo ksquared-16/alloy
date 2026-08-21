@@ -108,6 +108,68 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 10 — the reveal gate was guilty; child Mission ~30x
+
+### Priority 1 — gate PROVEN guilty
+
+`log()` in the prewarm scheduler is gated on `perfDevDetailEnabled()`
+(`NODE_ENV !== "production"`), so it emits nothing in the build these measurements run against —
+exactly the build where the gate needed proving. A production-visible timeline was added. On a real
+Lennon ↔ Wrigley switch:
+
+```
+57128ms subject_warm_emitted     active=false     <- the warm path works
+64254ms begin                    active=true
+64284ms subject_warm_suppressed  active=true
+64284ms subject_warm_suppressed  active=true
+   ...and NO `end` event, ever.
+```
+
+**Root cause.** The commit-time arm keyed on `target::subject`, so every child-to-child switch fired
+a fresh `beginWorkUnitPrimaryReveal()`. Its paired `end` lives in `useRecordWorkRuntime`, which ends
+the window when the selected subject's VM is APPLIED — but a child-to-child switch inside one family
+reuses the family Settlement runtime, so no VM fetch occurs, no apply happens, and no `end` runs.
+The scheduler's own law — *"prewarm can never stall"* — was violated.
+
+**Fix at the shared lifecycle**, no Waitlist escape hatch: the window defers the prewarm storm that
+follows a WORK UNIT commit, which is a property of committing a Work Unit, not of moving Attention
+between children of one family. Arming on the TARGET restores a cycle that closes.
+
+### Then, and only then, the pinned window mattered
+
+With the gate released the EXISTING preparation began emitting for the first time (+2 → +10 requests
+per switch) — but the Mission did not move, because the ±2 window was still pinned to row 0: its
+anchor matched `drawer_open.entity_id`, which every child row shares. Anchoring on live attention
+(K1) makes the window follow the operator.
+
+| selection | Mission before | Mission after |
+|---|---|---|
+| rows[6] (neighbour) | 6,818ms | **233ms** |
+| rows[4] (neighbour) | 7,739ms | **209ms** |
+| rows[1] (near entry anchor) | 216ms | 232ms |
+| rows[5] (first visit, genuinely unprepared) | — | 6,545ms |
+
+**~30× on the child Mission gap, for every prepared row rather than only rows near the entry
+anchor.** Cost: subject-related requests 24 → 58 per session.
+
+**Only one of the three reverted findings was reintroduced** — the pinned window — because only it
+moved the number once the gate released. The `entityType` type/runtime divergence and the one-shot
+idle warm remain unreintroduced, still recorded as smells.
+
+### Preserved
+
+Prepared entry first usable **393ms** (was 412ms — unchanged), T1/T2 identity 131–233ms, grid cells
+5, avatars exactly Wrigley and Lennon with 2 distinct URLs, 6 pills, workspace counts unchanged,
+latest-click-wins holds, no 5xx. **focusPanel 125/125** — the child-mission reveal contract still
+passes, so a prepared Mission commits only when the answer is for the attended child.
+
+Pre-existing failures proven by direct A/B (edits reverted vs restored — identical
+`5 failed | 19 passed`): `drawerVmPrewarmScheduler` expects `begin` to no-op when
+`ALLOY_OS_RUNTIME_ENABLED` is false, but the function has no flag guard at all;
+`workUnitOperationalReveal` is source-inspection over a page file this change does not touch.
+
+---
+
 ## WAVE 9 — CLS closed, Work View met, queue-subject blocker isolated
 
 ### Priority 3 — initial-load CLS: CLOSED
