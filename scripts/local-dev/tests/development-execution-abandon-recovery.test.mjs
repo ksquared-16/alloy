@@ -425,5 +425,46 @@ await test("11. an abandoned run left alone stays abandoned (no auto-resurrectio
   assert.equal(listExecutionRunsForLane(LANE, ROOT)[0].recovered_count, 0);
 });
 
+await test("2c. a worker that reported and then truly died is abandoned, but only after a long silence", async () => {
+  const { ABANDON_AFTER_HEARTBEAT_MS } = await import("../lib/vacilando/execution-stale.mjs");
+  const run = seedExecuting({ startMs: T0 });
+  seedRealisticSend(LANE, T0);
+  reportRunState(run.run_id, "executing", { origin: "agent", root: ROOT, nowMs: T0 + MIN, summary: "working" });
+
+  // Just under the window: still ambiguous, never auto-abandoned.
+  const early = T0 + MIN + ABANDON_AFTER_HEARTBEAT_MS - MIN;
+  assert.equal(classifyAt(getExecutionRun(run.run_id, ROOT), early).class, "ambiguous");
+  assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: early, laneId: LANE }).count, 0);
+
+  // Past it, with no session and no worktree movement, the lane must not stay
+  // blocked behind a worker that really is gone.
+  const late = T0 + MIN + ABANDON_AFTER_HEARTBEAT_MS + MIN;
+  const cls = classifyAt(getExecutionRun(run.run_id, ROOT), late);
+  assert.equal(cls.class, "stale");
+  assert.equal(cls.reason, "worker_gone_after_reporting");
+  const closed = abandonViaGovernor(getExecutionRun(run.run_id, ROOT), late);
+  assert.equal(closed.state, "ABANDONED");
+  // ...and it is still recoverable, because it was never a failure.
+  assert.equal(recoverExecutionRun(run.run_id, { laneId: LANE, cwd: WT, root: ROOT, nowMs: late + MIN }).recovered, true);
+});
+
+await test("12. abandonment notifies the operator instead of dying silently", async () => {
+  const { OUTCOME_PUSH_STATES, outcomePushPayload } = await import("../lib/vacilando/lane-push.mjs");
+  // The outcome the operator did not ask for is the one they most need told.
+  assert.equal(OUTCOME_PUSH_STATES.includes("ABANDONED"), true);
+  const payload = outcomePushPayload({
+    lane_id: LANE,
+    title: "abandon-primary",
+    state: "ABANDONED",
+    reason: "orphaned_pre_protocol_run",
+  });
+  assert.equal(payload.state, "ABANDONED");
+  assert.equal(payload.type, "execution_run.abandoned");
+  assert.match(payload.body, /closed as no longer live/);
+  assert.match(payload.body, /orphaned_pre_protocol_run/);
+  assert.match(payload.body, /continue it/i);
+  assert.equal(payload.path, `/#/lanes/${encodeURIComponent(LANE)}`);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

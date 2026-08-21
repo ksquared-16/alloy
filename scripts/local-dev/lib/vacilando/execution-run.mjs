@@ -325,7 +325,7 @@ function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
       at: run.updated_at,
     }, root);
   }
-  if (["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(run.state)) {
+  if (["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(run.state)) {
     return scheduleOutcomePush(run, root);
   }
   return Promise.resolve(null);
@@ -550,7 +550,7 @@ export function transitionExecutionRun(runId, toState, {
       writeStore(putRun(store, found), root);
     }
     // Retry push if the first dispatch never delivered. Dedup lives in lane-push.
-    const push = ["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(to)
+    const push = ["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(to)
       ? emitOutcomeEvent(found, root, { recordEvent: false })
       : Promise.resolve(null);
     return { ok: true, run: found, noop: true, heartbeat: touched, push };

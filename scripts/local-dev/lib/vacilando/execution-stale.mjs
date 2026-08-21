@@ -80,6 +80,13 @@ export const STALE_SETTLE_MS = 20 * 60 * 1000;
 export const WORKER_HEARTBEAT_RECENT_MS = 45 * 60 * 1000;
 /** Worktree commits/index writes are protective for this long. */
 export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
+/**
+ * A run that HAS reported has proven the protocol works on this lane, so its
+ * silence is much stronger evidence than a run that never spoke. It is still
+ * only abandonable after a long multi-signal silence — no session, no worktree
+ * movement, and no heartbeat for this long — never on silence alone.
+ */
+export const ABANDON_AFTER_HEARTBEAT_MS = 4 * 60 * 60 * 1000;
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -279,13 +286,10 @@ export function classifyExecutionRunStale(run, facts = {}) {
   if (evidence.genuine_recent_activity) {
     return { class: "active", reason: "recent_output_activity", evidence };
   }
-  if (evidence.has_agent_report || evidence.has_progress) {
-    return {
-      class: "ambiguous",
-      reason: "managed_reports_without_recent_activity",
-      evidence,
-    };
-  }
+  // NOTE: "has reported at some point" used to short-circuit to ambiguous here,
+  // which made tier-2 abandonment unreachable and could block a lane forever
+  // behind a worker that really was gone. It is now the FALLBACK below, after
+  // the dead-worker evaluation, not a veto before it.
   if (!evidence.past_settle) {
     return { class: "active", reason: "still_settling", evidence };
   }
@@ -294,9 +298,18 @@ export function classifyExecutionRunStale(run, facts = {}) {
   // evidence that no viable worker remains: no live agent session, no worker
   // heartbeat ever, and no worktree movement. Absence of reports alone is
   // ambiguous and is left for the operator, never auto-terminalized.
-  const deadWorker = !evidence.session_alive
-    && evidence.worker_report_count === 0
-    && !evidence.worktree_activity_recent;
+  const noLiveSignals = !evidence.session_alive && !evidence.worktree_activity_recent;
+  // Tier 1: the run never spoke at all. Nothing on this lane has proven the
+  // reporting protocol works, so an orphan is the likeliest reading.
+  const neverReported = noLiveSignals && evidence.worker_report_count === 0;
+  // Tier 2: the run did speak, then went fully silent for a long time. The lane
+  // must not be blocked forever by a worker that really is gone.
+  const heartbeatMs = merged.worker_report_ms;
+  const goneAfterReporting = noLiveSignals
+    && evidence.worker_report_count > 0
+    && heartbeatMs != null
+    && (nowMs - heartbeatMs) >= ABANDON_AFTER_HEARTBEAT_MS;
+  const deadWorker = neverReported || goneAfterReporting;
 
   if (evidence.certification && deadWorker) {
     return {
@@ -306,7 +319,7 @@ export function classifyExecutionRunStale(run, facts = {}) {
       summary: "Abandoned: certification/soak run went idle without a completion report.",
     };
   }
-  if (deadWorker && !evidence.has_agent_report) {
+  if (neverReported && !evidence.has_agent_report) {
     return {
       class: "stale",
       reason: "orphaned_pre_protocol_run",
@@ -314,7 +327,18 @@ export function classifyExecutionRunStale(run, facts = {}) {
       summary: "Abandoned: no agent session, no worker report, and no worktree activity.",
     };
   }
+  if (goneAfterReporting) {
+    return {
+      class: "stale",
+      reason: "worker_gone_after_reporting",
+      evidence,
+      summary: "Abandoned: the worker reported, then went silent with no session and no worktree activity.",
+    };
+  }
 
+  if (evidence.has_agent_report || evidence.has_progress) {
+    return { class: "ambiguous", reason: "managed_reports_without_recent_activity", evidence };
+  }
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
 }
 
