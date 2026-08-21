@@ -108,6 +108,87 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 7 — readiness made live: the operator journey is now sub-second
+
+### CORRECTION to wave 6
+
+I reported "0 preparation requests — the architecture is inert". **Wrong on both counts.** One
+request fires BEFORE the tiles paint (the eager primary warm) and my probe started counting after
+that point. The architecture runs; it was preparing the wrong destination.
+
+### Root cause
+
+This Workspace renders **one process card** whose CTA is `/work-unit/new` (the process default,
+0 rows) plus **six Work View rows** — the destinations an operator actually clicks.
+`processEntryHrefs` was built from `processes[].entryHref` alone, so it held ONE href, `rest` was
+empty, and the idle block returned early **by design**. Exactly one destination was ever prepared,
+and not one the operator uses.
+
+`WorkViewLinkModel.href` already carries the canonical destination hrefs — the same href the click
+navigates to and the same URL K2 consumes. They now join the bounded readiness set. No new
+preloader, no new fetch path, no hardcoded routes.
+
+### A/B — canonical operator journey, same build
+
+`/workspace` → click the Waitlist tile:
+
+| | control (click at once) | prepared (30s idle) |
+|---|---|---|
+| **first usable** | 6,693ms | **412ms / 408ms** |
+| **fully hydrated** | 17,617ms | **412ms / 408ms** |
+| preparation requests | 1 | 9 |
+
+**16× to first usable, 43× to fully hydrated**, reproducible across two runs. The prepared entry
+arrives COMPLETE — 15 rows, 5 truthful cards, correct header — not a skeleton.
+
+Preparation requests are the canonical URLs K2 consumes:
+
+```
+/api/admin/work-units/{new,active-pipeline,registration,waitlist,tours,all}/provisioning-answer
+/api/admin/view-models/drawer/opportunity/{d097e1a8…,93722453…}
+```
+
+### Correctness on the prepared path
+
+T1/T2 **98–127ms** (no regression), grid cells constant at 5, the child-mission reveal contract
+still engages (`preparing: ["current_work"]`), avatars still exactly Wrigley and Lennon, no 5xx.
+Workspace's own usable time unchanged within variance (11,299ms control vs 10,072–11,779ms).
+
+---
+
+## The three performance classes, now separated
+
+| path | measured | operator relevance |
+|---|---|---|
+| **true cold / direct URL entry** | **11,708ms** | diagnostic; no operator takes it |
+| Workspace → Work Unit, no preparation | **6,693ms** | canonical journey control |
+| **Workspace → Work Unit, prepared** | **412ms** | **primary operator experience** |
+
+## Re-ranked cold architecture options
+
+| Lever | Blocking span | Removable operator wait | Risk | Complexity | Recommendation |
+|---|---|---|---|---|---|
+| **C — preload/readiness** | the whole journey | **6,693ms → 412ms** | low (same canonical owner, bounded, deferred) | low (one dataflow correction) | **DONE — keep** |
+| A — first-use document boundary | ~7.7s stream on true cold | up to ~7s, but only on direct entry | high (hydration; streaming already measured and reverted) | high | **Deprioritise** — C removed its operator relevance |
+| B — placement materialization | ~2.1s inside the compose | only on true cold | medium (write-path, repair semantics) | high | **Not justified** on current evidence |
+
+**Option A is no longer required to reach the premium target for the operator journey.** It remains
+the lever for true-cold direct entry, which is a diagnostic class, not the operating experience.
+
+### Open tuning question — the §7 tension
+
+`deployedAcceptanceWiring` §7 guards against an "eager Work Unit route-prefetch storm". That guard
+is about Next viewport/route prefetch on links, which this change does not touch — but its spirit is
+"do not warm every visible destination". This warms all six visible Work Views on idle: **9
+background requests per Workspace visit, of which 1 of 6 destinations was used** in the measured
+run. The cap bounds a large organization but selects by visible order, not by likelihood.
+
+Whether the policy should narrow (active/most-likely view only, or hover-biased) is the tuning
+question. It should be answered with the A/B above in hand — the benefit is large enough that
+narrowing must be justified by measured waste, not assumed.
+
+---
+
 ## WAVE 6 — Option 3 accepted; Priority 7 measured
 
 Kelly accepted the ~11.7s cold baseline and redirected to Priority 7. Two findings from the brief
