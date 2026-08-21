@@ -1472,13 +1472,28 @@ export default function AccessUsersConfigurationPage({
                             data-testid="access-invite-steps"
                             aria-label="Invite sequence"
                         >
-                            {[
-                                { id: "person", label: "Person", state: "available" as const },
-                                { id: "role", label: "Role", state: "available" as const },
-                                { id: "access", label: "Access", state: "available" as const },
-                                { id: "sign-in", label: "Sign-in", state: "available" as const },
-                                { id: "review", label: "Review", state: "available" as const },
-                            ].map((step) => (
+                            {/*
+                              * Typed as the full union rather than inferred. Every step is `available`
+                              * now that Access is collected during the invite, and an inferred literal
+                              * type would narrow to `"available"` alone — which makes the three
+                              * `=== "planned"` comparisons below unreachable and, more to the point,
+                              * a TYPE ERROR (TS2367). CI caught exactly that; the local typecheck
+                              * cannot run to completion on this host.
+                              *
+                              * The `planned` rendering is kept, not deleted. `06…§4.10`'s marker is a
+                              * standing discipline for this surface — the next step added to this
+                              * sequence starts life unbuilt, and it should not have to reintroduce the
+                              * affordance to say so.
+                              */}
+                            {(
+                                [
+                                    { id: "person", label: "Person", state: "available" },
+                                    { id: "role", label: "Role", state: "available" },
+                                    { id: "access", label: "Access", state: "available" },
+                                    { id: "sign-in", label: "Sign-in", state: "available" },
+                                    { id: "review", label: "Review", state: "available" },
+                                ] as { id: string; label: string; state: "available" | "planned" }[]
+                            ).map((step) => (
                                 <li
                                     key={step.id}
                                     className={`rounded-full border px-2 py-0.5 ${
