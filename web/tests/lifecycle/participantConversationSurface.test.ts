@@ -45,6 +45,8 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
         phase: "shared_collection",
         progress: { total: 2, satisfied: 0, remaining: 2 },
         things_remaining: 2,
+        // The PARTICIPANT's own denominator, distinct from the requirement rollup above it.
+        work: { total: 3, settled: 1, remaining: 2, percent: 33 },
         next_turn: {
             kind: "confirm_known_value",
             prompt: "We have Date of Birth as 2021-05-04. Is that correct?",

@@ -19,6 +19,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
 
 import {
     resolveEnrollmentParticipantProgress,
@@ -127,6 +128,16 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
         orgId: string;
         processInstanceId: string;
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /**
+         * The session row the token resolver already read.
+         *
+         * The participant read path used to load this row twice per request — once to prove the
+         * link, once to answer "which session is current" — and the second read was a whole serial
+         * round trip in front of everything that depends on the session. Handing it forward removes
+         * that wave without moving the decision: `resolveCurrentEnrollmentSession` still applies
+         * its own predicate and falls back to the query when the row does not satisfy it.
+         */
+        preloadedSession?: PacketSessionRow | null;
     },
 ): Promise<ParticipantEnrollmentObjectiveWithContextResult> {
     const requiresConfirmation = enrollmentConfirmationPolicy();
@@ -134,6 +145,7 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
     const progressResult = await resolveEnrollmentParticipantProgress(supabase, {
         orgId: input.orgId,
         processInstanceId: input.processInstanceId,
+        preloadedSession: input.preloadedSession ?? null,
         captureLoaded: (rows) => {
             loaded = rows;
         },
@@ -176,6 +188,8 @@ export async function resolveParticipantEnrollmentObjective(
         processInstanceId: string;
         /** Canonical record prefill by shared key, when the caller already holds it. */
         canonicalValues?: Readonly<Record<string, unknown>>;
+        /** The session row the caller already read — see the context variant. */
+        preloadedSession?: PacketSessionRow | null;
     },
 ): Promise<ParticipantEnrollmentObjectiveResult> {
     // One implementation: the context variant IS the resolver; this signature just drops the

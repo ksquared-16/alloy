@@ -13,6 +13,8 @@
  */
 
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
+import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
 
 /**
  * The control a turn needs.
@@ -83,7 +85,8 @@ export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): Par
  * birth is a date whichever way the parent arrives at it.
  */
 export function valueControlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantValueControl {
-    const label = turn.label?.trim() || "your answer";
+    // Sentence case, from the authored label — never the authoring tool's own casing.
+    const label = participantControlLabel(turn.label);
     /**
      * The AUTHORED control leads. It is what the parent would have met on the Form itself, so
      * matching it is the difference between a conversation and a text box with a question above it.
@@ -160,7 +163,7 @@ export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string
  * and otherwise present the operator's own words unchanged rather than mangling them.
  */
 export function naturalFieldLabel(label: string | null | undefined): string {
-    const raw = (label ?? "").trim();
+    const raw = authoredOrHumanizedLabel(label);
     if (!raw) return "this";
     const key = raw.toLowerCase().replace(/[^a-z]+/g, " ").trim();
     const known: Record<string, string> = {
@@ -180,24 +183,62 @@ export function naturalFieldLabel(label: string | null | undefined): string {
     return /^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(raw) ? raw.toLowerCase() : raw;
 }
 
-/** A stored value as a parent would read it. Dates especially — "2021-08-08" is not an answer. */
+/**
+ * A label written for an authoring tool, made presentable WITHOUT inventing a doctrine.
+ *
+ * The authored label leads: it is what the parent would have met on the Form itself, so an operator
+ * who wrote "Child's date of birth" gets exactly that. Only a label that is still an internal
+ * key — `child_dob`, `EMERGENCY_CONTACT` — goes through the platform's established display-label
+ * behaviour (`humanizeOperatorSlug`), which is where "never show raw keys in primary UI" already
+ * lives. Nothing here touches the canonical key; this is presentation of a label, not identity.
+ */
+function authoredOrHumanizedLabel(label: string | null | undefined): string {
+    const raw = (label ?? "").trim();
+    if (!raw) return "";
+    // A key, not a sentence: underscores, or SHOUTING with no spaces. Anything a person wrote — any
+    // label with a space and ordinary casing — is left exactly as authored.
+    const looksLikeKey = /_/.test(raw) || (/^[A-Z0-9]+$/.test(raw) && raw.length > 1);
+    return looksLikeKey ? humanizeOperatorSlug(raw) : raw;
+}
+
+/**
+ * The label above a deterministic control — sentence case, never authoring casing.
+ *
+ * "Child Dob" is a column heading and it reached the participant verbatim. The conversational
+ * label is already resolved for the question; the control simply capitalises it, so the input a
+ * parent types into is captioned "Date of birth", not "Child Dob".
+ */
+export function participantControlLabel(label: string | null | undefined): string {
+    const natural = naturalFieldLabel(label);
+    if (!natural || natural === "this") return "Your answer";
+    return natural.charAt(0).toUpperCase() + natural.slice(1);
+}
+
+/**
+ * A stored value as a parent would read it.
+ *
+ * Dates go through the PLATFORM formatter (`formatDisplayDate`, `Aug 19, 2025`) — the same doctrine
+ * every operator surface uses. There is deliberately no Participant Runtime date format: a parent
+ * and an operator looking at the same birthday must read the same thing.
+ *
+ * `2021-08-08` is a database string, not an answer. The ISO branch below is the one place a raw
+ * date can enter participant copy, and it always leaves formatted.
+ */
 export function displayValue(value: unknown): string {
     if (value == null) return "";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     const raw = String(value).trim();
-    const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
-    if (iso) {
-        const date = new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
-        if (!Number.isNaN(date.getTime())) {
-            return date.toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-                year: "numeric",
-                timeZone: "UTC",
-            });
-        }
+    if (isIsoDateString(raw)) {
+        // UTC, matching the storage grain: a date-only value has no timezone and must not shift.
+        const formatted = formatDisplayDate(raw, { timeZone: "UTC" });
+        if (formatted && !isIsoDateString(formatted)) return formatted;
     }
     return raw;
+}
+
+/** `2021-08-08` and `2021-08-08T00:00:00Z` — the shapes that must never reach a parent. */
+export function isIsoDateString(value: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/.test(value.trim());
 }
 
 /**
@@ -217,6 +258,36 @@ export function displayValue(value: unknown): string {
 function familiarName(objective: ParticipantObjectiveWire): string {
     const subject = (objective.subject_display_name ?? "").trim();
     return subject.split(/\s+/)[0] ?? "";
+}
+
+/**
+ * One run of the current message, and whether it is the SCANNABLE part.
+ *
+ * A parent confirming a birthday should be able to find the date without reading the sentence.
+ * Emphasis is reserved for the value under discussion — deliberately not the whole sentence, which
+ * would turn every question into a heading and flatten the hierarchy it is meant to create.
+ */
+export type ParticipantMessageSegment = { readonly text: string; readonly emphasis: boolean };
+
+export function participantQuestionSegments(
+    objective: ParticipantObjectiveWire,
+): readonly ParticipantMessageSegment[] {
+    const turn = objective.next_turn;
+    if (turn.kind === "confirm_known_value") {
+        const shown = displayValue(turn.proposed_value);
+        if (shown) {
+            const whole = participantQuestion(objective);
+            const at = whole.indexOf(shown);
+            if (at >= 0) {
+                return [
+                    { text: whole.slice(0, at), emphasis: false },
+                    { text: shown, emphasis: true },
+                    { text: whole.slice(at + shown.length), emphasis: false },
+                ].filter((s) => s.text.length > 0);
+            }
+        }
+    }
+    return [{ text: participantQuestion(objective), emphasis: false }];
 }
 
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
@@ -285,6 +356,36 @@ export function participantIntro(objective: ParticipantObjectiveWire): string | 
  * unrealized and unsupported items, so a percentage over it would move for reasons a parent cannot
  * see and would imply precision the number does not have.
  */
+/**
+ * The quiet orientation rail — a phrase, and the participant's own percentage.
+ *
+ * `null` means show nothing: a rail that appears mid-conversation with no honest number is chrome.
+ * The percentage is `work`, never `progress` — see `participantWorkProgress.ts` for why the
+ * requirement denominator is the wrong one to put in front of a parent.
+ */
+export type ParticipantProgressDisplay = {
+    readonly label: string;
+    readonly percent: number;
+};
+
+export function participantProgressDisplay(
+    objective: ParticipantObjectiveWire,
+): ParticipantProgressDisplay | null {
+    const work = objective.work;
+    if (!work || work.total <= 0) return null;
+    if (objective.complete) return { label: "All done", percent: 100 };
+    if (objective.phase === "artifact_review") {
+        // Truthful about what is left, and it is not another question: the paperwork itself.
+        return { label: "Ready to review", percent: work.percent };
+    }
+    const remaining = objective.things_remaining;
+    if (remaining <= 0) return { label: "Almost there", percent: work.percent };
+    // Orientation, not gamification: no streaks, no celebration, no "you're doing great".
+    if (remaining === 1) return { label: "One more thing", percent: work.percent };
+    if (work.percent >= 70) return { label: `Almost there · ${remaining} left`, percent: work.percent };
+    return { label: `${remaining} things left`, percent: work.percent };
+}
+
 export function progressLine(objective: ParticipantObjectiveWire): string {
     if (objective.complete) return "All done — thank you.";
     const remaining = objective.things_remaining;

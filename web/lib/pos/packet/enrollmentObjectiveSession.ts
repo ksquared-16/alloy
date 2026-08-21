@@ -78,8 +78,17 @@ type ProcessInstanceRow = {
     subject_type: string;
 };
 
-const SESSION_COLUMNS =
+/**
+ * The columns a participant session is read with — ONE definition.
+ *
+ * Exported because the public token resolver now reads the same row on the way in, and a caller
+ * that selected a narrower list would hand back a row this module could not use, silently
+ * reintroducing the duplicate read it exists to remove.
+ */
+export const ENROLLMENT_SESSION_COLUMNS =
     "id, org_id, packet_definition_id, started_via_public_link_id, status, launch_context, crm_snapshot, shared_values, metadata, current_sequence_index, packet_instance_id, process_instance_id";
+
+const SESSION_COLUMNS = ENROLLMENT_SESSION_COLUMNS;
 
 const ITEM_COLUMNS =
     "id, packet_session_id, packet_item_id, sequence_index, status, form_submission_id, resolved_form_definition_version_id";
@@ -93,20 +102,45 @@ const ITEM_COLUMNS =
  */
 export async function resolveCurrentEnrollmentSession(
     supabase: SupabaseClient,
-    input: { orgId: string; processInstanceId: string },
+    input: {
+        orgId: string;
+        processInstanceId: string;
+        /**
+         * A session row the caller already read — the participant token resolver reads exactly this
+         * row to prove the link, and re-reading it cost a whole serial round trip on every turn.
+         *
+         * It is a SHORTCUT, never an override: the row is used only when it satisfies the same
+         * predicate this function would have queried with (right org, right journey, and current).
+         * Anything else falls through to the query, so the "one definition of current" rule above
+         * still has exactly one owner.
+         */
+        preloadedSession?: PacketSessionRow | null;
+    },
 ): Promise<{ session: PacketSessionRow | null; items: PacketSessionItemRow[]; error: Error | null }> {
-    const { data, error } = await supabase
-        .from("form_packet_sessions")
-        .select(SESSION_COLUMNS)
-        .eq("org_id", input.orgId)
-        .eq("process_instance_id", input.processInstanceId)
-        .eq("status", CURRENT_ENROLLMENT_SESSION_STATUS)
-        .maybeSingle();
+    const preloaded = input.preloadedSession ?? null;
+    const preloadedIsCurrent =
+        preloaded != null &&
+        String((preloaded as { org_id?: unknown }).org_id ?? "") === input.orgId &&
+        String((preloaded as { process_instance_id?: unknown }).process_instance_id ?? "") ===
+            input.processInstanceId &&
+        String((preloaded as { status?: unknown }).status ?? "") === CURRENT_ENROLLMENT_SESSION_STATUS;
 
-    if (error) return { session: null, items: [], error: new Error(error.message) };
-    if (!data) return { session: null, items: [], error: null };
+    let session: PacketSessionRow;
+    if (preloadedIsCurrent && preloaded) {
+        session = preloaded;
+    } else {
+        const { data, error } = await supabase
+            .from("form_packet_sessions")
+            .select(SESSION_COLUMNS)
+            .eq("org_id", input.orgId)
+            .eq("process_instance_id", input.processInstanceId)
+            .eq("status", CURRENT_ENROLLMENT_SESSION_STATUS)
+            .maybeSingle();
 
-    const session = data as PacketSessionRow;
+        if (error) return { session: null, items: [], error: new Error(error.message) };
+        if (!data) return { session: null, items: [], error: null };
+        session = data as PacketSessionRow;
+    }
     const { data: items } = await supabase
         .from("form_packet_session_items")
         .select(ITEM_COLUMNS)

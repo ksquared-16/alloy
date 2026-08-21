@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { cachedConfigRead } from "@/lib/runtime/provisioning/configReadCache";
+
 export type PublishedFormEnvelope = {
     formDefinitionId: string;
     formDefinitionVersionId: string;
@@ -19,12 +21,42 @@ export async function loadPublishedFormEnvelope(
     formDefinitionId: string,
     pinnedFormDefinitionVersionId: string | null
 ): Promise<PublishedFormEnvelope | null> {
-    const { data: formDef, error: formErr } = await supabase
-        .from("form_definitions")
-        .select("id, key, name, kind, metadata")
-        .eq("id", formDefinitionId)
-        .eq("org_id", orgId)
-        .maybeSingle();
+    /**
+     * The definition and its PINNED version are one wave, not two.
+     *
+     * The pinned read was serialized behind the definition read purely to reuse `fd.id` — which is
+     * the caller's own `formDefinitionId`, already the predicate of the first query. So the second
+     * read never actually needed the first, and on the participant document path that ordering was
+     * a whole round trip in front of every render.
+     *
+     * A D-94 pinned version is IMMUTABLE by id, so it also reads through the tenant-keyed config
+     * memo. The "latest published" fallback below deliberately does NOT: it is a moving target, and
+     * caching it would let a publish go unseen.
+     */
+    const [{ data: formDef, error: formErr }, pinnedVersion] = await Promise.all([
+        supabase
+            .from("form_definitions")
+            .select("id, key, name, kind, metadata")
+            .eq("id", formDefinitionId)
+            .eq("org_id", orgId)
+            .maybeSingle(),
+        pinnedFormDefinitionVersionId
+            ? cachedConfigRead(
+                  `formversion:${orgId}:${formDefinitionId}:${pinnedFormDefinitionVersionId}`,
+                  async () => {
+                      const res = await supabase
+                          .from("form_definition_versions")
+                          .select("id, status, schema_json, pdf_mapping_json")
+                          .eq("id", pinnedFormDefinitionVersionId)
+                          .eq("form_definition_id", formDefinitionId)
+                          .eq("org_id", orgId)
+                          .maybeSingle();
+                      if (res.error) throw new Error(res.error.message);
+                      return res.data;
+                  },
+              ).catch(() => null)
+            : Promise.resolve(null),
+    ]);
 
     if (formErr || !formDef) return null;
 
@@ -34,15 +66,8 @@ export async function loadPublishedFormEnvelope(
     let schemaJson: unknown = null;
     let pdfMappingJson: unknown | null = null;
 
-    if (pinnedFormDefinitionVersionId) {
-        const { data: ver } = await supabase
-            .from("form_definition_versions")
-            .select("id, status, schema_json, pdf_mapping_json")
-            .eq("id", pinnedFormDefinitionVersionId)
-            .eq("form_definition_id", fd.id)
-            .eq("org_id", orgId)
-            .maybeSingle();
-        const v = ver as { id: string; status: string; schema_json: unknown; pdf_mapping_json: unknown | null } | null;
+    {
+        const v = pinnedVersion as { id: string; status: string; schema_json: unknown; pdf_mapping_json: unknown | null } | null;
         if (v && v.status === "published") {
             versionId = v.id;
             schemaJson = v.schema_json;
