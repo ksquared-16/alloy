@@ -148,7 +148,11 @@ Every one of these produced a **plausible but false** result during this program
 - Validation broker pins `--max-old-space-size=4096` for typecheck while the package script uses 8192; typecheck OOMs.
 
 **Not yet certified**
-- `/organization` operator interaction (Part 5), card/command destination readiness (Part 3), operational workspace resume semantics (product decision).
+- `/organization` operator interaction (Part 5), card/command destination readiness (Part 3).
+- **CLOSED:** operational workspace resume semantics — decided, implemented at a shared owner, and certified (§10).
+- **`/api/admin/records/children` at ~3.3-4.5 s** is the largest single number left in the operator runtime. Owner: Records. Not a caching problem — see §10.
+- Save server tail (~3.2 s) and Activity cold prepared content (~2.1 s) remain owed against their budgets (§11).
+- A speculative drawer-VM prefetch on `/workspace` 404s (`/api/admin/view-models/drawer/opportunity/<id>`), i.e. readiness spending a request on a destination that does not resolve. Bounded and harmless, but it is measurable waste.
 
 
 ---
@@ -299,3 +303,36 @@ a caching problem, and not fixable by warming. **Owner: Records.** It is the lar
 left in the operator runtime and deserves its own decomposition; the route runs a serial
 `requireAdminOrOps → getAdminContextCached → getAdminAccessContextCached → resolveSearchAccessEnvelope
 → queryChildCohortPage` prologue before a bulk `Promise.all`.
+
+
+---
+
+## 11. Performance budgets
+
+A budget is a REGRESSION GATE, not an aspiration: a number that has been achieved on a production
+build and must not be given back. Where a budget is not yet met, it is recorded as **owed** with the
+measured value, so the gap is explicit rather than implied by silence.
+
+| surface | metric | budget | measured | status |
+|---|---|---|---|---|
+| Operational workspace launch | T2 shell | **< 200 ms** | 5–24 ms | **met** |
+| Resumed workspace | T2 shell on reopen | **< 200 ms** | 5–24 ms (all three workspaces, A/B/C) | **met** |
+| Resumed workspace | T3 resumed primary content, warm | **< 500 ms** | 14–28 ms | **met** |
+| Resumed workspace | T3 resumed primary content, Operations → Children | < 500 ms | **3,335 ms** | **owed** — `/api/admin/records/children` (§10) |
+| Operational workspace reopen | requests inside the freshness window | **0** | 0 (Operations, Processing, Work Items) | **met** |
+| Prepared operator journey | T3 primary usable | **< 600 ms** | 393–412 ms | **met** |
+| Work View switch | T3 | **< 500 ms** | 265–347 ms | **met** |
+| Queue subject identity | T3 | **< 400 ms** | 120–233 ms | **met** |
+| Child Mission switch | T3 | **< 400 ms** | 209–233 ms | **met** |
+| Save | T1 acknowledgement | **< 150 ms** | 77–83 ms | **met** |
+| Save | T2 server tail | < 1,000 ms | **~3,200 ms** | **owed** |
+| Activity | T3 cold prepared content | < 1,000 ms | **~2,100 ms** | **owed** |
+| Card destination commit | T2 | < 200 ms | not yet measured | **owed** |
+| Command destination commit | T2 | < 200 ms | not yet measured | **owed** |
+| `/organization` warm navigation | T2 | < 300 ms | not yet measured | **owed** |
+| Prepared path | cumulative layout shift | **0** | 0 | **met** |
+| True cold / direct entry | T3 Work Unit | (no budget — see §1) | 11,708 ms | accepted class |
+
+**Budgets are per performance class.** A cold-start number and a prepared-journey number are not
+comparable and must never be averaged into one figure; §1 exists because conflating them is how a
+premium journey gets reported as a regression, and a cold path gets reported as fine.

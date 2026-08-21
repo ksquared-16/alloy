@@ -31,6 +31,9 @@ p.on("request", (r) => {
 
 await p.goto(`${BASE}/workspace`, { waitUntil: "domcontentloaded", timeout: 120000 });
 await p.waitForTimeout(22000);
+// Resume is now live: without clearing it this measures whichever section a previous run left
+// behind, and the cycle counts would not be comparable between runs.
+await p.evaluate(() => window.sessionStorage.clear());
 
 const SHELL = '[data-adminv2-operations-modal="true"]';
 const READY = '[data-operations-roster-state="ready"]';

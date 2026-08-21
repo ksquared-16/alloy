@@ -1034,3 +1034,34 @@ for rows that cannot resolve.
   subject at ~2ms, making every surface look instantaneous.
 - The validation broker pins `--max-old-space-size=4096` for typecheck while `package.json` uses
   8192; typecheck OOMs (rc=134) on this tree. Pre-existing; the broker lives in another worktree.
+
+## Wave 11 — shared data lifecycle, resume, and readiness that follows it
+
+**Operations warm data lifecycle.** Operations was the one operational workspace reloading its whole
+dataset per open. The shared modal host was never the gap — it unmounts children for every workspace
+alike; Processing survives because its data is module-scoped, Operations' lived in `useState`/`useRef`.
+Adopted the existing `lib/runtime/warmCache.ts` primitive (two freshness classes + a mutation seam).
+
+| | requests per open | day on screen |
+|---|---|---|
+| before | 7, 7, 7, 7 | 2,845 ms |
+| after | **8, 0, 0, 6** | **30 ms** on a warm reopen |
+
+A second loader (`/api/admin/roster`, owned by `DailyRoster` + `AttendanceWorkspace`) was invisible to
+the path-keyed harness and kept 2 requests per reopen until routed through the same cache.
+
+**Workspace resume.** Implemented once at `lib/runtime/workspaceResume.ts`; transient state excluded
+structurally by the position type. Certified Scenarios A/B/C across Processing, Work Items and
+Operations — **9/9 PASS, shell 8–24 ms** against a <200 ms target.
+
+**Readiness follows resume.** Armed on nav intent (hover/focus), not the modal's open effect: the
+728 ms `records/bootstrap` prologue now resolves BEFORE the click. Resume also exposed speculative
+waste — reopening on Children paid for two adjacent-week roster prefetches (~2.6 s) for a board nobody
+was looking at; now gated on the roster being visible.
+
+**Two harness defects caught, both of which had produced passing results:** a single `Escape` left the
+workspace open so a "reopen" measured an already-open modal (0 ms shell, vacuous passes downstream);
+and a synthetic `MouseEvent("mouseenter")` never triggers React's `onMouseEnter` (delegated via
+`mouseover`), which made a working hover-warm look dead.
+
+**Left owed:** `/api/admin/records/children` ~3.3–4.5 s (Records), Save tail ~3.2 s, Activity ~2.1 s.
