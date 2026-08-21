@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: doctrine
+status: canonical
 last_reviewed: 2026-08-21
 ---
 
