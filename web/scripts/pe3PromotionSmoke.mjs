@@ -73,10 +73,21 @@ await p.waitForTimeout(13000);
 // Activity
 await fire("^Activity$");
 await p.waitForTimeout(6000);
-const act = await p.evaluate(() => ({
-  mode: document.querySelector("[data-inline-focus-panel]")?.getAttribute("data-inline-focus-panel-mode") ?? null,
-  chars: (document.querySelector("[data-adminv2-record-modal-scroll]")?.innerText ?? "").trim().length,
-}));
+// POLL for content rather than sampling once: the cockpit re-renders while composing, so a single
+// sample can land on an empty container and report a committed mode as a failure.
+const act = await p.evaluate(async () => {
+  const read = () => ({
+    mode: document.querySelector("[data-inline-focus-panel]")?.getAttribute("data-inline-focus-panel-mode") ?? null,
+    chars: (document.querySelector("[data-adminv2-record-modal-scroll]")?.innerText ?? "").trim().length,
+  });
+  let best = read();
+  for (let i = 0; i < 16 && best.chars <= 120; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const now = read();
+    if (now.chars > best.chars) best = now;
+  }
+  return best;
+});
 // Structural: the mode committed and the cockpit carries content. A family-specific heading
 // ("Recent Activity") is not a runtime contract — a record with no events legitimately lacks it.
 ok("Activity mode commits", act.mode === "activity" && act.chars > 120, `mode=${act.mode} chars=${act.chars}`);
