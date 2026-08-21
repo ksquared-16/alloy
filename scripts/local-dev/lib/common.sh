@@ -614,6 +614,15 @@ alloy_file_mtime_human() {
 # is why `vac run typecheck` died with SIGABRT (reported as class=config) while
 # `typecheck:tests` — which carries a hardcoded 8192 fallback — passed. A floor
 # enforced here means config drift can no longer undersize the compiler.
+#
+# MEASURED on this host (not assumed), same commit, same tsconfig.build.json:
+#   --max-old-space-size=4096 -> rc=134 SIGABRT, class=config, aborted after 98s,
+#                                peak RSS 4177MB (it ran into its own ceiling)
+#   --max-old-space-size=8192 -> rc=0, class=ok, finished in 86s,
+#                                peak RSS 4399MB
+# The compiler genuinely needs ~4.4GB for the full build graph, so 4096 is
+# structurally insufficient rather than merely tight. 8192 clears the measured
+# peak with roughly 1.9x headroom; it is not a blind increase.
 ALLOY_TYPECHECK_MIN_HEAP_MB="${ALLOY_TYPECHECK_MIN_HEAP_MB:-8192}"
 
 alloy_apply_heap_floor() {
