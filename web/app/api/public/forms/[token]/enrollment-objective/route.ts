@@ -20,6 +20,7 @@ import {
 import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { resolveParticipantCanonicalContext } from "@/lib/enrollment/participantRuntime/resolveParticipantCanonicalValues";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
+import { readPendingClarification } from "@/lib/enrollment/participantRuntime/pendingClarification";
 
 function plaintextToken(raw: string): string {
     try {
@@ -78,7 +79,17 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     // Narrowed for the wire: a participant surface never receives org ids, revision internals or
     // requirement plumbing it has no use for.
-    const response = publicOk(participantObjectiveWireModel(objective.value, { subjectDisplayName: canonical.subjectDisplayName }));
+    // A question raised on a previous turn survives a reload — the parent sees the same ask.
+    const pending = readPendingClarification(
+        resolved.context.needsContext.session?.metadata,
+        objective.value.next_turn.need?.identity.key ?? null,
+    );
+    const response = publicOk(
+        participantObjectiveWireModel(objective.value, {
+            subjectDisplayName: canonical.subjectDisplayName,
+            pendingClarificationQuestion: pending?.question ?? null,
+        }),
+    );
     response.headers.set("Server-Timing", timing.header());
     return response;
 }

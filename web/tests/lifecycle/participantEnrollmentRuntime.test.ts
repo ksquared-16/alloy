@@ -561,6 +561,11 @@ describe("a correction is itself a confirmation — the John Peters loop", () =>
             processInstanceId: PI,
             candidate: { kind: "corrected_value", value: "2021-05-06" },
             nowIso: NOW,
+            // The parent opened the authored control and typed a new value — the EXPLICIT
+            // correction flow. Without this signal a value that disagrees with the record is now
+            // treated as something said in passing and produces a question instead of an
+            // overwrite; that distinction is asserted separately.
+            correctionFlow: true,
         });
         if (!corrected.ok) throw new Error("correction failed");
         expect(corrected.disposition.action).toBe("write_shared_value");

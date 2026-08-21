@@ -58,6 +58,8 @@ function wire(overrides: Partial<ParticipantObjectiveWire> = {}): ParticipantObj
             optional: false,
             field_ids: [],
         },
+        // No question outstanding — the ordinary case.
+        pending_clarification: null,
         complete: false,
         ...overrides,
     };

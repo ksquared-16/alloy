@@ -32,6 +32,8 @@ import { participantProviderReasoningPermitted } from "@/lib/enrollment/particip
 import { startParticipantTiming } from "@/lib/perf/participantServerTiming";
 import { createSupabaseTrustRepository } from "@/lib/trust/persistence/trustDecisionRepository";
 import { participantObjectiveWireModel } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
+import { readPendingClarification } from "@/lib/enrollment/participantRuntime/pendingClarification";
+import { resolveAuthoredFieldForTurn } from "@/lib/enrollment/participantRuntime/resolveAuthoredFieldForTurn";
 
 function plaintextToken(raw: string): string {
     try {
@@ -143,10 +145,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     timing.provider(providerRan);
 
     const writeStart = timing.now();
+    /**
+     * THE AUTHORED FIELD, resolved from the PINNED schema.
+     *
+     * The route used to pass `field: null`, which meant the participant path never reached Forms'
+     * own validator and fell back to a narrow type gate — so an authored `min`, `max` or `pattern`
+     * was simply not enforced during the conversation, only later at submission. The need names its
+     * occurrence's `form_field_id`, and the needs context already carries the pinned schemas.
+     */
+    const authoredField = resolveAuthoredFieldForTurn(current.value.next_turn, current.context.needsContext);
+
     const applied = await applyParticipantTurnResponse(supabase, {
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
         candidate,
+        field: authoredField,
+        /**
+         * A `value` came from the authored control the parent deliberately opened; a `text` is
+         * something they said in passing. Only the former is an explicit correction, and only an
+         * explicit correction may overwrite a value that materially disagrees with the record.
+         */
+        correctionFlow: body.value !== undefined,
         // The SAME canonical record the turn was selected against. Recomputing the objective after
         // the write without it would flip every still-unanswered known fact back to `missing`, and
         // the participant would be asked next for something they were about to confirm.
@@ -169,7 +188,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         ...(clarificationPrompt && (applied.disposition.action === "no_change" || applied.disposition.action === "refused")
             ? { clarification: clarificationPrompt }
             : {}),
-        objective: participantObjectiveWireModel(applied.objective, { subjectDisplayName: canonical.subjectDisplayName }),
+        /**
+         * The platform's OWN clarification — deterministic, and never the provider's.
+         *
+         * Carried as `question` plus the two replies the parent may give. The pending value is
+         * deliberately NOT sent: the browser confirms by saying yes, and the server re-derives what
+         * yes meant, so a tampered client still cannot name the value being written.
+         */
+        ...(applied.disposition.action === "clarify"
+            ? { needs_clarification: { question: applied.disposition.question } }
+            : {}),
+        objective: participantObjectiveWireModel(applied.objective, {
+            subjectDisplayName: canonical.subjectDisplayName,
+            // The question this turn just raised, if any — so the surface asks it immediately.
+            pendingClarificationQuestion:
+                applied.disposition.action === "clarify" ? applied.disposition.question : null,
+        }),
     });
     response.headers.set("Server-Timing", timing.header());
     return response;
