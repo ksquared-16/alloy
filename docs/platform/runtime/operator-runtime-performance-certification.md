@@ -1,6 +1,6 @@
 ---
 owner: platform
-status: certified
+status: canonical
 last_reviewed: 2026-08-21
 supersedes: []
 ---

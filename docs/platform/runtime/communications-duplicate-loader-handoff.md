@@ -1,3 +1,10 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-21
+supersedes: []
+---
+
 # Communications workspace — duplicate loader ownership (HANDOFF)
 
 **Status:** open · **Owner:** Communications lane · **Raised by:** Runtime Performance / Premium UX
