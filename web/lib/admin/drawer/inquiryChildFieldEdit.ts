@@ -117,7 +117,9 @@ export async function patchCustomerMemberFromInquiryChild(
 ): Promise<Record<string, unknown>> {
     const res = await fetch(`/api/admin/customer-members/${encodeURIComponent(customerMemberId)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        // This caller discards the response body, so it opts out of the post-write readback the
+        // route would otherwise spend ~1.4s building. Standard HTTP; the route's default is unchanged.
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
         body: JSON.stringify(patch),
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
@@ -161,7 +163,8 @@ export async function patchInquiryChildIdentityFromDrawer(args: {
     }
     const res = await fetchImpl(`/api/admin/customer-members/${encodeURIComponent(args.row.customer_member_id)}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        // Body discarded on success — see the note on patchCustomerMemberFromInquiryChild.
+        headers: { "Content-Type": "application/json", Prefer: "return=minimal" },
         body: JSON.stringify(patch),
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };

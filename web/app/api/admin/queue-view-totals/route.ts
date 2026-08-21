@@ -181,24 +181,38 @@ export async function POST(request: NextRequest) {
                 });
             }
 
+            /**
+             * CONCURRENT, not serial. `countChildGrainMembersForLens` deliberately counts by running
+             * the full membership projection — a cheaper `count(*)` would be a second definition of
+             * membership, which is what produced 13-vs-8 — so each view here costs a whole
+             * projection. Awaiting them one at a time multiplied that by the number of child lenses:
+             * this endpoint measured 3.1-3.8s on a work unit with six work views.
+             *
+             * Each view keeps its OWN try/catch, so one lens that fails still yields UNKNOWN for
+             * itself and never a family number borrowed from another lens. Same queries, same
+             * results, same per-view failure semantics — just not one at a time.
+             */
             const childTotals = new Map<string, TotalOut>();
-            for (const view of childViews) {
-                const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
-                try {
-                    const count = await countChildGrainMembersForLens({
-                        supabase,
-                        orgId: gate.orgId,
-                        workUnitId: group.workUnitId,
-                        view,
-                    });
-                    childTotals.set(view.id, { ...base, count, known: true });
-                } catch {
-                    // UNKNOWN, never a family number. A wrong count is worse than an absent one — the
-                    // client keeps its prior value and shows none, rather than captioning child rows
-                    // with a count of something else.
-                    childTotals.set(view.id, { ...base, count: null, known: false });
-                }
-            }
+            const childCounted = await Promise.all(
+                childViews.map(async (view) => {
+                    const base = { workUnitId: group.workUnitId, queueKey: group.queueKey, workViewId: view.id };
+                    try {
+                        const count = await countChildGrainMembersForLens({
+                            supabase,
+                            orgId: gate.orgId,
+                            workUnitId: group.workUnitId,
+                            view,
+                        });
+                        return { id: view.id, total: { ...base, count, known: true } as TotalOut };
+                    } catch {
+                        // UNKNOWN, never a family number. A wrong count is worse than an absent one —
+                        // the client keeps its prior value and shows none, rather than captioning
+                        // child rows with a count of something else.
+                        return { id: view.id, total: { ...base, count: null, known: false } as TotalOut };
+                    }
+                }),
+            );
+            for (const { id, total } of childCounted) childTotals.set(id, total);
 
             // Every requested view is a child lens (or unknown) → the opportunity lane is never read.
             if (laneViews.length === 0) {

@@ -69,28 +69,87 @@ import {
   type OpenRosterModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
 import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
+import {
+  OPERATIONS_DEFAULT_POSITION,
+  OPERATIONS_WORKSPACE_KEY,
+  isValidOperationsPosition,
+} from "@/app/adminV2/operations/operationsResume";
+import {
+  resolveWorkspaceOpenPosition,
+  writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
+import {
+  invalidateOperationsDay,
+  warmOperationsDay,
+  warmOperationsReference,
+} from "@/lib/scheduling/operationsWorkspaceWarmCache";
+
+/**
+ * Every scheduling read this workspace makes, warm-first.
+ *
+ * Routed through the shared warm-cache primitive so the dataset survives the modal unmount —
+ * Operations previously reloaded all seven of its queries on every open. Reference views
+ * (configuration) and day views (commitments) carry different freshness; see
+ * `lib/scheduling/operationsWorkspaceWarmCache.ts`.
+ */
+const SCHED_REFERENCE_VIEWS = ["view=sites", "view=assignment_types"];
 
 async function schedApi(path: string): Promise<any> {
-  const res = await fetch(`/api/admin/scheduling${path}`, {
-    headers: { "content-type": "application/json" },
-  });
-  return res.json().catch(() => ({}));
+  const url = `/api/admin/scheduling${path}`;
+  return SCHED_REFERENCE_VIEWS.some((v) => path.includes(v))
+    ? warmOperationsReference(url)
+    : warmOperationsDay(url);
 }
 
 export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
   /**
-   * WORK or STUDIO — running the operating day, or configuring what it is made of.
+   * WORK or STUDIO, and the section within it — this workspace's stable navigation position.
    *
-   * Defaults to Work every time the workspace opens. Studio is where an operator goes
-   * deliberately and rarely; remembering it across opens would land someone on a configuration
-   * screen when they came to look at the day.
+   * RESUMED, not reset. This previously defaulted to Work on every open, on the reasoning that
+   * Studio is entered deliberately and rarely. The product decision is now that an operational
+   * workspace reopens where the operator left it: coming back to a configuration screen you
+   * deliberately opened is the expected behaviour, and being silently returned to the day is what
+   * loses your place. Resume is owned once, in `lib/runtime/workspaceResume.ts`.
+   *
+   * `useState` initialisers are the right seam because the shared modal host unmounts this
+   * component on close — every open is a fresh mount, so the remembered position is read exactly
+   * once per open.
    */
-  const [mode, setMode] = useState<OperationsMode>("work");
-  const [studioSection, setStudioSection] =
-    useState<Exclude<OperationsStudioSection, "templates">>("types");
-  const [section, setSection] = useState<RosterSection>("roster");
-  const [range, setRange] = useState<RosterRange>("day");
-  const [lens, setLens] = useState<RosterLens>("rooms");
+  const opened = useState(() =>
+    resolveWorkspaceOpenPosition(
+      OPERATIONS_WORKSPACE_KEY,
+      OPERATIONS_DEFAULT_POSITION,
+      isValidOperationsPosition,
+    ),
+  )[0];
+  const [mode, setMode] = useState<OperationsMode>(opened.mode as OperationsMode);
+  const [studioSection, setStudioSection] = useState<
+    Exclude<OperationsStudioSection, "templates">
+  >(opened.studioSection as Exclude<OperationsStudioSection, "templates">);
+  const [section, setSection] = useState<RosterSection>(opened.section as RosterSection);
+  const [range, setRange] = useState<RosterRange>(opened.range as RosterRange);
+  const [lens, setLens] = useState<RosterLens>(opened.lens as RosterLens);
+
+  /**
+   * Record the stable position whenever it changes. Only these five navigation keys are ever
+   * committed; nothing transient (an open editor, a room popover, a pending bulk assign) can be
+   * expressed in the position type, so none of it can be restored.
+   */
+  /** Read inside `loadWeek`, which is deliberately dependency-free so it never re-creates. */
+  const sectionRef = useRef<RosterSection>(section);
+  useEffect(() => {
+    sectionRef.current = section;
+  }, [section]);
+
+  useEffect(() => {
+    writeWorkspaceResume(OPERATIONS_WORKSPACE_KEY, {
+      mode,
+      section,
+      lens,
+      range,
+      studioSection,
+    });
+  }, [mode, section, lens, range, studioSection]);
 
   const [sites, setSites] = useState<RosterSite[] | null>(null);
   const [siteId, setSiteId] = useState<string>("");
@@ -226,15 +285,18 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     let alive = true;
     void (async () => {
       try {
-        const res = await fetch("/api/admin/records/bootstrap", {
-          credentials: "include",
-        });
-        const json = (await res.json()) as {
+        const json = (await warmOperationsReference(
+          "/api/admin/records/bootstrap",
+        )) as {
           ok?: boolean;
           positions?: { id: string; key: string | null; label: string }[];
           todayYmd?: string;
         };
-        if (!alive || !json.ok) return;
+        if (!alive) return;
+        // The warm cache absorbs a throw and yields `{}`, so a failed read arrives here as
+        // `ok !== true` rather than as an exception. It must still land on the fallback below —
+        // returning early on `!json.ok` would leave the operator on a permanent spinner.
+        if (!json.ok) throw new Error("records bootstrap unavailable");
         setPeopleBootstrap({
           positions: json.positions ?? [],
           todayYmd: json.todayYmd ?? new Date().toISOString().slice(0, 10),
@@ -350,8 +412,16 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     setWeek(data);
     setLoadingWeek(false);
     setWeekChangePending(false);
-    // Adjacent weeks, so stepping through the plan is instant.
-    if (data?.weekStart) {
+    /*
+     * Adjacent weeks, so stepping through the plan is instant — but ONLY while the roster is the
+     * section on screen.
+     *
+     * Resume made this visible: reopening Operations on Children still paid for two speculative
+     * week prefetches (~2.6 s of server work) for a board nobody was looking at, competing with the
+     * children list the operator actually asked for. Readiness must never compete with current
+     * intent; stepping through weeks is not possible from a section that does not show weeks.
+     */
+    if (data?.weekStart && sectionRef.current === "roster") {
       for (const offset of [-7, 7]) {
         const w = addDaysYmdLocal(data.weekStart, offset);
         if (weekCache.current.has(w)) continue;
@@ -428,6 +498,9 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
       if (seq !== assignSeq.current) return;
       setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
     });
+    // Both layers must drop: the in-session ref AND the cross-open warm cache. Clearing only the
+    // ref would let the warm cache re-serve the pre-mutation plan.
+    invalidateOperationsDay();
     weekCache.current.clear();
     void loadWeek(siteId, week?.weekStart ?? "");
   }, [siteId, loadWeek, week?.weekStart]);
@@ -636,6 +709,14 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
           ) : null}
 
           {mode === "work" && section === "roster" ? (
+            <div
+              className="contents"
+              /* Primary-usable seam for the operator runtime harnesses: "the day is on screen",
+                 not merely "the modal opened". Same idiom as the Focus Panel's cell attributes. */
+              data-operations-roster-state={
+                week ? "ready" : loadingWeek ? "loading" : "pending"
+              }
+            >
             <RosterSurface
               range={range}
               onRangeChange={setRange}
@@ -734,6 +815,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                 })
               }
             />
+            </div>
           ) : null}
 
           {mode === "work" && section === "attendance" ? (

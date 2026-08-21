@@ -29,9 +29,11 @@ function executableSource(rel: string): string {
 }
 
 describe("Access landing model", () => {
-    it("exposes exactly the four Access chapters as tiles with no conceptual summary cards", () => {
+    it("exposes exactly the Access chapters as tiles with no conceptual summary cards", () => {
         const model = buildAccessLandingModel(ACCESS_WORKSPACE_CHAPTERS);
-        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "scopes", "security"]);
+        // Access Scopes is not among them. It linked out to Locations and Departments and
+        // configured nothing itself; where a person may work is now set on the person.
+        expect(model.tiles.map((t) => t.id)).toEqual(["users", "roles", "security"]);
         expect(model.summaryCards).toEqual([]);
     });
 
@@ -114,12 +116,14 @@ describe("Access product UI wiring", () => {
     // W-49 changed this assertion's subject. The surface used to render an in-shell denial notice
     // (`access-permission-denied`) for a principal it had already admitted; the gate moved to the
     // route boundary, so that notice is gone and its absence is the property worth locking.
-    it("Access workspace surface renders all four chapter pages and no in-shell denial notice", () => {
+    it("Access workspace surface renders every chapter page and no in-shell denial notice", () => {
         const surface = read("components/adminV2/settings/access/AccessWorkspaceSurface.tsx");
         expect(surface).toContain("AccessUsersConfigurationPage");
         expect(surface).toContain("AccessRolesConfigurationPage");
-        expect(surface).toContain("AccessScopesPage");
         expect(surface).toContain("AccessSecurityPage");
+        // The retired chapter is gone from the renderer, not merely unlinked — an unreferenced
+        // branch would still be a screen one URL away from an operator.
+        expect(surface).not.toContain("AccessScopesPage");
         expect(surface).not.toContain("access-permission-denied");
         expect(surface).toContain("data-testid=\"access-workspace-surface\"");
     });
@@ -131,7 +135,11 @@ describe("Access product UI wiring", () => {
         expect(src).toContain('role="dialog"');
         expect(src).toContain('data-testid="access-user-role-select"');
         expect(src).toContain('data-testid="access-invite-steps"');
-        expect(src).toContain('data-testid="access-invite-access-planned"');
+        // The invite collects location access itself now. The card it replaced was a Planned notice
+        // pointing at a second screen — accurate, and the reason every new account spent the gap
+        // between invitation and follow-up organization-wide.
+        expect(src).toContain('data-testid="access-invite-location-access"');
+        expect(src).not.toContain('data-testid="access-invite-access-planned"');
         expect(src).not.toContain("Restricted</span>");
     });
 

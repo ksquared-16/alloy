@@ -199,10 +199,10 @@ describe("W-50 — the surface states the condition rather than drawing a dead c
         // rendering detail into the projection: `heldAuthorityAreas` excludes areas with no
         // enforced rows, so a role granted the whole catalog cannot read as able to do everything.
         // `roleAuthoritySummary.ts` is where that is now proved (`oneRoleEditorPage.test.ts`).
-        expect(source).toContain("heldAuthorityAreas");
+        expect(source).toContain("heldMatrixAreas");
         expect(source).toContain("Not enforced");
         // And the editor still renders EVERY area, so excluding one from the headline is not
         // hiding it — the record stays visible even when the summary declines to claim it.
-        expect(source).toContain("authorityAreas.map");
+        expect(source).toContain("matrix.map");
     });
 });

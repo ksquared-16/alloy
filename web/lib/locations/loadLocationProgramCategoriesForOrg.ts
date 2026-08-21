@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION } from "@/lib/locations/locationProgramCategorySelect";
+import { processMap } from "@/lib/perf/processCache";
 
 function asOptionalString(value: unknown): string | null {
     const raw = String(value ?? "").trim();
@@ -36,11 +37,28 @@ function mapCategoryRow(row: Record<string, unknown>): LocationProgramCategoryRo
     };
 }
 
+/**
+ * Org-scoped configuration cache. These categories are read on EVERY provisioning answer — the
+ * Waitlist placement attach alone spent ~350ms of a 4.5s step on it, serially — and they change
+ * about as often as any other org configuration. 90s matches the TTL its sibling org-config
+ * caches already use (`STATUS_EFFECTIVE_CACHE`, `ORG_OP_TZ_PROCESS_CACHE`).
+ *
+ * Held via `processMap` so it is genuinely process-wide: a module-level Map is per-route-bundle in
+ * a Next production build and would never hit across the request fan-out a page makes.
+ */
+const CATEGORY_CACHE = processMap<string, { at: number; rows: LocationProgramCategoryRow[] }>("location_program_categories");
+const CATEGORY_TTL_MS = 90_000;
+
 /** Server-side batch load for org location program categories (includes inactive for display). */
 export async function loadLocationProgramCategoriesForOrg(
     supabase: SupabaseClient,
     orgId: string
 ): Promise<LocationProgramCategoryRow[]> {
+    const hit = CATEGORY_CACHE.get(orgId);
+    // Return a COPY: the cached array outlives the request, and a caller that sorts or splices it
+    // would corrupt every later reader.
+    if (hit && Date.now() - hit.at < CATEGORY_TTL_MS) return [...hit.rows];
+
     const { data, error } = await supabase
         .from("location_program_categories")
         .select(LOCATION_PROGRAM_CATEGORY_SELECT_PUBLICATION)
@@ -50,7 +68,9 @@ export async function loadLocationProgramCategoriesForOrg(
 
     if (error || !data?.length) return [];
 
-    return data
+    const rows = data
         .map((raw) => mapCategoryRow(raw as Record<string, unknown>))
         .filter((r): r is LocationProgramCategoryRow => r != null);
+    CATEGORY_CACHE.set(orgId, { at: Date.now(), rows });
+    return [...rows];
 }

@@ -1,5 +1,16 @@
 "use client";
 
+import {
+    WORK_ITEMS_DEFAULT_POSITION,
+    WORK_ITEMS_WORKSPACE_KEY,
+    isValidWorkItemsPosition,
+    positionFromScope,
+    scopeFromPosition,
+} from "@/app/adminV2/tasks/workItemsResume";
+import {
+    resolveWorkspaceOpenPosition,
+    writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ListTodo } from "lucide-react";
 
@@ -186,14 +197,28 @@ export default function MyTasksPanel({
     }, [linkedOpportunityId, linkedRecordLabel]);
 
     const initialScope = useMemo<WorkItemQueueScope>(() => {
-        if (!navFilter) return DEFAULT_WORK_ITEM_QUEUE_SCOPE;
-        return {
-            ...DEFAULT_WORK_ITEM_QUEUE_SCOPE,
-            view: mapServerFilterToScopeView(navFilter),
-        };
+        // A deep link is the operator's CURRENT intent and outranks any remembered position.
+        if (navFilter) {
+            return {
+                ...DEFAULT_WORK_ITEM_QUEUE_SCOPE,
+                view: mapServerFilterToScopeView(navFilter),
+            };
+        }
+        // Otherwise resume the queue scope — the workspace's stable lane/filter.
+        return scopeFromPosition(
+            resolveWorkspaceOpenPosition(
+                WORK_ITEMS_WORKSPACE_KEY,
+                WORK_ITEMS_DEFAULT_POSITION,
+                isValidWorkItemsPosition,
+            ),
+        );
     }, [navFilter]);
 
     const [scope, setScope] = useState<WorkItemQueueScope>(initialScope);
+
+    useEffect(() => {
+        writeWorkspaceResume(WORK_ITEMS_WORKSPACE_KEY, positionFromScope(scope));
+    }, [scope]);
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedTaskId, setSelectedTaskId] = useState<string | null>(navSelectedTaskId ?? null);
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>(() => {

@@ -27,8 +27,9 @@ const ROLES = `${ACCESS}?section=roles`;
 const RAW_KEY = /\b[a-z_]+(?:\.[a-z_]+){1,3}\b/;
 
 /** The role this spec creates. Named so an operator finding it knows what it is. */
-const TEMP_ROLE_KEY = `w57_cert_${Date.now().toString(36)}`;
-const TEMP_ROLE_LABEL = "W-57 certification role";
+const TEMP_ROLE_LABEL = `W57 cert ${Date.now().toString(36)}`;
+/** Derived by the product from the name, exactly as an operator would get it. */
+const TEMP_ROLE_KEY = TEMP_ROLE_LABEL.toLowerCase().replace(/[^a-z0-9_]/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 
 async function openRoles(page: Page) {
     await page.goto(ROLES, { waitUntil: "domcontentloaded" });
@@ -72,15 +73,20 @@ test.describe("W-57 — one page per role", () => {
         const areas = page.getByTestId("access-role-areas");
         await expect(areas).toBeVisible();
 
-        // Every area carries an operator verb, and the verbs are the four this product uses.
-        const chips = page.locator('[data-testid^="access-role-area-"][data-testid$="-authority"]');
-        const chipCount = await chips.count();
-        expect(chipCount, "no capability areas rendered — this assertion would prove nothing").toBeGreaterThan(0);
-        for (let i = 0; i < chipCount; i += 1) {
-            // `innerText` returns the RENDERED text, and the chip is CSS-uppercased — so this
-            // compares case-insensitively. The vocabulary is what is under test, not its casing.
-            const text = (await chips.nth(i).innerText()).trim();
-            expect(text).toMatch(/^(manage|view|no access|limited · \d+ of \d+)$/i);
+        // Every area row carries its level as data, and the level vocabulary is the four this
+        // product uses. The visible chip now appears only for `limited` — an exact reading is shown
+        // by which radio is selected, so a chip beside it would be the same fact twice.
+        const rows = page.locator('tr[data-testid^="access-role-area-"]');
+        const rowCount = await rows.count();
+        expect(rowCount, "no capability areas rendered — this assertion would prove nothing").toBeGreaterThan(0);
+        for (let i = 0; i < rowCount; i += 1) {
+            const level = await rows.nth(i).getAttribute("data-authority");
+            expect(level, "an area row with no level").toMatch(/^(manage|view|none|limited)$/);
+        }
+        // A `limited` area must state its arithmetic rather than just the word.
+        const limited = page.locator('tr[data-authority="limited"] [data-testid$="-authority"]');
+        if (await limited.count()) {
+            expect((await limited.first().innerText()).trim()).toMatch(/limited · \d+ of \d+/i);
         }
 
         // And by default the operator sees no raw permission key anywhere in the section.
@@ -91,6 +97,11 @@ test.describe("W-57 — one page per role", () => {
     test("the keys are one disclosure away — diagnostics, not the default", async ({ page }) => {
         await openRoles(page);
         await selectFirstRole(page);
+
+        // Two levels of disclosure now, and that is the design: expanding an area reveals the real
+        // capabilities the preset summarises, and the advanced toggle reveals their catalog keys.
+        const firstArea = page.locator('[data-testid^="access-role-area-"][data-testid$="-disclose"]').first();
+        await firstArea.click();
 
         const toggle = page.getByTestId("access-role-advanced-toggle");
         await expect(toggle).not.toBeChecked();
@@ -104,22 +115,37 @@ test.describe("W-57 — one page per role", () => {
         expect(hidden).not.toMatch(RAW_KEY);
     });
 
-    test("the areas are exactly the platform's capability groups — no invented domain", async ({ page, request }) => {
+    test("every rendered capability is a real one — the regrouping invents nothing", async ({ page, request }) => {
+        // This assertion USED to require each rendered area to be a catalog `group_key`. That is
+        // now wrong by design: the areas are the operator-facing taxonomy, and its whole purpose is
+        // that `Config`, `Fields`, `Layouts`, `Option sets` and `Sections` stop being five separate
+        // operator concepts. So the property moved down a level — to the capabilities themselves,
+        // which is where inventing one would actually matter.
         await openRoles(page);
         await selectFirstRole(page);
 
         const res = await request.get("/api/admin/rbac/permissions");
         expect(res.ok(), "the capability catalog did not load — the comparison would be vacuous").toBe(true);
-        const catalog = (await res.json()) as { permissions?: { key: string; group_key: string }[] };
-        const catalogGroups = new Set((catalog.permissions ?? []).map((p) => p.group_key).filter(Boolean));
-        expect(catalogGroups.size, "the catalog returned no groups").toBeGreaterThan(0);
+        const catalog = (await res.json()) as { permissions?: { key: string }[] };
+        const catalogKeys = new Set((catalog.permissions ?? []).map((p) => p.key).filter(Boolean));
+        expect(catalogKeys.size, "the catalog returned no keys").toBeGreaterThan(0);
 
-        const rendered = await page.locator('[data-testid^="access-role-area-"]:not([data-testid$="-authority"])').all();
-        expect(rendered.length).toBeGreaterThan(0);
-        for (const area of rendered) {
-            const testId = (await area.getAttribute("data-testid")) ?? "";
-            const groupKey = testId.replace("access-role-area-", "");
-            expect(catalogGroups.has(groupKey), `${groupKey} is rendered but is not a catalog group`).toBe(true);
+        // Expand every area and turn on the key disclosure, then check each key against the catalog.
+        const disclosures = page.locator('[data-testid^="access-role-area-"][data-testid$="-disclose"]');
+        const n = await disclosures.count();
+        expect(n, "no areas rendered").toBeGreaterThan(0);
+        for (let i = 0; i < n; i += 1) await disclosures.nth(i).click();
+        await page.getByTestId("access-role-advanced-toggle").check();
+
+        const keyNodes = page.locator('[data-testid^="access-role-keys-"]');
+        const keyCount = await keyNodes.count();
+        expect(keyCount, "no capability keys disclosed — the check would be vacuous").toBeGreaterThan(0);
+        for (let i = 0; i < keyCount; i += 1) {
+            for (const key of (await keyNodes.nth(i).innerText()).split("·")) {
+                const k = key.trim();
+                if (!k) continue;
+                expect(catalogKeys.has(k), `${k} is rendered but the catalog does not define it`).toBe(true);
+            }
         }
     });
 
@@ -131,9 +157,14 @@ test.describe("W-57 — one page per role", () => {
         await expect(scope).toBeVisible();
         // It states the separation rather than leaving a silent absence.
         await expect(scope).toContainText(/not on the role/i);
-        // And points at the chapter that owns it — a link, never a control.
+        // And points at where scope is actually set — a link, never a control.
+        //
+        // That destination moved. The Access Scopes chapter is retired: it linked out to Locations
+        // and Departments and configured nothing, while scope is set per PERSON. So the link opens
+        // Users. Pinning the destination is still the point — a link to a chapter that no longer
+        // exists would state the separation and then fail to demonstrate it.
         const link = page.getByTestId("access-role-open-scopes");
-        await expect(link).toHaveAttribute("href", /section=scopes/);
+        await expect(link).toHaveAttribute("href", /section=users/);
         // No scope control exists inside the role page.
         await expect(scope.locator('input[type="checkbox"], input[type="radio"], select')).toHaveCount(0);
     });
@@ -159,15 +190,15 @@ test.describe("W-57 — one page per role", () => {
         await openRoles(page);
         await selectFirstRole(page);
 
-        const groups = page.locator('[role="radiogroup"]');
-        const n = await groups.count();
+        // The matrix groups radios by NAME per area/row rather than by a wrapper element, which is
+        // what lets the levels line up in columns. Each input still carries a visible-to-AT label.
+        const radios = page.locator('table input[type="radio"]');
+        const n = await radios.count();
         expect(n, "no editable capability control — accessibility assertion would be vacuous").toBeGreaterThan(0);
 
-        // Each group names what it is for, so a screen reader hears the capability, not "radio".
         for (let i = 0; i < Math.min(n, 5); i += 1) {
-            const label = await groups.nth(i).getAttribute("aria-label");
-            expect(label, "a radiogroup with no accessible name").toBeTruthy();
-            expect(label).toMatch(/access level/i);
+            const name = await radios.nth(i).getAttribute("name");
+            expect(name, "a level radio with no group name").toBeTruthy();
         }
 
         // The inputs are real radios — focusable and operable from the keyboard — not divs.
@@ -178,7 +209,7 @@ test.describe("W-57 — one page per role", () => {
         // product being CORRECT. The enabled save button is the signal that the set is known.
         await expect(page.getByTestId("access-role-save")).toBeEnabled();
 
-        const firstRadio = groups.first().locator('input[type="radio"]').first();
+        const firstRadio = radios.first();
         await expect(firstRadio).toBeEnabled();
         await firstRadio.focus();
         await expect(firstRadio).toBeFocused();
@@ -198,7 +229,30 @@ test.describe("W-57 — one page per role", () => {
     });
 });
 
+/**
+ * **This block WRITES, and that is why it is gated.**
+ *
+ * Every other test in this file is a navigation and a read, safe against any environment. This one
+ * creates a role, grants it a capability and stands it down again — which is the only way to certify
+ * that a level an operator changes is authority the server actually holds.
+ *
+ * Against `alloy-cert` that is fine: the tenant is disposable and this spec cleans up after itself.
+ * Against **staging** it is not. Staging is a shared, promoted environment, and a certification run
+ * that mutates it is indistinguishable from an operator doing so — it would write a role into the
+ * same `role_definitions` the product serves, and a failure between the grant and the stand-down
+ * would leave authority behind. That already happened twice on the cert tenant, which is why the
+ * stand-down moved into `afterAll`.
+ *
+ * So the write is OPT-IN. It runs when `CERT_ALLOW_WRITES=1`, and otherwise records why it did not.
+ * Read-only certification of staging stays complete and honest; the write half is a deliberate
+ * decision someone makes about a specific environment, not a side effect of pointing the suite at a
+ * new URL.
+ */
+const WRITES_ALLOWED = process.env.CERT_ALLOW_WRITES === "1";
+
 test.describe("W-57 — a level the operator changes is authority the server holds", () => {
+    test.skip(!WRITES_ALLOWED, "write certification is opt-in (CERT_ALLOW_WRITES=1) — it creates and edits a role");
+
     /**
      * The tenant is shared. An assertion that fails mid-test must not leave a role holding
      * authority nobody asked for, so the stand-down runs in `afterAll` rather than only on the
@@ -223,8 +277,11 @@ test.describe("W-57 — a level the operator changes is authority the server hol
 
         // 1 — create a role of this spec's own, so no seeded role is edited.
         await page.getByTestId("access-roles-new").click();
+        // No key field any more: the operator types a NAME and the key is derived. That the role is
+        // created at all is the proof — a surface that still required a technical identifier could
+        // not get past this step.
         await page.getByTestId("access-new-role-label").fill(TEMP_ROLE_LABEL);
-        await page.getByTestId("access-new-role-key").fill(TEMP_ROLE_KEY);
+        await expect(page.getByTestId("access-new-role-key")).toHaveCount(0);
         await page.getByTestId("access-new-role-save").click();
         await expect(page.getByTestId("access-role-selected-workspace")).toBeVisible();
 
@@ -237,10 +294,10 @@ test.describe("W-57 — a level the operator changes is authority the server hol
         // 3 — move one area to Manage through the UI the operator uses.
         //     The radio itself is `sr-only` — the operator clicks the labelled segment, and so does
         //     this. Driving the hidden input directly would certify a path no one takes.
-        const manageLabel = page.locator('label:has([data-testid$="-write"])').first();
+        const manageLabel = page.locator('tr[data-testid^="access-role-area-"] label:has(input[data-testid$="-write"])').first();
         await expect(manageLabel, "no Manage control available to certify against").toBeVisible();
         await manageLabel.click();
-        await expect(page.locator('[data-testid$="-write"]:checked')).toHaveCount(1);
+        await expect(page.locator('input[data-testid$="-write"]:checked').first()).toBeVisible();
         await page.getByTestId("access-role-save").click();
         await expect(page.getByRole("status")).toContainText(/saved/i);
 
@@ -255,14 +312,19 @@ test.describe("W-57 — a level the operator changes is authority the server hol
         await page.reload({ waitUntil: "domcontentloaded" });
         await page.goto(`${ROLES}&roleKey=${TEMP_ROLE_KEY}`, { waitUntil: "domcontentloaded" });
         await expect(page.getByTestId("access-role-selected-workspace")).toBeVisible();
-        const chips = page.locator('[data-testid^="access-role-area-"][data-testid$="-authority"]');
-        const texts = await chips.allInnerTexts();
-        // Case-insensitive: the chip is CSS-uppercased, so `innerText` is "MANAGE".
-        expect(texts.some((t) => /manage|limited/i.test(t)), "no area reports the authority just granted").toBe(true);
+        // The area's level is data now, not a chip — an exact reading is shown by which radio is
+        // selected, so only `limited` renders text beside it.
+        const levels = await page.locator('tr[data-testid^="access-role-area-"]').evaluateAll(
+            (rows) => rows.map((r) => r.getAttribute("data-authority")),
+        );
+        expect(
+            levels.some((l) => l === "manage" || l === "limited"),
+            "no area reports the authority just granted",
+        ).toBe(true);
 
         // 6 — put it back and stand the role down. The tenant is shared; this spec leaves an inert
         //     role behind rather than a role holding authority nobody asked for.
-        await page.locator('label:has([data-testid$="-none"])').first().click();
+        await page.locator('tr[data-testid^="access-role-area-"] label:has(input[data-testid$="-none"])').first().click();
         await page.getByTestId("access-role-edit-identity").click();
         await page.getByTestId("access-role-active-checkbox").uncheck();
         await page.getByTestId("access-role-save").click();

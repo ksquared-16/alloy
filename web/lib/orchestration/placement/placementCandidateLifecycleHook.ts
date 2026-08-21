@@ -18,6 +18,64 @@ function metaStr(meta: Record<string, unknown> | null | undefined, key: string):
 }
 
 /**
+ * THE ONE DEFINITION of a candidate's seed key and row.
+ *
+ * Both the per-child hook and the bulk form below derive through this. A second copy of this
+ * derivation is exactly the failure this codebase already paid for once — a separate definition of
+ * membership is what produced the 13-vs-8 count — and here a drifted copy would silently stop
+ * repairing children rather than merely miscount them.
+ */
+function derivePlacementCandidateSeedRow(input: {
+    orgId: string;
+    opportunityId: string;
+    customerMemberId: string;
+    oppCustomerId: string | null;
+    oppLocationId: string | null;
+    piId: string | null;
+    facts: Record<string, unknown>;
+    waitSinceIso: string;
+    personId: string | null;
+    dob: string | null;
+    programKey: string | null;
+}): { seedKey: string; row: Record<string, unknown> } {
+    const site = resolvePlacementCandidateSiteId({
+        ocmLocationId: metaStr(input.facts, "location_id"),
+        opportunityLocationId: input.oppLocationId,
+    });
+    const cohort = resolvePlacementCandidateCohortFromMember({
+        programKey: input.programKey,
+        programRoomCohortKey: metaStr(input.facts, "program_room_cohort_key"),
+        dateOfBirth: input.dob,
+    });
+    const seedKey = `pc_v1_pi:${input.opportunityId}:${input.customerMemberId}:${cohort.program_room_cohort_key || "unknown_program_room"}`;
+    return {
+        seedKey,
+        row: {
+            org_id: input.orgId,
+            opportunity_id: input.opportunityId,
+            customer_id: input.oppCustomerId,
+            opportunity_customer_member_id: null, // no OCM dependency
+            customer_member_id: input.customerMemberId,
+            person_id: input.personId,
+            site_id: site.site_id,
+            is_synthetic_fallback: false,
+            program_room_cohort_key: cohort.program_room_cohort_key,
+            program_room_group_label: cohort.program_room_group_label,
+            wait_since: input.waitSinceIso,
+            start_date: metaStr(input.facts, "start_date"),
+            status: "active",
+            seed_key: seedKey,
+            metadata: {
+                source: "process_instance_waitlist",
+                process_instance_id: input.piId,
+                cohort_resolution: cohort,
+                site_resolution: site,
+            },
+        },
+    };
+}
+
+/**
  * Create the placement candidate for a newly-waitlisted child from PROCESS-INSTANCE / child-subject
  * scope — no OCM required. Facts come from the child's enrollment process instance metadata (program /
  * site / room / start), with the opportunity as fallback for site/customer. Idempotent by seed_key.
@@ -75,47 +133,157 @@ export async function ensurePlacementCandidateForWaitlistedChildBySubject(
         programKey = (cat as { key?: string | null } | null)?.key ?? null;
     }
 
-    const site = resolvePlacementCandidateSiteId({
-        ocmLocationId: metaStr(facts, "location_id"),
-        opportunityLocationId: (opp as { location_id?: string | null }).location_id ?? null,
-    });
-    const cohort = resolvePlacementCandidateCohortFromMember({
+    const derived = derivePlacementCandidateSeedRow({
+        orgId,
+        opportunityId,
+        customerMemberId,
+        oppCustomerId: (opp as { customer_id?: string | null }).customer_id ?? null,
+        oppLocationId: (opp as { location_id?: string | null }).location_id ?? null,
+        piId,
+        facts,
+        waitSinceIso,
+        personId,
+        dob,
         programKey,
-        programRoomCohortKey: metaStr(facts, "program_room_cohort_key"),
-        dateOfBirth: dob,
     });
-    const seedKey = `pc_v1_pi:${opportunityId}:${customerMemberId}:${cohort.program_room_cohort_key || "unknown_program_room"}`;
+    const seedKey = derived.seedKey;
 
     const { data: existing } = await supabase.from("placement_candidates").select("id").eq("org_id", orgId).eq("seed_key", seedKey).maybeSingle();
     if ((existing as { id?: string } | null)?.id) {
         return { attempted: true, created: false, skipped_reason: "already_exists" };
     }
 
-    const row = {
-        org_id: orgId,
-        opportunity_id: opportunityId,
-        customer_id: (opp as { customer_id?: string | null }).customer_id ?? null,
-        opportunity_customer_member_id: null, // no OCM dependency
-        customer_member_id: customerMemberId,
-        person_id: personId,
-        site_id: site.site_id,
-        is_synthetic_fallback: false,
-        program_room_cohort_key: cohort.program_room_cohort_key,
-        program_room_group_label: cohort.program_room_group_label,
-        wait_since: waitSinceIso,
-        start_date: metaStr(facts, "start_date"),
-        status: "active",
-        seed_key: seedKey,
-        metadata: {
-            source: "process_instance_waitlist",
-            process_instance_id: piId,
-            cohort_resolution: cohort,
-            site_resolution: site,
-        },
-    };
+    const row = derived.row;
     const { error: insErr } = await supabase.from("placement_candidates").insert(row);
     if (insErr) return { attempted: true, created: false, skipped_reason: insErr.message };
     return { attempted: true, created: true };
+}
+
+/**
+ * BULK form of {@link ensurePlacementCandidateForWaitlistedChildBySubject}, for the Work View read
+ * path.
+ *
+ * The read path called the per-child hook once per queue row. Each call makes 4-6 SERIAL round
+ * trips (opportunity, process instance, customer member, optional program category, existence
+ * check) and, for a 15-row page, that is ~75 queries measured at 1.8-2.2s — almost always to
+ * conclude the candidate already exists.
+ *
+ * SEMANTICS ARE IDENTICAL, not relaxed. The same facts are read, the same
+ * `derivePlacementCandidateSeedRow` computes the same seed key, and a child is inserted exactly
+ * when the per-child hook would have inserted: when no candidate carries that exact seed key. A
+ * cohort change still yields a NEW seed key and still inserts, so repair timing is unchanged. What
+ * disappears is the per-child round trips, not the repair.
+ *
+ * Failure stays fail-open per child, as before: a child whose facts cannot be read is skipped and
+ * the queue still renders.
+ */
+export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        children: ReadonlyArray<{ opportunityId: string; customerMemberId: string }>;
+        /** Org program categories, already loaded by the caller (process-cached). id -> key. */
+        programKeyByCategoryId?: ReadonlyMap<string, string>;
+    },
+): Promise<{ attempted: number; created: number; skipped_existing: number }> {
+    if (!isPlacementLifecycleCandidateHookEnabled()) {
+        return { attempted: 0, created: 0, skipped_existing: 0 };
+    }
+    const children = params.children.filter((c) => c.opportunityId && c.customerMemberId);
+    if (!children.length) return { attempted: 0, created: 0, skipped_existing: 0 };
+    const orgId = params.orgId;
+    const opportunityIds = [...new Set(children.map((c) => c.opportunityId))];
+    const memberIds = [...new Set(children.map((c) => c.customerMemberId))];
+
+    const [oppRes, piRes, cmRes, existingRes] = await Promise.all([
+        supabase
+            .from("opportunities")
+            .select("id, customer_id, location_id")
+            .eq("org_id", orgId)
+            .in("id", opportunityIds),
+        supabase
+            .from("process_instances")
+            .select("id, metadata, stage_entered_at, context_id, subject_id")
+            .eq("org_id", orgId)
+            .eq("process_key", ENROLLMENT_PROCESS_KEY)
+            .in("context_id", opportunityIds)
+            .in("subject_id", memberIds),
+        supabase.from("customer_members").select("id, person_id, dob").eq("org_id", orgId).in("id", memberIds),
+        supabase.from("placement_candidates").select("seed_key").eq("org_id", orgId).in("opportunity_id", opportunityIds),
+    ]);
+
+    const oppById = new Map<string, { customer_id: string | null; location_id: string | null }>();
+    for (const r of (oppRes.data ?? []) as Array<Record<string, unknown>>) {
+        if (typeof r.id === "string") {
+            oppById.set(r.id, {
+                customer_id: typeof r.customer_id === "string" ? r.customer_id : null,
+                location_id: typeof r.location_id === "string" ? r.location_id : null,
+            });
+        }
+    }
+    const piByPair = new Map<string, { id: string | null; metadata: Record<string, unknown>; stage_entered_at: string | null }>();
+    for (const r of (piRes.data ?? []) as Array<Record<string, unknown>>) {
+        const key = `${String(r.context_id ?? "")}:${String(r.subject_id ?? "")}`;
+        piByPair.set(key, {
+            id: typeof r.id === "string" ? r.id : null,
+            metadata: (r.metadata ?? {}) as Record<string, unknown>,
+            stage_entered_at: typeof r.stage_entered_at === "string" ? r.stage_entered_at.trim() || null : null,
+        });
+    }
+    const cmById = new Map<string, { person_id: string | null; dob: string | null }>();
+    for (const r of (cmRes.data ?? []) as Array<Record<string, unknown>>) {
+        if (typeof r.id === "string") {
+            cmById.set(r.id, {
+                person_id: typeof r.person_id === "string" ? r.person_id : null,
+                dob: typeof r.dob === "string" ? r.dob : null,
+            });
+        }
+    }
+    const existingSeedKeys = new Set<string>();
+    for (const r of (existingRes.data ?? []) as Array<Record<string, unknown>>) {
+        if (typeof r.seed_key === "string") existingSeedKeys.add(r.seed_key);
+    }
+
+    const nowIso = new Date().toISOString();
+    const rows: Record<string, unknown>[] = [];
+    let skippedExisting = 0;
+    for (const child of children) {
+        const opp = oppById.get(child.opportunityId);
+        if (!opp) continue; // matches the per-child hook's `opportunity_not_found` early return
+        const pi = piByPair.get(`${child.opportunityId}:${child.customerMemberId}`) ?? null;
+        const facts = pi?.metadata ?? {};
+        const cm = cmById.get(child.customerMemberId) ?? null;
+        const programCategoryId = metaStr(facts, "program_category_id");
+        const programKey =
+            programCategoryId ? params.programKeyByCategoryId?.get(programCategoryId) ?? null : null;
+        const derived = derivePlacementCandidateSeedRow({
+            orgId,
+            opportunityId: child.opportunityId,
+            customerMemberId: child.customerMemberId,
+            oppCustomerId: opp.customer_id,
+            oppLocationId: opp.location_id,
+            piId: pi?.id ?? null,
+            facts,
+            // Wait-since is the Waitlist stage clock — not opportunity created_at (lead age).
+            waitSinceIso: pi?.stage_entered_at ?? nowIso,
+            personId: cm?.person_id ?? null,
+            dob: cm?.dob ?? null,
+            programKey,
+        });
+        if (existingSeedKeys.has(derived.seedKey)) {
+            skippedExisting += 1;
+            continue;
+        }
+        // Guard against two children in this page deriving the same key (they cannot, but an
+        // insert of duplicates would fail the whole batch).
+        if (rows.some((r) => r.seed_key === derived.seedKey)) continue;
+        rows.push(derived.row);
+    }
+
+    if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
+    const { error } = await supabase.from("placement_candidates").insert(rows);
+    if (error) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
+    return { attempted: children.length, created: rows.length, skipped_existing: skippedExisting };
 }
 
 /** `ALLOY_PLACEMENT_LIFECYCLE_CANDIDATE_HOOK_DISABLED=1` skips candidate ensure on waitlisted transition. */

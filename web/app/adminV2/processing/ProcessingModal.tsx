@@ -18,6 +18,15 @@ import ProcessingFormsStudio from "@/app/adminV2/pos/ProcessingFormsStudio";
 import type { ProcessingStudioTab } from "@/app/adminV2/pos/ProcessingStudioShell";
 import { ADMIN_V2_OPEN_PROCESSING_CASE, type OpenProcessingCaseDetail } from "@/lib/workItems/workItemsNavigation";
 import type { ProcessingModalIntent } from "@/lib/adminV2/workspaceModalEvents";
+import {
+    PROCESSING_DEFAULT_POSITION,
+    PROCESSING_WORKSPACE_KEY,
+    isValidProcessingPosition,
+} from "@/app/adminV2/processing/processingResume";
+import {
+    resolveWorkspaceOpenPosition,
+    writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
 
 export default function ProcessingModal({
     open,
@@ -28,10 +37,22 @@ export default function ProcessingModal({
     onClose: () => void;
     intent?: ProcessingModalIntent | null;
 }) {
+    // Stable navigation resumes; the case selection and the form being edited do not.
+    const opened = useState(() =>
+        resolveWorkspaceOpenPosition(
+            PROCESSING_WORKSPACE_KEY,
+            PROCESSING_DEFAULT_POSITION,
+            isValidProcessingPosition,
+        ),
+    )[0];
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-    const [mode, setMode] = useState<DigitalMailroomMode>("work");
-    const [workView, setWorkView] = useState<DigitalMailroomWorkView>("overview");
-    const [studioTab, setStudioTab] = useState<ProcessingStudioTab>("forms");
+    const [mode, setMode] = useState<DigitalMailroomMode>(opened.mode as DigitalMailroomMode);
+    const [workView, setWorkView] = useState<DigitalMailroomWorkView>(
+        opened.workView as DigitalMailroomWorkView,
+    );
+    const [studioTab, setStudioTab] = useState<ProcessingStudioTab>(
+        opened.studioTab as ProcessingStudioTab,
+    );
     const [studioFormId, setStudioFormId] = useState<string | null>(null);
     const [studioFormName, setStudioFormName] = useState<string | null>(null);
 
@@ -41,15 +62,22 @@ export default function ProcessingModal({
             void warmProcessingFormsCache();
         }
     }, [open]);
+    /**
+     * Closing clears TRANSIENT state only. The stable position (mode, Studio tab) is deliberately
+     * left standing so the next open resumes it — this used to reset everything to the default,
+     * which is exactly the behaviour the resume decision replaces.
+     */
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
-        setMode("work");
         setWorkView("overview");
-        setStudioTab("forms");
         setStudioFormId(null);
         setStudioFormName(null);
         onClose();
     }, [onClose]);
+
+    useEffect(() => {
+        writeWorkspaceResume(PROCESSING_WORKSPACE_KEY, { mode, workView, studioTab });
+    }, [mode, workView, studioTab]);
 
     const openCase = useCallback((caseId: string) => {
         setSelectedCaseId(caseId);

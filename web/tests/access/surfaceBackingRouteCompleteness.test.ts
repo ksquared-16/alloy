@@ -39,7 +39,6 @@ const CHAPTER_DIR = path.join(WEB_ROOT, "components/adminV2/settings/access");
 const CHAPTER_COMPONENTS: Record<AccessWorkspaceChapter, string[]> = {
     users: ["AccessUsersConfigurationPage.tsx"],
     roles: ["AccessRolesConfigurationPage.tsx"],
-    scopes: ["AccessScopesPage.tsx"],
     security: [],
 };
 

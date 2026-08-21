@@ -79,6 +79,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         resolveParticipantEnrollmentObjectiveWithContext(supabase, {
             orgId: access.value.orgId,
             processInstanceId: access.value.processInstanceId,
+            // The session row the access check already read — one fewer serial round trip.
+            preloadedSession: access.value.session,
         }),
     ]);
     timing.mark("objective", parallelStart);

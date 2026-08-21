@@ -21,9 +21,10 @@ import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/s
 import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
 import type { PlacementCandidatesByOpportunityId } from "@/lib/orchestration/placement/bulkLoadPlacementCandidatesByOpportunity";
-import { ensurePlacementCandidateForWaitlistedChildBySubject } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
+import { ensurePlacementCandidatesForWaitlistedChildrenBulk } from "@/lib/orchestration/placement/placementCandidateLifecycleHook";
 import type { ChildProvisioningRow } from "@/lib/runtime/provisioning/childGrainProvisioningRows";
 import { formatCompactRelativeDurationIso } from "@/lib/format/formatCompactRelativeDuration";
+import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
 export type ChildProvisioningRowWithPlacement = ChildProvisioningRow & {
     /** Canonical waitlist candidate projection when a placement_candidate matches this child. */
@@ -143,25 +144,55 @@ export async function attachChildGrainWaitlistPlacement(params: {
     ];
     if (!opportunityIds.length) return rows;
 
+    // Started here (not inside the gate) because the bulk ensure below needs the category -> key
+    // map to derive cohorts. Process-cached, so this is normally free after the first read.
+    const locationProgramCategoriesPromiseForEnsure = loadLocationProgramCategoriesForOrg(
+        params.supabase,
+        params.orgId,
+    );
+    void locationProgramCategoriesPromiseForEnsure.catch(() => {});
+
     // Ensure placement_candidates exist for waitlisted PI children (idempotent) BEFORE the
     // placement-config gate. Missing candidates are the root cause of rank "—" — create via
     // the existing lifecycle hook even when ranking attach is later fail-open.
+    const tEnsure = Date.now();
+    let ensureResult: { attempted: number; created: number; skipped_existing: number } | null = null;
     try {
-        await Promise.all(
-            rows.map(async (child) => {
-                const oppId = str(child.contextId);
-                const memberId = str(child.subjectId);
-                if (!oppId || !memberId) return;
-                await ensurePlacementCandidateForWaitlistedChildBySubject(params.supabase, {
-                    orgId: params.orgId,
-                    opportunityId: oppId,
-                    customerMemberId: memberId,
-                });
-            }),
-        );
+        /**
+         * ONE bulk pass, not one hook call per child. The per-child hook makes 4-6 SERIAL round
+         * trips each; over a 15-row page that measured ~75 queries and 1.8-2.2s, almost always to
+         * conclude the candidate already exists.
+         *
+         * The bulk form reads the same facts and derives the same seed key through the same
+         * `derivePlacementCandidateSeedRow`, so a child is inserted exactly when the per-child hook
+         * would have inserted one. Repair semantics are unchanged — a cohort change still produces
+         * a new seed key and still inserts. Only the round trips are gone.
+         *
+         * The program-category map comes from the org config the placement step already loads
+         * (process-cached), so the bulk pass does not re-read it per child either.
+         */
+        const categoriesForKeys = await locationProgramCategoriesPromiseForEnsure;
+        const programKeyByCategoryId = new Map<string, string>();
+        for (const cat of categoriesForKeys) {
+            const id = str((cat as { id?: unknown }).id);
+            const key = str((cat as { key?: unknown }).key);
+            if (id && key) programKeyByCategoryId.set(id, key);
+        }
+        ensureResult = await ensurePlacementCandidatesForWaitlistedChildrenBulk(params.supabase, {
+            orgId: params.orgId,
+            children: rows
+                .map((child) => ({ opportunityId: str(child.contextId) ?? "", customerMemberId: str(child.subjectId) ?? "" }))
+                .filter((c) => c.opportunityId && c.customerMemberId),
+            programKeyByCategoryId,
+        });
     } catch {
         // Fail-open on ensure — ranking may still attach existing candidates below.
     }
+    logDbTiming("waitlist.ensure_candidates", Date.now() - tEnsure, {
+        rows: rows.length,
+        created: ensureResult?.created ?? null,
+        skipped_existing: ensureResult?.skipped_existing ?? null,
+    });
 
     const queueKeys = params.placementQueueKeys?.length
         ? params.placementQueueKeys
@@ -186,23 +217,33 @@ export async function attachChildGrainWaitlistPlacement(params: {
     }
 
     try {
+        /**
+         * Org-scoped category config does not depend on this org's placement candidates, yet it sat
+         * third in a strictly serial chain. Start it here and join below so the step costs the max
+         * of the two branches, not the sum.
+         */
+        const tLpc = Date.now();
+        const locationProgramCategoriesPromise = locationProgramCategoriesPromiseForEnsure;
+
+        const tCand = Date.now();
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
             orgId: params.orgId,
             opportunityIds,
             activeOnly: false,
         });
+        logDbTiming("waitlist.bulk_candidates", Date.now() - tCand, { opportunities: opportunityIds.length });
 
+        const tHh = Date.now();
         const householdFactsByCustomerId = await loadPlacementEvaluationHouseholdContext({
             supabase: params.supabase,
             orgId: params.orgId,
             candidatesByOpportunityId,
         });
+        logDbTiming("waitlist.household_facts", Date.now() - tHh, {});
 
-        const locationProgramCategories = await loadLocationProgramCategoriesForOrg(
-            params.supabase,
-            params.orgId,
-        );
+        const locationProgramCategories = await locationProgramCategoriesPromise;
+        logDbTiming("waitlist.location_categories", Date.now() - tLpc, { concurrent: true });
         const waitlistCategoryContext = { categories: locationProgramCategories };
 
         const oppRows: Array<Record<string, unknown>> = opportunityIds.map((id) => ({

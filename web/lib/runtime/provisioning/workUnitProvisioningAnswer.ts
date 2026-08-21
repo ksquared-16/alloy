@@ -486,6 +486,12 @@ export type ProvisioningTimings = {
     projection_ms: number;
     composition_ms: number;
     total_ms: number;
+    /**
+     * DIAGNOSTIC SUB-SPANS inside composition. `composition_ms` measured 8.1s of a 9.9s answer and
+     * named nothing within it, which is not actionable — the same way an aggregate auth number
+     * concealed a 100%-miss JWKS cache until it was split into phases. Optional; no consumer breaks.
+     */
+    spans?: Record<string, number>;
 };
 
 const now = () => performance.now();
@@ -625,6 +631,9 @@ export async function composeWorkUnitProvisioningAnswer(
         authorization_ms: 0, work_unit_ms: 0, configuration_ms: 0, presentation_ms: 0,
         records_ms: 0, projection_ms: 0, composition_ms: 0, total_ms: 0,
     };
+    /** Diagnostic only — how long one named step inside composition took. */
+    const spans: Record<string, number> = {};
+    const markSpan = (name: string, startedAt: number) => { spans[name] = Math.round(now() - startedAt); };
     // A refusal carries whatever navigational frame was ALREADY resolved when it happened, so the
     // operator keeps a way out. `frame` is threaded explicitly rather than captured from an outer
     // mutable: the lens set does not exist for the early failures, and a closure would silently offer
@@ -1048,12 +1057,14 @@ export async function composeWorkUnitProvisioningAnswer(
         // obey the SAME one. While it was inline, the totals route had no way to ask what this lens
         // selects and counted the opportunity lane instead — thirteen child rows under a pill of eight.
         try {
+            const t_child_grain_members = now();
             childRows = await loadChildGrainMembersForLens({
                 supabase: req.supabase,
                 orgId: req.orgId,
                 workUnitId: populationWorkUnitId,
                 view: activeView,
             });
+            markSpan("child_grain_members", t_child_grain_members);
         } catch (e) {
             // NEVER the family path. `QueueService` degrades a failed child read to case-grain rows, which
             // on a child surface is a wrong-subject substitution dressed as success. Here it is an honest
@@ -1319,6 +1330,30 @@ export async function composeWorkUnitProvisioningAnswer(
     // Child Waitlist: attach Placement ranking (derived position / wait_since / program) onto rows.
     // Membership stays PI-owned; ranking authority is placement_candidates + overrides.
     if (childRows?.length) {
+        /**
+         * Avatar resolution runs CONCURRENTLY with the waitlist + inquiry chain.
+         *
+         * The four child-grain steps were strictly serial and measured 1.4s + 4.6s + 0.7s + 2.2s
+         * = 8.9s, which is essentially the whole 8.2s `composition_ms`. Inquiry genuinely depends
+         * on placement (it is the fallback for a program placement did not supply), but the avatar
+         * step reads ONLY `row.subjectId` — member -> person -> photo — and no placement field.
+         * Serialising it behind placement bought nothing.
+         *
+         * It runs on COPIES: `attachChildGrainAvatar` mutates rows in place, and the placement step
+         * can expand one child into several candidate rows, so mutating the shared input would
+         * write onto objects the final page no longer contains. The merge below re-applies the
+         * result keyed by `subjectId` — the same key the avatar step uses internally, so each row
+         * still answers only for its own child.
+         */
+        const t_child_grain_avatar_conc = now();
+        const avatarRowsPromise = attachChildGrainAvatar({
+            supabase: req.supabase,
+            orgId: req.orgId,
+            actor: req.documentActor,
+            childRows: childRows.map((r) => ({ ...r })) as ChildProvisioningRowWithPlacement[],
+        });
+        void avatarRowsPromise.catch(() => {});
+        const t_child_grain_waitlist = now();
         childRows = await attachChildGrainWaitlistPlacement({
             supabase: req.supabase,
             orgId: req.orgId,
@@ -1329,18 +1364,33 @@ export async function composeWorkUnitProvisioningAnswer(
             childRows,
             familyNamesByOpportunityId,
         });
+        markSpan("child_grain_waitlist", t_child_grain_waitlist);
+        const t_child_grain_inquiry = now();
         childRows = await attachChildGrainInquiryProgramFallback({
             supabase: req.supabase,
             orgId: req.orgId,
             childRows: childRows as ChildProvisioningRowWithPlacement[],
         });
-        // One batched member -> person -> photo resolution for the whole page, never per row.
-        childRows = await attachChildGrainAvatar({
-            supabase: req.supabase,
-            orgId: req.orgId,
-            actor: req.documentActor,
-            childRows: childRows as ChildProvisioningRowWithPlacement[],
-        });
+        markSpan("child_grain_inquiry", t_child_grain_inquiry);
+        // Join the avatar branch started above. One batched member -> person -> photo resolution
+        // for the whole page, never per row — and now off the critical path of placement.
+        try {
+            const avatarRows = await avatarRowsPromise;
+            const urlBySubject = new Map<string, string>();
+            for (const r of avatarRows) {
+                const id = strOrNull((r as { subjectId?: unknown }).subjectId);
+                const url = strOrNull((r as { avatarImageUrl?: unknown }).avatarImageUrl);
+                if (id && url) urlBySubject.set(id, url);
+            }
+            for (const r of childRows as ChildProvisioningRowWithPlacement[]) {
+                const id = strOrNull((r as { subjectId?: unknown }).subjectId);
+                const url = id ? urlBySubject.get(id) : null;
+                if (url) (r as { avatarImageUrl?: string }).avatarImageUrl = url;
+            }
+        } catch {
+            // Avatars are presentation. A read failure must never cost the operator their queue.
+        }
+        markSpan("child_grain_avatar", t_child_grain_avatar_conc);
     }
 
     let stage: LifecycleBuilderStageRecord;
@@ -1773,6 +1823,7 @@ export async function composeWorkUnitProvisioningAnswer(
         timings,
     };
     timings.composition_ms = now() - tComp;
+    timings.spans = spans;
     timings.total_ms = now() - t0;
     return answer;
 }

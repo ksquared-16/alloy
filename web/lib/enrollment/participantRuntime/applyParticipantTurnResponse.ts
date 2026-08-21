@@ -107,19 +107,38 @@ export async function applyParticipantTurnResponse(
     let postWrite: { shared_values: Record<string, unknown>; metadata: Record<string, unknown> } | null = null;
 
     if (sessionId && needKey && disposition.action !== "no_change" && disposition.action !== "refused") {
-        const { data: sessionRow, error: readError } = await supabase
-            .from("form_packet_sessions")
-            .select("shared_values, metadata")
-            .eq("id", sessionId)
-            .eq("org_id", input.orgId)
-            .maybeSingle();
-        if (readError) {
-            return { ok: false, refusal: { code: "read_failed", detail: readError.message } };
-        }
-        const row = (sessionRow ?? {}) as {
+        /**
+         * THE MERGE BASE — this request's own session snapshot, not a second read of it.
+         *
+         * A turn is a read-modify-write over `shared_values` / `metadata`, and it used to re-read
+         * the row it had just resolved the turn from: a whole serial round trip in front of the
+         * write, on every accepted answer. When the caller hands over the context it resolved the
+         * turn with, that context already CONTAINS this row, read milliseconds earlier in this same
+         * request.
+         *
+         * This is not a cache and it does not widen a race the code did not already have: the
+         * read-then-update was never atomic, and the only writer of a participant session is the
+         * participant. Where the caller supplied no context, the read still happens.
+         */
+        const contextSession = input.current?.context.needsContext.session ?? null;
+        let row: {
             shared_values?: Record<string, unknown> | null;
             metadata?: Record<string, unknown> | null;
         };
+        if (contextSession && String((contextSession as { id?: unknown }).id ?? "") === sessionId) {
+            row = contextSession as typeof row;
+        } else {
+            const { data: sessionRow, error: readError } = await supabase
+                .from("form_packet_sessions")
+                .select("shared_values, metadata")
+                .eq("id", sessionId)
+                .eq("org_id", input.orgId)
+                .maybeSingle();
+            if (readError) {
+                return { ok: false, refusal: { code: "read_failed", detail: readError.message } };
+            }
+            row = (sessionRow ?? {}) as typeof row;
+        }
         postWrite = {
             shared_values: (row.shared_values ?? {}) as Record<string, unknown>,
             metadata: (row.metadata ?? {}) as Record<string, unknown>,

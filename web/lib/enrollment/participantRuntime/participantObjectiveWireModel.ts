@@ -13,6 +13,10 @@
  */
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import {
+    projectParticipantWorkProgress,
+    type ParticipantWorkProgress,
+} from "@/lib/enrollment/participantRuntime/participantWorkProgress";
 
 /**
  * Which part of the experience the participant is in.
@@ -38,6 +42,13 @@ export type ParticipantObjectiveWire = {
     };
     /** "3 things remaining", backed by deterministic need state. */
     readonly things_remaining: number;
+    /**
+     * The participant's OWN progress — unique semantic facts plus the paperwork, never requirements.
+     *
+     * Separate from `progress` above deliberately: that one is the requirement rollup and is the
+     * denominator a parent must not be shown. This one is the conversation they are actually having.
+     */
+    readonly work: ParticipantWorkProgress;
     readonly next_turn: {
         readonly kind: string;
         readonly prompt: string;
@@ -122,6 +133,7 @@ export function participantObjectiveWireModel(
             remaining: objective.progress.remaining_requirements,
         },
         things_remaining: objective.needs.needs_requiring_action,
+        work: projectParticipantWorkProgress({ needs: objective.needs.needs, phase }),
         next_turn: {
             kind: turn.kind,
             prompt: turn.prompt,

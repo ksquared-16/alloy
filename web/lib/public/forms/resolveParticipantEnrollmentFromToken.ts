@@ -23,12 +23,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
+import { ENROLLMENT_SESSION_COLUMNS } from "@/lib/pos/packet/enrollmentObjectiveSession";
+import type { PacketSessionRow } from "@/lib/forms/packets/formPacketService";
 
 export type ParticipantEnrollmentAccess = {
     readonly orgId: string;
     readonly linkId: string;
     readonly sessionId: string;
     readonly processInstanceId: string;
+    /**
+     * The session row this access decision already read.
+     *
+     * Handed forward so the objective resolver does not re-read it. It is a PERFORMANCE handoff and
+     * nothing more — the objective still applies its own current-session predicate to it.
+     */
+    readonly session: PacketSessionRow;
 };
 
 export type ParticipantEnrollmentAccessFailure = {
@@ -84,7 +93,13 @@ export async function resolveParticipantEnrollmentFromToken(
             .maybeSingle(),
         supabase
             .from("form_packet_sessions")
-            .select("id, process_instance_id")
+            // The FULL session row, not just its identity.
+            //
+            // The objective resolver reads this exact row again to answer "which session is
+            // current?", which was a whole serial round trip on every participant request. Reading
+            // the columns it needs here lets it skip that wave — and it still re-checks the
+            // current-session predicate itself, so nothing about which session counts moved.
+            .select(ENROLLMENT_SESSION_COLUMNS)
             .eq("org_id", link.org_id)
             .eq("started_via_public_link_id", link.id)
             .maybeSingle(),
@@ -99,7 +114,7 @@ export async function resolveParticipantEnrollmentFromToken(
         };
     }
 
-    const row = data as { id: string; process_instance_id: string | null };
+    const row = data as PacketSessionRow & { process_instance_id: string | null };
     const processInstanceId = (row.process_instance_id ?? "").trim();
     if (!processInstanceId) {
         // A legitimate state, not a fault: single-form links and packets predating D-95 realize no
@@ -120,6 +135,7 @@ export async function resolveParticipantEnrollmentFromToken(
             linkId: link.id,
             sessionId: row.id,
             processInstanceId,
+            session: row,
         },
     };
 }

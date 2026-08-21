@@ -2,7 +2,7 @@
 
 /**
  * Organization Access workspace — Collection → Selected → Focused Workspace, Locations/Financials
- * quality shell around Users / Roles / Access Scopes / Security.
+ * quality shell around Users / Roles / Security.
  *
  * Replaces the old technical-tab `UsersRolesSettingsClient` as the primary section=users|roles
  * experience. See `.alloy-agent-evidence/access-ui-discovery/ACCESS-UI-DISCOVERY.md`.
@@ -16,7 +16,6 @@ import {
 } from "@/components/adminV2/settings/configurationRuntime/ConfigurationModeLayout";
 import AccessUsersConfigurationPage from "@/components/adminV2/settings/access/AccessUsersConfigurationPage";
 import AccessRolesConfigurationPage from "@/components/adminV2/settings/access/AccessRolesConfigurationPage";
-import AccessScopesPage from "@/components/adminV2/settings/access/AccessScopesPage";
 import AccessSecurityPage from "@/components/adminV2/settings/access/AccessSecurityPage";
 import {
     ACCESS_WORKSPACE_CHAPTER_META,
@@ -130,10 +129,6 @@ export default function AccessWorkspaceSurface({
                 : section === "roles" ?
                     <div data-testid="access-chapter-roles">
                         <AccessRolesConfigurationPage />
-                    </div>
-                : section === "scopes" ?
-                    <div data-testid="access-chapter-scopes">
-                        <AccessScopesPage />
                     </div>
                 :   <div data-testid="access-chapter-security">
                         <AccessSecurityPage />

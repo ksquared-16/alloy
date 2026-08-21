@@ -45,9 +45,34 @@ function inquiryChildRow(
 export function overlayChildMissionOntoSettledFocusModel(
     settled: FocusPanelWorkModeModel,
     commitCritical: FocusPanelCommitCriticalInput,
+    options?: {
+        /**
+         * The child attention is CURRENTLY on. When it names a different child than the answer
+         * this overlay was built from, the answer's mission is the PREVIOUS child's.
+         */
+        attentionSubjectId?: string | null;
+    },
 ): FocusPanelWorkModeModel {
     const grain = commitCritical.subjectGrain?.grain;
     if (grain !== "child") return settled;
+
+    /**
+     * CHILD MISSION IS SUBJECT-SCOPED — it may never outlive its subject.
+     *
+     * The header now commits the new child's identity from the clicked row's canonical context, so
+     * it moves at ~150ms while this answer still describes the child the operator just left. The
+     * FAMILY cards (household, children, billing, assignments) are authoritative for the same
+     * family and stay — they are not stale, they are shared. The two cards this overlay itself
+     * produces are the child's own, and showing the previous child's What's Next under the new
+     * child's name would assert something false about them.
+     *
+     * So exactly those cards go to the canonical reserve — the calm hold that keeps the cell's
+     * geometry and shows the card's title while its detail settles. The panel is never blanked and
+     * no family card is disturbed.
+     */
+    const attentionSubjectId = options?.attentionSubjectId?.trim() || null;
+    const missionIsForAnotherChild =
+        attentionSubjectId != null && attentionSubjectId !== commitCritical.subjectId;
 
     const stageWorkRuntime = commitCritical.stageWorkRuntime;
     const publishedStageInputs = commitCritical.publishedStageInputs;
@@ -120,6 +145,29 @@ export function overlayChildMissionOntoSettledFocusModel(
           ]
         : settled.commands;
 
+    /**
+     * CHILD MISSION MAY NOT OUTLIVE ITS SUBJECT.
+     *
+     * The header commits the new child from canonical queue context at ~150ms while this answer
+     * still describes the child the operator left. The FAMILY cards are authoritative for the same
+     * family and stay — they are shared, not stale. The two cards this overlay itself produces are
+     * the child's own, and showing the previous child's What's Next under the new child's name
+     * would assert something false.
+     *
+     * The cells KEEP their entries so the grid keeps composing them — dropping an entry removes the
+     * cell from its lane, which is a card vanishing and reappearing rather than a hold. Only
+     * `current_work` is rebuilt EMPTY so it asserts nothing; `reserved` readiness is what the grid
+     * reads, and it renders the calm titled hold in place. The panel is never blanked.
+     */
+    if (missionIsForAnotherChild) {
+        cardModels.set(
+            "current_work",
+            buildCurrentWorkCardModel({ stageWorkRuntime: null, nextActionLabel: null }),
+        );
+        cardReadiness.set("current_work", "reserved");
+        cardReadiness.set("child_identity", "reserved");
+    }
+
     return {
         ...settled,
         subject: {
@@ -159,7 +207,10 @@ export function overlayChildMissionOntoSettledFocusModel(
         },
         cardModels,
         cardReadiness,
-        title: subjectLabel,
+        // A stale answer's `subjectLabel` is the PREVIOUS child. The header already commits the new
+        // child from queue context, so the model falls back to the family title rather than
+        // asserting a child it can no longer speak for.
+        title: missionIsForAnotherChild ? settled.title : subjectLabel,
         statusLabel: situation?.stageLabel ?? settled.statusLabel,
         commands,
     };

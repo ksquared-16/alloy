@@ -74,12 +74,51 @@ This runbook keeps the existing snapshot and adds an explicit gate. **All must h
 | Spotlight | no `mds`/`mds_stores` above 5% | `ps -Ao pcpu,comm -r \| head` |
 | Competing node | **zero** other `next-server` / `next build` | `pgrep -fl "next-server\|next build"` |
 | Free memory | no sustained swap-out | `vm_stat` |
-| Control request | 5 consecutive `GET /api/health`-class requests within ±15% of each other | curl loop before the run |
-
-**The control request is the real gate.** It measures what the run will actually experience.
-If the control spread exceeds ±15%, the host is not quiet regardless of what `uptime` says.
+| Control request | recorded as environment, **not** a pass/fail — see below | `scripts/pe3ControlProbe.mjs` |
 
 For scale: this sprint's audit ran at load **50–118**. Nothing measured there is admissible.
+
+### The control request is NOT the gate — disproven 2026-08-20
+
+The previous version of this section said *"the control request is the real gate."* That is false on
+this host, and the check it justified could never pass. Three separate defects, all now fixed in
+`scripts/pe3HostGate.sh`:
+
+**1. It counted the measurement server as a competitor.** A `next-server` process carries no
+worktree path on its command line — only `next-server (v16.0.8)` plus inherited env — so the
+`grep -v "wt5-runtime-performance"` filter could never match anything. The gate failed on its own
+server. It now identifies our server by the PID owning `PE3_PORT` and excludes that PID tree.
+
+**2. The first control sample is a warm-up.** It measured ~2× the rest (route module load +
+connection setup) and alone pushed the min/max spread past 100%. Same discipline as the runs:
+discard sample 1.
+
+**3. The statistic is anti-correlated with contention.** Positive control — same server, same
+route, 20 samples per condition:
+
+| Condition | p50 | p75/p50 | max/p50 |
+|---|---|---|---|
+| idle, load 2.5 | 9.1 ms | 1.24 | 1.49 |
+| **8 cores pinned, load 7.2** | **5.3 ms** | 1.34 | 2.19 |
+
+Under full CPU saturation the control got **faster**. On Apple Silicon an idle host parks cores and
+drops clocks, so a lone request pays wake-up plus a frequency ramp; a saturated host is already
+boosted and resident. The measurement tracks CPU frequency state, not contention. A ±15% min/max
+band over ~10 ms samples is scheduler quantisation on top of that.
+
+**A gate that has never been demonstrated to fail on a genuinely bad host is not a gate.** Run the
+positive control before trusting any host criterion you add.
+
+### What qualifies a host instead
+
+Admissibility rests on the **counted** criteria, which are not load-sensitive — competing Alloy
+processes, Spotlight, load level and trend, CPU idle — plus a dispersion check on the
+**measurement cell itself**, which is the only thing that can prove the number is reproducible:
+
+> A cell is admissible when its 4 retained samples satisfy **max / median ≤ 1.5** on the primary
+> metric. Otherwise re-qualify and re-run the cell. Never discard the outlier.
+
+This moves qualification off a proxy and onto the statistic the runbook actually reports.
 
 ---
 

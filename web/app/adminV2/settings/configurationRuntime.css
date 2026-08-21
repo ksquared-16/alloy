@@ -149,6 +149,27 @@
     color: var(--cr-midnight);
 }
 
+/*
+ * A leading icon needs the input's text to start clear of it, and `.config-runtime-input` sets a
+ * `padding` SHORTHAND — so a `pl-*` utility on the element loses to it and the placeholder renders
+ * underneath the icon. Utilities and this stylesheet have equal specificity, so source order decides
+ * and the shorthand wins.
+ *
+ * The fix belongs here rather than at each call site: it is the shared input that resets the padding,
+ * so every consumer that adds a leading icon would otherwise rediscover the same bug. Declared after
+ * the base rule, and as a longhand, so it wins deterministically.
+ *
+ * It is its OWN rule, and that is load-bearing. This declaration was first written directly beneath
+ * `.config-runtime-select:focus,` — the opening line of the grouped focus rule below — which silently
+ * did two things: it gave every focused select a 2.05rem left padding (text jumping on focus), and it
+ * took the focus OUTLINE away from every select in the configuration runtime, because the selector
+ * that used to share the outline rule had been captured by this one. A comment between a grouped
+ * selector's lines does not separate them; only the brace does.
+ */
+.config-runtime-input--with-leading-icon {
+    padding-left: 2.05rem;
+}
+
 .config-runtime-select:focus,
 .config-runtime-input:focus {
     outline: 2px solid color-mix(in srgb, var(--cr-pine) 35%, transparent);

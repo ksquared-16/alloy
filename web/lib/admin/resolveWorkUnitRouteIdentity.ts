@@ -54,17 +54,29 @@ export const resolveWorkUnitRouteIdentity = cache(
         }
         try {
             const supabase = createAdminClient();
-            const { rows: workUnits } = await fetchWorkUnitsForSlugResolution({
+            /**
+             * ONE read. The departments come embedded on the work-unit rows, so route identity no
+             * longer pays a second serial round trip that could not start until the first named its
+             * department ids — inside `route_meta`, which is spent before the first byte.
+             *
+             * The separate read remains for callers that hold department ids without work-unit rows;
+             * this path falls back to it only if the embed produced nothing while rows exist, so a
+             * relationship that cannot be embedded degrades to exactly the previous behaviour.
+             */
+            const { rows: workUnits, departments: embedded } = await fetchWorkUnitsForSlugResolution({
                 supabase,
                 orgId: gate.orgId,
                 dim: gate.dim,
                 platformKey,
             });
-            const departments = await fetchDepartmentsForSlugResolution({
-                supabase,
-                orgId: gate.orgId,
-                departmentIds: workUnits.map((r) => r.department_id),
-            });
+            const departments =
+                embedded.length || !workUnits.length
+                    ? embedded
+                    : await fetchDepartmentsForSlugResolution({
+                          supabase,
+                          orgId: gate.orgId,
+                          departmentIds: workUnits.map((r) => r.department_id),
+                      });
             const resolution = resolveWorkUnitByRouteSlug({ slug, workUnits, departments });
             return { gate, platformKey, resolution, departments };
         } catch {
