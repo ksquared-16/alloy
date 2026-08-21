@@ -42,7 +42,9 @@ function useConversationViewport(ref: React.RefObject<HTMLDivElement | null>) {
             if (!node) return;
             // The visible height, minus whatever of the page sits above the thread.
             const top = node.getBoundingClientRect().top;
-            const available = Math.max(280, vv.height - Math.max(0, top) - 12);
+            // A CEILING, not a height. Clamped so a long conversation never runs past the fold
+            // and never grows into an unreadable column on a large display.
+            const available = Math.min(860, Math.max(280, vv.height - Math.max(0, top) - 12));
             node.style.setProperty("--participant-conversation-height", `${Math.round(available)}px`);
         };
         apply();
@@ -129,9 +131,16 @@ export function ConversationViewport({
             data-participant-conversation="true"
             className={clsx(
                 "flex flex-col overflow-hidden rounded-2xl border border-alloy-midnight/[0.08] bg-white shadow-[0_2px_22px_rgba(24,39,58,0.06)]",
-                // The conversation owns a viewport, so the composer is always at the bottom of it and
-                // the history scrolls above rather than pushing the reply box off the page.
-                "h-[var(--participant-conversation-height,calc(100dvh-9.5rem))] max-h-[860px] min-h-[440px]",
+                /**
+                 * A CEILING, not a fixed height.
+                 *
+                 * Claiming the full viewport left a short conversation stranded at the bottom of
+                 * several hundred pixels of white — the composer was anchored, and to nothing. The
+                 * card now grows with the conversation up to the space actually available, so two
+                 * turns read as two turns and a long thread scrolls inside its own region with the
+                 * composer still at the bottom of it.
+                 */
+                "max-h-[var(--participant-conversation-height,calc(100dvh-9.5rem))]",
             )}
         >
             {progress ? (
@@ -146,8 +155,8 @@ export function ConversationViewport({
                 // `overscroll-contain` keeps a flick inside the thread from scrolling the page behind it.
                 className="relative flex-1 overflow-y-auto overscroll-contain px-5 py-6 sm:px-7"
             >
-                {/* History grows upward: the column is bottom-aligned, so a short conversation sits
-                    beside the composer instead of stranded at the top of an empty panel. */}
+                {/* History grows upward: the column is bottom-aligned, so once the thread is taller
+                    than the region the newest exchange sits against the composer. */}
                 <div className="flex min-h-full flex-col justify-end gap-5">{thread}</div>
             </div>
 
@@ -217,10 +226,18 @@ export type ThreadDepth = "current" | "recent" | "history";
 export function ThreadTurn({
     who,
     depth,
+    showSpeaker = true,
     children,
 }: {
     who: "alloy" | "parent";
     depth: ThreadDepth;
+    /**
+     * False when the previous turn had the same speaker.
+     *
+     * Two "ALLOY" eyebrows stacked one above the other label nothing — the alternation is what the
+     * label is for, so a repeat is noise competing with what was actually said.
+     */
+    showSpeaker?: boolean;
     children: ReactNode;
 }) {
     const isParent = who === "parent";
@@ -230,6 +247,7 @@ export function ThreadTurn({
             data-said={who}
             data-depth={depth}
         >
+            {showSpeaker ? (
             <span
                 className={clsx(
                     "text-[10.5px] font-semibold uppercase tracking-[0.13em]",
@@ -242,6 +260,7 @@ export function ThreadTurn({
             >
                 {isParent ? "You" : "Alloy"}
             </span>
+            ) : null}
             <div className={clsx("max-w-[36ch] sm:max-w-[46ch]", isParent && "text-right")}>
                 {children}
             </div>

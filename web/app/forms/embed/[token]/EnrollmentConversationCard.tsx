@@ -379,7 +379,8 @@ export function EnrollmentConversationCard({
                 <>
                     {/* Alloy's opening line, spoken once and then left in the transcript above. */}
                     {intro && settled.length === 0 ? (
-                        <ThreadTurn who="alloy" depth="recent">
+                        // The opening line and the first question are both Alloy — one eyebrow.
+                        <ThreadTurn who="alloy" depth="recent" showSpeaker={false}>
                             <ThreadSaid who="alloy" depth="recent">{intro}</ThreadSaid>
                         </ThreadTurn>
                     ) : null}
