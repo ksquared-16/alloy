@@ -8,6 +8,7 @@ import {
 import { memberDirectoryLabel, projectMemberEmail } from "@/lib/access/memberDirectoryProjection";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 import { createMembershipWithAccessProfile } from "@/lib/admin/membershipWithProfile";
+import { fullNameFromParts } from "@/lib/access/operatorAccountName";
 
 export type AdminUserRow = {
     user_id: string;
@@ -122,9 +123,14 @@ export async function POST(request: Request) {
     if (!auth.ok) return auth.response;
     const { access } = auth;
 
-    let body: { email?: string; role?: string } = {};
+    let body: { email?: string; role?: string; first_name?: string; last_name?: string } = {};
     try {
-        body = (await request.json()) as { email?: string; role?: string };
+        body = (await request.json()) as {
+            email?: string;
+            role?: string;
+            first_name?: string;
+            last_name?: string;
+        };
     } catch {
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
@@ -141,8 +147,22 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
     }
 
+    /**
+     * The account's display name, if the operator supplied one.
+     *
+     * First and last are INPUTS. Only `full_name` is written, because that is the canonical
+     * representation the rest of the product already reads — persisting the parts alongside it would
+     * be the parallel identity store the operator decision forbids, and the two would disagree the
+     * first time either was edited anywhere else.
+     *
+     * Absent when neither part carries anything: an invitation with no name must leave the account
+     * genuinely nameless rather than seeding a blank one, so the surface can say so.
+     */
+    const fullName = fullNameFromParts(body.first_name, body.last_name);
+
     const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(email, {
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/login`.trim() || undefined,
+        ...(fullName ? { data: { full_name: fullName } } : {}),
     });
     if (inviteError) {
         return NextResponse.json({ error: inviteError.message }, { status: 400 });
@@ -169,6 +189,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
         user_id: user.id,
         email: user.email ?? email,
+        display_name: fullName,
         role,
         role_keys: [role],
     });

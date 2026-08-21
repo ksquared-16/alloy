@@ -9,10 +9,10 @@
  * See: `.alloy-agent-evidence/access-ui-discovery/ACCESS-UI-DISCOVERY.md`
  */
 
-/** Landing tiles for Access (Users / Roles / Access Scopes / Security). */
+/** Landing tiles for Access (Users / Roles / Security). */
 export type AccessLandingVm = {
     tiles: {
-        id: "users" | "roles" | "scopes" | "security";
+        id: "users" | "roles" | "security";
         label: string;
         summary: string;
         href: string;

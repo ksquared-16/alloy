@@ -1,4 +1,154 @@
 {
+  "staging_certified_read_only_session_33": {
+    "action": "application.certify_staging / tha_9f2937526a6719 / gar_1bcb1fcda29235",
+    "verified_locally": "Action record present, state completed, ONE evidence entry (not empty — the engine's evidence defect is fixed), status certified_read_only, source_sha 63aa211ce = PR #479's merge commit.",
+    "result": "16 passed / 0 failed / 1 skipped. The skip is this lane's own CERT_ALLOW_WRITES guard, which is what produced write_policy: read_only — the write-safety fix and the read-only certification are the same fact seen from two sides.",
+    "certified_on_staging": [
+      "membership resolves to one organization",
+      "no silent multi-org selection",
+      "role resolution",
+      "read vs manage distinction visible",
+      "capability chips follow SERVER authority, not a client guess",
+      "Role and Scope are siblings on the Access surface",
+      "admin/users opens for the seeded operator"
+    ],
+    "NOT_certified_five_named_gaps": {
+      "membership_missing_fails_closed": "not run — needs an isolated fixture mutation",
+      "location_department_restriction": "not run — needs a restricted-scope fixture",
+      "no_admin_ops_scope_bypass": "not run — needs a restricted-scope fixture",
+      "admin_users_ops_preserved_read": "NOT RUN — this is OD-8's core claim, that ops keeps roster read through the preservation grant. Proven in schema (0 missing) but never exercised through the running product on staging.",
+      "admin_users_without_read": "NOT RUN — the negative control for the same conversion."
+    },
+    "product_review": "ALL SIX captures failed (users, user_effective_access, roles, role_editor, scope, security) — artifact null, status capture_failed. No operator-facing product review evidence was produced.",
+    "honest_status": "Staging is certified READ-ONLY with five named authority gaps and no product-review artifacts. It is not fully certified.",
+    "product_review_second_delivery": {
+      "artifacts": "Six PNGs now exist and capture.json marks all six `captured`.",
+      "what_they_actually_show": "The Access SHELL on staging, mid-load, with the BOS panel open over the content region. Every one reads 'Loading Users / Fetching org memberships' or 'Loading Roles / Fetching role catalog'. No user list, no role list, no role editor, no effective-access card, no level controls.",
+      "roles_and_role_editor_are_the_same_image": "md5 ab5907a7ab5821dc92224ea92ee073f7 for both — the role editor was never opened.",
+      "capture_script_crashed": "capture.stderr: TypeError: Cannot read properties of undefined (reading 'launch') in trusted-host-certify-product-review.mjs:43 — the chromium import is undefined. That is why the first delivery reported capture_failed.",
+      "third_evidence_defect": "capture.json reports status `captured` for all six despite the crash, despite two artifacts being the same image, and despite every image showing a loading state. `captured` means a file exists, not that the intended view was captured — the same family of defect as the earlier `evidence: []`.",
+      "what_IS_established_by_them": [
+        "/organization/access renders on staging with the four chapters: Users, Roles, Access Scopes, Security.",
+        "The shipped A&I copy is live: 'Permission sets that define what operators may do', 'A role is a bundle of responsibilities. Everyone assigned this role can do what it says here', 'People who can sign in to Alloy, their assigned role, and their data access.'",
+        "Scope is a SEPARATE chapter (Access Scopes) beside Roles — W-57/RL-53's sibling relationship is visibly live.",
+        "Invite User and New Role affordances are present."
+      ],
+      "NOT_established": "Every substantive product-review item: Users list, effective-access explanation, responsibility-bundle role editor, No access/View/Manage, truthful Limited state, progressive disclosure of capability keys.",
+      "capture_fixes_needed": [
+        "wait for content, not just navigation",
+        "dismiss or exclude the BOS panel",
+        "actually navigate into the role editor for role_editor.png"
+      ]
+    }
+  },
+  "program_reconciliation_session_33": {
+    "landed": "42 workstreams: W-0..W-16, W-20, W-22, W-28, W-30, W-32, W-40, W-42..W-47, W-49..W-52, W-54..W-62.",
+    "remaining": 21,
+    "finding": "EVERY remaining workstream is decision-gated or blocked behind one that is. There is no independently READY A&I work left.",
+    "gates": {
+      "D2/I-10": [
+        "W-17"
+      ],
+      "D3": [
+        "W-18"
+      ],
+      "D4": [
+        "W-19"
+      ],
+      "AD-4": [
+        "W-44 SQL half",
+        "W-19"
+      ],
+      "AD-5": [
+        "W-26",
+        "W-33",
+        "W-37"
+      ],
+      "AD-6": [
+        "W-26"
+      ],
+      "AD-7": [
+        "W-33",
+        "W-36"
+      ],
+      "AD-8": [
+        "W-33"
+      ],
+      "AD-9": [
+        "W-29"
+      ],
+      "AD-10": [
+        "W-25"
+      ],
+      "AD-11": [
+        "W-24"
+      ],
+      "AD-12": [
+        "W-41",
+        "W-48 (after W-41)"
+      ],
+      "AD-13": [
+        "W-39"
+      ],
+      "AD-14": [
+        "W-35"
+      ],
+      "AD-15": [
+        "W-38"
+      ],
+      "AD-16": [
+        "W-27"
+      ],
+      "AD-17": [
+        "W-34"
+      ],
+      "OD-9": [
+        "W-31 — the plan header says 'no decision', but the product has NO server-side password write to enforce a policy at; establishing one is an authentication architecture change"
+      ],
+      "W-23 Q7": [
+        "W-53"
+      ],
+      "superseded": [
+        "W-21 — split into W-41 + W-48"
+      ]
+    }
+  },
+  "STAGING_LEDGER_IS_WRONG_session_30": {
+    "severity": "HIGH — staging has a ledger that claims ten migrations applied when four ran, one of those failed, and six never executed at all.",
+    "evidence": "Director tmp artifacts under trusted-host-actions/tmp/. Execution output (.out/.err) exists for FOUR versions only; ledger-<version>.out shows BEGIN/<version>/COMMIT for ALL TEN.",
+    "per_migration_truth": {
+      "20260818170000_w13_collapse_portal_eligible": "EXECUTED ok — INSERT 0 1 / 0 2 / 0 4, empty stderr",
+      "20260818180000_w61_role_key_fk_restrict": "EXECUTED ok — benign NOTICE on a DROP IF EXISTS",
+      "20260818190000_w16_user_roles_role_foreign_key": "EXECUTED ok — empty stderr",
+      "20260818220000_s3_action_link_token_hash": "FAILED — 'ERROR: column \"token\" does not exist' at the backfill; only the ALTER TABLE ran. LEDGER STILL COMMITTED.",
+      "20260818230000_s3_action_link_token_drop_plaintext": "NEVER EXECUTED — no .sql staged. LEDGER COMMITTED.",
+      "20260818240000_w60_m20_drop_catalog_compatibility_views": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260819120000_w13_i35b_analytics_read_preservation": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260819140000_od8_ops_users_roles_read_preservation": "NEVER EXECUTED. LEDGER COMMITTED.",
+      "20260820130000_w28_replace_role_permission_grants_rpc": "NEVER EXECUTED — no .sql, no .out, no .err. LEDGER COMMITTED.",
+      "20260820140000_w58_save_role_definition_and_grants": "NEVER EXECUTED. LEDGER COMMITTED."
+    },
+    "live_consequences_on_staging": [
+      "THE PRESERVATION GRANTS NEVER LANDED. ops holds neither reports.read nor settings.users_roles.read, while W-13's admission collapse and OD-8's admin/users conversion ARE deployed in code. The grant->convert order this whole promotion was sequenced around is inverted in production-like staging: ops operators have lost roster and analytics access they had before the merge.",
+      "W-28's RPC does not exist, so W-58's composed save has nothing to compose. The role editor's Save is broken on staging.",
+      "S-3 is half-applied: token_hash exists, the backfill did not run, and the plaintext-column drop never ran.",
+      "W-60's compatibility views were never dropped."
+    ],
+    "worst_part": "The ledger claims all ten applied, so `supabase db push` will SKIP all six that never ran. They cannot be applied through the normal path again until the false ledger rows are removed. A re-run of the governed batch will report success and change nothing.",
+    "director_defect": "stopOnFailure halted EXECUTION after the failure at 20260818220000 — correctly — but the ledger rows for that failed migration and for all six that never executed were committed anyway. Ledger writing is not gated on execution success. This is the exact hazard the A&I migration discipline was built to avoid, and it is why `evidence: []` on the action mattered: the action reported `completed` with no per-migration results while four of ten had actually run.",
+    "not_attempted": "No repair. This lane holds no staging credential, and removing false ledger rows is a privileged write requiring operator authority."
+  },
+  "od2_staging_schema_blocked_session_28": {
+    "staging_verified": "Head 63aa211ce, PR #479 present. All seven pre-request checks proven: no duplicate migration versions anywhere in the tree; 20260818200000 is uniquely Communications'; W-28 exists only at 20260820130000 and W-58 follows at 20260820140000; the ten A&I migrations are unique and ordered; deferred 20260819130000 absent; the four Communications migrations present via their own promotion path.",
+    "batch_requested": "gar_af93c87065a488 — database.apply_migration, staging, expectedSha 63aa211ce, ten migrations in version order (which satisfies every dependency, including W-28 before W-58), stopOnFailure.",
+    "outcome": "FAILED `apply_failed`. Started and failed in the SAME millisecond (18:01:16.447), with trusted_host_action_id null and execution_ended_at null.",
+    "root_cause": "The Director resolves migration files from resolveCanonicalRepoRoot() — /Users/Kelly/Alloy. That checkout is on branch `staging` at cfe86b2b3, **429 commits behind origin/staging**, and contains NONE of the ten A&I migrations. `psql -f <missing file>` exits non-zero on the first entry, which is `apply_failed`. Note the failure code is NOT trusted_credential_unavailable, so the trusted host's credentials loaded correctly — this is purely a stale checkout.",
+    "nothing_was_applied": "The action produced no trusted-host action id and no end timestamp, and the FIRST file in the batch does not exist in the checkout it reads from, so the batch could not have progressed past entry one. There is no partial schema state to unwind.",
+    "why_not_fixed_here": "The remedy is to fast-forward /Users/Kelly/Alloy to origin/staging. HEAD is an ancestor so it would fast-forward cleanly — but the checkout carries 183 modified/staged/untracked files, including staged additions, which is someone's in-flight work. CLAUDE.md forbids modifying the canonical checkout during implementation, and pulling over 183 staged files from another lane is exactly the hazard that rule exists for.",
+    "operator_remedy": "Disposition the 183 dirty files in /Users/Kelly/Alloy, fast-forward it to origin/staging, then re-request the batch. No code change anywhere.",
+    "state": "Staging schema NOT applied. Runtime and browser certification unreachable — both depend on it.",
+    "CORRECTION": "The canonical-checkout root cause recorded above is WRONG and is retracted. `database.apply_migration` does not read from /Users/Kelly/Alloy: the trusted-host action record for tha_f00602260a5113 shows artifactSource `git_object` with gitCwd = this lane's worktree, resolving each migration blob by SHA (fileSha and byte count recorded per entry). The stale canonical checkout was never the cause, and the operator recommendation to refresh it was unnecessary."
+  },
   "od2_post_merge_repair_session_27": {
     "merge": {
       "verified": "PR #475 MERGED 2026-08-20T15:37:43Z, merge commit 28f38e3bc, staging head 28f38e3bc. Branch head f1cb105e0 is an ancestor of staging. Confirmed independently rather than accepted from the notification — the previous merge claim had been false.",
@@ -34,6 +184,13 @@
       "conclusion": "The Director is not seeing the rollup `gh pr view` returns — most likely a different API shape or token scope yielding entries without conclusions, which its `!outcome` branch counts as pending. It is a Director-side defect: the same action merged PR #475 successfully earlier today.",
       "not_repaired_here": "Vacilando is not repaired from the Identity worktree, per standing instruction. `gh pr merge` was not retried from the shell.",
       "why_the_migration_batch_was_NOT_requested": "It depends on #479 landing. Staging currently holds TWO migrations at version 20260818200000, so applying the batch against that tree is exactly the hazard #479 removes: db push would mark the version applied and silently skip W-28, and W-58 composes it. Requesting the apply first would have been the one sequencing error this promotion exists to avoid."
+    },
+    "pr_479_merged": {
+      "verified_independently": "staging 63aa211ce, PR #479 MERGED 2026-08-20T17:57:11Z, merge commit 63aa211ce. 746316ad7 is an ancestor of staging. Checked against GitHub rather than accepted from the notification, whose payload was again all-null with census boilerplate.",
+      "defect_1_build": "FIXED on staging. app/api/communications/unsubscribe is declared; running the gate against staging's own table gives 'every exported API handler is declared', 21 inherited, ceiling 693 unraised.",
+      "defect_2_collision": "FIXED on staging. No duplicate versions anywhere in the tree; 20260818200000 is uniquely Communications' _ingress_observation_sender_authentication; W-28 is 20260820130000 and W-58 is 20260820140000, in order and above the staging head.",
+      "ten_migrations_present": "yes — w13_collapse, w61, w16, s3 x2, w60, w13_i35b, od8, w28, w58",
+      "schema_state": "NOT APPLIED. No A&I migration has run against the staging database. The governed batch was not requested: the completion notification directed 'Stop after merge.'"
     }
   },
   "od2_staging_promotion_session_23": {
@@ -920,5 +1077,30 @@
   "recommended_next_milestone_session_6": "Two lanes, and neither is W-15. FIRST, close tier D: the environment is repaired and one manual sign-in stands between this initiative and the browser evidence its acceptance standard has required for six sessions. That is the highest-value operator minute available. SECOND, W-24 — GAP-12 now stands on it ALONE (W-43 closed the resolver leg, W-45/W-47 the UI legs), so the milestone's last non-certification clause is one workstream away; it needs AD-11 and is lockout-adjacent, so it is not Director-ownable as-is. W-15's sweep remains correctly blocked on OD-7 and nothing done this session changes that. The session 5 recommendation — 'W-15, released by OD-7 and nothing else' — was wrong in one respect worth recording: it treated an empty W-15 lane as an empty MILESTONE lane, and the plan of record explicitly marked W-42 and W-43 as gated by nothing. Both were milestone work, both are now done. Before concluding a milestone is decision-blocked, read §20 for what the plan says is ungated.",
   "recommended_next_milestone_session_5": "W-15's sweep, released by OD-7 and nothing else. The lane has now had two sessions of preparation and is out of preparation to do: the declarations bind to source (session 4), and the sizing they are measured against is trustworthy rather than merely conservative (session 5). Building more tooling in front of it would be avoidance. The next unit of work is a conversion, every conversion needs the OD-7 rule, and under the recommended answer the largest two classes become mechanical and Director-ownable to completion.",
   "recommended_next_milestone_session_4": "Unchanged in direction, sharper in shape. W-15 remains the next milestone, and session 4 removed the two reasons it could not start well: its declarations now mean something, and its 725 is now four decision classes with a 304-handler risk concentration. What it needs from the operator is not 725 rulings but a POLICY for the two large classes — what capability a non-capability gate becomes, and whether that conversion may widen access. Everything downstream of that policy is mechanical and Director-owned.",
-  "recommended_next_milestone": "Not the simplified role/access editor — it is gated on AD-22/AD-25 (OD-6) and the mission forbids beginning a decision-gated redesign. The next coherent milestone is W-15, the enforcement sweep over 725 pending handlers, because it is what converts W-14's declarations into the enforcement the truthful surface is now presenting. It carries two product decisions already isolated by name (W14-F1, W49-F1), which is the smallest possible operator ask to release a large lane."
+  "recommended_next_milestone": "Not the simplified role/access editor — it is gated on AD-22/AD-25 (OD-6) and the mission forbids beginning a decision-gated redesign. The next coherent milestone is W-15, the enforcement sweep over 725 pending handlers, because it is what converts W-14's declarations into the enforcement the truthful surface is now presenting. It carries two product decisions already isolated by name (W14-F1, W49-F1), which is the smallest possible operator ask to release a large lane.",
+  "od2_staging_schema_apply_unverifiable_session_29": {
+    "claim": "gar_6a60a2e87813a9 / tha_f00602260a5113 reports state `completed`, failureReason null, executing 18:20:59.016 -> 18:21:20.961 (21s) over the ten migrations, each resolved as a git object with a recorded fileSha and byte count.",
+    "why_it_is_not_yet_proof": "The action's own evidenceSchema declares [migration_path, expected_sha, ledger, execution_audit]. The stored record has `evidence: []` and there is NO .results.json — unlike the census actions (tha_e1d6bbd4b62a79, tha_f2f89635241cea), which both produced results files. So there is no ledger evidence and no per-migration outcome. The instruction is explicit that ledger presence alone is insufficient; here not even that exists.",
+    "no_read_path_exists": "Verification was attempted through every sanctioned channel available to this lane and none can reach staging: the lane holds no staging credential (its only env targets 127.0.0.1), and `database.read_census` REJECTS target `staging` with wrong_database_target — the registry's validateInputs accepts only alloy_deployed_primary. So the platform currently has a governed WRITE path to staging with no governed READ path to verify what it wrote.",
+    "what_IS_confirmed": "Staging deployment status is `success` at both 63aa211ce (PR #479 merge) and the current head 27d3c346f, so the build fix landed and the Access code is deployed and building on staging.",
+    "not_claimed": "The ten migrations are NOT reported as applied. Schema invariants, staging runtime certification and staging browser certification are all unverified.",
+    "gateway_defects_for_that_lane": [
+      "database.apply_migration completes without populating the evidence its own evidenceSchema declares.",
+      "database.read_census cannot target staging, so no governed read can verify a governed write.",
+      "Four governed notifications for requests this lane never made were routed here (gar_86bbf1a8043ce6, gar_30385b18a7deab, gar_8354c0f6bee7e1, gar_cdd70c5f4abc3a), two naming target `someone_elses_db`."
+    ]
+  },
+  "RETRACTION_false_ledger_claim_session_31": {
+    "retracts": "STAGING_LEDGER_IS_WRONG_session_30 — the claim that seven false ledger rows were written for migrations that never executed. That claim is NOT supported by the evidence and is withdrawn.",
+    "what_the_code_actually_does": "applyMigrationBatch calls inspectLedger ONCE per migration, pre-apply. `ledgerLookupSql` is a read-only SELECT, not an insert — the engine never writes ledger rows at all. On apply failure it `return`s with stopped:true, so migrations after the failure are never reached and never inspected.",
+    "why_i_was_wrong": "I read `ledger-<version>.out` files as proof of ledger INSERTS. They are the stdout of the SELECT preflight, written to a per-version filename that is overwritten across runs. Files exist for versions this batch never reached, which means they are stale artifacts of an EARLIER attempt (tha_a28ea95925b1dd), not evidence about this one. Attributing them to this batch was the error.",
+    "what_IS_established": [
+      "20260818170000, 20260818180000, 20260818190000 EXECUTED SUCCESSFULLY in this batch (INSERT/ALTER output, empty stderr).",
+      "20260818220000 EXECUTED and FAILED: 'ERROR: column \"token\" does not exist' at the backfill. Its ADD COLUMN token_hash reported 'already exists, skipping'.",
+      "The batch then stopped. The remaining six were NOT ATTEMPTED by this batch — correct stop-on-failure behaviour."
+    ],
+    "what_is_NOT_established": "Whether staging's ledger contains rows for any of these versions, and whether the six unattempted migrations' schema effects are present. Determining that requires direct staging schema queries — the instruction's own first required step — and this lane has no staging credential, while database.read_census rejects target `staging` (wrong_database_target).",
+    "s3_root_cause_established": "20260818220000 adds token_hash IF NOT EXISTS then backfills it from `token`; 20260818230000 drops `token`. On staging token_hash ALREADY EXISTS and `token` is ALREADY GONE — which is precisely the end state after BOTH migrations. So staging already satisfies the S-3 final invariant, and the failure is a replay-safety gap: the backfill assumes a pre-state that staging has already moved past. The fix is to make the backfill conditional on the column existing, not to re-add `token`.",
+    "correct_severity": "The grant->convert regression I reported as live is NOT established. It depends on whether the preservation migrations are actually applied on staging, which I cannot read. It should be treated as UNVERIFIED, not as a confirmed outage."
+  }
 }

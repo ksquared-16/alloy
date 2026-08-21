@@ -41,6 +41,10 @@ describe("Organization Configuration Runtime", () => {
         expect(domains.map((domain) => domain.key)).toEqual([
             "programs-locations",
             "financials",
+            // `staff` arrived with the Employment foundation merge and this ordered list was not
+            // updated with it, so the branch inherited a red assertion about a domain that really
+            // does exist. The list is still exhaustive and still ordered — that is the property.
+            "staff",
             "access",
             "communications",
             "data-model",

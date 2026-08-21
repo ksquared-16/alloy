@@ -210,9 +210,14 @@ describe("W-57 / RL-53 — scope is a sibling of capability, never a field of th
 
     it("the separation is stated to the operator, not merely obeyed in code", () => {
         // A silent absence teaches nothing. The role page says where scope lives and links to it.
+        //
+        // "Where" moved: Access Scopes is retired and scope is set on the person, so the link must
+        // now open Users. Pinning the destination is the point — a link to a chapter that no longer
+        // exists would state the separation and then fail to demonstrate it.
         const src = executableSource(ROLE_EDITOR);
         expect(src).toContain("access-role-scope-sibling");
-        expect(src).toMatch(/accessWorkspaceChapterHref\("scopes"\)/);
+        expect(src).toMatch(/accessWorkspaceChapterHref\("users"\)/);
+        expect(src).not.toMatch(/accessWorkspaceChapterHref\("scopes"\)/);
     });
 });
 
@@ -302,7 +307,7 @@ describe("W-57 / OD-8 — meaning first, and the meaning is the catalog's", () =
         }
         // The summary declines to claim unenforced areas; the editor renders every area regardless,
         // so the record is not hidden — only the headline is honest.
-        expect(executableSource(ROLE_EDITOR)).toContain("authorityAreas.map");
+        expect(executableSource(ROLE_EDITOR)).toContain("matrix.map");
     });
 
     it("no permission key is named in the role editor's source", () => {

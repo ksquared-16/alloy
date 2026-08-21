@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Access → Users. Collection rail (members) + Selected workspace (Overview / Roles / Access /
- * Security / History) for one org member. Mutations reuse the existing Users & Roles APIs —
- * this file is UI-only.
+ * Access → Users. Collection rail (members) + Selected workspace (Overview / Role & Access /
+ * Security) for one org member. Mutations reuse the existing Users & Roles APIs — this file is
+ * UI-only.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -24,7 +24,16 @@ import {
 } from "@/lib/presentation/runtime/queueRowCardShell";
 import { LocationMultiSelect } from "@/components/adminV2/settings/configurationRuntime/LocationMultiSelect";
 
-type AccessUserTab = "overview" | "roles" | "access" | "security" | "history";
+/**
+ * The tabs a user detail actually has.
+ *
+ * `roles` and `history` are gone. `roles` showed the held roles and a replacement picker; Overview
+ * already answered "which role", and the picker belongs beside the scope it is half of — *what*
+ * someone may do and *where* are one question about one person, and splitting them across two tabs
+ * made an operator visit both to answer either. `history` rendered a single sentence saying history
+ * was planned, which is a tab that costs a click to learn nothing.
+ */
+type AccessUserTab = "overview" | "access" | "security";
 
 import {
     authenticationMethodLabel,
@@ -35,6 +44,11 @@ import {
     type ConfiguredScope,
 } from "@/lib/access/memberIdentityProjection";
 import { UnknownValue } from "@/components/adminV2/settings/access/UnknownValue";
+import {
+    identityHeadline,
+    identitySubtitle,
+    operatorIdentity,
+} from "@/lib/access/operatorAccountName";
 import type { AccessCommandKey } from "@/lib/access/accessChapterRoutes";
 import {
     heldRoleKeys,
@@ -52,6 +66,12 @@ import {
     scopeStatementForMember,
     type RoleGrantLoad,
 } from "@/lib/access/effectiveAccessExplanation";
+import {
+    inviteScopeNote,
+    inviteScopePayload,
+    inviteSiteSelectionIsComplete,
+    type InviteSiteMode,
+} from "@/lib/access/inviteLocationAccess";
 
 type MemberRow = {
     user_id: string;
@@ -76,10 +96,20 @@ type SiteLocOpt = { id: string; label: string | null };
 
 type RoleRow = { role_key: string; role_label: string; is_system: boolean; is_active: boolean; created_at: string | null };
 
+/**
+ * The account's identity for display.
+ *
+ * This used to be `display_name || email`, which put a login address where a person's name goes and
+ * then printed it again underneath. `identityHeadline`/`identitySubtitle` are a PAIR: the headline
+ * may fall back to the address, and the subtitle withholds it when it does, so the two can never
+ * repeat each other.
+ */
+function identityOf(m: MemberRow) {
+    return operatorIdentity({ display_name: m.display_name, email: m.email });
+}
+
 function displayName(m: MemberRow): string {
-    const n = (m.display_name ?? "").trim();
-    if (n) return n;
-    return (m.email ?? "").trim() || "Unnamed user";
+    return identityHeadline(identityOf(m));
 }
 
 /**
@@ -157,9 +187,22 @@ export default function AccessUsersConfigurationPage({
     const [tab, setTab] = useState<AccessUserTab>("overview");
 
     const [inviteOpen, setInviteOpen] = useState(false);
+    const [inviteFirstName, setInviteFirstName] = useState("");
+    const [inviteLastName, setInviteLastName] = useState("");
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteRole, setInviteRole] = useState("");
     const [inviteBusy, setInviteBusy] = useState(false);
+    /**
+     * Location access, asked at invite rather than left for a second visit.
+     *
+     * The default is `all` because that is what the platform ALREADY enforces for an account with
+     * no access profile (`ABSENT_PROFILE_ENFORCEMENT`). Defaulting to the closed direction would
+     * read as safer and be a lie — the control would claim to be restricting an account that the
+     * resolver treats as organization-wide either way. Choosing "Selected locations" is the
+     * narrowing, and it is the one that requires a deliberate act.
+     */
+    const [inviteSiteMode, setInviteSiteMode] = useState<InviteSiteMode>("all");
+    const [inviteSiteIds, setInviteSiteIds] = useState<string[]>([]);
 
     const [editRole, setEditRole] = useState("");
     const [roleSaving, setRoleSaving] = useState(false);
@@ -332,6 +375,12 @@ export default function AccessUsersConfigurationPage({
      * replaces every role row for the pair, so this is *everything held except the selection* —
      * and until it is empty or acknowledged, the save does not fire.
      */
+    /** The selected member's location scope, computed once — the card reads label and certainty. */
+    const selectedLocationScope = useMemo(
+        () => (selected ? locationSummary(selected, siteLocations) : null),
+        [selected, siteLocations],
+    );
+
     const rolesLostBySave = useMemo(
         () => (selected ? rolesDiscardedByReplacement(selected, editRole) : []),
         [selected, editRole],
@@ -379,6 +428,10 @@ export default function AccessUsersConfigurationPage({
     };
 
     const openInvite = () => {
+        setInviteFirstName("");
+        setInviteLastName("");
+        setInviteSiteMode("all");
+        setInviteSiteIds([]);
         setInviteEmail("");
         setInviteRole("");
         setInviteOpen(true);
@@ -392,14 +445,50 @@ export default function AccessUsersConfigurationPage({
             const res = await fetch("/api/admin/users", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole.trim() }),
+                body: JSON.stringify({
+                    email: inviteEmail.trim(),
+                    role: inviteRole.trim(),
+                    // Inputs, not storage: the route derives the canonical `full_name` from these.
+                    first_name: inviteFirstName.trim(),
+                    last_name: inviteLastName.trim(),
+                }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Invite failed");
-            setMessage(`Invitation sent to ${inviteEmail.trim()}.`);
             setInviteOpen(false);
-            await reload();
             const newUserId = (json as { user_id?: string }).user_id;
+
+            /*
+             * Two writes, and the second can fail on its own. The account EXISTS by this point —
+             * reporting "invite failed" would be false, and reporting plain success would claim a
+             * location restriction that was never stored. So the outcome names both halves.
+             *
+             * Order matters: the membership must exist before the scope route will accept a scope
+             * for it (it 404s on a user with no `user_roles` row in the org).
+             */
+            const scope = inviteScopePayload({ siteMode: inviteSiteMode, siteLocationIds: inviteSiteIds });
+            let scopeFailure: string | null = null;
+            if (typeof newUserId === "string" && newUserId && scope) {
+                const scopeRes = await fetch(`/api/admin/users/${encodeURIComponent(newUserId)}/access-scope`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(scope),
+                });
+                if (!scopeRes.ok) {
+                    const scopeJson = (await scopeRes.json().catch(() => ({}))) as { error?: string };
+                    scopeFailure = typeof scopeJson.error === "string" ? scopeJson.error : "scope was not saved";
+                }
+            }
+
+            if (scopeFailure) {
+                setError(
+                    `Invitation sent to ${inviteEmail.trim()}, but their location access was not set: ${scopeFailure}. ` +
+                        "Set it on their Role & Access tab.",
+                );
+            } else {
+                setMessage(`Invitation sent to ${inviteEmail.trim()}.`);
+            }
+            await reload();
             if (typeof newUserId === "string" && newUserId) selectMember(newUserId);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Invite failed.");
@@ -549,10 +638,8 @@ export default function AccessUsersConfigurationPage({
 
     const tabs = [
         { key: "overview" as const, label: "Overview" },
-        { key: "roles" as const, label: "Roles" },
-        { key: "access" as const, label: "Access" },
+        { key: "access" as const, label: "Role & Access" },
         { key: "security" as const, label: "Security" },
-        { key: "history" as const, label: "History" },
     ];
 
     return (
@@ -620,11 +707,36 @@ export default function AccessUsersConfigurationPage({
                                             {selectedRow ? <span aria-hidden className={QUEUE_ROW_SELECTED_RAIL_CLASS} /> : null}
                                             <span className="locations-collection-row__body">
                                                 <span className="locations-collection-row__name">{displayName(m)}</span>
-                                                <span className="locations-collection-row__place">{m.email ?? "No email on file"}</span>
+                                                {identitySubtitle(identityOf(m)) ?
+                                                    <span className="locations-collection-row__place">
+                                                        {identitySubtitle(identityOf(m))}
+                                                    </span>
+                                                :   <span className="locations-collection-row__place text-alloy-midnight/40">
+                                                        No name on file
+                                                    </span>
+                                                }
+                                                {/*
+                                                  * Location is the operator-facing scope. The
+                                                  * department summary used to sit here too, and for
+                                                  * almost everyone it read "All departments" — a
+                                                  * column of noise that pushed the facts an operator
+                                                  * came for off the end of the row.
+                                                  *
+                                                  * It is not simply hidden. Department scope is still
+                                                  * stored and still enforced, so a member who IS
+                                                  * restricted says so: dropping the row entirely
+                                                  * would let this surface imply unrestricted access
+                                                  * to someone who does not have it, which is the one
+                                                  * thing a truthful Access product must not do.
+                                                  */}
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
                                                     {rolesLabelFor(m) ?? "No role assigned"} ·{" "}
-                                                    {locationSummary(m, siteLocations).label} ·{" "}
-                                                    {departmentSummary(m, departments).label}
+                                                    {locationSummary(m, siteLocations).label}
+                                                    {m.effective_department_scope === "restricted" ?
+                                                        <span data-testid={`access-user-${m.user_id}-department-restricted`}>
+                                                            {" "}· Departments restricted
+                                                        </span>
+                                                    :   null}
                                                 </span>
                                             </span>
                                             <span
@@ -852,8 +964,26 @@ export default function AccessUsersConfigurationPage({
                                                     </div>
                                                 }
                                             </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard title="Account Snapshot" testId="access-user-overview-account">
+                                            <ConfigWorkspaceCard title="Account" testId="access-user-overview-account">
                                                 <dl className="grid gap-3 text-sm">
+                                                    {/*
+                                                      * The person, first. The heading above the rail is
+                                                      * the same projection, so a nameless account reads
+                                                      * as nameless in both places rather than showing
+                                                      * its address as a name in one of them.
+                                                      */}
+                                                    <div>
+                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">Name</dt>
+                                                        <dd className="mt-0.5" data-testid="access-user-overview-name">
+                                                            {identityOf(selected).name ?? (
+                                                                <UnknownValue
+                                                                    label="No name on file"
+                                                                    reason="This account was created without a name. Nothing is inferred from the email address."
+                                                                    testId="access-user-overview-name-unknown"
+                                                                />
+                                                            )}
+                                                        </dd>
+                                                    </div>
                                                     <div>
                                                         <dt className="text-[11px] font-medium text-alloy-midnight/40">Email</dt>
                                                         <dd className="mt-0.5">{selected.email ?? "No email on file"}</dd>
@@ -920,68 +1050,82 @@ export default function AccessUsersConfigurationPage({
                                                     </div>
                                                 </dl>
                                             </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard
-                                                title="Effective Access"
-                                                testId="access-user-overview-effective-access"
-                                                className="opacity-90"
-                                            >
+                                            {/*
+                                              * `Where` — the fourth layer of `AD-25`, at the person
+                                              * grain, on the page an operator opens to ask about a
+                                              * person. It used to be reachable only by opening the
+                                              * Access tab, which is why "does this person work at both
+                                              * sites?" took two clicks to answer.
+                                              *
+                                              * The summary is `scopeSummary`, so an unconfigured scope
+                                              * still renders as unconfigured here rather than as
+                                              * "All locations" — the reassurance W-45/W-47 removed.
+                                              */}
+                                            <ConfigWorkspaceCard title="Where they work" testId="access-user-overview-locations">
+                                                <p className="text-sm" data-testid="access-user-overview-location-summary">
+                                                    {selectedLocationScope?.certainty === "read" ?
+                                                        selectedLocationScope.label
+                                                    :   <UnknownValue
+                                                            label={selectedLocationScope?.label ?? "No access configured"}
+                                                            reason={
+                                                                selected.effective_divergence_reason ??
+                                                                "No access profile has been configured for this membership."
+                                                            }
+                                                            testId="access-user-overview-location-unknown"
+                                                        />
+                                                    }
+                                                </p>
                                                 {/*
-                                                  * W-47: the scope half of effective access is readable today, so it is
-                                                  * shown. `effective_*` comes from the enforcing resolver
-                                                  * (`resolveScopeAnswerFromProfile` under `ABSENT_PROFILE_ENFORCEMENT`),
-                                                  * not from a second rule — `IA-R4`'s "MUST NOT have a second
-                                                  * implementation" applied where it already costs nothing.
-                                                  *
-                                                  * The capability half is still Planned: W-48 binds it to the resolver
-                                                  * after W-41/W-42, and computing it here would be the second
-                                                  * implementation that workstream exists to prevent.
+                                                  * `scopeSummary` compresses two or more sites to
+                                                  * "N locations" — right for a rail row, not enough for
+                                                  * the page an operator opened to check WHICH. The names
+                                                  * go behind a disclosure so the card stays one line
+                                                  * until somebody needs the list.
                                                   */}
-                                                <dl
-                                                    className="grid gap-3 text-sm"
-                                                    data-testid="access-user-effective-scope"
-                                                >
-                                                    <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
-                                                            Locations
-                                                        </dt>
-                                                        <dd
-                                                            className="mt-0.5"
-                                                            data-scope-configured={selected.site_scope}
-                                                            data-scope-effective={selected.effective_site_scope}
-                                                        >
-                                                            {locationSummary(selected, siteLocations).label}
-                                                        </dd>
-                                                    </div>
-                                                    <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
-                                                            Departments
-                                                        </dt>
-                                                        <dd
-                                                            className="mt-0.5"
-                                                            data-scope-configured={selected.department_scope}
-                                                            data-scope-effective={selected.effective_department_scope}
-                                                        >
+                                                {selected.site_scope === "restricted" && selected.site_location_ids.length > 1 ?
+                                                    <details className="mt-1.5" data-testid="access-user-overview-location-detail">
+                                                        <summary className="cursor-pointer text-[12px] text-alloy-midnight/55">
+                                                            Show locations
+                                                        </summary>
+                                                        <ul className="mt-1 flex flex-wrap gap-1.5">
+                                                            {selected.site_location_ids.map((id) => (
+                                                                <li
+                                                                    key={id}
+                                                                    className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
+                                                                >
+                                                                    {siteLocations.find((sl) => sl.id === id)?.label ?? (
+                                                                        <UnknownValue
+                                                                            label="Unnamed location"
+                                                                            reason="This location id is granted but the locations catalog did not return a label for it."
+                                                                        />
+                                                                    )}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </details>
+                                                :   null}
+                                                {/*
+                                                  * Departments stay out of the primary experience and
+                                                  * still cannot become invisible: a real restriction is
+                                                  * NAMED here, with the detail one disclosure away.
+                                                  */}
+                                                {selected.department_scope === "restricted" ?
+                                                    <details className="mt-2" data-testid="access-user-overview-department-restriction">
+                                                        <summary className="cursor-pointer text-[12px] text-amber-800">
+                                                            Additional restriction applies
+                                                        </summary>
+                                                        <p className="mt-1 text-[12px] text-alloy-midnight/65">
                                                             {departmentSummary(selected, departments).label}
-                                                        </dd>
-                                                    </div>
-                                                    {selected.effective_divergence_reason ?
-                                                        <div
-                                                            className="rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[12px] leading-5 text-amber-900"
-                                                            data-testid="access-user-effective-scope-divergence"
-                                                            role="note"
-                                                        >
-                                                            {selected.effective_divergence_reason}
-                                                        </div>
-                                                    :   null}
-                                                    <p
-                                                        className="text-[12px] leading-5 text-alloy-midnight/55"
-                                                        data-capability="planned"
-                                                        data-testid="access-user-effective-access-planned"
-                                                    >
-                                                        Capability-level effective access — what this person may do, not
-                                                        only where — is planned and is not computed yet.
-                                                    </p>
-                                                </dl>
+                                                        </p>
+                                                    </details>
+                                                :   null}
+                                                <ConfigurationSecondaryButton
+                                                    className="mt-3"
+                                                    onClick={() => setTab("access")}
+                                                    data-testid="access-user-overview-edit-access"
+                                                >
+                                                    Change role &amp; access
+                                                </ConfigurationSecondaryButton>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard
                                                 title="Security Summary"
@@ -1003,124 +1147,123 @@ export default function AccessUsersConfigurationPage({
                                                 </p>
                                             </ConfigWorkspaceCard>
                                         </div>
-                                    : tab === "roles" ?
-                                        <ConfigWorkspaceCard
-                                            testId="access-user-roles"
-                                            title={selectedHeldRoles.length > 1 ? "Assigned Roles" : "Assigned Role"}
-                                        >
-                                            {/*
-                                              * W-51 / IA-7. The card previously stated "One role is supported per
-                                              * user today." `user_roles` is keyed on (user_id, org_id, role) and
-                                              * the resolver unions every row, so that sentence described the
-                                              * PICKER, not the platform — and the picker is the thing at fault.
-                                              */}
-                                            <p className="text-sm text-alloy-midnight/60">
-                                                This user receives the permissions of every role they hold.
-                                            </p>
-                                            <div className="mt-3" data-testid="access-user-roles-held">
-                                                <span className="config-typo-field-label">
-                                                    {selectedHeldRoles.length > 1 ? "Roles held" : "Role held"}
-                                                </span>
-                                                {selectedHeldRoles.length === 0 ?
-                                                    <p className="mt-1">
-                                                        <UnknownValue
-                                                            reason="This membership has no role rows in this organization."
-                                                            testId="access-user-roles-held-none"
-                                                        />
-                                                    </p>
-                                                :   <ul className="mt-1 flex flex-wrap gap-1.5">
-                                                        {selectedHeldRoles.map((roleKey) => (
-                                                            <li
-                                                                key={roleKey}
-                                                                className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
-                                                                data-testid={`access-user-role-held-${roleKey}`}
-                                                            >
-                                                                {roleLabelFor(roleKey)}
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                }
-                                            </div>
-                                            <label className="mt-3 block max-w-sm">
-                                                <span className="config-typo-field-label">Replace with</span>
-                                                <select
-                                                    className="config-runtime-select mt-1"
-                                                    value={editRole}
-                                                    onChange={(event) => {
-                                                        setEditRole(event.target.value);
-                                                        setConfirmRoleReplace(false);
-                                                    }}
-                                                    data-testid="access-user-role-select"
-                                                >
-                                                    {activeRoles.map((r) => (
-                                                        <option key={r.role_key} value={r.role_key}>
-                                                            {r.role_label}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </label>
-                                            {/*
-                                              * M2-17. `PATCH …/role` replaces every role row for the pair, so a
-                                              * membership holding {admin, regional_lead} loses `regional_lead` the
-                                              * moment the visible role changes. The loss was silent because the
-                                              * screen never showed the second role. It is now named, itemized, and
-                                              * requires a deliberate acknowledgement before the save can fire.
-                                              * W-17 makes the write additive and retires this block.
-                                              */}
-                                            {rolesLostBySave.length > 0 ?
-                                                <div
-                                                    className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
-                                                    role="note"
-                                                    data-testid="access-user-role-replace-warning"
-                                                >
-                                                    <p className="font-medium">
-                                                        Saving removes{" "}
-                                                        {rolesLostBySave.length === 1 ? "another role" : (
-                                                            `${rolesLostBySave.length} other roles`
-                                                        )}
-                                                        .
-                                                    </p>
-                                                    <p className="mt-1">
-                                                        This control replaces the whole assignment rather than adding
-                                                        to it. These would be removed:{" "}
-                                                        <span className="font-medium">
-                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}
-                                                        </span>
-                                                        .
-                                                    </p>
-                                                    <label className="mt-2 flex items-start gap-2">
-                                                        <input
-                                                            type="checkbox"
-                                                            className="mt-0.5"
-                                                            checked={confirmRoleReplace}
-                                                            onChange={(event) =>
-                                                                setConfirmRoleReplace(event.target.checked)
-                                                            }
-                                                            data-testid="access-user-role-replace-confirm"
-                                                        />
-                                                        <span>
-                                                            Remove{" "}
-                                                            {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}{" "}
-                                                            and leave only {roleLabelFor(editRole)}.
-                                                        </span>
-                                                    </label>
-                                                </div>
-                                            :   null}
-                                            <ConfigurationPrimaryButton
-                                                className="mt-3"
-                                                disabled={
-                                                    roleSaving ||
-                                                    replacementIsNoOp(selected, editRole) ||
-                                                    (rolesLostBySave.length > 0 && !confirmRoleReplace)
-                                                }
-                                                onClick={() => void saveRole()}
-                                                data-testid="access-user-role-save"
-                                            >
-                                                {roleSaving ? "Saving…" : "Save role"}
-                                            </ConfigurationPrimaryButton>
-                                        </ConfigWorkspaceCard>
                                     : tab === "access" ?
                                         <div className="space-y-4" data-testid="access-user-access">
+                                            <ConfigWorkspaceCard
+                                                testId="access-user-roles"
+                                                title={selectedHeldRoles.length > 1 ? "Assigned Roles" : "Assigned Role"}
+                                            >
+                                                {/*
+                                                  * W-51 / IA-7. The card previously stated "One role is supported per
+                                                  * user today." `user_roles` is keyed on (user_id, org_id, role) and
+                                                  * the resolver unions every row, so that sentence described the
+                                                  * PICKER, not the platform — and the picker is the thing at fault.
+                                                  */}
+                                                <p className="text-sm text-alloy-midnight/60">
+                                                    This user receives the permissions of every role they hold.
+                                                </p>
+                                                <div className="mt-3" data-testid="access-user-roles-held">
+                                                    <span className="config-typo-field-label">
+                                                        {selectedHeldRoles.length > 1 ? "Roles held" : "Role held"}
+                                                    </span>
+                                                    {selectedHeldRoles.length === 0 ?
+                                                        <p className="mt-1">
+                                                            <UnknownValue
+                                                                reason="This membership has no role rows in this organization."
+                                                                testId="access-user-roles-held-none"
+                                                            />
+                                                        </p>
+                                                    :   <ul className="mt-1 flex flex-wrap gap-1.5">
+                                                            {selectedHeldRoles.map((roleKey) => (
+                                                                <li
+                                                                    key={roleKey}
+                                                                    className="rounded-full border border-alloy-stone/30 px-2 py-0.5 text-[12px] text-alloy-midnight/75"
+                                                                    data-testid={`access-user-role-held-${roleKey}`}
+                                                                >
+                                                                    {roleLabelFor(roleKey)}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    }
+                                                </div>
+                                                <label className="mt-3 block max-w-sm">
+                                                    <span className="config-typo-field-label">Replace with</span>
+                                                    <select
+                                                        className="config-runtime-select mt-1"
+                                                        value={editRole}
+                                                        onChange={(event) => {
+                                                            setEditRole(event.target.value);
+                                                            setConfirmRoleReplace(false);
+                                                        }}
+                                                        data-testid="access-user-role-select"
+                                                    >
+                                                        {activeRoles.map((r) => (
+                                                            <option key={r.role_key} value={r.role_key}>
+                                                                {r.role_label}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </label>
+                                                {/*
+                                                  * M2-17. `PATCH …/role` replaces every role row for the pair, so a
+                                                  * membership holding {admin, regional_lead} loses `regional_lead` the
+                                                  * moment the visible role changes. The loss was silent because the
+                                                  * screen never showed the second role. It is now named, itemized, and
+                                                  * requires a deliberate acknowledgement before the save can fire.
+                                                  * W-17 makes the write additive and retires this block.
+                                                  */}
+                                                {rolesLostBySave.length > 0 ?
+                                                    <div
+                                                        className="mt-3 rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
+                                                        role="note"
+                                                        data-testid="access-user-role-replace-warning"
+                                                    >
+                                                        <p className="font-medium">
+                                                            Saving removes{" "}
+                                                            {rolesLostBySave.length === 1 ? "another role" : (
+                                                                `${rolesLostBySave.length} other roles`
+                                                            )}
+                                                            .
+                                                        </p>
+                                                        <p className="mt-1">
+                                                            This control replaces the whole assignment rather than adding
+                                                            to it. These would be removed:{" "}
+                                                            <span className="font-medium">
+                                                                {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}
+                                                            </span>
+                                                            .
+                                                        </p>
+                                                        <label className="mt-2 flex items-start gap-2">
+                                                            <input
+                                                                type="checkbox"
+                                                                className="mt-0.5"
+                                                                checked={confirmRoleReplace}
+                                                                onChange={(event) =>
+                                                                    setConfirmRoleReplace(event.target.checked)
+                                                                }
+                                                                data-testid="access-user-role-replace-confirm"
+                                                            />
+                                                            <span>
+                                                                Remove{" "}
+                                                                {rolesLostBySave.map((key) => roleLabelFor(key)).join(", ")}{" "}
+                                                                and leave only {roleLabelFor(editRole)}.
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                :   null}
+                                                <ConfigurationPrimaryButton
+                                                    className="mt-3"
+                                                    disabled={
+                                                        roleSaving ||
+                                                        replacementIsNoOp(selected, editRole) ||
+                                                        (rolesLostBySave.length > 0 && !confirmRoleReplace)
+                                                    }
+                                                    onClick={() => void saveRole()}
+                                                    data-testid="access-user-role-save"
+                                                >
+                                                    {roleSaving ? "Saving…" : "Save role"}
+                                                </ConfigurationPrimaryButton>
+                                            </ConfigWorkspaceCard>
                                             {!selected.has_access_profile ?
                                                 <div
                                                     className="rounded-lg border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-[13px] leading-5 text-amber-900"
@@ -1146,7 +1289,7 @@ export default function AccessUsersConfigurationPage({
                                             :   null}
                                             {scopeEditorVisible ?
                                             <>
-                                            <ConfigWorkspaceCard testId="access-user-access-locations" title="Locations">
+                                            <ConfigWorkspaceCard testId="access-user-access-locations" title="Location access">
                                                 <LocationMultiSelect
                                                     testId="access-user-access-locations-select"
                                                     legend="Locations"
@@ -1159,7 +1302,35 @@ export default function AccessUsersConfigurationPage({
                                                     selectedLabel="Selected locations"
                                                 />
                                             </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard testId="access-user-access-departments" title="Departments">
+                                            {/*
+                                              * Departments are an ADVANCED restriction, not a second
+                                              * primary question. `OD-8`'s tranche keeps them out of the
+                                              * V1 configuration experience — but "out of the experience"
+                                              * cannot mean "invisible", because a person restricted to
+                                              * two departments has narrower authority than this screen
+                                              * would otherwise imply.
+                                              *
+                                              * So the disclosure OPENS ITSELF whenever a restriction is
+                                              * configured. Collapsed-by-default is a choice about a
+                                              * setting nobody is using; a real restriction hidden behind
+                                              * a closed triangle is a screen overstating access.
+                                              */}
+                                            <details
+                                                className="rounded-xl border border-alloy-stone/25 bg-white"
+                                                open={deptScope === "restricted"}
+                                                data-testid="access-user-access-departments-advanced"
+                                            >
+                                                <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-alloy-midnight">
+                                                    Departments
+                                                    <span className="ml-2 text-[12px] font-normal text-alloy-midnight/55">
+                                                        {deptScope === "restricted" ?
+                                                            "Additional restriction applies"
+                                                        : deptScope === "unset" ?
+                                                            "Not configured"
+                                                        :   "No additional restriction"}
+                                                    </span>
+                                                </summary>
+                                                <div className="border-t border-alloy-stone/20 px-4 py-3">
                                                 <LocationMultiSelect
                                                     testId="access-user-access-departments-select"
                                                     legend="Departments"
@@ -1175,7 +1346,8 @@ export default function AccessUsersConfigurationPage({
                                                     searchPlaceholder="Search departments…"
                                                     allModeHint="Visible across every department."
                                                 />
-                                            </ConfigWorkspaceCard>
+                                                </div>
+                                            </details>
                                             <ConfigurationPrimaryButton
                                                 disabled={accessSaving || deptScope === "unset" || siteScope === "unset"}
                                                 onClick={() => void saveAccess()}
@@ -1186,8 +1358,7 @@ export default function AccessUsersConfigurationPage({
                                             </>
                                             :   null}
                                         </div>
-                                    : tab === "security" ?
-                                        <div className="space-y-4" data-testid="access-user-security">
+                                    :   <div className="space-y-4" data-testid="access-user-security">
                                             <ConfigWorkspaceCard testId="access-user-security-account" title="Account">
                                                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                                                     <div>
@@ -1276,12 +1447,6 @@ export default function AccessUsersConfigurationPage({
                                                 </p>
                                             </ConfigWorkspaceCard>
                                         </div>
-                                    :   <ConfigWorkspaceCard testId="access-user-history" title="History">
-                                            <p className="text-sm text-alloy-midnight/55" data-capability="planned">
-                                                A verified account and role history for this user is planned. No events
-                                                are fabricated for display.
-                                            </p>
-                                        </ConfigWorkspaceCard>
                                     }
                                 </div>
                             }
@@ -1307,13 +1472,28 @@ export default function AccessUsersConfigurationPage({
                             data-testid="access-invite-steps"
                             aria-label="Invite sequence"
                         >
-                            {[
-                                { id: "person", label: "Person", state: "available" as const },
-                                { id: "role", label: "Role", state: "available" as const },
-                                { id: "access", label: "Access", state: "planned" as const },
-                                { id: "sign-in", label: "Sign-in", state: "available" as const },
-                                { id: "review", label: "Review", state: "available" as const },
-                            ].map((step) => (
+                            {/*
+                              * Typed as the full union rather than inferred. Every step is `available`
+                              * now that Access is collected during the invite, and an inferred literal
+                              * type would narrow to `"available"` alone — which makes the three
+                              * `=== "planned"` comparisons below unreachable and, more to the point,
+                              * a TYPE ERROR (TS2367). CI caught exactly that; the local typecheck
+                              * cannot run to completion on this host.
+                              *
+                              * The `planned` rendering is kept, not deleted. `06…§4.10`'s marker is a
+                              * standing discipline for this surface — the next step added to this
+                              * sequence starts life unbuilt, and it should not have to reintroduce the
+                              * affordance to say so.
+                              */}
+                            {(
+                                [
+                                    { id: "person", label: "Person", state: "available" },
+                                    { id: "role", label: "Role", state: "available" },
+                                    { id: "access", label: "Access", state: "available" },
+                                    { id: "sign-in", label: "Sign-in", state: "available" },
+                                    { id: "review", label: "Review", state: "available" },
+                                ] as { id: string; label: string; state: "available" | "planned" }[]
+                            ).map((step) => (
                                 <li
                                     key={step.id}
                                     className={`rounded-full border px-2 py-0.5 ${
@@ -1334,6 +1514,40 @@ export default function AccessUsersConfigurationPage({
                                 Linking an existing Person record is planned. Today, invite by email creates sign-in
                                 access for that address.
                             </p>
+                            {/*
+                              * Name first, because that is who the operator is inviting.
+                              *
+                              * Both fields are INPUTS: the route derives the canonical `full_name`
+                              * from them and writes only that. Storing the halves too would be a
+                              * parallel identity store, and the two would disagree the first time
+                              * either was edited elsewhere.
+                              *
+                              * Optional on purpose. An invitation with no name leaves the account
+                              * genuinely nameless, which the Users list then SAYS — better than
+                              * seeding a blank name nobody can tell from a real one.
+                              */}
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <label className="block">
+                                    <span className="config-typo-field-label">First name</span>
+                                    <input
+                                        value={inviteFirstName}
+                                        onChange={(event) => setInviteFirstName(event.target.value)}
+                                        placeholder="Kelly"
+                                        className="config-runtime-input mt-1"
+                                        data-testid="access-invite-first-name"
+                                    />
+                                </label>
+                                <label className="block">
+                                    <span className="config-typo-field-label">Last name</span>
+                                    <input
+                                        value={inviteLastName}
+                                        onChange={(event) => setInviteLastName(event.target.value)}
+                                        placeholder="Kurzman"
+                                        className="config-runtime-input mt-1"
+                                        data-testid="access-invite-last-name"
+                                    />
+                                </label>
+                            </div>
                             <label className="block">
                                 <span className="config-typo-field-label">Email *</span>
                                 <input
@@ -1361,13 +1575,41 @@ export default function AccessUsersConfigurationPage({
                                     ))}
                                 </select>
                             </label>
+                            {/*
+                              * Location access, asked here rather than deferred.
+                              *
+                              * The card this replaced said access during invite was Planned and sent the
+                              * operator to a second screen. It was accurate and it was the wrong shape:
+                              * "where does this person work" is part of inviting them, and leaving it for
+                              * later meant every new account spent the interval organization-wide.
+                              *
+                              * Departments are not asked. `inviteScopeNote` says what happens to them, in
+                              * the same breath and from the same values the request is built from.
+                              */}
                             <div
-                                className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2 text-xs text-alloy-midnight/55"
-                                data-capability="planned"
-                                data-testid="access-invite-access-planned"
+                                className="rounded-lg border border-alloy-stone/20 px-3 py-2.5"
+                                data-testid="access-invite-location-access"
                             >
-                                Location and department access are set after invitation from the Access tab. Access
-                                during invite is Planned.
+                                <LocationMultiSelect
+                                    testId="access-invite-locations-select"
+                                    legend="Location access"
+                                    locations={siteOptions}
+                                    mode={inviteSiteMode === "all" ? "all" : "selected"}
+                                    selectedIds={inviteSiteIds}
+                                    onModeChange={(mode) => setInviteSiteMode(mode === "all" ? "all" : "restricted")}
+                                    onSelectedIdsChange={setInviteSiteIds}
+                                    allLabel="All locations"
+                                    selectedLabel="Selected locations"
+                                />
+                                <p
+                                    className="mt-2 text-xs text-alloy-midnight/60"
+                                    data-testid="access-invite-location-note"
+                                >
+                                    {inviteScopeNote({
+                                        siteMode: inviteSiteMode,
+                                        siteLocationCount: inviteSiteIds.length,
+                                    })}
+                                </p>
                             </div>
                             <p className="text-xs text-alloy-midnight/55">
                                 Sign-in method: <span className="font-medium text-alloy-midnight/75">Email invitation</span>
@@ -1378,7 +1620,17 @@ export default function AccessUsersConfigurationPage({
                                 Cancel
                             </ConfigurationSecondaryButton>
                             <ConfigurationPrimaryButton
-                                disabled={inviteBusy || !inviteEmail.trim() || !inviteRole}
+                                disabled={
+                                    inviteBusy ||
+                                    !inviteEmail.trim() ||
+                                    !inviteRole ||
+                                    // "Selected locations" with nothing selected is not an answer; the
+                                    // route would reject it, and sending it would mean "no locations".
+                                    !inviteSiteSelectionIsComplete({
+                                        siteMode: inviteSiteMode,
+                                        siteLocationIds: inviteSiteIds,
+                                    })
+                                }
                                 onClick={() => void sendInvite()}
                                 data-testid="access-invite-send"
                             >

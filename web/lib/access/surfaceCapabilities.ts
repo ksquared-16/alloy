@@ -129,15 +129,6 @@ export const ACCESS_SURFACE_DECLARATIONS: Record<AccessWorkspaceChapter, Surface
             "app/api/admin/settings/users-roles/members/route.ts",
         ],
     },
-    scopes: {
-        surfaceKey: "access:scopes",
-        label: ACCESS_WORKSPACE_CHAPTER_META.scopes.label,
-        href: accessWorkspaceChapterHref("scopes"),
-        capability: SETTINGS_USERS_ROLES_PERMISSION,
-        // The Scopes chapter reads the location/department catalogue from the members route rather
-        // than from a route of its own.
-        backingRoutes: ["app/api/admin/settings/users-roles/members/route.ts"],
-    },
     security: {
         surfaceKey: "access:security",
         label: ACCESS_WORKSPACE_CHAPTER_META.security.label,

@@ -141,7 +141,7 @@ export function ConfigCollectionRail({
                                 value={search}
                                 onChange={(event) => setSearch(event.target.value)}
                                 placeholder={`Search ${objectLabel.toLocaleLowerCase()}…`}
-                                className="config-runtime-input py-1.5 pl-8 text-xs"
+                                className="config-runtime-input config-runtime-input--with-leading-icon py-1.5 text-xs"
                                 data-testid={`${testId}-search`}
                             />
                         </label>

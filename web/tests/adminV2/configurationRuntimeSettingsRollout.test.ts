@@ -83,7 +83,6 @@ describe("Configuration Runtime settings rollout", () => {
             "components/adminV2/settings/access/AccessWorkspaceSurface.tsx",
             "components/adminV2/settings/access/AccessUsersConfigurationPage.tsx",
             "components/adminV2/settings/access/AccessRolesConfigurationPage.tsx",
-            "components/adminV2/settings/access/AccessScopesPage.tsx",
             "components/adminV2/settings/access/AccessSecurityPage.tsx",
             "components/adminV2/settings/organization/OrganizationCommunicationsPage.tsx",
             "components/adminV2/settings/entities/EntitiesConfigurationPage.tsx",
