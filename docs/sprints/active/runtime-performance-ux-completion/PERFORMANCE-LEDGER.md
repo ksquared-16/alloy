@@ -108,6 +108,117 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 3 — identity commits from the click; the read path stops repairing per child
+
+## 10. CLOSED — row -> Focus Panel identity waited 11.9s for data the client already had
+
+**The identity was never missing.** Every child-grain queue row carries canonical `QueueRowContext`:
+`row_subject.display_name` ("Wrigley Kurzman"), `subject_type: "child"`, `subject_id`, `stage_key`,
+`image_url`, `row_status_label`, and `case_context.case_id` as the family settlement anchor.
+`opportunityQueuePreviewSeedFromRowContext` already turns that into the seed the panel itself calls
+"INSTANT-IDENTITY".
+
+It was keyed on the **committed** Record of Attention, so it was only instant on cold open. On a row
+-> row switch the committed subject does not move until the provisioning answer lands. The seed is
+now keyed on **live attention (K1)**, which moves on the click, and the header prefers it over the
+answer's identity truth — which is also latest-click-wins applied to identity.
+
+| | before | after |
+|---|---|---|
+| T1 row selected | ~150ms | 108-187ms |
+| **T2 correct identity** | **10,799-12,071ms** | **108-187ms** |
+| T3 primary usable | after T2 | 108-187ms |
+| T4 fully hydrated | after T2 | 108-187ms |
+
+**Atomic subject coherence preserved.** The header names the child (Attention); the body renders the
+family opportunity (Settlement) — the certified composition. They can only disagree when the body is
+HOLDING a payload across a settlement change (a different FAMILY); there the prior subject still owns
+the header, so one child's name never appears over another family's cards.
+
+**Verified the body is not stale under the new header:** every card is family-scoped and identical
+across children (ASSIGNMENTS "15 children", HOUSEHOLD "Kurzman household", CHILDREN "15 children ·
+2 waitlisted", BILLING PREVIEW) and NOTHING changed between 1.2s and 17s after a click.
+Latest-click-wins verified under three rapid patterns (A->B at 60ms, A->B->A->B at 40ms, C->A) —
+newest intent won every time. Commit `525089ef9`.
+
+**RESIDUAL RISK for Kelly:** WHAT'S NEXT is child-scoped stage work and still arrives with the
+provisioning answer. Every child in this tenant shares one stage, so a differing stage-work card
+cannot be observed here. If two children of the SAME family sit at different stages, that one card
+would trail the header. Choosing between reserving the cell and holding it is a reveal-doctrine
+decision, not a performance one.
+
+## 11. CLOSED — ensure_candidates: bulk, with semantics proven unchanged
+
+**Ownership answers.** The invariant is that every waitlisted child has a `placement_candidates` row
+keyed `pc_v1_pi:{opportunity}:{member}:{cohort}`; without it the rank renders "—". A cohort change
+(programKey or DOB) makes the key move. **Two mutations already maintain it** —
+`updateOpportunityCustomerMemberLifecycleStatus` and `stageOutcomeRuleTargetExecutor` — so the read
+path was a third, redundant net. **It does not gate membership:** membership is process-instance
+owned ("Membership stays PI-owned; ranking authority is placement_candidates + overrides"), so it
+affects only the rank column.
+
+Repair semantics were NOT changed. `derivePlacementCandidateSeedRow` is now THE ONE definition of a
+candidate's seed key and row; the per-child hook derives through it unchanged (mutations unaffected),
+and a new bulk form reads the same facts in 4 concurrent queries and inserts exactly the children
+whose seed key is absent. Duplicating the derivation was deliberately avoided — a second definition
+is what produced 13-vs-8 here, and a drifted copy would silently stop repairing children.
+
+| scenario | before | after |
+|---|---|---|
+| candidate already correct | skip | skip |
+| candidate missing | insert | insert |
+| child cohort changed | insert (new key) | insert (new key) |
+| candidate on previous cohort | insert new | insert new |
+| partially created | hook's own existence check | unchanged |
+| concurrent readers/mutations | insert path unchanged | pre-filter can only err toward MORE work |
+
+  ensure_candidates  1,772-2,480ms -> 355-367ms warm (711ms cold)
+
+**Proven against real data, not by inspection:** the bulk pass reports `created: 0,
+skipped_existing: 15` — every seed key it derived matched a stored key exactly; any drift would have
+inserted instead. Ranks still render on all 15 rows ("1 / 12", "2 / 12", …), no "—". Commit `73e6a3bbb`.
+
+## Provisioning answer — cumulative
+
+| | wave-1 baseline | wave 2 | wave 3 |
+|---|---|---|---|
+| composition_ms | 8,241ms | 5,339ms | **3,853ms (−53%)** |
+| total_ms | 10,003ms | 7,050ms | **5,588ms (−44%)** |
+
+## Cold Work Unit (bare path) — cumulative, all cells gated before AND after
+
+| phase | baseline `c9ce324fa` | wave 2 | wave 3 | total |
+|---|---|---|---|---|
+| TTFB | 4,360ms | 3,936ms | 3,915ms | −10.2% |
+| stream complete | 16,142ms | 12,612ms | 11,609ms | −28.1% |
+| **first usable surface** | **16,200ms** | 12,672ms | **11,666ms** | **−28.0%** |
+| fully hydrated | 30,298ms | 24,821ms | **24,175ms** | −20.2% |
+
+max/median 1.05 on first usable.
+
+### Re-ranked: what gates cold FIRST USABLE now
+
+Everything else finishes earlier than the document. `work-unit-queue-summaries` completes at
+~10.4s and `queue-view-totals` at ~13.2s, both before `wu_surface` at 11.7s, so **first usable is
+gated entirely by the streamed document**:
+
+```
+0 ──── 3.9s ─────────────────── 11.6s ── 11.7s
+  mw auth 1.6s (cold only)       stream    first usable
+  + route_meta 2.1s              7.7s
+```
+
+Ranked by contribution to FIRST USABLE (not aggregate DB time):
+
+| rank | span | ms | note |
+|---|---|---|---|
+| 1 | seeded provisioning compose (in-stream) | ~7.7s | child_grain_members 1.4s · waitlist 2.5s · inquiry 0.7s · projection 1.4s |
+| 2 | route_meta | 2.1s | gate -> work units -> departments, genuinely serial (departments needs the work-unit ids) |
+| 3 | middleware auth, cold process only | 1.6s | one JWKS fetch per process; already 4ms warm |
+| — | AI capability probes, queue summaries, queue-view-totals | — | complete before the document; contend for connections but gate nothing |
+
+---
+
 ## WAVE 2 — the Waitlist "block" was a harness error, and cold had never been measured
 
 ### The reconciliation: the product works; the harness read the wrong contract
