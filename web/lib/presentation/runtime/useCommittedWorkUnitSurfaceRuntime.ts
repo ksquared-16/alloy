@@ -71,11 +71,7 @@ function prewarmSubjectDestination(target: string, lens: string | null, subjectI
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
-import {
-    OPPORTUNITY_QUEUE_UPDATED_EVENT,
-    parseOpportunityQueueUpdatedDetail,
-} from "@/lib/admin/opportunityQueueRefreshEvent";
-import { planWorkUnitConvergence } from "./workUnitConvergencePlan";
+import { subscribeWorkUnitConvergence } from "./workUnitConvergencePlan";
 import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
 import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
@@ -586,21 +582,19 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         });
     }, [kernel]);
 
-    useEffect(() => {
-        if (typeof window === "undefined") return;
-        const onQueueUpdated = (ev: Event) => {
-            // Each projection is decided INDEPENDENTLY by the existing policy. A signal that moves a
-            // count must not be allowed to imply a row refetch, and vice versa.
-            const plan = planWorkUnitConvergence({
-                detail: parseOpportunityQueueUpdatedDetail(ev),
-                visibleOpportunityIds: visibleOpportunityIdsRef.current,
-            });
-            if (plan.refreshSummaries) setSettlementRefreshToken((n) => n + 1);
-            if (plan.refetchRows) recommitForTruthMovement();
-        };
-        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
-        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
-    }, [recommitForTruthMovement]);
+    // Each projection is decided INDEPENDENTLY by the existing policy: a signal that moves a count
+    // must not be allowed to imply a row refetch, and vice versa. The wiring lives in
+    // `subscribeWorkUnitConvergence` so the event → policy → callback path is guarded without a DOM.
+    useEffect(
+        () =>
+            subscribeWorkUnitConvergence({
+                target: typeof window === "undefined" ? null : window,
+                getVisibleOpportunityIds: () => visibleOpportunityIdsRef.current,
+                onRefreshSummaries: () => setSettlementRefreshToken((n) => n + 1),
+                onRefetchRows: recommitForTruthMovement,
+            }),
+        [recommitForTruthMovement],
+    );
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),

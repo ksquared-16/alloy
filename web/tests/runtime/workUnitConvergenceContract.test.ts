@@ -15,7 +15,11 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { planWorkUnitConvergence } from "@/lib/presentation/runtime/workUnitConvergencePlan";
+import {
+    planWorkUnitConvergence,
+    subscribeWorkUnitConvergence,
+} from "@/lib/presentation/runtime/workUnitConvergencePlan";
+import { OPPORTUNITY_QUEUE_UPDATED_EVENT } from "@/lib/admin/opportunityQueueRefreshEvent";
 
 const root = resolve(__dirname, "../..");
 const read = (rel: string) => readFileSync(resolve(root, rel), "utf8");
@@ -95,8 +99,7 @@ describe("a production consumer exists", () => {
     it("the Work Unit runtime subscribes to the canonical mutation bus", () => {
         expect(existsSync(resolve(root, runtimePath))).toBe(true);
         const src = read(runtimePath);
-        expect(src).toContain("addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT");
-        expect(src).toContain("planWorkUnitConvergence");
+        expect(src).toContain("subscribeWorkUnitConvergence");
     });
 
     it("rows converge by re-preparing the committed answer, not by a second row store", () => {
@@ -165,5 +168,70 @@ describe("a source-reading guard cannot certify a file that does not exist", () 
             }
         }
         expect(missing).toEqual([]);
+    });
+});
+
+describe("the subscription actually calls the right refreshes", () => {
+    /*
+     * event → policy → callback, with a real EventTarget. This is the guard the missing subscription
+     * would have failed: the policy tests above all passed while nothing in production consumed them.
+     */
+    function harness(visible: readonly string[], canPatchRows = false) {
+        const target = new EventTarget();
+        const calls = { rows: 0, summaries: 0, patch: 0 };
+        const off = subscribeWorkUnitConvergence({
+            target,
+            getVisibleOpportunityIds: () => visible,
+            onRefetchRows: () => { calls.rows += 1; },
+            onRefreshSummaries: () => { calls.summaries += 1; },
+            onPatchRows: () => { calls.patch += 1; },
+            canPatchRows,
+        });
+        const fire = (detail: unknown) =>
+            target.dispatchEvent(new CustomEvent(OPPORTUNITY_QUEUE_UPDATED_EVENT, { detail }));
+        return { fire, calls, off };
+    }
+
+    it("a placement membership event refreshes rows AND counts", () => {
+        const { fire, calls, off } = harness(VISIBLE);
+        fire({ action_key: "placement_manual_order" });
+        expect(calls.rows).toBe(1);
+        expect(calls.summaries).toBe(1);
+        off();
+    });
+
+    it("an identity rename on a visible record refreshes the row", () => {
+        const { fire, calls, off } = harness(VISIBLE);
+        fire({ id: "opp-visible-1", action_key: "inquiry_child_identity" });
+        expect(calls.rows).toBe(1);
+        off();
+    });
+
+    it("an unrelated off-screen edit refreshes NOTHING", () => {
+        const { fire, calls, off } = harness(VISIBLE);
+        fire({ id: "opp-not-here", action_key: "person_record_updated" });
+        expect(calls).toEqual({ rows: 0, summaries: 0, patch: 0 });
+        off();
+    });
+
+    it("unsubscribing stops convergence", () => {
+        const { fire, calls, off } = harness(VISIBLE);
+        off();
+        fire({ action_key: "placement_manual_order" });
+        expect(calls.rows).toBe(0);
+        off();
+    });
+
+    it("a patchable surface patches instead of refetching", () => {
+        const { fire, calls, off } = harness(VISIBLE, true);
+        fire({
+            id: "opp-visible-1",
+            action_key: "person_record_updated",
+            queue_row_patch: { customer_name: "New Name" },
+        });
+        expect(calls.patch).toBe(1);
+        expect(calls.rows).toBe(0);
+        expect(calls.summaries).toBe(0);
+        off();
     });
 });

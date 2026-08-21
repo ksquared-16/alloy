@@ -26,8 +26,7 @@ describe("inquiry child placement save refreshes waitlist queue", () => {
      */
     it("the current work-unit runtime consumes the queue refresh policy", () => {
         const runtime = read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts");
-        expect(runtime).toContain("OPPORTUNITY_QUEUE_UPDATED_EVENT");
-        expect(runtime).toContain("planWorkUnitConvergence");
+        expect(runtime).toContain("subscribeWorkUnitConvergence");
         // Rows converge by re-preparing the committed answer; summaries by the totals refresh token.
         expect(runtime).toContain("provisioningKey");
         expect(runtime).toContain("setSettlementRefreshToken");

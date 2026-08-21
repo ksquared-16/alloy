@@ -26,7 +26,9 @@
  */
 
 import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
     isQueueRowDisplayPatchActionKey,
+    parseOpportunityQueueUpdatedDetail,
     shouldPatchWorkUnitQueueRowsForEvent,
     shouldRefetchWorkUnitQueueRowsForEvent,
     shouldRefreshQueueSummariesForEvent,
@@ -85,4 +87,46 @@ export function planWorkUnitConvergence(args: {
 /** True when the action key is display-only — kept exported so callers can explain a decision. */
 export function isDisplayOnlyWorkUnitActionKey(actionKey: string | null | undefined): boolean {
     return isQueueRowDisplayPatchActionKey(actionKey);
+}
+
+
+/**
+ * Subscribe a Work Unit surface to the canonical mutation bus.
+ *
+ * `target` is injected rather than reaching for `window` so the wiring — event → policy → the RIGHT
+ * callbacks — is testable without a DOM. This is the seam the missing subscription would have been
+ * caught by: a policy-only test passes perfectly while nothing consumes the policy.
+ *
+ * Returns an unsubscribe function; safe to call with no target (SSR) — it becomes a no-op.
+ */
+export function subscribeWorkUnitConvergence(args: {
+    target: EventTarget | null | undefined;
+    /** Read at EVENT time, never captured — the visible rows change as the operator works. */
+    getVisibleOpportunityIds: () => readonly string[];
+    onRefetchRows: () => void;
+    onRefreshSummaries: () => void;
+    canPatchRows?: boolean;
+    onPatchRows?: () => void;
+}): () => void {
+    const { target } = args;
+    if (!target) return () => {};
+
+    const listener = (ev: Event) => {
+        const plan = planWorkUnitConvergence({
+            detail: parseOpportunityQueueUpdatedDetail(ev),
+            visibleOpportunityIds: args.getVisibleOpportunityIds(),
+            canPatchRows: args.canPatchRows,
+        });
+        // Independent decisions, in the order that keeps a converging count from blanking its pill:
+        // summaries re-resolve alongside the row refetch, never as a consequence of it.
+        if (plan.patchRowsOnly) {
+            args.onPatchRows?.();
+            return;
+        }
+        if (plan.refreshSummaries) args.onRefreshSummaries();
+        if (plan.refetchRows) args.onRefetchRows();
+    };
+
+    target.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, listener);
+    return () => target.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, listener);
 }
