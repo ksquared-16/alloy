@@ -94,6 +94,7 @@ justification, regression updates, and re-certification.
 17. **StrictMode measurement** — development double-invocation is not production duplicate-fetch evidence.
 18. **Performance measurement** — separate T0 intent / T1 acknowledgement / T2 destination / T3 primary usable / T4 hydrated. T4 alone is not a UX metric.
 19. **Two performance classes** — see §1.
+20. **Floating surfaces may never cover primary navigation.** A parked or floating surface may be positioned by score, but regions carrying a surface's primary navigation are forbidden territory, not a low score. Scoring alone cannot express "never here": on a dense surface every candidate overlaps something and the least-bad winner can still swallow a control.
 
 ## 5. Invariant → guard matrix
 
@@ -108,6 +109,7 @@ justification, regression updates, and re-certification.
 | 15 Save persistence / no false success | child-scoped mutation owner | browser-verified round trip only | **gap** |
 | 12 operational workspace resume | shared workspace host | none — behaviour not yet decided | **gap / product decision** |
 | 13 Activity subject switching | Focus Panel runtime | browser-verified only | **gap** |
+| 20 floating surfaces vs navigation | `chooseBosParkingGeometry` + `BosPresentationControllerContext` | browser-verified (real pointer clicks on both tabs) | **gap — no deterministic guard yet** |
 | 1, 11, 14, 16 | various | measured, not guarded | **gap** |
 
 ## 6. Measurement methodology and pitfalls
@@ -127,11 +129,11 @@ Every one of these produced a **plausible but false** result during this program
 ## 7. Open items
 
 **Owned elsewhere**
-- `adminv2-bos-rail-overlay` resizes at ~22 s (97% of direct-path CLS) **and intercepts pointer events over the Focus Panel mode tabs**. Rail owner.
+- `adminv2-bos-rail-overlay` still moves horizontally at ~21–24 s, which is ~97% of direct-path CLS (0.1795). Its parked position genuinely overlaps page controls, so it re-parks to escape them — the algorithm working as designed. A conditional "do not re-park when unobstructed" was measured and produced no change; eliminating the shift is a decision about where the floating rail should live. **Rail owner.** (The pointer-interception half is FIXED — see law 20.)
 
 **Runtime debt**
 - Save server completion ~3.2 s (client UX already premium).
-- Operational workspace data grammar diverges: Processing 3→0 and Work Items 4→0 requests on reopen (warm), but **Operations 7→7** and **Inbox/Communications 20→22**, with `templates` ×4 growing to ×6 on reopen and `status-options` ×4. Shell launch is uniform; data loading is not.
+- Operational workspace **shell** launch is uniform and premium (54–101 ms, constant height, clean Escape); the **data** grammar is not shared: Processing 3→0 and Work Items 4→0 requests on reopen (warm), but **Operations 7→7** and **Inbox/Communications 20→22**, with `templates` ×4 growing to ×6 on reopen and `status-options` ×4. Shell launch is uniform; data loading is not.
 - Activity cold timeline 2.1 s; 11 requests on subject switch while Activity is open.
 - `QueueRowModel.entityType` is typed `"opportunity" | "job" | "schedule"` while the provisioning answer emits `"child"` — type/runtime divergence.
 - Queue rows 404 on `/view-models/drawer/opportunity/<row id>`: ~1.4 s of wasted server work per row click.
