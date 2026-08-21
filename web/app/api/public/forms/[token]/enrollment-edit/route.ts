@@ -116,6 +116,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         orgId: access.value.orgId,
         processInstanceId: access.value.processInstanceId,
         canonicalValues: canonical.values,
+        // The session row the access check already read — one fewer serial round trip.
+        preloadedSession: access.value.session,
     });
     if (!before.ok) return publicErr(before.refusal.detail, 409, { code: before.refusal.code });
     const needKey =

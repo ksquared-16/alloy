@@ -201,7 +201,17 @@ describe("Continue, not Saving", () => {
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
         expect(card).not.toContain("Saving…");
         expect(card).not.toContain("Saving your answer");
-        expect(card).toContain(">\n                    Continue\n                </button>");
+        /**
+         * ONE primary action for a typed answer.
+         *
+         * The label moved from "Continue" to "Use this" when the control moved into the composer
+         * dock: "Continue" reads as a wizard step, and this is a reply. The property under test is
+         * that there is exactly one such action and that a duplicate submit cannot reach the
+         * network — not which word is on it.
+         */
+        expect(card.match(/onSubmit\(text\.trim\(\), shown\)/g)?.length).toBe(2);
+        expect(card).toContain("Use this");
+        expect(card).toContain("disabled={busy || !ready}");
         // Persistence stays an implementation detail; the guard is the in-flight ref, not the copy.
         expect(card).toContain("inFlight.current");
     });

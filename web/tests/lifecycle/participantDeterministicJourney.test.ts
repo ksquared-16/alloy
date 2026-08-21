@@ -116,7 +116,10 @@ describe("2 + 3. a continuous surface, and immediate acknowledgement", () => {
 
     it("Change is a local transition, not a server turn", () => {
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
-        expect(card).toContain("onClick={() => setCorrecting(true)}");
+        // Still a local state transition and still no round trip — it is now reached from a
+        // suggested reply rather than a bordered button, which changes the chrome, not the rule.
+        expect(card).toContain("onSelect: () => setCorrecting(true)");
+        expect(card).not.toContain("submit({ text: \"change\"");
     });
 });
 
@@ -163,20 +166,35 @@ describe("the surface reads as a conversation, not a wizard", () => {
     it("keeps the exchange and speaks in one voice", () => {
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
         // Prior turns stay on screen as what was SAID and what was ANSWERED.
-        expect(card).toContain('data-said="alloy"');
-        expect(card).toContain('data-said="parent"');
-        expect(card).toContain("<Said who=\"alloy\">{participantQuestion(objective)}</Said>");
+        /**
+         * One voice, two speakers — now carried by the thread primitive.
+         *
+         * `ThreadTurn` emits `data-said` from the speaker it is given, so the alternation is a
+         * property of every turn rather than of two hand-written blocks. The card is what decides
+         * WHO speaks, and it must still name both.
+         */
+        const thread = read("app/forms/embed/[token]/ParticipantThread.tsx");
+        expect(thread).toContain("data-said={who}");
+        expect(card).toContain('who="alloy"');
+        expect(card).toContain('who="parent"');
+        // The live question is a line of conversation spoken by Alloy at the CURRENT depth — the
+        // largest thing on the screen — and its scannable value is emphasised within it.
+        expect(card).toContain('<ThreadSaid who="alloy" depth="current">');
+        expect(card).toContain("participantQuestionSegments(objective)");
         // No heading chrome around the live question — it is a line of conversation.
         expect(card).not.toContain("<IntakeHeading title={participantQuestion(objective)}");
     });
 
     it("asks an optional question as a question, and answers resolve it outright", () => {
         const card = code("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
-        expect(card).toContain('data-participant-control="optional"');
+        // The optional question is still asked as a question, and its two answers still carry the
+        // authored control kind into the DOM — as suggested replies now, which is what a
+        // specialist offering "nothing to add" or "yes, I'll tell you" actually looks like.
+        expect(card).toContain('suggestionKind = "optional"');
         expect(card).toContain("optionalAffirmLabel");
         // "No known allergies" submits immediately; "Yes — I'll tell you" is local and reveals the
         // authored control. Neither needs a redundant Continue.
-        expect(card).toContain("onClick={() => setElaborating(true)}");
+        expect(card).toContain("onSelect: () => setElaborating(true)");
     });
 
     it("an Enrollment journey reviews the artifact whole — no stepper, no phase headings", () => {
