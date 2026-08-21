@@ -39,6 +39,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FieldValue, SignaturePlacement } from "@/lib/forms/pdf/generation/types";
 import { buildEnrollmentAcroFormFixture } from "@/lib/forms/pdf/generation/enrollmentFixture";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
+import {
+    DOCUMENT_DATE_FORMATS,
+    formatValueForDocumentDestination,
+} from "@/lib/forms/pdf/documentDestinationDate";
 
 const signaturePlacementSchema = z
     .object({
@@ -68,7 +72,23 @@ export const fidelityPdfMappingSchema = z
          * and several schema fields may share a `shared_value_key` — both are how one confirmed
          * value reaches every occurrence. The map points location → semantics, never the reverse.
          */
-        acro_fields: z.record(z.string().min(1), z.object({ field_id: z.string().min(1) }).strict()),
+        acro_fields: z.record(
+            z.string().min(1),
+            z
+                .object({
+                    field_id: z.string().min(1),
+                    /**
+                     * How a DATE prints AT THIS DESTINATION — presentation wiring, never storage.
+                     *
+                     * Absent means the platform default (`mm/dd/yyyy`), deliberately NOT the ISO
+                     * serialization the value is stored in. A destination that genuinely needs the
+                     * machine form declares `iso`, so ISO on paperwork is a choice rather than an
+                     * accident. @see documentDestinationDate.ts
+                     */
+                    date_format: z.enum(DOCUMENT_DATE_FORMATS).optional(),
+                })
+                .strict(),
+        ),
         signature_placements: z.array(signaturePlacementSchema).default([]),
     })
     .strict()
@@ -197,7 +217,17 @@ export function fidelityFieldValues(
     const out: Record<string, FieldValue> = {};
     for (const [pdfField, target] of Object.entries(mapping.acro_fields)) {
         const value = values[target.field_id];
-        if (usableFieldValue(value)) out[pdfField] = value;
+        if (!usableFieldValue(value)) continue;
+        /**
+         * The DESTINATION decides how a date prints.
+         *
+         * Applied here rather than at either call site because both of them must agree: the live
+         * review render and the signed stored artifact are the same paperwork, and a parent who
+         * reviewed `03/14/2021` must not sign a copy that says `2021-03-14`. One seam, one answer.
+         *
+         * Storage is untouched — this reads a value and returns a rendering of it.
+         */
+        out[pdfField] = formatValueForDocumentDestination(value, target.date_format) as FieldValue;
     }
     return out;
 }

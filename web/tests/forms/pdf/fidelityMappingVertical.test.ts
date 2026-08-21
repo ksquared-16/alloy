@@ -166,9 +166,28 @@ describe("THE ASK-ONCE PROOF — one confirmed fact fills every document locatio
         expect(filled.missed).toEqual([]);
 
         const rendered = await readTextFieldValues(filled.bytes);
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDob]).toBe("2025-08-19");
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobMedical]).toBe("2025-08-19");
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobPickup]).toBe("2025-08-19");
+        /**
+         * The date PRINTS as the destination asks, not as it is stored.
+         *
+         * This assertion used to read `2025-08-19` — the canonical serialization — which is exactly
+         * the defect: a parent's paperwork showed the database's shape. One stored value still
+         * reaches all three destinations; what changed is that each renders it.
+         */
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDob]).toBe("08/19/2025");
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobMedical]).toBe("08/19/2025");
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobPickup]).toBe("08/19/2025");
+        // Still ONE fact, so the three destinations cannot disagree.
+        expect(
+            new Set([
+                rendered[ENROLLMENT_FIELD_NAMES.childDob],
+                rendered[ENROLLMENT_FIELD_NAMES.childDobMedical],
+                rendered[ENROLLMENT_FIELD_NAMES.childDobPickup],
+            ]).size,
+        ).toBe(1);
+        // And no destination shows the storage form.
+        for (const name of [ENROLLMENT_FIELD_NAMES.childDob, ENROLLMENT_FIELD_NAMES.childDobMedical, ENROLLMENT_FIELD_NAMES.childDobPickup]) {
+            expect(rendered[name]).not.toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        }
         expect(rendered[ENROLLMENT_FIELD_NAMES.childName]).toBe("Test Process");
         expect(rendered[ENROLLMENT_FIELD_NAMES.allergies]).toBe("Peanut butter");
     });
@@ -186,9 +205,10 @@ describe("THE ASK-ONCE PROOF — one confirmed fact fills every document locatio
             now: NOW,
         });
         const rendered = await readTextFieldValues(corrected.bytes);
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDob]).toBe("2025-08-20");
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobMedical]).toBe("2025-08-20");
-        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobPickup]).toBe("2025-08-20");
+        // The corrected fact reaches every destination, in the destination's shape.
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDob]).toBe("08/20/2025");
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobMedical]).toBe("08/20/2025");
+        expect(rendered[ENROLLMENT_FIELD_NAMES.childDobPickup]).toBe("08/20/2025");
     });
 });
 
