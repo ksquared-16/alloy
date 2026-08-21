@@ -107,8 +107,32 @@ log "Ensuring Vacilando specialist lane (does not bind a worktree)..."
 node "$HERE/alloy-vacilando" ensure-lane vacilando
 
 if [ "${VACILANDO_INSTALL_GATEWAY:-1}" = "1" ]; then
-  log "Installing Gateway launchd from canonical toolkit (not a sprint worktree)..."
-  VACILANDO_NODE_NAME="$NODE_NAME" bash "$REPO/scripts/local-dev/install-vacilando-gateway.sh"
+  # The Gateway must come from the VERSIONED TOOLKIT INSTALLATION, not from
+  # "$REPO/scripts/local-dev". The canonical WORKING TREE is not guaranteed to
+  # be current: on the MacBook it sat 512 commits behind origin/staging and did
+  # not contain the Gateway host at all, so installing from it would either
+  # fail outright or pin launchd to stale code. alloy-toolkit reads the git
+  # object store, so it is correct even when the working tree is behind.
+  TOOLKIT_CURRENT="${ALLOY_TOOLKIT_ROOT:-$HOME/.local/share/alloy/toolkit}/current"
+
+  if command -v alloy-toolkit >/dev/null 2>&1; then
+    log "Installing canonical toolkit from ${ALLOY_TOOLKIT_REF:-origin/staging}..."
+    ALLOY_REPO="$REPO" alloy-toolkit install "${ALLOY_TOOLKIT_REF:-origin/staging}"
+  else
+    log "WARN: alloy-toolkit not on PATH — cannot refresh the canonical toolkit installation"
+  fi
+
+  GATEWAY_INSTALLER="$TOOLKIT_CURRENT/install-vacilando-gateway.sh"
+  [ -f "$GATEWAY_INSTALLER" ] || fail "Gateway installer missing at $GATEWAY_INSTALLER — run: alloy-toolkit install origin/staging"
+
+  case "$(cd "$(dirname "$GATEWAY_INSTALLER")" && pwd -P)" in
+    *"/alloy-worktrees/"*)
+      fail "refusing to install the Gateway from a sprint worktree: $GATEWAY_INSTALLER" ;;
+  esac
+
+  log "Installing Gateway launchd from $GATEWAY_INSTALLER ..."
+  VACILANDO_NODE_NAME="$NODE_NAME" NODE_BIN="${NODE_BIN:-$(command -v node)}" \
+    bash "$GATEWAY_INSTALLER"
 fi
 
 log ""
