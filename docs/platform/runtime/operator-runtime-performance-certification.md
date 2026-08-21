@@ -95,6 +95,10 @@ justification, regression updates, and re-certification.
 18. **Performance measurement** — separate T0 intent / T1 acknowledgement / T2 destination / T3 primary usable / T4 hydrated. T4 alone is not a UX metric.
 19. **Two performance classes** — see §1.
 20. **Floating surfaces may never cover primary navigation.** A parked or floating surface may be positioned by score, but regions carrying a surface's primary navigation are forbidden territory, not a low score. Scoring alone cannot express "never here": on a dense surface every candidate overlaps something and the least-bad winner can still swallow a control.
+21. **An operational workspace's dataset survives its own modal unmount.** The shared modal host unmounts children on close for every workspace alike, so anything owned in `useState`/`useRef` dies with the close and the workspace reloads cold on reopen. Data lifecycle belongs to a module-scoped warm owner (`lib/runtime/warmCache.ts`), never to the component tree. A `useRef` cache is not a cache — it has exactly the component's lifetime.
+22. **A workspace reopens to its last stable internal position, and never to transient state.** Stable navigation (section, mode, view, lens, filter, lane) is remembered; an editor, dialog, popover, half-completed form, selected record or command destination is not. The exclusion is STRUCTURAL: a position is a flat `Record<string, string>` of navigation identity, so transient state has no representation and cannot be committed by mistake. A remembered position is a hint, never an authority — anything that fails its workspace's validity guard falls back to the default rather than opening broken.
+23. **Reuse is only safe with an invalidation seam.** A TTL alone is not freshness. Every cached projection a command can change must be dropped by that command, at every layer that holds it. Caching a mutable projection without its seam is how a green toast leaves a stale board on screen.
+24. **Readiness follows resume.** Preparing the default destination for a workspace that reopens somewhere else prepares the wrong thing. Readiness reads the remembered position, and arms on nav intent (hover/focus) — warming inside the modal's own open effect runs at the same instant the workspace mounts and cannot shorten a serial chain.
 
 ## 5. Invariant → guard matrix
 
@@ -107,7 +111,10 @@ justification, regression updates, and re-certification.
 | 10 attention-relative window | `useCommittedWorkUnitSurfaceRuntime` | same file | **guarded** |
 | 5 latest intent wins | Focus Panel runtime | browser-verified only (A→B→A→B at 40–60 ms) | **gap** |
 | 15 Save persistence / no false success | child-scoped mutation owner | browser-verified round trip only | **gap** |
-| 12 operational workspace resume | shared workspace host | none — behaviour not yet decided | **gap / product decision** |
+| 12 operational workspace resume | `lib/runtime/workspaceResume.ts` | `tests/runtime/workspaceResumeContract.test.ts` (14) + `scripts/pe3WorkspaceResumeCert.mjs` (A/B/C × 3 workspaces) | **guarded** |
+| 21 workspace data lifecycle | `lib/runtime/warmCache.ts` + `lib/scheduling/operationsWorkspaceWarmCache.ts` | `tests/runtime/operationsWorkspaceWarmLifecycle.test.ts` (9) | **guarded** |
+| 23 invalidation seam | per-workspace warm owner | `operationsWorkspaceWarmLifecycle.test.ts` (mutation drops day, not configuration) | **guarded** |
+| 24 readiness follows resume | `warmOperationsWorkspace` + `SidebarOperationsNavItem` | browser-measured (request chain) | **partial — no deterministic guard** |
 | 13 Activity subject switching | Focus Panel runtime | browser-verified only | **gap** |
 | 20 floating surfaces vs navigation | `chooseBosParkingGeometry` + `BosPresentationControllerContext` | browser-verified (real pointer clicks on both tabs) | **gap — no deterministic guard yet** |
 | 1, 11, 14, 16 | various | measured, not guarded | **gap** |
@@ -155,7 +162,7 @@ count, is the diagnostic:** flat means a loader, rising means an accumulating ef
 |---|---|---|---|
 | Processing | 3, 0, 0, 2 | warm + occasional refresh | **healthy** — warm reuse with explicit freshness |
 | Work Items | 4, 0, 0, 0 | warm after first | **healthy** |
-| Operations | 7, 7, 7, 7 | **flat** | **primary dataset, refetched per open** — no warm reuse, but no accumulation |
+| Operations | 7, 7, 7, 7 → **8, 0, 0, 6** | flat → warm | **FIXED** — adopted the shared warm primitive (§9) |
 | Inbox / Communications | 20, 22, 23, 22 | **plateau** | **genuine duplicate loader** — see below |
 
 ### Two corrections to earlier reporting
@@ -186,3 +193,109 @@ is duplicate loader ownership, one of this program's named deprecation classes.
 
 **Owner: Communications.** Not fixed here to avoid colliding with that lane. The remedy is to route
 those components through the existing warm cache they already import.
+
+
+---
+
+## 9. Operations warm data lifecycle — fixed
+
+Operations was the one operational workspace that reloaded its entire dataset on every open. The gap
+was **never the shared host**: `AdminV2WorkspaceBosModalShell` unmounts children on close for every
+workspace alike. Processing survives that unmount because its data lives in module-scoped warm
+caches; Operations' lived in `useState`/`useRef` inside `RosterWorkspace`. Its loaders were
+component-scoped rather than workspace-runtime-scoped — it even had a `weekCache` already, as a
+`useRef`, i.e. with exactly the component's lifetime.
+
+**Remedy:** adopt the existing platform primitive `lib/runtime/warmCache.ts` — the same one
+Processing, Work Items and Operational Intelligence already read through. Not an Operations-only
+parallel cache. Two caches, because Operations has two freshness classes:
+
+| class | TTL | reads | why |
+|---|---|---|---|
+| REFERENCE | 5 min | `view=sites`, `view=assignment_types`, `records/bootstrap` | configuration the day is *described in*; authored in Studio, changed rarely |
+| DAY | 30 s | `view=roster…`, `view=assignment_roster…`, `/api/admin/roster…` | the commitments themselves; this is what an operator watches and what mutates |
+
+**Freshness is not only a TTL.** `invalidateOperationsDay()` is the seam `reloadAssignments` and the
+attendance command use, so a changed commitment re-reads immediately instead of waiting out 30 s.
+Both layers drop — the in-session ref and the cross-open cache. A non-2xx is never cached as data.
+
+### Measured (production build, four open/close cycles, full URLs retained)
+
+| | requests per open | day on screen |
+|---|---|---|
+| before | 7, 7, 7, 7 | 2,845 ms |
+| after (scheduling views only) | 8, 2, 2, 6 | 3,273 → ~21 ms |
+| **after (both roster surfaces)** | **8, 0, 0, 6** | **2,845 → 30 ms** |
+
+Cycle 4 refreshing 6 is the freshness contract working, not a regression: the day class expired, the
+configuration class did not. **A second loader is invisible to a path-keyed harness** — the first cut
+left `/api/admin/roster` fetching on every open because `DailyRoster` and `AttendanceWorkspace` own
+their own reads of the same day.
+
+> **Measurement note.** `pe3WorkspaceDataLifecycle.mjs` keys requests by PATH ONLY
+> (`.split("?")[0]`), which made Operations' seven DISTINCT queries look like duplicates of two.
+> `pe3OperationsWarmAB.mjs` keys by FULL URL, which is what makes "reused" and "refetched"
+> distinguishable at all.
+
+---
+
+## 10. Workspace resume — certified
+
+**Product decision:** an operational workspace reopens to its LAST STABLE INTERNAL POSITION.
+
+Implemented ONCE at `lib/runtime/workspaceResume.ts`, not as three parallel resume stores. A
+workspace *declares* its position and its validity guard (`operationsResume.ts`,
+`processingResume.ts`, `workItemsResume.ts`); a future workspace inherits resume by declaring, not by
+reimplementing. Writes MERGE, so a workspace with two owners (Work Items keeps its view in the modal
+and its queue scope in the panel) does not have them erase each other.
+
+Storage is `sessionStorage`, holding navigation identity only — never a business-record payload.
+Restoring *where* the operator was must never become a stale second copy of *what* they were seeing.
+
+**Processing deliberately cannot resume its case-detail view.** `DigitalMailroomWorkView` is
+`"overview" | "work"`, and `"work"` only means anything with a selected case — which is transient and
+not persisted. A remembered `"work"` is therefore invalid by construction and falls back to the
+default, so Processing never reopens onto an empty case detail.
+
+This **overrides** RosterWorkspace's previous deliberate "always default to Work" choice, which
+argued Studio should not be remembered. Under the resume decision, returning someone to the day when
+they deliberately left themselves in configuration is what loses their place.
+
+### Certification — `scripts/pe3WorkspaceResumeCert.mjs`
+
+| workspace | A: non-default section restored | B: section kept, transient absent | C: return to default restored | T2 shell |
+|---|---|---|---|---|
+| Processing | PASS (Studio/Forms) | PASS | PASS | 11–21 ms |
+| Work Items | PASS (Queue) | PASS (1 transient open → 0) | PASS | 16–24 ms |
+| Operations | PASS (Children) | PASS | PASS | 5–17 ms |
+
+Shell commits in **5–24 ms** against the <200 ms target, on all three, in every scenario.
+
+> **This harness twice produced a vacuous pass and was hardened both times.** A single `Escape`
+> dismisses an open popover and leaves the workspace standing, so the next "reopen" measured an
+> already-open modal: 0 ms shell, no acknowledgement, and every assertion after it true for the wrong
+> reason. The close is now verified and an unclosed workspace throws. Separately, comparing active-tab
+> LABEL TEXT failed spuriously because cohort tabs embed live counts (`"All Children15"`); the
+> assertion compares section identity instead.
+
+### Open — resumed primary content is not uniformly warm
+
+Every resumed destination commits in 14–28 ms **except Operations → Children, at ~4.1 s.** Decomposed
+against the live request chain:
+
+```
+click +22 ms    req  /api/admin/records/bootstrap
+     +750 ms    res  200                                (728 ms, serial)
+     +762 ms    req  /api/admin/records/children?cohort=all&offset=0
+    +4415 ms    res  200                                (3,653 ms — the endpoint itself)
+```
+
+Two separate problems. The 728 ms bootstrap is now removed from the serial chain by arming readiness
+on **nav intent** (hover/focus on the sidebar item) rather than inside the modal's open effect, which
+fires at the same instant the workspace mounts and can never shorten a serial chain.
+
+The remaining **3,653 ms is `/api/admin/records/children` itself** — a server-side critical path, not
+a caching problem, and not fixable by warming. **Owner: Records.** It is the largest single number
+left in the operator runtime and deserves its own decomposition; the route runs a serial
+`requireAdminOrOps → getAdminContextCached → getAdminAccessContextCached → resolveSearchAccessEnvelope
+→ queryChildCohortPage` prologue before a bulk `Promise.all`.

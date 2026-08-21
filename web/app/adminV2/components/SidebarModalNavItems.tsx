@@ -9,6 +9,7 @@ import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksN
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
 import { useActiveAdminV2WorkspaceModal } from "@/lib/adminV2/useActiveWorkspaceModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { warmOipAnalyticsModal } from "@/lib/metrics/oipWorkspaceWarmCache";
 import { warmOperationalIntelligence } from "@/lib/analytics/runtime/operationalIntelligenceWarmCache";
 import { warmProcessingQueueCache } from "@/lib/pos/processingQueueWarmCache";
@@ -254,7 +255,19 @@ export function SidebarOperationsNavItem({ collapsed }: { collapsed: boolean }) 
             badge={null}
             active={activeModal === "operations"}
             dataAttr="operations"
+            /*
+             * Readiness on NAV INTENT, not on the click. Warming inside the modal's own open effect
+             * runs at the same instant the workspace mounts, so a serial chain (configuration ->
+             * section data) gains nothing from it. Hover/focus is the earliest honest signal, and it
+             * is the seam Communications already uses.
+             *
+             * `warmOperationsWorkspace` reads the REMEMBERED position and prepares that destination —
+             * bounded to the configuration class, never a full hydration of a closed workspace.
+             */
+            onMouseEnter={() => warmOperationsWorkspace()}
+            onFocus={() => warmOperationsWorkspace()}
             onClick={() => {
+                warmOperationsWorkspace();
                 dispatchAdminV2OpenOperationsModal();
             }}
         />

@@ -24,8 +24,28 @@ export type MyTasksModalProps = {
     onClose: () => void;
 };
 
+import {
+    WORK_ITEMS_DEFAULT_POSITION,
+    WORK_ITEMS_WORKSPACE_KEY,
+    isValidWorkItemsPosition,
+} from "@/app/adminV2/tasks/workItemsResume";
+import {
+    resolveWorkspaceOpenPosition,
+    writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
+
 export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
-    const [workView, setWorkView] = useState<WorkItemsWorkView>("overview");
+    // Stable navigation resumes; the selected task and every editor/popover below it do not.
+    const opened = useState(() =>
+        resolveWorkspaceOpenPosition(
+            WORK_ITEMS_WORKSPACE_KEY,
+            WORK_ITEMS_DEFAULT_POSITION,
+            isValidWorkItemsPosition,
+        ),
+    )[0];
+    const [workView, setWorkView] = useState<WorkItemsWorkView>(
+        opened.workView as WorkItemsWorkView,
+    );
     const [newTaskNonce, setNewTaskNonce] = useState(0);
     const [navFilter, setNavFilter] = useState<OperationalTaskWorkspaceFilter | null>(null);
     const [navSelectedTaskId, setNavSelectedTaskId] = useState<string | null>(null);
@@ -39,8 +59,11 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
             void prefetchCommandCenterConversations();
         }
     }, [open]);
+    /**
+     * Closing clears TRANSIENT state only. `workView` is stable navigation and is left standing so
+     * the next open resumes it.
+     */
     const handleClose = useCallback(() => {
-        setWorkView("overview");
         setNavFilter(null);
         setNavSelectedTaskId(null);
         setNavSource(null);
@@ -48,6 +71,10 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         setNewTaskNonce(0);
         onClose();
     }, [onClose]);
+
+    useEffect(() => {
+        writeWorkspaceResume(WORK_ITEMS_WORKSPACE_KEY, { workView });
+    }, [workView]);
 
     const openQueue = useCallback(() => {
         setNavFilter("open");

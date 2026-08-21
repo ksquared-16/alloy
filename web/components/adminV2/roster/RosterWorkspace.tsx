@@ -70,6 +70,15 @@ import {
 } from "@/lib/adminV2/workspaceModalEvents";
 import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
 import {
+  OPERATIONS_DEFAULT_POSITION,
+  OPERATIONS_WORKSPACE_KEY,
+  isValidOperationsPosition,
+} from "@/app/adminV2/operations/operationsResume";
+import {
+  resolveWorkspaceOpenPosition,
+  writeWorkspaceResume,
+} from "@/lib/runtime/workspaceResume";
+import {
   invalidateOperationsDay,
   warmOperationsDay,
   warmOperationsReference,
@@ -94,18 +103,53 @@ async function schedApi(path: string): Promise<any> {
 
 export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
   /**
-   * WORK or STUDIO — running the operating day, or configuring what it is made of.
+   * WORK or STUDIO, and the section within it — this workspace's stable navigation position.
    *
-   * Defaults to Work every time the workspace opens. Studio is where an operator goes
-   * deliberately and rarely; remembering it across opens would land someone on a configuration
-   * screen when they came to look at the day.
+   * RESUMED, not reset. This previously defaulted to Work on every open, on the reasoning that
+   * Studio is entered deliberately and rarely. The product decision is now that an operational
+   * workspace reopens where the operator left it: coming back to a configuration screen you
+   * deliberately opened is the expected behaviour, and being silently returned to the day is what
+   * loses your place. Resume is owned once, in `lib/runtime/workspaceResume.ts`.
+   *
+   * `useState` initialisers are the right seam because the shared modal host unmounts this
+   * component on close — every open is a fresh mount, so the remembered position is read exactly
+   * once per open.
    */
-  const [mode, setMode] = useState<OperationsMode>("work");
-  const [studioSection, setStudioSection] =
-    useState<Exclude<OperationsStudioSection, "templates">>("types");
-  const [section, setSection] = useState<RosterSection>("roster");
-  const [range, setRange] = useState<RosterRange>("day");
-  const [lens, setLens] = useState<RosterLens>("rooms");
+  const opened = useState(() =>
+    resolveWorkspaceOpenPosition(
+      OPERATIONS_WORKSPACE_KEY,
+      OPERATIONS_DEFAULT_POSITION,
+      isValidOperationsPosition,
+    ),
+  )[0];
+  const [mode, setMode] = useState<OperationsMode>(opened.mode as OperationsMode);
+  const [studioSection, setStudioSection] = useState<
+    Exclude<OperationsStudioSection, "templates">
+  >(opened.studioSection as Exclude<OperationsStudioSection, "templates">);
+  const [section, setSection] = useState<RosterSection>(opened.section as RosterSection);
+  const [range, setRange] = useState<RosterRange>(opened.range as RosterRange);
+  const [lens, setLens] = useState<RosterLens>(opened.lens as RosterLens);
+
+  /**
+   * Record the stable position whenever it changes. Only these five navigation keys are ever
+   * committed; nothing transient (an open editor, a room popover, a pending bulk assign) can be
+   * expressed in the position type, so none of it can be restored.
+   */
+  /** Read inside `loadWeek`, which is deliberately dependency-free so it never re-creates. */
+  const sectionRef = useRef<RosterSection>(section);
+  useEffect(() => {
+    sectionRef.current = section;
+  }, [section]);
+
+  useEffect(() => {
+    writeWorkspaceResume(OPERATIONS_WORKSPACE_KEY, {
+      mode,
+      section,
+      lens,
+      range,
+      studioSection,
+    });
+  }, [mode, section, lens, range, studioSection]);
 
   const [sites, setSites] = useState<RosterSite[] | null>(null);
   const [siteId, setSiteId] = useState<string>("");
@@ -368,8 +412,16 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     setWeek(data);
     setLoadingWeek(false);
     setWeekChangePending(false);
-    // Adjacent weeks, so stepping through the plan is instant.
-    if (data?.weekStart) {
+    /*
+     * Adjacent weeks, so stepping through the plan is instant — but ONLY while the roster is the
+     * section on screen.
+     *
+     * Resume made this visible: reopening Operations on Children still paid for two speculative
+     * week prefetches (~2.6 s of server work) for a board nobody was looking at, competing with the
+     * children list the operator actually asked for. Readiness must never compete with current
+     * intent; stepping through weeks is not possible from a section that does not show weeks.
+     */
+    if (data?.weekStart && sectionRef.current === "roster") {
       for (const offset of [-7, 7]) {
         const w = addDaysYmdLocal(data.weekStart, offset);
         if (weekCache.current.has(w)) continue;

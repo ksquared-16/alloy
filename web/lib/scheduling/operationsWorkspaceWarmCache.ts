@@ -30,7 +30,9 @@
  * without that seam would leave the Rooms board asserting the old plan after an action — the precise
  * failure the un-cached code avoided by clearing its ref.
  */
+import { OPERATIONS_WORKSPACE_KEY } from "@/app/adminV2/operations/operationsResume";
 import { createWarmCache } from "@/lib/runtime/warmCache";
+import { readWorkspaceResume } from "@/lib/runtime/workspaceResume";
 
 /** Scope is the request path itself — it already carries site and week. */
 type PathParams = { path: string };
@@ -96,12 +98,32 @@ export function invalidateOperationsDay(): void {
 
 /**
  * Armed on nav intent (the left-nav open), so the workspace opens against warm configuration.
- * Only the site list is warmed here: every day read is keyed by a site that is not known until the
- * site list resolves, and speculatively warming a guessed site would compete with the operator's
- * actual choice.
+ *
+ * READINESS FOLLOWS RESUME. Operations does not reopen on the roster by default any more — it
+ * reopens where the operator left it — so preparing the roster's configuration unconditionally
+ * would prepare the wrong destination and the REMEMBERED section would still cold-load. The
+ * remembered position decides which configuration is warmed.
+ *
+ * Deliberately BOUNDED to the configuration class. Every operating-day read is keyed by a site that
+ * is not known until the site list resolves, and speculatively warming a guessed site would compete
+ * with the operator's actual choice — the one thing readiness must never do. This is CODE + SHELL +
+ * CONFIGURATION readiness, not full hydration of a closed workspace.
  */
 export function warmOperationsWorkspace(): void {
     void referenceCache.warm({ path: "/api/admin/scheduling?view=sites" });
+
+    const position = readWorkspaceResume(OPERATIONS_WORKSPACE_KEY);
+    const section = position?.section;
+    const lens = position?.lens;
+
+    // Staff and Children need the durable population bootstrap; the roster never does.
+    if (section === "staff" || section === "children") {
+        void referenceCache.warm({ path: "/api/admin/records/bootstrap" });
+    }
+    // The Assignments lens is the only reader of the org's assignment categories.
+    if (lens === "assignments") {
+        void referenceCache.warm({ path: "/api/admin/scheduling?view=assignment_types" });
+    }
 }
 
 /** Test-only. */
