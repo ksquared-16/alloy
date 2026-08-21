@@ -1,3 +1,10 @@
+---
+owner: platform
+status: sprint
+last_reviewed: 2026-08-21
+supersedes: []
+---
+
 # D2 / I-10 — one role per organization, or several?
 
 **Status:** decision requested, not implemented. No D2/I-10 code was written for this document.
