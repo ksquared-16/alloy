@@ -6,6 +6,7 @@
  *   vac run-status <run_id> <state> [--reason "..."] [--summary "..."] [--resource <key>]
  */
 import { resolve } from "node:path";
+import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 import { reportRunState } from "./lib/vacilando/execution-run.mjs";
 
 function usage(code = 2) {

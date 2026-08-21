@@ -8,6 +8,7 @@
  *   node vac-session-report.mjs governed-action --run <id> --lane <lane> --json '{...}'
  */
 import { resolve } from "node:path";
+import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 import { acceptHandoffReport, acceptOrientationReport } from "./lib/vacilando/agent-session-lifecycle.mjs";
 import { requestGovernedAction } from "./lib/vacilando/governed-action-request.mjs";
 
