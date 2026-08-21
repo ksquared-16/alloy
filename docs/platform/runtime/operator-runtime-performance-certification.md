@@ -397,3 +397,80 @@ instruction, and NOT a readiness problem — the readiness is already there and 
 - `takeOpportunityDrawerActivityPrefetch` is consumed only by `OpportunityDrawerVmTabPanes` (the VM
   drawer), not by the inline Activity cockpit — so the prefetched snapshot warms the network and the
   server, but the cockpit does not read the slot.
+
+
+---
+
+## 13. Card / command readiness — CERTIFIED
+
+The whole Focus Panel interaction family commits through ONE shared seam: `data-fp-depth="active"`
+(or a popup for menu-style commands). No card-specific or command-specific fast path was added, and
+none was needed.
+
+### Measured (production build, `scripts/pe3CardCommandReadiness.mjs`)
+
+| transition | T1 ack | T2 destination | T3 usable | T4 quiet | requests | verdict |
+|---|---|---|---|---|---|---|
+| CMD Message | 1 ms | 80 ms | 80 ms | 6,257 ms | 5–9 | **premium commit**, secondary debt |
+| CMD Send form | 0 ms | 49 ms | 49 ms | 525 ms | 2 | **premium** |
+| CMD Tour | 1 ms | 28 ms | (menu) | 31 ms | **0** | **premium** |
+| CARD Children | 1 ms | 31 ms | 31 ms | 488 ms | 2 | **premium** |
+| CARD Household | 1 ms | 121–155 ms | 121–156 ms | 638 ms | 1 | **premium** |
+| CARD Assignment | 1 ms | 53 ms | 53 ms | 532 ms | 1 | **premium** |
+| CARD Billing Preview | 1 ms | 32 ms | 32 ms | 508 ms | **0** | **premium** |
+
+**Every destination commits in 28–155 ms against a <200 ms aspiration, and T3 equals T2 in every
+case** — the destination arrives already carrying its controls, rather than committing and then
+becoming usable. Tour and Billing Preview commit with **zero requests**: pure prepared state. Return
+to base is a uniform ~3.0 s Escape dwell in the harness, not a measured cost.
+
+### Destination requirement classification
+
+| requirement | class |
+|---|---|
+| focused subject, family settlement, recipient identity | **KNOWN BEFORE INTENT** — present at commit |
+| child identity + existing assignment state | **KNOWN BEFORE INTENT** |
+| tour context and its action set | **KNOWN BEFORE INTENT** (0 requests) |
+| `lifecycle-builder/participant-decisions`, `family-close` | **SAFE TO PREPARE** (fires at ~60–90 ms, does not gate commit) |
+| `locations`, `location-program-categories`, `financial-config` | **SECONDARY AFTER COMMIT** |
+| message history, thread messages, recipients, identities | **SECONDARY AFTER COMMIT — EXTERNAL OWNER** |
+| capacity / slot availability | **SECONDARY AFTER COMMIT** — never gates the destination |
+
+### No cross-child leakage — PROVEN
+
+Asserted on the canonical identity seam (`data-children-focused-member` within
+`[data-identity-depth="details"]`), selecting two DIFFERENT children in sequence:
+
+```
+child A  PassA Kid  member 1e30034b…  shows self: true
+child B  PassB Kid  member c1cd2074…  shows self: true   shows previous child: FALSE
+distinct member ids: true            VERDICT: PASS
+```
+
+> The first version of this assertion was **vacuous** and was rewritten. It scoped to
+> `[data-fp-depth]` — which is the WHOLE Focus Panel, listing every child in the family — so "the
+> pane shows child A" was satisfied by the roster and could never have detected leakage. Identity
+> assertions must be scoped to the identity seam, not to the surface that contains it.
+
+### Secondary debt — EXTERNAL OWNER (Communications)
+
+`Message` commits in 80 ms but does not go quiet until **6.3 s**: three `threads/*/messages`,
+`identities`, `family-workspace` and `drawer-recipients` hydrate afterwards. The composer, recipient
+and controls are usable at 80 ms, so this is secondary hydration, not a blocked destination — but it
+is the same Communications cascade recorded in §12 and the duplicate-loader handoff. **Not fixed
+here by instruction.** One console error accompanies it (a 404 on a speculative drawer-VM prefetch,
+also recorded in §7).
+
+### Two harness defects corrected during this work
+
+1. **`el.click()` is the wrong gesture for a menu command.** Menu-style commands open on
+   **pointerdown**; a lone synthetic `click` left the Tour menu closed (`aria-expanded` stayed
+   `false`, zero new nodes) and made a working command look **broken**. The harness now dispatches a
+   full `pointerdown → pointerup → click` sequence. Same family as the synthetic-`mouseenter` error
+   in §10.
+2. **The reported CLS (0.178–0.528) is a MEASUREMENT ARTIFACT, not a product defect.** Chrome marks
+   layout shifts within ~500 ms of real user input as `hadRecentInput` and excludes them; a
+   *synthetic* event sets no such flag, so the deliberate 240 ms depth animation
+   (`--alloy-os-fp-depth-ms`) is scored as unexpected movement. The Focus Panel grid width is
+   **stable at 895 px before and after** the transition — the 863 px seen mid-flight is the
+   animation, and it returns. **No layout fix is warranted; do not chase these numbers.**
