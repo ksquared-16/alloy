@@ -30,14 +30,14 @@ warm reuse, workspace resume, card/command readiness, the five guard gaps) are a
 | # | Area | Item | Evidence carried in | Class | Owner |
 |---|---|---|---|---|---|
 | 1 | **Unexpected refresh** | App "randomly refreshes"; cause unknown | none — NEW, must be instrumented | correctness/UX | **this lane** |
-| 2 | **Live convergence** | How canonical mutations propagate is unmapped | none — NEW | architecture | **this lane** |
+| 2 | **Live convergence** | How canonical mutations propagate is unmapped | **MAPPED** — [`CONVERGENCE-MATRIX.md`](CONVERGENCE-MATRIX.md); A/A2/B/F live-certified with exact restoration, C/D code-certified, E not exercisable | architecture | **this lane** |
 | 3 | **Operations** | Full product/perf/convergence pass beyond shell+warm+resume | shell 8–101 ms, reopen 0 requests, resume 9/9 certified | completion | **this lane** |
 | 4 | **Communications** | Duplicate loader ownership: `TemplatesWorkspace` / `AnnouncementsWorkspace` direct-fetch what `communicationsWorkspaceWarmCache` already owns | §handoff + 20/22/23/22 per-open shape; **not** an accumulating leak; globalThis hypothesis **disproved** | convergence | **this lane** (was external) |
 | 5 | **Records** | `/api/admin/records/children` ~3.3–4.5 s | measured in the prior phase; largest single number left | performance | **this lane** (was external) |
 | 6 | **/organization** | Second pass: true-cold route-family entry, deep controls/editor, convergence after save | warm nav 17–63 ms certified; cold 1,486–2,594 ms; hover prefetch **disproved** | performance/convergence | **this lane** |
 | 7 | **True cold** | Bare Work Unit ~11,708 ms | separate performance class (§1) | performance | **this lane** — re-profile first |
-| 8 | **Counts / KPIs** | No matrix of projection → truth → invalidation owner | none — NEW | convergence | **this lane** |
-| 9 | **Cross-surface truth** | No explicit freshness contract | none — NEW | architecture | **this lane** |
+| 8 | **Counts / KPIs** | No matrix of projection → truth → invalidation owner | **BUILT** — matrix §4; two 120 s polls total; queue summaries have no trigger | convergence | **this lane** |
+| 9 | **Cross-surface truth** | No explicit freshness contract | **BUILT** — matrix §5; child name is the one fact with no contract off its owning card | architecture | **this lane** |
 
 ## Carried external handoffs (NOT absorbed)
 
@@ -48,6 +48,20 @@ warm reuse, workspace resume, card/command readiness, the five guard gaps) are a
 | Vacilando ABANDONED execution-run checkpoint | Vacilando | open — tooling debt; both prior runs abandoned mid-flight |
 | Brokered `vac run typecheck` OOM (pins 4096 vs package 8192) | validation broker | open — `typecheck:tests` at 8192 passes |
 | `/organization/access` convergence | **PR #483** | active lane — do not modify here |
+
+## Priority 2 findings — top three convergence defects
+
+Full evidence: [`CONVERGENCE-MATRIX.md`](CONVERGENCE-MATRIX.md). Laws **28** and **29** frozen from them.
+
+| # | Defect | Operator impact | Owner to fix |
+|---|---|---|---|
+| 1 | **The Work Unit queue subscribes to nothing.** The row/summary refresh policy has zero production callers; the current route registers no listener; its guard reads a deleted file. | Every membership- or order-changing mutation leaves the rows the operator is looking at stale. Counts converge, rows do not — so the screen looks authoritative and is wrong. | work-unit surface runtime + the existing policy in `lib/admin/opportunityQueueRefreshEvent.ts` |
+| 2 | **A child rename converges one card and no other surface.** `saveInquiryChild` emits only record-patch signals unless participation fields changed. | Two different names for one child on one screen (Children card vs Assignments card vs queue row), until a manual browser refresh. | `focusPanelMutation.saveInquiryChild` + `buildDurableChildFocusPanelMutation` (one contract, two owners) |
+| 3 | **Organization config saves emit no signal and refresh their own route.** One program rename = 3 POSTs + 1 GET + 1 RSC. | Consuming operator surfaces are never told; freshness depends on reopening them. The editor's own freshness is bought with an RSC refresh. | `configuration/programs` write path |
+
+**Priority 1 regression proof (Mutation B).** The reload removal HOLDS live: 0 document loads, 0 RSC,
+no remount, canonical broadcast emitted. The claim in that commit that "listeners refetch rows AND
+counts" is **half true** — counts yes, rows no (defect 1). Recorded rather than re-opened.
 
 ## Convergence invariant adopted
 
