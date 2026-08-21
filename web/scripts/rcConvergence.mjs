@@ -175,3 +175,56 @@ export async function openProbe({ headless = true } = {}) {
 }
 
 export const settle = (page, ms = 2500) => page.waitForTimeout(ms);
+
+/**
+ * ── THE REVERSIBLE-PROBE RESTORATION CONTRACT ──
+ *
+ * Written because two probes have now left residue on Firefly.
+ *
+ * 1. A prior certification probe renamed a child and restored it in the surface it was editing. The
+ *    placement projection kept the probe name, and is still wrong today. Restoring the value you can
+ *    see is not restoring the truth.
+ * 2. This probe renamed a configuration Program and restored it. The live label came back exactly —
+ *    and the object's REVISION HISTORY permanently holds two revisions named `Toddler RCPROBE`,
+ *    because a versioned object records the restore as a NEW version rather than removing the old one.
+ *
+ * So the contract has two halves, and the second is the one that bites:
+ *
+ *   VERIFY EVERY PROJECTION, not the one you edited. `assertRestored` takes a reader per projection
+ *   and fails unless all of them are byte-equal to the captured original.
+ *
+ *   DO NOT PROBE A VERSIONED OBJECT AT ALL. Publication-versioned configuration (Programs, and
+ *   anything else with a `revisions` array or a publish step) is NOT reversible by definition — the
+ *   restore is an append. There is no "restore" that makes it clean, so such a mutation must never be
+ *   chosen as a "safe reversible probe" in the first place.
+ */
+
+/** Refuse a probe target whose restore would only append a version. */
+export function assertReversibleTarget(sample, label = "target") {
+    const s = typeof sample === "string" ? sample : JSON.stringify(sample ?? {});
+    if (/"revisions"\s*:\s*\[|"publishedRevisionId"|"action"\s*:\s*"publish"/.test(s)) {
+        throw new Error(
+            `${label} is publication-versioned — a restore APPENDS a revision and cannot make it clean. ` +
+            `Choose an unversioned field, or accept the history and say so up front.`,
+        );
+    }
+}
+
+/**
+ * Prove restoration across EVERY affected projection.
+ * `readers` is `{ name: async () => value }`; every value must equal the captured original.
+ */
+export async function assertRestored(originals, readers) {
+    const failures = [];
+    for (const [name, read] of Object.entries(readers)) {
+        const now = await read();
+        const before = originals[name];
+        const eq = JSON.stringify(now) === JSON.stringify(before);
+        if (!eq) failures.push(`${name}: expected ${JSON.stringify(before)}, found ${JSON.stringify(now)}`);
+    }
+    if (failures.length) {
+        throw new Error(`RESTORATION INCOMPLETE — do not report this probe as clean:\n  ${failures.join("\n  ")}`);
+    }
+    return true;
+}
+

@@ -163,6 +163,23 @@ The five per-open `provisioning-answer` calls are **five distinct `work_view_id`
 duplicates** — stripping the query string makes them read as one repeated call, which is the exact
 false finding the previous phase recorded.
 
+## 6b. Probe hygiene — what this program left on Firefly, exactly
+
+| Probe | Live truth after restore | Residue |
+|---|---|---|
+| A / A2 child fields + name | exact original, verified by re-read | none |
+| B waitlist placement | all 16 positions identical, no active overrides | none |
+| F Program name | `draft.label = "Toddler"`, list and consumers correct | **two revisions named `Toddler RCPROBE` in the object's version history — permanent** |
+
+The Program residue is version HISTORY, not divergent truth: publishing a restore appends a revision
+rather than removing the one before it. That is the object behaving correctly and the PROBE being
+wrong to treat it as reversible. Frozen as law 33, and enforced in the harness:
+`assertReversibleTarget` now refuses a publication-versioned target, and `assertRestored` fails a
+probe that verifies only the surface it edited.
+
+The pre-existing `perf-probe-1787311039569` name is the same failure one generation earlier — a
+prior probe restored the child in the card it was editing and never checked the placement projection.
+
 ## 7. Priority 3 (Operations) preparation
 
 - Firefly's operating day is **empty** — 0 children expected, 0 staff scheduled, all four Operations
