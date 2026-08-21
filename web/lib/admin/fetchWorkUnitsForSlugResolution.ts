@@ -4,8 +4,19 @@ import { operatorStageKeysForPipelineQueueKey } from "@/lib/lifecycle/enrollment
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import type { WorkUnitRouteSlugRow } from "@/lib/admin/resolveWorkUnitByRouteSlug";
 
+/**
+ * The work unit's department is EMBEDDED, not fetched afterwards.
+ *
+ * Route identity needed both, and the departments read could only start once the work-unit rows
+ * named their department ids — a second serial round trip on the document critical path, inside
+ * `route_meta` (~2.1s), which is paid before the first byte.
+ *
+ * `org_id` is selected on the embedded row deliberately: the standalone departments read asserted
+ * `.eq("org_id", orgId)`, and that explicit tenant guard is re-applied in memory below rather than
+ * being downgraded to "the FK implies it".
+ */
 const SLUG_WU_SELECT =
-    "id, org_id, department_id, key, name, sort_order, is_active, queue_definition";
+    "id, org_id, department_id, key, name, sort_order, is_active, queue_definition, departments(id, org_id, key, name, metadata)";
 
 /** Avoid PostgrestFilterBuilder deep-instantiation (matches accessScope query helpers). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -16,6 +27,30 @@ function applyDepartmentScope(query: any, dim: AdminAccessScopeDimensions): any 
         return query.in("department_id", allowed);
     }
     return query;
+}
+
+/**
+ * Departments carried on the embedded work-unit rows, with the SAME explicit `org_id` assertion the
+ * standalone read used. PostgREST returns the embed as an object (to-one) — normalised here.
+ */
+function embeddedDepartments(data: unknown[] | null, orgId: string): SlugResolutionDepartmentRow[] {
+    const byId = new Map<string, SlugResolutionDepartmentRow>();
+    for (const row of data ?? []) {
+        const embed = (row as { departments?: unknown }).departments;
+        for (const dept of Array.isArray(embed) ? embed : embed ? [embed] : []) {
+            const d = dept as { id?: unknown; org_id?: unknown; key?: unknown; name?: unknown; metadata?: unknown };
+            if (typeof d.id !== "string") continue;
+            // The explicit tenant guard, preserved rather than downgraded to "the FK implies it".
+            if (typeof d.org_id === "string" && d.org_id !== orgId) continue;
+            byId.set(d.id, {
+                id: d.id,
+                key: (d.key as string | null) ?? null,
+                name: (d.name as string | null) ?? null,
+                metadata: d.metadata ?? null,
+            });
+        }
+    }
+    return [...byId.values()];
 }
 
 function mapRows(data: unknown[] | null): WorkUnitRouteSlugRow[] {
@@ -61,7 +96,12 @@ export async function fetchWorkUnitsForSlugResolution(params: {
     orgId: string;
     dim: AdminAccessScopeDimensions;
     platformKey: string;
-}): Promise<{ rows: WorkUnitRouteSlugRow[]; strategy: "direct" | "lifecycle" | "org_scan" }> {
+}): Promise<{
+    rows: WorkUnitRouteSlugRow[];
+    strategy: "direct" | "lifecycle" | "org_scan";
+    /** Departments carried by the embed — same rows the separate read used to return. */
+    departments: SlugResolutionDepartmentRow[];
+}> {
     const { supabase, orgId, dim, platformKey } = params;
     const base = () =>
         applyDepartmentScope(
@@ -89,21 +129,21 @@ export async function fetchWorkUnitsForSlugResolution(params: {
 
     const directRows = candidateRows.filter((r) => r.key === platformKey);
     if (directRows.length) {
-        return { rows: directRows, strategy: "direct" };
+        return { rows: directRows, strategy: "direct", departments: embeddedDepartments(candidateData, orgId) };
     }
     if (lifecycleWuKeys.length) {
         const lifecycleRows = candidateRows.filter(
             (r) => typeof r.key === "string" && lifecycleWuKeys.includes(r.key.toLowerCase()),
         );
         if (lifecycleRows.length) {
-            return { rows: lifecycleRows, strategy: "lifecycle" };
+            return { rows: lifecycleRows, strategy: "lifecycle", departments: embeddedDepartments(candidateData, orgId) };
         }
     }
 
     /** Queue-lane slugs require scanning queue_definition across candidates — fallback only. */
     const { data: allData, error: allErr } = await base();
     if (allErr) throw allErr;
-    return { rows: dedupeRows(mapRows(allData)), strategy: "org_scan" };
+    return { rows: dedupeRows(mapRows(allData)), strategy: "org_scan", departments: embeddedDepartments(allData, orgId) };
 }
 
 export type SlugResolutionDepartmentRow = {

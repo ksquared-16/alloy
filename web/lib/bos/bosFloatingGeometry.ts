@@ -262,8 +262,26 @@ export function chooseBosParkingGeometry(params: {
     size: { width: number; height: number };
     canvas: BosCanvasBounds;
     obstacles: ObstacleRect[];
+    /**
+     * Regions the rail may NEVER cover, however good the score.
+     *
+     * Scoring alone is "fewest controls obscured", so on a dense surface every candidate overlaps
+     * something and the least-bad winner can still land on primary navigation. Measured: a re-park
+     * ~22s after entry moved the rail from x=1016 to x=521, directly over the Focus Panel mode
+     * tabs, and the Activity tab stopped receiving pointer events entirely — an interaction defect,
+     * not a cosmetic one.
+     *
+     * Forbidden regions disqualify a candidate outright. If EVERY candidate is disqualified the
+     * rail still parks by score, so this can never leave it unplaced.
+     */
+    forbidden?: ObstacleRect[];
 }): { geometry: BosFloatingGeometry; obstructed: number } {
-    const candidates = bosParkingCandidates(params.size, params.canvas);
+    const allCandidates = bosParkingCandidates(params.size, params.canvas);
+    const forbidden = params.forbidden ?? [];
+    const permitted = forbidden.length
+        ? allCandidates.filter((c) => !forbidden.some((f) => rectOverlapArea(c, f) > 0))
+        : allCandidates;
+    const candidates = permitted.length ? permitted : allCandidates;
     const obstacles = params.obstacles ?? [];
     if (obstacles.length === 0) return { geometry: candidates[0]!, obstructed: 0 };
 

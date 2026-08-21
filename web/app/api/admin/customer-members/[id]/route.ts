@@ -67,6 +67,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
+    const tRequest = Date.now();
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
@@ -91,34 +92,77 @@ export async function PATCH(
     }
 
     const supabase = createAdminClient();
+
+    /*
+     * SAVE TAIL SPANS. The operator's edit acknowledges locally in ~90 ms, but the authoritative
+     * response took ~3.2 s, and "the server is slow" is not an answer a fix can be built on. These
+     * spans separate AUTHORITATIVE PERSISTENCE from the post-write work that only shapes the
+     * response body, and are surfaced on `x-alloy-patch-spans` so the browser harness can read them
+     * without a server log. Diagnostic only — they change no behaviour.
+     */
+    const tStart = Date.now();
+    const spans: Record<string, number> = { auth_to_write: tStart - tRequest };
+
+    const tWrite = Date.now();
     const applied = await applyCustomerMemberMutationPatch({
         supabase,
         orgId: ctx.orgId,
         memberId: id,
         body,
     });
+    spans.write_ms = Date.now() - tWrite;
+    if (applied.ok && applied.spans) Object.assign(spans, applied.spans);
     if (!applied.ok) {
         return NextResponse.json({ error: applied.error }, { status: applied.status ?? 500 });
     }
 
-    const profileByMember = await loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]);
+    /*
+     * POST-WRITE READBACKS.
+     *
+     * Measured: authoritative persistence completed at ~1.9 s, and a further ~1.44 s (43% of the
+     * response) went on re-reading the row to shape the response BODY. Neither read carries an
+     * invariant, an audit guarantee, or transaction work — the write is already durable when they
+     * begin. Every caller of this endpoint in the codebase discards the body (it is parsed only to
+     * surface `error` on failure), so the operator was waiting on a projection nobody reads.
+     *
+     * `Prefer: return=minimal` is the standard HTTP way to say so. The default response is
+     * UNCHANGED, so any consumer that does want the row still gets it; only callers that opt in skip
+     * the readback. And when the readback does run, its two independent queries now run
+     * concurrently instead of serially — the operator was paying their SUM.
+     */
+    const preferMinimal = /return=minimal/i.test(request.headers.get("prefer") ?? "");
+    if (preferMinimal) {
+        spans.readback_ms = 0;
+        spans.total_ms = Date.now() - tRequest;
+        return NextResponse.json({ id }, { headers: { "x-alloy-patch-spans": JSON.stringify(spans) } });
+    }
+
+    const tRead = Date.now();
+    const [profileByMember, rowRes] = await Promise.all([
+        loadCustomerMemberProfileFieldsByMemberId(supabase, ctx.orgId, [id]),
+        supabase
+            .from("customer_members")
+            .select(CUSTOMER_MEMBER_SELECT)
+            .eq("id", id)
+            .eq("org_id", ctx.orgId)
+            .single(),
+    ]);
+    spans.readback_ms = Date.now() - tRead;
     const profile = profileByMember.get(id) ?? {};
+    const row = rowRes.data;
 
-    const { data: row } = await supabase
-        .from("customer_members")
-        .select(CUSTOMER_MEMBER_SELECT)
-        .eq("id", id)
-        .eq("org_id", ctx.orgId)
-        .single();
-
-    return NextResponse.json({
-        ...(row ?? { id }),
-        preferred_name: profile.preferred_name ?? null,
-        gender: profile.gender ?? null,
-        allergies: profile.allergies ?? null,
-        medical_notes: profile.medical_notes ?? null,
-        special_instructions: profile.special_instructions ?? null,
-    });
+    spans.total_ms = Date.now() - tRequest;
+    return NextResponse.json(
+        {
+            ...(row ?? { id }),
+            preferred_name: profile.preferred_name ?? null,
+            gender: profile.gender ?? null,
+            allergies: profile.allergies ?? null,
+            medical_notes: profile.medical_notes ?? null,
+            special_instructions: profile.special_instructions ?? null,
+        },
+        { headers: { "x-alloy-patch-spans": JSON.stringify(spans) } }
+    );
 }
 
 /** DELETE: hard delete customer_member. Admin only. */

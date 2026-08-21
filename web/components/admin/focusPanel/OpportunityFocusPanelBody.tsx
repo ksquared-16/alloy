@@ -77,6 +77,12 @@ export default function OpportunityFocusPanelBody({
     // routing focus through `openDrawer` mounts the modal overlay this work removes. The grid stays
     // source-agnostic — it receives a request and knows nothing about where it came from.
     const attention = useAttentionCardFocus();
+    /**
+     * The child attention is CURRENTLY on — moves on the click, not when provisioning commits.
+     * The child-mission overlay uses it to refuse a mission built for a child the operator has
+     * already left; the family Settlement cards are untouched.
+     */
+    const attentionSubjectId = attention.subject;
     const requestedCardFocus = useMemo(
         () =>
             attention.focus
@@ -105,7 +111,9 @@ export default function OpportunityFocusPanelBody({
             // Child Attention must keep the child's published stage mission after Settlement
             // loads the family opportunity VM (which carries the family's persisted Lead work).
             if (commitCritical?.subjectGrain?.grain === "child") {
-                const overlaid = overlayChildMissionOntoSettledFocusModel(settled, commitCritical);
+                const overlaid = overlayChildMissionOntoSettledFocusModel(settled, commitCritical, {
+                    attentionSubjectId,
+                });
                 if (typeof window !== "undefined") {
                     const settledCw = settled.cardModels.get("current_work");
                     const overlaidCw = overlaid.cardModels.get("current_work");

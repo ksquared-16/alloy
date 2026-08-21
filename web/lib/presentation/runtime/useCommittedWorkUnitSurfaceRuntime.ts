@@ -35,6 +35,7 @@ import {
     beginWorkUnitPrimaryReveal,
     endWorkUnitPrimaryReveal,
     isWorkUnitPrimaryRevealActive,
+    recordRevealGateEvent,
 } from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
 import { ATTENTION_SCOPE } from "@/lib/runtime/kernel/attention";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -63,7 +64,8 @@ function prewarmSubjectDestination(target: string, lens: string | null, subjectI
     // inflates the selected subject's own reveal — measured as the 8–10s Focus Panel gap. Skip it
     // during the reveal; neighbours warm normally on the next intent (hover/idle) once the panel is
     // meaningful. The selected subject's own load never comes through here.
-    if (isWorkUnitPrimaryRevealActive()) return;
+    if (isWorkUnitPrimaryRevealActive()) { recordRevealGateEvent("subject_warm_suppressed", id); return; }
+    recordRevealGateEvent("subject_warm_emitted", id);
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
     void prewarmRecordWork(id);
 }
@@ -71,6 +73,7 @@ import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/wor
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
 import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
+import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 
 /** The surface has nothing to render until K3 commits. There is no third state. */
 export type CommittedWorkUnitSurfaceRuntime = {
@@ -130,9 +133,28 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // commit-critical provisioning + its answer-triggered neighbour/view prewarm storm — so that
     // speculative work defers instead of saturating the DB and inflating the selected reveal. The
     // window is ended when the selected subject's VM is applied (useRecordWorkRuntime, every path).
-    const committedRevealKey = focus.current
-        ? `${focus.current.ref.target ?? ""}::${focus.current.ref.subject ?? ""}`
-        : null;
+    /**
+     * ARMED PER WORK UNIT, NOT PER SUBJECT.
+     *
+     * This keyed on `target::subject`, so every child-to-child switch fired a fresh
+     * `beginWorkUnitPrimaryReveal()`. The paired `end` lives in `useRecordWorkRuntime`, which ends
+     * the window when the selected subject's VM is APPLIED — but a child-to-child switch inside one
+     * family reuses the family Settlement runtime, so no VM fetch occurs, no apply happens, and no
+     * `end` ever runs.
+     *
+     * Proven with a production reveal-gate timeline: `begin` fires on each child switch, NO `end`
+     * event ever appears, and from that point every subject warm logs
+     * `subject_warm_suppressed active=true`. Before the first `begin`, the same warms logged
+     * `subject_warm_emitted active=false` — the path works; the gate was holding it shut. The
+     * scheduler's own stated law, "prewarm can never stall", was being violated.
+     *
+     * The window exists to defer the prewarm STORM that follows a Work Unit commit. That storm is a
+     * property of committing a Work Unit, not of moving Attention between children of one family —
+     * which reuses stable family cards and fetches one subject-keyed answer. Keying the arm on the
+     * TARGET restores a begin/end cycle that actually closes, and leaves the child-scoped Mission
+     * reserve (which is a reveal CONTRACT, not this gate) untouched.
+     */
+    const committedRevealKey = focus.current ? (focus.current.ref.target ?? "") || null : null;
     useEffect(() => {
         if (committedRevealKey) beginWorkUnitPrimaryReveal();
     }, [committedRevealKey]);
@@ -443,10 +465,26 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // with the commit-critical VM). Keyed on the stable neighbour-id string so settlement re-renders
     // (new `model` ref, same rows) don't cancel-and-drop the scheduled warm.
     const selectedSubjectId = model?.selectedRecordId ?? model?.selectedSubject?.selectedRecordId ?? null;
+    /**
+     * THE WINDOW MUST FOLLOW THE OPERATOR.
+     *
+     * The anchor matched `selectedSubjectId` against the row id OR its `drawer_open.entity_id`. On a
+     * child-grain queue every row shares one `drawer_open.entity_id` (the family opportunity) and
+     * the settlement subject IS that family id, so the match always landed on row 0 and the +/-2
+     * window never moved off the entry anchor: rows near it committed their Mission in ~216ms while
+     * every other row waited 6.5-7.3s.
+     *
+     * Live attention (K1) carries the child the operator is actually on. The previous resolution
+     * remains the fallback for grains where attention is not a row id.
+     */
+    const attentionSubjectForWindow = useAttentionSubject();
     const adjacentSubjectIds = useMemo(() => {
         const rows = model?.queue.rows;
         if (!rows?.length || !selectedSubjectId) return "";
-        const idx = rows.findIndex(
+        const byAttention = attentionSubjectForWindow
+            ? rows.findIndex((r) => r.entityId === attentionSubjectForWindow)
+            : -1;
+        const idx = byAttention >= 0 ? byAttention : rows.findIndex(
             (r) => r.entityId === selectedSubjectId || r.context?.drawer_open.entity_id === selectedSubjectId,
         );
         if (idx < 0) return "";
@@ -460,8 +498,9 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
             }
         }
         return [...new Set(neighbours)].join(",");
-    }, [model?.queue.rows, selectedSubjectId]);
+    }, [model?.queue.rows, selectedSubjectId, attentionSubjectForWindow]);
     useEffect(() => {
+        recordRevealGateEvent("neighbour_effect", adjacentSubjectIds ? `ids=${adjacentSubjectIds.split(",").length}` : "EMPTY");
         if (!adjacentSubjectIds || typeof window === "undefined") return;
         const ids = adjacentSubjectIds.split(",");
         const run = () => {

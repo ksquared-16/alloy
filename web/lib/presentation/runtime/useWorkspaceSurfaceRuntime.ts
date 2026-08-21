@@ -83,6 +83,13 @@ function seedLifecycleCards(
     return routeVmCards.length ? [...routeVmCards] : [];
 }
 
+/**
+ * How many Workspace destinations may be prepared on idle. Bounded so a large organization never
+ * prepares every Work Unit; the primary destination is warmed eagerly and the rest are idle-deferred
+ * behind any active Work Unit reveal.
+ */
+const WORKSPACE_READINESS_DESTINATION_CAP = 6;
+
 export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     const routeVm = useWorkspaceRouteVm();
     const { orgId, orgName, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
@@ -410,10 +417,34 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
     // cannot be used here — K2 disposes a preparation for a target other than the current attention
     // (Workspace) at its emit boundary, so it would never be stored. Bounded, idle-scheduled, keyed on
     // the stable entry-href set so re-renders don't re-fire.
-    const processEntryHrefs = (visibleProcessSnapshot?.processes ?? [])
-        .map((p) => p.entryHref)
-        .filter((h): h is string => Boolean(h))
-        .slice(0, 6)
+    /**
+     * THE DESTINATIONS THE OPERATOR ACTUALLY CLICKS, not just each process's default entry.
+     *
+     * This set was built from `processes[].entryHref` alone. On a tenant whose Workspace renders ONE
+     * process with several Work View rows, that is a single href — the process's default queue — so
+     * `rest` below was always empty and the idle preparation returned early. Measured: exactly one
+     * preparation request per Workspace load, for `/work-unit/new` (0 rows), while the operator's
+     * real destination (`/work-unit/waitlist`, 15 rows) was prepared only if they happened to hover.
+     *
+     * The Work View rows carry their own canonical hrefs, which are the same hrefs their click
+     * navigates to and the same URLs K2 later consumes. Preparing them IS the readiness architecture
+     * doing what it was written to do; nothing new is introduced.
+     *
+     * Bounded and ordered deliberately: process entries first (a process CTA is a real destination),
+     * then Work View rows, de-duplicated, capped. The cap is what keeps a large organization from
+     * preparing everything — it is not a guess about which one the operator wants.
+     */
+    const processEntryHrefs = [
+        ...new Set(
+            [
+                ...(visibleProcessSnapshot?.processes ?? []).map((p) => p.entryHref),
+                ...(visibleProcessSnapshot?.processes ?? []).flatMap((p) =>
+                    (p.workViews ?? []).map((v) => v.href),
+                ),
+            ].filter((h): h is string => Boolean(h && h.trim())),
+        ),
+    ]
+        .slice(0, WORKSPACE_READINESS_DESTINATION_CAP)
         .join("\n");
     const warmDestination = useCallback((href: string) => {
         const answerPromise = prefetchWorkUnitProvisioningFromHref(href);

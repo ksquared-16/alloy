@@ -683,7 +683,24 @@ export default function OpportunityFocusPanelModeGrid({
                         // not loading. In the `commit` phase a not-ready card is genuinely still settling →
                         // the calm reserve. This stops a resolved card from appearing to load forever.
                         // Read the DECLARED phase, never the producer's name (`model.source` is diagnostic).
-                        const settled = model.phase === "settled" || readiness === "not_applicable";
+                        /**
+                         * An EXPLICIT `reserved` outranks the phase inference.
+                         *
+                         * The phase rule exists for cards the surface never produced: once settled,
+                         * a still-not-ready card is resolved-empty, so it cannot appear to load
+                         * forever. But a card explicitly marked `reserved` is a positive statement
+                         * that THIS cell is settling for the current subject — a child mission
+                         * whose subject just changed. Treating that as resolved-empty asserts "this
+                         * child has no What's Next", which is false while it is still arriving.
+                         *
+                         * `has()` is what separates the two: an absent key defaults to "reserved"
+                         * above, and those must keep the resolved-empty treatment.
+                         */
+                        const explicitlyReserved =
+                            cardReadiness.has(typeKey) && cardReadiness.get(typeKey) === "reserved";
+                        const settled =
+                            readiness === "not_applicable"
+                            || (model.phase === "settled" && !explicitlyReserved);
                         return <ReservedFocusPanelCell typeKey={typeKey} settled={settled} />;
                     }
                     const cardModel = composeEffectiveCardModel(baseModel, resolution?.config ?? null, record);

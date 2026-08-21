@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { withDbTiming } from "@/lib/admin/dbQueryTiming";
+import { processMap } from "@/lib/perf/processCache";
 
 export const UTC_FALLBACK_IANA = "UTC";
 
@@ -51,7 +52,7 @@ export function resolveOrgTimezoneFromMetadata(metadata: unknown): {
     return { iana: tzRaw, source };
 }
 
-const ORG_OP_TZ_PROCESS_CACHE = new Map<string, { at: number; iana: string; source: OperationalTimezoneSource }>();
+const ORG_OP_TZ_PROCESS_CACHE = processMap<string, { at: number; iana: string; source: OperationalTimezoneSource }>("org_op_tz");
 const ORG_OP_TZ_TTL_MS = 90_000;
 const ORG_OP_TZ_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
@@ -95,10 +96,10 @@ export async function fetchOperationalTimezoneForOrgWithCache(
 }
 
 const USER_DISPLAY_TZ_TTL_MS = 60_000;
-const USER_DISPLAY_TZ_CACHE = new Map<
+const USER_DISPLAY_TZ_CACHE = processMap<
     string,
     { at: number; iana: string; source: UserDisplayTimezoneSource }
->();
+>("user_display_tz");
 
 /**
  * effectiveUserTimeZone for admin UI: user_profiles.timezone → org → UTC.

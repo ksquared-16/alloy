@@ -241,10 +241,28 @@ export function BosPresentationControllerProvider({
                 obstacles.push({ x: r.x, y: r.y, width: r.width, height: r.height });
             }
 
+            /**
+             * Primary surface navigation the rail may never cover. The Focus Panel mode switch is
+             * the operator's way between Summary and Activity; a parked rail over it silently
+             * swallows the click.
+             */
+            const forbidden: ObstacleRect[] = [];
+            for (const el of Array.from(
+                document.querySelectorAll<HTMLElement>(
+                    ".alloy-os-focus-panel-mode-switch,[data-inline-focus-panel-header]",
+                ),
+            )) {
+                if (panel?.contains(el)) continue;
+                const r = el.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) continue;
+                forbidden.push({ x: r.x, y: r.y, width: r.width, height: r.height });
+            }
+
             const { geometry } = chooseBosParkingGeometry({
                 size: { width: floatingGeometry.width, height: floatingGeometry.height },
                 canvas,
                 obstacles,
+                forbidden,
             });
 
             setFloatingGeometryState((prev) =>

@@ -17,6 +17,7 @@ frozen kernel and the region constitution — it does not restate them.
 - **The kernel** (what runtime exists): [`alloy-runtime-kernel.md`](../platform/runtime/alloy-runtime-kernel.md) — K1 Attention · K2 Provisioning · K3 Focus · K4 Instrumentation.
 - **Work Unit region ownership** (Header/Queue/Focus Panel/Actions/Editing): [`work-unit-configuration-runtime-constitution.md`](../platform/runtime/work-unit-configuration-runtime-constitution.md).
 - **Operator laws** (never watch Alloy build itself): [`operational-runtime-doctrine.md`](../platform/runtime/operational-runtime-doctrine.md).
+- **Performance doctrine** (what the runtime must achieve, its two performance classes, readiness strategy, and the frozen performance invariants): [`operator-runtime-performance-certification.md`](../platform/runtime/operator-runtime-performance-certification.md).
 - **Freeze evidence**: [`docs/runtime/final-sprint/`](./final-sprint/README.md) (8 reports) + the Runtime V1 Freeze Report and Executive Summary alongside this file.
 
 ---
