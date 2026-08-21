@@ -108,6 +108,106 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 6 — Option 3 accepted; Priority 7 measured
+
+Kelly accepted the ~11.7s cold baseline and redirected to Priority 7. Two findings from the brief
+architecture pass are recorded first because they change what accepting that baseline costs.
+
+### FINDING — the readiness architecture already exists, and it is INERT
+
+Option C classes 1-3 are already built:
+
+* `lib/runtime/kernel/workUnitProvisioningPrefetch.ts` — warms the EXACT provisioning-answer URL K2
+  consumes (same canonical owner, 60s TTL, deduped, errors never cached);
+* `ProcessSummaryCard` — hover/focus warm on each Work Unit tile;
+* `useWorkspaceSurfaceRuntime` — idle preparation of up to 6 visible entry hrefs, eagerly warming the
+  PRIMARY destination and **chaining that answer's default subject's complete VM** off the same
+  answer, explicitly so "entering the first work unit commits from a warm provisioning answer AND
+  reveals a complete Focus Panel with no cold fetch".
+
+**Measured on /workspace: 0 preparation requests in 25 seconds of idle.** The architecture does not
+run. It is gated on `processEntryHrefs`, built from `visibleProcessSnapshot.processes[].entryHref`,
+and returns early when that string is empty — the most likely cause, since the rendered tiles do
+carry hrefs.
+
+### FINDING — the cold number depends on which path you measure
+
+| path | first usable |
+|---|---|
+| direct URL entry (what the cold cell measures) | **11,708ms** |
+| operator journey: /workspace → click the tile | **8,458ms** |
+| /workspace itself usable | 11,835ms |
+
+The cold cell navigates directly to the work-unit URL, which bypasses workspace idle preparation,
+tile hover warm, and the K1 entry gesture (which commits in place rather than performing a document
+navigation). It measures a path an operator does not take. **If the idle preparation were working,
+the journey number is the one that would move.**
+
+---
+
+## Surface 8 — dropdown / editing: MEASURED, meets the bar
+
+Canonical `AlloySelect` (`button[aria-haspopup="listbox"]` → `[role="listbox"]` → `[role="option"]`),
+Site filter on the Work Unit surface, 3 passes:
+
+| interaction | measured |
+|---|---|
+| dropdown → menu committed | 90ms cold, **25-30ms warm** |
+| dropdown → options usable | same instant (25-90ms) |
+| **network to open the dropdown** | **0 requests** |
+| selection → local acknowledgement | 128-262ms |
+| Edit ("Adjust") → control visible | **94ms** |
+
+Options were already known and the menu opens with no network at all — exactly the stated bar. The
+original value was restored after every pass.
+
+Two observations worth keeping: opening the Adjust editor fires **2 requests**
+(`provisioning-answer?subject_id=…` and the drawer VM for that row) that the pin dialog does not
+appear to need; and the summary Focus Panel exposes **no editable fields** — only search inputs and
+the AI assistant textarea.
+
+## Surface 9 — Save: NOT MEASURED, needs Kelly
+
+The only mutation affordance reachable from the canonical surface is the queue row's **"Adjust" →
+"Apply position"**, i.e. a placement PIN on live Firefly waitlist ordering ("Hold position (pin
+ordinal)", with a Reason field and a Reset pin affordance).
+
+That is reversible in principle — an unpinned child pinned then reset returns to unpinned — but it
+writes override state with a reason on a real tenant and transiently affects other children's
+derived ordinals. Kelly's instruction referenced an "already-established safe reversible Firefly
+technique" which is not recoverable from this lane's context, so **no mutation was performed**.
+Naming the sanctioned field/technique unblocks this immediately.
+
+## CLS — earlier figures corrected
+
+Previously logged as "card focus CLS 0.225, Message CLS 0.184". Re-measured:
+
+* **initial load accumulates CLS 0.1829 before any interaction** — that is the real layout movement;
+* the card is **not clickable as a whole** (ASSIGNMENTS has 30 inner affordances, CHILDREN 33; a
+  whole-card click and an inner-affordance click both fail to commit any destination);
+* with CLS reset immediately before the click, click-induced CLS is **0**, and panel height is
+  constant at 762.
+
+So the earlier per-interaction CLS numbers were not click-induced and should not be treated as a
+card-focus defect. **The load-time 0.1829 is the real item**, and "card focus" needs its actual
+affordance identified before it can be called measured at all.
+
+## /organization/processes — 89% of the payload is ONE request
+
+  TTFB 373ms · FCP 404ms · 28 API requests · 2,853KB
+
+| response | KB | ms |
+|---|---|---|
+| `admin/entity-layouts` | **2,538** | 1,370 |
+| `admin/configuration/programs` | 78 | 1,809 |
+| `…/lifecycle-builder` | 69 | 1,107 |
+| `admin/lifecycle-builder/stage-bootstrap` | 28 | **6,417** |
+
+The page PAINTS fast (FCP 404ms); the weight is entirely secondary. Two distinct items: one 2.5MB
+response (89% of all bytes) and one 6.4s request. Neither is on the operator critical path.
+
+---
+
 ## WAVE 5 — the confirming cell, and what it corrected
 
 ### CORRECTION: route_meta improved; first usable did NOT
