@@ -38,6 +38,27 @@ export type DrawerVmPrewarmTask = {
 };
 
 let primaryRevealActive = false;
+
+/**
+ * PRODUCTION-VISIBLE reveal-gate timeline (diagnostic only).
+ *
+ * `log()` above is gated on `perfDevDetailEnabled()` — `NODE_ENV !== "production"` — so it emits
+ * nothing in the build these measurements run against, which is precisely the build where the gate
+ * needs proving. This ring buffer answers one question: does the child-scoped reveal gate ever
+ * release on a child-to-child switch, or does it suppress subject preparation indefinitely?
+ */
+type RevealGateEvent = { t: number; event: string; active: boolean; detail?: string };
+function revealGateDiag(): RevealGateEvent[] {
+    if (typeof window === "undefined") return [];
+    const w = window as Window & { __ALLOY_REVEAL_GATE_DIAG__?: RevealGateEvent[] };
+    if (!w.__ALLOY_REVEAL_GATE_DIAG__) w.__ALLOY_REVEAL_GATE_DIAG__ = [];
+    return w.__ALLOY_REVEAL_GATE_DIAG__;
+}
+export function recordRevealGateEvent(event: string, detail?: string): void {
+    const buf = revealGateDiag();
+    if (buf.length > 400) buf.splice(0, buf.length - 200);
+    buf.push({ t: Math.round(typeof performance !== "undefined" ? performance.now() : Date.now()), event, active: primaryRevealActive, detail });
+}
 let running = 0;
 const queue: DrawerVmPrewarmTask[] = [];
 const queuedKeys = new Set<string>();
@@ -74,6 +95,7 @@ export function logDrawerVmPrewarmSchedulerBoot(): void {
 export function beginWorkUnitPrimaryReveal(): void {
     logDrawerVmPrewarmSchedulerBoot();
     primaryRevealActive = true;
+    recordRevealGateEvent("begin");
     // New Work Unit context — drop any stale backlog from a prior work unit so it cannot drain
     // against the new reveal. In-flight tasks already settle into their own deduped caches.
     epoch += 1;
@@ -86,8 +108,9 @@ export function beginWorkUnitPrimaryReveal(): void {
  * Coordinated reveal completed — release the deferred prewarm queue and drain one task at a time.
  */
 export function endWorkUnitPrimaryReveal(): void {
-    if (!primaryRevealActive && queue.length === 0) return;
+    if (!primaryRevealActive && queue.length === 0) { recordRevealGateEvent("end:noop"); return; }
     primaryRevealActive = false;
+    recordRevealGateEvent("end");
     log("prewarm_reveal_ready_flush", { count: queue.length });
     pump();
 }
