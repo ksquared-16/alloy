@@ -69,12 +69,27 @@ import {
   type OpenRosterModalDetail,
 } from "@/lib/adminV2/workspaceModalEvents";
 import type { RosterRange } from "@/app/adminV2/operations/operationsSections";
+import {
+  invalidateOperationsDay,
+  warmOperationsDay,
+  warmOperationsReference,
+} from "@/lib/scheduling/operationsWorkspaceWarmCache";
+
+/**
+ * Every scheduling read this workspace makes, warm-first.
+ *
+ * Routed through the shared warm-cache primitive so the dataset survives the modal unmount —
+ * Operations previously reloaded all seven of its queries on every open. Reference views
+ * (configuration) and day views (commitments) carry different freshness; see
+ * `lib/scheduling/operationsWorkspaceWarmCache.ts`.
+ */
+const SCHED_REFERENCE_VIEWS = ["view=sites", "view=assignment_types"];
 
 async function schedApi(path: string): Promise<any> {
-  const res = await fetch(`/api/admin/scheduling${path}`, {
-    headers: { "content-type": "application/json" },
-  });
-  return res.json().catch(() => ({}));
+  const url = `/api/admin/scheduling${path}`;
+  return SCHED_REFERENCE_VIEWS.some((v) => path.includes(v))
+    ? warmOperationsReference(url)
+    : warmOperationsDay(url);
 }
 
 export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
@@ -226,15 +241,18 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
     let alive = true;
     void (async () => {
       try {
-        const res = await fetch("/api/admin/records/bootstrap", {
-          credentials: "include",
-        });
-        const json = (await res.json()) as {
+        const json = (await warmOperationsReference(
+          "/api/admin/records/bootstrap",
+        )) as {
           ok?: boolean;
           positions?: { id: string; key: string | null; label: string }[];
           todayYmd?: string;
         };
-        if (!alive || !json.ok) return;
+        if (!alive) return;
+        // The warm cache absorbs a throw and yields `{}`, so a failed read arrives here as
+        // `ok !== true` rather than as an exception. It must still land on the fallback below —
+        // returning early on `!json.ok` would leave the operator on a permanent spinner.
+        if (!json.ok) throw new Error("records bootstrap unavailable");
         setPeopleBootstrap({
           positions: json.positions ?? [],
           todayYmd: json.todayYmd ?? new Date().toISOString().slice(0, 10),
@@ -428,6 +446,9 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
       if (seq !== assignSeq.current) return;
       setSubjects((res?.subjects ?? []) as AssignmentRosterSubject[]);
     });
+    // Both layers must drop: the in-session ref AND the cross-open warm cache. Clearing only the
+    // ref would let the warm cache re-serve the pre-mutation plan.
+    invalidateOperationsDay();
     weekCache.current.clear();
     void loadWeek(siteId, week?.weekStart ?? "");
   }, [siteId, loadWeek, week?.weekStart]);
@@ -636,6 +657,14 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
           ) : null}
 
           {mode === "work" && section === "roster" ? (
+            <div
+              className="contents"
+              /* Primary-usable seam for the operator runtime harnesses: "the day is on screen",
+                 not merely "the modal opened". Same idiom as the Focus Panel's cell attributes. */
+              data-operations-roster-state={
+                week ? "ready" : loadingWeek ? "loading" : "pending"
+              }
+            >
             <RosterSurface
               range={range}
               onRangeChange={setRange}
@@ -734,6 +763,7 @@ export default function RosterWorkspace({ onClose }: { onClose?: () => void }) {
                 })
               }
             />
+            </div>
           ) : null}
 
           {mode === "work" && section === "attendance" ? (

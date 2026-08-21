@@ -13,10 +13,19 @@
  * the same change that re-parents the product would make any failure ambiguous between "the move
  * broke it" and "the selector moved".
  */
+import { useEffect } from "react";
+
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
+import { warmOperationsWorkspace } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import OperationsWorkspace from "@/components/adminV2/roster/RosterWorkspace";
 
 export default function OperationsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+    // Arm the workspace's configuration on nav intent, as Processing does — so a first open reads
+    // warm rather than paying for the site list before it can render anything.
+    useEffect(() => {
+        if (open) warmOperationsWorkspace();
+    }, [open]);
+
     return (
         <AdminV2WorkspaceBosModalShell
             open={open}
