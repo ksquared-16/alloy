@@ -108,6 +108,94 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 4 — the child-mission reveal contract, and route identity
+
+## 12. CLOSED — a child's What's Next may not outlive its subject
+
+Kelly's reveal decision, implemented at `overlayChildMissionOntoSettledFocusModel`: on a
+same-family switch the new child's header commits immediately; FAMILY cards stay because they are
+authoritative for the same family; only the CHILD-scoped mission cards (`current_work`,
+`child_identity`) go to the canonical reserve until the new subject's provisioning resolves.
+
+Two attempts were wrong before the third was right, and both are worth remembering:
+
+* an **early return** from the overlay skipped composition the child grain needs — grid cells went
+  5 -> 4;
+* **deleting** the card entries dropped the cell out of its lane — same 5 -> 4, a card vanishing
+  and reappearing rather than a hold.
+
+The entries are kept and `current_work` is rebuilt EMPTY, so the grid keeps composing the cell and
+the hold happens in place. One shared-grid change was needed: `ReservedFocusPanelCell` picked its
+treatment from the surface phase, so on a settled surface the held cell rendered resolved-EMPTY —
+asserting "this child has no What's Next", false in the opposite direction. An explicit `reserved`
+now outranks that inference, distinguished by `cardReadiness.has(key)` from an absent key that
+merely defaults to reserved (those keep resolved-empty, so a never-produced card still cannot
+appear to load forever).
+
+Browser evidence, Wrigley <-> Lennon:
+
+| t | header | gridCells | preparing | panel height |
+|---|---|---|---|---|
+| +300ms | Wrigley Kurzman | 5 | `["current_work"]` | 762 |
+| +6,000ms | Wrigley Kurzman | 5 | `["current_work"]` | 762 |
+| +10,000ms | Wrigley Kurzman | 5 | `[]` | 762 |
+
+Cell count and panel height constant — the hold causes no layout movement. Family card text
+byte-identical during the hold. Latest-click-wins holds under A->B->A->B at 45ms.
+
+**Regression coverage:** `tests/focusPanel/childMissionRevealContract.test.ts`, 6 cases with two
+siblings at DIFFERENT stages (Lennon `tour_scheduled`, Wrigley `waitlist`) sharing one family —
+the case this tenant cannot exhibit, since every child here sits at one stage. Commit `d4ff2238c`.
+
+## 13. PARTIAL — route_meta: one of three serial round trips removed
+
+`route_meta` is spent before the first byte and was three serial reads: access bundle, then work
+units, then departments — the last unable to start until the first named its department ids.
+
+Departments are now EMBEDDED on the work-unit select. The embed selects `org_id` deliberately, so
+the explicit tenant guard the standalone read asserted is re-applied in memory rather than
+downgraded to "the FK implies it". The standalone helper remains and the caller falls back to it if
+the embed yields nothing while rows exist.
+
+  route_meta_ms              2,102ms -> 1,632ms  (-22.4%)
+  wu_surface / first usable 11,666ms -> 11,098ms (-4.9%)
+
+**Directional, not certified.** That cell's PRE-run gate passed and its POST-run gate did not, and
+the host then degraded to system work outside this lane's control (`mds_stores` >100%,
+AddressBookManager 81%). The counted evidence — one serial RTT removed from a three-RTT chain on
+the document critical path — is not load-sensitive and stands on its own. **A confirming cell is
+owed.**
+
+Correctness: all six work-unit slugs resolve with unchanged counts, six pills each, no 5xx;
+`resolveWorkUnitByRouteSlug` 9/9. Commit `5f17956e5`.
+
+## 14. KEPT, but it did NOT move the headline — the fourth module-scope cache
+
+`adminShellContextCache` (120s TTL, meant to span requests) was per-route-bundle: 15 misses against
+103 hits in one session, each miss paying `resolveAdminAccessCore` at ~1.1s. Process-wide it takes
+3 misses across three loads on one process.
+
+It did **not** move cold first usable (route_meta 2,102 -> 2,110, within noise) — a fresh process
+must miss once regardless of scoping. Kept under the standing rule: it removes proven, measured
+waste at no complexity, via a helper already used four times. Recorded as a non-win rather than
+folded into the wave's headline.
+
+---
+
+## Cold Work Unit — where it stands
+
+| phase | baseline `c9ce324fa` | wave 3 | wave 4 |
+|---|---|---|---|
+| route_meta | 2,473ms | 2,102ms | **1,632ms** |
+| **first usable** | **16,200ms** | 11,666ms | **~11,098ms** (directional) |
+| fully hydrated | 30,298ms | 24,175ms | ~23,392ms (directional) |
+
+**Still a miss.** First usable remains gated entirely by the streamed document: middleware auth
+(cold only) + route_meta + the seeded provisioning compose. Priority 4 (O-5 / seeded provisioning
+decomposition) and Priorities 6-7 are NOT started.
+
+---
+
 ## WAVE 3 — identity commits from the click; the read path stops repairing per child
 
 ## 10. CLOSED — row -> Focus Panel identity waited 11.9s for data the client already had
