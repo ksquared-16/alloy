@@ -17,7 +17,11 @@ const p = await c.newPage();
 const mutations = [];
 p.on("response", async (r) => {
   const m = r.request().method();
-  if (m !== "GET" && r.url().includes("/api/")) mutations.push({ t: Date.now(), status: r.status(), u: r.url().replace(BASE, "").slice(0, 90) });
+  if (m !== "GET" && r.url().includes("/api/")) {
+    // Server-side decomposition of the save tail, emitted by the PATCH route.
+    const spans = r.headers()["x-alloy-patch-spans"] ?? null;
+    mutations.push({ t: Date.now(), status: r.status(), u: r.url().replace(BASE, "").slice(0, 90), spans });
+  }
 });
 
 async function openDrillIn() {
@@ -96,6 +100,7 @@ async function setValue(value, label) {
     await p.waitForTimeout(40);
   }
   console.log(`  ${label}: edit->control ${T_control}ms | T1 ack ${T_ack}ms | T2 server ${T_server}ms | T3 converged ${T_conv}ms | mutations ${JSON.stringify(mutations.slice(before).map((m) => m.status + " " + m.u.split("?")[0]))}`);
+  for (const mu of mutations.slice(before)) if (mu.spans) console.log(`    SERVER SPANS: ${mu.spans}`);
   return { T_control, T_ack, T_server, T_conv };
 }
 

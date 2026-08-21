@@ -21,6 +21,7 @@ import {
     invalidateOperationsDay,
     warmOperationsDayResult,
 } from "@/lib/scheduling/operationsWorkspaceWarmCache";
+import { createLatestWinsGate } from "@/lib/runtime/latestWins";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, UserRound, Users } from "lucide-react";
 
@@ -238,13 +239,14 @@ export default function AttendanceWorkspace({
      * while the header already shows the new campus's name. Only the newest
      * request may write state.
      */
-    const requestSeq = useRef(0);
+    /* Latest intent wins — one gate for THIS load. See lib/runtime/latestWins.ts. */
+    const requestGate = useRef(createLatestWinsGate());
 
     const load = useCallback(async () => {
         // The workspace mounts this before a site resolves; fetching on "" is a
         // guaranteed 400.
         if (!siteLocationId) return;
-        const seq = ++requestSeq.current;
+        const seq = requestGate.current.issue();
         setError(null);
         try {
             const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
@@ -259,13 +261,13 @@ export default function AttendanceWorkspace({
                 todayYmd?: string;
                 error?: string;
             };
-            if (seq !== requestSeq.current) return;
+            if (!requestGate.current.isCurrent(seq)) return;
             if (loadError) throw new Error(loadError);
             setModel(json.roster ?? null);
             // Adopt the org-local service date the server resolved.
             if (!date && json.roster?.date) setDate(json.roster.date);
         } catch (e) {
-            if (seq !== requestSeq.current) return;
+            if (!requestGate.current.isCurrent(seq)) return;
             setError(e instanceof Error ? e.message : "Could not load attendance");
         }
     }, [siteLocationId, date]);

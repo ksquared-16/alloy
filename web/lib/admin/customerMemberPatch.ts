@@ -162,7 +162,9 @@ export async function applyCustomerMemberMutationPatch(args: {
     orgId: string;
     memberId: string;
     body: Record<string, unknown>;
-}): Promise<{ ok: true } | { ok: false; error: string; status?: number }> {
+}): Promise<
+    { ok: true; spans?: Record<string, number> } | { ok: false; error: string; status?: number }
+> {
     const validated = validateCustomerMemberPatchBody(args.body);
     if (!validated.ok) return { ok: false, error: validated.error, status: 400 };
 
@@ -171,30 +173,51 @@ export async function applyCustomerMemberMutationPatch(args: {
     const hasConfig = Object.keys(validated.config).length > 0;
     if (!hasNative && !hasConfig) return { ok: false, error: "No allowed fields to update", status: 400 };
 
-    const { data: existing, error: fetchErr } = await args.supabase
-        .from("customer_members")
-        .select("id")
-        .eq("id", args.memberId)
-        .eq("org_id", args.orgId)
-        .maybeSingle();
-    if (fetchErr) return { ok: false, error: fetchErr.message, status: 500 };
-    if (!existing) return { ok: false, error: "Member not found", status: 404 };
+    /* Span-instrumented so the save tail can be attributed to a STEP, not to "the server". */
+    const spans: Record<string, number> = {};
+
+    /*
+     * PRE-WRITE GUARDS, CONCURRENTLY.
+     *
+     * Both must pass before anything is written — the existence check produces the 404 and the
+     * definition check produces the 400 — but they are independent of each other, and running them
+     * in series made the operator wait for their SUM (~550 ms + ~345 ms measured). Neither is
+     * weakened by overlapping them: both are still awaited, and both still gate the write below.
+     */
+    const t0 = Date.now();
+    const [existsRes, defErr] = await Promise.all([
+        args.supabase
+            .from("customer_members")
+            .select("id")
+            .eq("id", args.memberId)
+            .eq("org_id", args.orgId)
+            .maybeSingle(),
+        hasConfig
+            ? assertCustomerMemberConfigFieldDefinitionsExist(args.supabase, args.orgId, validated.config)
+            : Promise.resolve(null),
+    ]);
+    spans.guards_ms = Date.now() - t0;
+    if (existsRes.error) return { ok: false, error: existsRes.error.message, status: 500 };
+    if (!existsRes.data) return { ok: false, error: "Member not found", status: 404 };
+    if (defErr) return { ok: false, error: defErr, status: 400 };
 
     if (hasConfig) {
-        const defErr = await assertCustomerMemberConfigFieldDefinitionsExist(args.supabase, args.orgId, validated.config);
-        if (defErr) return { ok: false, error: defErr, status: 400 };
+        const t2 = Date.now();
         await upsertCustomerMemberConfigFieldValues(args.supabase, args.orgId, args.memberId, validated.config);
+        spans.upsert_config_ms = Date.now() - t2;
     }
 
     if (hasNative) {
+        const t3 = Date.now();
         const { error } = await args.supabase
             .from("customer_members")
             .update(nativeUpdates)
             .eq("id", args.memberId)
             .eq("org_id", args.orgId);
+        spans.update_native_ms = Date.now() - t3;
         if (error) return { ok: false, error: error.message, status: 500 };
     }
 
-    return { ok: true };
+    return { ok: true, spans };
 }
 
