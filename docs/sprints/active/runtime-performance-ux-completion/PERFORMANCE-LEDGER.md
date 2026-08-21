@@ -108,7 +108,169 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
-## Combined effect
+## WAVE 2 — the Waitlist "block" was a harness error, and cold had never been measured
+
+### The reconciliation: the product works; the harness read the wrong contract
+
+Wave 1 reported Surfaces 5-9 as BLOCKED because clicking a Waitlist row never changed
+`data-inline-focus-panel-subject`. **That conclusion was wrong.** A human clicking Lennon/Wrigley
+on current staging gets the correct child: the panel header goes "Lennon Kurzman" -> "Test
+Process5" -> "PassA Kid", `resolved: true`, `error: false`.
+
+`data-inline-focus-panel-subject` carries a settlement anchor and does NOT follow the selected row
+— it stays pinned to one family opportunity (`d097e1a8`) across every child. The only attribute
+that tracks identity is the Focus Panel HEADER TEXT. Reading the wrong contract made a working
+surface look broken, and the accompanying 404 made the misreading look corroborated.
+
+The 404 on `/api/admin/view-models/drawer/opportunity/<row id>` is real but is NOT the panel's
+data path — the panel resolves from the provisioning answer. It is a failing speculative fetch the
+product tolerates: ~1.4s of wasted server work per row click, and 10 console errors per session.
+Recorded as O-9, not a functional break.
+
+**Harness corrections made before any number was quoted:** signals re-based on the header
+contract; an instrumentation assertion that fails loudly if the init script does not install;
+route navigation measured with Navigation Timing (a full navigation destroys the in-page observer,
+which had produced four blank Organization rows); and the settle window raised, because it was
+SHORTER than the product's own latency — which is how the "never commits" reading arose.
+
+### The defect that was actually there: 11-12s to change subject
+
+| point | measured |
+|---|---|
+| T1 row highlight | **~150ms** |
+| T2 subject identity visible | **10,799 / 11,751 / 12,071ms** |
+
+The row acknowledges immediately, then the operator reads the PREVIOUS child's Focus Panel for
+eleven seconds. Root cause: `provisioning-answer?subject_id=…` takes ~11.9s and the header commits
+at 12,071ms — immediately after it resolves.
+
+### Where the provisioning answer's time goes
+
+`ProvisioningTimings` is already in the payload; `composition_ms` was 8.2s of a 9.9s answer and
+named nothing inside itself. Added sub-spans:
+
+| span | before | note |
+|---|---|---|
+| child_grain_waitlist | 4,482ms | of which ensure_candidates ~2.1-2.5s, bulk_candidates ~1.07s, household_facts ~1.05s, location_categories ~0.35s |
+| child_grain_avatar | 2,236ms | reads only `subjectId` — no placement dependency |
+| child_grain_members | 1,384ms | full projection (deliberate: a cheaper count is a second definition of membership) |
+| child_grain_inquiry | 698ms | genuinely depends on placement |
+
+All four ran **serially**, summing to ~8.8s ≈ the whole of composition.
+
+## 7. CLOSED — child avatars resolved behind placement for no reason
+
+Avatar reads only `row.subjectId` (member -> person -> photo, one batch) and touches no placement
+field. It now starts before the placement chain and joins after inquiry, on COPIES — the avatar
+step mutates rows in place and placement can expand one child into several candidate rows, so
+mutating the shared input would write onto objects the final page no longer contains. The merge
+re-applies by `subjectId`, the same key the avatar step uses internally.
+
+  composition_ms  8,241ms -> 5,877ms (-29%) · total_ms 10,003ms -> 7,602ms (-24%)
+
+**R-019 verified after the change:** exactly Wrigley and Lennon Kurzman carry avatars, 2 distinct
+signed URLs across 2 rows (1:1, no cross-child leakage), other 13 rows none. Commit `fcb12d0ec`.
+
+## 8. CLOSED — org category config was serialised behind placement candidates
+
+`loadLocationProgramCategoriesForOrg` is org configuration that depends on neither candidates nor
+household facts, yet sat third in a serial chain and was re-read every answer. Now 90s
+process-cached (matching its sibling org-config caches, held via `processMap`, callers get a copy)
+and started concurrently.
+
+  child_grain_waitlist 4,482ms -> 3,917ms · composition 5,877ms -> 5,339ms · total 7,602ms -> 7,050ms
+
+Cumulative: **composition 8,241ms -> 5,339ms (-35%), total 10,003ms -> 7,050ms (-30%)**. Commit `8005da8a1`.
+
+## 9. CLOSED — child work-view counts were counted one lens at a time
+
+`queue-view-totals` awaited `countChildGrainMembersForLens` inside a `for` loop; each call runs a
+full projection, so the cost multiplied by the number of child lenses. Now concurrent, each view
+keeping its own try/catch so a failing lens still yields UNKNOWN for itself.
+
+  /api/admin/queue-view-totals 3,082-3,802ms -> 2,483ms
+
+Counts verified unchanged on /workspace and the pills. Commit `3670502ff`.
+
+---
+
+## PRIORITY 1 RESULT — cold Work Unit, on the path an operator actually takes
+
+**Wave 1's "~10.7s cold, -3%" was measured on the DEEPLINK path, which short-circuits
+provisioning** (`?subject_id=` for an opportunity outside this queue returns a 1KB answer in 1.7s
+instead of a 203KB answer in ~10s). The bare path — what an operator gets by clicking into a Work
+Unit — had never been measured.
+
+Clean A/B, same host, **both cells host-qualified before AND after**, n=4, run 1 discarded,
+max/median ~1.01:
+
+| phase | baseline `c9ce324fa` | current | delta |
+|---|---|---|---|
+| TTFB | 4,360ms | 3,936ms | −424ms (−9.7%) |
+| stream complete (responseEnd) | 16,142ms | 12,612ms | **−3,530ms (−21.9%)** |
+| **first usable surface** | **16,200ms** | **12,672ms** | **−3,528ms (−21.8%)** |
+| first truthful card | 16,200ms | 12,673ms | −3,527ms (−21.8%) |
+| **fully hydrated** | **30,298ms** | **24,821ms** | **−5,477ms (−18.1%)** |
+| HTML document | 300,192 bytes | 300,318 bytes | unchanged |
+
+Cold Work Unit has moved materially — but **12.7s to first usable is still nowhere near Grade A.**
+
+### The cold critical path as it now stands
+
+```
+0 ─── 3.9s ────────────────── 12.6s ──── 12.7s ─────────── 24.8s
+  mw auth 1.6s (cold only)     stream     first usable      fully hydrated
+  + route_meta 2.1s            8.7s       surface
+```
+
+The dominant cost is the **8.7s streamed document (300KB)**: the layout deliberately AWAITS the
+seeded provisioning compose rather than streaming it, because a pending RSC promise crashes
+hydration in Next 16 and a client-gated stream cannot deliver the seed earlier — both were
+measured and reverted previously. So the way to move cold is to make the compose itself cheaper,
+which is what §7-§9 do. That trade is certified architecture and is not being reopened.
+
+---
+
+## OPEN — measured, ranked, not yet fixed
+
+| # | Item | Evidence |
+|---|---|---|
+| **O-10** | `ensure_candidates` **~1.8-2.2s per answer** — LARGEST remaining span | Calls an idempotent per-child lifecycle hook for all 15 rows on a READ path; each makes 4-6 serial round trips (opportunities, process_instances, customer_members, optional category, existence check) almost always to conclude the candidate already exists — ~75 queries per answer. **NEEDS KELLY:** the existence key is `pc_v1_pi:{opportunity}:{member}:{cohort}` and the cohort is only known AFTER those reads, so any bulk pre-filter changes WHEN placement data is repaired for a child whose cohort moved. That is a decision about repair semantics, not performance. |
+| O-9 | Drawer VM 404 per row click | ~1.4s wasted server work + 10 console errors/session; not the panel's data path |
+| O-11 | `POST /api/admin/actions/execute` takes **10,271ms** on cold load | Fires at 13.3s, off first-paint, but 10s of server work on a page load |
+| O-1 | `auth.cached_user_hydrate` ~490ms/load | Only `.id` (22 sites) and `.email` (12) are read; both in the verified claims |
+| O-5 | Drawer opportunity VM 173-178KB / 11.5s | Not the Focus Panel's gate (provisioning is) — reclassified |
+| O-6 | 2 AI capability probes on cold path, 1.8-2.1s each | Gate nothing the operator needs |
+| O-7 | Card focus CLS **0.225**, Message command CLS 0.184 | "Poor" by web-vitals; no timing fix masks it |
+| O-12 | `/organization/processes` pulls **2,853KB over 28 requests** | Largest config-page payload by far |
+
+---
+
+## Surfaces 4-10 — T1 acknowledgement vs T3 primary usable
+
+Warm, prod build. **T1 is uniformly excellent; T2/T3 is where Alloy is not Grade A.**
+
+| interaction | T1 ack | T2 identity | T3 usable | T4 hydrated |
+|---|---|---|---|---|
+| Work View switch (empty lens) | 121-162ms | 137ms | — | — |
+| Work View return (with data) | 51-56ms | 51-56ms | 51-56ms | 237-248ms |
+| Work View return (cold-ish) | 1,670-2,683ms | same | same | 1,893-2,901ms |
+| **Queue row -> Focus Panel** | **105-165ms** | **10,799-12,071ms** | after T2 | after T2 |
+| Card focus (active-work) | 2,235ms | — | 2,235ms | 2,235ms · **CLS 0.225** |
+| Command: Manage | 51ms | — | 51ms | 51ms |
+| Command: Message | — | — | — | **CLS 0.184** |
+| Organization home (cold route) | TTFB 2,146ms | FCP 2,180ms | domInteractive 2,268ms | 18 req / 183KB |
+| Organization locations (warm) | TTFB 382ms | FCP 408ms | domInteractive 1,800ms | 20 req / 185KB |
+| Organization processes (warm) | TTFB 361ms | FCP 396ms | domInteractive 1,440ms | 28 req / **2,853KB** |
+| Organization home (return) | TTFB 379ms | FCP 412ms | domInteractive 1,403ms | 19 req / 184KB |
+
+Organization warm navigation is genuinely good (TTFB ~380ms, FCP ~410ms). Surfaces 8 (dropdown)
+and 9 (save) are still unmeasured — the dropdown probe found no `[role=combobox]` on the Focus
+Panel summary surface, and no safe reversible write has been exercised yet.
+
+---
+
+## WAVE 1 — combined effect
 
 **Warm API request** (same probe, same host, prod build, 30 requests) — this is the operator's
 actual steady state:
