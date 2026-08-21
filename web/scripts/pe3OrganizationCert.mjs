@@ -38,8 +38,29 @@ const links = await p.evaluate(() =>
 console.log(`nav links discovered: ${links.length}`);
 console.log(links.map((l) => `${l.label}→${l.href}`).join("\n"));
 
-const WANT = (process.env.PE3_ORG_PAGES ?? "surfaces,locations,access,processes,data-model,commands").split(",");
-const targets = WANT.map((seg) => links.find((l) => l.href === `/organization/${seg}`) ?? { href: `/organization/${seg}`, label: seg });
+/*
+ * The Organization sidebar is CONTEXTUAL — its links change once you are inside a page — so every
+ * target is approached from `/organization` and the hrefs are taken from what the home page
+ * actually offers. Hard-coding segments measured a link that was not there and reported `clicked:
+ * false`, which is a harness miss, not a product result.
+ */
+const pick = (pred) => links.find(pred);
+const targets = [
+  { label: "Surfaces", href: "/organization/surfaces" },
+  { label: "Locations", href: pick((l) => l.href.startsWith("/organization/locations"))?.href ?? "/organization/locations" },
+  { label: "Access", href: "/organization/access" },
+  { label: "Processes", href: "/organization/processes" },
+  { label: "Data Model", href: "/organization/data-model?section=entities" },
+  { label: "Statuses", href: "/organization/data-model?section=statuses" },
+].filter((t) => t.href);
+
+/** Always start from the Organization home so the contextual sidebar offers every link. */
+async function goHome() {
+  if (new URL(p.url()).pathname !== "/organization") {
+    await p.goto(`${BASE}/organization`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    await p.waitForTimeout(6000);
+  }
+}
 
 async function navigate(target) {
   const errs0 = errors.length, n0 = reqs.length, t0 = Date.now();
@@ -59,7 +80,8 @@ async function navigate(target) {
       const chars = (el?.innerText || "").trim().length;
       if (chars < m.minChars) m.minChars = chars;
       if (chars < 80) m.blanked = true;
-      if (m.t2 == null && location.pathname === href && el) m.t2 = now();
+      const wantPath = href.split("?")[0];
+      if (m.t2 == null && location.pathname === wantPath && el) m.t2 = now();
       if (m.t3 == null && m.t2 != null) {
         const cur = controlCensus(el);
         let fresh = 0;
@@ -70,7 +92,7 @@ async function navigate(target) {
     const obs = new MutationObserver(check);
     obs.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
     const a = [...document.querySelectorAll('a[href^="/organization/"]')].find((x) => x.getAttribute("href") === href);
-    if (a) a.click(); else { obs.disconnect(); return { clicked: false }; }
+    if (a) a.click(); else { obs.disconnect(); return { clicked: false, missing: true }; }
     check();
     await new Promise((r) => setTimeout(r, 11000));
     obs.disconnect();
@@ -87,18 +109,20 @@ async function navigate(target) {
 
 const rows = [];
 for (const t of targets) {
+  await goHome();
   rows.push(await navigate(t));
-  await p.waitForTimeout(1500);
+  await p.waitForTimeout(1200);
 }
-// warm revisit of the first target
+// WARM REVISIT of the first target — same route, second time.
+await goHome();
 const warm = targets.length ? await navigate(targets[0]) : null;
 
 console.log("\n" + "═".repeat(118));
-console.log("page                 click  T1     T2     T3     lastReq  reqs  shell  blanked  chars  err  path-ok");
+console.log("page           click  T1     T2     T3     lastReq  reqs  shell  blanked  chars  err  path-ok");
 console.log("═".repeat(118));
 const f = (v) => String(v ?? "—").padStart(5);
 for (const r of [...rows, warm && { ...warm, label: `${warm.label} (warm)` }].filter(Boolean)) {
-  console.log(`${String(r.label).padEnd(20)} ${String(r.clicked).padEnd(5)} ${f(r.t1)} ${f(r.t2)} ${f(r.t3)} ${f(r.lastReqMs).padStart(7)}  ${String(r.reqCount).padStart(3)}  ` +
+  console.log(`${String(r.label).padEnd(14)} ${String(r.clicked).padEnd(5)} ${f(r.t1)} ${f(r.t2)} ${f(r.t3)} ${f(r.lastReqMs).padStart(7)}  ${String(r.reqCount).padStart(3)}  ` +
     `${String(r.shellSurvived).padEnd(5)}  ${String(r.blanked).padEnd(7)} ${String(r.chars).padStart(5)}  ${String(r.errs).padStart(3)}  ${r.path === r.href}`);
 }
 await b.close();

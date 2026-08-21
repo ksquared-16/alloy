@@ -307,7 +307,11 @@ left in the operator runtime and deserves its own decomposition; the route runs 
 
 ---
 
-## 11. Performance budgets
+## 11. Performance budgets — SUPERSEDED BY §16
+
+> This table was written mid-programme and is kept only for history. **§16 is the authority**: it
+> carries the final numbers, adds the card/command/resume/Organization/Save-completion budgets, and
+> pairs every budget with a structural regression guard. Where the two disagree, §16 is correct.
 
 A budget is a REGRESSION GATE, not an aspiration: a number that has been achieved on a production
 build and must not be given back. Where a budget is not yet met, it is recorded as **owed** with the
@@ -474,3 +478,205 @@ also recorded in §7).
    (`--alloy-os-fp-depth-ms`) is scored as unexpected movement. The Focus Panel grid width is
    **stable at 895 px before and after** the transition — the 863 px seen mid-flight is the
    animation, and it returns. **No layout fix is warranted; do not chase these numbers.**
+
+
+---
+
+## 14. Save server tail — REDUCED
+
+**The question was: when is authoritative persistence actually complete, and what is the server
+waiting for after that?** It is answerable now because the mutation path is span-instrumented
+(`x-alloy-patch-spans`), so the tail attributes to a STEP rather than to "the server".
+
+| span | before | after |
+|---|---|---|
+| auth → write | 1 ms | 2 ms |
+| pre-write guards (existence → 404, field definitions → 400) | 896 ms **serial** | **698 ms concurrent** |
+| authoritative upsert | 1,036 ms | 1,059 ms |
+| **post-write readback** | **1,442 ms** | **0 ms** |
+| **total** | **3,376 ms** | **1,759 ms** |
+
+**Authoritative persistence completes at ~1.74 s, and the response now returns immediately after
+it.** Previously the server spent a further 1,442 ms — **43% of the response** — re-reading the row
+to shape a response BODY. The write is already durable when those reads begin: they carry no
+invariant, no audit guarantee and no transaction work. And every caller of this endpoint in the
+codebase **discards the body** (it is parsed only to surface `error` on failure), so the operator was
+waiting on a projection nobody reads.
+
+### Classification of post-write work
+
+| work | class |
+|---|---|
+| existence check (produces 404) | **MUST COMPLETE BEFORE SUCCESS RESPONSE** — but may overlap the definition check |
+| field-definition check (produces 400) | **MUST COMPLETE BEFORE SUCCESS RESPONSE** — but may overlap the existence check |
+| canonical upsert | **MUST COMPLETE** — this is the authoritative write |
+| profile-field readback | **REDUNDANT READ / RECOMPOSITION** |
+| canonical row readback | **REDUNDANT READ / RECOMPOSITION** |
+
+### Fixed at the shared mutation owner, not with a second endpoint
+
+- `Prefer: return=minimal` — the standard HTTP way for a caller to say it does not want the
+  representation. **The default response is unchanged**, so any consumer that wants the row still
+  gets it; only callers that opt in skip the readback. Both in-repo callers opt in.
+- The two pre-write guards now run **concurrently**. Both are still awaited and both still gate the
+  write — the operator simply no longer pays their sum.
+
+**Preserved and verified:** no false success · durable persistence (`persisted=true`) · transaction
+correctness · reload agreement · **exact restoration** (`exact_restore=true`, Firefly left as found).
+**The acknowledgement UX is untouched:** T1 76–83 ms, local convergence 77–84 ms.
+
+The remaining 1,736 ms is ~700 ms of required guards plus a ~1,030 ms authoritative upsert against a
+REMOTE Supabase. That is required work against network-bound round trips, not projection rebuilding.
+
+> A guard caught a genuine behaviour change while making this: with the guards concurrent, the
+> definition query now runs even when the member is missing (it used to be short-circuited). Still
+> 404, still zero writes — one extra read on the rare failure path, buying ~200 ms on every success.
+
+---
+
+## 15. `/organization` operator certification
+
+Canonical pages only. Legacy Layout Builder, Opportunity Drawer Layout, drawer-era configuration and
+diagnostic routes were **not** entered.
+
+| page | T1 ack | T2 committed (warm) | T2 committed (cold) | controls usable | requests |
+|---|---|---|---|---|---|
+| Surfaces | 5 ms | 33–49 ms | — | 342 ms | 2 |
+| Locations | 2 ms | 17 ms | — | 335 ms | 4 |
+| Access | 1 ms | 39–54 ms | 1,496 ms | 39 ms | 0–3 |
+| Processes | 1 ms | 54 ms | — | 54 ms | 9 |
+| Data Model (entities) | 2 ms | — | 1,486–2,594 ms | same as commit | 1 |
+| Statuses (`data-model?section=statuses`) | 2 ms | — | 1,454–1,486 ms | same as commit | 0 |
+| Surfaces — **warm revisit** | 1 ms | **45 ms** | — | 45 ms | 0 |
+
+**Warm navigation is premium (17–55 ms). First entry to a route family costs ~1.5–2.6 s.** The
+timeline is consistent across pages: the RSC payload arrives at 16–311 ms, the route's JS chunk is
+requested at ~1,474–2,033 ms, and commit follows it.
+
+**Nav-intent prefetch does NOT close that gap** — A/B with a matched-dwell control:
+
+```
+cold   (no lead)        t2 = 1,537 ms
+dwell  (2.5s, no hover) t2 = 1,639 ms
+hover  (2.5s real hover)t2 = 1,522 ms
+```
+
+Hover is indistinguishable from dwell. Classified **TRUE-COLD TECHNICAL DEBT**, not a readiness gap —
+and explicitly not "fixed" by a prefetch that measurement shows does nothing.
+
+### Processes — the specific question answered
+
+`entity-layouts` and `stage-bootstrap` **do NOT gate interaction.** Controls are usable at **54 ms**
+while those requests continue to ~3,530 ms; the page carries live inputs, and the process editor
+opens with its own controls (Stages, Work Views, Commands, Automation, Health, History).
+**Classified SECONDARY.** No transfer-size optimisation is warranted, and no duplicate "fast
+settings" endpoint was created.
+
+### Organization behaves as ONE runtime
+
+No inconsistent page behaviour survived scrutiny. Every settings route shares one streaming reserve
+(`app/adminV2/settings/loading.tsx`), deliberately structure-neutral so entry is an additive content
+fill rather than a layout rearrangement.
+
+> **A reported inconsistency was withdrawn.** The harness flagged "Surfaces blanks its main region
+> while Access does not" (21 chars vs 701). That is the **shared loading reserve doing its job** — a
+> skeleton has no text, so a character-count metric scores a calm, width-stable reserve as a blank.
+> Not a defect. A metric that cannot tell a reserve from an empty page will manufacture consistency
+> defects that do not exist.
+
+> **Main-thread blocking is NOT measured.** The `longtask` observer returned zero entries on every
+> page, including ones taking 1.5 s+ — it has no positive control in this harness, so no claim is
+> made from its silence in either direction.
+
+
+---
+
+## 16. Final performance budget matrix
+
+Every area carries **two** things: a PRODUCTION EXPERIENCE BUDGET (what the operator must feel,
+measured on a production build) and a STRUCTURAL REGRESSION GUARD (a deterministic test that fails
+when the *mechanism* regresses). The guard is what runs in CI. **No wall-clock assertion is used as a
+CI gate** — timing is measured deliberately, on a qualified host, never in a flaky test.
+
+| area | production experience budget | measured | structural regression guard |
+|---|---|---|---|
+| Workspace → prepared Work Unit | < 600 ms | 393–412 ms | reveal lifecycle + readiness invariants (8) |
+| Work View switch | < 500 ms | 265–347 ms | reveal gate armed per work unit |
+| Queue → identity | < 400 ms | 120–233 ms | child mission reveal contract (6) |
+| Prepared Queue → Mission | < 400 ms | 209–233 ms | child mission reveal contract |
+| Operational workspace shell | < 200 ms | 8–101 ms | — (browser-certified) |
+| **Resumed workspace shell** | **< 200 ms** | **5–24 ms** | workspace resume contract (14) |
+| **Resumed primary content (warm)** | **< 500 ms** | **14–28 ms** | warm lifecycle (9) + resume contract |
+| **Workspace reopen requests (in TTL)** | **0** | **0** | warm lifecycle — reuse + invalidation seam |
+| **Card transition (destination commit)** | **< 200 ms** | **31–155 ms** | latest-wins ordering (7) |
+| **Command destination commit** | **< 200 ms** | **28–80 ms** | latest-wins ordering (7) |
+| Activity shell | < 200 ms | 18–33 ms | subject-gate ordering (3) |
+| Dropdown (warm) | < 100 ms | 25–30 ms | — |
+| Save acknowledgement | < 150 ms | 74–83 ms | no-false-success contract (6) |
+| **Save authoritative completion** | **< 2,000 ms** | **1,736–1,759 ms** | no-false-success + span classification |
+| **Organization warm navigation** | **< 300 ms** | **17–55 ms** | — (browser-certified) |
+| Organization first entry (cold) | *(no budget — true-cold class)* | 1,486–2,594 ms | — |
+| Prepared-path layout shift | 0 | 0 | BOS forbidden parking (5) |
+
+**Budgets are per performance class.** A cold-start number and a prepared-journey number are never
+averaged into one figure — §1 exists because conflating them reports a premium journey as a
+regression and a cold path as fine.
+
+---
+
+## 17. Final guard matrix
+
+| invariant | owner | guard | status |
+|---|---|---|---|
+| 6/7/8/10 reveal lifecycle + readiness | `useCommittedWorkUnitSurfaceRuntime` | `revealLifecycleAndReadinessInvariants.test.ts` (8) | **guarded** |
+| child mission reveal / no sibling work | `overlayChildMissionOntoSettledFocusModel` | `childMissionRevealContract.test.ts` (6) | **guarded** |
+| 12 workspace resume | `lib/runtime/workspaceResume.ts` | `workspaceResumeContract.test.ts` (14) + `pe3WorkspaceResumeCert.mjs` A/B/C × 3 | **guarded** |
+| 21 workspace data lifecycle | `lib/runtime/warmCache.ts` + Operations adopter | `operationsWorkspaceWarmLifecycle.test.ts` (9) | **guarded** |
+| 23 invalidation seam | per-workspace warm owner | same file — mutation drops day, not configuration | **guarded** |
+| **latest-click-wins** | `lib/runtime/latestWins.ts` | `latestWinsOrderingContract.test.ts` (4) | **guarded** |
+| **Activity subject switching** | `createSubjectGate` | `latestWinsOrderingContract.test.ts` (3) | **guarded** |
+| **15 Save persistence / no false success** | `applyCustomerMemberMutationPatch` | `saveNoFalseSuccessContract.test.ts` (6) | **guarded** |
+| **20 forbidden parking** | `chooseBosParkingGeometry` | `bosForbiddenParkingContract.test.ts` (5) | **guarded** |
+| 24 readiness follows resume | `warmOperationsWorkspace` + sidebar nav intent | browser-measured request chain | **partial** |
+| cross-child leakage | `data-children-focused-member` | `pe3CardCommandReadiness.mjs` identity assertion | **browser-certified** |
+
+**All five named guard gaps are closed.** Every guard is deterministic and positive-controlled: each
+reuse/ordering assertion is paired with a case that MUST fetch or MUST commit, so a mechanism that
+silently stopped working entirely could not pass.
+
+---
+
+## 18. Final classification
+
+### CERTIFIED / PREMIUM
+- Workspace → prepared Work Unit, Work View switch, Queue identity, prepared Queue → Mission.
+- Operational workspace launch and **resume** (Processing, Work Items, Operations) — 9/9 scenarios.
+- Operational workspace **warm data lifecycle** — 0 requests on reopen inside the freshness window.
+- **All Focus Panel card and command destinations** — 28–155 ms, controls present at commit.
+- Activity mode shell and subject switching.
+- Save acknowledgement and local convergence.
+- `/organization` **warm** navigation, and Processes interaction.
+
+### CERTIFIED WITH SECONDARY DEBT
+- **Message command** — commits in 80 ms; secondary hydration continues to ~6.3 s (Communications).
+- **Processes** — controls usable at 54 ms; `entity-layouts` / `stage-bootstrap` continue to ~3.5 s
+  without gating anything.
+- **Operations → Children resume** — section restores immediately; its list content waits on Records.
+
+### EXTERNAL OWNER
+- **Communications** — duplicate loader ownership; the Activity early-switch cascade; the timeline
+  double-fetch and a 100-event payload rendering 3 events. See the handoff artifact.
+- **Records** — `/api/admin/records/children` at ~3.3–4.5 s.
+- **BOS rail owner** — remaining direct-path late re-park (product placement decision).
+- **Vacilando** — ABANDONED execution-run checkpoint transition.
+
+### TRUE-COLD TECHNICAL DEBT
+- Work Unit bare cold path: 11,708 ms (accepted class; see §1).
+- `/organization` first entry to a route family: 1,486–2,594 ms. **Nav-intent prefetch measurably
+  does not help** — do not "fix" it with one.
+
+### OPEN PLATFORM DEFECT
+- A speculative drawer-VM prefetch on `/workspace` 404s
+  (`/api/admin/view-models/drawer/opportunity/<id>`): readiness spending a request on a destination
+  that does not resolve. Bounded and harmless, but it is measurable waste and it is the source of the
+  console error seen during card/command measurement.

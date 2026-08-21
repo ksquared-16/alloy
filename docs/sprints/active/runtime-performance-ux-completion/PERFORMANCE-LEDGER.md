@@ -1065,3 +1065,33 @@ and a synthetic `MouseEvent("mouseenter")` never triggers React's `onMouseEnter`
 `mouseover`), which made a working hover-warm look dead.
 
 **Left owed:** `/api/admin/records/children` ~3.3–4.5 s (Records), Save tail ~3.2 s, Activity ~2.1 s.
+
+## Wave 12 — card/command, Save tail, /organization, guard closure
+
+**Card / command readiness — CERTIFIED.** Every Focus Panel destination commits through ONE shared
+seam (`data-fp-depth`) in **28–155 ms**, with T3 == T2 — the destination arrives already carrying its
+controls. Tour and Billing Preview commit with **zero requests**. No cross-child leakage, proven on
+`data-children-focused-member` across two different children.
+
+**Save server tail — 3,376 ms → 1,759 ms (−48%).** Authoritative persistence completes at ~1.74 s;
+the 1,442 ms after it was post-write readback shaping a body every caller discards. Fixed at the
+shared mutation owner via `Prefer: return=minimal` (default response unchanged) plus concurrent
+pre-write guards. Acknowledgement UX untouched (T1 76–83 ms); persistence and exact restoration
+re-proven.
+
+**/organization — CERTIFIED warm (17–55 ms).** First entry to a route family costs 1.5–2.6 s and
+**nav-intent prefetch measurably does not help** (hover 1,522 ms ≈ dwell 1,639 ms ≈ cold 1,537 ms) —
+classified true-cold debt rather than "fixed" with a prefetch that does nothing. `entity-layouts` /
+`stage-bootstrap` do NOT gate Processes interaction (controls usable at 54 ms) — SECONDARY.
+
+**All five named guard gaps closed**, deterministic, no wall-clock: latest-click-wins + Activity
+subject switching (new shared `lib/runtime/latestWins.ts`), Save no-false-success, BOS forbidden
+parking, workspace resume. **55 guards across 7 files, all passing.**
+
+**Three false findings caught and withdrawn this wave:**
+1. `el.click()` left the Tour menu closed (menus open on **pointerdown**) — a working command looked
+   broken.
+2. The card/command CLS figures are a synthetic-input artifact — Chrome excludes shifts near real
+   input via `hadRecentInput`; the panel width is stable at 895 px.
+3. "Surfaces blanks while Access does not" was the **shared loading reserve** working as designed; a
+   character-count metric cannot tell a calm reserve from an empty page.
