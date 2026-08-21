@@ -12,12 +12,19 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { localNodeId } from "./execution-node.mjs";
+
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
 export const LANE_NAME_MAX = 80;
 export const IDENTITY_TMUX = "alloy-identity";
 export const IDENTITY_LANE_NAME = "Access & Identity";
 export const IDENTITY_LANE_ID = "lane_955fe041d417";
+export const VACILANDO_LANE_NAME = "Vacilando";
+export const VACILANDO_LANE_ALIAS = "vacilando";
+export const WORK_CLASS_PRODUCT = "product";
+export const WORK_CLASS_RUNTIME_SELF = "runtime_self";
+export const RUNTIME_SELF_RESOURCE_PRIORITY = -10;
 
 function runtimeRoot() {
   return process.env.ALLOY_RUNTIME_ROOT?.trim()
@@ -94,6 +101,45 @@ function coerceSlot(value, fallback = null) {
   return Number.isInteger(n) && n >= 1 && n <= 6 ? n : fallback;
 }
 
+export function coerceWorkClass(value, fallback = WORK_CLASS_PRODUCT) {
+  const v = String(value || "").trim();
+  if (v === WORK_CLASS_RUNTIME_SELF) return WORK_CLASS_RUNTIME_SELF;
+  if (v === WORK_CLASS_PRODUCT) return WORK_CLASS_PRODUCT;
+  return fallback;
+}
+
+export function scarceResourcePriorityForLane(laneId, root = runtimeRoot()) {
+  const rec = getDurableLane(laneId, root);
+  if (typeof rec?.scarce_resource_priority === "number") return rec.scarce_resource_priority;
+  if (rec?.work_class === WORK_CLASS_RUNTIME_SELF) return RUNTIME_SELF_RESOURCE_PRIORITY;
+  return 0;
+}
+
+function normalizeBinding(binding, { root, previous = null } = {}) {
+  if (!binding) return null;
+  const nodeId = binding.node_id || localNodeId(root);
+  return {
+    type: binding.type || previous?.type || "alloy_local",
+    node_id: nodeId,
+    worktree_path: binding.worktree_path || previous?.worktree_path || null,
+    worktree_name: binding.worktree_name || previous?.worktree_name || null,
+    branch: binding.branch || previous?.branch || null,
+    tmux_session: Object.prototype.hasOwnProperty.call(binding, "tmux_session")
+      ? (binding.tmux_session || null)
+      : (previous?.tmux_session || null),
+    tmux_pane: Object.prototype.hasOwnProperty.call(binding, "tmux_pane")
+      ? (binding.tmux_pane || null)
+      : (previous?.tmux_pane || null),
+    slot: Object.prototype.hasOwnProperty.call(binding, "slot")
+      ? coerceSlot(binding.slot, null)
+      : coerceSlot(previous?.slot, null),
+    provider: binding.provider || previous?.provider || "claude",
+    stale: false,
+    status: "bound",
+    last_node_id: previous?.node_id && previous.node_id !== nodeId ? previous.node_id : (previous?.last_node_id || null),
+  };
+}
+
 export function isDurableLaneId(id) {
   return DURABLE_LANE_ID_RE.test(String(id || ""));
 }
@@ -154,6 +200,8 @@ export function createDurableLane({
   aliases = [],
   mission_id = null,
   origin = "adopted",
+  work_class = WORK_CLASS_PRODUCT,
+  scarce_resource_priority = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -196,16 +244,11 @@ export function createDurableLane({
     aliases: [...new Set((aliases || []).filter(Boolean))],
     mission_id: mission_id ? String(mission_id) : null,
     mission_bound_at: mission_id ? iso(nowMs) : null,
-    binding: binding ? {
-      type: "alloy_local",
-      worktree_path: binding.worktree_path || null,
-      worktree_name: binding.worktree_name || null,
-      branch: binding.branch || null,
-      tmux_session: binding.tmux_session || null,
-      tmux_pane: binding.tmux_pane || null,
-      slot: coerceSlot(binding.slot, null),
-      provider: binding.provider || "claude",
-    } : null,
+    work_class: coerceWorkClass(work_class),
+    scarce_resource_priority: typeof scarce_resource_priority === "number"
+      ? scarce_resource_priority
+      : (coerceWorkClass(work_class) === WORK_CLASS_RUNTIME_SELF ? RUNTIME_SELF_RESOURCE_PRIORITY : 0),
+    binding: binding ? normalizeBinding(binding, { root }) : null,
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -233,18 +276,7 @@ export function bindDurableLane(laneId, binding, { nowMs = Date.now(), root = ru
   if (existing && existing.lane_id !== rec.lane_id) {
     return { ok: false, error: "already_connected", lane: existing };
   }
-  rec.binding = {
-    type: "alloy_local",
-    worktree_path: binding.worktree_path || rec.binding?.worktree_path || null,
-    worktree_name: binding.worktree_name || rec.binding?.worktree_name || null,
-    branch: binding.branch || rec.binding?.branch || null,
-    tmux_session: binding.tmux_session || rec.binding?.tmux_session || null,
-    tmux_pane: binding.tmux_pane || rec.binding?.tmux_pane || null,
-    slot: Object.prototype.hasOwnProperty.call(binding, "slot")
-      ? coerceSlot(binding.slot, null)
-      : coerceSlot(rec.binding?.slot, null),
-    provider: binding.provider || rec.binding?.provider || "claude",
-  };
+  rec.binding = normalizeBinding(binding, { root, previous: rec.binding });
   rec.updated_at = iso(nowMs);
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -403,6 +435,7 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
   const previousSlot = rec.binding?.slot ?? null;
   rec.binding = {
     type: rec.binding?.type || "alloy_local",
+    node_id: rec.binding?.node_id || null,
     worktree_path: rec.binding?.worktree_path || null,
     worktree_name: rec.binding?.worktree_name || null,
     branch: rec.binding?.branch || null,
@@ -410,6 +443,9 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
     tmux_pane: null,
     slot: null,
     provider: rec.binding?.provider || "claude",
+    stale: true,
+    status: "idle",
+    last_node_id: rec.binding?.node_id || rec.binding?.last_node_id || null,
   };
   rec.execution_capacity = {
     state: "IDLE",
@@ -628,6 +664,9 @@ export function connectExistingWork({
 export function validateRuntimeBinding(rec, observation) {
   const blockers = [];
   const binding = rec?.binding;
+  if (binding?.stale || binding?.status === "stale" || binding?.status === "unbound") {
+    blockers.push({ code: "binding_stale", detail: "Execution binding is stale and must be rebound on this node" });
+  }
   if (!binding?.worktree_path) blockers.push({ code: "missing_worktree", detail: "Lane has no worktree binding" });
   else if (!existsSync(binding.worktree_path)) blockers.push({ code: "worktree_missing", detail: "Bound worktree path does not exist" });
   if (observation?.worktree?.path && binding?.worktree_path && observation.worktree.path !== binding.worktree_path) {
@@ -637,6 +676,112 @@ export function validateRuntimeBinding(rec, observation) {
     blockers.push({ code: "tmux_mismatch", detail: "Live tmux session does not match binding" });
   }
   return { ok: blockers.length === 0, blockers, binding };
+}
+
+/**
+ * Mark host-specific binding fields invalid without deleting the lane.
+ * Keeps last-known worktree/branch as historical context.
+ */
+export function invalidateStaleExecutionBindings({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  reason = "host_rebinding",
+  currentNodeId = null,
+} = {}) {
+  const store = readDevelopmentLaneStore(root);
+  let invalidated = 0;
+  for (const rec of Object.values(store.lanes || {})) {
+    if (!rec || rec.status === "ARCHIVED") continue;
+    if (!rec.binding) continue;
+    const nodeMatch = currentNodeId && rec.binding.node_id === currentNodeId && rec.binding.stale !== true;
+    if (nodeMatch && reason !== "restored_onto_different_node") continue;
+    rec.binding = {
+      ...rec.binding,
+      tmux_session: null,
+      tmux_pane: null,
+      slot: null,
+      stale: true,
+      status: "stale",
+      last_node_id: rec.binding.node_id || rec.binding.last_node_id || null,
+      node_id: null,
+      invalidated_at: iso(nowMs),
+      invalidated_reason: reason,
+    };
+    rec.updated_at = iso(nowMs);
+    store.lanes[rec.lane_id] = rec;
+    invalidated += 1;
+  }
+  writeStore(store, root);
+  return { ok: true, invalidated };
+}
+
+/**
+ * Same durable lane, new execution substrate on the current node.
+ * Does not create a new lane. Does not mutate Git.
+ */
+export function rebindDurableLane(laneId, binding, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const out = bindDurableLane(laneId, binding, { nowMs, root });
+  if (!out.ok) return out;
+  return { ...out, lane_id: rec.lane_id, substrate_mutated: false, git_mutated: false };
+}
+
+export function findVacilandoSpecialistLane(root = runtimeRoot()) {
+  for (const rec of listDurableLanes(root)) {
+    if ((rec.aliases || []).includes(VACILANDO_LANE_ALIAS)) return rec;
+    if (rec.work_class === WORK_CLASS_RUNTIME_SELF && rec.name === VACILANDO_LANE_NAME) return rec;
+  }
+  return null;
+}
+
+/**
+ * Permanent specialist lane for Vacilando-runtime work. Same identity model
+ * as other specialist lanes — not a special-cased object type.
+ */
+export function ensureVacilandoSpecialistLane({
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const existing = findVacilandoSpecialistLane(root);
+  if (existing) {
+    let dirty = false;
+    if (existing.work_class !== WORK_CLASS_RUNTIME_SELF) {
+      existing.work_class = WORK_CLASS_RUNTIME_SELF;
+      dirty = true;
+    }
+    if (typeof existing.scarce_resource_priority !== "number"
+        || existing.scarce_resource_priority > RUNTIME_SELF_RESOURCE_PRIORITY) {
+      existing.scarce_resource_priority = RUNTIME_SELF_RESOURCE_PRIORITY;
+      dirty = true;
+    }
+    const aliases = new Set(existing.aliases || []);
+    if (!aliases.has(VACILANDO_LANE_ALIAS)) {
+      aliases.add(VACILANDO_LANE_ALIAS);
+      existing.aliases = [...aliases];
+      dirty = true;
+    }
+    if (dirty) {
+      existing.updated_at = iso(nowMs);
+      const store = readDevelopmentLaneStore(root);
+      store.lanes[existing.lane_id] = existing;
+      writeStore(store, root);
+    }
+    return { ok: true, lane: existing, created: false };
+  }
+  return {
+    ...createDurableLane({
+      name: VACILANDO_LANE_NAME,
+      description: "Owns Vacilando development-runtime improvements. Lower scarce-resource priority than Alloy product work.",
+      origin: "created",
+      aliases: [VACILANDO_LANE_ALIAS],
+      work_class: WORK_CLASS_RUNTIME_SELF,
+      scarce_resource_priority: RUNTIME_SELF_RESOURCE_PRIORITY,
+      nowMs,
+      root,
+    }),
+    created: true,
+  };
 }
 
 export function publicDurableLane(rec) {
@@ -649,6 +794,10 @@ export function publicDurableLane(rec) {
     aliases: rec.aliases || [],
     binding: rec.binding,
     origin: rec.origin,
+    work_class: rec.work_class || WORK_CLASS_PRODUCT,
+    scarce_resource_priority: typeof rec.scarce_resource_priority === "number"
+      ? rec.scarce_resource_priority
+      : (rec.work_class === WORK_CLASS_RUNTIME_SELF ? RUNTIME_SELF_RESOURCE_PRIORITY : 0),
     created_at: rec.created_at,
     updated_at: rec.updated_at,
     mission_id: rec.mission_id || null,
@@ -660,6 +809,28 @@ export function publicDurableLane(rec) {
 export function resetDevelopmentLanesForTests(root = runtimeRoot()) {
   writeStore(emptyStore(), root);
 }
+
+/**
+ * Host-portability rebind: same durable lane, new execution substrate.
+ * Not remote workload migration.
+ */
+export const HOST_REBIND_CONTRACT = Object.freeze({
+  implemented: true,
+  retains: [
+    "durable lane_id",
+    "operator name",
+    "aliases",
+    "work_class",
+    "historical Execution Runs",
+    "historical Agent Sessions",
+  ],
+  invalidates: [
+    "tmux session",
+    "slot",
+    "pane",
+    "live node claim",
+  ],
+});
 
 export const FUTURE_REBIND_CONTRACT = Object.freeze({
   implemented: false,

@@ -2,6 +2,10 @@
 # Install or update the Vacilando Gateway launchd agent.
 # Dual bind: 127.0.0.1 + currently discovered Tailscale IPv4. Never 0.0.0.0.
 # Uses $HOME — no MacBook hostname. Does not touch Electron on :3021.
+#
+# Install from the canonical Alloy checkout (ALLOY_REPO), not a sprint worktree.
+# WorkingDirectory is this toolkit copy — that is the Gateway code host, not a
+# Development Lane identity.
 set -euo pipefail
 
 HOME_DIR="${HOME:?}"
@@ -9,7 +13,7 @@ LABEL="com.alloy.vacilando-gateway"
 PLIST="${HOME_DIR}/Library/LaunchAgents/${LABEL}.plist"
 BIN_DIR="${HOME_DIR}/.local/bin"
 WRAPPER="${BIN_DIR}/alloy-vacilando-gateway"
-RUNTIME_ROOT="${HOME_DIR}/.local/state/alloy-dev/gateway"
+RUNTIME_ROOT="${VACILANDO_GATEWAY_ROOT:-${HOME_DIR}/.local/state/alloy-dev/gateway}"
 LOG_DIR="${RUNTIME_ROOT}/logs"
 HERE="$(cd "$(dirname "$0")" && pwd)"
 HOST_JS="${HERE}/lib/vacilando-gateway-host.mjs"
@@ -47,6 +51,7 @@ cat > "$PLIST" <<EOF
     <key>VACILANDO_REQUIRE_API_AUTH</key><string>1</string>
     <key>VACILANDO_BIND</key><string>127.0.0.1</string>
     <key>VACILANDO_PORT</key><string>${PORT}</string>
+    <key>VACILANDO_NODE_NAME</key><string>${VACILANDO_NODE_NAME:-}</string>
   </dict>
   <key>StandardOutPath</key><string>${LOG_DIR}/gateway.out.log</string>
   <key>StandardErrorPath</key><string>${LOG_DIR}/gateway.err.log</string>

@@ -11,6 +11,7 @@ import { basename, join } from "node:path";
 
 import { gitFactsForPath, readAllMetadata, resolveRuntimeConfig, TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { isRuntimeAdoptionBlocked } from "./development-lane.mjs";
+import { localNodeId } from "./execution-node.mjs";
 import {
   inferClaudePresence,
   isAllowlistedSession,
@@ -178,7 +179,7 @@ export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
     active_providers: activeProviders,
     max_providers: maxProviders,
     blockers,
-    execution_node: "local",
+    execution_node: localNodeId(),
   };
 }
 

@@ -14,6 +14,7 @@ import { LANE_ID_RE, LANE_INSTRUCTION_MAX } from "./lanes.mjs";
 import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
+import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
 export const EXECUTION_RUN_MAX_LANES = 32;
@@ -174,7 +175,7 @@ export function listExecutionRunsForLane(laneId, root = runtimeRoot()) {
 }
 
 export function gatewayRuntimeRoot() {
-  return join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return vacilandoGatewayRoot();
 }
 
 export function candidateRuntimeRoots() {
@@ -317,6 +318,7 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     origin: run.origin || null,
     mission_id: run.mission_id || null,
     worktree_path: run.worktree_path || null,
+    node_id: run.node_id || null,
     latest_progress: run.latest_progress || null,
     completion_report: run.completion_report || null,
     resource_wait: run.resource_wait || null,
@@ -456,6 +458,7 @@ export function createQueuedRun({
     worktree_path: worktreePath
       ? String(worktreePath)
       : (getDurableLane(id, root)?.binding?.worktree_path || null),
+    node_id: localNodeId(root),
     mission_id: getDurableLane(id, root)?.mission_id || null,
     output_fingerprint_at_send: null,
     transitions: [],

@@ -112,6 +112,7 @@ export function resolveCanonicalRepoRoot() {
   const candidates = [
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
+    join(process.env.HOME || "", "Alloy"),
     "/Users/Kelly/Alloy",
     findRepoRoot(),
   ].filter(Boolean);

@@ -2,19 +2,30 @@
 /**
  * alloy-vacilando — Vacilando Runtime CLI.
  *
- * The runtime that powers the Command Center. It PROJECTS existing toolkit
- * truth (alloy-ro + git + state files); it owns no parallel model and never
- * mutates anything. Read-only in Phase 1.
+ * Projects toolkit truth and operates the Gateway control plane. Durable
+ * backup/restore and node identity are explicit mutations of Vacilando state
+ * files — never Git, worktrees, or trusted-host secrets.
  *
  * Usage:
  *   alloy-vacilando snapshot [--json]   Compose + print the Command Center snapshot
  *   alloy-vacilando sources             Show which authoritative sources resolved
  *   alloy-vacilando serve [--port N]    Start the loopback control plane (default 3020)
+ *   alloy-vacilando node [--name NAME]  Show/ensure this execution node
+ *   alloy-vacilando backup [--out DIR]  Backup durable Vacilando state
+ *   alloy-vacilando restore --from DIR --to ROOT
+ *   alloy-vacilando ensure-lane vacilando
  *   alloy-vacilando help
  */
 import { composeSnapshot } from "./lib/vacilando/compose.mjs";
 import { collectRaw } from "./lib/vacilando/sources.mjs";
 import { startVacilandoServer } from "./lib/vacilando-server.mjs";
+import {
+  cmdBackup,
+  cmdEnsureVacilandoLane,
+  cmdNode,
+  cmdRestore,
+  cmdVerify,
+} from "./lib/vacilando/commands/node-ops.mjs";
 
 const args = process.argv.slice(2);
 const cmd = args[0] || "help";
@@ -62,9 +73,13 @@ async function main() {
   if (cmd === "help" || cmd === "--help" || cmd === "-h") {
     process.stdout.write(
       "alloy-vacilando — Vacilando Runtime (read-only projection over the Alloy toolkit)\n\n" +
-      "  snapshot [--json]   Compose + print the Command Center snapshot\n" +
-      "  sources             Show which authoritative sources resolved\n" +
-      "  serve [--port N]    Start loopback control plane (default 3020)\n" +
+      "  snapshot [--json]        Compose + print the Command Center snapshot\n" +
+      "  sources                  Show which authoritative sources resolved\n" +
+      "  serve [--port N]         Start loopback control plane (default 3020)\n" +
+      "  node [--name NAME]       Show/ensure this execution node identity\n" +
+      "  backup [--out DIR]       Backup durable Vacilando state (no secrets)\n" +
+      "  restore --from DIR --to ROOT   Restore into an isolated runtime root\n" +
+      "  ensure-lane vacilando    Adopt/create the Vacilando specialist lane\n" +
       "  help\n");
     return;
   }
@@ -89,6 +104,45 @@ async function main() {
     const port = Number(opt("--port", "3020"));
     const { port: bound } = await startVacilandoServer(port);
     process.stdout.write(`Vacilando Runtime → http://127.0.0.1:${bound}  (loopback only · read-only · Ctrl-C to stop)\n`);
+    return;
+  }
+  if (cmd === "node") {
+    const rec = cmdNode({ name: opt("--name", null) });
+    process.stdout.write(`${JSON.stringify(rec, null, 2)}\n`);
+    return;
+  }
+  if (cmd === "backup") {
+    const out = cmdBackup({ backupRoot: opt("--out", undefined) });
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
+    return;
+  }
+  if (cmd === "restore") {
+    const from = opt("--from", null);
+    const to = opt("--to", null);
+    if (!from || !to) {
+      process.stderr.write("restore requires --from BACKUP_DIR --to DEST_ROOT\n");
+      process.exit(2);
+    }
+    const verified = cmdVerify({ backupPath: from });
+    if (!verified.ok) {
+      process.stdout.write(`${JSON.stringify(verified, null, 2)}\n`);
+      process.exit(1);
+    }
+    const out = cmdRestore({ backupPath: from, destRoot: to });
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
+    return;
+  }
+  if (cmd === "ensure-lane") {
+    const which = args[1];
+    if (which !== "vacilando") {
+      process.stderr.write("ensure-lane currently supports: vacilando\n");
+      process.exit(2);
+    }
+    const out = cmdEnsureVacilandoLane();
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
     return;
   }
   process.stderr.write(`unknown command: ${cmd}\n`);

@@ -72,6 +72,7 @@ import { listCapabilities, getCapability, registerCapability } from "./vacilando
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
+import { getLocalNode, publicExecutionNode } from "./vacilando/execution-node.mjs";
 import { getDevelopmentLane, getLaneOutput, listDevelopmentLanes, LANE_ID_RE, normalizeLaneId, unexpectedLaneControlFields } from "./vacilando/lanes.mjs";
 import { connectExistingWorkRequest, createNewLaneRequest, listAdoptionCandidates, renameLaneRequest } from "./vacilando/lane-identity-api.mjs";
 import { attachLaneInstructions, enrichOutputRuntime } from "./vacilando/lane-runtime.mjs";
@@ -1694,6 +1695,7 @@ export function createVacilandoServer() {
 
     // ---- Runtime host identity (system host — never a worker slot) ----
     if (path === "/api/host") return sendJson(res, 200, hostIdentity());
+    if (path === "/api/node") return sendJson(res, 200, publicExecutionNode(getLocalNode(RUNTIME_ROOT_DIR)));
 
     // ---- Trust: explicit CATEGORIES, with browser-certification coverage ----
     if (path === "/api/trust") {

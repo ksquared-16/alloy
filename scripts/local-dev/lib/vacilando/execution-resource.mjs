@@ -25,7 +25,7 @@ import {
 } from "./execution-run.mjs";
 import { acquireBrowserCertLease, releaseBrowserCertLease } from "../browser-cert-lease.mjs";
 import { LANE_ID_RE } from "./lanes.mjs";
-import { canonicalLaneStoreId } from "./development-lane.mjs";
+import { canonicalLaneStoreId, scarceResourcePriorityForLane } from "./development-lane.mjs";
 import { orchestrateDirectorGovernedWait } from "./governed-action-request.mjs";
 import {
   EXCLUSIVE_RESOURCE_KEY,
@@ -630,7 +630,7 @@ export function ensureResourceRequest({
     resource_class: def.class,
     requested_at: iso(nowMs),
     state: def.queueable ? "QUEUED" : "REQUESTED",
-    priority: 0,
+    priority: scarceResourcePriorityForLane(run.lane_id, root),
     granted_at: null,
     released_at: null,
     reason: reason ? String(reason).slice(0, 500) : null,

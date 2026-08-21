@@ -13,7 +13,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, scarceResourcePriorityForLane } from "./development-lane.mjs";
+import { localNodeId } from "./execution-node.mjs";
 
 export const ADMISSION_SCHEMA = "vacilando.execution_admission.v1";
 export const ADMISSION_STATES = Object.freeze([
@@ -170,11 +171,11 @@ export function createAdmissionRequest({
     run_id: runId || null,
     provider: "claude",
     development_adapter: "alloy_local",
-    execution_node: "local",
+    execution_node: localNodeId(root),
     requested_at: iso(nowMs),
     updated_at: iso(nowMs),
     state: "QUEUED",
-    priority: 0,
+    priority: scarceResourcePriorityForLane(id, root),
     provisioning_state: null,
     failure_reason: null,
     provenance: null,

@@ -92,7 +92,7 @@ export function resolveRuntimeConfig() {
     ALLOY_CONFIG_DIR: join(HOME, ".config", "alloy-dev"),
   };
   // Two-pass: defaults first, then re-read with expanded bases.
-  bases.ALLOY_REPO = configGet("ALLOY_REPO", files, bases) || "/Users/Kelly/Alloy";
+  bases.ALLOY_REPO = configGet("ALLOY_REPO", files, bases) || join(HOME, "Alloy");
   bases.ALLOY_RUNTIME_ROOT = configGet("ALLOY_RUNTIME_ROOT", files, bases) || bases.ALLOY_RUNTIME_ROOT;
   bases.ALLOY_WORKTREE_ROOT = configGet("ALLOY_WORKTREE_ROOT", files, bases) || bases.ALLOY_WORKTREE_ROOT;
   bases.ALLOY_CONFIG_DIR = configGet("ALLOY_CONFIG_DIR", files, bases) || bases.ALLOY_CONFIG_DIR;
