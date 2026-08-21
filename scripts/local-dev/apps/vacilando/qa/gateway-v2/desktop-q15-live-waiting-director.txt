@@ -1,0 +1,135 @@
+Vacilando
+DEVELOPMENT GATEWAY
+DEVELOPMENT LANES
+Access & Identity
+Waiting on Director · Claude
+◷ Read-only database census
+Billing
+Idle
+○ Idle
+Communications
+Running · Claude
+● Running
+Lifecycle Cert
+Queued for capacity
+◷ Idle
+Processing
+Queued for capacity
+◷ Idle
+More
+A
+Settings
+Admin
+Lane
+Search…
+Improve Vacilando
+↻ Refresh
+Polling
+CURRENT WORK
+Waiting on Director
+Read-only database census
+This Development Lane has no DATABASE_URL, hosted service-role key, or trusted-host token. database.read_census must run on Director/trusted host.
+Director is handling database.read_census.
+Started 1m ago
+LATEST CLAUDE RESPONSE
+Copy
+Refreshing output…
+Claude is running
+Claude session refresh failed
+INSTRUCTION 
+0 characters
+Enter to send · Shift+Enter for a new line
+Send
+Access & Identity
+
+Waiting on Director · Read-only database census
+
+Rename Lane
+Notify
+RUNTIME
+
+Waiting on Director · Slot 1
+
+This Development Lane has no DATABASE_URL, hosted service-role key, or trusted-host token. database.read_census must run on Director/trusted host.
+
+Director is handling database.read_census.
+
+RECENT SYSTEM ACTIVITY
+Claude session refresh failed
+Claude session refresh failed
+Claude session refresh failed
+YOUR LAST INSTRUCTION
+Continue Access & Identity V2 — Q15 real-tenant authority census, then W-15/W-20.
+Delivered · 1m ago
+DEVELOPMENT STATUS
+Dirty · ↑67 · ↓102 · Session connected
+EXECUTION CAPACITY
+Active
+2 / 3
+Running
+Access & Identity, Communications
+Queued
+Processing #1, Lifecycle Cert #3
+Available
+0
+Session
+Claude connected · activity 1d ago
+Branch
+agent/claude/1-access-identity-v2
+Worktree
+wt1-access-identity-v2
+Git
+Sync required · 102 behind
+tmux
+alloy-identity
+SOURCE CONTROL
+Branch
+agent/claude/1-access-identity-v2
+Checkpoint
+None yet
+Base
+102 behind staging
+Posture
+Sync required
+
+Sync scheduled at next safe checkpoint
+
+AGENT
+Provider
+Claude Code
+Session
+ACTIVE
+Model
+—
+Context
+—
+Refresh Claude Context
+USAGE
+Input
+—
+Output
+—
+Cache read
+—
+Cache write
+—
+Session cost
+Not reported
+LANE
+Sessions
+1
+Lifetime input
+0
+Lifetime output
+0
+Lifetime cost
+Not reported · Claude Max subscription
+RESOURCES
+Browser certification
+Held
+Heavy validation
+Available
+Dev servers
+2 / 3
+Exclusive machine timing
+Available

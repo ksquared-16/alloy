@@ -14,6 +14,7 @@ import { canonicalLaneStoreId } from "./development-lane.mjs";
 export const LANE_RUNTIME_SCHEMA = "vacilando.lane.runtime.v1";
 export const LANE_RUNTIME_MAX_LANES = 32;
 export const SEND_BASELINE_WINDOW_MS = 30_000;
+export const OUTPUT_QUIESCE_MS = 20_000;
 
 function runtimeRoot() {
   return process.env.ALLOY_RUNTIME_ROOT?.trim()
@@ -182,6 +183,18 @@ export function noteOutputAfterInstruction(laneId, fingerprint, nowMs = Date.now
   }
   if (rec.notification_emitted_at) {
     return { ok: true, notify: false, reason: "already_emitted" };
+  }
+  if (rec.pending_fingerprint !== fp) {
+    rec.pending_fingerprint = fp;
+    rec.pending_fingerprint_at = new Date(nowMs).toISOString();
+    rec.activity_fingerprint = fp;
+    rec.activity_at = rec.pending_fingerprint_at;
+    atomicWrite(laneRuntimeStorePath(root), store);
+    return { ok: true, notify: false, reason: "output_still_changing", last_instruction: publicLastInstruction(rec) };
+  }
+  const pendingMs = Date.parse(rec.pending_fingerprint_at || "");
+  if (!Number.isFinite(pendingMs) || nowMs - pendingMs < OUTPUT_QUIESCE_MS) {
+    return { ok: true, notify: false, reason: "output_settling", last_instruction: publicLastInstruction(rec) };
   }
   rec.activity_fingerprint = fp;
   rec.activity_at = new Date(nowMs).toISOString();

@@ -73,7 +73,7 @@ import { assembleConversation, listConversations } from "./vacilando/conversatio
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
 import { getDevelopmentLane, getLaneOutput, listDevelopmentLanes, LANE_ID_RE, normalizeLaneId, unexpectedLaneControlFields } from "./vacilando/lanes.mjs";
-import { connectExistingWorkRequest, createNewLaneRequest, listAdoptionCandidates, renameLaneRequest } from "./vacilando/lane-identity-api.mjs";
+import { connectExistingWorkRequest, createNewLaneRequest, listAdoptionCandidates, renameLaneRequest, setLaneProviderRequest } from "./vacilando/lane-identity-api.mjs";
 import { attachLaneInstructions, enrichOutputRuntime } from "./vacilando/lane-runtime.mjs";
 import { attachLaneRuns, inspectLaneRun } from "./vacilando/execution-run.mjs";
 import { attachLaneRunLifecycle } from "./vacilando/execution-stale.mjs";
@@ -1024,6 +1024,17 @@ export function createVacilandoServer() {
         const out = renameLaneRequest(laneId, body.value || {});
         return sendJson(res, out.status, out.body);
       }
+      const laneProviderMatch = path.match(/^\/api\/lanes\/([^/]+)\/provider$/);
+      if (laneProviderMatch) {
+        const laneId = normalizeLaneId(laneProviderMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "provider");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        const out = setLaneProviderRequest(laneId, body.value || {});
+        return sendJson(res, out.status, out.body);
+      }
       const closeStaleMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/close-stale$/);
       if (closeStaleMatch) {
         const laneId = normalizeLaneId(closeStaleMatch[1]);
@@ -1050,11 +1061,11 @@ export function createVacilandoServer() {
         if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction");
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction" && k !== "provider");
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const instruction = body.value?.instruction;
-          const out = await deliverManagedLaneInstruction(laneId, instruction);
+          const out = await deliverManagedLaneInstruction(laneId, instruction, { provider: body.value?.provider });
           const status = laneInstructionHttpStatus(out);
           return sendJson(res, status, out);
         } catch (e) {

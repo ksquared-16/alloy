@@ -166,7 +166,10 @@ export function findAuthorization({
       // Merge authorization is SHA-bound. Approving one expected head
       // must not auto-execute a later pin of the same PR.
       if (actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
-        || actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+        || actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+        || actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER
+        || actionType === ACTION_TYPES.APPLICATION_CERTIFY_STAGING
+        || actionType === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
         return Boolean(queryHash) && a.queryHash === queryHash;
       }
       return !a.queryHash || !queryHash || a.queryHash === queryHash;

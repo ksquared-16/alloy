@@ -28,6 +28,7 @@ import {
   ensureKnownLaneMissionBindings,
   getDurableLane,
   laneAliases,
+  lanePreferredProvider,
   listDurableLanes,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
@@ -152,6 +153,71 @@ export function inferClaudePresence(pane) {
   if (/^\d+\.\d+\.\d+$/.test(cmd)) return "present";
   if (pane?.dead) return "absent";
   return "unknown";
+}
+
+export function inferCursorPresence(pane) {
+  const cmd = String(pane?.command || "");
+  const title = String(pane?.title || "");
+  if (/cursor-agent/i.test(cmd) || /cursor-agent/i.test(title)) return "present";
+  // After start, pane_current_command is often `node`; tmux title stays "Cursor Agent".
+  if (/cursor\s+agent/i.test(title)) return "present";
+  if (pane?.dead) return "absent";
+  return "unknown";
+}
+
+export function inferLiveProvider(pane) {
+  if (inferCursorPresence(pane) === "present") return "cursor";
+  if (inferClaudePresence(pane) === "present") return "claude";
+  return null;
+}
+
+/** Cursor TUI workspace-trust dialog. Not a chat question — Vacilando accepts it. */
+export function workspaceTrustPaneState(text) {
+  const t = String(text || "");
+  if (cursorComposerReady(t)) return null;
+  if (/Trusting workspace/i.test(t)) return "in_progress";
+  if (/Workspace Trust Required/i.test(t) && /Trust this workspace/i.test(t)) return "required";
+  return null;
+}
+
+function cursorComposerReady(text) {
+  const t = String(text || "");
+  return /Plan, search, build anything/i.test(t)
+    || /Ask Cursor/i.test(t)
+    || /Type a message/i.test(t);
+}
+
+export function acceptWorkspaceTrustArgv(target) {
+  return ["send-keys", "-t", target, "a"];
+}
+
+export function captureVisiblePaneArgv(target) {
+  return ["capture-pane", "-p", "-J", "-t", target];
+}
+
+export function visiblePaneText(text, paneHeight = 24) {
+  const lines = String(text || "").split(/\n/);
+  const n = Number(paneHeight);
+  const take = Number.isInteger(n) && n > 0 ? n : 24;
+  return lines.slice(-take).join("\n");
+}
+
+export async function clearWorkspaceTrustPrompt({ target, tmux, timeoutMs = 8000 } = {}) {
+  if (!target || typeof tmux !== "function") return { ok: true, cleared: false };
+  const started = Date.now();
+  let sent = false;
+  while (Date.now() - started < timeoutMs) {
+    const cap = await tmux(captureVisiblePaneArgv(target));
+    const state = workspaceTrustPaneState(cap?.stdout);
+    if (!state) return { ok: true, cleared: sent };
+    if (state === "required" && !sent) {
+      const key = await tmux(acceptWorkspaceTrustArgv(target));
+      if (!key?.ok) return { ok: false, error: "workspace_trust_blocked" };
+      sent = true;
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return { ok: false, error: "workspace_trust_blocked" };
 }
 
 export function selectPrimaryPane(panes) {
@@ -400,6 +466,7 @@ export function projectDurableObservation(rec, observations = []) {
     execution_capacity: rec.execution_capacity || null,
     mission_id: rec.mission_id || null,
     mission_bound_at: rec.mission_bound_at || null,
+    preferred_provider: lanePreferredProvider(rec),
   };
 }
 
@@ -576,7 +643,9 @@ async function latestResponseForLane(lane, durableId, nowMs, opts = {}) {
       fingerprint: null,
       line_count: 0,
       truncated: false,
+      incomplete: false,
       empty: true,
+      blocking_prompt: null,
     };
   }
   const text = String(result.text || "");
@@ -593,7 +662,9 @@ async function latestResponseForLane(lane, durableId, nowMs, opts = {}) {
     fingerprint: outputFingerprint(text),
     line_count: text === "" ? 0 : text.split("\n").length,
     truncated: Boolean(result.truncated),
+    incomplete: Boolean(result.incomplete),
     empty: text.length === 0,
+    blocking_prompt: null,
   };
 }
 
@@ -616,10 +687,33 @@ export async function getLaneOutput(laneId, opts = {}) {
   const durableId = lane.lane_id || id;
 
   if (mode === "latest_response") {
-    return latestResponseForLane(lane, durableId, nowMs, opts);
+    const latest = await latestResponseForLane(lane, durableId, nowMs, opts);
+    if (!lane?.tmux?.alive) return latest;
+    const resolved = resolvedTmuxTarget(lane);
+    if (!resolved.ok) return latest;
+    const cap = opts.capturePane
+      ? await opts.capturePane(resolved.target, { historyLines: 24 })
+      : await runTmux(captureVisiblePaneArgv(resolved.target));
+    const state = workspaceTrustPaneState(visiblePaneText(cap?.stdout, 24));
+    if (!state) return latest;
+    return {
+      ...latest,
+      available: true,
+      blocking_prompt: state,
+      text: String(cap.stdout || ""),
+      empty: !String(cap.stdout || "").trim(),
+      source: "tmux_pane",
+    };
   }
 
-  if (!lane?.tmux?.alive) return unavailable(durableId, "pane_unavailable", nowMs);
+  if (!lane?.tmux?.alive) {
+    const latest = await latestResponseForLane(lane, durableId, nowMs, opts);
+    return {
+      ...latest,
+      fallback_from: "pane_unavailable",
+      error: latest.available ? null : (latest.error || "pane_unavailable"),
+    };
+  }
 
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return unavailable(durableId, "pane_unavailable", nowMs);
@@ -661,6 +755,7 @@ export async function getLaneOutput(laneId, opts = {}) {
     history_limit: facts.history_limit,
     pane_height: facts.pane_height,
     viewport_only: viewportOnly,
+    blocking_prompt: workspaceTrustPaneState(visiblePaneText(bounded.text, facts.pane_height)),
   };
 }
 
@@ -722,12 +817,13 @@ export function validateSendTarget(lane) {
   const cwd = String(lane.tmux.cwd || "");
   const wt = String(lane.worktree.path);
   if (!cwd || (cwd !== wt && !cwd.startsWith(`${wt}/`))) return { ok: false, error: "target_mismatch" };
-  const presence = inferClaudePresence({
+  const preferred = lanePreferredProvider(lane);
+  const live = inferLiveProvider({
     command: lane.tmux.command,
     title: lane.tmux.title,
     dead: !lane.tmux.alive,
   });
-  if (presence !== "present") return { ok: false, error: "target_mismatch" };
+  if (live !== preferred) return { ok: false, error: "target_mismatch" };
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return { ok: false, error: "pane_unavailable" };
   return { ok: true, target: resolved.target, lane };
@@ -860,6 +956,14 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
     }
 
     const tmux = opts.tmux || runTmux;
+    const trust = await clearWorkspaceTrustPrompt({
+      target: targetCheck.target,
+      tmux,
+      timeoutMs: opts.trustTimeoutMs ?? 8000,
+    });
+    if (!trust.ok) {
+      return auditAndReturn(sendResult({ ok: false, laneId: durableId, error: "workspace_trust_blocked", status: "failed", nowMs, size }));
+    }
     const delivered = await defaultDeliverInstruction({
       target: targetCheck.target,
       instruction: body.instruction,

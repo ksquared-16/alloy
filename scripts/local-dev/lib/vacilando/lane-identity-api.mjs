@@ -11,9 +11,12 @@ import {
 import {
   connectExistingWork,
   createDurableLane,
+  lanePreferredProvider,
   listDurableLanes,
+  normalizeLaneProvider,
   publicDurableLane,
   renameDurableLane,
+  setPreferredLaneProvider,
   validateLaneName,
 } from "./development-lane.mjs";
 import { getDevelopmentLane, listDevelopmentLanes } from "./lanes.mjs";
@@ -185,14 +188,15 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
   if (extra.length) return { status: 400, body: { ok: false, error: "path_refused", fields: extra } };
   const named = validateLaneName(body.name);
   if (!named.ok) return { status: 400, body: { ok: false, error: named.error } };
-  const provider = String(body.provider || "claude").toLowerCase().replace(/\s+/g, "");
-  if (provider && provider !== "claude" && provider !== "claudecode") {
+  const provider = normalizeLaneProvider(body.provider);
+  if (!provider) {
     return { status: 400, body: { ok: false, error: "unsupported_provider" } };
   }
   const instruction = body.instruction != null ? String(body.instruction) : "";
   const created = createDurableLane({
     name: named.name,
     origin: "created",
+    preferred_provider: provider,
     nowMs,
   });
   if (!created.ok) {
@@ -217,7 +221,7 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     const adm = createAdmissionRequest({
       laneId: created.lane.lane_id,
       runId: run.run_id,
-      provider: "claude",
+      provider,
       nowMs,
     });
     admission = adm.request || null;
@@ -253,3 +257,37 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     },
   };
 }
+
+export function setLaneProviderRequest(laneId, body = {}, { actor = "operator", nowMs = Date.now() } = {}) {
+  const extra = pathLikeFields(body);
+  if (extra.length) return { status: 400, body: { ok: false, error: "path_refused" } };
+  const out = setPreferredLaneProvider(laneId, body.provider, { nowMs });
+  if (!out.ok) {
+    const status = out.error === "lane_not_found" ? 404 : 400;
+    return { status, body: { ok: false, error: out.error } };
+  }
+  try {
+    writeAuditEvent({
+      actor,
+      command: "lane.set_provider",
+      input: { lane_id: out.lane.lane_id, provider: out.provider },
+      target: { kind: "lane", label: out.lane.lane_id, ref: { lane_id: out.lane.lane_id } },
+      preview_summary: `Use ${out.provider} for ${out.lane.name}`,
+      confirmed: true,
+      outcome: "succeeded",
+      error: null,
+      sources_refreshed: [],
+    }, nowMs);
+  } catch { /* */ }
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      lane: publicDurableLane(out.lane),
+      provider: out.provider,
+      preferred_provider: lanePreferredProvider(out.lane),
+      substrate_mutated: false,
+    },
+  };
+}
+

@@ -37,6 +37,7 @@ import {
   recognizePriorCensusAuthorization,
   listAuthorizations,
   databaseTargetFingerprint,
+  grantMissionAuthorization,
 } from "./trusted-host-authz.mjs";
 import {
   mergePullRequest,
@@ -48,7 +49,32 @@ import {
   APPLY_MIGRATION_SH,
   readMigrationContent,
   ledgerLookupSql,
+  ledgerInsertSql,
+  ACCESS_IDENTITY_INVARIANTS,
+  requireMigrationEvidence,
 } from "./trusted-host-migrate.mjs";
+import {
+  applyCertifyStaging,
+  publicCertificationResult,
+  requireCertificationEvidence,
+  runDefaultBrowser,
+  captureDefaultReview,
+} from "./trusted-host-certify-app.mjs";
+import {
+  applyEnsureCertificationPrincipal,
+  overlayCertificationPrincipalBinding,
+  publicEnsureResult,
+  payloadContainsPrincipalSecrets,
+} from "./trusted-host-cert-principal.mjs";
+import {
+  assertGovernedActionIdentity,
+  stampGovernedIdentity,
+} from "./governed-action-integrity.mjs";
+import {
+  validateLedgerRepairInputs,
+  applyLedgerRepair,
+  ledgerDeleteSql,
+} from "./trusted-host-repair-ledger.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
 import { attachEvidence } from "./evidence.mjs";
 
@@ -222,9 +248,21 @@ export function requestTrustedHostAction({
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
       : a.inputs?.queryHash === validated.normalized.queryHash)
-    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state));
+    && ["requested", "policy_review", "authorized", "executing", "completed", "retrying"].includes(a.state)
+    && !(a.state === "completed" && a.result && a.result.ok === false));
   if (existing) {
-    return { ok: true, action: existing, deduped: true };
+    if (existing.state === "completed") {
+      const identity = assertGovernedActionIdentity({
+        request: { action_key: actionType, request_id: existing.id },
+        action: existing,
+        result: existing.result,
+        evidence: existing.result,
+        requireLoaded: false,
+      });
+      if (identity.ok) return { ok: true, action: existing, deduped: true };
+    } else {
+      return { ok: true, action: existing, deduped: true };
+    }
   }
 
   const action = {
@@ -317,13 +355,33 @@ export function authorizeTrustedHostAction(actionId, {
 export function executeTrustedHostAction(actionId, { actor = "director", nowMs } = {}) {
   let action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
-  if (action.state === "completed") return { ok: true, action, already: true };
+  if (action.state === "completed") {
+    const identity = assertGovernedActionIdentity({
+      request: { action_key: action.actionType, request_id: action.id },
+      action,
+      result: action.result,
+      evidence: action.result,
+    });
+    if (!identity.ok) {
+      return failTrustedAction(action, identity.error, identity.detail || identity.error, { nowMs });
+    }
+    return { ok: true, action, already: true };
+  }
 
   if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     return executeMergeTrustedHostAction(action, { actor, nowMs });
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return executeMigrationTrustedHostAction(action, { actor, nowMs });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return executeLedgerRepairTrustedHostAction(action, { actor, nowMs });
+  }
+  if (action.actionType === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    return executeCertifyStagingTrustedHostAction(action, { actor, nowMs });
+  }
+  if (action.actionType === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    return executeEnsureCertificationPrincipalTrustedHostAction(action, { actor, nowMs });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -720,6 +778,7 @@ export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
 
 let mergeGhForTests = null;
 let migrationRunnersForTests = null;
+let certifyRunnersForTests = null;
 
 export function setTrustedHostMergeGhForTests(fn) {
   mergeGhForTests = typeof fn === "function" ? fn : null;
@@ -729,33 +788,83 @@ export function setTrustedHostMigrationRunnersForTests(runners = null) {
   migrationRunnersForTests = runners;
 }
 
+export function setTrustedHostCertifyRunnersForTests(runners = null) {
+  certifyRunnersForTests = runners;
+}
+
+let principalRunnersForTests = null;
+export function setTrustedHostPrincipalRunnersForTests(runners = null) {
+  principalRunnersForTests = runners;
+}
+
 function payloadHasSecrets(value) {
   const text = typeof value === "string" ? value : (() => {
     try { return JSON.stringify(value); } catch { return ""; }
   })();
-  return /postgresql:\/\/|postgres:\/\/|DATABASE_URL|ghp_[A-Za-z0-9]|github_pat_/i.test(text);
+  return /postgresql:\/\/|postgres:\/\/|DATABASE_URL|CERT_OPERATOR_PASSWORD|ghp_[A-Za-z0-9]|github_pat_/i.test(text)
+    || payloadContainsPrincipalSecrets(value);
 }
 
-function failTrustedAction(action, code, detail, { nowMs } = {}) {
+function failTrustedAction(action, code, detail, { nowMs, evidence = null, result = null } = {}) {
   action.state = "failed";
   action.executionState = "failed";
   action.failureReason = code;
   action.completed_at = iso(nowMs);
   action.updated_at = iso(nowMs);
-  action.result = { ok: false, code, detail: redactSecrets(detail || code).slice(0, 400) };
+  action.evidence = Array.isArray(evidence) ? evidence : (action.evidence || []);
+  action.result = result || { ok: false, code, detail: redactSecrets(detail || code).slice(0, 400) };
   writeAction(action);
   return { ok: false, error: code, detail: action.result.detail, action };
 }
 
 function completeTrustedAction(action, result, { nowMs } = {}) {
+  const stamped = stampGovernedIdentity(result, {
+    request: { request_id: action.id, action_key: action.actionType, target: action.inputs?.environment || action.inputs?.databaseTarget },
+    action,
+    nowMs,
+  });
+  const identity = assertGovernedActionIdentity({
+    request: { action_key: action.actionType, request_id: action.id },
+    action,
+    result: stamped,
+    evidence: stamped,
+  });
+  if (!identity.ok) {
+    return failTrustedAction(action, identity.error, identity.detail || identity.error, {
+      nowMs,
+      evidence: stamped?.evidence || [],
+      result: { ...stamped, ok: false, code: identity.error, detail: identity.detail || identity.error },
+    });
+  }
+  if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    const gate = requireMigrationEvidence(stamped);
+    if (!gate.ok) {
+      return failTrustedAction(action, gate.code, gate.detail, {
+        nowMs,
+        evidence: stamped?.evidence || [],
+        result: { ...stamped, ok: false, code: gate.code, detail: gate.detail },
+      });
+    }
+  }
+  if (action.actionType === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    const gate = requireCertificationEvidence(stamped);
+    if (!gate.ok) {
+      return failTrustedAction(action, gate.code, gate.detail, {
+        nowMs,
+        evidence: stamped?.evidence || [],
+        result: { ...stamped, ok: false, code: gate.code, detail: gate.detail },
+      });
+    }
+  }
   action.state = "completed";
   action.executionState = "completed";
-  action.completed_at = iso(nowMs);
-  action.updated_at = iso(nowMs);
-  action.result = result;
+  action.completed_at = iso(Date.now());
+  action.updated_at = iso(Date.now());
+  action.result = stamped;
+  action.evidence = stamped?.evidence || action.evidence || [];
   action.failureReason = null;
   writeAction(action);
-  return { ok: true, action, result };
+  return { ok: true, action, result: stamped };
 }
 
 export function executeMergeTrustedHostAction(action, { actor = "director", nowMs } = {}) {
@@ -809,7 +918,11 @@ function defaultInspectLedger({ version }) {
       detail: errText.slice(0, 400) || "Ledger inspect failed",
     };
   }
-  const applied = String(outText).includes(String(version));
+  const applied = String(outText)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && line !== "BEGIN" && line !== "COMMIT")
+    .includes(String(version));
   return { applied };
 }
 
@@ -837,9 +950,91 @@ function defaultApplyMigrationFile({ entry, text }) {
   const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
   try { unlinkSync(file); } catch { /* */ }
   if (child.status !== 0) {
-    return { ok: false, code: /trusted_credential_unavailable/.test(errText) ? "trusted_credential_unavailable" : "apply_failed", detail: errText.slice(0, 400) };
+    return {
+      ok: false,
+      code: /trusted_credential_unavailable/.test(errText) ? "trusted_credential_unavailable" : "apply_failed",
+      detail: errText.slice(0, 400),
+      stdout: existsSync(outFile) ? readFileSync(outFile, "utf8") : "",
+    };
   }
-  return { ok: true, ledger: "applied" };
+  return { ok: true, ledger: "applied", stdout: existsSync(outFile) ? readFileSync(outFile, "utf8") : "" };
+}
+
+function parsePassFail(outText) {
+  const lines = String(outText || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && l !== "BEGIN" && l !== "COMMIT");
+  return lines[lines.length - 1] === "pass";
+}
+
+function runTrustedSql(sql, label) {
+  const tmpDir = join(STORE_DIR, "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const sqlFile = join(tmpDir, `${label}.sql`);
+  const outFile = join(tmpDir, `${label}.out`);
+  const errFile = join(tmpDir, `${label}.err`);
+  writeFileSync(sqlFile, sql);
+  try { chmodSync(RUN_SQL_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [RUN_SQL_SH, sqlFile, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const outText = existsSync(outFile) ? readFileSync(outFile, "utf8") : "";
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(sqlFile); } catch { /* */ }
+  return { status: child.status, outText, errText };
+}
+
+function defaultVerifyInvariant({ version }) {
+  const sql = ACCESS_IDENTITY_INVARIANTS[String(version)];
+  if (!sql) return { ok: true, pass: true, skipped: true };
+  const ran = runTrustedSql(sql, `invariant-${version}`);
+  if (ran.status !== 0) {
+    return { ok: false, pass: false, detail: ran.errText.slice(0, 400) || "Invariant probe failed" };
+  }
+  const pass = parsePassFail(ran.outText);
+  return pass
+    ? { ok: true, pass: true }
+    : { ok: false, pass: false, detail: `Invariant failed for ${version}` };
+}
+
+function defaultRecordLedger({ version, name }) {
+  const tmpDir = join(STORE_DIR, "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const file = join(tmpDir, `ledger-insert-${version}.sql`);
+  const outFile = join(tmpDir, `ledger-insert-${version}.out`);
+  const errFile = join(tmpDir, `ledger-insert-${version}.err`);
+  writeFileSync(file, ledgerInsertSql(version, name));
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(file); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, detail: errText.slice(0, 400) || "Ledger insert failed" };
+  }
+  return { ok: true };
 }
 
 export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs } = {}) {
@@ -856,6 +1051,8 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
     inspectLedger: runners.inspectLedger || defaultInspectLedger,
     applyFile: runners.applyFile || defaultApplyMigrationFile,
     readContent: runners.readContent || readMigrationContent,
+    verifyInvariant: runners.verifyInvariant || defaultVerifyInvariant,
+    recordLedger: runners.recordLedger || defaultRecordLedger,
     nowMs,
   });
   if (payloadHasSecrets(out)) {
@@ -864,25 +1061,82 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
   if (!out?.ok) {
     const failed = out?.results?.find((r) => !r.ok);
     const publicResult = publicMigrationResult(out);
-    const failedAction = failTrustedAction(
+    return failTrustedAction(
       action,
       failed?.code || "apply_failed",
       failed?.detail || "Migration batch stopped on failure.",
-      { nowMs },
+      {
+        nowMs,
+        evidence: out.evidence || [],
+        result: {
+          ...publicResult,
+          ok: false,
+          code: failed?.code || "apply_failed",
+          detail: failed?.detail || "Migration batch stopped on failure.",
+        },
+      },
     );
-    if (failedAction.action) {
-      failedAction.action.result = {
-        ...publicResult,
-        ok: false,
-        code: failed?.code || "apply_failed",
-        detail: failed?.detail || "Migration batch stopped on failure.",
-      };
-      writeAction(failedAction.action);
-    }
-    return failedAction;
   }
   const result = { ...publicMigrationResult(out), ok: true };
   action.result = result;
+  return completeTrustedAction(action, result, { nowMs });
+}
+
+function defaultDeleteLedgerVersions({ versions }) {
+  const sql = ledgerDeleteSql(versions);
+  if (!sql) return { ok: false, code: "no_versions", detail: "No versions to delete." };
+  const tmpDir = join(STORE_DIR, "tmp");
+  mkdirSync(tmpDir, { recursive: true });
+  const file = join(tmpDir, `ledger-repair-${versions.join("-")}.sql`);
+  const outFile = `${file}.out`;
+  const errFile = `${file}.err`;
+  writeFileSync(file, sql);
+  try { chmodSync(APPLY_MIGRATION_SH, 0o755); } catch { /* */ }
+  const child = spawnSync("bash", [APPLY_MIGRATION_SH, file, outFile, errFile], {
+    env: {
+      ...process.env,
+      ALLOY_CANONICAL_ROOT: resolveCanonicalRepoRoot(),
+      ALLOY_REPO: resolveCanonicalRepoRoot(),
+      ALLOY_SERVER_ENV_SOURCE: resolveTrustedServerEnvSource(),
+      VACILANDO_CHECKOUT: findRepoRoot(),
+      ALLOY_WORKTREE: findRepoRoot(),
+      ALLOY_BLOCK_REMOTE_SUPABASE: "",
+    },
+    timeout: 60_000,
+    encoding: "utf8",
+  });
+  const errText = redactSecrets(existsSync(errFile) ? readFileSync(errFile, "utf8") : (child.stderr || ""));
+  try { unlinkSync(file); } catch { /* */ }
+  if (child.status !== 0) {
+    return { ok: false, code: "repair_failed", detail: errText.slice(0, 400) || "Ledger delete failed" };
+  }
+  return { ok: true };
+}
+
+export function executeLedgerRepairTrustedHostAction(action, { actor = "director", nowMs } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const runners = migrationRunnersForTests || {};
+  const out = applyLedgerRepair(action.inputs, {
+    inspectLedger: runners.inspectLedger || defaultInspectLedger,
+    verifyInvariant: runners.verifyInvariant || defaultVerifyInvariant,
+    deleteVersions: runners.deleteVersions || defaultDeleteLedgerVersions,
+  });
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "repair_failed", out?.detail || "Ledger repair refused.", {
+      nowMs,
+      evidence: [{ kind: "ledger_repair", ...out }],
+      result: { ok: false, ...out },
+    });
+  }
+  const result = { ok: true, environment: "staging", ...out };
+  action.evidence = [{ kind: "ledger_repair", repaired: out.repaired, already: out.already, refused: out.refused }];
   return completeTrustedAction(action, result, { nowMs });
 }
 
@@ -933,6 +1187,173 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+    };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+}
+
+export function fulfillDatabaseLedgerRepairForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
+    inputs,
+    nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+    };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+}
+
+export function executeCertifyStagingTrustedHostAction(action, { actor = "director", nowMs } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const runners = certifyRunnersForTests || {};
+  const evidenceRoot = join(STORE_DIR, "certification", action.id);
+  const env = overlayCertificationPrincipalBinding(runners.env || process.env);
+  const out = applyCertifyStaging(action.inputs, {
+    resolveDeployment: runners.resolveDeployment,
+    resolvePrincipal: runners.resolvePrincipal,
+    resolveSuite: runners.resolveSuite,
+    runBrowser: runners.runBrowser || runDefaultBrowser,
+    captureReview: runners.captureReview || captureDefaultReview,
+    env,
+    evidenceRoot,
+    nowMs,
+  });
+  if (payloadHasSecrets(out) || payloadHasSecrets(publicCertificationResult(out))) {
+    return failTrustedAction(action, "result_contained_secrets", "Certification result contained secrets and was discarded.", {
+      nowMs,
+      evidence: out?.evidence || [],
+    });
+  }
+  const pub = publicCertificationResult(out);
+  if (["principal_unavailable", "environment_unavailable", "failed"].includes(pub.status)) {
+    return failTrustedAction(action, pub.status, pub.detail || pub.status, {
+      nowMs,
+      evidence: out?.evidence || [],
+      result: pub,
+    });
+  }
+  return completeTrustedAction(action, pub, { nowMs });
+}
+
+export function executeEnsureCertificationPrincipalTrustedHostAction(action, { actor = "director", nowMs } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const runners = principalRunnersForTests || {};
+  const out = applyEnsureCertificationPrincipal(action.inputs, {
+    ...runners,
+    env: runners.env || process.env,
+    runtimeRoot: runners.runtimeRoot || RUNTIME_ROOT,
+    nowMs,
+  });
+  if (payloadHasSecrets(out) || payloadHasSecrets(publicEnsureResult(out))) {
+    return failTrustedAction(action, "result_contained_secrets", "Principal ensure result contained secrets and was discarded.", { nowMs });
+  }
+  const pub = publicEnsureResult(out);
+  if (!pub?.ok) {
+    return failTrustedAction(action, pub?.code || "ensure_failed", pub?.detail || "Principal ensure failed", {
+      nowMs,
+      result: pub,
+    });
+  }
+  return completeTrustedAction(action, pub, { nowMs });
+}
+
+export function fulfillApplicationEnsureCertificationPrincipalForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL,
+    inputs,
+    nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  if (!auth.ok) {
+    return {
+      ok: false,
+      error: "authorization_required",
+      action: auth.action,
+    };
+  }
+  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+}
+
+export function fulfillApplicationCertifyStagingForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId,
+    assignmentId,
+    executionSessionId,
+    requestedBy: actor,
+    actionType: ACTION_TYPES.APPLICATION_CERTIFY_STAGING,
+    inputs,
+    nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const writePolicy = req.action.inputs?.writePolicy || req.action.inputs?.write_policy || "read_only";
+  if (writePolicy !== "mutate") {
+    grantMissionAuthorization({
+      missionId,
+      actionType: ACTION_TYPES.APPLICATION_CERTIFY_STAGING,
+      databaseTarget: req.action.inputs?.environment || "staging",
+      queryHash: req.action.inputs?.queryHash,
+      actor: "director_policy",
+      note: "policy_read_only_staging_certification",
+      nowMs,
+    });
+  }
   const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
   if (!auth.ok) {
     return {

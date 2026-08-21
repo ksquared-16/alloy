@@ -73,6 +73,16 @@ function makeComms() {
 await test("send to bound offline lane stays QUEUED and does not FAILED", async () => {
   const created = makeComms();
   assert.equal(created.ok, true, created.error);
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "absent" },
+      tmux: { alive: false, pane_id: null },
+      worktree: { path: WT },
+    }),
+    assessSessionStartCapacity: async () => ({ ok: true, available: true }),
+    startRuntime: async () => ({ ok: false, error: "runtime_pane_missing", skip_queue: true }),
+  });
   const out = await deliverManagedLaneInstruction(created.lane.lane_id, "Ship inbound SMS routing.", {
     root: ROOT,
     worktreePath: WT,
@@ -168,6 +178,68 @@ await test("Start Session with a pane creates a session only after spawn succeed
   assert.equal(out.ok, true, out.error);
   assert.equal(spawnCalls.length, 1);
   assert.equal(listAgentSessionsForLane(created.lane.lane_id, ROOT).length, 1);
+});
+
+await test("send to bound offline lane starts the session instead of waiting for Start Session", async () => {
+  const created = makeComms();
+  let started = 0;
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "absent" },
+      tmux: { alive: false, pane_id: null },
+      worktree: { path: WT },
+    }),
+    assessSessionStartCapacity: async () => ({ ok: true, available: true }),
+    startRuntime: async () => {
+      started += 1;
+      return { ok: true, tmux_session: "alloy-comms", pane_id: "%9" };
+    },
+    spawnClaude: async () => ({ ok: true }),
+    sendLaneInstruction: async () => ({ ok: true, status: "delivered" }),
+  });
+  const out = await deliverManagedLaneInstruction(created.lane.lane_id, "Ship inbound SMS routing.", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: async () => {
+      throw new Error("must not attempt pane delivery before Claude is present");
+    },
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.status, "queued");
+  assert.equal(started, 1);
+  assert.equal(out.execution_run.state, "QUEUED");
+  assert.equal(out.execution_run.state_reason, "starting_agent_session");
+  assert.doesNotMatch(String(out.execution_run.state_reason || ""), /waiting_for_execution_capacity/);
+});
+
+await test("send stays queued for capacity when provider slots are full", async () => {
+  const created = makeComms();
+  let started = 0;
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "absent" },
+      tmux: { alive: false, pane_id: null },
+      worktree: { path: WT },
+    }),
+    assessSessionStartCapacity: async () => ({ ok: false, available: false }),
+    startRuntime: async () => {
+      started += 1;
+      return { ok: true };
+    },
+  });
+  const out = await deliverManagedLaneInstruction(created.lane.lane_id, "Wait for a slot.", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: async () => {
+      throw new Error("must not attempt pane delivery");
+    },
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.status, "queued");
+  assert.equal(started, 0);
+  assert.equal(out.execution_run.state_reason, "waiting_for_execution_capacity");
 });
 
 await test("unbound idle send queues admission without FAILED", async () => {

@@ -13,7 +13,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, lanePreferredProvider } from "./development-lane.mjs";
+import { activeRunForLane, getExecutionRun, isTerminalRunState } from "./execution-run.mjs";
 
 export const ADMISSION_SCHEMA = "vacilando.execution_admission.v1";
 export const ADMISSION_STATES = Object.freeze([
@@ -157,18 +158,27 @@ export function createAdmissionRequest({
 } = {}) {
   const id = canonicalLaneStoreId(laneId, root);
   if (!id) return { ok: false, error: "invalid_lane_id" };
-  if (String(provider || "claude") !== "claude") {
+  const chosen = String(provider || "claude").toLowerCase();
+  if (chosen !== "claude" && chosen !== "cursor") {
     return { ok: false, error: "unsupported_provider" };
   }
   const store = readAdmissionStore(root);
   const existing = (store.requests || []).find((r) => r.lane_id === id && ADMISSION_OPEN.has(r.state));
-  if (existing) return { ok: true, request: existing, existing: true };
+  if (existing) {
+    if (runId && existing.run_id !== runId) {
+      existing.run_id = runId;
+      existing.updated_at = iso(nowMs);
+      writeStore(store, root);
+      emitAdmissionEvent("admission_run_attached", existing, root, { run_id: runId });
+    }
+    return { ok: true, request: existing, existing: true };
+  }
   const rec = {
     schema_version: ADMISSION_SCHEMA,
     admission_id: newAdmissionId(id, nowMs),
     lane_id: id,
     run_id: runId || null,
-    provider: "claude",
+    provider: chosen,
     development_adapter: "alloy_local",
     execution_node: "local",
     requested_at: iso(nowMs),
@@ -252,6 +262,7 @@ export function attachLaneAdmissions(lanes, root = runtimeRoot()) {
 }
 
 let capacityImpl = null;
+let sessionCapImpl = null;
 let provisionImpl = null;
 let deliverImpl = null;
 let bindImpl = null;
@@ -261,6 +272,7 @@ const provisioningInflight = new Set();
 
 export function setAdmissionImplForTests(impl = {}) {
   capacityImpl = typeof impl.canProvisionNow === "function" ? impl.canProvisionNow : null;
+  sessionCapImpl = typeof impl.assessSessionStartCapacity === "function" ? impl.assessSessionStartCapacity : null;
   provisionImpl = typeof impl.provisionLaneBinding === "function" ? impl.provisionLaneBinding : null;
   deliverImpl = typeof impl.deliverQueuedRun === "function" ? impl.deliverQueuedRun : null;
   bindImpl = typeof impl.bindDurableLane === "function" ? impl.bindDurableLane : null;
@@ -270,6 +282,7 @@ export function setAdmissionImplForTests(impl = {}) {
 
 export function resetAdmissionImplForTests() {
   capacityImpl = null;
+  sessionCapImpl = null;
   provisionImpl = null;
   deliverImpl = null;
   bindImpl = null;
@@ -285,6 +298,34 @@ export function resetAdmissionsForTests(root = runtimeRoot()) {
     if (existsSync(p)) writeFileSync(p, "", "utf8");
   } catch { /* */ }
   resetAdmissionImplForTests();
+}
+
+export function resolveAdmissionWork(rec, root = runtimeRoot()) {
+  if (!rec) return { stale: true, reason: "missing", run: null };
+  const current = activeRunForLane(rec.lane_id, root);
+  if (rec.run_id) {
+    const named = getExecutionRun(rec.run_id, root);
+    if (!named || isTerminalRunState(named.state)) return { stale: true, reason: "run_terminal", run: named };
+    if (named.state !== "QUEUED") return { stale: true, reason: "run_already_active", run: named };
+    if (!current || current.run_id !== named.run_id) return { stale: true, reason: "run_superseded", run: named };
+    return { stale: false, reason: null, run: named };
+  }
+  if (!current || current.state !== "QUEUED") {
+    return { stale: true, reason: current ? "run_already_active" : "run_missing", run: current };
+  }
+  return { stale: false, reason: null, run: current };
+}
+
+function attachRunId(rec, runId, { nowMs, root } = {}) {
+  if (!rec || !runId || rec.run_id === runId) return rec;
+  const store = readAdmissionStore(root);
+  const hit = store.requests.find((r) => r.admission_id === rec.admission_id);
+  if (!hit) return rec;
+  hit.run_id = runId;
+  hit.updated_at = iso(nowMs);
+  writeStore(store, root);
+  rec.run_id = runId;
+  return rec;
 }
 
 async function canProvisionNow(root) {
@@ -316,23 +357,55 @@ async function deliverRun(runRef, { lane, root, nowMs }) {
 }
 
 /**
- * Admit the FIFO head when the adapter says capacity is available.
+ * Walk the FIFO queue. Unrunnable heads (stale, unbound while provision is
+ * disabled) must not block a later lane that can start now.
  * Does not steal ACTIVE/PROVISIONING capacity.
  */
 export async function evaluateAdmissionQueue({
   root = runtimeRoot(),
   nowMs = Date.now(),
 } = {}) {
-  const store = readAdmissionStore(root);
-  const head = queuedAdmissions(store)[0];
-  if (!head) return { ok: true, admitted: 0, skipped: "empty" };
-  if (provisioningInflight.has(head.admission_id)) {
-    return { ok: true, admitted: 0, skipped: "inflight" };
+  const queue = queuedAdmissions(readAdmissionStore(root));
+  if (!queue.length) return { ok: true, admitted: 0, skipped: "empty" };
+  let lastSkip = "none_runnable";
+  for (const head of queue) {
+    const work = resolveAdmissionWork(head, root);
+    if (work.stale) {
+      transitionAdmission(head.admission_id, "CANCELLED", {
+        reason: work.reason || "stale",
+        nowMs,
+        root,
+      });
+      lastSkip = work.reason || "stale";
+      continue;
+    }
+    if (work.run?.run_id) attachRunId(head, work.run.run_id, { nowMs, root });
+    if (provisioningInflight.has(head.admission_id)) {
+      lastSkip = "inflight";
+      continue;
+    }
+    const result = await tryAdmitQueuedAdmission(head, { root, nowMs });
+    if (result?.admitted > 0) return result;
+    if (result?.stop) return result;
+    lastSkip = result?.skipped || lastSkip;
   }
+  return { ok: true, admitted: 0, skipped: lastSkip };
+}
+
+async function tryAdmitQueuedAdmission(head, { root, nowMs }) {
   const peek = getDurableLane(head.lane_id, root);
   const alreadyBoundPeek = Boolean(peek?.binding?.worktree_path || peek?.binding?.tmux_session);
-  const cap = alreadyBoundPeek
+  let ownsSession = false;
+  try {
+    const { activeAgentSessionForLane } = await import("./agent-session.mjs");
+    const sess = activeAgentSessionForLane(head.lane_id, root);
+    ownsSession = Boolean(sess && ["STARTING", "ACTIVE", "VERIFYING", "RESTARTING", "HANDOFF"].includes(sess.state));
+  } catch { /* capacity check below remains authoritative */ }
+  const cap = ownsSession || lanePreferredProvider(peek) === "cursor" || String(head.provider || "") === "cursor"
+    ? { ok: true, available: true }
+    : alreadyBoundPeek
     ? await (async () => {
+      if (sessionCapImpl) return sessionCapImpl({ root });
       const { assessSessionStartCapacity } = await import("./alloy-dev-adapter.mjs");
       return assessSessionStartCapacity();
     })()
@@ -341,7 +414,13 @@ export async function evaluateAdmissionQueue({
     ? cap.ok !== false && cap.available !== false
     : Boolean(cap);
   if (!available) {
-    return { ok: true, admitted: 0, skipped: alreadyBoundPeek ? "no_session_capacity" : "no_capacity", capacity: cap };
+    return {
+      ok: true,
+      admitted: 0,
+      stop: false,
+      skipped: alreadyBoundPeek ? "no_session_capacity" : "no_capacity",
+      capacity: cap,
+    };
   }
   provisioningInflight.add(head.admission_id);
   try {
@@ -358,7 +437,7 @@ export async function evaluateAdmissionQueue({
         root,
         provisioning_state: "failed",
       });
-      return { ok: false, error: "lane_missing", admission_id: head.admission_id };
+      return { ok: false, error: "lane_missing", admission_id: head.admission_id, skipped: "lane_missing" };
     }
     const alreadyBound = Boolean(lane.binding?.worktree_path || lane.binding?.tmux_session);
     if (alreadyBound) {
@@ -381,7 +460,12 @@ export async function evaluateAdmissionQueue({
           provisioning_state: null,
           reason: started?.queued ? "waiting_for_execution_capacity" : (started?.error || "session_start_pending"),
         });
-        return { ok: true, admitted: 0, skipped: started?.queued ? "waiting_for_execution_capacity" : (started?.error || "session_start_pending") };
+        return {
+          ok: true,
+          admitted: 0,
+          stop: Boolean(started?.queued),
+          skipped: started?.queued ? "waiting_for_execution_capacity" : (started?.error || "session_start_pending"),
+        };
       }
       transitionAdmission(head.admission_id, "ADMITTED", {
         nowMs,

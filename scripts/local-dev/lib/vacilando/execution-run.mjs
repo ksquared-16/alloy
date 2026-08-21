@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
 import { LANE_ID_RE, LANE_INSTRUCTION_MAX } from "./lanes.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, lanePreferredProvider } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 
@@ -323,6 +323,7 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     governed_action: run.governed_action || null,
     checkpoint_ready: Boolean(run.checkpoint_ready),
     checkpoint_summary: run.checkpoint_summary || null,
+    provider: run.provider || null,
   };
   if (includeInstruction) out.instruction = run.instruction;
   if (includeTransitions) out.transitions = run.transitions || [];
@@ -457,6 +458,7 @@ export function createQueuedRun({
       ? String(worktreePath)
       : (getDurableLane(id, root)?.binding?.worktree_path || null),
     mission_id: getDurableLane(id, root)?.mission_id || null,
+    provider: lanePreferredProvider(getDurableLane(id, root)),
     output_fingerprint_at_send: null,
     transitions: [],
     updated_at: iso(nowMs),
@@ -562,6 +564,18 @@ export function transitionExecutionRun(runId, toState, {
       root,
     });
   } catch { /* resource coordinator must not fail the run transition */ }
+  if (isTerminalRunState(to)) {
+    Promise.resolve().then(async () => {
+      try {
+        const { releaseIdleCapacityForQueuedWork } = await import("./lane-execution-capacity.mjs");
+        await releaseIdleCapacityForQueuedWork({ root, nowMs });
+      } catch { /* cycle must not fail the terminal transition */ }
+      try {
+        const { evaluateAdmissionQueue } = await import("./execution-admission.mjs");
+        await evaluateAdmissionQueue({ root, nowMs });
+      } catch { /* cycle must not fail the terminal transition */ }
+    });
+  }
   return { ok: true, run: getExecutionRun(runId, root) || found, from, to, push };
 }
 

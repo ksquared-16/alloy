@@ -60,17 +60,19 @@ async function tickWatch(laneId, rec) {
   if (rec.inflight) return;
   rec.inflight = true;
   try {
-    if (Date.now() - rec.startedAt > rec.maxMs) {
+    const nowMs = typeof rec.nowMs === "function" ? rec.nowMs() : Date.now();
+    if (nowMs - rec.startedAt > rec.maxMs) {
       stopOutputWatch(laneId);
       return;
     }
     const out = await rec.getOutput(laneId);
     if (!out?.ok || !out.fingerprint) return;
     if (!rec.baselined) {
-      maybeSetSendBaseline(laneId, out.fingerprint, Date.now());
+      maybeSetSendBaseline(laneId, out.fingerprint, nowMs);
       rec.baselined = true;
     }
     const decision = await emitIfNeeded(laneId, out.fingerprint, {
+      nowMs,
       sendPush: rec.sendPush,
       resolveLabel: rec.resolveLabel,
       hasManagedRun: rec.hasManagedRun,
@@ -91,18 +93,20 @@ export function startOutputWatch(laneId, {
   sendPush = sendPushToSubscriptions,
   resolveLabel = defaultLabel,
   hasManagedRun = defaultHasManagedRun,
+  nowMs = Date.now,
 } = {}) {
   const id = String(laneId || "");
   if (!id) return { ok: false };
   stopOutputWatch(id);
   const rec = {
     timer: null,
-    startedAt: Date.now(),
+    startedAt: typeof nowMs === "function" ? nowMs() : Date.now(),
     maxMs,
     getOutput,
     sendPush,
     resolveLabel,
     hasManagedRun,
+    nowMs,
     inflight: false,
     baselined: false,
   };

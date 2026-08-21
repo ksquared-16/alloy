@@ -220,5 +220,27 @@ await test("latest assistant text prefers newest transcript and fails soft", () 
   assert.equal(missing.available, false);
 });
 
+await test("latest response joins the last operator turn instead of the final tool-use fragment", () => {
+  const { configDir, cwd, jsonl } = fixture();
+  writeFileSync(jsonl, [
+    JSON.stringify({ type: "user", message: { role: "user", content: "Finish the PR" } }),
+    JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "text", text: "Two real type errors. Fixing:" }], stop_reason: "tool_use" },
+    }),
+    JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: "1" }] }, toolUseResult: {} }),
+    JSON.stringify({
+      type: "assistant",
+      timestamp: "2026-08-21T21:00:00.000Z",
+      message: { role: "assistant", content: [{ type: "text", text: "Both typechecks clean. Committing and opening the PR:" }], stop_reason: "tool_use" },
+    }),
+  ].join("\n") + "\n");
+  const hit = collectLatestClaudeResponse({ cwd, configDir });
+  assert.equal(hit.available, true);
+  assert.match(hit.text, /Two real type errors/);
+  assert.match(hit.text, /Both typechecks clean/);
+  assert.equal(hit.incomplete, true);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

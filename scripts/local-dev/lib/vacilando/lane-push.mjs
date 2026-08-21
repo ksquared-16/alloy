@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 
@@ -43,11 +44,16 @@ function atomicWrite(path, obj) {
 }
 
 function loadWebPush() {
-  try {
-    return require("web-push");
-  } catch {
-    return null;
+  const candidates = [
+    () => require("web-push"),
+    () => require(join(dirname(fileURLToPath(import.meta.url)), "..", "..", "node_modules", "web-push")),
+  ];
+  for (const load of candidates) {
+    try {
+      return load();
+    } catch { /* try next */ }
   }
+  return null;
 }
 
 export function normalizePageOrigin(value) {
@@ -289,7 +295,7 @@ export function pushPayloadForLane({ lane_id, title } = {}) {
     type: "lane_unseen_after_instruction",
     lane_id: id || null,
     title: label,
-    body: "New Claude output is available.",
+    body: "New output is available.",
     path: id ? `/#/lanes/${encodeURIComponent(id)}` : "/#/lanes",
   };
 }

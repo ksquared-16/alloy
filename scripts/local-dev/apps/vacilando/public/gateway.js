@@ -161,6 +161,7 @@ function maybeNotify(map) {
       viewingSelected: G.selected === lane.lane_id && !document.hidden,
       lastInstruction: lastInstructionFor(lane.lane_id) || lane.last_instruction,
       laneLabel: lane.label || lane.lane_id,
+      runState: lane.execution_run?.state,
     });
     if (!ev) continue;
     const key = `${lane.lane_id}:${st?.activity}:${paneOutputForLane(lane.lane_id)?.fingerprint || lane.last_activity_ms || ""}`;
@@ -546,6 +547,9 @@ async function fetchOutput(id, { mode = "recent" } = {}) {
     }
     if (G.outputMode === "recent") {
       G.output = G.recentOutput;
+    } else if (!G.output?.text && G.recentOutput?.text) {
+      G.output = G.recentOutput;
+      if (G.recentOutput.mode === "latest_response") G.outputMode = "latest_response";
     }
     return G.recentOutput;
   }
@@ -650,6 +654,7 @@ function paint() {
     disabled: G.sending || G.releasing,
     notice: G.notice,
     draft: saved?.value ?? getDraft(G.selected),
+    provider: View.lanePreferredProvider(G.lane),
   };
   const map = attentionMap();
   maybeNotify(map);
@@ -849,8 +854,10 @@ async function submitCreate() {
   if (G.connect.submitting) return;
   const nameEl = document.getElementById("gw-create-name");
   const instEl = document.getElementById("gw-create-instruction");
+  const provEl = document.getElementById("gw-create-provider");
   const name = nameEl ? nameEl.value : G.connect.name;
   const instruction = instEl ? instEl.value : G.connect.instruction;
+  const provider = provEl ? provEl.value : "claude";
   G.connect.name = name;
   G.connect.instruction = instruction;
   G.connect.submitting = true;
@@ -860,7 +867,7 @@ async function submitCreate() {
     const r = await gwFetch("/api/lanes/create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, provider: "claude", instruction }),
+      body: JSON.stringify({ name, provider, instruction }),
     });
     const j = await r.json();
     if (!j.ok) {
@@ -1055,6 +1062,32 @@ function hide() {
   stopTelemetryPoll();
 }
 
+function selectedProvider() {
+  const el = document.querySelector("[data-gw-provider] input:checked");
+  const value = el?.value || View.lanePreferredProvider(G.lane);
+  return value === "cursor" ? "cursor" : "claude";
+}
+
+async function setLaneProvider(provider) {
+  const id = G.selected;
+  if (!id) return;
+  const p = provider === "cursor" ? "cursor" : "claude";
+  try {
+    await gwFetch(`/api/lanes/${encodeURIComponent(id)}/provider`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: p }),
+    });
+    if (G.lane) {
+      G.lane = {
+        ...G.lane,
+        preferred_provider: p,
+        binding: { ...(G.lane.binding || {}), provider: p },
+      };
+    }
+  } catch { /* send still carries the chosen provider */ }
+}
+
 async function sendCurrent() {
   const id = G.selected;
   const ta = document.getElementById("gw-instruction");
@@ -1073,7 +1106,7 @@ async function sendCurrent() {
     const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/instruction`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(View.buildSendBody(instruction)),
+      body: JSON.stringify(View.buildSendBody(instruction, selectedProvider())),
     });
     result = await r.json();
   } catch {
@@ -1133,6 +1166,13 @@ document.addEventListener("paste", (e) => {
   if (!t || t.id !== "gw-token") return;
   const btn = document.querySelector("[data-gw-login-submit]");
   if (btn) btn.disabled = false;
+});
+
+document.addEventListener("change", (e) => {
+  const field = e.target?.closest?.("[data-gw-provider]");
+  if (!field) return;
+  const value = e.target?.value;
+  if (value === "claude" || value === "cursor") setLaneProvider(value);
 });
 
 document.addEventListener("submit", (e) => {

@@ -227,6 +227,54 @@ await test("one active run per lane; second instruction is refused", async () =>
   assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, 1);
 });
 
+await test("undelivered QUEUED run is replaced by a new operator send", async () => {
+  const created = createQueuedRun({
+    laneId: "alloy-identity",
+    instruction: "old queued prompt",
+    worktreePath: WT,
+    root: ROOT,
+  });
+  assert.equal(created.ok, true);
+  const payloads = [];
+  const second = await deliverManagedLaneInstruction("alloy-identity", "new instruction", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(payloads),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+  });
+  assert.equal(second.ok, true);
+  assert.equal(second.status, "delivered");
+  assert.equal(second.execution_run.instruction, "new instruction");
+  assert.notEqual(second.run_id, created.run.run_id);
+  const old = listExecutionRunsForLane("alloy-identity", ROOT).find((r) => r.run_id === created.run.run_id);
+  assert.equal(old.state, "ABANDONED");
+  assert.equal(old.transitions.at(-1).reason, "superseded_by_operator_send");
+  assert.match(payloads[0].instruction, /new instruction/);
+});
+
+await test("resending the same undelivered QUEUED instruction retries delivery", async () => {
+  const created = createQueuedRun({
+    laneId: "alloy-identity",
+    instruction: "retry me",
+    worktreePath: WT,
+    root: ROOT,
+  });
+  const payloads = [];
+  const again = await deliverManagedLaneInstruction("alloy-identity", "retry me", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(payloads),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+  });
+  assert.equal(again.ok, true);
+  assert.equal(again.status, "delivered");
+  assert.equal(again.run_id, created.run.run_id);
+  assert.equal(again.execution_run.state, "EXECUTING");
+  assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, 1);
+});
+
 await test("NEEDS_INPUT continues the same run instead of creating another", async () => {
   const { out } = await startRun("original");
   const id = out.run_id;

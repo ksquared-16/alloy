@@ -39,8 +39,8 @@ const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
 export const STALE_ACTIVITY_RECENT_MS = 30 * 60 * 1000;
-/** Auto-abandon is not allowed until the run has had time to report. */
-export const STALE_SETTLE_MS = 2 * 60 * 1000;
+/** Auto-abandon is not allowed until the run has had time to report after it actually started. */
+export const STALE_SETTLE_MS = 15 * 60 * 1000;
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -111,8 +111,17 @@ function genuineRecentActivity(facts) {
   return (facts.now_ms - facts.activity_ms) <= STALE_ACTIVITY_RECENT_MS;
 }
 
+function lastExecutingAt(run) {
+  const fromStarted = parseMs(run?.started_at);
+  const exec = [...(run?.transitions || [])].reverse().find((t) => t?.to_state === "EXECUTING");
+  const fromTransition = parseMs(exec?.occurred_at || exec?.at);
+  return fromStarted ?? fromTransition ?? null;
+}
+
 function pastSettle(run, facts) {
-  const start = parseMs(run?.started_at) || parseMs(run?.created_at) || facts.delivered_ms;
+  // Queue wait is not settle time. A run can sit QUEUED for hours, then
+  // start; created_at must not make that look abandoned two minutes later.
+  const start = lastExecutingAt(run) || facts.delivered_ms;
   if (start == null) return false;
   return facts.now_ms - start >= STALE_SETTLE_MS;
 }
@@ -173,8 +182,8 @@ export function classifyExecutionRunStale(run, facts = {}) {
   if (evidence.in_flight_continuation) {
     return { class: "active", reason: "in_flight_continuation", evidence };
   }
-  if (SESSION_BUSY.has(merged.session_state)) {
-    return { class: "active", reason: "session_busy", evidence };
+  if (SESSION_BUSY.has(merged.session_state) || merged.session_state === "ACTIVE") {
+    return { class: "active", reason: merged.session_state === "ACTIVE" ? "live_agent_session" : "session_busy", evidence };
   }
   if (evidence.genuine_recent_activity) {
     return { class: "active", reason: "recent_output_activity", evidence };

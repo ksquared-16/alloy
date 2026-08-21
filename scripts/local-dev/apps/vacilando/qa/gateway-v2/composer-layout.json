@@ -1,0 +1,115 @@
+{
+  "evidence": [
+    {
+      "where": "desktop-wide",
+      "ok": true,
+      "viewport": {
+        "w": 1440,
+        "h": 900,
+        "vvh": 900
+      },
+      "thread": {
+        "top": 420,
+        "bottom": 711,
+        "height": 291,
+        "overflowY": "auto",
+        "scrollHeight": 1207,
+        "clientHeight": 291
+      },
+      "composer": {
+        "top": 719,
+        "bottom": 892,
+        "height": 173,
+        "position": "static"
+      },
+      "textarea": {
+        "top": 747,
+        "height": 81,
+        "fontSize": "14px"
+      },
+      "outputBottom": 1627,
+      "composerInView": true,
+      "composerBelowThread": true,
+      "threadOwnsScroll": true,
+      "noHorizontalOverflow": true,
+      "composerNotFixed": true,
+      "appHasDetail": true
+    },
+    {
+      "where": "desktop-multiline",
+      "ok": true,
+      "viewport": {
+        "w": 1440,
+        "h": 900,
+        "vvh": 900
+      },
+      "thread": {
+        "top": 420,
+        "bottom": 671,
+        "height": 251,
+        "overflowY": "auto",
+        "scrollHeight": 1207,
+        "clientHeight": 251
+      },
+      "composer": {
+        "top": 679,
+        "bottom": 892,
+        "height": 213,
+        "position": "static"
+      },
+      "textarea": {
+        "top": 707,
+        "height": 121,
+        "fontSize": "14px"
+      },
+      "outputBottom": 711,
+      "composerInView": true,
+      "composerBelowThread": true,
+      "threadOwnsScroll": true,
+      "noHorizontalOverflow": true,
+      "composerNotFixed": true,
+      "appHasDetail": true
+    },
+    {
+      "where": "iphone",
+      "ok": true,
+      "viewport": {
+        "w": 390,
+        "h": 844,
+        "vvh": 844
+      },
+      "thread": {
+        "top": 284,
+        "bottom": 642,
+        "height": 358,
+        "overflowY": "auto",
+        "scrollHeight": 1252,
+        "clientHeight": 358
+      },
+      "composer": {
+        "top": 650,
+        "bottom": 836,
+        "height": 186,
+        "position": "static"
+      },
+      "textarea": {
+        "top": 678,
+        "height": 90,
+        "fontSize": "16px"
+      },
+      "outputBottom": 1536,
+      "composerInView": true,
+      "composerBelowThread": true,
+      "threadOwnsScroll": true,
+      "noHorizontalOverflow": true,
+      "composerNotFixed": true,
+      "appHasDetail": true
+    }
+  ],
+  "thread_scrolled": {
+    "desktop": {
+      "topScroll": 0,
+      "botScroll": 916
+    }
+  }
+}

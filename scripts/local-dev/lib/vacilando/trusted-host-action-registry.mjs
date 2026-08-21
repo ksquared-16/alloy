@@ -9,11 +9,17 @@ import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateLedgerRepairInputs } from "./trusted-host-repair-ledger.mjs";
+import { validateCertifyStagingInputs } from "./trusted-host-certify-app.mjs";
+import { validateEnsureCertificationPrincipalInputs } from "./trusted-host-cert-principal.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
   REPOSITORY_MERGE_PULL_REQUEST: "repository.merge_pull_request",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
+  DATABASE_REPAIR_MIGRATION_LEDGER: "database.repair_migration_ledger",
+  APPLICATION_CERTIFY_STAGING: "application.certify_staging",
+  APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL: "application.ensure_certification_principal",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -248,10 +254,94 @@ function defineDatabaseApplyMigration() {
   };
 }
 
+function defineDatabaseRepairMigrationLedger() {
+  return {
+    actionType: ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER,
+    version: 1,
+    title: "Repair staging migration history",
+    requiredCapability: "trusted_host.database.migrate",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["environment", "versions", "reason", "originating_action_id", "evidence_refs"],
+    },
+    outputSchema: { environment: "string", repaired: "array" },
+    evidenceSchema: ["versions", "reason", "originating_action_id", "evidence_refs", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateLedgerRepairInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function defineApplicationCertifyStaging() {
+  return {
+    actionType: ACTION_TYPES.APPLICATION_CERTIFY_STAGING,
+    version: 1,
+    title: "Certify promoted staging application",
+    requiredCapability: "trusted_host.application.certify",
+    riskClass: "privileged_read",
+    timeoutMs: 600_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["environment", "expectedSha", "suiteKey"],
+    },
+    outputSchema: { environment: "string", status: "string", tests: "object" },
+    evidenceSchema: [
+      "environment",
+      "deployment_url_identity",
+      "expected_sha",
+      "suite_hash",
+      "write_policy",
+      "principal_id",
+      "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const v = validateCertifyStagingInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function defineApplicationEnsureCertificationPrincipal() {
+  return {
+    actionType: ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL,
+    version: 1,
+    title: "Ensure staging certification principal",
+    requiredCapability: "trusted_host.application.certify_principal",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["environment"],
+    },
+    outputSchema: { environment: "string", operation: "string", principal_id: "string" },
+    evidenceSchema: [
+      "environment",
+      "operation",
+      "principal_id",
+      "principal_label",
+      "binding_status",
+      "execution_audit",
+    ],
+    validateInputs(inputs = {}) {
+      const v = validateEnsureCertificationPrincipalInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
+  [ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER, defineDatabaseRepairMigrationLedger()],
+  [ACTION_TYPES.APPLICATION_CERTIFY_STAGING, defineApplicationCertifyStaging()],
+  [ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL, defineApplicationEnsureCertificationPrincipal()],
 ]);
 
 export function listRegisteredActions() {

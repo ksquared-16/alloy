@@ -1,0 +1,132 @@
+{
+  "at": "2026-08-21T20:34:33.020Z",
+  "registered": [
+    "database.read_census",
+    "repository.merge_pull_request",
+    "database.apply_migration",
+    "database.repair_migration_ledger",
+    "application.certify_staging",
+    "application.ensure_certification_principal"
+  ],
+  "report": {
+    "audited": 24,
+    "invalidated": [
+      {
+        "request_id": "gar_1bcb1fcda29235",
+        "action_key": "application.certify_staging",
+        "reason": "unsupported_action_execution / action identity mismatch",
+        "result_ref": "tha_9f2937526a6719"
+      }
+    ],
+    "intact": [
+      {
+        "request_id": "gar_88740692dbf1e5",
+        "action_key": "database.read_census"
+      },
+      {
+        "request_id": "gar_2fba541dd4c61a",
+        "action_key": "database.read_census"
+      },
+      {
+        "request_id": "gar_f9193ef35eb617",
+        "action_key": "repository.merge_pull_request"
+      },
+      {
+        "request_id": "gar_60cb4aaca2b274",
+        "action_key": "database.read_census"
+      },
+      {
+        "request_id": "gar_30f3c08b089a3d",
+        "action_key": "database.read_census"
+      },
+      {
+        "request_id": "gar_740bb0e77c12b1",
+        "action_key": "repository.merge_pull_request"
+      },
+      {
+        "request_id": "gar_2f5012cb3aed42",
+        "action_key": "database.read_census"
+      },
+      {
+        "request_id": "gar_6a60a2e87813a9",
+        "action_key": "database.apply_migration"
+      },
+      {
+        "request_id": "gar_0a570a9ce30050",
+        "action_key": "repository.merge_pull_request"
+      }
+    ],
+    "skipped": [
+      {
+        "request_id": "gar_5a35817f1c5028",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_587ce35b49e6fb",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_78f6c5077f41df",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_d22d078d762147",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_e65da76acd16bb",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_bf66fd22791e72",
+        "action_key": "database.apply_migration",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_b912e67e5f2677",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_2d473ad9289caa",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_4164b6a478543e",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_af93c87065a488",
+        "action_key": "database.apply_migration",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_5d8a6bd6e80891",
+        "action_key": "application.certify_staging",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_d70737a6bca196",
+        "action_key": "application.certify_staging",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_890fd8cc4a3ec2",
+        "action_key": "application.certify_staging",
+        "reason": "failed"
+      },
+      {
+        "request_id": "gar_08c35ffe15bc77",
+        "action_key": "repository.merge_pull_request",
+        "reason": "failed"
+      }
+    ]
+  }
+}

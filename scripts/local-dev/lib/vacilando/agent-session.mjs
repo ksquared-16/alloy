@@ -263,7 +263,20 @@ export function endAgentSession(sessionId, {
 export function laneEconomics(laneId, root = runtimeRoot()) {
   const sessions = listAgentSessionsForLane(laneId, root);
   const ended = sessions.filter((s) => s.state === "ENDED" || s.state === "FAILED");
-  const sum = (key) => ended.reduce((n, s) => n + (Number(s.usage?.[key]) || 0), 0);
+  const sum = (list, key) => list.reduce((n, s) => n + (Number(s.usage?.[key]) || 0), 0);
+  const byProvider = {};
+  for (const s of sessions) {
+    const p = s.provider || "claude";
+    if (!byProvider[p]) {
+      byProvider[p] = { session_count: 0, ended_count: 0, input_tokens: 0, output_tokens: 0 };
+    }
+    byProvider[p].session_count += 1;
+    if (s.state === "ENDED" || s.state === "FAILED") {
+      byProvider[p].ended_count += 1;
+      byProvider[p].input_tokens += Number(s.usage?.input_tokens) || 0;
+      byProvider[p].output_tokens += Number(s.usage?.output_tokens) || 0;
+    }
+  }
   const modes = new Set(ended.map((s) => s.cost?.billing_mode).filter(Boolean));
   const reported = ended
     .map((s) => s.cost?.reported_usd)
@@ -273,10 +286,10 @@ export function laneEconomics(laneId, root = runtimeRoot()) {
     session_count: sessions.length,
     ended_count: ended.length,
     lifetime_usage: {
-      input_tokens: sum("input_tokens") || null,
-      output_tokens: sum("output_tokens") || null,
-      cache_read_tokens: sum("cache_read_tokens") || null,
-      cache_write_tokens: sum("cache_write_tokens") || null,
+      input_tokens: sum(ended, "input_tokens") || null,
+      output_tokens: sum(ended, "output_tokens") || null,
+      cache_read_tokens: sum(ended, "cache_read_tokens") || null,
+      cache_write_tokens: sum(ended, "cache_write_tokens") || null,
     },
     lifetime_cost: {
       reported_usd: reported.length ? reported.reduce((a, b) => a + b, 0) : null,
@@ -284,6 +297,7 @@ export function laneEconomics(laneId, root = runtimeRoot()) {
       billing_mode: modes.size === 1 ? [...modes][0] : (subscriptionOnly ? "claude_max_subscription" : null),
       note: subscriptionOnly ? "Not reported · Claude Max subscription" : null,
     },
+    by_provider: byProvider,
   };
 }
 
@@ -303,6 +317,10 @@ export function publicAgentSession(rec, economics = null) {
     predecessor_session_id: rec.predecessor_session_id,
     successor_session_id: rec.successor_session_id,
     handoff_id: rec.handoff_id,
+    orientation_attempts: rec.orientation_attempts || 0,
+    last_orientation_error: rec.last_orientation_error || null,
+    last_orientation_attempt_at: rec.last_orientation_attempt_at || null,
+    oriented_at: rec.oriented_at || null,
     lane_economics: economics,
   };
 }

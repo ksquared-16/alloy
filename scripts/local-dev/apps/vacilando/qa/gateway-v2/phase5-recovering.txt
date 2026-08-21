@@ -1,0 +1,85 @@
+<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="alloy-comms">
+    <div class="gw-lanes" data-gw-lanes>
+    <div class="gw-lanes-h">Development Lanes</div>
+    <a class="gw-lane" data-gw-lane="alloy-records" href="#/lanes/alloy-records">
+    <span class="gw-lane-title">Records / Roster<span class="gw-lane-attn is-complete">Complete</span></span>
+    
+    <span class="gw-lane-meta">Claude · available</span>
+    <span class="gw-lane-git">agent/claude/2-records</span>
+    <span class="gw-lane-ab">Clean · ↑3 · ↓0</span>
+    <span class="gw-lane-ab">Active 2m ago</span>
+  </a><a class="gw-lane is-active" data-gw-lane="alloy-comms" href="#/lanes/alloy-comms">
+    <span class="gw-lane-title">Communications<span class="gw-lane-attn is-recovering">Recovering</span></span>
+    <span class="gw-lane-queue">Browser certification ownership</span>
+    <span class="gw-lane-meta">Claude · available</span>
+    <span class="gw-lane-git">agent/claude/3-comms</span>
+    <span class="gw-lane-ab">Clean · ↑1 · ↓0</span>
+    <span class="gw-lane-ab">Active 40s ago</span>
+  </a>
+  </div>
+    <section class="gw-main">
+      <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+      <header class="gw-lane-h">
+        <h1>Communications</h1>
+        <p class="gw-presence" data-gw-presence>Claude connected · activity 40s ago</p>
+        
+      </header>
+      <div class="gw-notify-panel" data-gw-notify>
+    <div class="gw-status-h">Notifications</div>
+    <p class="gw-notify-copy">Notify me when a lane I instructed has new output.</p>
+    <button type="button" class="btn gw-notify-enable" data-gw-notify-enable>Enable notifications</button>
+  </div>
+      <aside class="gw-work is-recovering" data-gw-work data-run-state="VALIDATING">
+    <div class="gw-work-h">Current work</div>
+    <div class="gw-work-text">Communications ingress certification</div>
+    <div class="gw-work-state">Recovering</div>
+    <div class="gw-work-resource">Browser certification ownership</div>
+    
+    
+    <div class="gw-work-meta">Started 12m ago</div>
+    
+    
+  </aside>
+      <aside class="gw-sys" data-gw-sys>
+    <div class="gw-sys-h">Recent system activity</div>
+    <div class="gw-sys-row">Recovered stale browser-cert ownership</div><div class="gw-sys-row">Verified resource available</div><div class="gw-sys-row">Resumed validation</div>
+  </aside>
+      
+      <div class="gw-output-h">
+        <span>Claude</span>
+        <button type="button" class="btn gw-copy" data-gw-copy >Copy</button>
+      </div>
+      <pre class="gw-output" data-gw-output tabindex="0">Validation continues.
+Recovering stale browser-cert ownership.</pre>
+      <form class="gw-composer" data-gw-composer>
+    <label class="gw-composer-h" for="gw-instruction">Instruction</label>
+    <textarea id="gw-instruction" name="instruction" rows="5" maxlength="24000"
+      placeholder="Write an instruction…" ></textarea>
+    <div class="gw-composer-row">
+      <span class="gw-count" data-gw-count></span>
+      <button class="btn primary gw-send" type="submit" data-gw-send >Send</button>
+    </div>
+    
+  </form>
+    </section>
+    <details class="gw-status" data-gw-status open>
+    <summary class="gw-status-sum-row">
+      <span class="gw-status-h">Development Status</span>
+      <span class="gw-status-sum">Clean · ↑1 · ↓0 · Session connected</span>
+    </summary>
+    <dl class="gw-kv">
+      <dt>Session</dt><dd>Claude connected · activity 40s ago</dd>
+      <dt>Branch</dt><dd>agent/claude/3-comms</dd>
+      <dt>Worktree</dt><dd>wt3-comms</dd>
+      <dt>Git</dt><dd>Clean · ↑1 · ↓0</dd>
+      <dt>tmux</dt><dd>alloy-comms</dd>
+      
+      
+    </dl>
+    
+    <div class="gw-status-block" data-gw-resources>
+    <div class="gw-status-h">Resources</div>
+    <dl class="gw-kv"><dt>Browser certification</dt><dd>Blocked by stale owner</dd><dt>Heavy validation</dt><dd>Available</dd><dt>Dev servers</dt><dd>2 / 3</dd><dt>Exclusive machine timing</dt><dd>Available</dd></dl>
+  </div>
+  </details>
+  </div>
