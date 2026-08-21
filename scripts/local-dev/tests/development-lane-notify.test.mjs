@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 
 import { outputFingerprint } from "../lib/vacilando/lanes.mjs";
 import {
+  OUTPUT_QUIESCE_MS,
   maybeSetSendBaseline,
   noteOutputAfterInstruction,
   pendingNotificationWatches,
@@ -67,9 +68,15 @@ await test("one instruction → one qualifying new-output notification", () => {
   const fp0 = outputFingerprint("before");
   maybeSetSendBaseline("alloy-identity", fp0, 1_700_000_000_000 + 1000, r);
   const first = noteOutputAfterInstruction("alloy-identity", outputFingerprint("after"), 1_700_000_000_000 + 5000, r);
-  assert.equal(first.notify, true);
-  assert.equal(first.reason, "activity_after_instruction");
-  const again = noteOutputAfterInstruction("alloy-identity", outputFingerprint("later still"), 1_700_000_000_000 + 8000, r);
+  assert.equal(first.notify, false);
+  assert.equal(first.reason, "output_still_changing");
+  const settling = noteOutputAfterInstruction("alloy-identity", outputFingerprint("after"), 1_700_000_000_000 + 5000 + 5_000, r);
+  assert.equal(settling.notify, false);
+  assert.equal(settling.reason, "output_settling");
+  const settled = noteOutputAfterInstruction("alloy-identity", outputFingerprint("after"), 1_700_000_000_000 + 5000 + OUTPUT_QUIESCE_MS, r);
+  assert.equal(settled.notify, true);
+  assert.equal(settled.reason, "activity_after_instruction");
+  const again = noteOutputAfterInstruction("alloy-identity", outputFingerprint("later still"), 1_700_000_000_000 + 5000 + OUTPUT_QUIESCE_MS + 3000, r);
   assert.equal(again.notify, false);
   assert.equal(again.reason, "already_emitted");
 });
@@ -103,9 +110,11 @@ await test("repeated fingerprints for the same send do not spam", () => {
     delivered_at: new Date(1_700_000_000_000).toISOString(),
   }, r);
   maybeSetSendBaseline("alloy-identity", "aaa", 1_700_000_000_000 + 1000, r);
-  assert.equal(noteOutputAfterInstruction("alloy-identity", "bbb", 1_700_000_000_000 + 2000, r).notify, true);
+  assert.equal(noteOutputAfterInstruction("alloy-identity", "bbb", 1_700_000_000_000 + 2000, r).notify, false);
   assert.equal(noteOutputAfterInstruction("alloy-identity", "ccc", 1_700_000_000_000 + 3000, r).notify, false);
   assert.equal(noteOutputAfterInstruction("alloy-identity", "bbb", 1_700_000_000_000 + 4000, r).notify, false);
+  assert.equal(noteOutputAfterInstruction("alloy-identity", "bbb", 1_700_000_000_000 + 4000 + OUTPUT_QUIESCE_MS, r).notify, true);
+  assert.equal(noteOutputAfterInstruction("alloy-identity", "ccc", 1_700_000_000_000 + 4000 + OUTPUT_QUIESCE_MS + 1000, r).notify, false);
 });
 
 await test("notification payload contains no instruction/output/token", () => {
@@ -113,7 +122,7 @@ await test("notification payload contains no instruction/output/token", () => {
   assert.equal(payload.type, "lane_unseen_after_instruction");
   assert.equal(payload.lane_id, "alloy-identity");
   assert.equal(payload.path, "/#/lanes/alloy-identity");
-  assert.equal(payload.body, "New Claude output is available.");
+  assert.equal(payload.body, "New output is available.");
   assert.equal("instruction" in payload, false);
   assert.equal("output" in payload, false);
   assert.equal("token" in payload, false);
@@ -159,11 +168,13 @@ await test("watch emits once then stops; no all-lane fan-out", async () => {
     delivered_at: new Date().toISOString(),
   }, r);
   maybeSetSendBaseline("alloy-identity", "base", Date.now(), r);
+  let t = Date.now();
   let captures = 0;
   const sent = [];
   startOutputWatch("alloy-identity", {
     intervalMs: 20,
-    maxMs: 2000,
+    maxMs: 2000 + OUTPUT_QUIESCE_MS,
+    nowMs: () => t,
     getOutput: async () => {
       captures += 1;
       return { ok: true, fingerprint: captures === 1 ? "base" : "changed", lane_id: "alloy-identity" };
@@ -172,7 +183,10 @@ await test("watch emits once then stops; no all-lane fan-out", async () => {
     resolveLabel: async () => "Access Identity V2",
     hasManagedRun: () => false,
   });
-  await new Promise((res) => setTimeout(res, 80));
+  await new Promise((res) => setTimeout(res, 50));
+  assert.equal(sent.length, 0);
+  t += OUTPUT_QUIESCE_MS;
+  await new Promise((res) => setTimeout(res, 50));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].lane_id, "alloy-identity");
   assert.equal(sent[0].instruction, undefined);
@@ -199,7 +213,7 @@ await test("pending watches only include un-notified recent sends", () => {
   assert.deepEqual(pendingNotificationWatches(Date.now(), r), ["alloy-identity"]);
   maybeSetSendBaseline("alloy-identity", "old", Date.now(), r);
   noteOutputAfterInstruction("alloy-identity", "newfp", Date.now() + 1000, r);
-  assert.deepEqual(pendingNotificationWatches(Date.now(), r), []);
+  assert.deepEqual(pendingNotificationWatches(Date.now(), r), ["alloy-identity"]);
 });
 
 await test("sendPush prunes 410 endpoints and never includes secrets", async () => {

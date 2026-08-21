@@ -286,31 +286,74 @@ export function extractAssistantText(obj) {
   return "";
 }
 
+function isSidechainEvent(ev) {
+  return Boolean(ev?.isSidechain);
+}
+
+function isHumanUserEvent(ev) {
+  if (!ev || isSidechainEvent(ev)) return false;
+  const msg = ev.message && typeof ev.message === "object" ? ev.message : ev;
+  if (ev.type !== "user" && msg.role !== "user") return false;
+  if (ev.toolUseResult) return false;
+  const content = msg.content;
+  if (Array.isArray(content) && content.some((p) => p && p.type === "tool_result")) return false;
+  return true;
+}
+
+function isAssistantEvent(ev) {
+  if (!ev || isSidechainEvent(ev)) return false;
+  const msg = ev.message && typeof ev.message === "object" ? ev.message : ev;
+  return ev.type === "assistant" || msg.role === "assistant";
+}
+
+/**
+ * Last operator turn: all assistant narration after the last human message.
+ * Claude often splits a turn across tool_use events; the last fragment alone
+ * looks like a cutoff ("Committing and opening the PR:").
+ */
 export function latestAssistantResponseFromTranscript(filePath, { maxChars = LATEST_RESPONSE_MAX_CHARS } = {}) {
   let raw;
   try { raw = readFileSync(filePath, "utf8"); } catch {
     return { available: false, error: "transcript_unreadable", text: null };
   }
   const cap = Number(maxChars) > 0 ? Number(maxChars) : LATEST_RESPONSE_MAX_CHARS;
-  const lines = raw.split("\n");
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = lines[i].trim();
-    if (!line) continue;
-    let ev;
-    try { ev = JSON.parse(line); } catch { continue; }
-    const text = extractAssistantText(ev);
-    if (!text) continue;
-    const truncated = text.length > cap;
-    return {
-      available: true,
-      text: truncated ? text.slice(0, cap) : text,
-      truncated,
-      timestamp: ev.timestamp || null,
-      session_id: ev.sessionId || ev.session_id || null,
-      source: CLAUDE_TELEMETRY_SOURCE,
-    };
+  const events = [];
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try { events.push(JSON.parse(trimmed)); } catch { /* skip */ }
   }
-  return { available: false, error: "no_assistant_text", text: null };
+  let lastHuman = -1;
+  for (let i = 0; i < events.length; i++) {
+    if (isHumanUserEvent(events[i])) lastHuman = i;
+  }
+  const turn = lastHuman >= 0 ? events.slice(lastHuman + 1) : events;
+  const texts = [];
+  let lastAssistant = null;
+  for (const ev of turn) {
+    if (!isAssistantEvent(ev)) continue;
+    lastAssistant = ev;
+    const text = extractAssistantText(ev);
+    if (text && text !== texts[texts.length - 1]) texts.push(text);
+  }
+  if (!texts.length) return { available: false, error: "no_assistant_text", text: null };
+  let text = texts.join("\n\n");
+  const truncated = text.length > cap;
+  if (truncated) {
+    text = text.slice(text.length - cap);
+    const nl = text.indexOf("\n");
+    if (nl >= 0 && nl < text.length - 1) text = text.slice(nl + 1);
+  }
+  const stop = lastAssistant?.message?.stop_reason || lastAssistant?.stop_reason || null;
+  return {
+    available: true,
+    text,
+    truncated,
+    incomplete: stop === "tool_use",
+    timestamp: lastAssistant?.timestamp || null,
+    session_id: lastAssistant?.sessionId || lastAssistant?.session_id || null,
+    source: CLAUDE_TELEMETRY_SOURCE,
+  };
 }
 
 /**

@@ -36,6 +36,7 @@ import { resetResourceRequestsForTests } from "../lib/vacilando/execution-resour
 import { resetSourceControlForTests } from "../lib/vacilando/source-control.mjs";
 import {
   isProtectedWorktree,
+  releaseIdleCapacityForQueuedWork,
   releaseLaneExecutionCapacity,
   resetReleaseImplForTests,
   setReleaseImplForTests,
@@ -316,6 +317,121 @@ await test("Create New Lane still works with and without capacity", async () => 
   const yes = await createNewLaneRequest({ name: "With Capacity Lane", instruction: "go" });
   assert.equal(yes.status, 200);
   assert.equal(getDurableLane(yes.body.lane.lane_id, ROOT).binding.slot, 6);
+});
+
+await test("idle session is released so queued work can cycle in", async () => {
+  reset();
+  const calls = injectSafeRelease();
+  const occupier = seedBoundLane("Idle Occupier", { slot: 2, tmux: "alloy-idle-occupier" });
+  const waiting = createDurableLane({ name: "Waiting Lane", origin: "created", root: ROOT });
+  const path = join(ROOT, "wt-waiting-cycle");
+  mkdirSync(path, { recursive: true });
+  bindDurableLane(waiting.lane.lane_id, {
+    worktree_path: path,
+    worktree_name: "wt-waiting-cycle",
+    provider: "claude",
+  }, { root: ROOT });
+  const run = createQueuedRun({
+    laneId: waiting.lane.lane_id,
+    instruction: "fourth lane work",
+    worktreePath: path,
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: waiting.lane.lane_id, runId: run.run.run_id, root: ROOT });
+  setAdmissionImplForTests({
+    canProvisionNow: () => ({ ok: false, available: false }),
+    assessSessionStartCapacity: async () => ({ ok: false, available: false }),
+    startProviderOnBinding: async () => ({ ok: false, queued: true }),
+  });
+  setReleaseImplForTests({
+    inspectGit: async () => ({ dirty: false, conflict: false }),
+    stopSession: ({ tmuxSession }) => {
+      calls.stop.push(tmuxSession);
+      return { ok: true, tmux_session: tmuxSession };
+    },
+    finishSprint: ({ slot }) => {
+      calls.finish.push(slot);
+      return { ok: true, slot };
+    },
+    assessSessionStartCapacity: async () => ({ ok: false, available: false }),
+  });
+  const out = await releaseIdleCapacityForQueuedWork({ root: ROOT });
+  assert.equal(out.released, 1, JSON.stringify(out));
+  assert.equal(out.lane_id, occupier.lane.lane_id);
+  assert.equal(getDurableLane(occupier.lane.lane_id, ROOT).binding.tmux_session, null);
+  assert.equal(admissionForLane(waiting.lane.lane_id, ROOT).state, "QUEUED");
+});
+
+await test("queued run is not released as idle capacity", async () => {
+  reset();
+  const occupier = seedBoundLane("Starting Occupier", { slot: 2, tmux: "alloy-starting-occupier" });
+  const run = createQueuedRun({
+    laneId: occupier.lane.lane_id,
+    instruction: "operator send implies start",
+    worktreePath: occupier.lane.binding.worktree_path,
+    root: ROOT,
+  });
+  createAdmissionRequest({
+    laneId: occupier.lane.lane_id,
+    runId: run.run.run_id,
+    root: ROOT,
+  });
+  transitionAdmission(admissionForLane(occupier.lane.lane_id, ROOT).admission_id, "ADMITTED", {
+    reason: "session_starting",
+    root: ROOT,
+    provisioning_state: "session_starting",
+  });
+  const waiting = createDurableLane({ name: "Stale Waiter", origin: "created", root: ROOT });
+  const path = join(ROOT, "wt-stale-waiter");
+  mkdirSync(path, { recursive: true });
+  bindDurableLane(waiting.lane.lane_id, {
+    worktree_path: path,
+    worktree_name: "wt-stale-waiter",
+    provider: "claude",
+  }, { root: ROOT });
+  const waitRun = createQueuedRun({
+    laneId: waiting.lane.lane_id,
+    instruction: "old cert fixture",
+    worktreePath: path,
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: waiting.lane.lane_id, runId: waitRun.run.run_id, root: ROOT });
+  setReleaseImplForTests({
+    inspectGit: async () => ({ dirty: false, conflict: false }),
+    stopSession: () => {
+      throw new Error("must not kill a lane with a queued run");
+    },
+    finishSprint: () => {
+      throw new Error("must not finish a lane with a queued run");
+    },
+    assessSessionStartCapacity: async () => ({ ok: false, available: false }),
+  });
+  const out = await releaseIdleCapacityForQueuedWork({ root: ROOT });
+  assert.equal(out.released, 0, JSON.stringify(out));
+  assert.equal(getDurableLane(occupier.lane.lane_id, ROOT).binding.tmux_session, "alloy-starting-occupier");
+  assert.equal(getExecutionRun(run.run.run_id, ROOT).state, "QUEUED");
+});
+
+await test("cursor lanes skip alloy-sprint-finish so a missing Claude slot does not stick FINISHING", async () => {
+  reset();
+  const lane = seedBoundLane("Vacilando Cursor", { slot: 1, tmux: "alloy-vacilando" });
+  bindDurableLane(lane.lane.lane_id, {
+    ...getDurableLane(lane.lane.lane_id, ROOT).binding,
+    provider: "cursor",
+  }, { root: ROOT });
+  const finish = [];
+  setReleaseImplForTests({
+    inspectGit: async () => ({ dirty: false, conflict: false }),
+    stopSession: () => ({ ok: true, tmux_session: "alloy-vacilando" }),
+    finishSprint: ({ slot }) => {
+      finish.push(slot);
+      return { ok: false, error: "error: no managed agent in slot 1\n" };
+    },
+  });
+  const out = await releaseLaneExecutionCapacity(lane.lane.lane_id, { origin: "operator", root: ROOT });
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.deepEqual(finish, []);
+  assert.equal(getDurableLane(lane.lane.lane_id, ROOT).execution_capacity.state, "IDLE");
 });
 
 await test("operator does not supply a slot number to create or release", async () => {

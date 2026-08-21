@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createDurableLane, resetDevelopmentLanesForTests } from "../lib/vacilando/development-lane.mjs";
+import { createDurableLane, resetDevelopmentLanesForTests, setPreferredLaneProvider } from "../lib/vacilando/development-lane.mjs";
 import {
   activeRunForLane,
   createQueuedRun,
@@ -30,16 +30,18 @@ import {
   resetAgentSessionLifecycleForTests,
   acceptOrientationReport,
   reconcilePendingOrientation,
+  buildContinuationInstruction,
 } from "../lib/vacilando/agent-session-lifecycle.mjs";
-import { listAgentSessionsForLane, resetAgentSessionsForTests, activeAgentSessionForLane, patchAgentSession } from "../lib/vacilando/agent-session.mjs";
+import { listAgentSessionsForLane, resetAgentSessionsForTests, activeAgentSessionForLane, patchAgentSession, createAgentSession, markAgentSessionActive } from "../lib/vacilando/agent-session.mjs";
 import {
   assessSessionStartCapacity,
   resetAlloyAdapterImplForTests,
   setAlloyAdapterImplForTests,
+  persistentProviderArgv,
   startPersistentAgentSession,
   tmuxSessionNameForLane,
 } from "../lib/vacilando/alloy-dev-adapter.mjs";
-import { unexpectedLaneControlFields } from "../lib/vacilando/lanes.mjs";
+import { LANE_INSTRUCTION_MAX, unexpectedLaneControlFields } from "../lib/vacilando/lanes.mjs";
 import { deliverExistingQueuedRun } from "../lib/vacilando/execution-run-send.mjs";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-casec-"));
@@ -161,6 +163,94 @@ await test("existing live agent refuses duplicate start", async () => {
   assert.equal(second.ok, false);
   assert.equal(second.error, "agent_already_running");
   assert.equal(listAgentSessionsForLane(created.lane.lane_id, ROOT).length, 1);
+});
+
+await test("paper Cursor session does not block starting Claude", async () => {
+  const created = makeComms();
+  createAgentSession({
+    laneId: created.lane.lane_id,
+    provider: "cursor",
+    providerSessionId: "cursor-paper",
+    root: ROOT,
+  });
+  patchAgentSession(activeAgentSessionForLane(created.lane.lane_id, ROOT).agent_session_id, {
+    state: "VERIFYING",
+    provider: "cursor",
+    tmux_session: null,
+  }, { root: ROOT });
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "present" },
+      tmux: { alive: true, pane_id: "%6", session: "alloy-vacilando" },
+      worktree: { path: WT },
+    }),
+    countClaude: () => 1,
+    startRuntime: async () => { throw new Error("must adopt existing Claude"); },
+    spawnClaude: () => { throw new Error("must not spawn"); },
+  });
+  const out = await startLaneAgentSession({ laneId: created.lane.lane_id, root: ROOT });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.adopted, true);
+  const live = activeAgentSessionForLane(created.lane.lane_id, ROOT);
+  assert.equal(live.provider, "claude");
+});
+
+await test("paper Claude session does not block adopting live Cursor", async () => {
+  const created = makeComms();
+  setPreferredLaneProvider(created.lane.lane_id, "cursor", { root: ROOT });
+  const paper = createAgentSession({
+    laneId: created.lane.lane_id,
+    provider: "claude",
+    providerSessionId: "old-claude",
+    root: ROOT,
+  });
+  assert.equal(paper.ok, true);
+  markAgentSessionActive(paper.session.agent_session_id, { root: ROOT });
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      preferred_provider: "cursor",
+      claude: { presence: "absent" },
+      tmux: { alive: true, pane_id: "%10", session: "alloy-vacilando", command: "cursor-agent" },
+      worktree: { path: WT },
+    }),
+    countClaude: () => 0,
+    startRuntime: async () => { throw new Error("must adopt existing Cursor pane"); },
+    spawnClaude: () => { throw new Error("must not spawn Claude"); },
+  });
+  const out = await startLaneAgentSession({ laneId: created.lane.lane_id, root: ROOT });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.adopted, true);
+  const live = activeAgentSessionForLane(created.lane.lane_id, ROOT);
+  assert.equal(live.provider, "cursor");
+});
+
+await test("preferred Cursor does not adopt a live Claude pane", async () => {
+  const created = makeComms();
+  setPreferredLaneProvider(created.lane.lane_id, "cursor", { root: ROOT });
+  let startedProvider = null;
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      preferred_provider: "cursor",
+      binding: { provider: "cursor", worktree_path: WT },
+      claude: { presence: "present" },
+      tmux: { alive: true, pane_id: "%6", session: "alloy-vacilando", command: "2.1.239" },
+      worktree: { path: WT },
+    }),
+    countClaude: () => 1,
+    startRuntime: async ({ rec }) => {
+      startedProvider = rec.preferred_provider || rec.binding?.provider;
+      return { ok: true, tmux_session: "alloy-vacilando", pane_id: "%6", created: { tmux: false, provider: true } };
+    },
+    spawnClaude: () => { throw new Error("must not spawn Claude for a Cursor lane"); },
+  });
+  const out = await startLaneAgentSession({ laneId: created.lane.lane_id, root: ROOT });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(startedProvider, "cursor");
+  const live = activeAgentSessionForLane(created.lane.lane_id, ROOT);
+  assert.equal(live.provider, "cursor");
 });
 
 await test("capacity unavailable queues start and does not FAILED", async () => {
@@ -390,6 +480,64 @@ await test("reconcile retries orientation when Claude is ready but not oriented"
   assert.equal(sends.length, 2);
   assert.match(sends[1], /Orient first/);
   assert.equal(getExecutionRun(run.run.run_id, ROOT).state, "QUEUED");
+});
+
+await test("orientation wrap does not duplicate a long approved instruction", () => {
+  const instruction = `${"Measure the workspace. ".repeat(800)}UNIQUE_TAIL`;
+  const text = buildContinuationInstruction({
+    run: {
+      lane_id: "lane_testtesttest",
+      run_id: "erun_testtesttest",
+      instruction,
+      state: "QUEUED",
+      worktree_path: WT,
+    },
+    handoff: {
+      remaining_work: instruction,
+      next_action: "Orient first.",
+    },
+    git: { branch: "main", head: "abc", dirty: false, worktree: WT },
+    successorSessionId: "agsess_test",
+  });
+  assert.ok(text.length <= LANE_INSTRUCTION_MAX, `wrap ${text.length} exceeds ${LANE_INSTRUCTION_MAX}`);
+  assert.match(text, /See approved instruction above/);
+  assert.equal((text.match(/UNIQUE_TAIL/g) || []).length, 1);
+});
+
+await test("oversized kickoff falls back to delivering the queued run", async () => {
+  const created = makeComms();
+  const run = createQueuedRun({
+    laneId: created.lane.lane_id,
+    instruction: "Approved work stays the same.",
+    worktreePath: WT,
+    root: ROOT,
+  });
+  const sends = [];
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "absent" },
+      tmux: { alive: true, pane_id: "%9", session: "alloy-communications" },
+      worktree: { path: WT },
+    }),
+    spawnClaude: ({ sessionId }) => ({ ok: true, provider_session_id: sessionId }),
+    sendLaneInstruction: async (_id, text) => {
+      sends.push(text);
+      if (/Orient first/.test(text)) return { ok: false, error: "instruction_too_large" };
+      return { ok: true, status: "delivered" };
+    },
+  });
+  const start = await startLaneAgentSession({ laneId: created.lane.lane_id, root: ROOT });
+  assert.equal(start.ok, true);
+  assert.equal(getExecutionRun(run.run.run_id, ROOT).state, "EXECUTING");
+  assert.equal(activeAgentSessionForLane(created.lane.lane_id, ROOT).state, "ACTIVE");
+  assert.ok(sends.some((t) => /Approved work stays the same/.test(t)));
+});
+
+await test("interactive Cursor starts with --trust so workspace trust is not a chat question", () => {
+  assert.deepEqual(persistentProviderArgv({ provider: "cursor", bin: "cursor-agent" }), ["cursor-agent", "--trust"]);
+  assert.deepEqual(persistentProviderArgv({ provider: "claude", bin: "claude", sessionId: "sid" }), ["claude", "--session-id", "sid"]);
+  assert.equal(persistentProviderArgv({ provider: "claude", bin: "claude" }).includes("--trust"), false);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

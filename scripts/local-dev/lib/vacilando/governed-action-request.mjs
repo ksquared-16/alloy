@@ -42,7 +42,18 @@ import {
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
+  fulfillDatabaseLedgerRepairForMission,
+  fulfillApplicationCertifyStagingForMission,
+  fulfillApplicationEnsureCertificationPrincipalForMission,
 } from "./trusted-host-actions.mjs";
+import {
+  assertGovernedActionIdentity,
+  classifyStoredGovernedCompletion,
+  completionNotificationFor,
+  continuationSummaryFor,
+  invalidateGovernedCompletion,
+  stampGovernedIdentity,
+} from "./governed-action-integrity.mjs";
 import { ACCESS_IDENTITY_STAGING_MIGRATIONS } from "./trusted-host-migrate.mjs";
 import { createDecision, listDecisions, answerDecision } from "./decisions.mjs";
 import { appendTimelineEvent } from "./timeline.mjs";
@@ -72,6 +83,7 @@ export const GOVERNED_STATUSES = Object.freeze([
   "executing",
   "complete",
   "failed",
+  "invalidated",
 ]);
 
 export const GOVERNED_MODES = Object.freeze([
@@ -79,6 +91,7 @@ export const GOVERNED_MODES = Object.freeze([
   "certification",
   "migration_apply",
   "promotion",
+  "privileged_write",
   "other",
 ]);
 
@@ -99,7 +112,7 @@ const STALE_REGISTRY_FAILURES = new Set([
 ]);
 
 function secretRe() {
-  return /postgresql:\/\/[^\s]+|postgres:\/\/[^\s]+|DATABASE_URL|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi;
+  return /postgresql:\/\/[^\s]+|postgres:\/\/[^\s]+|DATABASE_URL|CERT_OPERATOR_PASSWORD[^\s]*|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi;
 }
 
 function runtimeRoot() {
@@ -219,12 +232,49 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Apply ${n || "ordered"} staging schema migration${n === 1 ? "" : "s"} · stop on first failure`,
     };
   }
+  if (key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    const versions = inputs.versions || inputs.expected_ledger_versions || [];
+    return {
+      approve_label: "Authorize repair",
+      deny_label: "Stop promotion",
+      wait_label: "Waiting on Director — repair staging migration history",
+      mission_need: "Needs approval — Repair staging migration history",
+      detail: `Remove false ledger records so verified migrations can be applied safely · ${Array.isArray(versions) ? versions.length : 0} version(s)`,
+    };
+  }
+  if (key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    const mutate = (inputs.write_policy || inputs.writePolicy) === "mutate";
+    const awaiting = req.status === "awaiting_operator";
+    return {
+      approve_label: mutate ? "Authorize staging write certification" : "Authorize staging certification",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — staging certification",
+      mission_need: mutate && awaiting
+        ? "Needs approval — mutating staging application certification"
+        : "Certifying staging",
+      detail: mutate
+        ? "Operator-approved mutating certification against shared staging · isolated fixtures required"
+        : "Read-only certification of the promoted staging application · no worker credentials",
+    };
+  }
+  if (key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    const awaiting = req.status === "awaiting_operator";
+    return {
+      approve_label: "Authorize staging certification principal",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — certification principal",
+      mission_need: awaiting
+        ? "Needs approval — provision or bind staging certification principal"
+        : "Ensuring staging certification principal",
+      detail: "Create or bind the dedicated non-human staging certification identity. Credentials stay on the trusted host.",
+    };
+  }
   return {
-    approve_label: "Authorize census",
+    approve_label: `Authorize ${req.action_key || "governed action"}`,
     deny_label: "Deny",
     wait_label: "Waiting on Director",
-    mission_need: "Needs approval — read-only census",
-    detail: `Read-only database census · Target: ${req.target || DEFAULT_TARGET} · Data mode: Read-only`,
+    mission_need: `Needs approval — ${req.action_key || "governed action"}`,
+    detail: req.purpose || `${req.action_key} · ${req.target || "trusted host"}`,
   };
 }
 
@@ -244,6 +294,7 @@ export function publicGovernedAction(req) {
     reason_worker_cannot_execute: req.reason_worker_cannot_execute || null,
     operator_approval_required: Boolean(req.operator_approval_required),
     status: req.status,
+    integrity: req.integrity || null,
     result_ref: req.result_ref || null,
     failure_reason: req.failure_reason || null,
     failure_code: req.failure_code || null,
@@ -291,10 +342,12 @@ function newestPending(list) {
   return pending.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
 }
 
-export function pendingGovernedActionForLane(laneId, root = runtimeRoot()) {
+export function pendingGovernedActionForLane(laneId, root = runtimeRoot(), actionKey = null) {
   if (!laneId) return null;
   const lane = canonicalLaneStoreId(laneId, root);
-  return newestPending(listGovernedActions({ laneId: lane, root }));
+  const list = listGovernedActions({ laneId: lane, root })
+    .filter((r) => !actionKey || r.action_key === actionKey);
+  return newestPending(list);
 }
 
 export function latestGovernedActionForMission(missionId, root = runtimeRoot()) {
@@ -370,6 +423,7 @@ function emitNotification(type, rec, { title, body, root = runtimeRoot() } = {})
     mission_id: rec.mission_id,
     lane_id: rec.lane_id,
     request_id: rec.request_id,
+    action_key: rec.action_key,
     mobile_ready: true,
     created_at: iso(),
   };
@@ -576,6 +630,9 @@ function defaultModeForAction(actionKey, requested) {
   if (requested) return requested;
   if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return "promotion";
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
+  if (actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) return "migration_apply";
+  if (actionKey === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) return "certification";
+  if (actionKey === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) return "privileged_write";
   return "read_only";
 }
 
@@ -598,6 +655,9 @@ function validateRequestShape(input, { root } = {}) {
   const purpose = bound(input.purpose, 1000) || "Governed capability required";
   const defaultTarget = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
     || actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+    || actionKey === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER
+    || actionKey === ACTION_TYPES.APPLICATION_CERTIFY_STAGING
+    || actionKey === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL
     ? "staging"
     : DEFAULT_TARGET;
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
@@ -668,6 +728,25 @@ function actionQueryHash(rec) {
   if (rec?.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return rec.inputs?.expected_sha || rec.inputs?.expectedSha || rec.inputs?.dedupeKey || rec.inputs?.dedupe_key || null;
   }
+  if (rec?.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return rec.inputs?.queryHash || rec.inputs?.query_hash || rec.inputs?.dedupeKey || null;
+  }
+  if (rec?.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    return rec.inputs?.queryHash || rec.inputs?.query_hash || rec.inputs?.dedupeKey
+      || [
+        rec.inputs?.expected_sha || rec.inputs?.expectedSha,
+        rec.inputs?.suite_key || rec.inputs?.suiteKey || "access_identity_v2",
+        rec.inputs?.write_policy || rec.inputs?.writePolicy || "read_only",
+      ].join(":");
+  }
+  if (rec?.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    return rec.inputs?.queryHash || rec.inputs?.query_hash || rec.inputs?.dedupeKey
+      || [
+        rec.inputs?.environment || "staging",
+        rec.inputs?.suite_key || rec.inputs?.suiteKey || "access_identity_v2",
+        rec.inputs?.mode || "ensure",
+      ].join(":");
+  }
   return null;
 }
 
@@ -695,6 +774,28 @@ function policyDecision(rec, { nowMs } = {}) {
       reason: "privileged_read_requires_operator",
     };
   }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    const writePolicy = rec.inputs?.write_policy || rec.inputs?.writePolicy || "read_only";
+    if (writePolicy === "mutate") {
+      return {
+        auto_execute: false,
+        operator_approval_required: true,
+        reason: "staging_mutation_requires_operator",
+      };
+    }
+    return {
+      auto_execute: true,
+      operator_approval_required: false,
+      reason: "policy_read_only_staging_certification",
+    };
+  }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    return {
+      auto_execute: false,
+      operator_approval_required: true,
+      reason: "staging_auth_identity_requires_operator",
+    };
+  }
   return {
     auto_execute: false,
     operator_approval_required: true,
@@ -712,6 +813,15 @@ function requestTitle(rec) {
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return "Apply Access & Identity staging migrations";
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return "Repair staging migration history";
+  }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    return "Certify promoted staging application";
+  }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    return "Ensure staging certification principal";
   }
   return rec.action_key;
 }
@@ -861,15 +971,18 @@ export function orchestrateDirectorGovernedWait({
   if (!run?.run_id) return { ok: false, error: "run_not_found" };
   const fields = wait || run.resource_wait || {};
   const existingId = fields.governed_request_id;
+  const wanted = fields.action_key || fields.actionKey || null;
   if (existingId) {
     const rec = getGovernedAction(existingId, root);
-    if (rec && isPendingGovernedStatus(rec.status)) {
+    if (rec && isPendingGovernedStatus(rec.status) && (!wanted || rec.action_key === wanted)) {
       attachRunWait(rec, { nowMs, root });
       return { ok: true, request: publicGovernedAction(rec), deduped: true };
     }
   }
-  const pending = pendingGovernedActionForRun(run.run_id, root)
-    || pendingGovernedActionForLane(run.lane_id, root);
+  const pendingRun = pendingGovernedActionForRun(run.run_id, root);
+  const pending = (pendingRun && (!wanted || pendingRun.action_key === wanted))
+    ? pendingRun
+    : pendingGovernedActionForLane(run.lane_id, root, wanted);
   if (pending) {
     attachRunWait(pending, { nowMs, root });
     return { ok: true, request: publicGovernedAction(pending), deduped: true };
@@ -919,6 +1032,9 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
       }
       if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
         return d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "");
+      }
+      if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+        return d.defaultAction === "approve_governed_ledger_repair" || /repair staging migration history/i.test(d.title || "");
       }
       return d.title === rec.title;
     });
@@ -987,12 +1103,27 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
   const n = rec.inputs?.pull_request_number || rec.inputs?.pullRequestNumber;
   const versions = Array.isArray(rec.inputs?.migrations)
     ? rec.inputs.migrations.map((m) => m.version || m).join("\n")
-    : "";
+    : (Array.isArray(rec.inputs?.versions) ? rec.inputs.versions.join("\n") : "");
   const isMerge = rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST;
+  const isRepair = rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER;
   const { decision } = createDecision({
     missionId: rec.mission_id,
     title: rec.title || presentation.mission_need.replace(/^Needs approval — /, ""),
-    situation: [
+    situation: isRepair
+      ? [
+        "Repair staging migration history",
+        "",
+        "Reason:",
+        rec.purpose || "Vacilando recorded A&I migrations that failed or never executed.",
+        "",
+        "Versions:",
+        versions || "(see inputs)",
+        "",
+        rec.reason_worker_cannot_execute,
+        "",
+        "This is not arbitrary SQL. Director will delete only exact false ledger rows after evidence of non-execution and a failed schema invariant.",
+      ].join("\n")
+      : [
       presentation.detail,
       "",
       `Target: ${rec.target}`,
@@ -1008,25 +1139,37 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
       "Credentials stay on the trusted host. The Development Lane never receives them.",
     ].join("\n"),
     whyThisMatters: rec.purpose,
-    currentPlan: isMerge
+    currentPlan: isRepair
+      ? "Director removes false ledger records so verified migrations can be applied safely. Schema objects that already exist are left untouched."
+      : isMerge
       ? "Director merges the named pull request into staging on the trusted host and returns the merge SHA to the originating lane."
       : "Director applies the approved committed migration files to staging, one at a time, and stops on the first failure.",
     discovery: rec.reason_worker_cannot_execute,
     options: [
       {
-        optionId: isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
+        optionId: isRepair
+          ? "authorize_ledger_repair"
+          : isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
         label: presentation.approve_label,
         description: presentation.detail,
       },
       {
-        optionId: "deny_governed_action",
-        label: "Deny",
-        description: "Deny this privileged action. Director will not bounce the worker to retry a capability it cannot access.",
+        optionId: isRepair ? "stop_promotion" : "deny_governed_action",
+        label: presentation.deny_label,
+        description: isRepair
+          ? "Stop promotion. Director will not mutate staging migration history."
+          : "Deny this privileged action. Director will not bounce the worker to retry a capability it cannot access.",
       },
     ],
-    recommendation: isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
-    recommendationReason: "The lane correctly cannot hold GitHub or database credentials. Director/trusted host is the sanctioned path.",
-    defaultAction: isMerge ? "approve_governed_merge" : "approve_governed_migration",
+    recommendation: isRepair
+      ? "authorize_ledger_repair"
+      : isMerge ? "authorize_staging_merge" : "authorize_staging_migrations",
+    recommendationReason: isRepair
+      ? "False ledger rows block a truthful recovery apply. Repair is the sanctioned path."
+      : "The lane correctly cannot hold GitHub or database credentials. Director/trusted host is the sanctioned path.",
+    defaultAction: isRepair
+      ? "approve_governed_ledger_repair"
+      : isMerge ? "approve_governed_merge" : "approve_governed_migration",
     actor: "director",
     nowMs,
     evidence: rec.artifact_refs || [],
@@ -1063,6 +1206,41 @@ function defaultExecute(rec, { nowMs, actor } = {}) {
       nowMs,
     });
   }
+  if (rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER) {
+    return fulfillDatabaseLedgerRepairForMission(rec.mission_id, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+    return fulfillApplicationCertifyStagingForMission(rec.mission_id, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL) {
+    return fulfillApplicationEnsureCertificationPrincipalForMission(rec.mission_id, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: {
+        ...(rec.inputs || {}),
+        worktree_path: rec.worktree_path,
+        worktreePath: rec.worktree_path,
+      },
+      actor,
+      nowMs,
+    });
+  }
   if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "action_unavailable" };
   }
@@ -1074,6 +1252,63 @@ function defaultExecute(rec, { nowMs, actor } = {}) {
     actor,
     nowMs,
   });
+}
+
+function deferCertifyForPrincipal(rec, out, { nowMs, root, actor }) {
+  rec.status = "awaiting_director";
+  rec.deferred_reason = "certification_principal_unavailable";
+  rec.failure_code = null;
+  rec.failure_reason = null;
+  rec.updated_at = iso(nowMs);
+  saveRequest(rec, root);
+  appendAudit(rec, "deferred_for_principal", { nowMs }, root);
+  const existing = listGovernedActions({
+    missionId: rec.mission_id,
+    laneId: rec.lane_id,
+    root,
+  }).find((r) => r.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL
+    && ["requested", "awaiting_director", "awaiting_operator", "executing", "complete"].includes(r.status));
+  if (existing?.status === "complete") {
+    rec.status = "requested";
+    rec.updated_at = iso(nowMs);
+    saveRequest(rec, root);
+    return processGovernedAction(rec.request_id, { nowMs, root, actor: "director" });
+  }
+  if (existing && ["requested", "awaiting_director", "awaiting_operator", "executing"].includes(existing.status)) {
+    return { ok: true, request: publicGovernedAction(rec), deferred: true, ensure: publicGovernedAction(existing) };
+  }
+  const ensure = requestGovernedAction({
+    mission_id: rec.mission_id,
+    lane_id: rec.lane_id,
+    run_id: rec.run_id,
+    action_key: ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL,
+    target: "staging",
+    purpose: "Ensure the staging certification principal before application certification",
+    reason_worker_cannot_execute: rec.reason_worker_cannot_execute,
+    worktree_path: rec.worktree_path,
+    inputs: {
+      environment: "staging",
+      suite_key: rec.inputs?.suite_key || rec.inputs?.suiteKey || "access_identity_v2",
+      mode: "ensure",
+      source_mission_id: rec.mission_id,
+    },
+    continuation_intent: rec.continuation_intent,
+    continuation_plan: { kind: "retry_certify", certify_request_id: rec.request_id },
+  }, { nowMs, root, processNow: true });
+  return { ok: true, request: publicGovernedAction(rec), deferred: true, ensure };
+}
+
+function retryCertifyAfterPrincipal(rec, { nowMs, root, actor }) {
+  const certifyId = rec.continuation_plan?.certify_request_id;
+  if (!certifyId) return null;
+  const certify = getGovernedAction(certifyId, root);
+  if (!certify) return null;
+  certify.status = "requested";
+  certify.failure_code = null;
+  certify.failure_reason = null;
+  certify.updated_at = iso(nowMs);
+  saveRequest(certify, root);
+  return processGovernedAction(certify.request_id, { nowMs, root, actor: actor || "director" });
 }
 
 function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
@@ -1088,6 +1323,11 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
     appendAudit(rec, "awaiting_operator", { nowMs }, root);
     return { ok: true, request: publicGovernedAction(rec), awaiting_operator: true };
   }
+  const status = out?.action?.result?.status || out?.error || out?.action?.failureReason;
+  if (rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING
+    && (status === "principal_unavailable" || out?.error === "principal_unavailable")) {
+    return deferCertifyForPrincipal(rec, out, { nowMs, root, actor });
+  }
   if (!out?.ok || out.action?.state !== "completed") {
     const code = out?.error === "wrong_database_target"
       ? "target_unavailable"
@@ -1098,31 +1338,64 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   if (containsSecret(action.result) || containsSecret(action.inputs)) {
     return failRequest(rec, "result_validation_failed", "Result contained secrets and was not routed to the worker.", { nowMs, root });
   }
+  const identity = assertGovernedActionIdentity({
+    request: rec,
+    action,
+    result: action.result,
+    evidence: action.result,
+  });
+  if (!identity.ok) {
+    return failRequest(
+      rec,
+      identity.error,
+      identity.detail || identity.error,
+      { nowMs, root },
+    );
+  }
   rec.status = "complete";
   rec.trusted_host_action_id = action.id;
-  rec.result = action.result || null;
-  rec.result_ref = action.result?.evidencePath || action.id;
-  rec.execution_ended_at = iso(nowMs);
+  rec.result = stampGovernedIdentity(action.result, { request: rec, action, nowMs: Date.now() });
+  rec.result_ref = rec.result?.evidence_path || rec.result?.evidencePath || action.id;
+  rec.execution_ended_at = iso(Date.now());
   rec.updated_at = iso(nowMs);
   rec.failure_code = null;
   rec.failure_reason = null;
   saveRequest(rec, root);
   appendAudit(rec, "complete", { nowMs, detail: { result_ref: rec.result_ref } }, root);
+  const notice = completionNotificationFor(rec, rec.result);
   emitNotification("governed_action_complete", rec, {
-    title: `${rec.title || rec.action_key} complete`,
-    body: "Director finished the trusted-host action and is resuming the originating lane.",
+    title: notice.title,
+    body: notice.body,
     root,
   });
   try {
-    attachEvidence({
-      missionId: rec.mission_id,
-      type: "database",
-      title: rec.title || rec.action_key,
-      description: `${rec.action_key} against ${rec.target}`,
-      fileUri: rec.result_ref,
-      createdBy: actor || "director",
-      nowMs,
-    });
+    if (!rec.evidence_attached) {
+      attachEvidence({
+        missionId: rec.mission_id,
+        type: rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING ? "browser" : "database",
+        title: rec.title || rec.action_key,
+        description: `${rec.action_key} against ${rec.target}`,
+        fileUri: rec.result_ref,
+        createdBy: actor || "director",
+        nowMs,
+      });
+      if (rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING) {
+        for (const shot of rec.result?.product_review || []) {
+          if (!shot?.artifact) continue;
+          attachEvidence({
+            missionId: rec.mission_id,
+            type: "screenshot",
+            title: shot.title || shot.id,
+            description: shot.path || "",
+            fileUri: shot.artifact,
+            createdBy: actor || "director",
+            nowMs,
+          });
+        }
+      }
+      rec.evidence_attached = true;
+      saveRequest(rec, root);
+    }
   } catch { /* evidence optional */ }
   try {
     appendTimelineEvent(rec.mission_id, {
@@ -1188,7 +1461,24 @@ export function processGovernedAction(requestId, {
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
-  if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
+  if (rec.status === "invalidated") {
+    return { ok: false, error: rec.failure_code || "governed_action_identity_mismatch", request: publicGovernedAction(rec) };
+  }
+  if (rec.status === "complete") {
+    const identity = assertGovernedActionIdentity({
+      request: rec,
+      action: { actionType: rec.action_key, id: rec.trusted_host_action_id, result: rec.result },
+      result: rec.result,
+      evidence: rec.result,
+    });
+    if (!identity.ok) {
+      invalidateGovernedCompletion(rec, { reason: identity.detail || identity.error, nowMs });
+      saveRequest(rec, root);
+      appendAudit(rec, "invalidated", { nowMs, detail: { reason: rec.integrity?.reason } }, root);
+      return { ok: false, error: identity.error, request: publicGovernedAction(rec) };
+    }
+    return { ok: true, request: publicGovernedAction(rec), already: true };
+  }
   if (rec.status === "failed") {
     if (isRecoverableStaleRegistryFailure(rec) && getActionDefinition(rec.action_key)) {
       rec.status = "requested";
@@ -1275,7 +1565,12 @@ export function executeGovernedAction(requestId, {
   }
   const applied = applyExecuteResult(rec, out, { nowMs, root, actor });
   if (applied.ok && rec.status === "complete") {
-    applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
+    if (rec.action_key === ACTION_TYPES.APPLICATION_ENSURE_CERTIFICATION_PRINCIPAL
+      && rec.continuation_plan?.kind === "retry_certify") {
+      applied.retry = retryCertifyAfterPrincipal(rec, { nowMs, root, actor });
+    } else {
+      applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
+    }
   }
   return applied;
 }
@@ -1321,7 +1616,9 @@ export async function approveGovernedAction(requestId, {
           ? "authorize_staging_merge"
           : rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
             ? "authorize_staging_migrations"
-            : "authorize_mission_census",
+            : rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER
+              ? "authorize_ledger_repair"
+              : "authorize_mission_census",
         response: rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS
           ? "Operator approved read-only census."
           : `Operator approved ${rec.action_key}.`,
@@ -1440,14 +1737,15 @@ export function tickGovernedActions({
 }
 
 export function continuationTextForGovernedAction(rec, action = null) {
-  const census = action?.result?.census || {};
   const evidencePath = rec.result_ref
+    || action?.result?.evidence_path
     || action?.result?.evidencePath
     || null;
-  const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
-  const rowCounts = questions
-    ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
-    : null;
+  const isMigration = rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+    || rec.action_key === ACTION_TYPES.DATABASE_REPAIR_MIGRATION_LEDGER;
+  const isCertify = rec.action_key === ACTION_TYPES.APPLICATION_CERTIFY_STAGING;
+  const isMerge = rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST;
+  const summary = continuationSummaryFor(rec, action);
   return redact([
     "[VACILANDO GOVERNED ACTION COMPLETE]",
     `Request: ${rec.request_id}`,
@@ -1458,21 +1756,26 @@ export function continuationTextForGovernedAction(rec, action = null) {
     "",
     "Director executed this on the trusted host.",
     "You did NOT receive hosted database credentials or any privileged secret.",
-    "Do not retry the census from this lane. Read the result file and continue.",
+    isCertify
+      ? "Do not request staging URLs, operator passwords, cookies, or environment secrets. Consume this evidence and continue program reconciliation."
+      : isMigration
+      ? "Do not infer schema from the migration ledger. Resume staging runtime certification from this evidence."
+      : isMerge
+      ? "Do not retry the merge. The pull request is on staging. Continue from this evidence."
+      : "Do not retry the census from this lane. Read the result file and continue.",
     rec.run_id ? `When this assignment is finished, report: vac run-status ${rec.run_id} complete --summary "..."${rec.lane_id ? ` --lane ${rec.lane_id}` : ""}` : null,
     "",
     "Bounded result summary:",
-    JSON.stringify({
-      census_run_at: census.census_run_at || null,
-      format: census.format || null,
-      org_count: census.org_count ?? null,
-      database: census.database || null,
-      question_ids: census.question_ids || null,
-      question_row_counts: rowCounts,
-      keys: Object.keys(census).slice(0, 20),
-    }, null, 2),
+    JSON.stringify(summary, null, 2),
     "",
-    rec.continuation_intent || "Continue the current assignment using this evidence.",
+    rec.continuation_intent
+      || (isCertify
+        ? "Resume the same Access & Identity lane. Use the certification evidence. Do not discover the staging URL or operator credentials."
+        : isMigration
+        ? "Resume the same Access & Identity lane at staging runtime/browser certification. Do not continue migration implementation."
+        : isMerge
+        ? "Resume the same lane. The merge completed; continue remaining assigned work."
+        : "Continue the current assignment using this evidence."),
   ].filter((line) => line != null).join("\n"));
 }
 
@@ -1550,11 +1853,26 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   root = runtimeRoot(),
   actor = "director",
 } = {}) {
-  if (resumeImpl) return resumeImpl(requestId, { nowMs, root, actor });
   const rec = getGovernedAction(requestId, root);
   if (!rec || rec.status !== "complete") {
     return { ok: false, error: "request_not_complete" };
   }
+  if (rec.resumed_at && rec.resume_delivery?.ok) {
+    return { ok: true, request: publicGovernedAction(rec), already: true, same_lane: true };
+  }
+  const identity = assertGovernedActionIdentity({
+    request: rec,
+    action: { actionType: rec.action_key, id: rec.trusted_host_action_id, result: rec.result },
+    result: rec.result,
+    evidence: rec.result,
+  });
+  if (!identity.ok) {
+    invalidateGovernedCompletion(rec, { reason: identity.detail || identity.error, nowMs });
+    saveRequest(rec, root);
+    appendAudit(rec, "invalidated", { nowMs, detail: { reason: rec.integrity?.reason } }, root);
+    return { ok: false, error: identity.error, request: publicGovernedAction(rec) };
+  }
+  if (resumeImpl) return resumeImpl(requestId, { nowMs, root, actor });
   const pendingNext = pendingGovernedActionForLane(rec.lane_id, root);
   if (pendingNext && pendingNext.request_id !== rec.request_id) {
     attachRunWait(pendingNext, { nowMs, root });
@@ -1608,8 +1926,8 @@ export async function resumeLaneAfterGovernedAction(requestId, {
   saveRequest(rec, root);
   appendAudit(rec, "resumed", { nowMs, detail: rec.resume_delivery }, root);
   emitNotification("governed_action_worker_resumed", rec, {
-    title: "Worker resumed",
-    body: `Continuing ${rec.lane_id} with governed-action results.`,
+    title: `${rec.title || rec.action_key} — worker resumed`,
+    body: `Continuing ${rec.lane_id} with ${rec.action_key} results.`,
     root,
   });
   return {
@@ -1694,6 +2012,44 @@ export function handleGovernedDecisionAnswer(missionId, chosenOptionId, {
     });
   }
   return { ok: false, error: "unhandled_option", chosenOptionId };
+}
+
+export function reconcileGovernedActionIntegrity({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+} = {}) {
+  const store = readGovernedActionStore(root);
+  const report = {
+    audited: store.requests.length,
+    invalidated: [],
+    intact: [],
+    skipped: [],
+  };
+  for (const rec of store.requests) {
+    if (rec.status === "invalidated") {
+      report.skipped.push({ request_id: rec.request_id, action_key: rec.action_key, reason: "already_invalidated" });
+      continue;
+    }
+    const cls = classifyStoredGovernedCompletion(rec);
+    if (cls.skipped) {
+      report.skipped.push({ request_id: rec.request_id, action_key: rec.action_key, reason: cls.reason });
+      continue;
+    }
+    if (cls.ok) {
+      report.intact.push({ request_id: rec.request_id, action_key: rec.action_key });
+      continue;
+    }
+    invalidateGovernedCompletion(rec, { reason: cls.reason, nowMs });
+    saveRequest(rec, root);
+    appendAudit(rec, "invalidated", { nowMs, detail: { reason: cls.reason } }, root);
+    report.invalidated.push({
+      request_id: rec.request_id,
+      action_key: rec.action_key,
+      reason: cls.reason,
+      result_ref: rec.result_ref || null,
+    });
+  }
+  return report;
 }
 
 export { publicExecutionRun, redact as redactGovernedSecrets, containsSecret as governedPayloadHasSecrets };

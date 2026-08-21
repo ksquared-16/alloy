@@ -12,6 +12,8 @@ import {
   displayLabelForLane,
   getDevelopmentLane,
   inferClaudePresence,
+  inferCursorPresence,
+  inferLiveProvider,
   isAllowlistedSession,
   listDevelopmentLanes,
   parseTmuxPaneLines,
@@ -67,6 +69,14 @@ await test("parseTmuxPaneLines maps live-shaped fields", () => {
   assert.equal(panes[0].dead, false);
   assert.equal(panes[0].attached, false);
   assert.equal(inferClaudePresence(panes[0]), "present");
+});
+
+await test("Cursor Agent title is live Cursor even when the process is node", () => {
+  const pane = { command: "node", title: "Cursor Agent", dead: false };
+  assert.equal(inferCursorPresence(pane), "present");
+  assert.equal(inferLiveProvider(pane), "cursor");
+  assert.equal(inferCursorPresence({ command: "cursor-agent", title: "" }), "present");
+  assert.equal(inferCursorPresence({ command: "node", title: "zsh" }), "unknown");
 });
 
 await test("display label strips tmux title noise", () => {

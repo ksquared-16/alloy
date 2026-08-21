@@ -26,7 +26,7 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, sendLaneInstruction } from "./lanes.mjs";
+import { LANE_INSTRUCTION_MAX, getDevelopmentLane, inferClaudePresence, inferLiveProvider, sendLaneInstruction } from "./lanes.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -49,6 +49,8 @@ import {
   findLaneByBinding,
   getDurableLane,
   isRuntimeAdoptionBlocked,
+  lanePreferredProvider,
+  normalizeLaneProvider,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 
@@ -80,6 +82,7 @@ let spawnImpl = null;
 let countImpl = null;
 let telemetryImpl = null;
 let startRuntimeImpl = null;
+let sessionCapImpl = null;
 const rotationInflight = new Set();
 const startInflight = new Set();
 const advanceTimers = new Set();
@@ -93,6 +96,7 @@ export function setAgentSessionLifecycleImplForTests(impl = {}) {
   countImpl = typeof impl.countClaude === "function" ? impl.countClaude : null;
   telemetryImpl = typeof impl.collectTelemetry === "function" ? impl.collectTelemetry : null;
   startRuntimeImpl = typeof impl.startRuntime === "function" ? impl.startRuntime : null;
+  sessionCapImpl = typeof impl.assessSessionStartCapacity === "function" ? impl.assessSessionStartCapacity : null;
 }
 
 export function resetAgentSessionLifecycleForTests() {
@@ -102,6 +106,7 @@ export function resetAgentSessionLifecycleForTests() {
   countImpl = null;
   telemetryImpl = null;
   startRuntimeImpl = null;
+  sessionCapImpl = null;
   rotationInflight.clear();
   startInflight.clear();
   for (const t of advanceTimers) clearTimeout(t);
@@ -361,7 +366,33 @@ export function buildHandoffRequestInstruction({ run, git, handoffId }) {
   ].filter(Boolean).join("\n");
 }
 
-export function buildContinuationInstruction({ run, handoff, git, successorSessionId, recovery = false }) {
+function remainingWorkForOrientation(run, handoff) {
+  const remaining = String(handoff?.remaining_work || "");
+  const instruction = String(run?.instruction || "");
+  if (!remaining || remaining === instruction) return "See approved instruction above.";
+  return remaining;
+}
+
+export function spilledInstructionPath(runId, root = runtimeRoot()) {
+  return join(root, "vacilando", "execution-runs", "instruction-files", `${runId}.md`);
+}
+
+function spillApprovedInstruction(run, root) {
+  const path = spilledInstructionPath(run.run_id, root);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, String(run.instruction || ""), "utf8");
+  return path;
+}
+
+export function buildContinuationInstruction({
+  run,
+  handoff,
+  git,
+  successorSessionId,
+  recovery = false,
+  instructionBody = null,
+} = {}) {
+  const approved = instructionBody ?? String(run?.instruction || "");
   const lines = [
     recovery
       ? "Vacilando recovered this Development Lane after the previous Claude session ended unexpectedly."
@@ -379,13 +410,13 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
     "",
     "Approved instruction:",
     "---",
-    String(run.instruction || ""),
+    approved,
     "---",
     "",
     "Structured handoff:",
     JSON.stringify({
       completed_work: handoff?.completed_work || "",
-      remaining_work: handoff?.remaining_work || "",
+      remaining_work: remainingWorkForOrientation(run, handoff),
       current_phase: handoff?.current_phase || run.current_phase || run.state,
       validation_state: handoff?.validation_state || "",
       resource_state: handoff?.resource_state || "",
@@ -409,6 +440,104 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
     })}`,
   ];
   return lines.join("\n");
+}
+
+export function orientationInstructionForSend({
+  run,
+  handoff,
+  git,
+  successorSessionId,
+  recovery = false,
+  root = runtimeRoot(),
+} = {}) {
+  const built = buildContinuationInstruction({ run, handoff, git, successorSessionId, recovery });
+  if (built.length <= LANE_INSTRUCTION_MAX) {
+    return { ok: true, text: built, spilled: false, size: built.length };
+  }
+  const path = spillApprovedInstruction(run, root);
+  const pointer = [
+    `The approved instruction is ${String(run.instruction || "").length} characters and exceeds what a session kickoff can send inline.`,
+    `It is saved at ${path}.`,
+    "Read that file and follow it. Do not wait for the operator to paste it.",
+  ].join("\n");
+  const spilled = buildContinuationInstruction({
+    run,
+    handoff: {
+      ...handoff,
+      remaining_work: pointer,
+      next_action: handoff?.next_action || "Read the approved instruction file, then report ORIENTED.",
+    },
+    git,
+    successorSessionId,
+    recovery,
+    instructionBody: pointer,
+  });
+  if (spilled.length <= LANE_INSTRUCTION_MAX) {
+    return { ok: true, text: spilled, spilled: true, path, size: spilled.length };
+  }
+  return { ok: false, error: "instruction_too_large", size: spilled.length, spilled: true, path };
+}
+
+async function skipOrientationAndDeliverRun({ sessionId, run, root, nowMs }) {
+  markAgentSessionActive(sessionId, { root, orientedAt: iso(nowMs) });
+  const { deliverExistingQueuedRun } = await import("./execution-run-send.mjs");
+  return deliverExistingQueuedRun(run.run_id, {
+    root,
+    nowMs,
+    sendLaneInstruction: sendImpl || undefined,
+  });
+}
+
+async function sendOrientationOrFallback({
+  laneId,
+  run,
+  sessionId,
+  git,
+  handoff,
+  recovery = false,
+  root,
+  nowMs,
+  attempts,
+  dedupeKey,
+}) {
+  const prepared = orientationInstructionForSend({
+    run,
+    handoff,
+    git,
+    successorSessionId: sessionId,
+    recovery,
+    root,
+  });
+  const send = sendImpl || sendLaneInstruction;
+  let delivered = { ok: false, error: prepared.ok ? "not_sent" : prepared.error };
+  if (prepared.ok) {
+    try {
+      delivered = await send(laneId, prepared.text, { actor: "governor", dedupeKey }) || { ok: false };
+    } catch {
+      delivered = { ok: false, error: "delivery_failed" };
+    }
+  }
+  if (delivered?.ok) {
+    patchAgentSession(sessionId, {
+      state: "VERIFYING",
+      orientation_attempts: attempts,
+      last_orientation_attempt_at: iso(nowMs),
+      last_orientation_error: null,
+    }, { root });
+    return { ok: true, delivered };
+  }
+  const err = delivered?.error || prepared.error || "delivery_failed";
+  patchAgentSession(sessionId, {
+    state: "STARTING",
+    orientation_attempts: attempts,
+    last_orientation_attempt_at: iso(nowMs),
+    last_orientation_error: err,
+  }, { root });
+  if (err === "instruction_too_large" || attempts >= 4) {
+    const fallback = await skipOrientationAndDeliverRun({ sessionId, run, root, nowMs });
+    return { ok: Boolean(fallback?.ok), fallback: true, delivered: fallback, error: err };
+  }
+  return { ok: false, error: err, delivered };
 }
 
 export async function requestSessionRotation({
@@ -639,6 +768,14 @@ export function laneClaudePresent(lane) {
   if (lane.tmux && inferClaudePresence(lane.tmux) === "present") return true;
   const panes = Array.isArray(lane.tmux?.panes) ? lane.tmux.panes : [];
   return panes.some((p) => inferClaudePresence(p) === "present");
+}
+
+export function liveProviderOnLane(lane) {
+  if (!lane) return null;
+  const fromPane = inferLiveProvider(lane.tmux || {});
+  if (fromPane) return fromPane;
+  if (laneClaudePresent(lane)) return "claude";
+  return null;
 }
 
 function countClaudeOnLane(lane) {
@@ -1152,6 +1289,33 @@ export async function startLaneAgentSession({
   }
 }
 
+function providerSessionIsLive(session, found) {
+  if (!session) return false;
+  if (laneClaudePresent(found)) {
+    if (session.provider && session.provider !== "claude" && !session.tmux_session) return false;
+    return true;
+  }
+  if (session.tmux_session && found?.tmux?.session === session.tmux_session && found?.tmux?.alive !== false) {
+    return true;
+  }
+  return false;
+}
+
+function retirePaperAgentSession(laneId, found, { root, nowMs }) {
+  const existing = activeAgentSessionForLane(laneId, root);
+  if (!existing) return null;
+  const inProgress = ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"].includes(existing.state)
+    && !(existing.provider && existing.provider !== "claude" && !existing.tmux_session);
+  if (inProgress) return existing;
+  if (providerSessionIsLive(existing, found)) return existing;
+  endAgentSession(existing.agent_session_id, {
+    reason: "stale_without_runtime",
+    nowMs,
+    root,
+  });
+  return null;
+}
+
 async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   const found = await observeLane(laneId);
   if (!found) return { ok: false, error: "lane_not_found" };
@@ -1173,11 +1337,24 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
   }
 
-  if (laneClaudePresent(found)) {
-    if (countClaudeOnLane(found) > 1) {
+  retirePaperAgentSession(found.lane_id, found, { root, nowMs });
+
+  const preferred = lanePreferredProvider(rec);
+  const live = liveProviderOnLane(found);
+  if (live && live === preferred) {
+    if (preferred === "claude" && countClaudeOnLane(found) > 1) {
       return { ok: false, error: "duplicate_claude" };
     }
     let sess = activeAgentSessionForLane(found.lane_id, root);
+    const sessProvider = normalizeLaneProvider(sess?.provider) || (sess ? "claude" : null);
+    if (sess && sessProvider && sessProvider !== preferred) {
+      endAgentSession(sess.agent_session_id, {
+        reason: "provider_switched",
+        nowMs,
+        root,
+      });
+      sess = null;
+    }
     if (sess) {
       return {
         ok: false,
@@ -1192,6 +1369,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
       runId: run?.run_id || null,
       nowMs,
       root,
+      provider: preferred,
     });
     if (!created.ok) return created;
     sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
@@ -1200,11 +1378,13 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
       adopted: true,
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
+      provider: preferred,
     };
   }
 
   const existingSession = activeAgentSessionForLane(found.lane_id, root);
-  if (existingSession && ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"].includes(existingSession.state)) {
+  if (existingSession && ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"].includes(existingSession.state)
+    && existingSession.provider === preferred) {
     return {
       ok: true,
       already: true,
@@ -1217,15 +1397,19 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   let lane = found;
   let createdRuntime = null;
   const hasPane = Boolean(lane.tmux?.pane_id) && lane.tmux?.alive !== false;
-  if (!hasPane) {
+  const needsProviderStart = !hasPane || (live && live !== preferred);
+  if (needsProviderStart) {
     const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
-    const cap = await assessSessionStartCapacity();
+    const cap = preferred === "cursor"
+      ? { ok: true, available: true }
+      : await (sessionCapImpl ? sessionCapImpl() : assessSessionStartCapacity());
     if (!cap.ok) {
       const run = activeRunForLane(found.lane_id, root);
       const { createAdmissionRequest } = await import("./execution-admission.mjs");
       const adm = createAdmissionRequest({
         laneId: found.lane_id,
         runId: run?.run_id || null,
+        provider: preferred,
         nowMs,
         root,
       });
@@ -1248,6 +1432,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
         existingTmuxSession: rec.binding?.tmux_session || null,
         expectedBranch: rec.binding?.branch || null,
         runtimeRoot: root,
+        provider: preferred,
       });
     if (!started?.ok) {
       return {
@@ -1281,13 +1466,14 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     }
   }
 
-  if (laneClaudePresent(lane) && createdRuntime?.adopted) {
+  if ((preferred === "claude" ? laneClaudePresent(lane) : liveProviderOnLane(lane) === "cursor") && createdRuntime?.adopted) {
     const run = activeRunForLane(found.lane_id, root);
     const created = createAgentSession({
       laneId: found.lane_id,
       runId: run?.run_id || null,
       nowMs,
       root,
+      provider: preferred,
     });
     if (!created.ok) return created;
     const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
@@ -1302,7 +1488,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
 
   const providerSessionId = randomUUID();
   let spawned = { ok: true, provider_session_id: providerSessionId };
-  if (!createdRuntime?.created?.provider && !laneClaudePresent(lane)) {
+  if (!createdRuntime?.created?.provider && preferred === "claude" && !laneClaudePresent(lane)) {
     spawned = await spawnClaudeInPane({ lane, sessionId: providerSessionId });
     if (!spawned.ok) {
       return {
@@ -1327,35 +1513,44 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     providerSessionId: spawned.provider_session_id || providerSessionId,
     nowMs,
     root,
+    provider: preferred,
   });
   if (!created.ok) return created;
+  if (preferred === "cursor") {
+    const sess = markAgentSessionActive(created.session.agent_session_id, {
+      root,
+      orientedAt: new Date(nowMs).toISOString(),
+    }) || created.session;
+    return {
+      ok: true,
+      started: true,
+      adopted: true,
+      status: "ready",
+      agent_session_id: sess.agent_session_id,
+      tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
+      start_session_implemented: true,
+    };
+  }
   patchAgentSession(created.session.agent_session_id, { state: "STARTING" }, { root });
   const cwd = boundPath;
   if (run && !isTerminalRunState(run.state)) {
-    const instruction = buildContinuationInstruction({
+    await sendOrientationOrFallback({
+      laneId: found.lane_id,
       run,
+      sessionId: created.session.agent_session_id,
+      git: captureGitTruth(cwd),
       handoff: {
         completed_work: "",
         remaining_work: run.instruction || "",
         next_action: "Orient on this Development Lane. Do not start approved work until you report ORIENTED.",
         current_phase: run.state,
       },
-      git: captureGitTruth(cwd),
-      successorSessionId: created.session.agent_session_id,
       recovery: false,
+      root,
+      nowMs,
+      attempts: 1,
+      dedupeKey: `orient-start:${created.session.agent_session_id}`,
     });
-    const send = sendImpl || sendLaneInstruction;
-    try {
-      const delivered = await send(found.lane_id, instruction, {
-        actor: "governor",
-        dedupeKey: `orient-start:${created.session.agent_session_id}`,
-      });
-      patchAgentSession(created.session.agent_session_id, {
-        state: delivered?.ok ? "VERIFYING" : "STARTING",
-        orientation_attempts: 1,
-        last_orientation_attempt_at: iso(nowMs),
-      }, { root });
-    } catch { /* orientation delivery retries on the next reconcile */ }
   }
   return {
     ok: true,
@@ -1388,40 +1583,29 @@ export async function reconcilePendingOrientation({ root = runtimeRoot(), nowMs 
     const run = activeRunForLane(rec.lane_id, root);
     if (!run || run.state !== "QUEUED" || run.state_reason !== "waiting_for_agent_session") continue;
     const attempts = Number(session.orientation_attempts || 0);
-    if (attempts >= 4) continue;
     const last = session.last_orientation_attempt_at ? Date.parse(session.last_orientation_attempt_at) : 0;
-    if (last && nowMs - last < 8000) continue;
+    if (attempts < 4 && last && nowMs - last < 8000) continue;
     const found = await observeLane(rec.lane_id);
     if (!found || !laneClaudePresent(found)) continue;
     const cwd = rec.binding?.worktree_path || found.worktree?.path;
-    const instruction = buildContinuationInstruction({
+    const out = await sendOrientationOrFallback({
+      laneId: rec.lane_id,
       run,
+      sessionId: session.agent_session_id,
+      git: captureGitTruth(cwd),
       handoff: {
         completed_work: "",
         remaining_work: run.instruction || "",
         next_action: "Orient on this Development Lane. Do not start approved work until you report ORIENTED.",
         current_phase: run.state,
       },
-      git: captureGitTruth(cwd),
-      successorSessionId: session.agent_session_id,
       recovery: false,
+      root,
+      nowMs,
+      attempts: attempts >= 4 ? 4 : attempts + 1,
+      dedupeKey: `orient-retry:${session.agent_session_id}:${attempts + 1}`,
     });
-    const send = sendImpl || sendLaneInstruction;
-    let delivered = { ok: false };
-    try {
-      delivered = await send(rec.lane_id, instruction, {
-        actor: "governor",
-        dedupeKey: `orient-retry:${session.agent_session_id}:${attempts + 1}`,
-      }) || { ok: false };
-    } catch {
-      delivered = { ok: false };
-    }
-    patchAgentSession(session.agent_session_id, {
-      state: delivered.ok ? "VERIFYING" : session.state,
-      orientation_attempts: attempts + 1,
-      last_orientation_attempt_at: iso(nowMs),
-    }, { root });
-    if (delivered.ok) retried += 1;
+    if (out.ok) retried += 1;
   }
   return { ok: true, retried };
 }

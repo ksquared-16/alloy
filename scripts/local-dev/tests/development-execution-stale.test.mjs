@@ -432,5 +432,17 @@ await test("idle governed resume does not block a new send forever", async () =>
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "ABANDONED");
 });
 
+await test("queued wait time does not make a just-started run look stale", async () => {
+  const queuedAt = Date.now() - 3 * 60 * 60 * 1000;
+  const startedAt = Date.now() - 90 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: startedAt });
+  const stored = getExecutionRun(run.run_id, ROOT);
+  stored.created_at = new Date(queuedAt).toISOString();
+  seedSend(PRODUCT, startedAt, startedAt + 1_000);
+  const cls = classifyExecutionRunStale(stored, collectStaleRunFacts(stored, { root: ROOT, nowMs: Date.now() }));
+  assert.equal(cls.class, "active", cls.reason);
+  assert.equal(cls.reason, "still_settling");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

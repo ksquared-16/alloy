@@ -1,0 +1,2 @@
+Waiting on Director · Q15 census requested
+Current work Waiting on Director Continue Access &amp; Identity V2 — Q15 census then W-15/W-20 Q15 census requested Worker cannot access deployed tenant credentials by design. Director is handling database.read_census.

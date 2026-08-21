@@ -1,0 +1,3 @@
+Phase 1 Execution Run UI evidence
+Source: Gateway view functions + fixture run store objects
+Not TUI scraping. Live identity Claude was not instructed.

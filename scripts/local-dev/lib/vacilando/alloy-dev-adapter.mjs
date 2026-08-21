@@ -17,6 +17,7 @@ import {
   listTmuxPanesRaw,
   parseTmuxPaneLines,
   TMUX_SESSION_RE,
+  workspaceTrustPaneState,
 } from "./lanes.mjs";
 
 export function candidateIdFor(worktreeName) {
@@ -308,6 +309,14 @@ function resolveClaudeBin() {
   return "claude";
 }
 
+function resolveCursorBin() {
+  const home = process.env.HOME || homedir();
+  for (const p of [join(home, ".local/bin/cursor-agent"), "/usr/local/bin/cursor-agent", "/opt/homebrew/bin/cursor-agent"]) {
+    if (existsSync(p)) return p;
+  }
+  return "cursor-agent";
+}
+
 let tmuxRunImpl = null;
 let listPanesImpl = null;
 let sessionStartImpl = null;
@@ -377,6 +386,32 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+export function persistentProviderArgv({ provider = "claude", bin, sessionId = null } = {}) {
+  if (String(provider || "claude").toLowerCase() === "cursor") return [bin, "--trust"];
+  const argv = [bin];
+  if (sessionId) argv.push("--session-id", String(sessionId));
+  return argv;
+}
+
+/** Wait until Cursor is past the workspace-trust gate. Vacilando-managed trees are trusted. */
+export async function waitForCursorReady(session, { timeoutMs = 20000, intervalMs = 400 } = {}) {
+  const started = Date.now();
+  let sentTrust = false;
+  while (Date.now() - started < timeoutMs) {
+    const pane = sessionPane(session);
+    const target = pane?.pane_id || `${session}:0.0`;
+    const cap = runTmuxSync(["capture-pane", "-p", "-J", "-t", target]);
+    const state = workspaceTrustPaneState(cap.stdout);
+    if (!state) return { ok: true, waited_ms: Date.now() - started, trusted: sentTrust };
+    if (state === "required" && !sentTrust) {
+      runTmuxSync(["send-keys", "-t", target, "a"]);
+      sentTrust = true;
+    }
+    await sleep(intervalMs);
+  }
+  return { ok: false, error: "cursor_prompt_timeout", waited_ms: Date.now() - started };
+}
+
 /** Wait until the interactive Claude TUI can accept a pasted instruction. */
 export async function waitForClaudePrompt(session, { timeoutMs = 20000, intervalMs = 400 } = {}) {
   const started = Date.now();
@@ -434,10 +469,11 @@ export async function startPersistentAgentSession({
   expectedBranch = null,
   providerSessionId = null,
   runtimeRoot = null,
+  provider = "claude",
 } = {}) {
   if (sessionStartImpl) {
     return sessionStartImpl({
-      worktreePath, worktreeName, laneName, existingTmuxSession, expectedBranch, providerSessionId, runtimeRoot,
+      worktreePath, worktreeName, laneName, existingTmuxSession, expectedBranch, providerSessionId, runtimeRoot, provider,
     });
   }
   const cwd = String(worktreePath || "");
@@ -507,12 +543,14 @@ export async function startPersistentAgentSession({
     return { ok: false, error: "tmux_cwd_mismatch", cwd: pane.cwd };
   }
 
+  const wantCursor = String(provider || "claude").toLowerCase() === "cursor";
   const claudePresent = inferClaudePresence({ command: pane.command, title: "" }) === "present";
+  const cursorPresent = /cursor-agent/i.test(String(pane.command || ""));
+  const present = wantCursor ? cursorPresent : claudePresent;
   let startedProvider = false;
-  if (!claudePresent) {
-    const claude = resolveClaudeBin();
-    const argv = [claude];
-    if (providerSessionId) argv.push("--session-id", String(providerSessionId));
+  if (!present) {
+    const bin = wantCursor ? resolveCursorBin() : resolveClaudeBin();
+    const argv = persistentProviderArgv({ provider: wantCursor ? "cursor" : "claude", bin, sessionId: providerSessionId });
     const spawn = runTmuxSync([
       "respawn-pane", "-k", "-c", cwd, "-t", pane.pane_id, "--",
       ...argv,
@@ -530,8 +568,11 @@ export async function startPersistentAgentSession({
     startedProvider = true;
   }
 
-  if (startedProvider) {
+  if (startedProvider && !wantCursor) {
     await waitForClaudePrompt(session);
+  }
+  if (wantCursor) {
+    await waitForCursorReady(session);
   }
 
   const after = sessionPane(session);

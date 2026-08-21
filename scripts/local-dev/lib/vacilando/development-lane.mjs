@@ -14,6 +14,18 @@ import { dirname, join } from "node:path";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
+export const LANE_PROVIDERS = Object.freeze(["claude", "cursor"]);
+
+export function normalizeLaneProvider(value) {
+  const p = String(value || "").toLowerCase().replace(/\s+/g, "");
+  if (p === "cursor") return "cursor";
+  if (p === "claude" || p === "claudecode" || p === "") return "claude";
+  return null;
+}
+
+export function lanePreferredProvider(rec) {
+  return normalizeLaneProvider(rec?.preferred_provider || rec?.binding?.provider) || "claude";
+}
 export const LANE_NAME_MAX = 80;
 export const IDENTITY_TMUX = "alloy-identity";
 export const IDENTITY_LANE_NAME = "Access & Identity";
@@ -154,6 +166,7 @@ export function createDurableLane({
   aliases = [],
   mission_id = null,
   origin = "adopted",
+  preferred_provider = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -196,6 +209,7 @@ export function createDurableLane({
     aliases: [...new Set((aliases || []).filter(Boolean))],
     mission_id: mission_id ? String(mission_id) : null,
     mission_bound_at: mission_id ? iso(nowMs) : null,
+    preferred_provider: normalizeLaneProvider(preferred_provider || binding?.provider) || "claude",
     binding: binding ? {
       type: "alloy_local",
       worktree_path: binding.worktree_path || null,
@@ -204,7 +218,7 @@ export function createDurableLane({
       tmux_session: binding.tmux_session || null,
       tmux_pane: binding.tmux_pane || null,
       slot: coerceSlot(binding.slot, null),
-      provider: binding.provider || "claude",
+      provider: normalizeLaneProvider(binding.provider || preferred_provider) || "claude",
     } : null,
   };
   const store = readDevelopmentLaneStore(root);
@@ -243,8 +257,9 @@ export function bindDurableLane(laneId, binding, { nowMs = Date.now(), root = ru
     slot: Object.prototype.hasOwnProperty.call(binding, "slot")
       ? coerceSlot(binding.slot, null)
       : coerceSlot(rec.binding?.slot, null),
-    provider: binding.provider || rec.binding?.provider || "claude",
+    provider: normalizeLaneProvider(binding.provider || rec.preferred_provider || rec.binding?.provider) || "claude",
   };
+  rec.preferred_provider = rec.binding.provider;
   rec.updated_at = iso(nowMs);
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -639,6 +654,20 @@ export function validateRuntimeBinding(rec, observation) {
   return { ok: blockers.length === 0, blockers, binding };
 }
 
+export function setPreferredLaneProvider(laneId, provider, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const p = normalizeLaneProvider(provider);
+  if (!p) return { ok: false, error: "unsupported_provider" };
+  rec.preferred_provider = p;
+  if (rec.binding) rec.binding = { ...rec.binding, provider: p };
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec, provider: p };
+}
+
 export function publicDurableLane(rec) {
   if (!rec) return null;
   return {
@@ -648,6 +677,7 @@ export function publicDurableLane(rec) {
     status: rec.status,
     aliases: rec.aliases || [],
     binding: rec.binding,
+    preferred_provider: lanePreferredProvider(rec),
     origin: rec.origin,
     created_at: rec.created_at,
     updated_at: rec.updated_at,

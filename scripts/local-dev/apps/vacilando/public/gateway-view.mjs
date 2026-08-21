@@ -94,9 +94,21 @@ export function gitLine(git, sourceControl) {
   return `${st} · ↑${ahead} · ↓${behind}`;
 }
 
+export function lanePreferredProvider(lane) {
+  const p = String(lane?.preferred_provider || lane?.binding?.provider || lane?.agent_session?.provider || "claude").toLowerCase();
+  return p === "cursor" ? "cursor" : "claude";
+}
+
+export function laneProviderName(lane) {
+  return lanePreferredProvider(lane) === "cursor" ? "Cursor" : "Claude";
+}
+
 export function presenceLine(lane) {
   const bits = [];
-  if (lane?.claude?.presence === "present") bits.push("Claude connected");
+  const name = laneProviderName(lane);
+  if (name && (lane?.claude?.presence === "present" || lane?.tmux?.alive || lane?.runtime === "online")) {
+    bits.push(`${name} connected`);
+  } else if (lane?.claude?.presence === "present") bits.push("Claude connected");
   else if (lane?.tmux?.alive) bits.push("Session running");
   else bits.push("Session unavailable");
   const when = ago(lane?.last_activity_ms);
@@ -105,9 +117,7 @@ export function presenceLine(lane) {
 }
 
 export function agentLabel(lane) {
-  if (lane?.claude?.presence === "present") return "Claude";
-  if (lane?.tmux?.alive) return "Session";
-  return "Offline";
+  return laneProviderName(lane) || "Claude";
 }
 
 /** Cheap summary from the existing /api/resources snapshot. Does not fetch. */
@@ -121,8 +131,11 @@ export function machineLine(res) {
   return bits.join(" · ");
 }
 
-export function buildSendBody(instruction) {
-  return { instruction: String(instruction ?? "") };
+export function buildSendBody(instruction, provider) {
+  const body = { instruction: String(instruction ?? "") };
+  const p = String(provider || "").toLowerCase();
+  if (p === "claude" || p === "cursor") body.provider = p;
+  return body;
 }
 
 export function sendPayload(laneId, instruction) {
@@ -137,10 +150,13 @@ export function deliveryNotice(result) {
     return { kind: "ok", text: "Delivered to the existing session." };
   }
   if (result?.ok && (result.status === "queued" || result.admission_queued)) {
-    if (result.session_required) {
-      return { kind: "ok", text: "Work queued. No agent session is running." };
-    }
-    return { kind: "ok", text: "Work queued. Waiting for execution capacity." };
+    const atCapacity = result.execution_run?.state_reason === "waiting_for_execution_capacity";
+    return {
+      kind: "ok",
+      text: atCapacity
+        ? "Instruction queued. Waiting for a free execution slot — Vacilando starts this automatically when another lane finishes."
+        : "Instruction queued. Starting the agent now — sending a message starts the session.",
+    };
   }
   return { kind: "err", text: deliveryErrorText(result?.error) };
 }
@@ -148,7 +164,7 @@ export function deliveryNotice(result) {
 export function deliveryErrorText(error) {
   switch (error) {
     case "current_run_active":
-      return "This lane still has an open run. If Claude already finished, close that run, then send the new instruction.";
+      return "This lane is already working. Wait until that run finishes or asks you a question. A second prompt will not interrupt it.";
     case "duplicate_send":
       return "Same instruction was just sent. Wait a moment before sending it again.";
     case "send_in_progress":
@@ -207,11 +223,18 @@ export const LANE_EXECUTION_POSTURES = Object.freeze([
 ]);
 
 function liveAgentOnLane(lane) {
-  return lane?.claude?.presence === "present" || lane?.runtime === "online";
+  return lane?.claude?.presence === "present" || lane?.runtime === "online" || Boolean(lane?.tmux?.alive && lane?.tmux?.alive !== false);
 }
 
 function laneIsBound(lane) {
   return Boolean(lane?.binding?.worktree_path || lane?.worktree?.path);
+}
+
+function queuedRunWaitingForCapacity(lane, run = lane?.execution_run) {
+  const reason = run?.state_reason;
+  if (reason === "waiting_for_execution_capacity") return true;
+  if (reason === "starting_agent_session" || reason === "waiting_for_agent_session") return false;
+  return lane?.admission?.state === "QUEUED" || run?.admission?.state === "QUEUED";
 }
 
 /**
@@ -236,11 +259,14 @@ export function deriveLaneExecutionPosture(lane) {
   const slot = lane?.slot ?? lane?.binding?.slot ?? null;
   const sess = lane?.agent_session?.state;
   const run = lane?.execution_run;
-  const queued = lane?.admission?.state === "QUEUED" || run?.admission?.state === "QUEUED";
-  const n = lane?.admission?.queue_position || run?.admission?.queue_position || null;
   const runState = run?.state || null;
+  const queued = lane?.admission?.state === "QUEUED" || run?.admission?.state === "QUEUED"
+    || (runState === "QUEUED" && !liveAgent);
+  const n = lane?.admission?.queue_position || run?.admission?.queue_position || null;
 
-  if (stored === "FINISHING") {
+  const liveWork = liveAgent
+    || ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED", "NEEDS_INPUT"].includes(runState);
+  if (stored === "FINISHING" && !liveWork && !lane?.execution_capacity?.error) {
     return {
       state: "FINISHING",
       label: "Finishing",
@@ -324,25 +350,47 @@ export function deriveLaneExecutionPosture(lane) {
     };
   }
   if (sess === "STARTING" || sess === "VERIFYING" || sess === "RESTARTING") {
+    const kickoffErr = lane?.agent_session?.last_orientation_error;
+    const stuck = Number(lane?.agent_session?.orientation_attempts || 0) >= 4;
+    const tooLarge = kickoffErr === "instruction_too_large";
     return {
       state: "STARTING",
-      label: "Starting",
+      label: stuck || kickoffErr ? "Kickoff failed" : "Starting",
       mark: "●",
-      hint: "Starting Claude",
-      headline: sess === "STARTING" ? "Starting Claude…" : "Orienting Claude…",
+      hint: tooLarge
+        ? `${agentLabel(lane)} started, but the kickoff was too long`
+        : (kickoffErr || stuck ? `${agentLabel(lane)} started, but the kickoff did not land` : `Starting ${agentLabel(lane)}`),
+      headline: tooLarge
+        ? `${agentLabel(lane)} started · kickoff too long`
+        : (kickoffErr || stuck
+          ? `${agentLabel(lane)} started · kickoff failed`
+          : (sess === "STARTING" ? `Starting ${agentLabel(lane)}…` : `Orienting ${agentLabel(lane)}…`)),
       tone: "run",
       slot,
       queue_position: null,
     };
   }
   if (queued && !liveAgent) {
+    const waitingSlot = queuedRunWaitingForCapacity(lane);
+    if (!waitingSlot) {
+      return {
+        state: "STARTING",
+        label: "Starting",
+        mark: "●",
+        hint: "Send starts the session",
+        headline: `Starting ${agentLabel(lane)}…`,
+        tone: "run",
+        slot: null,
+        queue_position: null,
+      };
+    }
     const pos = n ? ` · #${n}` : "";
     return {
       state: "QUEUED_FOR_CAPACITY",
-      label: "Queued for capacity",
+      label: "Queued — waiting to start",
       mark: "◷",
-      hint: n ? `Queued for capacity · #${n}` : "Queued for capacity",
-      headline: `Queued for capacity${pos}`,
+      hint: n ? `Instruction queued · waiting for a free slot · #${n}` : "Instruction queued · waiting for a free slot",
+      headline: `Queued — waiting to start${pos}`,
       tone: "run",
       slot: null,
       queue_position: n || null,
@@ -368,7 +416,7 @@ export function deriveLaneExecutionPosture(lane) {
       label: "Running",
       mark: "●",
       hint: executing ? "Current work executing" : "Running",
-      headline: liveAgent ? "Running · Claude connected" : "Running",
+      headline: liveAgent ? `Running · ${agentLabel(lane)} connected` : "Running",
       tone: "run",
       slot,
       queue_position: null,
@@ -488,19 +536,18 @@ export function renderLaneRuntimeControls(lane, cap) {
     </aside>`;
   }
   if (posture.state === "QUEUED_FOR_CAPACITY") {
-    const n = posture.queue_position ? ` · #${posture.queue_position}` : "";
+    const n = posture.queue_position ? ` · #${posture.queue_position} in line` : "";
     return `<aside class="gw-runtime" data-gw-runtime data-posture="QUEUED_FOR_CAPACITY">
       <div class="gw-work-h">Runtime</div>
-      <p class="gw-runtime-line">Queued for capacity${esc(n)}</p>
-      <p class="gw-runtime-d">Vacilando starts this lane when capacity is free. You do not pick a slot.</p>
+      <p class="gw-runtime-line">Instruction queued${esc(n)}</p>
+      <p class="gw-runtime-d">Vacilando starts this lane as soon as another lane finishes and frees a slot. You do not need to start a session or pick a slot.</p>
     </aside>`;
   }
   if (posture.state === "IDLE") {
     return `<aside class="gw-runtime" data-gw-runtime data-posture="IDLE">
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">Idle · No execution slot allocated</p>
-      <p class="gw-runtime-d">Start work with an instruction. Vacilando allocates capacity.</p>
-      <button type="button" class="btn primary sm" data-gw-start-work>Start work</button>
+      <p class="gw-runtime-d">Write an instruction below. Vacilando starts this when a slot is free.</p>
     </aside>`;
   }
   if (posture.state === "STARTING") {
@@ -570,15 +617,41 @@ export function outputBelongsToLane(output, selectedId, lane) {
 
 export function outputBodyText(output, outputText, { pending = false } = {}) {
   if (output?.mode === "latest_response" && output.available === false) {
-    return "Latest Claude response is not available from the session transcript.";
+    return output.fallback_from === "pane_unavailable"
+      ? "No live session, and no saved assistant reply for this worktree yet."
+      : "Latest response is not available from the session transcript.";
   }
   const raw = outputText == null ? (output?.text == null ? "" : String(output.text)) : String(outputText);
   if (!raw) {
     if (pending) return "Refreshing output…";
-    if (output?.mode === "latest_response") return "No latest Claude response in the session transcript yet.";
-    return "";
+    if (output?.mode === "latest_response") return "No latest assistant reply in the session transcript yet.";
+    if (output?.error === "pane_unavailable" || output?.ok === false) {
+      return "No live session output. Last saved reply was not available.";
+    }
+    return "No output yet.";
   }
   return raw;
+}
+
+/** Cursor workspace-trust is a TUI gate, not a question to answer in the composer. */
+export function outputWorkspaceTrustState(output) {
+  const p = output?.blocking_prompt;
+  if (p === "required" || p === "workspace_trust") return "required";
+  if (p === "in_progress" || p === "workspace_trust_progress") return "in_progress";
+  const t = String(output?.text || "");
+  if (/Trusting workspace/i.test(t)) return "in_progress";
+  if (/Workspace Trust Required/i.test(t) && /Trust this workspace/i.test(t)) return "required";
+  return null;
+}
+
+export function renderWorkspaceTrustNotice(output) {
+  const st = outputWorkspaceTrustState(output);
+  if (!st) return "";
+  return `<aside class="gw-work is-run" data-gw-work data-workspace-trust="${esc(st)}">
+    <span class="gw-work-h">Current work</span>
+    <span class="gw-work-state">Trusting workspace</span>
+    <span class="gw-work-meta">Cursor asked to trust this worktree. Vacilando accepts that automatically — do not type an answer in the box.</span>
+  </aside>`;
 }
 
 export function claudeRunStatus(lane) {
@@ -725,9 +798,10 @@ export function deriveLaneStatus({
   viewing = false,
   nowMs = Date.now(),
 } = {}) {
+  const named = laneProviderName(lane);
   const session = !lane?.tmux?.alive
     ? "unavailable"
-    : (lane.claude?.presence === "present" ? "connected" : "running");
+    : (lane.claude?.presence === "present" || named ? "connected" : "running");
 
   if (session === "unavailable") {
     const bound = Boolean(lane?.worktree?.path || lane?.binding?.worktree_path);
@@ -743,10 +817,22 @@ export function deriveLaneStatus({
     if (lane?.durable) {
       const sess = lane.agent_session?.state;
       if (sess === "STARTING") {
-        return { session: "offline", activity: "starting", attention: "none", headline: "Starting Claude…", listHint: "Starting Claude" };
+        return { session: "offline", activity: "starting", attention: "none", headline: `Starting ${agentLabel(lane)}…`, listHint: `Starting ${agentLabel(lane)}` };
       }
       if (sess === "VERIFYING" || sess === "RESTARTING") {
-        return { session: "offline", activity: "orienting", attention: "none", headline: "Orienting Claude…", listHint: "Orienting Claude" };
+        return { session: "offline", activity: "orienting", attention: "none", headline: `Orienting ${agentLabel(lane)}…`, listHint: `Orienting ${agentLabel(lane)}` };
+      }
+      const run = lane.execution_run;
+      const queued = lane.admission?.state === "QUEUED" || run?.state === "QUEUED";
+      if (queued) {
+        const n = lane.admission?.queue_position || run?.admission?.queue_position;
+        return {
+          session: "offline",
+          activity: "queued",
+          attention: "none",
+          headline: n ? `Queued — waiting to start · #${n}` : "Queued — waiting to start",
+          listHint: n ? `Instruction queued · #${n}` : "Instruction queued",
+        };
       }
       return {
         session: "offline",
@@ -785,7 +871,9 @@ export function deriveLaneStatus({
     else if (!viewed && lastInstruction && outputChangedAfterSend) attention = "new_output";
   }
 
-  const sessionLabel = session === "connected" ? "Claude connected" : "Session running";
+  const sessionLabel = session === "connected"
+    ? `${named || "Claude"} connected`
+    : "Session running";
   let headline = sessionLabel;
   if (activity === "after_instruction") {
     headline = `${sessionLabel} · activity after your instruction`;
@@ -803,15 +891,19 @@ export function deriveLaneStatus({
   return { session, activity, attention, headline, listHint };
 }
 
-export function notificationEvent({ status, viewingSelected, lastInstruction, laneLabel } = {}) {
+export function notificationEvent({ status, viewingSelected, lastInstruction, laneLabel, runState } = {}) {
   if (viewingSelected) return null;
   if (!lastInstruction) return null;
-  if (status?.attention !== "new_output" && status?.activity !== "after_instruction") return null;
+  const done = ["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(String(runState || status?.run_state || "").toUpperCase());
+  if (!done) return null;
   const label = laneLabel || "Development Lane";
+  const body = String(runState || status?.run_state || "").toUpperCase() === "NEEDS_INPUT"
+    ? "Needs your input."
+    : (String(runState || "").toUpperCase() === "FAILED" ? "Could not continue." : "Work complete and ready for review.");
   return {
     type: "lane_unseen_after_instruction",
     title: label,
-    body: "New Claude output is available.",
+    body,
   };
 }
 
@@ -1121,8 +1213,10 @@ export function renderCurrentWork(run, nowMs = Date.now()) {
             : "Waiting on Director"))
         : waiting
         ? "Waiting for resource"
-        : (run.admission?.state === "QUEUED"
-          ? (run.state_reason === "waiting_for_agent_session" ? "Work queued" : "Queued for development capacity")
+        : (run.state === "QUEUED"
+          ? (queuedRunWaitingForCapacity({ execution_run: run, admission: run.admission }, run)
+            ? "Queued — waiting to start"
+            : "Starting")
           : (executionRunListHint(run) || run.state));
   const startedMs = run.started_at ? Date.parse(run.started_at) : NaN;
   const started = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
@@ -1141,13 +1235,13 @@ export function renderCurrentWork(run, nowMs = Date.now()) {
     ? (run.governed_action?.title || wait?.summary || "Governed action requested")
     : waiting && wait?.label
     ? wait.label
-    : (run.admission?.state === "QUEUED"
-      ? (run.state_reason === "waiting_for_agent_session"
-        ? "No agent session running."
-        : "You do not need to keep this screen open.")
+    : (run.state === "QUEUED"
+      ? (queuedRunWaitingForCapacity({ execution_run: run, admission: run.admission }, run)
+        ? "Waiting for a free execution slot. Vacilando starts this automatically when another lane finishes."
+        : "Send starts the session. Vacilando is starting it now.")
       : ((ready || validating) && wait?.label ? `${wait.label}${ready ? " available" : wait?.resource_key === "runtime_timing_certification" ? " window" : ""}` : ""));
-  const queueLine = run.admission?.state === "QUEUED" && run.admission?.queue_position
-    ? `#${run.admission.queue_position} admission queue`
+  const queueLine = run.state === "QUEUED" && run.admission?.queue_position
+    ? `#${run.admission.queue_position} in line — starts when a running lane finishes`
     : waiting && wait?.queue_position && !exclusivePreparing
     ? `#${wait.queue_position} in queue`
     : (resuming ? "Resuming…" : (validating && wait?.resource_key === "runtime_timing_certification" ? "Exclusive timing window" : ""));
@@ -1176,35 +1270,57 @@ export function renderLaneSessionCallout(lane) {
   const bound = Boolean(lane.worktree?.path || lane.binding?.worktree_path);
   const sessState = lane.agent_session?.state;
   if (sessState === "STARTING") {
+    const err = lane.agent_session?.last_orientation_error;
+    const attempts = Number(lane.agent_session?.orientation_attempts || 0);
+    if (err || attempts >= 4) {
+      const tooLarge = err === "instruction_too_large";
+      return `<aside class="gw-session-callout" data-gw-session-callout data-starting-failed>
+      <div class="gw-work-h">Agent</div>
+      <p class="gw-lead">${tooLarge ? `${esc(agentLabel(lane))} started, but the kickoff was too long` : `${esc(agentLabel(lane))} started, but the kickoff did not land`}</p>
+      <p class="gw-session-callout-d">${tooLarge
+        ? "The queued instruction is too long to deliver. Send a shorter prompt — it replaces that stuck queued run."
+        : "The first instruction never reached the agent. Send your next prompt — it replaces that stuck queued run."}</p>
+    </aside>`;
+    }
     return `<aside class="gw-session-callout" data-gw-session-callout data-starting>
       <div class="gw-work-h">Agent</div>
-      <p class="gw-lead">Starting Claude…</p>
+      <p class="gw-lead">Starting ${esc(agentLabel(lane))}…</p>
     </aside>`;
   }
   if (sessState === "VERIFYING" || sessState === "RESTARTING") {
     return `<aside class="gw-session-callout" data-gw-session-callout data-orienting>
       <div class="gw-work-h">Agent</div>
-      <p class="gw-lead">Orienting Claude…</p>
+      <p class="gw-lead">Orienting ${esc(agentLabel(lane))}…</p>
     </aside>`;
   }
-  if (lane.claude?.presence === "present" || lane.runtime === "online") return "";
+  if (lane.claude?.presence === "present" || lane.runtime === "online" || (lane.tmux?.alive && laneProviderName(lane))) return "";
   if (!bound) return "";
-  if (lane.admission?.state === "QUEUED" && lane.execution_run?.state_reason === "waiting_for_execution_capacity") {
-    const n = lane.admission?.queue_position;
-    return `<aside class="gw-session-callout" data-gw-session-callout data-queued>
+  const run = lane.execution_run;
+  const queuedWaiting = lane.admission?.state === "QUEUED" || run?.state === "QUEUED" || run?.admission?.state === "QUEUED";
+  if (queuedWaiting) {
+    const waitingSlot = queuedRunWaitingForCapacity(lane, run);
+    const n = lane.admission?.queue_position || run?.admission?.queue_position;
+    if (!waitingSlot) {
+      return `<aside class="gw-session-callout" data-gw-session-callout data-starting>
       <div class="gw-work-h">Agent</div>
-      <p class="gw-lead">Queued for execution capacity</p>
-      ${n ? `<p class="gw-session-callout-d">#${n}</p>` : ""}
+      <p class="gw-lead">Starting ${esc(agentLabel(lane))}…</p>
+      <p class="gw-session-callout-d">Your instruction is queued. Sending a message starts the session — no separate start click.</p>
+    </aside>`;
+    }
+    return `<aside class="gw-session-callout" data-gw-session-callout data-queued>
+      <div class="gw-work-h">Queued</div>
+      <p class="gw-lead">Your instruction is waiting to start</p>
+      <p class="gw-session-callout-d">${n
+        ? `#${n} in line. Vacilando starts this automatically when another lane finishes and frees a slot.`
+        : "Vacilando starts this automatically when another lane finishes and frees a slot."}</p>
     </aside>`;
   }
   const title = "No agent session";
-  const detail = "Existing worktree is connected. Start a persistent Claude session to continue queued work.";
-  const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
+  const detail = "This worktree is connected. Write an instruction below — Vacilando starts the session when a slot is free.";
   return `<aside class="gw-session-callout" data-gw-session-callout>
     <div class="gw-work-h">Agent</div>
     <p class="gw-lead">${esc(title)}</p>
     <p class="gw-session-callout-d">${esc(detail)}</p>
-    ${btn}
   </aside>`;
 }
 
@@ -1258,10 +1374,10 @@ export function formatTokenCount(n) {
 }
 
 export function contextCompact(telemetry) {
+  if (!telemetry?.available) return null;
   const pct = telemetry?.context?.percent_used;
   if (Number.isFinite(pct)) return `Context ${Math.round(pct)}%`;
-  if (telemetry) return "Context unavailable";
-  return null;
+  return "Context unavailable";
 }
 
 export function contextDetailLine(telemetry) {
@@ -1381,19 +1497,29 @@ export function outputReviewHint(output) {
     if (!output.available) {
       return {
         kind: "latest_unavailable",
-        heading: "Latest Claude Response",
-        text: "Latest Claude response is not available from the session transcript. Switch back to recent terminal output.",
+        heading: "Latest response",
+        text: output.fallback_from === "pane_unavailable"
+          ? "No live session, and no saved assistant reply yet."
+          : "Latest response is not available from the session transcript. Switch back to recent terminal output if a session is running.",
         showRecent: true,
         showLatest: false,
         showExtended: true,
       };
     }
+    const fallback = output.fallback_from === "pane_unavailable";
+    const incomplete = output.incomplete === true;
     return {
-      kind: "latest",
-      heading: "Latest Claude Response",
-      text: output.truncated
-        ? "Latest Claude response (length-capped)."
-        : "Latest Claude response from the session transcript. This is the assistant message, not full terminal/tool output.",
+      kind: incomplete ? "latest_incomplete" : "latest",
+      heading: "Latest response",
+      text: incomplete
+        ? (fallback
+          ? "No live session. Last saved reply stopped while the agent was still working — there is no finished summary."
+          : "This reply stopped while the agent was still working. There is no finished summary yet.")
+        : (fallback
+          ? "No live session. Showing the last saved assistant reply."
+          : (output.truncated
+            ? "Latest response (showing the most recent part of the turn)."
+            : "Latest assistant messages from this turn, not full terminal/tool output.")),
       showRecent: true,
       showLatest: false,
       showExtended: true,
@@ -1469,17 +1595,23 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
-export function renderComposer({ disabled, notice, draft, max = LANE_INSTRUCTION_MAX, idleStart = false } = {}) {
+export function renderComposer({ disabled, notice, draft, max = LANE_INSTRUCTION_MAX, provider = "claude" } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
     : "";
-  const placeholder = idleStart ? "Start work — write an instruction…" : "Write an instruction…";
-  const sendLabel = idleStart ? "Start work" : "Send";
+  const placeholder = "Write an instruction…";
+  const sendLabel = "Send";
+  const selected = provider === "cursor" ? "cursor" : "claude";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <textarea id="gw-instruction" name="instruction" rows="3" maxlength="${max}"
       placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
     <div class="gw-composer-row">
+      <fieldset class="gw-provider" data-gw-provider>
+        <legend>Run with</legend>
+        <label class="${selected === "claude" ? "is-on" : ""}"><input type="radio" name="provider" value="claude"${selected === "claude" ? " checked" : ""} ${disabled ? "disabled" : ""}> Claude</label>
+        <label class="${selected === "cursor" ? "is-on" : ""}"><input type="radio" name="provider" value="cursor"${selected === "cursor" ? " checked" : ""} ${disabled ? "disabled" : ""}> Cursor</label>
+      </fieldset>
       <span class="gw-count" data-gw-count></span>
       <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
       <button class="btn primary gw-send" type="submit" data-gw-send ${disabled ? "disabled" : ""}>${esc(sendLabel)}</button>
@@ -1502,7 +1634,7 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
     return `<div class="gw-status-block" data-gw-agent>
     <div class="gw-status-h">Agent</div>
     <dl class="gw-kv">
-      <dt>Provider</dt><dd>Claude Code</dd>
+      <dt>Provider</dt><dd>${esc(agentLabel(extras.lane) === "Cursor" ? "Cursor" : "Claude Code")}</dd>
       <dt>Session</dt><dd>None</dd>
       <dt>Runtime</dt><dd>Offline</dd>
     </dl>
@@ -1514,13 +1646,19 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
   const token = (n) => formatTokenCount(n) || "—";
   const recommended = extras.lane?.session_rotation?.need === "recommended";
   const refresh = extras.lane?.lane_id && !rotating
-    ? `<button type="button" class="btn gw-session-refresh" data-gw-session-refresh data-lane-id="${esc(extras.lane.lane_id)}">Refresh Claude Context</button>`
+    ? `<button type="button" class="btn gw-session-refresh" data-gw-session-refresh data-lane-id="${esc(extras.lane.lane_id)}">Refresh ${esc(agentLabel(extras.lane))} Context</button>`
     : "";
+  const byProvider = economics?.by_provider || {};
+  const providerRows = Object.entries(byProvider).map(([id, row]) => {
+    const label = id === "cursor" ? "Cursor" : "Claude";
+    return `<dt>${esc(label)} sessions</dt><dd>${esc(String(row.session_count ?? 0))}</dd>`;
+  }).join("");
   const laneBlock = economics
     ? `<div class="gw-status-block" data-gw-lane-econ>
     <div class="gw-status-h">Lane</div>
     <dl class="gw-kv">
       <dt>Sessions</dt><dd>${esc(String(economics.session_count ?? "—"))}</dd>
+      ${providerRows}
       <dt>Lifetime input</dt><dd>${esc(token(economics.lifetime_usage?.input_tokens))}</dd>
       <dt>Lifetime output</dt><dd>${esc(token(economics.lifetime_usage?.output_tokens))}</dd>
       <dt>Lifetime cost</dt><dd>${esc(economics.lifetime_cost?.note || (Number.isFinite(economics.lifetime_cost?.reported_usd) ? `$${economics.lifetime_cost.reported_usd.toFixed(2)}` : "Not reported"))}</dd>
@@ -1530,8 +1668,8 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
   return `<div class="gw-status-block" data-gw-agent>
     <div class="gw-status-h">Agent</div>
     <dl class="gw-kv">
-      <dt>Provider</dt><dd>Claude Code</dd>
-      <dt>Session</dt><dd>${esc(rotating ? "Refreshing Claude context…" : sess)}</dd>
+      <dt>Provider</dt><dd>${esc(agentLabel(extras.lane) === "Cursor" ? "Cursor" : "Claude Code")}</dd>
+      <dt>Session</dt><dd>${esc(rotating ? `Refreshing ${agentLabel(extras.lane)} context…` : sess)}</dd>
       <dt>Model</dt><dd>${esc(telemetry?.agent?.model || extras.lane?.agent_session?.model || "—")}</dd>
       <dt>Context</dt><dd>${esc(ctx)}</dd>
     </dl>
@@ -1688,7 +1826,8 @@ export function renderCreateLaneFlow(create = {}) {
       <input id="gw-create-name" name="name" maxlength="80" value="${esc(create.name || "")}" placeholder="Processing" />
       <label class="gw-composer-h" for="gw-create-provider">Provider</label>
       <select id="gw-create-provider" name="provider">
-        <option value="claude" selected>Claude Code</option>
+        <option value="claude"${create.provider === "cursor" ? "" : " selected"}>Claude Code</option>
+        <option value="cursor"${create.provider === "cursor" ? " selected" : ""}>Cursor</option>
       </select>
       <label class="gw-composer-h" for="gw-create-instruction">Initial work</label>
       <textarea id="gw-create-instruction" name="instruction" rows="8" maxlength="${LANE_INSTRUCTION_MAX}" placeholder="Approved initial instruction…">${esc(create.instruction || "")}</textarea>
@@ -1900,9 +2039,12 @@ export function renderGatewayShell({
     outputText,
   });
   const hint = outputReviewHint(output);
-  const heading = hint?.heading || "Latest Claude Response";
+  const heading = hint?.heading || `Latest ${agentLabel(lane)} response`;
   const cap = deriveLaneExecutionPosture(lane);
-  const workStatus = `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
+  const trustNotice = renderWorkspaceTrustNotice(output);
+  const workStatus = trustNotice
+    ? `${trustNotice}${renderPreviousWork(lane?.previous_run)}`
+    : `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
   const bodyText = outputBodyText(output, outputText, { pending });
   return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
     ${list}
@@ -1921,7 +2063,7 @@ export function renderGatewayShell({
         </div>
         ${renderClaudeRunStatus(lane, telemetry)}
         ${renderOperatorDecisionBar(lane?.execution_run)}
-        ${renderComposer({ ...(composer || {}), idleStart: cap.state === "IDLE" })}
+        ${renderComposer({ ...(composer || {}), provider: lanePreferredProvider(lane) })}
       </div>
       <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
         <div class="gw-lane-compact">

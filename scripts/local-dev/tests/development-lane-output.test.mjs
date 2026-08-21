@@ -171,21 +171,45 @@ await test("non-development pane alloy-test is not readable through the lane API
   assert.equal(capturedTarget, null);
 });
 
-await test("dead pane produces unavailable state, not invented output", async () => {
+await test("dead pane falls back to saved transcript instead of inventing pane text", async () => {
   const stdout = paneLine({ dead: "1", pid: "", paneId: "%1" }) + "\n";
   let captured = false;
-  const out = await getLaneOutput("alloy-identity", laneOpts({
+  const missing = await getLaneOutput("alloy-identity", laneOpts({
     stdout,
     capturePane: async () => {
       captured = true;
       return { ok: true, stdout: "stale invented output" };
     },
+    extra: {
+      collectLatestResponse: () => ({ available: false, error: "transcript_missing", text: null }),
+    },
   }));
-  assert.equal(out.ok, false);
-  assert.equal(out.available, false);
-  assert.equal(out.error, "pane_unavailable");
-  assert.equal(out.text, null);
+  assert.equal(missing.ok, true);
+  assert.equal(missing.available, false);
+  assert.equal(missing.fallback_from, "pane_unavailable");
+  assert.equal(missing.text, null);
   assert.equal(captured, false);
+
+  const saved = await getLaneOutput("alloy-identity", laneOpts({
+    stdout,
+    capturePane: async () => {
+      throw new Error("must not capture a dead pane");
+    },
+    extra: {
+      collectLatestResponse: () => ({
+        available: true,
+        text: "Two real type errors. Fixing:\n\nBoth typechecks clean. Committing and opening the PR:",
+        truncated: false,
+        incomplete: true,
+      }),
+    },
+  }));
+  assert.equal(saved.ok, true);
+  assert.equal(saved.available, true);
+  assert.equal(saved.fallback_from, "pane_unavailable");
+  assert.equal(saved.incomplete, true);
+  assert.match(saved.text, /Both typechecks clean/);
+  assert.equal(saved.text.includes("stale invented"), false);
 
   const failedCapture = await getLaneOutput("alloy-identity", laneOpts({
     capturePane: async () => ({ ok: false, stdout: "", error: "can't find pane %1" }),
@@ -289,12 +313,13 @@ await test("latest Claude response is presentation-only and fails soft", async (
       }),
     },
   }));
-  assert.equal(captured, false);
+  assert.equal(captured, true);
   assert.equal(latest.ok, true);
   assert.equal(latest.mode, "latest_response");
   assert.equal(latest.source, "claude_code_session_transcript");
   assert.match(latest.text, /Grant repair/);
   assert.equal(latest.truncated, false);
+  assert.equal(latest.blocking_prompt, null);
 
   const missing = await getLaneOutput("alloy-identity", laneOpts({
     extra: {
@@ -306,6 +331,26 @@ await test("latest Claude response is presentation-only and fails soft", async (
   assert.equal(missing.available, false);
   assert.equal(missing.text, null);
   assert.equal(missing.error, "transcript_missing");
+});
+
+await test("workspace trust pane overrides latest response so the operator is not asked to type an answer", async () => {
+  const out = await getLaneOutput("alloy-identity", laneOpts({
+    capturePane: async () => ({
+      ok: true,
+      stdout: "⚠ Workspace Trust Required\n[a] Trust this workspace\n[q] Quit\n",
+    }),
+    extra: {
+      mode: "latest_response",
+      collectLatestResponse: () => ({
+        available: true,
+        text: "stale assistant text",
+        truncated: false,
+      }),
+    },
+  }));
+  assert.equal(out.blocking_prompt, "required");
+  assert.match(out.text, /Workspace Trust Required/);
+  assert.equal(out.text.includes("stale assistant text"), false);
 });
 
 await test("pane facts parse alternate-screen empty history", () => {

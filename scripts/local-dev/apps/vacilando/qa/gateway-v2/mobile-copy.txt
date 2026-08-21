@@ -1,0 +1,47 @@
+  non-interactive operator exists
+  (qa.operator@northwind.invalid), so no human sign-in
+  was ever required. Checking which stack it targets  
+  and port availability.                              
+                                                    
+  Ran 1 shell command                                 
+                                                      
+⏺ Two constraints surface: the cert stack is the
+  shared alloy-cert (another session holds its lease),
+  and port 3011 is occupied. Identifying my slot's    
+  port and who owns 3011.                             
+                                                      
+  Ran 1 shell command 
+                                                      
+⏺ Key finding — the prior blocker was not solely 
+  command approval. This worktree isn't in the slot   
+  registry at all:                                    
+                                                  
+  Ran 2 shell commands                                
+                                                      
+⏺ Surface inventory established: 3 legacy authority
+  surfaces remain (the 4th adminV2 alias was already
+  deleted by W-51), customer-person-roles is the    
+  different concept the plan says to leave, and       
+  exactly one component already renders the grid. Now
+  the Tier D check — starting with a read-only status.
+                                                      
+  Ran 1 shell command                                 
+                                                   
+⏺ Stack ready with the seeded operator. Writing env
+  and serving on the free port 3014.                  
+                                                      
+  Running 2 shell commands · 2m 52s…
+  ⎿  $ cd /Users/Kelly/Code/alloy-worktrees/wt1-access
+     -identity-v2; CERT_APP_PORT=3014                 
+     certification/alloy-certify serve 2>&1 | tail    
+     -15; echo "SERVE_EXIT=$?" (2m 48s)               
+     (ctrl+b ctrl+b (twice) to run in background)     
+                                                      
+· Determining… (5m 54s · ↓ 6.8k tokens)               
+  ⎿  Tip: Use /btw to ask a quick side question 
+     without interrupting Claude's current work       
+                                           
+──────────────────────────────── Access Identity V2 ──
+❯                                                     
+──────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · esc to inte…

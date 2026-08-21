@@ -1,0 +1,160 @@
+Vacilando
+DEVELOPMENT GATEWAY
+DEVELOPMENT LANES
+Access & Identity
+Claude · Context 33%
+● Executing
+Billing
+Idle
+○ Idle
+Communications
+Running · Claude
+● Running
+Lifecycle Cert
+Queued for capacity
+◷ Idle
+Processing
+Queued for capacity
+◷ Idle
+More
+A
+Settings
+Admin
+Lane
+Search…
+Improve Vacilando
+↻ Refresh
+Polling
+CURRENT WORK
+Executing
+Continue Access & Identity V2 — Q15 real-tenant authority census, then W-15/W-20.
+Started 21m ago
+governed_action_complete
+LATEST CLAUDE RESPONSE
+Copy
+
+Latest Claude response from the session transcript. This is the assistant message, not full terminal/tool output.
+
+Load more
+Recent output
+Now consuming the census that arrived.
+Claude is running
+Claude session refresh failed
+INSTRUCTION 
+0 characters
+Enter to send · Shift+Enter for a new line
+Send
+Access & Identity
+
+Running · Claude connected
+
+Context 33%
+
+Rename Lane
+Notify
+RUNTIME
+
+Running · Claude connected · Slot 1
+
+Release execution capacity
+RECENT SYSTEM ACTIVITY
+Claude session refresh failed
+Claude session refresh failed
+Claude session refresh failed
+YOUR LAST INSTRUCTION
+OD-8 is approved.
+
+## Decision
+
+**Access is the canonical home for capability configuration.**
+
+Capabilities are configured and understood centrally through the Access product.
+
+Individual operational/configuration surfaces **consume effective capability authority** to determine visibility and permitted behavior, but they do not independently own or redefine capability configuration.
+
+Do not distribute capability configuration across Enrollment, Communications, Roster, Processing, Billing, Settings subsections, or other individual product surfaces.
+
+This preserves the accepted four-layer Access model:
+
+1. Membership
+2. Role
+3. Capability
+4. Scope
+
+and keeps authorization configuration understandable from one canonical Access product.
+
+## Important distinction
+
+This does **not** mean Access owns the business capability itself.
+
+The platform/domain still owns what a capability means and server enforcement remains authoritative.
+
+Access owns the operator experience for:
+
+* assigning roles;
+* understanding role capability grants;
+* configuring permitted capability grants where tenant configuration allows it;
+* understanding effective scope;
+* explaining effective access.
+
+Operational surfaces consume that authority.
+
+Surface visibility remains a projection of capability authority — never the enforcement mechanism itself.
+
+## Resume the Access & Identity V2 program
+
+Reconcile current HEAD and the plan after this decision.
+
+OD-8 should unlock W-57 and downstream W-17. Verify that from current evidence rather than assuming it.
+
+Then autonomously execute **all work made READY by OD-8**, beginning with the role/access editor convergence.
+
+Do not wait for Q15.
+
+Q15/W-15/W-20 remain a separate dependency lane currently blocked on the Vacilando trusted-host handoff. Track them as blocked, but continue the OD-8-released product work independently.
+
+## Product objective
+
+Move `/organization/access` from a truthful-but-still-technical authority surface toward the **premium operator-facing Access product originally intended**.
+
+Do not create a new route or separate Identity application.
+
+The existing `/organization/access` product should converge around the four-layer mental model.
+
+The operator should be able to answer:
+
+* Who has access?
+* What role do they have?
+* What can that role do?
+* Where does that authority apply?
+* Why does this user have this access?
+
+without understanding database tables, permission keys, resolver internals, or legacy authority stores.
+
+## Role editor
+
+The Role editor should become meaning-first rather than a raw permission-key matrix.
+
+A role should read like an understandable responsibility bundle.
+
+For example:
+
+**Center Director**
+
+Access
+
+* Enrollment — Manage
+* Communications — Manage
+* Attendance — Manage
+* Roster — Manage
+* Records — Manage
+* Configuration — Limited
+
+Scope default
+
+* Assigned locations
+
+Administrative authority
+
+* Manage users: No
+* Ma

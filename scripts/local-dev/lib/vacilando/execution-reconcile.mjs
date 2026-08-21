@@ -249,6 +249,15 @@ export async function reconcileGovernor({
   } catch { /* stale-run pass must not fail resource reconcile */ }
 
   try {
+    const { releaseIdleCapacityForQueuedWork } = await import("./lane-execution-capacity.mjs");
+    const released = await releaseIdleCapacityForQueuedWork({ root, nowMs });
+    if (released?.released > 0) {
+      summary.repaired += released.released;
+      summary.actions.push("idle_capacity_cycle");
+    }
+  } catch { /* idle release must not fail the resource pass */ }
+
+  try {
     const { evaluateAdmissionQueue } = await import("./execution-admission.mjs");
     const admitted = await evaluateAdmissionQueue({ root, nowMs });
     if (admitted?.admitted > 0) summary.repaired += admitted.admitted;

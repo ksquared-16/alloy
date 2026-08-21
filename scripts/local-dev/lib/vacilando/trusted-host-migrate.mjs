@@ -482,14 +482,128 @@ export function ledgerLookupSql(version) {
   return `SELECT version FROM supabase_migrations.schema_migrations WHERE version = '${v}';`;
 }
 
+export function ledgerInsertSql(version, name = "") {
+  const v = String(version || "").replace(/'/g, "");
+  const n = String(name || "").replace(/'/g, "''").slice(0, 200);
+  return `INSERT INTO supabase_migrations.schema_migrations (version, name)
+SELECT '${v}', '${n}'
+WHERE NOT EXISTS (
+  SELECT 1 FROM supabase_migrations.schema_migrations WHERE version = '${v}'
+);`;
+}
+
+export const ACCESS_IDENTITY_INVARIANTS = Object.freeze({
+  "20260818220000": `SELECT CASE WHEN EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='action_links' AND column_name='token_hash'
+    ) AND NOT EXISTS (SELECT 1 FROM public.action_links WHERE token_hash IS NULL)
+    THEN 'pass' ELSE 'fail' END;`,
+  "20260818230000": `SELECT CASE WHEN NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='action_links' AND column_name='token'
+    ) THEN 'pass' ELSE 'fail' END;`,
+  "20260818240000": `SELECT CASE WHEN NOT EXISTS (
+      SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public' AND c.relkind='v' AND c.relname IN ('permissions','permission_keys')
+    ) THEN 'pass' ELSE 'fail' END;`,
+  "20260819120000": `SELECT CASE WHEN NOT EXISTS (
+      SELECT 1 FROM public.role_definitions rd
+      WHERE rd.role_key='ops' AND NOT EXISTS (
+        SELECT 1 FROM public.role_permission_grants g
+        WHERE g.org_id=rd.org_id AND g.role_key='ops' AND g.permission_key='reports.read' AND g.allowed
+      )
+    ) THEN 'pass' ELSE 'fail' END;`,
+  "20260819140000": `SELECT CASE WHEN NOT EXISTS (
+      SELECT 1 FROM public.role_definitions rd
+      WHERE rd.role_key='ops' AND NOT EXISTS (
+        SELECT 1 FROM public.role_permission_grants g
+        WHERE g.org_id=rd.org_id AND g.role_key='ops' AND g.permission_key='settings.users_roles.read' AND g.allowed
+      )
+    ) THEN 'pass' ELSE 'fail' END;`,
+  "20260820130000": `SELECT CASE WHEN EXISTS (
+      SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname='replace_role_permission_grants'
+    ) THEN 'pass' ELSE 'fail' END;`,
+  "20260820140000": `SELECT CASE WHEN EXISTS (
+      SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+      WHERE n.nspname='public' AND p.proname='save_role_definition_and_grants'
+    ) THEN 'pass' ELSE 'fail' END;`,
+});
+
+function notAttemptedTail(migrations, fromIndex) {
+  return migrations.slice(fromIndex).map((entry) => ({
+    ok: false,
+    version: entry.version,
+    path: entry.path,
+    status: "not_attempted",
+    code: "not_attempted",
+    detail: "Not attempted because a prior migration in this batch failed.",
+    ledger: null,
+  }));
+}
+
+function evidenceFor(entry, sha, extra = {}) {
+  return {
+    version: entry.version,
+    path: entry.path,
+    source_sha: sha || null,
+    file_sha: entry.fileSha || extra.fileSha || null,
+    started_at: extra.started_at || null,
+    outcome: extra.outcome || extra.status || null,
+    status: extra.status || extra.outcome || null,
+    stdout_ref: extra.stdout_ref || extra.stdout || extra.outText || null,
+    stderr_ref: extra.stderr_ref || extra.stderr || extra.errText || extra.detail || null,
+    ledger_before: extra.ledger_before ?? extra.ledgerBefore ?? null,
+    ledger_after: extra.ledger_after ?? extra.ledgerAfter ?? extra.ledger ?? null,
+    invariant: extra.invariant || null,
+  };
+}
+
+function pushNotAttemptedEvidence(evidence, migrations, fromIndex, sha) {
+  for (const rest of migrations.slice(fromIndex)) {
+    evidence.push(evidenceFor(rest, sha, { status: "not_attempted", outcome: "not_attempted" }));
+  }
+}
+
+export function requireMigrationEvidence(result) {
+  const evidence = result?.evidence;
+  if (!Array.isArray(evidence) || evidence.length === 0) {
+    return { ok: false, code: "evidence_missing", detail: "Privileged migration apply cannot complete without per-migration evidence." };
+  }
+  const versions = (result.results || []).map((r) => r.version);
+  for (const v of versions) {
+    if (!evidence.some((e) => e.version === v)) {
+      return { ok: false, code: "evidence_missing", detail: `Missing evidence for migration ${v}.` };
+    }
+  }
+  return { ok: true };
+}
+
 export function applyMigrationBatch(normalized, {
   inspectLedger = null,
   applyFile = null,
   readContent = readMigrationContent,
+  verifyInvariant = null,
+  recordLedger = null,
   nowMs = Date.now(),
 } = {}) {
   const results = [];
-  for (const entry of normalized.migrations) {
+  const evidence = [];
+  const migrations = normalized.migrations || [];
+  const sha = normalized.expectedSha;
+
+  function stop(payload) {
+    return {
+      ...payload,
+      evidence,
+      credentialsExposed: false,
+      artifactSource: "git_object",
+    };
+  }
+
+  for (let i = 0; i < migrations.length; i++) {
+    const entry = migrations[i];
+    const startedAt = new Date(nowMs).toISOString();
     const latest = readContent({
       root: normalized.worktreePath,
       sha: normalized.expectedSha,
@@ -498,43 +612,85 @@ export function applyMigrationBatch(normalized, {
       currentStagingSha: normalized.stagingSha,
     });
     if (!latest.ok) {
-      results.push({ ok: false, version: entry.version, path: entry.path, code: latest.code, detail: latest.detail });
-      return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      results.push({ ok: false, version: entry.version, path: entry.path, status: "failed", code: latest.code, detail: latest.detail });
+      evidence.push(evidenceFor(entry, sha, { started_at: startedAt, status: "failed", detail: latest.detail, ledger_before: false }));
+      results.push(...notAttemptedTail(migrations, i + 1));
+      pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+      return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
     }
     if (sha256(latest.text) !== entry.fileSha) {
       results.push({
         ok: false,
         version: entry.version,
         path: entry.path,
+        status: "failed",
         code: "artifact_hash_mismatch",
         detail: "Committed migration blob does not match the approved artifact hash.",
       });
-      return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      evidence.push(evidenceFor(entry, sha, { started_at: startedAt, status: "failed", fileSha: entry.fileSha, ledger_before: false }));
+      results.push(...notAttemptedTail(migrations, i + 1));
+      pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+      return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
     }
     const ledger = inspectLedger
       ? inspectLedger({ version: entry.version, environment: normalized.environment })
       : { applied: false };
+    const ledgerBefore = Boolean(ledger?.applied);
     if (ledger?.ok === false) {
       results.push({
         ok: false,
         version: entry.version,
         path: entry.path,
+        status: "failed",
         code: ledger.code || "preflight_failed",
         detail: ledger.detail || "Migration preflight failed.",
       });
-      return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      evidence.push(evidenceFor(entry, sha, { started_at: startedAt, status: "failed", detail: ledger.detail, ledger_before: ledgerBefore }));
+      results.push(...notAttemptedTail(migrations, i + 1));
+      pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+      return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
     }
     if (ledger?.inconsistent) {
       results.push({
         ok: false,
         version: entry.version,
         path: entry.path,
+        status: "failed",
         code: "ledger_mismatch",
         detail: ledger.detail || "Ledger says applied but schema evidence is inconsistent.",
       });
-      return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      evidence.push(evidenceFor(entry, sha, { started_at: startedAt, status: "failed", ledger_before: ledgerBefore, invariant: "fail" }));
+      results.push(...notAttemptedTail(migrations, i + 1));
+      pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+      return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
     }
     if (ledger?.applied) {
+      let invariant = null;
+      if (typeof verifyInvariant === "function") {
+        const inv = verifyInvariant({ version: entry.version, environment: normalized.environment });
+        invariant = inv?.pass ? "pass" : "fail";
+        if (inv && inv.ok === false) {
+          results.push({
+            ok: false,
+            version: entry.version,
+            path: entry.path,
+            status: "failed",
+            code: "ledger_inconsistent",
+            detail: inv.detail || "Ledger row exists but the migration invariant does not hold.",
+          });
+          evidence.push(evidenceFor(entry, sha, {
+            started_at: startedAt,
+            status: "failed",
+            ledger_before: true,
+            ledger_after: true,
+            invariant,
+            detail: inv.detail,
+          }));
+          results.push(...notAttemptedTail(migrations, i + 1));
+          pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+          return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
+        }
+      }
       results.push({
         ok: true,
         idempotent: true,
@@ -542,8 +698,17 @@ export function applyMigrationBatch(normalized, {
         path: entry.path,
         environment: normalized.environment,
         ledger: "applied",
+        status: "already_applied",
         applied_at: new Date(nowMs).toISOString(),
       });
+      evidence.push(evidenceFor(entry, sha, {
+        started_at: startedAt,
+        status: "already_applied",
+        outcome: "already_applied",
+        ledger_before: true,
+        ledger_after: true,
+        invariant,
+      }));
       continue;
     }
     const applied = applyFile
@@ -559,10 +724,75 @@ export function applyMigrationBatch(normalized, {
         ok: false,
         version: entry.version,
         path: entry.path,
+        status: "failed",
         code: applied?.code || "apply_failed",
         detail: applied?.detail || "Migration apply failed",
       });
-      return { ok: false, stopped: true, environment: normalized.environment, expectedSha: normalized.expectedSha, results };
+      evidence.push(evidenceFor(entry, sha, {
+        started_at: startedAt,
+        status: "failed",
+        outcome: "failed",
+        ledger_before: ledgerBefore,
+        ledger_after: false,
+        stderr: applied?.detail,
+        stdout: applied?.stdout,
+      }));
+      results.push(...notAttemptedTail(migrations, i + 1));
+      pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+      return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
+    }
+    if (typeof recordLedger === "function") {
+      const recorded = recordLedger({
+        version: entry.version,
+        name: entry.filename || entry.path,
+        environment: normalized.environment,
+      });
+      if (recorded?.ok === false) {
+        results.push({
+          ok: false,
+          version: entry.version,
+          path: entry.path,
+          status: "failed",
+          code: "ledger_write_failed",
+          detail: recorded.detail || "Migration executed but ledger write failed.",
+        });
+        evidence.push(evidenceFor(entry, sha, {
+          started_at: startedAt,
+          status: "failed",
+          ledger_before: false,
+          ledger_after: false,
+          detail: recorded.detail,
+        }));
+        results.push(...notAttemptedTail(migrations, i + 1));
+        pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+        return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
+      }
+    }
+    let invariant = null;
+    if (typeof verifyInvariant === "function") {
+      const inv = verifyInvariant({ version: entry.version, environment: normalized.environment });
+      invariant = inv?.pass ? "pass" : (inv ? "fail" : null);
+      if (inv && inv.ok === false) {
+        results.push({
+          ok: false,
+          version: entry.version,
+          path: entry.path,
+          status: "failed",
+          code: "invariant_failed",
+          detail: inv.detail || "Migration executed but post-apply invariant failed.",
+        });
+        evidence.push(evidenceFor(entry, sha, {
+          started_at: startedAt,
+          status: "failed",
+          ledger_before: false,
+          ledger_after: true,
+          invariant,
+          detail: inv.detail,
+        }));
+        results.push(...notAttemptedTail(migrations, i + 1));
+        pushNotAttemptedEvidence(evidence, migrations, i + 1, sha);
+        return stop({ ok: false, stopped: true, environment: normalized.environment, expectedSha: sha, results });
+      }
     }
     results.push({
       ok: true,
@@ -571,18 +801,32 @@ export function applyMigrationBatch(normalized, {
       path: entry.path,
       environment: normalized.environment,
       ledger: applied.ledger || "applied",
+      status: applied.idempotent ? "already_applied" : "applied",
       applied_at: new Date(nowMs).toISOString(),
     });
+    evidence.push(evidenceFor(entry, sha, {
+      started_at: startedAt,
+      status: applied.idempotent ? "already_applied" : "applied",
+      outcome: applied.idempotent ? "already_applied" : "applied",
+      ledger_before: false,
+      ledger_after: true,
+      stdout: applied.stdout,
+      invariant,
+    }));
   }
-  return {
+  const result = {
     ok: true,
     stopped: false,
     environment: normalized.environment,
-    expectedSha: normalized.expectedSha,
+    expectedSha: sha,
     results,
+    evidence,
     credentialsExposed: false,
     artifactSource: "git_object",
   };
+  const gate = requireMigrationEvidence(result);
+  if (!gate.ok) return stop({ ...result, ok: false, code: gate.code, detail: gate.detail });
+  return result;
 }
 
 export function publicMigrationResult(result) {
@@ -592,15 +836,20 @@ export function publicMigrationResult(result) {
     expected_sha: result.expectedSha,
     stopped: Boolean(result.stopped),
     artifact_source: result.artifactSource || "git_object",
+    ok: result.ok !== false,
+    code: result.code || null,
+    detail: result.detail || null,
     migrations: (result.results || []).map((r) => ({
       version: r.version,
       path: r.path,
       ok: r.ok,
       idempotent: Boolean(r.idempotent),
       ledger: r.ledger || null,
+      status: r.status || null,
       code: r.code || null,
       detail: r.detail || null,
       applied_at: r.applied_at || null,
     })),
+    evidence: result.evidence || [],
   };
 }

@@ -7,6 +7,8 @@
  * (evidence retained). Duplicate / in-progress refusals happen before create.
  *
  * One active non-terminal run per lane. NEEDS_INPUT continues the same run.
+ * An undelivered QUEUED run (never started) is replaced by a new operator send —
+ * it must not permanently refuse the composer.
  */
 import { afterLaneInstructionDelivered } from "./lane-notify.mjs";
 import {
@@ -33,7 +35,7 @@ function decorate(out, run, extra = {}) {
 export function laneInstructionHttpStatus(out) {
   if (out?.ok) return 200;
   const e = out?.error;
-  if (e === "invalid_lane_id" || e === "instruction_empty" || e === "instruction_too_large" || e === "unexpected_control_field" || e === "missing_lane_id") return 400;
+  if (e === "invalid_lane_id" || e === "instruction_empty" || e === "instruction_too_large" || e === "unexpected_control_field" || e === "missing_lane_id" || e === "unsupported_provider") return 400;
   if (e === "send_in_progress" || e === "duplicate_send" || e === "current_run_active") return 409;
   if (e === "pane_unavailable" || e === "target_mismatch" || e === "delivery_failed") return 503;
   return 404;
@@ -45,10 +47,13 @@ function bindingExists(rec) {
 
 async function laneHasEligibleSession(laneId) {
   try {
-    const { getDevelopmentLane } = await import("./lanes.mjs");
-    const { laneClaudePresent } = await import("./agent-session-lifecycle.mjs");
+    const { getDevelopmentLane, inferLiveProvider } = await import("./lanes.mjs");
+    const { lanePreferredProvider } = await import("./development-lane.mjs");
     const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
-    return Boolean(found?.ok && laneClaudePresent(found.lane));
+    if (!found?.ok) return false;
+    const preferred = lanePreferredProvider(found.lane);
+    const live = inferLiveProvider(found.lane?.tmux || {});
+    return live === preferred;
   } catch {
     return false;
   }
@@ -56,7 +61,11 @@ async function laneHasEligibleSession(laneId) {
 
 async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason }) {
   const { createAdmissionRequest, evaluateAdmissionQueue } = await import("./execution-admission.mjs");
-  createAdmissionRequest({ laneId: rec.lane_id, runId: run.run_id, nowMs, root });
+  createAdmissionRequest({ laneId: rec.lane_id, runId: run.run_id, provider: rec.preferred_provider || rec.binding?.provider || "claude", nowMs, root });
+  try {
+    const { releaseIdleCapacityForQueuedWork } = await import("./lane-execution-capacity.mjs");
+    await releaseIdleCapacityForQueuedWork({ root, nowMs });
+  } catch { /* stay queued if release is unsafe */ }
   try { await evaluateAdmissionQueue({ root, nowMs }); } catch { /* stay queued */ }
   try {
     const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
@@ -70,7 +79,7 @@ async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reas
       instruction_size: size,
       delivered_at: null,
       admission_queued: true,
-      session_required: reason === "waiting_for_agent_session",
+      session_required: reason === "waiting_for_agent_session" || reason === "starting_agent_session",
     }, getExecutionRun(run.run_id, root) || run);
   } catch {
     return decorate({
@@ -82,9 +91,31 @@ async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reas
       instruction_size: size,
       delivered_at: null,
       admission_queued: true,
-      session_required: reason === "waiting_for_agent_session",
+      session_required: reason === "waiting_for_agent_session" || reason === "starting_agent_session",
     }, run);
   }
+}
+
+function isUndeliveredQueuedRun(run) {
+  return Boolean(run && run.state === "QUEUED" && !run.started_at);
+}
+
+function instructionsMatch(a, b) {
+  return String(a ?? "").trim() === String(b ?? "").trim();
+}
+
+function queuedAck(laneId, size, run, extra = {}) {
+  return decorate({
+    ok: true,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: laneId,
+    status: "queued",
+    error: null,
+    instruction_size: size,
+    delivered_at: null,
+    admission_queued: true,
+    session_required: true,
+  }, run, extra);
 }
 
 function refused(laneId, error, nowMs, size, run = null) {
@@ -103,6 +134,7 @@ function refused(laneId, error, nowMs, size, run = null) {
 /**
  * Gateway / API entry. One active non-terminal run per lane.
  * NEEDS_INPUT: operator send continues the same run (decision reply).
+ * Undelivered QUEUED: same text retries delivery; a new text supersedes.
  * Other non-terminal states: refuse current_run_active.
  */
 export async function deliverManagedLaneInstruction(laneId, instruction, opts = {}) {
@@ -118,7 +150,44 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     staleClosed = Boolean(rec.stale_run_closed);
   } catch { /* send still proceeds; active-run check below is authoritative */ }
 
-  const active = activeRunForLane(laneId, root);
+  if (opts.provider) {
+    try {
+      const { setPreferredLaneProvider, normalizeLaneProvider } = await import("./development-lane.mjs");
+      const p = normalizeLaneProvider(opts.provider);
+      if (!p) return refused(laneId, "unsupported_provider", nowMs, size);
+      setPreferredLaneProvider(laneId, p, { nowMs, root });
+    } catch { /* preference persist is best-effort; send still uses stored provider */ }
+  }
+
+  let active = activeRunForLane(laneId, root);
+  if (isUndeliveredQueuedRun(active)) {
+    if (instructionsMatch(active.instruction, text)) {
+      const retried = await deliverExistingQueuedRun(active.run_id, {
+        ...opts,
+        nowMs,
+        sendLaneInstruction: send,
+      });
+      const run = retried.execution_run || retried.run || activeRunForLane(laneId, root) || active;
+      if (retried.ok && (retried.status === "delivered" || retried.already_delivered)) {
+        return decorate(retried, run, { stale_run_closed: staleClosed });
+      }
+      if (retried.ok || retried.deferred) {
+        return queuedAck(laneId, size, run, { stale_run_closed: staleClosed });
+      }
+    }
+    const closed = transitionExecutionRun(active.run_id, "ABANDONED", {
+      reason: "superseded_by_operator_send",
+      origin: "operator",
+      nowMs,
+      root,
+      completion_report: {
+        summary: "Abandoned: operator sent a new instruction before this queued run reached the agent.",
+      },
+    });
+    if (!closed.ok) return refused(laneId, closed.error || "current_run_active", nowMs, size, active);
+    staleClosed = true;
+    active = activeRunForLane(laneId, root);
+  }
   if (active && active.state !== "NEEDS_INPUT") {
     return refused(laneId, "current_run_active", nowMs, size, active);
   }
@@ -179,13 +248,36 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
 
   let run = created.run;
   try {
-    const { getDurableLane } = await import("./development-lane.mjs");
+    const { getDurableLane, setDurableLaneExecutionCapacity } = await import("./development-lane.mjs");
     const rec = getDurableLane(laneId, root);
+    if (rec?.execution_capacity?.state === "FINISHING") {
+      setDurableLaneExecutionCapacity(rec.lane_id, { state: "RUNNING" }, { nowMs, root });
+    }
     if (rec) {
-      const eligible = await laneHasEligibleSession(rec.lane_id);
-      if (!eligible) {
-        const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
-        return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+      let eligible = await laneHasEligibleSession(rec.lane_id);
+      if (!eligible && bindingExists(rec)) {
+        try {
+          const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+          const started = await startLaneAgentSession({ laneId: rec.lane_id, nowMs, root });
+          eligible = await laneHasEligibleSession(rec.lane_id);
+          if (!eligible && (started?.adopted || started?.error === "agent_already_running")) {
+            eligible = true;
+          }
+          if (!eligible) {
+            const reason = started?.queued
+              ? "waiting_for_execution_capacity"
+              : (started?.ok ? "starting_agent_session" : "waiting_for_agent_session");
+            return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
+          }
+        } catch {
+          return queueWithoutImmediateDelivery({
+            rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+          });
+        }
+      } else if (!eligible) {
+        return queueWithoutImmediateDelivery({
+          rec, run, nowMs, root, size, reason: "waiting_for_execution_capacity",
+        });
       }
     }
   } catch { /* fall through to live send */ }
@@ -255,15 +347,22 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     return { ok: true, already_delivered: true, run };
   }
   if (run.state !== "QUEUED") return { ok: false, error: "not_queued", run };
+  let cursorSessionId = null;
+  let markActive = null;
   try {
-    const { activeAgentSessionForLane } = await import("./agent-session.mjs");
-    const session = activeAgentSessionForLane(run.lane_id, root);
-    if (session && ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"].includes(session.state)) {
-      return { ok: false, deferred: true, error: "session_not_oriented", run };
+    const sessionApi = await import("./agent-session.mjs");
+    const session = sessionApi.activeAgentSessionForLane(run.lane_id, root);
+    const cursorSession = (session?.provider || run.provider) === "cursor";
+    if (!cursorSession) {
+      if (session && ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"].includes(session.state)) {
+        return { ok: false, deferred: true, error: "session_not_oriented", run };
+      }
+      if (run.state_reason === "waiting_for_agent_session" && session && !session.oriented_at) {
+        return { ok: false, deferred: true, error: "session_not_oriented", run };
+      }
     }
-    if (run.state_reason === "waiting_for_agent_session" && session && !session.oriented_at) {
-      return { ok: false, deferred: true, error: "session_not_oriented", run };
-    }
+    cursorSessionId = cursorSession && session ? session.agent_session_id : null;
+    markActive = sessionApi.markAgentSessionActive;
   } catch { /* deliver if session store is unavailable */ }
   const send = opts.sendLaneInstruction || sendLaneInstruction;
   const out = await send(run.lane_id, executionEnvelope(run.run_id, run.instruction, { laneId: run.lane_id }), {
@@ -272,6 +371,11 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     dedupeKey: `admission:${run.run_id}`,
   });
   if (out.ok && out.status === "delivered") {
+    if (cursorSessionId && markActive) {
+      try {
+        markActive(cursorSessionId, { root, orientedAt: new Date(nowMs).toISOString() });
+      } catch { /* session bookkeeping must not block delivery */ }
+    }
     const exec = transitionExecutionRun(run.run_id, "EXECUTING", {
       reason: "admission_delivered",
       origin: "governor",

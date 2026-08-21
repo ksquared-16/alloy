@@ -52,6 +52,7 @@ import {
   presenceLine,
   railHtml,
   renderConnectFlow,
+  renderComposer,
   renderCreateLaneFlow,
   renderCopyControl,
   renderGatewayShell,
@@ -66,6 +67,7 @@ import {
   renderDevelopmentResources,
   renderOutput,
   outputReviewHint,
+  outputWorkspaceTrustState,
   renderOutputChrome,
   renderRecentSystemActivity,
   renderStatus,
@@ -198,16 +200,18 @@ await test("no fake chat parsing of TUI chrome", () => {
   assert.match(html, /<pre class="gw-output"/);
 });
 
-await test("composer send payload is only lane_id + instruction", () => {
+await test("composer send payload is instruction plus optional provider", () => {
   const body = buildSendBody("hello `code`; $HOME");
   assert.deepEqual(Object.keys(body), ["instruction"]);
+  assert.deepEqual(buildSendBody("go", "cursor"), { instruction: "go", provider: "cursor" });
+  assert.deepEqual(buildSendBody("go", "claude"), { instruction: "go", provider: "claude" });
   const payload = sendPayload("alloy-identity", "hello `code`; $HOME");
   assert.deepEqual(Object.keys(payload).sort(), ["instruction", "lane_id"]);
   assert.equal(payload.lane_id, "alloy-identity");
   assert.equal("session" in payload, false);
   assert.equal("pane" in payload, false);
   assert.equal("target" in payload, false);
-  assert.match(gwSrc, /buildSendBody\(instruction\)/);
+  assert.match(gwSrc, /buildSendBody\(instruction, selectedProvider\(\)\)/);
   assert.equal(gwSrc.includes("send-keys"), false);
 });
 
@@ -481,11 +485,17 @@ await test("viewed / new-output attention behaves correctly", () => {
     viewingSelected: false,
     lastInstruction: { instruction: "x", status: "delivered" },
     laneLabel: "Access Identity V2",
+    runState: "COMPLETE",
   });
   assert.equal(ev.type, "lane_unseen_after_instruction");
-  assert.equal(ev.body, "New Claude output is available.");
+  assert.equal(ev.body, "Work complete and ready for review.");
   assert.equal(ev.title, "Access Identity V2");
-  assert.equal(notificationEvent({ status: unseen, viewingSelected: true, lastInstruction: { instruction: "x" } }), null);
+  assert.equal(notificationEvent({ status: unseen, viewingSelected: true, lastInstruction: { instruction: "x" }, runState: "COMPLETE" }), null);
+  assert.equal(notificationEvent({
+    status: unseen,
+    viewingSelected: false,
+    lastInstruction: { instruction: "x" },
+  }), null);
 });
 
 await test("Development Status collapse/expand and mobile compact default", () => {
@@ -1031,7 +1041,7 @@ await test("lane list shows compact recovering posture and recent system activit
 });
 
 await test("current-run-active refusal is understandable; no fake progress percentages", () => {
-  assert.match(deliveryErrorText("current_run_active"), /still has an open run/);
+  assert.match(deliveryErrorText("current_run_active"), /already working/);
   assert.match(css, /\.gw-work\.is-needs/);
   assert.match(css, /\.gw-work-text\{[^}]*text-overflow:ellipsis/);
   assert.equal(viewSrc.includes("percent_complete"), false);
@@ -1230,10 +1240,29 @@ await test("Create New Lane form has no substrate fields", () => {
   assert.match(html, /New Development Lane/);
   assert.match(html, /Initial work/);
   assert.match(html, /Claude Code/);
+  assert.match(html, /<option value="cursor"/);
   assert.equal(html.includes("worktree"), false);
   assert.equal(html.includes("tmux"), false);
   assert.equal(html.includes("slot"), false);
   assert.match(gwSrc, /\/api\/lanes\/create/);
+});
+
+await test("composer lets the operator pick Claude or Cursor for the next prompt", () => {
+  const claude = renderComposer({ provider: "claude" });
+  assert.match(claude, /data-gw-provider/);
+  assert.match(claude, /value="claude"[^>]*checked/);
+  assert.match(claude, /value="cursor"/);
+  const cursor = renderComposer({ provider: "cursor" });
+  assert.match(cursor, /value="cursor"[^>]*checked/);
+  const shell = renderGatewayShell({
+    lanes: [{ lane_id: "lane_db3431e755a8", label: "Vacilando", durable: true, preferred_provider: "cursor", binding: { provider: "cursor" } }],
+    selectedId: "lane_db3431e755a8",
+    lane: { lane_id: "lane_db3431e755a8", label: "Vacilando", durable: true, preferred_provider: "cursor", binding: { provider: "cursor" } },
+    outputText: "",
+    listReady: true,
+  });
+  assert.match(shell, /value="cursor"[^>]*checked/);
+  assert.match(gwSrc, /\/api\/lanes\/\$\{encodeURIComponent\(id\)\}\/provider/);
 });
 
 await test("viewed fingerprint migrates from alias keys", () => {
@@ -1247,7 +1276,7 @@ await test("viewed fingerprint migrates from alias keys", () => {
   assert.equal(JSON.parse(store.getItem("vac.gw.viewed.lane_abc123abc123")).fingerprint, "abc");
 });
 
-await test("offline bound lane shows Start Session without failing work", () => {
+await test("offline bound lane does not ask the operator to Start Session", () => {
   const comms = {
     lane_id: "lane_336af3bdc474",
     label: "Communications",
@@ -1262,15 +1291,24 @@ await test("offline bound lane shows Start Session without failing work", () => 
   };
   const html = renderGatewayShell({ lanes: [comms], selectedId: comms.lane_id, lane: comms, outputText: "", listReady: true });
   assert.match(html, /No agent session/);
-  assert.match(html, /Existing worktree is connected/);
-  assert.match(html, /Start Session/);
-  assert.match(html, /data-gw-session-start/);
+  assert.match(html, /Write an instruction below/);
+  assert.doesNotMatch(html, /Start Session/);
+  assert.equal(html.includes("data-gw-session-start"), false);
+  assert.equal(html.includes("data-gw-start-work"), false);
   assert.equal(executionRunListHint(null, comms), "No agent session");
   const st = deriveLaneStatus({ lane: comms, viewing: true });
   assert.equal(st.headline, "No agent session running");
   const n = deliveryNotice({ ok: true, status: "queued", session_required: true, admission_queued: true });
   assert.equal(n.kind, "ok");
-  assert.match(n.text, /No agent session/);
+  assert.match(n.text, /Instruction queued/);
+  assert.match(n.text, /Starting the agent/);
+  const cap = deliveryNotice({
+    ok: true,
+    status: "queued",
+    admission_queued: true,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_execution_capacity" },
+  });
+  assert.match(cap.text, /free execution slot/);
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1284,6 +1322,96 @@ await test("online lane still shows Orienting Claude while VERIFYING", () => {
   });
   assert.match(html, /Orienting Claude/);
   assert.doesNotMatch(html, /Start Session/);
+});
+
+await test("queued instruction at capacity is shown as waiting to start, not Start Session", () => {
+  const lane = {
+    lane_id: "lane_db3431e755a8",
+    label: "Vacilando",
+    durable: true,
+    runtime: "offline",
+    claude: { presence: "absent" },
+    worktree: { path: "/x/wt1" },
+    binding: { worktree_path: "/x/wt1" },
+    admission: { state: "QUEUED", queue_position: 2 },
+    execution_run: {
+      state: "QUEUED",
+      state_reason: "waiting_for_execution_capacity",
+      instruction: "Repair abandoned execution runs.",
+      admission: { state: "QUEUED", queue_position: 2 },
+    },
+  };
+  const callout = renderLaneSessionCallout(lane);
+  assert.match(callout, /waiting to start/i);
+  assert.match(callout, /#2 in line/);
+  assert.doesNotMatch(callout, /Start Session/);
+  const work = renderCurrentWork(lane.execution_run);
+  assert.match(work, /Queued — waiting to start/);
+  assert.match(work, /Repair abandoned execution runs/);
+  assert.match(work, /free execution slot/);
+  const posture = deriveLaneExecutionPosture(lane);
+  assert.equal(posture.state, "QUEUED_FOR_CAPACITY");
+  assert.match(posture.headline, /waiting to start/);
+  const status = deriveLaneStatus({ lane, viewing: true });
+  assert.match(status.headline, /Queued — waiting to start/);
+});
+
+await test("queued instruction with no session starts Claude instead of asking for Start Session", () => {
+  const lane = {
+    lane_id: "lane_73a897409906",
+    label: "Runtime Performance",
+    durable: true,
+    runtime: "offline",
+    claude: { presence: "absent" },
+    worktree: { path: "/x/wt5" },
+    binding: { worktree_path: "/x/wt5" },
+    execution_run: {
+      state: "QUEUED",
+      state_reason: "starting_agent_session",
+      instruction: "Continue the Runtime Convergence sprint.",
+    },
+  };
+  const callout = renderLaneSessionCallout(lane);
+  assert.match(callout, /Starting Claude/);
+  assert.match(callout, /Sending a message starts the session/);
+  assert.doesNotMatch(callout, /Start Session/);
+  const work = renderCurrentWork(lane.execution_run);
+  assert.match(work, />Starting</);
+  assert.doesNotMatch(work, /free execution slot/);
+  const posture = deriveLaneExecutionPosture(lane);
+  assert.equal(posture.state, "STARTING");
+  assert.match(posture.headline, /Starting Claude/);
+});
+
+await test("stuck STARTING kickoff tells the operator to send a replacement prompt", () => {
+  const html = renderLaneSessionCallout({
+    lane_id: "lane_73a897409906",
+    durable: true,
+    runtime: "online",
+    claude: { presence: "present" },
+    worktree: { path: "/x/wt5" },
+    agent_session: {
+      state: "STARTING",
+      orientation_attempts: 4,
+      last_orientation_error: "instruction_too_large",
+    },
+  });
+  assert.match(html, /kickoff was too long/);
+  assert.match(html, /Send a shorter prompt/);
+  assert.doesNotMatch(html, /Start Session/);
+  const posture = deriveLaneExecutionPosture({
+    durable: true,
+    runtime: "online",
+    claude: { presence: "present" },
+    agent_session: {
+      state: "STARTING",
+      orientation_attempts: 4,
+      last_orientation_error: "instruction_too_large",
+    },
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+    binding: { worktree_path: "/x/wt5" },
+  });
+  assert.match(posture.headline, /kickoff too long/);
 });
 
 await test("live executing lane is not labeled no agent session because of leftover admission", () => {
@@ -1321,7 +1449,7 @@ await test("idle unbound lane is Idle, not failed", () => {
     admission: { state: "QUEUED", queue_position: 1 },
     execution_run: { state: "QUEUED", admission: { state: "QUEUED", queue_position: 1 } },
   };
-  assert.match(executionRunListHint(processing.execution_run, processing), /Queued for capacity/);
+  assert.match(executionRunListHint(processing.execution_run, processing), /Instruction queued|waiting for a free slot|Send starts Claude/);
 });
 
 await test("six-lane representation keeps lane / run / admission / session distinct", () => {
@@ -1338,7 +1466,7 @@ await test("six-lane representation keeps lane / run / admission / session disti
   assert.match(html, /Executing/);
   assert.match(html, /Waiting for browser certification/);
   assert.match(html, /Validating/);
-  assert.match(html, /Queued for capacity/);
+  assert.match(html, /Instruction queued|waiting to start|Starting Claude|Send starts the session/);
   assert.match(html, /Idle/);
   assert.match(gwSrc, /agent-session\/start/);
 });
@@ -1620,7 +1748,7 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: latest.text,
     listReady: true,
   });
-  assert.match(html, /Latest Claude Response/);
+  assert.match(html, /Latest response/);
   assert.match(html, /data-gw-output-recent/);
   assert.match(html, /Claude is running/);
   assert.match(html, /data-gw-claude-run/);
@@ -1716,6 +1844,22 @@ await test("lane execution posture is not Execution Run state", () => {
     execution_run: { state: "COMPLETE" },
   });
   assert.equal(ready.state, "READY_TO_RELEASE");
+  const finishingLive = deriveLaneExecutionPosture({
+    label: "Vacilando",
+    binding: { provider: "cursor" },
+    tmux: { alive: true },
+    execution_capacity: { state: "FINISHING", error: "error: no managed agent in slot 1" },
+    agent_session: { state: "ACTIVE", provider: "cursor" },
+    execution_run: { state: "EXECUTING" },
+  });
+  assert.equal(finishingLive.state, "RUNNING");
+  assert.match(finishingLive.headline, /Cursor connected/);
+  const finishingStuck = deriveLaneExecutionPosture({
+    label: "Vacilando",
+    durable: true,
+    execution_capacity: { state: "FINISHING", error: "error: no managed agent in slot 1" },
+  });
+  assert.notEqual(finishingStuck.state, "FINISHING");
   const html = renderLaneRuntimeControls({
     lane_id: "lane_abcabcabcabc",
     label: "Communications",
@@ -1727,8 +1871,9 @@ await test("lane execution posture is not Execution Run state", () => {
   assert.match(html, /Release execution capacity/);
   assert.equal(html.includes("type=\"number\""), false);
   const idleHtml = renderLaneRuntimeControls({ lane_id: "lane_bbbbbbbbbbbb", label: "Billing", durable: true });
-  assert.match(idleHtml, /Start work/);
-  assert.match(idleHtml, /data-gw-start-work/);
+  assert.match(idleHtml, /Write an instruction below/);
+  assert.equal(idleHtml.includes("data-gw-start-work"), false);
+  assert.equal(idleHtml.includes("Start work"), false);
 });
 
 await test("capacity summary names lanes, not slot pickers", () => {
@@ -1746,6 +1891,28 @@ await test("capacity summary names lanes, not slot pickers", () => {
   assert.equal(html.includes("Slot 1"), false);
   assert.match(gwSrc, /\/runtime\/release/);
   assert.equal(viewSrc.includes("Runtime adoption"), false);
+});
+
+await test("Cursor workspace trust is a status, not a composer question", () => {
+  const output = {
+    ok: true,
+    text: "⚠ Workspace Trust Required\n[a] Trust this workspace\n[q] Quit",
+    blocking_prompt: "required",
+  };
+  assert.equal(outputWorkspaceTrustState(output), "required");
+  const html = renderGatewayShell({
+    lanes: [identity],
+    selectedId: identity.lane_id,
+    lane: identity,
+    output,
+    outputText: output.text,
+    listReady: true,
+  });
+  assert.match(html, /Trusting workspace/);
+  assert.match(html, /do not type an answer/);
+  assert.equal(html.includes("Needs input"), false);
+  assert.equal(outputWorkspaceTrustState({ text: "⏳ Trusting workspace..." }), "in_progress");
+  assert.equal(outputWorkspaceTrustState({ text: "Ask Cursor" }), null);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

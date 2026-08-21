@@ -12,11 +12,14 @@ import {
   deleteBufferArgv,
   loadBufferArgv,
   pasteBufferArgv,
+  inferLiveProvider,
   resetLaneSendStateForTests,
   sendLaneInstruction,
   submitEnterArgv,
   validateLaneInstruction,
   validateSendTarget,
+  visiblePaneText,
+  workspaceTrustPaneState,
 } from "../lib/vacilando/lanes.mjs";
 
 const IDENTITY_WT = "/Users/Kelly/Code/alloy-worktrees/wt1-access-identity-v2";
@@ -75,6 +78,10 @@ function recordingTmux() {
   return { tmux, calls };
 }
 
+function deliveryCalls(calls) {
+  return (calls || []).filter((c) => c.argv[0] !== "capture-pane");
+}
+
 function baseOpts({ stdout, tmux, extra = {} } = {}) {
   const rec = tmux ? { tmux, calls: null } : recordingTmux();
   const audits = [];
@@ -116,17 +123,19 @@ await test("valid lane + instruction resolves target server-side", async () => {
   assert.equal(out.ok, true);
   assert.equal(out.status, "delivered");
   assert.equal(out.lane_id, "alloy-identity");
-  assert.equal(opts.calls[0].argv[0], "load-buffer");
-  assert.equal(opts.calls[1].argv.includes("%1"), true);
-  assert.equal(opts.calls[1].argv[0], "paste-buffer");
-  assert.deepEqual(opts.calls[2].argv, submitEnterArgv("%1"));
+  const delivered = deliveryCalls(opts.calls);
+  assert.equal(delivered[0].argv[0], "load-buffer");
+  assert.equal(delivered[1].argv.includes("%1"), true);
+  assert.equal(delivered[1].argv[0], "paste-buffer");
+  assert.deepEqual(delivered[2].argv, submitEnterArgv("%1"));
 });
 
 await test("literal multiline instruction is passed as data, never argv", async () => {
   const opts = baseOpts();
   const out = await sendLaneInstruction("alloy-identity", HARD_TEXT, opts);
   assert.equal(out.ok, true);
-  assert.equal(opts.calls[0].input, HARD_TEXT);
+  const load = opts.calls.find((c) => c.argv[0] === "load-buffer");
+  assert.equal(load.input, HARD_TEXT);
   const joined = opts.calls.map((c) => c.argv.join(" ")).join("\n");
   assert.equal(joined.includes(HARD_TEXT), false);
   assert.equal(joined.includes("$HOME"), false);
@@ -142,8 +151,8 @@ await test("quotes/backticks/semicolons/code blocks are not shell-executed", asy
     assert.equal(call.argv.includes("bash"), false);
     assert.equal(call.argv[0] === "claude", false);
   }
-  assert.equal(opts.calls[0].argv[0], "load-buffer");
-  assert.equal(opts.calls[0].argv.includes("-"), true);
+  assert.equal(deliveryCalls(opts.calls)[0].argv[0], "load-buffer");
+  assert.equal(deliveryCalls(opts.calls)[0].argv.includes("-"), true);
 });
 
 await test("browser cannot override session/pane/target", async () => {
@@ -219,10 +228,11 @@ await test("empty input refuses", async () => {
 await test("only the expected fixed tmux mutation sequence is used", async () => {
   const opts = baseOpts();
   await sendLaneInstruction("alloy-identity", "hello", opts);
-  assert.equal(opts.calls.length, 3);
-  assert.deepEqual(opts.calls[0].argv, loadBufferArgv("vacilando-alloy-identity"));
-  assert.deepEqual(opts.calls[1].argv, pasteBufferArgv("vacilando-alloy-identity", "%1"));
-  assert.deepEqual(opts.calls[2].argv, submitEnterArgv("%1"));
+  const delivered = deliveryCalls(opts.calls);
+  assert.equal(delivered.length, 3);
+  assert.deepEqual(delivered[0].argv, loadBufferArgv("vacilando-alloy-identity"));
+  assert.deepEqual(delivered[1].argv, pasteBufferArgv("vacilando-alloy-identity", "%1"));
+  assert.deepEqual(delivered[2].argv, submitEnterArgv("%1"));
   assert.deepEqual(deleteBufferArgv("vacilando-alloy-identity"), ["delete-buffer", "-b", "vacilando-alloy-identity"]);
 });
 
@@ -261,7 +271,7 @@ await test("concurrent sends to one lane cannot interleave", async () => {
   const first = await p1;
   assert.equal(first.ok, true);
   assert.equal(calls.filter((c) => c.argv[0] === "load-buffer").length, 1);
-  assert.equal(calls[0].input, "first");
+  assert.equal(calls.find((c) => c.argv[0] === "load-buffer").input, "first");
 });
 
 await test("another lane is independently lockable", async () => {
@@ -283,7 +293,7 @@ await test("another lane is independently lockable", async () => {
   await Promise.resolve();
   const other = await sendLaneInstruction("alloy-other", "two", baseOpts({ stdout, extra: { tmux: otherTmux } }));
   assert.equal(other.ok, true);
-  assert.equal(otherCalls[0].input, "two");
+  assert.equal(otherCalls.find((c) => c.argv[0] === "load-buffer").input, "two");
   release();
   const first = await p1;
   assert.equal(first.ok, true);
@@ -312,7 +322,7 @@ await test("same-payload retry is refused as duplicate_send", async () => {
   const second = await sendLaneInstruction("alloy-identity", "same", opts);
   assert.equal(second.ok, false);
   assert.equal(second.error, "duplicate_send");
-  assert.equal(opts.calls.length, 3);
+  assert.equal(deliveryCalls(opts.calls).length, 3);
 });
 
 await test("non-development alloy-test is not sendable", async () => {
@@ -332,6 +342,57 @@ await test("non-development alloy-test is not sendable", async () => {
   assert.equal(out.ok, false);
   assert.equal(out.error, "lane_not_found");
   assert.equal(opts.calls.length, 0);
+});
+
+await test("workspace trust dialog is accepted before paste, not typed as an instruction", async () => {
+  const TRUST = "⚠ Workspace Trust Required\n[a] Trust this workspace\n[q] Quit\n";
+  let captures = 0;
+  const calls = [];
+  const tmux = async (argv, opts = {}) => {
+    calls.push({ argv: [...argv], input: opts.input ?? null });
+    if (argv[0] === "capture-pane") {
+      captures += 1;
+      return { ok: true, stdout: captures === 1 ? TRUST : "Ask Cursor\n" };
+    }
+    return { ok: true, stdout: "" };
+  };
+  const opts = baseOpts({ extra: { tmux, trustTimeoutMs: 2000 } });
+  opts.calls = calls;
+  const out = await sendLaneInstruction("alloy-identity", "continue the cutover", opts);
+  assert.equal(out.ok, true, out.error);
+  assert.equal(workspaceTrustPaneState(TRUST), "required");
+  assert.equal(workspaceTrustPaneState("⏳ Trusting workspace..."), "in_progress");
+  assert.equal(workspaceTrustPaneState("Ask Cursor"), null);
+  assert.equal(workspaceTrustPaneState(`${TRUST}\n⏳ Trusting workspace...\n→ Plan, search, build anything\n`), null);
+  const keys = calls.filter((c) => c.argv[0] === "send-keys");
+  assert.equal(keys.some((c) => c.argv.includes("a") && !c.argv.includes("Enter")), true);
+  assert.equal(calls.some((c) => c.argv[0] === "load-buffer"), true);
+  assert.equal(calls.find((c) => c.argv[0] === "load-buffer").input, "continue the cutover");
+  assert.equal(calls.some((c) => c.argv.includes("continue the cutover") && c.argv[0] === "send-keys"), false);
+});
+
+await test("node + Cursor Agent title is a valid Cursor send target", () => {
+  const wt = "/Users/Kelly/Code/alloy-worktrees/wt1-vacilando-mac-mini-readiness";
+  const out = validateSendTarget({
+    lane_id: "alloy-vacilando",
+    preferred_provider: "cursor",
+    worktree: { managed: true, path: wt },
+    tmux: {
+      alive: true,
+      cwd: wt,
+      command: "node",
+      title: "Cursor Agent",
+      pane_id: "%10",
+      session: "alloy-vacilando",
+    },
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(inferLiveProvider({ command: "node", title: "Cursor Agent" }), "cursor");
+});
+
+await test("workspace trust in scrollback is not a live blocking prompt", () => {
+  const history = `${"⚠ Workspace Trust Required\n[a] Trust this workspace\n⏳ Trusting workspace...\n"}${"\n".repeat(20)}Plan, search, build anything\n`;
+  assert.equal(workspaceTrustPaneState(visiblePaneText(history, 8)), null);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

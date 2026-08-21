@@ -9,7 +9,8 @@
  *
  * Does not delete the durable lane, worktree, or branch.
  * Does not auto-merge to staging. Does not adopt Runtime.
- * Does not auto-release on Execution Run COMPLETE.
+ * Idle sessions (no in-flight Execution Run) are released when queued work
+ * is waiting, so the next lane can start without a manual Release click.
  */
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -19,6 +20,7 @@ import {
   canonicalLaneStoreId,
   getDurableLane,
   isRuntimeAdoptionBlocked,
+  listDurableLanes,
   releaseDurableLaneRuntimeBinding,
   setDurableLaneExecutionCapacity,
 } from "./development-lane.mjs";
@@ -27,6 +29,9 @@ import {
   ADMISSION_OCCUPYING,
   admissionForLane,
   evaluateAdmissionQueue,
+  queuedAdmissions,
+  readAdmissionStore,
+  resolveAdmissionWork,
   transitionAdmission,
 } from "./execution-admission.mjs";
 import { activeAgentSessionForLane, endAgentSession } from "./agent-session.mjs";
@@ -37,6 +42,7 @@ import { TMUX_SESSION_RE } from "./lanes.mjs";
 export const RELEASE_COMMAND = "lane.release_execution_capacity";
 
 const UNSAFE_RUN = new Set([
+  "QUEUED",
   "EXECUTING",
   "VALIDATING",
   "WAITING_RESOURCE",
@@ -148,6 +154,53 @@ async function reevaluateAdmission(root) {
     return releaseImpl.evaluateAdmissionQueue({ root });
   }
   return evaluateAdmissionQueue({ root });
+}
+
+/**
+ * When the 3 provider slots are full but a lane has finished (no in-flight
+ * run), release one idle session so the next queued instruction can start.
+ */
+export async function releaseIdleCapacityForQueuedWork({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+} = {}) {
+  const waiting = queuedAdmissions(readAdmissionStore(root)).filter((r) => !resolveAdmissionWork(r, root).stale);
+  if (!waiting.length) return { ok: true, released: 0, skipped: "empty_queue" };
+
+  const { assessSessionStartCapacity } = await import("./alloy-dev-adapter.mjs");
+  const cap = await (typeof releaseImpl?.assessSessionStartCapacity === "function"
+    ? releaseImpl.assessSessionStartCapacity()
+    : assessSessionStartCapacity());
+  if (cap && cap.ok !== false && cap.available !== false) {
+    return { ok: true, released: 0, skipped: "capacity_available" };
+  }
+
+  const waitingIds = new Set(waiting.map((r) => r.lane_id));
+  const idle = listDurableLanes(root)
+    .filter((lane) => {
+      if (waitingIds.has(lane.lane_id)) return false;
+      if (!lane.binding?.tmux_session) return false;
+      if (isProtectedWorktree(lane.binding?.worktree_path)) return false;
+      if (isProtectedSlot(lane.binding?.slot)) return false;
+      const run = activeRunForLane(lane.lane_id, root);
+      if (run && UNSAFE_RUN.has(run.state)) return false;
+      const adm = admissionForLane(lane.lane_id, root);
+      if (adm && (adm.state === "PROVISIONING" || adm.state === "ADMITTED")) return false;
+      return true;
+    })
+    .sort((a, b) => String(a.updated_at || a.created_at || "").localeCompare(String(b.updated_at || b.created_at || "")));
+
+  for (const lane of idle) {
+    const out = await releaseLaneExecutionCapacity(lane.lane_id, {
+      origin: "governor_cycle",
+      nowMs,
+      root,
+    });
+    if (out?.ok && !out.already_idle) {
+      return { ok: true, released: 1, lane_id: lane.lane_id, command: RELEASE_COMMAND };
+    }
+  }
+  return { ok: true, released: 0, skipped: "no_safe_idle_lane" };
 }
 
 /**
@@ -268,11 +321,13 @@ export async function releaseLaneExecutionCapacity(laneId, {
   }
 
   let slotReleased = false;
-  if (Number.isInteger(Number(slot)) && Number(slot) >= 1) {
+  const managedSlot = Number.isInteger(Number(slot)) && Number(slot) >= 1
+    && String(rec.binding?.provider || "claude") !== "cursor";
+  if (managedSlot) {
     const finished = await finishSprint(slot, Boolean(run?.checkpoint_ready));
     if (!finished?.ok) {
       setDurableLaneExecutionCapacity(rec.lane_id, {
-        state: rec.execution_capacity?.state || "RUNNING",
+        state: rec.binding?.tmux_session ? "RUNNING" : "IDLE",
         error: finished.error || "sprint_finish_failed",
       }, { nowMs, root });
       return { ok: false, error: finished.error || "sprint_finish_failed", command: RELEASE_COMMAND };

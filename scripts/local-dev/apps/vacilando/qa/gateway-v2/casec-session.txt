@@ -1,0 +1,5 @@
+desktop_after_ok
+start_buttons=0
+after_text=Vacilando DEVELOPMENT GATEWAY DEVELOPMENT LANES Access & Identity Claude · Clean · ↑47 · ↓89 Executing Billing Offline · unknown · ↑0 · ↓0 Idle Communications Claude · Context 52k Queued · no agent session · #2 Processing Offline · unknown · ↑0 · ↓0 Queued for capacity · #1 More A Settings Admin Lane Search… Improve Vacilando ↻ Refresh Polling Communications Claude connected · activity after your instruction Context 52k Rename Lane NOTIFICATIONS Notifications blocked in browser settings CURRENT WORK # EMAIL INGRESS V2 — OPERATIONAL INBOXES, PURPOSE INTAKE & ACQUISITION Start a fresh sprint/thread for Email Ingress V2. This is a CAPABILITY → ARCHITECTURE → IMPLEMENTATION sprint. Do not disturb the live-certified Communications runtime. Do not redesign Communications. Do not replace the cano
+tmux=alloy-communications,alloy-identity,alloy-test
+mobile_ok

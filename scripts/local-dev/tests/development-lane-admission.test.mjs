@@ -20,8 +20,14 @@ import {
   resetAdmissionsForTests,
   setAdmissionImplForTests,
 } from "../lib/vacilando/execution-admission.mjs";
-import { activeRunForLane, createQueuedRun, getExecutionRun, resetExecutionRunsForTests } from "../lib/vacilando/execution-run.mjs";
+import { activeRunForLane, createQueuedRun, getExecutionRun, resetExecutionRunsForTests, transitionExecutionRun } from "../lib/vacilando/execution-run.mjs";
 import { createNewLaneRequest } from "../lib/vacilando/lane-identity-api.mjs";
+import {
+  activeAgentSessionForLane,
+  createAgentSession,
+  patchAgentSession,
+  resetAgentSessionsForTests,
+} from "../lib/vacilando/agent-session.mjs";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-admit-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
@@ -45,6 +51,7 @@ function reset() {
   resetDevelopmentLanesForTests(ROOT);
   resetExecutionRunsForTests(ROOT);
   resetAdmissionsForTests(ROOT);
+  resetAgentSessionsForTests(ROOT);
 }
 
 await test("durable lane can be created with capacity", async () => {
@@ -274,6 +281,140 @@ await test("list overlay shows queued admission", async () => {
   const lanes = attachLaneAdmissions([{ lane_id: out.body.lane.lane_id, execution_run: { state: "QUEUED", run_id: out.body.execution_run.run_id } }], ROOT);
   assert.equal(lanes[0].admission.state, "QUEUED");
   assert.equal(lanes[0].admission.queue_position, 1);
+});
+
+await test("existing admission attaches the later run id", () => {
+  reset();
+  const lane = createDurableLane({ name: "Vacilando", origin: "created", root: ROOT });
+  const first = createAdmissionRequest({ laneId: lane.lane.lane_id, runId: null, root: ROOT });
+  assert.equal(first.request.run_id, null);
+  const run = createQueuedRun({
+    laneId: lane.lane.lane_id,
+    instruction: "repair abandoned runs",
+    root: ROOT,
+  });
+  const second = createAdmissionRequest({
+    laneId: lane.lane.lane_id,
+    runId: run.run.run_id,
+    root: ROOT,
+  });
+  assert.equal(second.existing, true);
+  assert.equal(second.request.run_id, run.run.run_id);
+  assert.equal(admissionForLane(lane.lane.lane_id, ROOT).run_id, run.run.run_id);
+});
+
+await test("unprovisionable head does not block a later bound lane", async () => {
+  reset();
+  setAdmissionImplForTests({ canProvisionNow: () => ({ ok: false, available: false }) });
+  const older = await createNewLaneRequest({ name: "Older Unbound", instruction: "cert fixture" });
+  const newer = createDurableLane({ name: "Newer Bound", origin: "created", root: ROOT });
+  const path = join(ROOT, "wt-newer-bound");
+  mkdirSync(path, { recursive: true });
+  bindDurableLane(newer.lane.lane_id, {
+    worktree_path: path,
+    worktree_name: "wt-newer-bound",
+    provider: "claude",
+    tmux_session: null,
+  }, { root: ROOT });
+  const run = createQueuedRun({
+    laneId: newer.lane.lane_id,
+    instruction: "real queued work",
+    worktreePath: path,
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: newer.lane.lane_id, runId: run.run.run_id, root: ROOT });
+  let started = 0;
+  setAdmissionImplForTests({
+    canProvisionNow: () => ({ ok: false, available: false }),
+    assessSessionStartCapacity: () => ({ ok: true, available: true }),
+    startProviderOnBinding: async () => {
+      started += 1;
+      return { ok: true, adopted: true };
+    },
+    deliverQueuedRun: async () => ({ ok: true }),
+  });
+  const out = await evaluateAdmissionQueue({ root: ROOT });
+  assert.equal(out.admitted, 1, JSON.stringify(out));
+  assert.equal(out.lane_id, newer.lane.lane_id);
+  assert.equal(started, 1);
+  assert.equal(admissionForLane(older.body.lane.lane_id, ROOT).state, "QUEUED");
+});
+
+await test("full provider table does not block a later lane that already owns a session", async () => {
+  reset();
+  const hol = createDurableLane({ name: "Processing Fixture", origin: "created", root: ROOT });
+  const holPath = join(ROOT, "wt-hol");
+  mkdirSync(holPath, { recursive: true });
+  bindDurableLane(hol.lane.lane_id, {
+    worktree_path: holPath,
+    worktree_name: "wt-hol",
+    provider: "claude",
+  }, { root: ROOT });
+  const holRun = createQueuedRun({
+    laneId: hol.lane.lane_id,
+    instruction: "old fixture",
+    worktreePath: holPath,
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: hol.lane.lane_id, runId: holRun.run.run_id, root: ROOT });
+
+  const live = createDurableLane({ name: "Runtime Performance", origin: "created", root: ROOT });
+  const livePath = join(ROOT, "wt-live");
+  mkdirSync(livePath, { recursive: true });
+  bindDurableLane(live.lane.lane_id, {
+    worktree_path: livePath,
+    worktree_name: "wt-live",
+    provider: "claude",
+    tmux_session: "alloy-runtime-performance",
+  }, { root: ROOT });
+  const liveRun = createQueuedRun({
+    laneId: live.lane.lane_id,
+    instruction: "operator send",
+    worktreePath: livePath,
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: live.lane.lane_id, runId: liveRun.run.run_id, root: ROOT });
+  createAgentSession({ laneId: live.lane.lane_id, runId: liveRun.run.run_id, root: ROOT });
+  patchAgentSession(activeAgentSessionForLane(live.lane.lane_id, ROOT).agent_session_id, {
+    state: "VERIFYING",
+  }, { root: ROOT });
+
+  let startedHol = 0;
+  let startedLive = 0;
+  setAdmissionImplForTests({
+    assessSessionStartCapacity: () => ({ ok: false, available: false }),
+    startProviderOnBinding: async ({ lane }) => {
+      if (lane.lane_id === hol.lane.lane_id) {
+        startedHol += 1;
+        return { ok: true, queued: true };
+      }
+      startedLive += 1;
+      return { ok: true, already: true };
+    },
+    deliverQueuedRun: async () => ({ ok: true, deferred: true }),
+  });
+  const out = await evaluateAdmissionQueue({ root: ROOT });
+  assert.equal(startedHol, 0);
+  assert.equal(startedLive, 1);
+  assert.equal(out.admitted, 1, JSON.stringify(out));
+  assert.equal(out.lane_id, live.lane.lane_id);
+  assert.equal(admissionForLane(hol.lane.lane_id, ROOT).state, "QUEUED");
+});
+
+await test("stale admission for a finished run is cancelled", async () => {
+  reset();
+  const lane = createDurableLane({ name: "Trust Runtime", origin: "created", root: ROOT });
+  const run = createQueuedRun({
+    laneId: lane.lane.lane_id,
+    instruction: "old leftover",
+    root: ROOT,
+  });
+  createAdmissionRequest({ laneId: lane.lane.lane_id, runId: run.run.run_id, root: ROOT });
+  assert.equal(transitionExecutionRun(run.run.run_id, "EXECUTING", { origin: "system", root: ROOT }).ok, true);
+  const out = await evaluateAdmissionQueue({ root: ROOT });
+  assert.equal(out.admitted, 0);
+  const rec = readAdmissionStore(ROOT).requests.find((r) => r.lane_id === lane.lane.lane_id);
+  assert.equal(rec.state, "CANCELLED");
 });
 
 await test("bindDurableLane refuses a second owner of the same worktree", () => {
