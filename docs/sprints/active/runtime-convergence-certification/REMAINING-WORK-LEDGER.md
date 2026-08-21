@@ -57,7 +57,21 @@ Full evidence: [`CONVERGENCE-MATRIX.md`](CONVERGENCE-MATRIX.md). Laws **28** and
 |---|---|---|---|
 | 1 | **The Work Unit queue subscribes to nothing.** The row/summary refresh policy has zero production callers; the current route registers no listener; its guard reads a deleted file. | Every membership- or order-changing mutation leaves the rows the operator is looking at stale. Counts converge, rows do not — so the screen looks authoritative and is wrong. | work-unit surface runtime + the existing policy in `lib/admin/opportunityQueueRefreshEvent.ts` |
 | 2 | **A child rename converges one card and no other surface.** `saveInquiryChild` emits only record-patch signals unless participation fields changed. | Two different names for one child on one screen (Children card vs Assignments card vs queue row), until a manual browser refresh. | `focusPanelMutation.saveInquiryChild` + `buildDurableChildFocusPanelMutation` (one contract, two owners) |
-| 3 | **Organization config saves emit no signal and refresh their own route.** One program rename = 3 POSTs + 1 GET + 1 RSC. | Consuming operator surfaces are never told; freshness depends on reopening them. The editor's own freshness is bought with an RSC refresh. | `configuration/programs` write path |
+| 3 | ~~Organization config saves emit no signal~~ — **WITHDRAWN, see matrix §3b.** The save already publishes canonical invalidation on an in-module bus the probe could not observe, and the 3 POSTs are `update_draft`/`validate_draft`/`publish`. | None — convergence was already correct. The one real finding (a `router.replace` to the address already shown, costing an RSC) is fixed. | closed |
+
+**Fix status (this run).**
+
+| Defect | Fix | Guard | Live re-proof |
+|---|---|---|---|
+| 1 Work Unit subscribes to nothing | `workUnitConvergencePlan.ts` + subscription in `useCommittedWorkUnitSurfaceRuntime`; rows converge by `provisioning.invalidate` + SUBJECT-scope re-commit; totals via a settlement `refreshToken` | `tests/runtime/workUnitConvergenceContract.test.ts` (13) + repointed `opportunityInquiryChildrenQueueRefresh` (2) | **pending** — see below |
+| 2 child rename converges one card | identity-only signal from BOTH `saveInquiryChild` owners (case-grain dispatch, durable-grain broadcast); profile-only saves unchanged at 1 request | same suite | **pending** |
+| 3 org config | withdrawn; `router.replace` to an unchanged href guarded | — | **pending** |
+
+**Live re-measurement is blocked on one operator decision.** The toolkit binds slot 5's dev server
+(`:3015`) to the SIBLING worktree `wt5-runtime-convergence-certification`, not to this lane's
+worktree, and this lane's worktree has no dev metadata. The fixes are therefore guard-certified but
+not yet live-re-measured. Either repoint slot 5's dev metadata at
+`wt5-runtime-performance-ux-completion`, or authorize a server for it.
 
 **Priority 1 regression proof (Mutation B).** The reload removal HOLDS live: 0 document loads, 0 RSC,
 no remount, canonical broadcast emitted. The claim in that commit that "listeners refetch rows AND

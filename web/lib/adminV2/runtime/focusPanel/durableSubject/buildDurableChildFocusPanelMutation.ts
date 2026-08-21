@@ -38,6 +38,7 @@ import {
     patchInquiryChildIdentityFromDrawer,
 } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import { setChildAvatarSessionPreview } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import {
     patchPersonChildRelationshipFromFocusPanel,
     removePersonChildRelationshipRoleFromFocusPanel,
@@ -104,6 +105,16 @@ export function buildDurableChildFocusPanelMutation(input: {
             }
 
             void childId;
+            /*
+             * ONE CONTRACT, BOTH HOSTS. The case-grain owner emits the identity signal for exactly
+             * this reason; a durable-child host editing the SAME name must not converge less. There is
+             * no opportunity to name here — the subject is a durable child — so this is the
+             * surface-neutral broadcast, which is the honest signal: every mounted projection re-reads
+             * because none of them can be matched by a row id.
+             */
+            if (Object.keys(patch.identityPatch).length > 0) {
+                broadcastWorkspaceMutation("inquiry_child_identity");
+            }
             onSaved?.();
             return { ok: true };
         },

@@ -17,11 +17,19 @@ describe("inquiry child placement save refreshes waitlist queue", () => {
         expect(src).toContain("program_room_cohort_key");
     });
 
-    it("work-unit page listens for opportunity-updated and busts queue cache", () => {
-        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        expect(page).toContain("OPPORTUNITY_QUEUE_UPDATED_EVENT");
-        expect(page).toContain("shouldRefetchWorkUnitQueueRowsForEvent");
-        expect(page).toContain("deleteQueueRowCacheKeysForWorkUnit");
-        expect(page).toContain("fetchQueueSummaries");
+    /*
+     * This guard used to read `app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx`.
+     * That route was DELETED in a route move, so the guard threw ENOENT and certified nothing while the
+     * Work Unit surface quietly stopped consuming the refresh policy altogether. Repointed at the
+     * runtime that actually owns the subscription today; the behavioural contract lives in
+     * `tests/runtime/workUnitConvergenceContract.test.ts`.
+     */
+    it("the current work-unit runtime consumes the queue refresh policy", () => {
+        const runtime = read("lib/presentation/runtime/useCommittedWorkUnitSurfaceRuntime.ts");
+        expect(runtime).toContain("OPPORTUNITY_QUEUE_UPDATED_EVENT");
+        expect(runtime).toContain("planWorkUnitConvergence");
+        // Rows converge by re-preparing the committed answer; summaries by the totals refresh token.
+        expect(runtime).toContain("provisioningKey");
+        expect(runtime).toContain("setSettlementRefreshToken");
     });
 });

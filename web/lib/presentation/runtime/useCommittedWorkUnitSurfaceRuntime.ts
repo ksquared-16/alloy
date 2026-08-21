@@ -24,7 +24,7 @@
  * `AttentionIntent` cannot express a coarser field, a subject movement structurally cannot change the
  * lens, the Work Unit, or the Context Frame.
  */
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
@@ -71,6 +71,12 @@ function prewarmSubjectDestination(target: string, lens: string | null, subjectI
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
+import {
+    OPPORTUNITY_QUEUE_UPDATED_EVENT,
+    parseOpportunityQueueUpdatedDetail,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
+import { planWorkUnitConvergence } from "./workUnitConvergencePlan";
+import { provisioningKey } from "@/lib/runtime/kernel/provisioning";
 import { selectedWorkViewId } from "@/lib/runtime/provisioning/contextualFocusAnswer";
 import type { WorkUnitSurfaceModel, WorkUnitSurfaceIntents, QueueRowModel } from "./types";
 import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
@@ -123,7 +129,13 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // and this only overlays values into already-laid-out slots. Returns `operationalModel` unchanged
     // (same reference) until a real value lands, so the operational first paint is never re-rendered
     // for nothing. See `useWorkUnitSettlement` for the discipline (deduped, no commit gate, no reflow).
-    const settlement = useWorkUnitSettlement(focus.current?.snapshot ?? null);
+    // Bumped by a canonical mutation whose policy says the counted facts moved. Folds into the
+    // totals scope key so Work View pill counts and the queue total re-resolve ON A WORK UNIT ROUTE —
+    // the Workspace nonce that already did this is only mounted on `/workspace`.
+    const [settlementRefreshToken, setSettlementRefreshToken] = useState(0);
+    const settlement = useWorkUnitSettlement(focus.current?.snapshot ?? null, {
+        refreshToken: settlementRefreshToken,
+    });
     const model = useMemo(
         () => (operationalModel ? mergeWorkUnitSettlement(operationalModel, settlement) : null),
         [operationalModel, settlement],
@@ -520,6 +532,75 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         const timer = window.setTimeout(run, 400);
         return () => window.clearTimeout(timer);
     }, [adjacentSubjectIds, kernel]);
+
+    /*
+     * ── CANONICAL MUTATION CONVERGENCE (the subscription that was missing) ──
+     *
+     * The refresh policy for these rows already existed and was already unit-tested; nothing in
+     * production ever asked it. A placement change therefore emitted its canonical broadcast,
+     * converged the KPIs and the record VM, and left the rows the operator was reading stale —
+     * proven live, and proven again by a child rename that updated the Children card while the queue
+     * row behind it kept the old name.
+     *
+     * Rows converge by RE-PREPARING the committed answer, not by a second row store: the snapshot is
+     * the only row truth this surface has, so `invalidate` + a re-commit at the CURRENT scope is the
+     * canonical seam. Subject scope first because it inherits target and lens and so re-prepares the
+     * very key we invalidated — a LENS re-commit clears the subject and would deselect the record the
+     * operator is working in, which is a worse outcome than the staleness it fixes.
+     */
+    const visibleOpportunityIds = useMemo(
+        () =>
+            (operationalModel?.queue.rows ?? [])
+                .filter((r) => r.entityType === "opportunity" && r.entityId)
+                .map((r) => String(r.entityId)),
+        [operationalModel?.queue.rows],
+    );
+    const visibleOpportunityIdsRef = useRef<readonly string[]>(visibleOpportunityIds);
+    useEffect(() => {
+        visibleOpportunityIdsRef.current = visibleOpportunityIds;
+    }, [visibleOpportunityIds]);
+
+    const recommitForTruthMovement = useCallback(() => {
+        const current = kernel.attention.get();
+        if (!current) return;
+        kernel.provisioning.invalidate(provisioningKey(current));
+        if (current.subject) {
+            kernel.attention.move({
+                scope: ATTENTION_SCOPE.SUBJECT,
+                subject: current.subject,
+                source: "command",
+            });
+            return;
+        }
+        if (current.lens) {
+            kernel.attention.move({ scope: ATTENTION_SCOPE.LENS, lens: current.lens, source: "command" });
+            return;
+        }
+        kernel.attention.move({
+            scope: ATTENTION_SCOPE.SURFACE,
+            target: current.target,
+            lens: current.lens ?? null,
+            cohort: current.cohort ?? null,
+            destination: current.destination ?? null,
+            source: "command",
+        });
+    }, [kernel]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onQueueUpdated = (ev: Event) => {
+            // Each projection is decided INDEPENDENTLY by the existing policy. A signal that moves a
+            // count must not be allowed to imply a row refetch, and vice versa.
+            const plan = planWorkUnitConvergence({
+                detail: parseOpportunityQueueUpdatedDetail(ev),
+                visibleOpportunityIds: visibleOpportunityIdsRef.current,
+            });
+            if (plan.refreshSummaries) setSettlementRefreshToken((n) => n + 1);
+            if (plan.refetchRows) recommitForTruthMovement();
+        };
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+        return () => window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated);
+    }, [recommitForTruthMovement]);
 
     const intents = useMemo<WorkUnitSurfaceIntents>(
         () => ({ selectWorkView, prefetchWorkView, openRecord, prefetchRecord }),

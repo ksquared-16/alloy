@@ -77,7 +77,17 @@ export type WorkUnitSettlement = {
 const EMPTY_COUNTS = new Map<string, number | null>();
 
 /** Resolve the deferred values for a committed Work Unit surface. Null snapshot → nothing to settle. */
-export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): WorkUnitSettlement {
+export function useWorkUnitSettlement(
+    snapshot: ProvisioningAnswer | null,
+    options?: {
+        /**
+         * Bumped by the Work Unit runtime when a canonical mutation's policy says the counted facts
+         * moved. Folds into the totals scope key only — the settled counts stay visible while the
+         * refresh resolves, so a converging count never blanks the pill it is correcting.
+         */
+        refreshToken?: string | number;
+    },
+): WorkUnitSettlement {
     // Only `operational` and `empty` carry reserved regions to fill.
     //
     // `error` never resolved them. `contextual` has NOTHING TO SETTLE — every region here is a property
@@ -131,6 +141,7 @@ export function useWorkUnitSettlement(snapshot: ProvisioningAnswer | null): Work
         targets,
         selectedSiteId: siteId,
         enabled: targets.length > 0,
+        refreshToken: options?.refreshToken,
     });
 
     // Re-key totals by workViewId (the canonical host is folded in), so the merge is a plain view lookup.

@@ -31,7 +31,7 @@ history writes and surface mount identity.
 | **C** | Work item state | `dispatchOperationalWorkRefresh` (`lib/workItems/operationalWorkRefresh.ts`) | `adminv2:opportunity-operational-tasks-refresh` + `dispatchOpportunityQueueUpdated(id, kind)` (+ processing/comms variants) | **EVENT_DRIVEN**; launcher badge additionally **BOUNDED_POLL 120 s** | badge counts, drawer task strip, MyTasksPanel | not measured live | no | see note |
 | **D** | Processing review | same owner, `kind:"processing_review"` | `adminv2:processing-queue-refresh` + `warmProcessingQueueCache({force:true})` | **EVENT_DRIVEN + warm-cache force** | exactly **one** subscriber: `app/adminV2/components/MyTasksPanel.tsx` | not measured live | unknown beyond that subscriber | latent |
 | **E** | Operations / roster | — | — | **not exercisable** — Firefly's operating day is empty (0 children expected, 0 staff scheduled), so no roster row exists to mutate | — | — | — | see §5 |
-| **F** | Organization config (Program name) | `POST /api/admin/configuration/programs` | **none** — no `adminv2:*` signal at all | **RSC_REFRESH of its own route** + re-read GET | the configuration editor/list | **3× POST + 1 GET + 1 RSC** for one name change | no (locally) | **DEFECT 3** |
+| **F** | Organization config (Program name) | `POST /api/admin/configuration/programs` | `publishConfigurationInvalidation("programs")` + `invalidateProgramsCollection` (in-module bus) | **TARGETED_INVALIDATE + REFETCH** | the configuration editor/list, and any mounted subscriber | `update_draft` + `validate_draft` + `publish` + 1 GET (+ 1 RSC, now removed) | no | **NOT a defect — see §3b** |
 
 C and D are **code-certified, not live-certified**: the Work Items row markup would not bind to a
 deterministic locator inside the probe budget, and Processing mutations are document reviews that are
@@ -71,6 +71,29 @@ Only **three** listeners exist on the canonical bus, and none owns queue rows:
 | `useOperationalAnswers` | OIP metric KPIs | membership-changing keys → `prefetchOipMetricsWarm(force)` |
 | `useWorkspaceSurfaceRuntime` | workspace landing cards + Work View totals | membership keys → bust caches, bump nonce (**only while `/workspace` is mounted**) |
 | `useRecordWorkRuntime` | Focus Panel record VM | `planRecordWorkRefresh(actionKey)` |
+
+## 3b. CORRECTION — Organization config was NOT a convergence defect
+
+The Priority 2 audit recorded "no canonical signal is emitted" and "3 POSTs for one name change".
+**Both were wrong, and the record is corrected here rather than quietly restated.**
+
+- The save **does** publish canonical invalidation: `invalidateProgramsCollection(orgId, …)` plus
+  `publishConfigurationInvalidation("programs", …)`, and the workspace's own
+  `subscribeConfigurationInvalidation` listener reloads on it — that listener's `reload({force:true})`
+  IS the single follow-up GET that was measured. Convergence was already correct.
+- The three POSTs are three **distinct operations** on one endpoint, proven by their bodies:
+  `{"action":"update_draft"}`, `{"action":"validate_draft"}`, `{"action":"publish"}`. A
+  draft → validate → publish lifecycle, not a triple write.
+
+**Why the audit got it wrong.** The probe tap patches `window.dispatchEvent` and therefore sees only
+`window` CustomEvents. `publishConfigurationInvalidation` is an in-module pub/sub bus, so a working
+canonical signal was invisible to the instrument and read as "no signal at all". *An instrument that
+cannot observe a mechanism reports its absence.* The harness now says so in its own header.
+
+The one real (small) finding survives: the editor's Continuity URL sync called
+`router.replace(href)` even when `href` was the address already displayed, and the App Router issues
+an RSC round trip for that. Guarded now — the sync only runs for a **different** href — which removes
+the RSC without touching the convergence contract.
 
 ## 3. DEFECT 2 — a record patch does not reach the projections that copy the record's facts
 
@@ -123,7 +146,7 @@ not a convergence failure — but they are an operator-facing contradiction and 
 | **Child name** | `persons` / `customer_members` | Children card, Assignments card, queue rows, Records, Operations | `saveInquiryChild` | Children card **IMMEDIATE**; every other surface **"until the user refreshes"** — *not an acceptable contract* |
 | Waitlist position / order | placement overrides → derived at load | queue rows, Focus Panel, KPIs | `manual-position` | KPIs **ON TARGETED INVALIDATION**; drawer **ON TARGETED INVALIDATION**; **rows have no contract** |
 | Work-item state | operational tasks | launcher badge, Work Items workspace, drawer strip, MyTasksPanel | `dispatchOperationalWorkRefresh` | **ON TARGETED INVALIDATION + BOUNDED POLL (120 s)** — explicit and adequate |
-| Program (configuration) | `configuration/programs` | config editor; consumed by Enrollment/queue vocabularies | config POST | editor **ON RSC REFRESH**; consumers **ON NEXT OPEN** (no signal is emitted) |
+| Program (configuration) | `configuration/programs` | config editor; consumed by Enrollment/queue vocabularies | config POST | editor **ON TARGETED INVALIDATION**; mounted subscribers **ON TARGETED INVALIDATION**; unmounted consumers **ON NEXT OPEN** (collection cache invalidated) |
 
 ## 6. Request blast radius
 
@@ -132,7 +155,7 @@ not a convergence failure — but they are an operator-facing contradiction and 
 | Child field save (A) | 1 PATCH | **EXPECTED TARGETED** — the floor |
 | Placement apply (B) | 1 POST + `metrics/resolve` + drawer VM | expected targeted, but **incomplete** (rows missing) |
 | Placement reset (B) | 7, including `forms`, `drawer-recipients`, `delivery-subjects` | **REDUNDANT / UNRELATED** — a placement order change does not alter form or recipient vocabulary |
-| Program rename (F) | **3× POST** to the same endpoint + 1 GET + 1 RSC | **REDUNDANT** — one name change should be one write |
+| Program rename (F) | `update_draft` + `validate_draft` + `publish` + 1 GET (RSC now removed) | **EXPECTED TARGETED** — three distinct operations, not a triple write (correction, §3b) |
 | `/workspace` root load | **6 unscoped** `provisioning-answer` prefetches, one of them **222 KB** | **BROAD** — Priority 3 |
 | Open one Work Unit | **5 scoped** `provisioning-answer` (one per Work View: 4 × ~10 KB + 1 × 108 KB) + 30 other API calls | **BROAD** |
 

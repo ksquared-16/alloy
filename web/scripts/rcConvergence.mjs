@@ -10,6 +10,15 @@
  * The event tap patches `window.dispatchEvent` rather than adding listeners, because a listener
  * only sees events it subscribed to and the point is to discover which signal fires — including
  * one nobody wired a listener for, which is precisely the STALE_UNTIL_MANUAL_REFRESH case.
+ *
+ * ── WHAT THIS INSTRUMENT CANNOT SEE (law 32) ──
+ *
+ * Only `window` CustomEvents. A module-scoped pub/sub bus is invisible to it. That is not
+ * hypothetical: this harness recorded Organization configuration saves as emitting "no signal at
+ * all", when in fact `publishConfigurationInvalidation` was firing correctly on an in-module bus and
+ * its subscriber's reload was the very GET the harness had already logged. A missing-signal finding
+ * from this tool means "no window event" and NOTHING MORE — confirm the mechanism in source before
+ * calling a surface unconverged.
  */
 import { createRequire } from "module";
 import { homedir } from "os";
