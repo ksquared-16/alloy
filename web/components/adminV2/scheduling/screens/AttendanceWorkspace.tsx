@@ -17,6 +17,10 @@
  * Every mutation goes through a registered action. There are no inline writes.
  */
 
+import {
+    invalidateOperationsDay,
+    warmOperationsDayResult,
+} from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, UserRound, Users } from "lucide-react";
 
@@ -244,16 +248,19 @@ export default function AttendanceWorkspace({
         setError(null);
         try {
             const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
-            const res = await fetch(
+            // Same warm read as the day roster — they share this endpoint, so they must share the
+            // cache AND its invalidation, or a check-in here would leave the roster asserting the
+            // old presence.
+            const { data, error: loadError } = await warmOperationsDayResult(
                 `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}${dateParam}`
             );
-            const json = (await res.json()) as {
+            const json = (data ?? {}) as {
                 roster?: RosterModel;
                 todayYmd?: string;
                 error?: string;
             };
             if (seq !== requestSeq.current) return;
-            if (!res.ok) throw new Error(json.error ?? "Could not load attendance");
+            if (loadError) throw new Error(loadError);
             setModel(json.roster ?? null);
             // Adopt the org-local service date the server resolved.
             if (!date && json.roster?.date) setDate(json.roster.date);
@@ -291,6 +298,8 @@ export default function AttendanceWorkspace({
                 const msg = typeof json.error === "string" ? json.error : json.error?.message;
                 throw new Error(msg ?? "Action failed");
             }
+            // The command has authored; the cached projection is now provably out of date.
+            invalidateOperationsDay();
             await load();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Action failed");

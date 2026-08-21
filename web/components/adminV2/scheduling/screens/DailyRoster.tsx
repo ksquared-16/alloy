@@ -24,6 +24,7 @@
  * present — never the expected count, and never scheduled staff standing in for present staff.
  */
 
+import { warmOperationsDayResult } from "@/lib/scheduling/operationsWorkspaceWarmCache";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, UserRound, Users } from "lucide-react";
 
@@ -295,16 +296,19 @@ export default function DailyRoster({
         setModel(null);
         try {
             const dateParam = date ? `&date=${encodeURIComponent(date)}` : "";
-            const res = await fetch(
+            // Warm-first: the day survives the Operations modal unmount instead of reloading on
+            // every open. Mutations drop it explicitly (`invalidateOperationsDay`) so a corrected
+            // roster is never read from cache.
+            const { data, error: loadError } = await warmOperationsDayResult(
                 `/api/admin/roster?site_location_id=${encodeURIComponent(siteLocationId)}${dateParam}`
             );
-            const json = (await res.json()) as {
+            const json = (data ?? {}) as {
                 roster?: RosterModel;
                 todayYmd?: string;
                 error?: string;
             };
             if (seq !== requestSeq.current) return;
-            if (!res.ok) throw new Error(json.error ?? "Could not load the roster");
+            if (loadError) throw new Error(loadError);
             setModel(json.roster ?? null);
             if (json.todayYmd) setServerToday(json.todayYmd);
             // Adopt the org-local service date the server resolved.

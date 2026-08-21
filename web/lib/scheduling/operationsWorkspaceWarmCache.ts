@@ -42,7 +42,12 @@ async function fetchJson(path: string): Promise<any> {
         headers: { "content-type": "application/json" },
         credentials: "include",
     });
-    return res.json().catch(() => ({}));
+    const json = await res.json().catch(() => ({}));
+    // A non-2xx must NOT be cached as if it were data. Throwing hands the server's own message to
+    // the warm cache, which surfaces it as `error` — callers that show failure copy read it through
+    // `warmOperationsDayResult`.
+    if (!res.ok) throw new Error((json?.error as string) ?? "Request failed");
+    return json;
 }
 
 const referenceCache = createWarmCache<PathParams, any>({
@@ -69,6 +74,16 @@ export async function warmOperationsReference(path: string): Promise<any> {
 export async function warmOperationsDay(path: string): Promise<any> {
     const { data } = await dayCache.warm({ path });
     return data ?? {};
+}
+
+/**
+ * Operating-day read that preserves failure, for callers that render their own error copy.
+ * `warmOperationsDay` is the convenience form; this is the same read with the error kept.
+ */
+export async function warmOperationsDayResult(
+    path: string,
+): Promise<{ data: any | null; error: string | null }> {
+    return dayCache.warm({ path });
 }
 
 /**

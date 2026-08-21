@@ -16,6 +16,7 @@ import {
     invalidateOperationsDay,
     resetOperationsWorkspaceWarmForTests,
     warmOperationsDay,
+    warmOperationsDayResult,
     warmOperationsReference,
     warmOperationsWorkspace,
 } from "@/lib/scheduling/operationsWorkspaceWarmCache";
@@ -28,7 +29,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
     resetOperationsWorkspaceWarmForTests();
-    fetchMock = vi.fn(async () => ({ json: async () => ({ ok: true }) }) as unknown as Response);
+    fetchMock = vi.fn(async () => ({ ok: true, json: async () => ({ ok: true }) }) as unknown as Response);
     vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -84,6 +85,20 @@ describe("Operations workspace warm lifecycle", () => {
         await Promise.resolve();
         expect(fetchMock).toHaveBeenCalledTimes(1);
         expect(String(fetchMock.mock.calls[0][0])).toContain("view=sites");
+    });
+
+    it("a non-2xx is NOT cached as data, and surfaces the server's own message", async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            json: async () => ({ error: "site not found" }),
+        } as unknown as Response);
+        const failed = await warmOperationsDayResult(ROSTER);
+        expect(failed.data).toBeNull();
+        expect(failed.error).toBe("site not found");
+        // Nothing was cached, so the next read genuinely retries.
+        const ok = await warmOperationsDayResult(ROSTER);
+        expect(ok.error).toBeNull();
+        expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it("a failed read is absorbed as an empty object, not thrown at the caller", async () => {
