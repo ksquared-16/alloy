@@ -302,7 +302,7 @@ describe("W-57 / OD-8 — meaning first, and the meaning is the catalog's", () =
         }
         // The summary declines to claim unenforced areas; the editor renders every area regardless,
         // so the record is not hidden — only the headline is honest.
-        expect(executableSource(ROLE_EDITOR)).toContain("authorityAreas.map");
+        expect(executableSource(ROLE_EDITOR)).toContain("matrix.map");
     });
 
     it("no permission key is named in the role editor's source", () => {

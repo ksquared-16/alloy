@@ -132,7 +132,7 @@ export function LocationMultiSelect({
                                         value={search}
                                         onChange={(event) => setSearch(event.target.value)}
                                         placeholder={searchPlaceholder}
-                                        className="config-runtime-input w-full pl-8"
+                                        className="config-runtime-input config-runtime-input--with-leading-icon w-full"
                                         data-testid={`${testId}-search`}
                                         aria-label={searchPlaceholder.replace("…", "")}
                                     />

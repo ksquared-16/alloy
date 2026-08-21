@@ -41,10 +41,10 @@
  * and the advanced disclosure below every area shows the catalog keys the level stands for.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowUpRight, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Pencil, Plus, Search, ShieldCheck } from "lucide-react";
 import {
     ConfigurationEmptyState,
     ConfigurationPrimaryButton,
@@ -66,12 +66,15 @@ import {
     rowEnforcement,
     type PermissionGridLevel,
 } from "@/lib/admin/permissionGrid";
+import { OPERATOR_LEVEL_LABEL } from "@/lib/access/roleAuthoritySummary";
 import {
-    OPERATOR_LEVEL_LABEL,
-    areaAuthorityLabel,
-    buildRoleAuthorityAreas,
-    heldAuthorityAreas,
-} from "@/lib/access/roleAuthoritySummary";
+    applyAreaPreset,
+    areaLevelLabel,
+    buildCapabilityMatrix,
+    heldMatrixAreas,
+    offerableAreaLevels,
+    type MatrixArea,
+} from "@/lib/access/capabilityMatrix";
 import { accessWorkspaceChapterHref } from "@/lib/access/accessChapterRoutes";
 import {
     AUTHORITY_SET_LOADING,
@@ -83,6 +86,7 @@ import {
     authoritySetWriteRefusal,
 } from "@/lib/access/authoritySetLoad";
 import { heldRoleKeys, memberHoldsRole } from "@/lib/access/memberRoleAssignment";
+import { roleKeyFromName } from "@/lib/access/roleKeyFromName";
 
 type RoleRow = { role_key: string; role_label: string; is_system: boolean; is_active: boolean; created_at: string | null };
 /**
@@ -144,7 +148,6 @@ export default function AccessRolesConfigurationPage() {
     const [showAdvanced, setShowAdvanced] = useState(false);
 
     const [newRoleOpen, setNewRoleOpen] = useState(false);
-    const [newRoleKey, setNewRoleKey] = useState("");
     const [newRoleLabel, setNewRoleLabel] = useState("");
     const [newRoleBusy, setNewRoleBusy] = useState(false);
 
@@ -261,8 +264,27 @@ export default function AccessRolesConfigurationPage() {
      * The summary never travels without its rows — see `roleAuthoritySummary.ts` for why collapsing
      * a disagreeing area to one word would be an authority misstatement rather than a simplification.
      */
-    const authorityAreas = useMemo(() => buildRoleAuthorityAreas(gridRows, grantKeys), [gridRows, grantKeys]);
-    const heldAreas = useMemo(() => heldAuthorityAreas(authorityAreas), [authorityAreas]);
+    const matrix = useMemo(() => buildCapabilityMatrix(gridRows, grantKeys), [gridRows, grantKeys]);
+    const heldAreas = useMemo(() => heldMatrixAreas(matrix), [matrix]);
+
+    /** Which areas are expanded to their underlying capabilities. Presentation only. */
+    const [openAreas, setOpenAreas] = useState<Set<string>>(new Set());
+    const toggleArea = (areaKey: string) =>
+        setOpenAreas((prev) => {
+            const next = new Set(prev);
+            if (next.has(areaKey)) next.delete(areaKey);
+            else next.add(areaKey);
+            return next;
+        });
+
+    /**
+     * Apply an area preset. Refused for the same reason a row edit is (`W-56`): an edit against a
+     * grant set that is not KNOWN would manufacture a confident value out of a failed read.
+     */
+    const setAreaLevel = (area: MatrixArea, level: PermissionGridLevel) => {
+        if (grantLoad.status !== "loaded") return;
+        setGrantLoad(authoritySetLoaded(applyAreaPreset({ area, level, granted: new Set(grantLoad.keys) })));
+    };
 
     const selectRole = (roleKey: string) => {
         setSelectedRoleKey(roleKey);
@@ -272,7 +294,6 @@ export default function AccessRolesConfigurationPage() {
     };
 
     const openNewRole = () => {
-        setNewRoleKey("");
         setNewRoleLabel("");
         setNewRoleOpen(true);
     };
@@ -282,10 +303,17 @@ export default function AccessRolesConfigurationPage() {
         setMessage(null);
         setError(null);
         try {
+            // The key is DERIVED, never typed. It stays the canonical identifier underneath — it
+            // is what `W-16`'s foreign key constrains — but asking an operator to invent it made an
+            // implementation detail their problem, and a mistyped one is carried forever.
+            const derivedKey = roleKeyFromName(newRoleLabel, roles.map((r) => r.role_key));
+            if (!derivedKey) {
+                throw new Error("Enter a role name using letters or numbers.");
+            }
             const res = await fetch("/api/admin/rbac/roles", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ role_key: newRoleKey.trim(), role_label: newRoleLabel.trim() }),
+                body: JSON.stringify({ role_key: derivedKey, role_label: newRoleLabel.trim() }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Create role failed");
@@ -576,124 +604,160 @@ export default function AccessRolesConfigurationPage() {
                                             <p className="text-sm text-alloy-midnight/55" data-testid="access-role-permissions-empty">
                                                 No capabilities are defined in the platform catalog.
                                             </p>
-                                        :   <div className="space-y-3" data-testid="access-role-areas">
-                                                {authorityAreas.map((area) => (
-                                                    <section
-                                                        key={area.groupKey}
-                                                        className="overflow-hidden rounded-lg border border-alloy-stone/20 bg-white/40"
-                                                        data-testid={`access-role-area-${area.groupKey}`}
-                                                        data-authority={area.authority}
-                                                    >
-                                                        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-alloy-stone/15 bg-alloy-stone/5 px-3 py-2">
-                                                            <h3 className="text-[12px] font-semibold text-alloy-midnight">
-                                                                {area.groupLabel}
-                                                            </h3>
-                                                            <span
-                                                                className={`${CHIP_CLASS} ${
-                                                                    area.authority === "manage" ?
-                                                                        "border-alloy-bend-pine/35 text-alloy-bend-pine"
-                                                                    : area.authority === "view" ?
-                                                                        "border-alloy-stone/35 text-alloy-midnight/70"
-                                                                    : area.authority === "limited" ?
-                                                                        "border-alloy-stone/35 text-alloy-midnight/60"
-                                                                    :   "border-alloy-stone/25 text-alloy-midnight/40"
-                                                                }`}
-                                                                data-testid={`access-role-area-${area.groupKey}-authority`}
-                                                            >
-                                                                {areaAuthorityLabel(area)}
-                                                            </span>
-                                                        </header>
-
-                                                        <ul className="divide-y divide-alloy-stone/12">
-                                                            {area.rows.map((row) => {
-                                                                const level = levelFromGrantedKeys(row, grantKeys);
-                                                                // W-50 / IA-R8. `offered` is the enforced
-                                                                // subset: a level nothing consults renders
-                                                                // no control, because a control that
-                                                                // changes nothing is T-6's revocation
-                                                                // theatre.
-                                                                const offered = offerableLevelsForRow(row);
-                                                                const enforcement = rowEnforcement(row);
-                                                                const inert = enforcement.inert || offered.length <= 1;
-                                                                return (
-                                                                    <li
-                                                                        key={row.id}
-                                                                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-3 py-2"
-                                                                        data-permission-row={row.id}
-                                                                        data-capability={inert ? "planned" : undefined}
+                                        :   <div
+                                                className="overflow-hidden rounded-lg border border-alloy-stone/20 bg-white/40"
+                                                data-testid="access-role-areas"
+                                            >
+                                                {/*
+                                                  * The matrix. Areas down the side, the three levels
+                                                  * across — compact enough for an administrator to
+                                                  * scan, which the per-area card stack was not.
+                                                  *
+                                                  * The level control is a PRESET: choosing one sets
+                                                  * every enforced capability in the area, one row at
+                                                  * a time through `applyGridRowSelection`, so `H2`
+                                                  * still holds and keys this surface cannot draw are
+                                                  * carried through untouched. It is never stored as
+                                                  * an area-level value, because that would be a
+                                                  * second permission system beside the real grants.
+                                                  */}
+                                                <table className="w-full min-w-[560px] text-left text-xs">
+                                                    <thead className="bg-alloy-stone/10 text-alloy-midnight/65">
+                                                        <tr>
+                                                            <th className="px-3 py-2 font-semibold">Area</th>
+                                                            <th className="w-24 px-3 py-2 text-center font-semibold">No access</th>
+                                                            <th className="w-20 px-3 py-2 text-center font-semibold">View</th>
+                                                            <th className="w-24 px-3 py-2 text-center font-semibold">Manage</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {matrix.map((area) => {
+                                                            const offered = offerableAreaLevels(area);
+                                                            const expanded = openAreas.has(area.areaKey);
+                                                            return (
+                                                                <Fragment key={area.areaKey}>
+                                                                    <tr
+                                                                        className="border-t border-alloy-stone/15"
+                                                                        data-testid={`access-role-area-${area.areaKey}`}
+                                                                        data-authority={area.level}
                                                                     >
-                                                                        <div className="min-w-0">
-                                                                            <div
-                                                                                className={`text-[13px] ${
-                                                                                    inert ?
-                                                                                        "text-alloy-midnight/45"
-                                                                                    :   "font-medium text-alloy-midnight"
-                                                                                }`}
+                                                                        <td className="px-3 py-2">
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => toggleArea(area.areaKey)}
+                                                                                aria-expanded={expanded}
+                                                                                className="flex items-center gap-1.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-bend-pine/35 rounded-sm"
+                                                                                data-testid={`access-role-area-${area.areaKey}-disclose`}
                                                                             >
-                                                                                {row.label}
-                                                                            </div>
-                                                                            {showAdvanced ?
-                                                                                <div
-                                                                                    className="mt-0.5 font-mono text-[10px] text-alloy-midnight/45"
-                                                                                    data-testid={`access-role-keys-${row.id}`}
-                                                                                >
-                                                                                    {[...row.readKeys, ...row.writeKeys]
-                                                                                        .map(
-                                                                                            (k) =>
-                                                                                                `${k}${
-                                                                                                    permissionLabelByKey.get(k) ?
-                                                                                                        ""
-                                                                                                    :   " (uncatalogued)"
-                                                                                                }`,
-                                                                                        )
-                                                                                        .join("  ·  ")}
-                                                                                </div>
-                                                                            :   null}
-                                                                        </div>
+                                                                                <ChevronRight
+                                                                                    className={`h-3 w-3 shrink-0 text-alloy-midnight/40 transition-transform ${expanded ? "rotate-90" : ""}`}
+                                                                                    strokeWidth={2.5}
+                                                                                    aria-hidden
+                                                                                />
+                                                                                <span className="font-medium text-alloy-midnight">{area.label}</span>
+                                                                                {area.level === "limited" ?
+                                                                                    <span
+                                                                                        className={`${CHIP_CLASS} border-alloy-stone/35 text-alloy-midnight/60`}
+                                                                                        data-testid={`access-role-area-${area.areaKey}-authority`}
+                                                                                    >
+                                                                                        {areaLevelLabel(area)}
+                                                                                    </span>
+                                                                                :   null}
+                                                                            </button>
+                                                                        </td>
+                                                                        {(["none", "read", "write"] as const).map((opt) => (
+                                                                            <td key={opt} className="px-3 py-2 text-center">
+                                                                                {offered.includes(opt) ?
+                                                                                    <label className="inline-flex cursor-pointer items-center justify-center">
+                                                                                        <input
+                                                                                            type="radio"
+                                                                                            name={`access-area-${area.areaKey}`}
+                                                                                            checked={
+                                                                                                area.level !== "limited"
+                                                                                                && ((opt === "none" && area.level === "none")
+                                                                                                    || (opt === "read" && area.level === "view")
+                                                                                                    || (opt === "write" && area.level === "manage"))
+                                                                                            }
+                                                                                            disabled={!writable}
+                                                                                            onChange={() => setAreaLevel(area, opt)}
+                                                                                            data-testid={`access-role-area-${area.areaKey}-${opt}`}
+                                                                                        />
+                                                                                        <span className="sr-only">{OPERATOR_LEVEL_LABEL[opt]}</span>
+                                                                                    </label>
+                                                                                :   <span className="text-alloy-midnight/25" aria-label="Not available for this area">—</span>
+                                                                                }
+                                                                            </td>
+                                                                        ))}
+                                                                    </tr>
 
-                                                                        {inert ?
-                                                                            <span
-                                                                                className="text-[11px] text-alloy-midnight/45"
-                                                                                data-testid={`access-role-permission-${row.id}-unenforced`}
-                                                                            >
-                                                                                Not enforced yet — granting this would change nothing
-                                                                            </span>
-                                                                        :   <div
-                                                                                role="radiogroup"
-                                                                                aria-label={`${row.label} access level`}
-                                                                                className="flex shrink-0 items-center gap-1 rounded-md border border-alloy-stone/25 bg-white/70 p-0.5"
-                                                                            >
-                                                                                {(["none", "read", "write"] as const)
-                                                                                    .filter((opt) => offered.includes(opt))
-                                                                                    .map((opt) => (
-                                                                                        <label
-                                                                                            key={opt}
-                                                                                            className={`cursor-pointer rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                                                                                                level === opt ?
-                                                                                                    "bg-alloy-bend-pine/12 text-alloy-bend-pine"
-                                                                                                :   "text-alloy-midnight/55 hover:text-alloy-midnight"
-                                                                                            }`}
+                                                                    {/*
+                                                                      * Progressive disclosure. The
+                                                                      * preset above is a summary of
+                                                                      * these rows; this is where an
+                                                                      * operator sees — and sets —
+                                                                      * the capabilities it summarises.
+                                                                      */}
+                                                                    {expanded ?
+                                                                        area.rows.map((row) => {
+                                                                            const level = levelFromGrantedKeys(row, grantKeys);
+                                                                            const rowOffered = offerableLevelsForRow(row);
+                                                                            const inert = rowEnforcement(row).inert || rowOffered.length <= 1;
+                                                                            return (
+                                                                                <tr
+                                                                                    key={row.id}
+                                                                                    className="border-t border-alloy-stone/10 bg-alloy-stone/5"
+                                                                                    data-permission-row={row.id}
+                                                                                    data-capability={inert ? "planned" : undefined}
+                                                                                >
+                                                                                    <td className="py-1.5 pl-9 pr-3">
+                                                                                        <span className={inert ? "text-alloy-midnight/45" : "text-alloy-midnight/80"}>
+                                                                                            {row.label}
+                                                                                        </span>
+                                                                                        {showAdvanced ?
+                                                                                            <span
+                                                                                                className="ml-2 font-mono text-[10px] text-alloy-midnight/40"
+                                                                                                data-testid={`access-role-keys-${row.id}`}
+                                                                                            >
+                                                                                                {[...row.readKeys, ...row.writeKeys].join(" · ")}
+                                                                                            </span>
+                                                                                        :   null}
+                                                                                    </td>
+                                                                                    {inert ?
+                                                                                        <td
+                                                                                            colSpan={3}
+                                                                                            className="px-3 py-1.5 text-center text-[11px] text-alloy-midnight/45"
+                                                                                            data-testid={`access-role-permission-${row.id}-unenforced`}
                                                                                         >
-                                                                                            <input
-                                                                                                type="radio"
-                                                                                                className="sr-only"
-                                                                                                name={`access-perm-${row.id}`}
-                                                                                                checked={level === opt}
-                                                                                                disabled={!writable}
-                                                                                                onChange={() => setGridLevel(row.id, opt)}
-                                                                                                data-testid={`access-role-permission-${row.id}-${opt}`}
-                                                                                            />
-                                                                                            {OPERATOR_LEVEL_LABEL[opt]}
-                                                                                        </label>
-                                                                                    ))}
-                                                                            </div>
-                                                                        }
-                                                                    </li>
-                                                                );
-                                                            })}
-                                                        </ul>
-                                                    </section>
-                                                ))}
+                                                                                            Not enforced yet
+                                                                                        </td>
+                                                                                    :   (["none", "read", "write"] as const).map((opt) => (
+                                                                                            <td key={opt} className="px-3 py-1.5 text-center">
+                                                                                                {rowOffered.includes(opt) ?
+                                                                                                    <label className="inline-flex cursor-pointer items-center justify-center">
+                                                                                                        <input
+                                                                                                            type="radio"
+                                                                                                            name={`access-perm-${row.id}`}
+                                                                                                            checked={level === opt}
+                                                                                                            disabled={!writable}
+                                                                                                            onChange={() => setGridLevel(row.id, opt)}
+                                                                                                            data-testid={`access-role-permission-${row.id}-${opt}`}
+                                                                                                        />
+                                                                                                        <span className="sr-only">{OPERATOR_LEVEL_LABEL[opt]}</span>
+                                                                                                    </label>
+                                                                                                :   <span className="text-alloy-midnight/25">—</span>
+                                                                                                }
+                                                                                            </td>
+                                                                                        ))
+                                                                                    }
+                                                                                </tr>
+                                                                            );
+                                                                        })
+                                                                    :   null}
+                                                                </Fragment>
+                                                            );
+                                                        })}
+                                                    </tbody>
+                                                </table>
                                             </div>
                                         }
 
@@ -801,7 +865,7 @@ export default function AccessRolesConfigurationPage() {
                         </div>
                         <div className="mt-4 space-y-3">
                             <label className="block">
-                                <span className="config-typo-field-label">Label *</span>
+                                <span className="config-typo-field-label">Role name *</span>
                                 <input
                                     value={newRoleLabel}
                                     onChange={(event) => setNewRoleLabel(event.target.value)}
@@ -809,27 +873,18 @@ export default function AccessRolesConfigurationPage() {
                                     className="config-runtime-input mt-1"
                                     data-testid="access-new-role-label"
                                 />
-                            </label>
-                            <label className="block">
-                                <span className="config-typo-field-label">Key *</span>
-                                <input
-                                    value={newRoleKey}
-                                    onChange={(event) => setNewRoleKey(event.target.value)}
-                                    placeholder="front_desk_coordinator"
-                                    className="config-runtime-input mt-1"
-                                    data-testid="access-new-role-key"
-                                />
                                 <span className="mt-1 block text-[11px] text-alloy-midnight/45">
-                                    Technical identifier only — operators see the label, not this key.
+                                    What this responsibility is called. You can change it later.
                                 </span>
                             </label>
+
                         </div>
                         <div className="mt-5 flex justify-end gap-2">
                             <ConfigurationSecondaryButton disabled={newRoleBusy} onClick={() => setNewRoleOpen(false)}>
                                 Cancel
                             </ConfigurationSecondaryButton>
                             <ConfigurationPrimaryButton
-                                disabled={newRoleBusy || !newRoleKey.trim() || !newRoleLabel.trim()}
+                                disabled={newRoleBusy || !newRoleLabel.trim()}
                                 onClick={() => void createRole()}
                                 data-testid="access-new-role-save"
                             >

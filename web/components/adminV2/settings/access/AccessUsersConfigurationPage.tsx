@@ -621,10 +621,28 @@ export default function AccessUsersConfigurationPage({
                                             <span className="locations-collection-row__body">
                                                 <span className="locations-collection-row__name">{displayName(m)}</span>
                                                 <span className="locations-collection-row__place">{m.email ?? "No email on file"}</span>
+                                                {/*
+                                                  * Location is the operator-facing scope. The
+                                                  * department summary used to sit here too, and for
+                                                  * almost everyone it read "All departments" — a
+                                                  * column of noise that pushed the facts an operator
+                                                  * came for off the end of the row.
+                                                  *
+                                                  * It is not simply hidden. Department scope is still
+                                                  * stored and still enforced, so a member who IS
+                                                  * restricted says so: dropping the row entirely
+                                                  * would let this surface imply unrestricted access
+                                                  * to someone who does not have it, which is the one
+                                                  * thing a truthful Access product must not do.
+                                                  */}
                                                 <span className="locations-collection-row__meta text-alloy-midnight/50">
                                                     {rolesLabelFor(m) ?? "No role assigned"} ·{" "}
-                                                    {locationSummary(m, siteLocations).label} ·{" "}
-                                                    {departmentSummary(m, departments).label}
+                                                    {locationSummary(m, siteLocations).label}
+                                                    {m.effective_department_scope === "restricted" ?
+                                                        <span data-testid={`access-user-${m.user_id}-department-restricted`}>
+                                                            {" "}· Departments restricted
+                                                        </span>
+                                                    :   null}
                                                 </span>
                                             </span>
                                             <span
@@ -918,69 +936,6 @@ export default function AccessUsersConfigurationPage({
                                                             }
                                                         </dd>
                                                     </div>
-                                                </dl>
-                                            </ConfigWorkspaceCard>
-                                            <ConfigWorkspaceCard
-                                                title="Effective Access"
-                                                testId="access-user-overview-effective-access"
-                                                className="opacity-90"
-                                            >
-                                                {/*
-                                                  * W-47: the scope half of effective access is readable today, so it is
-                                                  * shown. `effective_*` comes from the enforcing resolver
-                                                  * (`resolveScopeAnswerFromProfile` under `ABSENT_PROFILE_ENFORCEMENT`),
-                                                  * not from a second rule — `IA-R4`'s "MUST NOT have a second
-                                                  * implementation" applied where it already costs nothing.
-                                                  *
-                                                  * The capability half is still Planned: W-48 binds it to the resolver
-                                                  * after W-41/W-42, and computing it here would be the second
-                                                  * implementation that workstream exists to prevent.
-                                                  */}
-                                                <dl
-                                                    className="grid gap-3 text-sm"
-                                                    data-testid="access-user-effective-scope"
-                                                >
-                                                    <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
-                                                            Locations
-                                                        </dt>
-                                                        <dd
-                                                            className="mt-0.5"
-                                                            data-scope-configured={selected.site_scope}
-                                                            data-scope-effective={selected.effective_site_scope}
-                                                        >
-                                                            {locationSummary(selected, siteLocations).label}
-                                                        </dd>
-                                                    </div>
-                                                    <div>
-                                                        <dt className="text-[11px] font-medium text-alloy-midnight/40">
-                                                            Departments
-                                                        </dt>
-                                                        <dd
-                                                            className="mt-0.5"
-                                                            data-scope-configured={selected.department_scope}
-                                                            data-scope-effective={selected.effective_department_scope}
-                                                        >
-                                                            {departmentSummary(selected, departments).label}
-                                                        </dd>
-                                                    </div>
-                                                    {selected.effective_divergence_reason ?
-                                                        <div
-                                                            className="rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[12px] leading-5 text-amber-900"
-                                                            data-testid="access-user-effective-scope-divergence"
-                                                            role="note"
-                                                        >
-                                                            {selected.effective_divergence_reason}
-                                                        </div>
-                                                    :   null}
-                                                    <p
-                                                        className="text-[12px] leading-5 text-alloy-midnight/55"
-                                                        data-capability="planned"
-                                                        data-testid="access-user-effective-access-planned"
-                                                    >
-                                                        Capability-level effective access — what this person may do, not
-                                                        only where — is planned and is not computed yet.
-                                                    </p>
                                                 </dl>
                                             </ConfigWorkspaceCard>
                                             <ConfigWorkspaceCard
