@@ -41,13 +41,17 @@ Production build, hosted Supabase, host qualified before and after each cell.
 | Queue row → child Mission, prepared | **209–233 ms** | 6,818–7,739 ms before the reveal-gate fix |
 | Queue row → child Mission, unprepared | ~6.5 s | genuinely cold row |
 | Focus Panel mode switch (Activity) | **18–33 ms** | height constant, context preserved |
-| Activity timeline usable, cold / warm | 2,110 ms / **33 ms** | |
+| Focus Panel Activity content, settled / early-switch | **315–327 ms** / 1,905–3,998 ms | see §12 — early-switch cost is Communications contention, NOT a missing prefetch |
 | Operational workspace shell | **54–101 ms** | Processing · Work Items · Operations · Inbox |
+| **Operational workspace shell, resumed** | **5–24 ms** | see §10 — 9/9 scenarios across three workspaces |
+| **Focus Panel card destination** | **31–155 ms** | see §13 — controls present at commit |
+| **Focus Panel command destination** | **28–80 ms** | see §13 — Tour and Billing commit with 0 requests |
+| **Operations workspace reopen** | **0 requests** in the freshness window | see §9 — was 7 every open |
 | Edit → control | 13–94 ms | |
 | Dropdown → options | **25–30 ms warm**, 0 network | |
 | Save acknowledgement / convergence | **77–84 ms** | UI converges before the server responds |
-| Save server completion | 3,100–3,238 ms | open item |
-| Organization warm navigation | TTFB ~380 ms, FCP ~410 ms | |
+| **Save server authoritative completion** | **1,736–1,759 ms** | was 3,376 ms — see §14. Post-write readback removed |
+| **`/organization` warm navigation** | **17–55 ms** to destination commit | see §15. First cold entry to a route family 1,486–2,594 ms |
 | CLS, prepared path | **0** | direct path 0.183, 97% one late overlay |
 
 ## 3. Readiness strategy (certified)
@@ -100,7 +104,11 @@ justification, regression updates, and re-certification.
 23. **Reuse is only safe with an invalidation seam.** A TTL alone is not freshness. Every cached projection a command can change must be dropped by that command, at every layer that holds it. Caching a mutable projection without its seam is how a green toast leaves a stale board on screen.
 24. **Readiness follows resume.** Preparing the default destination for a workspace that reopens somewhere else prepares the wrong thing. Readiness reads the remembered position, and arms on nav intent (hover/focus) — warming inside the modal's own open effect runs at the same instant the workspace mounts and cannot shorten a serial chain.
 
-## 5. Invariant → guard matrix
+## 5. Invariant → guard matrix — SUPERSEDED BY §17
+
+> Kept for history. **§17 is the authority.** Four rows below read "gap" and are now CLOSED: latest
+> intent wins, Save persistence / no false success, Activity subject switching, and floating surfaces
+> vs navigation. Where the two disagree, §17 is correct.
 
 | Law | Canonical owner | Guard | Status |
 |---|---|---|---|
@@ -139,19 +147,27 @@ Every one of these produced a **plausible but false** result during this program
 - `adminv2-bos-rail-overlay` still moves horizontally at ~21–24 s, which is ~97% of direct-path CLS (0.1795). Its parked position genuinely overlaps page controls, so it re-parks to escape them — the algorithm working as designed. A conditional "do not re-park when unobstructed" was measured and produced no change; eliminating the shift is a decision about where the floating rail should live. **Rail owner.** (The pointer-interception half is FIXED — see law 20.)
 
 **Runtime debt**
-- Save server completion ~3.2 s (client UX already premium).
+- ~~Save server completion ~3.2 s~~ — **RESOLVED (§14): 3,376 ms → 1,759 ms.**
 - Operational workspace **shell** launch is uniform and premium (54–101 ms, constant height, clean Escape). The **data** lifecycle is classified below (§8) — two earlier readings of it were wrong and are corrected there.
-- Activity cold timeline 2.1 s; 11 requests on subject switch while Activity is open.
+- ~~Activity cold timeline 2.1 s~~ — **RECLASSIFIED (§12).** Not a preload gap: the prefetch already
+  fires ~14 s ahead. The early-switch cost is contention with the record's own in-flight preparation,
+  dominated by the Communications cascade. **External owner.** (11 requests on an in-Activity subject
+  switch is still observed.)
 - `QueueRowModel.entityType` is typed `"opportunity" | "job" | "schedule"` while the provisioning answer emits `"child"` — type/runtime divergence.
 - Queue rows 404 on `/view-models/drawer/opportunity/<row id>`: ~1.4 s of wasted server work per row click.
-- `/organization/processes`: 89% of 2,853 KB is one `entity-layouts` response; `stage-bootstrap` 6.4 s. Both secondary to paint — operator gating not yet certified.
+- ~~`/organization/processes` operator gating not yet certified~~ — **CERTIFIED (§15).** `entity-layouts`
+  and `stage-bootstrap` do NOT gate process selection, stage selection, the editor or controls:
+  controls are usable at 54 ms while those requests continue to ~3,530 ms. **Classified SECONDARY.**
 - Validation broker pins `--max-old-space-size=4096` for typecheck while the package script uses 8192; typecheck OOMs.
 
 **Not yet certified**
-- `/organization` operator interaction (Part 5), card/command destination readiness (Part 3).
+- ~~`/organization` operator interaction; card/command destination readiness~~ — **BOTH CERTIFIED**
+  (§15 and §13).
 - **CLOSED:** operational workspace resume semantics — decided, implemented at a shared owner, and certified (§10).
 - **`/api/admin/records/children` at ~3.3-4.5 s** is the largest single number left in the operator runtime. Owner: Records. Not a caching problem — see §10.
-- Save server tail (~3.2 s) and Activity cold prepared content (~2.1 s) remain owed against their budgets (§11).
+- ~~Save server tail (~3.2 s) and Activity cold prepared content (~2.1 s) remain owed~~ — Save
+  **RESOLVED (§14)**; Activity **reclassified to an external owner (§12)**. Current budget status is
+  §16.
 - A speculative drawer-VM prefetch on `/workspace` 404s (`/api/admin/view-models/drawer/opportunity/<id>`), i.e. readiness spending a request on a destination that does not resolve. Bounded and harmless, but it is measurable waste.
 
 
@@ -639,6 +655,14 @@ regression and a cold path as fine.
 | **20 forbidden parking** | `chooseBosParkingGeometry` | `bosForbiddenParkingContract.test.ts` (5) | **guarded** |
 | 24 readiness follows resume | `warmOperationsWorkspace` + sidebar nav intent | browser-measured request chain | **partial** |
 | cross-child leakage | `data-children-focused-member` | `pe3CardCommandReadiness.mjs` identity assertion | **browser-certified** |
+| **Assignment child scoping** | `resolveFocusPanelMutationOpportunityId` + assignment subject binding | `operationalAssignments/assignmentSubjectBinding.test.ts`, `adminV2/runtime/resolveFocusPanelMutationOpportunityId.test.ts`, `subjectContractGeneralization.test.ts`, `subjectGrainDerivedOnce.test.ts` | **guarded (pre-existing)** |
+| **Avatar identity propagation** | child avatar resolution | `adminV2/runtime/identitySemanticAvatar.test.ts`, `childAvatarSessionPreview.test.ts`, `resolveChildPhotoUrl.test.ts` | **guarded (pre-existing)** |
+| **Escape layering** | Focus Panel escape ownership | `focusPanel/escapeLayerOwnership.test.ts` | **guarded (pre-existing)** |
+| **Command return grammar** | command surface handoff | `adminV2/commandSurfaceHandoffUx.contract.test.ts`, `commandSurfaceCardNavigation.test.ts`, `commandSurfaceExecutionReceipt.contract.test.ts` | **guarded (pre-existing)** — one source-inspection assertion in the handoff suite fails on staging independently of this branch; see §7 |
+
+**All five named guard gaps are closed, and every high-risk contract named at freeze has a
+deterministic owner.** The four rows above were already guarded before this programme — they are
+recorded here so the matrix is complete, and **no test was added merely to raise the count**.
 
 **All five named guard gaps are closed.** Every guard is deterministic and positive-controlled: each
 reuse/ordering assertion is paired with a case that MUST fetch or MUST commit, so a mechanism that
