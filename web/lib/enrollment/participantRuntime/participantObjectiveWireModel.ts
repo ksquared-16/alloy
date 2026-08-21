@@ -71,6 +71,13 @@ export type ParticipantObjectiveWire = {
          */
         readonly field_ids: readonly string[];
     };
+    /**
+     * An outstanding question the runtime raised about this need.
+     *
+     * The QUESTION only — never the pending value. The parent answers yes or no; the server alone
+     * knows what yes refers to, so a tampered browser still cannot name a value to be written.
+     */
+    readonly pending_clarification: { readonly question: string } | null;
     /** Whether anything at all is left for the participant. */
     readonly complete: boolean;
 };
@@ -98,7 +105,11 @@ function resolvedSubjectDisplayName(
 
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
-    context?: { readonly subjectDisplayName?: string | null },
+    context?: {
+        readonly subjectDisplayName?: string | null;
+        /** The outstanding question for the CURRENT need, resolved by the caller from session state. */
+        readonly pendingClarificationQuestion?: string | null;
+    },
 ): ParticipantObjectiveWire {
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
@@ -147,6 +158,9 @@ export function participantObjectiveWireModel(
             optional: turn.need?.optional === true,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
+        pending_clarification: context?.pendingClarificationQuestion
+            ? { question: context.pendingClarificationQuestion }
+            : null,
         complete: turn.kind === "complete",
     };
 }

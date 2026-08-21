@@ -267,7 +267,15 @@ function violatesHiddenNonEmpty(field: FormField, raw: unknown): boolean {
     return raw !== "";
 }
 
-function validateScalarValue(
+/**
+ * The one owner of "is this value valid for this authored field".
+ *
+ * Exported so the Participant Runtime can DELEGATE to it instead of restating its rules. That
+ * matters more than it looks: this function is where `validate.min`, `validate.max`,
+ * `validate.pattern`, the closed option set and the type checks live, and a conversational surface
+ * that re-implemented any of them would drift from the artifact the parent eventually signs.
+ */
+export function validateScalarValue(
     field: FormField,
     raw: unknown,
     mode: FormPayloadMode,

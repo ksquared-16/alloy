@@ -136,6 +136,7 @@ jobs:
             tests/lifecycle/participantDeterministicJourney.test.ts \
             tests/lifecycle/compiledParticipantArtifact.test.ts \
             tests/lifecycle/participantConversationProductization.test.ts \
+            tests/lifecycle/participantTypedValidation.test.ts \
             tests/forms/loadPublishedFormEnvelope.test.ts \
             tests/forms/resolveActiveStepEnvelope.test.ts \
             tests/forms/pdf/documentDestinationDateFormat.test.ts \

@@ -37,6 +37,12 @@ import {
     type ParticipantObjectiveContext,
 } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import type { FormField } from "@/lib/forms/schema";
+import type { ProgramAgeRange } from "@/lib/programs/programAgeRange";
+import {
+    readPendingClarification,
+    withPendingClarification,
+    withoutPendingClarification,
+} from "@/lib/enrollment/participantRuntime/pendingClarification";
 import type {
     CandidateDisposition,
     StructuredCandidate,
@@ -68,6 +74,22 @@ export async function applyParticipantTurnResponse(
         field?: FormField | null;
         /** Injected so the write stays deterministic and testable. */
         nowIso: string;
+        /**
+         * The PROGRAMME's own age rule, when the caller resolved one.
+         *
+         * Absent applies no age rule at all — Alloy has one owner for this
+         * (`lib/programs/programAgeRange.ts`) and the participant runtime is not it.
+         */
+        ageRange?: ProgramAgeRange | null;
+        /**
+         * The parent is EXPLICITLY correcting, having opened the authored control.
+         *
+         * False (the default) means a value arrived in passing, and a material disagreement with
+         * what is on file becomes a question rather than an overwrite.
+         */
+        correctionFlow?: boolean;
+        /** Internal: retire the outstanding question for this need as part of this write. */
+        clearPendingFor?: string | null;
         canonicalValues?: Readonly<Record<string, unknown>>;
         /**
          * The objective the CALLER already resolved this request, with its context.
@@ -94,10 +116,39 @@ export async function applyParticipantTurnResponse(
     if (!before.ok) return before;
 
     const turn = before.value.next_turn;
+    /**
+     * AN OUTSTANDING QUESTION OUTRANKS THE TURN.
+     *
+     * When the runtime has already asked "did you mean August 8, 2021?", a `confirmed` candidate
+     * means yes-to-THAT, not yes-to-the-record. Resolving it here — before disposal — is what lets
+     * the browser answer with a bare "yes" while the server alone knows what yes referred to.
+     */
+    const pendingNeedKey = turn.need?.identity.key ?? null;
+    const pending = readPendingClarification(
+        input.current?.context.needsContext.session?.metadata,
+        pendingNeedKey,
+    );
+    if (pending && pendingNeedKey) {
+        if (input.candidate.kind === "confirmed") {
+            // Accept the value the runtime proposed, exactly as a correction the parent made.
+            return await applyParticipantTurnResponse(supabase, {
+                ...input,
+                candidate: { kind: "corrected_value", value: pending.value },
+                correctionFlow: true,
+                clearPendingFor: pendingNeedKey,
+            });
+        }
+        // Anything else — a new value, a refusal, words — retires the question and is judged fresh.
+        input = { ...input, clearPendingFor: pendingNeedKey };
+    }
+
     const disposition = disposeParticipantCandidate({
         turn,
         candidate: input.candidate,
         field: input.field ?? null,
+        // The clock is the caller's; plausibility refuses to read one itself.
+        context: { nowIso: input.nowIso, ageRange: input.ageRange ?? null },
+        correctionFlow: input.correctionFlow === true,
     });
 
     const sessionId = before.value.session_id;
@@ -106,7 +157,55 @@ export async function applyParticipantTurnResponse(
     /** The session as it stands AFTER this turn's write — the pure recompute's one moving input. */
     let postWrite: { shared_values: Record<string, unknown>; metadata: Record<string, unknown> } | null = null;
 
-    if (sessionId && needKey && disposition.action !== "no_change" && disposition.action !== "refused") {
+    /**
+     * A CLARIFICATION IS A METADATA WRITE, NEVER A VALUE WRITE.
+     *
+     * The question is recorded so it survives a reload and a resumed session; `shared_values` is
+     * untouched, so no document, prefill or mapped destination moves while the question is open.
+     * That separation IS the product value of this tranche.
+     */
+    if (disposition.action === "clarify" && sessionId && needKey) {
+        const baseSession = input.current?.context.needsContext.session ?? null;
+        const nextMetadata = withPendingClarification({
+            metadata: (baseSession as { metadata?: unknown } | null)?.metadata ?? {},
+            needKey,
+            value: disposition.pending,
+            question: disposition.question,
+            askedAtIso: input.nowIso,
+        });
+        const { error } = await supabase
+            .from("form_packet_sessions")
+            .update({ metadata: nextMetadata })
+            .eq("id", sessionId)
+            .eq("org_id", input.orgId);
+        if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+        if (input.current && baseSession) {
+            return {
+                ok: true,
+                disposition,
+                objective: recomputeParticipantObjectiveFromContext(input.current.context, {
+                    ...baseSession,
+                    metadata: nextMetadata,
+                }),
+            };
+        }
+    }
+
+    /**
+     * NOTHING IS WRITTEN unless the platform accepted the answer.
+     *
+     * `clarify` is listed here explicitly and deliberately: a suspicious or conflicting value has
+     * been READ but not trusted, and the whole point of the outcome is that `shared_values` is not
+     * touched while the question is outstanding. Omitting it here would persist exactly the values
+     * this tranche exists to catch.
+     */
+    if (
+        sessionId &&
+        needKey &&
+        disposition.action !== "no_change" &&
+        disposition.action !== "refused" &&
+        disposition.action !== "clarify"
+    ) {
         /**
          * THE MERGE BASE — this request's own session snapshot, not a second read of it.
          *
@@ -168,6 +267,14 @@ export async function applyParticipantTurnResponse(
              */
             const patch: Record<string, unknown> = {};
             if (metadata) patch.metadata = metadata;
+            // Accepting an answer retires any question the runtime had raised about this need — in
+            // the same write, so a crash cannot leave a question outstanding over a settled value.
+            if (input.clearPendingFor) {
+                patch.metadata = withoutPendingClarification(
+                    patch.metadata ?? row.metadata ?? {},
+                    input.clearPendingFor,
+                );
+            }
             if (sharedKey) {
                 patch.shared_values = shallowMergeSharedValues(
                     (row.shared_values ?? {}) as Record<string, unknown>,
@@ -210,6 +317,14 @@ export async function applyParticipantTurnResponse(
             });
             const patch: Record<string, unknown> = { shared_values };
             if (metadata) patch.metadata = metadata;
+            // Accepting an answer retires any question the runtime had raised about this need — in
+            // the same write, so a crash cannot leave a question outstanding over a settled value.
+            if (input.clearPendingFor) {
+                patch.metadata = withoutPendingClarification(
+                    patch.metadata ?? row.metadata ?? {},
+                    input.clearPendingFor,
+                );
+            }
             const { error } = await supabase
                 .from("form_packet_sessions")
                 .update(patch)

@@ -102,6 +102,24 @@ export type CandidateDisposition =
     | { readonly action: "confirm_value"; readonly value: unknown }
     | { readonly action: "write_shared_value"; readonly value: unknown }
     | { readonly action: "no_change"; readonly reason: "unresolved" | "clarification_needed" }
+    /**
+     * READ, BUT NOT TRUSTED — the participant is asked, and NOTHING is persisted.
+     *
+     * Distinct from `refused`, which ends the attempt, and from `no_change`, which means the runtime
+     * could not read the answer at all. Here the runtime read it and doubts it: a five-digit year, a
+     * date of birth that would make the child a different age than the record says. The suspicious
+     * value never reaches `shared_values`; it lives only in this response, as a question.
+     *
+     * `pending` is what would be written IF the parent says yes, so the next turn can accept a bare
+     * confirmation without the browser ever naming a value.
+     */
+    | {
+          readonly action: "clarify";
+          readonly question: string;
+          readonly pending: unknown;
+          /** The value already on file, when this is a disagreement rather than a typo. */
+          readonly existing?: unknown;
+      }
     | { readonly action: "refused"; readonly reason: string };
 
 /** Parse anything claiming to be a provider candidate. Unrecognized shapes become `unresolved`. */

@@ -314,7 +314,22 @@ export function EnrollmentConversationCard({
     const suggestions: SuggestedReply[] = [];
     /** Which authored control the pills stand for — see `SuggestedReplies`. */
     let suggestionKind: string | undefined;
-    if (control.kind === "choice_or_text" && !correcting) {
+    if (objective.pending_clarification && !correcting) {
+        /**
+         * A question is outstanding, so it owns the replies.
+         *
+         * "Yes" sends the word and nothing else — the server knows what it referred to. "No" opens
+         * the authored control so the parent supplies the value themselves. Neither path lets the
+         * browser name a value, and neither has persisted anything yet.
+         */
+        suggestionKind = "clarification";
+        suggestions.push({
+            label: "Yes, that's right",
+            emphasis: true,
+            onSelect: () => void submit({ text: "yes", settledAs: "Yes" }),
+        });
+        suggestions.push({ label: "No, let me change it", onSelect: () => setCorrecting(true) });
+    } else if (control.kind === "choice_or_text" && !correcting) {
         suggestionKind = "confirm";
         suggestions.push({
             label: control.affirm,
@@ -414,6 +429,16 @@ export function EnrollmentConversationCard({
                                     ),
                                 )}
                             </ThreadSaid>
+                            {objective.pending_clarification ? (
+                                /* THE PLATFORM'S OWN QUESTION — deterministic, not the provider's.
+                                   It replaces nothing: the same turn and its controls stand
+                                   beneath, and no value has been written while it is open. */
+                                <span data-participant-needs-clarification="true">
+                                    <ThreadSupporting tone="speaking">
+                                        {objective.pending_clarification.question}
+                                    </ThreadSupporting>
+                                </span>
+                            ) : null}
                             {clarification ? (
                                 // The provider's bounded clarifying question, in Alloy's voice. The
                                 // turn and its deterministic controls are UNCHANGED beneath it.
