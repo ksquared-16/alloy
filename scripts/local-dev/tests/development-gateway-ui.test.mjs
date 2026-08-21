@@ -58,6 +58,7 @@ import {
   renderLaneList,
   renderLastInstruction,
   renderLaneSessionCallout,
+  renderComposer,
   renderCurrentWork,
   renderPreviousWork,
   renderLaneRuntimeControls,
@@ -1247,6 +1248,38 @@ await test("viewed fingerprint migrates from alias keys", () => {
   assert.equal(JSON.parse(store.getItem("vac.gw.viewed.lane_abc123abc123")).fingerprint, "abc");
 });
 
+await test("Start Session callout names occupying Claude lanes at capacity", () => {
+  const html = renderLaneSessionCallout({
+    lane_id: "lane_2cea84351d90",
+    label: "Trust Runtime",
+    durable: true,
+    runtime: "offline",
+    claude: { presence: "absent" },
+    tmux: { alive: false, session: null },
+    worktree: { name: "wt4-enrollment", path: "/x/wt4" },
+    binding: { worktree_path: "/x/wt4", provider: "claude" },
+    admission: { state: "QUEUED", queue_position: 5 },
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+    start_session: { available: true, implemented: true },
+  }, {
+    executionCapacity: {
+      max_active: 3,
+      active: 3,
+      available: 0,
+      running: [
+        { name: "Access & Identity" },
+        { name: "Communications" },
+        { name: "Runtime Performance" },
+      ],
+    },
+  });
+  assert.match(html, /Start Session/);
+  assert.match(html, /Claude is at 3\/3/);
+  assert.match(html, /Access &amp; Identity/);
+  assert.match(html, /Communications/);
+  assert.match(html, /Runtime Performance/);
+});
+
 await test("offline bound lane shows Start Session without failing work", () => {
   const comms = {
     lane_id: "lane_336af3bdc474",
@@ -1271,6 +1304,17 @@ await test("offline bound lane shows Start Session without failing work", () => 
   const n = deliveryNotice({ ok: true, status: "queued", session_required: true, admission_queued: true });
   assert.equal(n.kind, "ok");
   assert.match(n.text, /No agent session/);
+  const replaced = deliveryNotice({
+    ok: true,
+    status: "queued",
+    session_required: true,
+    admission_queued: true,
+    replaced: true,
+  });
+  assert.match(replaced.text, /Instruction updated/);
+  const composer = renderComposer({ queueUntilSession: true });
+  assert.match(composer, /queue until a session starts/);
+  assert.doesNotMatch(composer, /disabled/);
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1620,8 +1664,12 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: latest.text,
     listReady: true,
   });
-  assert.match(html, /Latest Claude Response/);
+  // The panel is named for what it shows, not for who produced it: one panel
+  // serves both Claude and Cursor lanes.
+  assert.match(html, /Latest response/);
+  assert.equal(html.includes("Latest Claude Response"), false);
   assert.match(html, /data-gw-output-recent/);
+  // The agent name IS provider-aware in sentences about the agent.
   assert.match(html, /Claude is running/);
   assert.match(html, /data-gw-claude-run/);
   assert.equal(html.includes("data-gw-output-latest>"), false);
@@ -1698,7 +1746,7 @@ await test("lane execution posture is not Execution Run state", () => {
     execution_run: { state: "EXECUTING" },
   });
   assert.equal(running.state, "RUNNING");
-  assert.match(running.hint, /Current work executing/);
+  assert.match(running.label, /Executing/);
   const queued = deriveLaneExecutionPosture({
     label: "Processing",
     durable: true,
@@ -1737,8 +1785,8 @@ await test("capacity summary names lanes, not slot pickers", () => {
     { lane_id: "c", label: "Communications", claude: { presence: "present" }, execution_run: { state: "COMPLETE" } },
     { lane_id: "p", label: "Processing", admission: { state: "QUEUED", queue_position: 1 }, execution_run: { state: "QUEUED", admission: { state: "QUEUED", queue_position: 1 } } },
   ], { max_providers: 3 });
-  assert.equal(summary.active, 2);
-  assert.equal(summary.available, 1);
+  assert.equal(summary.active, 1);
+  assert.equal(summary.available, 2);
   const html = renderExecutionCapacity(summary);
   assert.match(html, /Execution capacity/);
   assert.match(html, /Access &amp; Identity/);
@@ -1746,6 +1794,67 @@ await test("capacity summary names lanes, not slot pickers", () => {
   assert.equal(html.includes("Slot 1"), false);
   assert.match(gwSrc, /\/runtime\/release/);
   assert.equal(viewSrc.includes("Runtime adoption"), false);
+});
+
+await test("queued and connected lanes are not collapsed to Idle or Running", () => {
+  const queued = {
+    lane_id: "lane_queuedqueued",
+    label: "Processing",
+    durable: true,
+    admission: { state: "QUEUED", queue_position: 2 },
+    execution_run: { state: "QUEUED", admission: { state: "QUEUED", queue_position: 2 } },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  const idleHint = deriveLaneStatus({ lane: queued, viewing: false });
+  assert.equal(idleHint.listHint, "Queued for capacity");
+  const rail = railHtml([queued], queued.lane_id, { [queued.lane_id]: { listHint: "Idle" } });
+  assert.match(rail, /Queued for capacity/);
+  assert.doesNotMatch(rail, />○ Idle</);
+  const executing = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+    execution_run: { state: "EXECUTING" },
+  });
+  const connected = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+  });
+  const validating = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+    execution_run: { state: "VALIDATING" },
+  });
+  assert.equal(executing.label, "Executing");
+  assert.equal(connected.state, "CONNECTED");
+  assert.equal(connected.label, "Connected");
+  assert.equal(validating.label, "Validating");
+  const cursorLive = {
+    lane_id: "lane_cursorcursor",
+    label: "Vacilando",
+    durable: true,
+    runtime: "online",
+    binding: { provider: "cursor", worktree_path: "/x/wt1" },
+    worktree: { path: "/x/wt1" },
+    agent_session: { state: "ACTIVE", provider: "cursor" },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  assert.equal(deriveLaneExecutionPosture(cursorLive).state, "CONNECTED");
+  assert.equal(deriveLaneExecutionPosture(cursorLive).label, "Connected");
+  assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
+  assert.match(railHtml([cursorLive], cursorLive.lane_id), /Cursor/);
+  const leftover = deriveLaneExecutionPosture({
+    label: "Communications",
+    claude: { presence: "present" },
+    slot: 3,
+    previous_run: { state: "COMPLETE" },
+  });
+  assert.equal(leftover.state, "READY_TO_RELEASE");
+  const cap = summarizeExecutionCapacity([
+    { lane_id: "a", label: "Access & Identity", claude: { presence: "present" } },
+    { lane_id: "c", label: "Communications", claude: { presence: "present" }, previous_run: { state: "COMPLETE" } },
+    cursorLive,
+  ], { max_providers: 3 });
+  assert.equal(cap.active, 1);
+  assert.equal(cap.running.map((r) => r.name).join(","), "Access & Identity");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

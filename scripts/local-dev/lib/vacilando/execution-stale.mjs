@@ -1,19 +1,48 @@
 /**
  * Stale / orphaned Execution Run reconciliation.
  *
- * A non-terminal run is not automatically "active work". Certification soak,
- * pre-protocol bookkeeping, and sessions that returned to idle without a
- * structured completion event can leave EXECUTING forever. That must not
- * permanently block a durable lane.
+ * ABANDONED SEMANTICS (Phase 2 contract).
+ *
+ *   ABANDONED means: Vacilando holds POSITIVE evidence that this run no longer
+ *   owns a viable worker/session, and the operator has not continued it.
+ *
+ *   ABANDONED does NOT mean: "no checkpoint arrived recently". Inactivity is not
+ *   abandonment. Long agent work legitimately runs for tens of minutes with no
+ *   state transition — reading, planning, compiling, validating.
+ *
+ * WHY THIS WAS REWRITTEN. The previous contract abandoned a run 2 minutes after
+ * delivery whenever no agent report had landed yet (`orphaned_pre_protocol_run`).
+ * Two facts made that fire against healthy lanes:
+ *
+ *   1. `sends.activity_at` is a NOTIFICATION-DEDUP timestamp, not a liveness
+ *      clock. `noteOutputAfterInstruction` writes it exactly ONCE per delivered
+ *      instruction and then short-circuits on `notification_emitted_at`. It is
+ *      normally written within seconds of delivery, which also classifies it as
+ *      a delivery echo — so `genuine_recent_activity` was false for the entire
+ *      life of essentially every run.
+ *   2. A worker's first and most natural report, `vac run-status <run> executing`
+ *      on an already-EXECUTING run, was discarded by `transitionExecutionRun` as
+ *      a noop. It appended no transition and set no progress, so `hasAgentReport`
+ *      stayed false no matter how many times the agent reported.
+ *
+ *   With both liveness signals structurally dead, every run fell through to
+ *   "orphaned pre-protocol" at the 2-minute settle. Measured on this host's live
+ *   store: 44 of 53 runs ABANDONED, 39 of them `orphaned_pre_protocol_run`,
+ *   42 of 44 killed inside 150 seconds (median 124.9s == the first governor
+ *   sweep past STALE_SETTLE_MS). Only 4 runs ever reached COMPLETE.
+ *
+ * Liveness is now positive and cheap (no pane capture, no transcript parse):
+ *   - worker heartbeat  — any agent-origin report, including same-state
+ *   - agent session     — an active-ish durable session for the lane
+ *   - worktree activity — git HEAD/index mtime, one stat call
+ *   - open resources / in-flight continuations / protective states (as before)
  *
  * Terminal choice: ABANDONED, not FAILED.
  *   FAILED = the work itself failed.
  *   COMPLETE = the work finished.
  *   ABANDONED = the run is no longer live work; closed by reconciliation or
- *     operator. History is preserved. A stale certification run is not a
- *     product failure.
- * SUPERSEDED was considered for replacement-by-newer-run; this closer is
- * orphaned bookkeeping, not a successor run, so ABANDONED is the fit.
+ *     operator. History is preserved, and ABANDONED is RECOVERABLE — see
+ *     recoverExecutionRun() in execution-run.mjs.
  *
  * Authority is durable JSON facts (run, sends, resources, session). TUI
  * prompt and spinner glyphs are never parsed.
@@ -30,7 +59,9 @@ import {
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { canonicalLaneStoreId } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { statSync } from "node:fs";
+import { join } from "node:path";
 
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
@@ -39,8 +70,23 @@ const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
 export const STALE_ACTIVITY_RECENT_MS = 30 * 60 * 1000;
-/** Auto-abandon is not allowed until the run has had time to report. */
-export const STALE_SETTLE_MS = 2 * 60 * 1000;
+/**
+ * Auto-abandon is not allowed until the run has had time to report.
+ * Was 2 minutes, which is shorter than a single file-reading pass. A worker that
+ * orients, reads a subsystem and plans before its first report is normal, not dead.
+ */
+export const STALE_SETTLE_MS = 20 * 60 * 1000;
+/** A worker heartbeat is protective for this long. Reports are cheap; silence is not proof. */
+export const WORKER_HEARTBEAT_RECENT_MS = 45 * 60 * 1000;
+/** Worktree commits/index writes are protective for this long. */
+export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
+/**
+ * A run that HAS reported has proven the protocol works on this lane, so its
+ * silence is much stronger evidence than a run that never spoke. It is still
+ * only abandonable after a long multi-signal silence — no session, no worktree
+ * movement, and no heartbeat for this long — never on silence alone.
+ */
+export const ABANDON_AFTER_HEARTBEAT_MS = 4 * 60 * 60 * 1000;
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -74,6 +120,35 @@ function hasInFlightContinuation(requests) {
   return requests.some((r) => IN_FLIGHT_CONTINUATION.has(r.continuation?.delivery_state));
 }
 
+const SESSION_ALIVE = new Set(["STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING"]);
+
+/**
+ * Cheap worktree liveness: newest mtime across the git control files a working
+ * agent necessarily touches (commits, staging, checkouts). Bounded to a handful
+ * of stat() calls — no directory walk, no `git` subprocess, no repo scan.
+ */
+export function worktreeActivityMs(worktreePath) {
+  if (!worktreePath) return null;
+  const git = join(String(worktreePath), ".git");
+  let base = git;
+  try {
+    const st = statSync(git);
+    if (st.isFile()) {
+      // Linked worktree: `.git` is a file pointing at the real gitdir.
+      base = git;
+      return st.mtimeMs;
+    }
+  } catch { return null; }
+  let newest = null;
+  for (const rel of ["HEAD", "index", "logs/HEAD", "COMMIT_EDITMSG"]) {
+    try {
+      const ms = statSync(join(base, rel)).mtimeMs;
+      if (newest == null || ms > newest) newest = ms;
+    } catch { /* absent control file is not evidence of death */ }
+  }
+  return newest;
+}
+
 function isDeliveryEcho(deliveredMs, activityMs) {
   if (deliveredMs == null || activityMs == null) return false;
   const delta = activityMs - deliveredMs;
@@ -92,6 +167,10 @@ export function collectStaleRunFacts(run, { root, nowMs = Date.now(), sendStore,
   try { session = activeAgentSessionForLane(run.lane_id, root); } catch { session = null; }
   const deliveredMs = parseMs(send?.delivered_at) || parseMs(run?.started_at) || parseMs(run?.created_at);
   const activityMs = parseMs(send?.activity_at);
+  let worktree = run?.worktree_path || null;
+  if (!worktree) {
+    try { worktree = getDurableLane(run.lane_id, root)?.binding?.worktree_path || null; } catch { worktree = null; }
+  }
   return {
     delivered_ms: deliveredMs,
     activity_ms: activityMs,
@@ -101,8 +180,21 @@ export function collectStaleRunFacts(run, { root, nowMs = Date.now(), sendStore,
     request_count: requests.length,
     session_state: session?.state || null,
     session_run_id: session?.run_id || null,
+    session_alive: SESSION_ALIVE.has(session?.state),
+    worker_report_ms: parseMs(run?.last_worker_report_at),
+    worktree_activity_ms: worktreeActivityMs(worktree),
     now_ms: nowMs,
   };
+}
+
+function workerHeartbeatRecent(facts) {
+  if (facts.worker_report_ms == null) return false;
+  return (facts.now_ms - facts.worker_report_ms) <= WORKER_HEARTBEAT_RECENT_MS;
+}
+
+function worktreeActivityRecent(facts) {
+  if (facts.worktree_activity_ms == null) return false;
+  return (facts.now_ms - facts.worktree_activity_ms) <= WORKTREE_ACTIVITY_RECENT_MS;
 }
 
 function genuineRecentActivity(facts) {
@@ -111,8 +203,23 @@ function genuineRecentActivity(facts) {
   return (facts.now_ms - facts.activity_ms) <= STALE_ACTIVITY_RECENT_MS;
 }
 
+/**
+ * When the run last began EXECUTING. `started_at` is stamped on the first
+ * EXECUTING transition; the transition scan covers runs restored from older
+ * stores that predate that field.
+ */
+function lastExecutingAt(run) {
+  const fromStarted = parseMs(run?.started_at);
+  if (fromStarted != null) return fromStarted;
+  const exec = [...(run?.transitions || [])].reverse().find((t) => t?.to_state === "EXECUTING");
+  return parseMs(exec?.occurred_at || exec?.at);
+}
+
 function pastSettle(run, facts) {
-  const start = parseMs(run?.started_at) || parseMs(run?.created_at) || facts.delivered_ms;
+  // Queue wait is NOT settle time. `created_at` must never be the clock: a run
+  // can sit QUEUED for hours and then start, and measuring settle from creation
+  // makes it eligible for auto-abandon the instant it begins executing.
+  const start = lastExecutingAt(run) ?? facts.delivered_ms;
   if (start == null) return false;
   return facts.now_ms - start >= STALE_SETTLE_MS;
 }
@@ -135,6 +242,10 @@ export function classifyExecutionRunStale(run, facts = {}) {
     genuine_recent_activity: genuineRecentActivity(merged),
     activity_is_delivery_echo: Boolean(merged.activity_is_delivery_echo),
     session_state: merged.session_state || null,
+    session_alive: Boolean(merged.session_alive),
+    worker_heartbeat_recent: workerHeartbeatRecent(merged),
+    worker_report_count: Number(run?.worker_report_count) || 0,
+    worktree_activity_recent: worktreeActivityRecent(merged),
     past_settle: pastSettle(run, merged),
   };
 
@@ -176,33 +287,73 @@ export function classifyExecutionRunStale(run, facts = {}) {
   if (SESSION_BUSY.has(merged.session_state)) {
     return { class: "active", reason: "session_busy", evidence };
   }
+  // Positive liveness. Any one of these is proof the run still owns a worker,
+  // and outranks silence on the reporting channel.
+  if (evidence.worker_heartbeat_recent) {
+    return { class: "active", reason: "worker_heartbeat", evidence };
+  }
+  if (evidence.session_alive) {
+    return { class: "active", reason: "agent_session_alive", evidence };
+  }
+  if (evidence.worktree_activity_recent) {
+    return { class: "active", reason: "worktree_activity", evidence };
+  }
   if (evidence.genuine_recent_activity) {
     return { class: "active", reason: "recent_output_activity", evidence };
   }
-  if (evidence.has_agent_report || evidence.has_progress) {
-    return {
-      class: "ambiguous",
-      reason: "managed_reports_without_recent_activity",
-      evidence,
-    };
-  }
+  // NOTE: "has reported at some point" used to short-circuit to ambiguous here,
+  // which made tier-2 abandonment unreachable and could block a lane forever
+  // behind a worker that really was gone. It is now the FALLBACK below, after
+  // the dead-worker evaluation, not a veto before it.
   if (!evidence.past_settle) {
     return { class: "active", reason: "still_settling", evidence };
   }
 
-  const preProtocol = !evidence.has_agent_report;
-  if (evidence.certification || preProtocol) {
-    const reason = evidence.certification ? "stale_certification_run" : "orphaned_pre_protocol_run";
+  // Everything protective is exhausted. Auto-abandon still requires POSITIVE
+  // evidence that no viable worker remains: no live agent session, no worker
+  // heartbeat ever, and no worktree movement. Absence of reports alone is
+  // ambiguous and is left for the operator, never auto-terminalized.
+  const noLiveSignals = !evidence.session_alive && !evidence.worktree_activity_recent;
+  // Tier 1: the run never spoke at all. Nothing on this lane has proven the
+  // reporting protocol works, so an orphan is the likeliest reading.
+  const neverReported = noLiveSignals && evidence.worker_report_count === 0;
+  // Tier 2: the run did speak, then went fully silent for a long time. The lane
+  // must not be blocked forever by a worker that really is gone.
+  const heartbeatMs = merged.worker_report_ms;
+  const goneAfterReporting = noLiveSignals
+    && evidence.worker_report_count > 0
+    && heartbeatMs != null
+    && (nowMs - heartbeatMs) >= ABANDON_AFTER_HEARTBEAT_MS;
+  const deadWorker = neverReported || goneAfterReporting;
+
+  if (evidence.certification && deadWorker) {
     return {
       class: "stale",
-      reason,
+      reason: "stale_certification_run",
       evidence,
-      summary: evidence.certification
-        ? "Abandoned: certification/soak run went idle without a completion report."
-        : "Abandoned: run never reported managed status and is no longer live work.",
+      summary: "Abandoned: certification/soak run went idle without a completion report.",
+    };
+  }
+  if (neverReported && !evidence.has_agent_report) {
+    return {
+      class: "stale",
+      reason: "orphaned_pre_protocol_run",
+      evidence,
+      summary: "Abandoned: no agent session, no worker report, and no worktree activity.",
+    };
+  }
+  if (goneAfterReporting) {
+    return {
+      class: "stale",
+      reason: "worker_gone_after_reporting",
+      evidence,
+      summary: "Abandoned: the worker reported, then went silent with no session and no worktree activity.",
     };
   }
 
+  if (evidence.has_agent_report || evidence.has_progress) {
+    return { class: "ambiguous", reason: "managed_reports_without_recent_activity", evidence };
+  }
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
 }
 

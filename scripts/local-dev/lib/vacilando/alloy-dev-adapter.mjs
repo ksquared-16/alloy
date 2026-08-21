@@ -10,7 +10,9 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 import { gitFactsForPath, readAllMetadata, resolveRuntimeConfig, TOOLKIT_DIR } from "./workspace-facts.mjs";
-import { isRuntimeAdoptionBlocked } from "./development-lane.mjs";
+import { isRuntimeAdoptionBlocked, listDurableLanes } from "./development-lane.mjs";
+import { localNodeId } from "./execution-node.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import {
   inferClaudePresence,
   isAllowlistedSession,
@@ -36,6 +38,7 @@ export function parseCandidateId(id) {
 function suggestedName(worktreeName, sprint) {
   const n = String(worktreeName || "").replace(/^wt\d+-/, "").replace(/-/g, " ");
   if (/communications/i.test(n)) return "Communications";
+  if (/enrollment/i.test(n)) return "Enrollment";
   if (/records|roster/i.test(n)) return "Records / Roster";
   if (/identity|access/i.test(n)) return "Access & Identity";
   if (sprint && !/v2|phase|t00/i.test(sprint)) {
@@ -178,7 +181,7 @@ export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
     active_providers: activeProviders,
     max_providers: maxProviders,
     blockers,
-    execution_node: "local",
+    execution_node: localNodeId(),
   };
 }
 
@@ -207,8 +210,9 @@ export async function provisionLaneBinding({ lane, run } = {}) {
   if (!realProvisionAllowed()) {
     return { ok: false, error: "provision_adapter_disabled", skip_queue: true };
   }
+  const provider = normalizeExecutionProvider(lane?.binding?.provider, "claude") || "claude";
   const name = sprintSlugFromLaneName(lane?.name, lane?.lane_id);
-  const args = [name, "--provider", "claude", "--slot", "auto", "--without-server"];
+  const args = [name, "--provider", provider, "--slot", "auto", "--without-server"];
   if (run?.instruction || run?.run_id) {
     args.push("--objective", String(lane?.name || name));
   }
@@ -237,7 +241,7 @@ export async function provisionLaneBinding({ lane, run } = {}) {
       branch,
       tmux_session: worktree ? `alloy-${String(worktree).replace(/^wt\d+-/, "").slice(0, 40)}` : null,
       slot: Number.isInteger(slot) ? slot : null,
-      provider: "claude",
+      provider,
     },
   };
 }
@@ -400,14 +404,53 @@ async function liveClaudePanes() {
   return panes.filter((p) => isAllowlistedSession(p.session) && inferClaudePresence(p) === "present");
 }
 
+function laneForClaudePane(pane, lanes) {
+  const session = pane?.session || null;
+  const cwd = pane?.cwd || null;
+  return (lanes || []).find((l) =>
+    (session && l.binding?.tmux_session === session)
+    || (cwd && l.binding?.worktree_path === cwd)
+  ) || null;
+}
+
+/**
+ * A live Claude pane occupies session-start capacity unless it belongs to a
+ * Cursor lane or a leftover finished session (work COMPLETE, no current run).
+ */
+export function claudePaneOccupiesCapacity(pane, lanes, root, {
+  activeRunForLane,
+  isTerminalRunState,
+  listExecutionRunsForLane,
+} = {}) {
+  const hit = laneForClaudePane(pane, lanes);
+  if (!hit) return true;
+  if (normalizeExecutionProvider(hit.binding?.provider, "claude") === "cursor") return false;
+  const run = activeRunForLane ? activeRunForLane(hit.lane_id, root) : null;
+  if (run && run.state !== "QUEUED") return true;
+  const prev = listExecutionRunsForLane
+    ? listExecutionRunsForLane(hit.lane_id, root).filter((r) => isTerminalRunState(r.state)).at(-1)
+    : null;
+  if (!run && prev?.state === "COMPLETE") return false;
+  return true;
+}
+
 /**
  * Capacity to start a provider on an *existing* binding. Does not require a
  * free sprint slot — the worktree already occupies one.
  */
-export async function assessSessionStartCapacity({ maxProviders = null } = {}) {
+export async function assessSessionStartCapacity({ maxProviders = null, root = null } = {}) {
   const max = Number(maxProviders ?? process.env.ALLOY_MAX_ACTIVE_PROVIDERS ?? 3);
   const live = await liveClaudePanes();
-  const active = live.length;
+  const runtime = root || process.env.ALLOY_RUNTIME_ROOT?.trim() || undefined;
+  const lanes = listDurableLanes(runtime);
+  const {
+    activeRunForLane,
+    isTerminalRunState,
+    listExecutionRunsForLane,
+  } = await import("./execution-run.mjs");
+  const runFns = { activeRunForLane, isTerminalRunState, listExecutionRunsForLane };
+  const occupyingPanes = live.filter((p) => claudePaneOccupiesCapacity(p, lanes, runtime, runFns));
+  const active = occupyingPanes.length;
   const blockers = [];
   if (!(max > 0)) blockers.push("provider_capacity");
   if (active >= max) blockers.push("provider_capacity");
@@ -418,6 +461,10 @@ export async function assessSessionStartCapacity({ maxProviders = null } = {}) {
     max_providers: max,
     blockers,
     kind: "session_start",
+    occupying: occupyingPanes.map((p) => ({
+      session: p?.session || null,
+      cwd: p?.cwd || null,
+    })),
   };
 }
 

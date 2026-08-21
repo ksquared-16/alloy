@@ -14,14 +14,11 @@ import { execFileSync, spawn } from "node:child_process";
 import { basename } from "node:path";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import os from "node:os";
 import { getMission } from "./commands/missions.mjs";
 import { resolveSlotIdentity, runtimeHost, invalidateIdentity } from "./identity.mjs";
 import { listWorkerTelemetry } from "./worker-health.mjs";
 import { listExecutionSessions } from "./execution-session.mjs";
-
-const WT_ROOT = join(os.homedir(), "Code", "alloy-worktrees");
-const META_DIR = join(os.homedir(), ".local", "state", "alloy-dev", "metadata");
+import { resolveRuntimeConfig, worktreePathForName } from "./workspace-facts.mjs";
 
 function portListening(port) {
   const p = Number(port);
@@ -38,10 +35,11 @@ function portListening(port) {
 }
 
 function metadataByWorktree(worktreeName) {
-  if (!worktreeName || !existsSync(META_DIR)) return null;
+  const metaDir = resolveRuntimeConfig().metadata_dir;
+  if (!worktreeName || !existsSync(metaDir)) return null;
   try {
-    for (const f of readdirSync(META_DIR).filter((x) => x.endsWith(".env"))) {
-      const t = readFileSync(join(META_DIR, f), "utf8");
+    for (const f of readdirSync(metaDir).filter((x) => x.endsWith(".env"))) {
+      const t = readFileSync(join(metaDir, f), "utf8");
       const g = (k) => (t.match(new RegExp(`^${k}="?([^"\\n]*)"?`, "m")) || [])[1] || null;
       if (g("ALLOY_WORKTREE_NAME") === worktreeName) {
         return {
@@ -49,7 +47,7 @@ function metadataByWorktree(worktreeName) {
           slot: Number(g("ALLOY_WORKTREE_SLOT")) || null,
           port: Number(g("PORT")) || null,
           branch: g("ALLOY_WORKTREE_BRANCH") || null,
-          path: g("ALLOY_WORKTREE_PATH") || join(WT_ROOT, worktreeName),
+          path: g("ALLOY_WORKTREE_PATH") || worktreePathForName(worktreeName),
         };
       }
     }
@@ -73,11 +71,11 @@ function resolveMissionWorktree(missionId) {
   const slot = resolveMissionSlot(missionId);
   if (slot != null) {
     const id = resolveSlotIdentity(slot);
-    if (id?.worktree_name && existsSync(id.worktree_path || join(WT_ROOT, id.worktree_name))) {
+    if (id?.worktree_name && existsSync(id.worktree_path || worktreePathForName(id.worktree_name))) {
       return {
         slot,
         worktree_name: id.worktree_name,
-        worktree_path: id.worktree_path || join(WT_ROOT, id.worktree_name),
+        worktree_path: id.worktree_path || worktreePathForName(id.worktree_name),
         port: Number(id.port) || (3010 + slot),
         branch: id.branch || null,
         source: "registry",

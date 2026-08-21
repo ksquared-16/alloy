@@ -1305,6 +1305,50 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
+  const recoverRun = e.target?.closest?.("[data-gw-run-recover]");
+  if (recoverRun) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (recoverRun.disabled) return;
+    const laneId = G.selected || G.lane?.lane_id;
+    const runId = recoverRun.getAttribute("data-run-id") || G.lane?.previous_run?.run_id;
+    if (!laneId) return;
+    recoverRun.disabled = true;
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/run/recover`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(runId ? { run_id: runId } : {}),
+      });
+      const out = await r.json().catch(() => ({}));
+      if (out.ok) {
+        G.notice = {
+          kind: "ok",
+          text: out.already_recovering
+            ? "That run is already recovering."
+            : "Run recovered. Its history is preserved and it can continue to completion.",
+        };
+        await fetchLanes();
+        if (laneId) await fetchLane(laneId);
+      } else {
+        const why = {
+          lane_has_active_run: "Newer work is already running on this lane, so the old run was not reopened.",
+          run_irreversible: "That run is COMPLETE or FAILED and cannot be reopened.",
+          binding_mismatch: "The lane is no longer bound to that run's worktree.",
+          lane_missing: "The Development Lane no longer exists.",
+          recovery_budget_exhausted: "That run has been recovered too many times.",
+        }[out.error];
+        G.notice = { kind: "err", text: why || out.error || "Could not recover that run." };
+        recoverRun.disabled = false;
+      }
+      paint();
+    } catch {
+      recoverRun.disabled = false;
+      G.notice = { kind: "err", text: "Could not recover that run." };
+      paint();
+    }
+    return;
+  }
   const closeStale = e.target?.closest?.("[data-gw-close-stale]");
   if (closeStale) {
     e.preventDefault();
@@ -1412,14 +1456,20 @@ document.addEventListener("click", async (e) => {
       G.notice = out.ok
         ? { kind: "ok", text: out.queued
           ? "Queued for execution capacity."
-          : (out.adopted ? "Existing Claude session adopted." : "Starting Claude…") }
+          : (out.adopted
+            ? (out.provider === "cursor" ? "Cursor session attached." : "Existing Claude session adopted.")
+            : (out.provider === "cursor" ? "Cursor session started." : "Starting Claude…")) }
         : { kind: "err", text: out.error === "agent_already_running"
-          ? "A Claude session is already running on this lane."
+          ? (out.provider === "cursor" ? "A Cursor session is already attached to this lane." : "A Claude session is already running on this lane.")
           : (out.error === "binding_missing"
             ? "This lane has no worktree binding yet."
             : (out.error === "runtime_pane_missing"
               ? "No runtime pane is available to start a session."
-              : (out.error || "Could not start session."))) };
+              : (out.error === "provider_capacity"
+                ? (Array.isArray(out.occupying_names) && out.occupying_names.length
+                  ? `Claude is at ${out.active_providers}/${out.max_providers}. Running: ${out.occupying_names.join(", ")}. Release one to start this session.`
+                  : "Claude is at capacity. Release a running lane to start this session.")
+                : (out.error || "Could not start session.")))) };
       await fetchLanes();
       if (G.selected) await fetchLane(G.selected);
       paint();

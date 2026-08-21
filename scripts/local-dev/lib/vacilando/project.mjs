@@ -16,8 +16,8 @@ import { humanize } from "./sprint.mjs";
 
 export function projectProject(raw, sprints) {
   const rootInfo = raw.root || {};
-  const canonical = rootInfo.canonical || rootInfo.Canonical || "/Users/Kelly/Alloy";
-  const name = humanize((canonical.split("/").pop() || "alloy"));
+  const canonical = rootInfo.canonical || rootInfo.Canonical || null;
+  const name = humanize(((canonical || "alloy").split("/").pop() || "alloy"));
 
   return {
     // The one authoritative project today.

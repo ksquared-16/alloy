@@ -4,7 +4,7 @@
 #
 # Paths are configurable. Defaults match the Phase 1 directory model.
 
-ALLOY_REPO="/Users/Kelly/Alloy"
+ALLOY_REPO="$HOME/Alloy"
 ALLOY_WORKTREE_ROOT="$HOME/Code/alloy-worktrees"
 ALLOY_RUNTIME_ROOT="$HOME/.local/state/alloy-dev"
 ALLOY_CONFIG_DIR="$HOME/.config/alloy-dev"

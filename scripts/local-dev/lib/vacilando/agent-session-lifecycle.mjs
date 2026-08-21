@@ -26,7 +26,7 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, sendLaneInstruction } from "./lanes.mjs";
+import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction } from "./lanes.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -49,8 +49,10 @@ import {
   findLaneByBinding,
   getDurableLane,
   isRuntimeAdoptionBlocked,
+  listDurableLanes,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 
 export const ROTATION_POLICY = Object.freeze({
   auto_mode: "on",
@@ -361,7 +363,20 @@ export function buildHandoffRequestInstruction({ run, git, handoffId }) {
   ].filter(Boolean).join("\n");
 }
 
+function boundOrientationField(value, max) {
+  const s = String(value || "");
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 16))}\n…[truncated]`;
+}
+
 export function buildContinuationInstruction({ run, handoff, git, successorSessionId, recovery = false }) {
+  const queued = run?.state === "QUEUED";
+  const approved = queued
+    ? "Approved instruction is already queued on this Execution Run. Do not start it until you report ORIENTED. Vacilando pastes it after orientation."
+    : boundOrientationField(run?.instruction, 6000);
+  const remaining = queued
+    ? "Report ORIENTED, then Vacilando delivers the queued instruction."
+    : boundOrientationField(handoff?.remaining_work, 2000);
   const lines = [
     recovery
       ? "Vacilando recovered this Development Lane after the previous Claude session ended unexpectedly."
@@ -379,25 +394,27 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
     "",
     "Approved instruction:",
     "---",
-    String(run.instruction || ""),
+    approved,
     "---",
     "",
     "Structured handoff:",
     JSON.stringify({
-      completed_work: handoff?.completed_work || "",
-      remaining_work: handoff?.remaining_work || "",
+      completed_work: boundOrientationField(handoff?.completed_work, 1200),
+      remaining_work: remaining,
       current_phase: handoff?.current_phase || run.current_phase || run.state,
-      validation_state: handoff?.validation_state || "",
-      resource_state: handoff?.resource_state || "",
-      known_blockers: handoff?.known_blockers || "",
-      important_decisions: handoff?.important_decisions || "",
-      recent_files: handoff?.recent_files || "",
+      validation_state: boundOrientationField(handoff?.validation_state, 400),
+      resource_state: boundOrientationField(handoff?.resource_state, 400),
+      known_blockers: boundOrientationField(handoff?.known_blockers, 400),
+      important_decisions: boundOrientationField(handoff?.important_decisions, 800),
+      recent_files: boundOrientationField(handoff?.recent_files, 400),
       next_action: handoff?.next_action || "",
     }, null, 2),
     "",
     recovery
       ? "Inspect current Git and worktree state and reconcile before any mutation. Do not assume the previous session's last thought is still true."
-      : "After orientation, continue the same Execution Run from next_action.",
+      : (queued
+        ? "After orientation, Vacilando delivers the queued instruction on this same Execution Run."
+        : "After orientation, continue the same Execution Run from next_action."),
     "Report ORIENTED with the Gateway-owned helper once lane, run, worktree, branch, and next action match.",
     `node ${JSON.stringify(sessionReportHelperPath(run.worktree_path || git?.worktree || ""))} oriented --run ${run.run_id} --lane ${run.lane_id} --json ${jsonFlag({
       lane: run.lane_id,
@@ -408,7 +425,9 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
       next_action: handoff?.next_action || "",
     })}`,
   ];
-  return lines.join("\n");
+  const text = lines.join("\n");
+  if (text.length <= LANE_INSTRUCTION_MAX) return text;
+  return boundOrientationField(text, LANE_INSTRUCTION_MAX);
 }
 
 export async function requestSessionRotation({
@@ -630,6 +649,18 @@ async function observeLane(laneId, opts) {
   if (observeImpl) return observeImpl(laneId, opts);
   const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
   return found.ok ? found.lane : null;
+}
+
+function laneProviderKind(lane, rec) {
+  return normalizeExecutionProvider(
+    rec?.binding?.provider || lane?.binding?.provider || rec?.provider,
+    "claude",
+  ) || "claude";
+}
+
+function cursorSessionLive(rec, lane) {
+  if (!rec || !["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(rec.state)) return false;
+  return rec.provider === "cursor" || laneProviderKind(lane, rec) === "cursor";
 }
 
 export function laneClaudePresent(lane) {
@@ -1142,17 +1173,36 @@ export async function startLaneAgentSession({
   laneId,
   nowMs = Date.now(),
   root = runtimeRoot(),
+  origin = "admission",
 } = {}) {
   if (startInflight.has(laneId)) return { ok: true, phase: "IN_FLIGHT", start_session_implemented: true };
   startInflight.add(laneId);
   try {
-    return await startLaneAgentSessionUnlocked({ laneId, nowMs, root });
+    return await startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin });
   } finally {
     startInflight.delete(laneId);
   }
 }
 
-async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
+function occupyingLaneSummaries(cap, root) {
+  const live = Array.isArray(cap?.occupying) ? cap.occupying : [];
+  const lanes = listDurableLanes(root);
+  return live.map((p) => {
+    const session = p?.session || null;
+    const cwd = p?.cwd || null;
+    const hit = lanes.find((l) =>
+      (session && l.binding?.tmux_session === session)
+      || (cwd && l.binding?.worktree_path === cwd)
+    );
+    return {
+      name: hit?.name || hit?.label || session || "unknown",
+      lane_id: hit?.lane_id || null,
+      tmux_session: session,
+    };
+  });
+}
+
+async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
   const found = await observeLane(laneId);
   if (!found) return { ok: false, error: "lane_not_found" };
   const rec = getDurableLane(found.lane_id, root);
@@ -1171,6 +1221,51 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   const check = validateRuntimeBinding(rec, found);
   if (!check.ok && check.blockers.some((b) => b.code === "worktree_missing" || b.code === "missing_worktree" || b.code === "worktree_mismatch")) {
     return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
+  }
+
+  const provider = laneProviderKind(found, rec);
+  if (provider === "cursor") {
+    const existing = activeAgentSessionForLane(found.lane_id, root);
+    if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
+      if (existing.state !== "ACTIVE") {
+        markAgentSessionActive(existing.agent_session_id, { root });
+      }
+      return {
+        ok: true,
+        adopted: true,
+        provider: "cursor",
+        agent_session_id: existing.agent_session_id,
+        start_session_implemented: true,
+      };
+    }
+    const run = activeRunForLane(found.lane_id, root);
+    const created = createAgentSession({
+      laneId: found.lane_id,
+      runId: run?.run_id || null,
+      provider: "cursor",
+      nowMs,
+      root,
+    });
+    if (!created.ok && created.error === "lane_has_active_session") {
+      const sess = created.session || activeAgentSessionForLane(found.lane_id, root);
+      return {
+        ok: true,
+        adopted: true,
+        provider: "cursor",
+        agent_session_id: sess?.agent_session_id || null,
+        start_session_implemented: true,
+      };
+    }
+    if (!created.ok) return created;
+    const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    return {
+      ok: true,
+      started: true,
+      adopted: false,
+      provider: "cursor",
+      agent_session_id: sess.agent_session_id,
+      start_session_implemented: true,
+    };
   }
 
   if (laneClaudePresent(found)) {
@@ -1219,8 +1314,21 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   const hasPane = Boolean(lane.tmux?.pane_id) && lane.tmux?.alive !== false;
   if (!hasPane) {
     const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
-    const cap = await assessSessionStartCapacity();
+    const cap = await assessSessionStartCapacity({ root });
     if (!cap.ok) {
+      const occupying = occupyingLaneSummaries(cap, root);
+      if (origin === "operator") {
+        return {
+          ok: false,
+          error: "provider_capacity",
+          start_session_implemented: true,
+          max_providers: cap.max_providers,
+          active_providers: cap.active_providers,
+          occupying,
+          occupying_names: occupying.map((o) => o.name),
+          capacity: cap,
+        };
+      }
       const run = activeRunForLane(found.lane_id, root);
       const { createAdmissionRequest } = await import("./execution-admission.mjs");
       const adm = createAdmissionRequest({
@@ -1236,6 +1344,8 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
         waiting_for_execution_capacity: true,
         admission_id: adm.request?.admission_id || null,
         start_session_implemented: true,
+        occupying,
+        occupying_names: occupying.map((o) => o.name),
         capacity: cap,
       };
     }
@@ -1388,7 +1498,8 @@ export async function reconcilePendingOrientation({ root = runtimeRoot(), nowMs 
     const run = activeRunForLane(rec.lane_id, root);
     if (!run || run.state !== "QUEUED" || run.state_reason !== "waiting_for_agent_session") continue;
     const attempts = Number(session.orientation_attempts || 0);
-    if (attempts >= 4) continue;
+    const maxAttempts = session.state === "STARTING" ? 8 : 4;
+    if (attempts >= maxAttempts) continue;
     const last = session.last_orientation_attempt_at ? Date.parse(session.last_orientation_attempt_at) : 0;
     if (last && nowMs - last < 8000) continue;
     const found = await observeLane(rec.lane_id);
@@ -1435,10 +1546,11 @@ export function attachLaneAgentSessions(lanes, root = runtimeRoot()) {
     const pending = rec?.state === "ROTATION_PENDING" || need.kind === "safe_automatic";
     const rotating = rec && ["HANDOFF", "RESTARTING", "VERIFYING"].includes(rec.state);
     const present = laneClaudePresent(lane);
+    const cursorLive = cursorSessionLive(rec, lane);
     const run = lane.execution_run;
     let sessionHint = need.reason || null;
     const liveRun = run && ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(run.state);
-    if (rec && rec.state === "ACTIVE" && !present && liveRun) {
+    if (rec && rec.state === "ACTIVE" && !present && liveRun && rec.provider !== "cursor") {
       sessionHint = "Claude session ended unexpectedly";
     }
     const posture = rotating
@@ -1454,14 +1566,15 @@ export function attachLaneAgentSessions(lanes, root = runtimeRoot()) {
     }
     const sessionActivity = recentSessionActivity(lane.lane_id, root);
     const prior = Array.isArray(lane.recent_system_activity) ? lane.recent_system_activity : [];
-    const showSession = rec && (present || rotating || pending || Boolean(sessionHint && liveRun) || ["STARTING", "VERIFYING", "RESTARTING"].includes(rec.state));
+    const showSession = rec && (present || cursorLive || rotating || pending || Boolean(sessionHint && liveRun) || ["STARTING", "VERIFYING", "RESTARTING"].includes(rec.state));
+    const live = present || cursorLive;
     return {
       ...lane,
       runtime_posture: rotating ? posture : (pending ? posture : lane.runtime_posture),
       execution_run: nextRun,
       agent_session: showSession ? publicAgentSession(rec, economics) : null,
-      runtime: present ? "online" : "offline",
-      start_session: present ? null : {
+      runtime: live ? "online" : "offline",
+      start_session: live ? null : {
         available: Boolean(lane.worktree?.path || lane.binding?.worktree_path),
         implemented: Boolean(lane.worktree?.path || lane.binding?.worktree_path),
       },

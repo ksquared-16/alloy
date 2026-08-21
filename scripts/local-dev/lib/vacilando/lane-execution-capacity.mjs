@@ -320,14 +320,15 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
     max_active: provision.max_providers,
     max_providers: provision.max_providers,
   });
-  const available = provision.available ? ui.available : 0;
   return {
     ...ui,
     max_active: provision.max_providers,
     occupied_slots: provision.occupied_slots,
     free_slots: provision.free_slots,
-    active_providers: provision.active_providers,
-    available,
-    blockers: provision.blockers || [],
+    active_providers: ui.active,
+    available: ui.available,
+    blockers: ui.available > 0
+      ? (provision.blockers || []).filter((b) => b !== "provider_capacity")
+      : Array.from(new Set(["provider_capacity", ...(provision.blockers || [])])),
   };
 }

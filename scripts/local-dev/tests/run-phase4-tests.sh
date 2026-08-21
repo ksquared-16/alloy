@@ -382,6 +382,9 @@ assert_ok "runtime admission tests" bash "$ROOT/tests/test-runtime-admission.sh"
 echo "== Runtime Actuation V1 (R3) =="
 assert_ok "runtime actuator tests" bash "$ROOT/tests/test-runtime-actuator.sh"
 
+echo "== Typecheck heap floor (broker resource contract) =="
+assert_ok "typecheck heap floor" bash "$ROOT/tests/test-typecheck-heap-floor.sh"
+
 echo "== Runtime isolation =="
 assert_ok "runtime isolation focused tests" bash "$ROOT/tests/test-runtime-isolation.sh"
 

@@ -92,7 +92,7 @@ export function resolveRuntimeConfig() {
     ALLOY_CONFIG_DIR: join(HOME, ".config", "alloy-dev"),
   };
   // Two-pass: defaults first, then re-read with expanded bases.
-  bases.ALLOY_REPO = configGet("ALLOY_REPO", files, bases) || "/Users/Kelly/Alloy";
+  bases.ALLOY_REPO = configGet("ALLOY_REPO", files, bases) || join(HOME, "Alloy");
   bases.ALLOY_RUNTIME_ROOT = configGet("ALLOY_RUNTIME_ROOT", files, bases) || bases.ALLOY_RUNTIME_ROOT;
   bases.ALLOY_WORKTREE_ROOT = configGet("ALLOY_WORKTREE_ROOT", files, bases) || bases.ALLOY_WORKTREE_ROOT;
   bases.ALLOY_CONFIG_DIR = configGet("ALLOY_CONFIG_DIR", files, bases) || bases.ALLOY_CONFIG_DIR;
@@ -119,6 +119,14 @@ export function resolveRuntimeConfig() {
     web_dir: webDir,
     runtime_root_exists: existsSync(runtimeRoot),
   };
+}
+
+/** Worktree directory for a managed name. Honors ALLOY_WORKTREE_ROOT, then config. */
+export function worktreePathForName(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const root = process.env.ALLOY_WORKTREE_ROOT?.trim() || resolveRuntimeConfig().worktree_root;
+  return join(root, n);
 }
 
 function metaGet(file, key) {

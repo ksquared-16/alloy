@@ -14,8 +14,7 @@ import os from "node:os";
 import { join } from "node:path";
 
 import { collectRaw, DISK_SIZE_TTL_MS, noteDuExecution } from "./sources.mjs";
-
-const WORKTREE_ROOT = join(os.homedir(), "Code", "alloy-worktrees");
+import { worktreePathForName } from "./workspace-facts.mjs";
 
 function run(cmd, args, timeout = 4000) {
   return new Promise((res) => {
@@ -105,7 +104,8 @@ export async function collectWorktreeDiskSizes({ force = false, worktrees = null
       const names = worktrees || (raw.agents.agents || []).map((a) => a.worktree).filter(Boolean);
       // Sequential — do not fan out one du per worktree in parallel.
       for (const name of names) {
-        const path = join(WORKTREE_ROOT, name);
+        const path = worktreePathForName(name);
+        if (!path) continue;
         diskCache.last_paths.push(path);
         try {
           const mb = await diskMbOnce(path);

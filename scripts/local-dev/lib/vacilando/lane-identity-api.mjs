@@ -17,6 +17,7 @@ import {
   validateLaneName,
 } from "./development-lane.mjs";
 import { getDevelopmentLane, listDevelopmentLanes } from "./lanes.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 
 function pathLikeFields(body = {}) {
   const keys = [
@@ -185,8 +186,8 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
   if (extra.length) return { status: 400, body: { ok: false, error: "path_refused", fields: extra } };
   const named = validateLaneName(body.name);
   if (!named.ok) return { status: 400, body: { ok: false, error: named.error } };
-  const provider = String(body.provider || "claude").toLowerCase().replace(/\s+/g, "");
-  if (provider && provider !== "claude" && provider !== "claudecode") {
+  const provider = normalizeExecutionProvider(body.provider, "claude");
+  if (!provider) {
     return { status: 400, body: { ok: false, error: "unsupported_provider" } };
   }
   const instruction = body.instruction != null ? String(body.instruction) : "";
@@ -217,7 +218,7 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     const adm = createAdmissionRequest({
       laneId: created.lane.lane_id,
       runId: run.run_id,
-      provider: "claude",
+      provider,
       nowMs,
     });
     admission = adm.request || null;

@@ -54,6 +54,28 @@ async function laneHasEligibleSession(laneId) {
   }
 }
 
+async function replaceQueuedInstruction({ rec, run, text, nowMs, root, size }) {
+  const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const reason = run.state_reason
+    || (bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity");
+  const patched = patchRunFields(run.run_id, { instruction: text, state_reason: reason }, { nowMs, root });
+  if (!patched.ok) {
+    return refused(rec.lane_id, patched.error || "instruction_empty", nowMs, size, run);
+  }
+  return decorate({
+    ok: true,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: rec.lane_id,
+    status: "queued",
+    error: null,
+    instruction_size: size,
+    delivered_at: null,
+    admission_queued: true,
+    replaced: true,
+    session_required: reason === "waiting_for_agent_session",
+  }, getExecutionRun(run.run_id, root) || patched.run || run);
+}
+
 async function queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason }) {
   const { createAdmissionRequest, evaluateAdmissionQueue } = await import("./execution-admission.mjs");
   createAdmissionRequest({ laneId: rec.lane_id, runId: run.run_id, nowMs, root });
@@ -119,6 +141,16 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   } catch { /* send still proceeds; active-run check below is authoritative */ }
 
   const active = activeRunForLane(laneId, root);
+  if (active?.state === "QUEUED") {
+    try {
+      const { getDurableLane } = await import("./development-lane.mjs");
+      const rec = getDurableLane(laneId, root);
+      if (rec) {
+        return replaceQueuedInstruction({ rec, run: active, text, nowMs, root, size });
+      }
+    } catch { /* fall through to current_run_active */ }
+    return refused(laneId, "current_run_active", nowMs, size, active);
+  }
   if (active && active.state !== "NEEDS_INPUT") {
     return refused(laneId, "current_run_active", nowMs, size, active);
   }

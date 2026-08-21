@@ -46,12 +46,18 @@ resolve_kind_command() {
   # $1=kind  $2=web_dir  $3..=caller passthrough args (test paths / filters)
   local kind="$1"
   case "$kind" in
-    typecheck) printf '%s' "$ALLOY_TYPECHECK_COMMAND" ;;
+    typecheck)
+      if [[ -n "${ALLOY_TYPECHECK_COMMAND:-}" ]]; then
+        alloy_apply_heap_floor "$ALLOY_TYPECHECK_COMMAND"
+      else
+        printf '%s' "node --max-old-space-size=${ALLOY_TYPECHECK_MIN_HEAP_MB} node_modules/typescript/bin/tsc -p tsconfig.build.json --noEmit"
+      fi
+      ;;
     typecheck:tests)
       if [[ -n "${ALLOY_TYPECHECK_TESTS_COMMAND:-}" ]]; then
-        printf '%s' "$ALLOY_TYPECHECK_TESTS_COMMAND"
+        alloy_apply_heap_floor "$ALLOY_TYPECHECK_TESTS_COMMAND"
       else
-        printf '%s' 'node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.json --noEmit'
+        printf '%s' "node --max-old-space-size=${ALLOY_TYPECHECK_MIN_HEAP_MB} node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
       fi
       ;;
     test)

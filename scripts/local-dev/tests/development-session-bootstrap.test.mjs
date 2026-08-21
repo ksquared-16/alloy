@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { createDurableLane, resetDevelopmentLanesForTests } from "../lib/vacilando/development-lane.mjs";
+import { bindDurableLane, createDurableLane, resetDevelopmentLanesForTests } from "../lib/vacilando/development-lane.mjs";
 import {
   activeRunForLane,
   createQueuedRun,
@@ -25,12 +25,14 @@ import {
 } from "../lib/vacilando/execution-admission.mjs";
 import {
   attachLaneAgentSessions,
+  buildContinuationInstruction,
   startLaneAgentSession,
   setAgentSessionLifecycleImplForTests,
   resetAgentSessionLifecycleForTests,
   acceptOrientationReport,
   reconcilePendingOrientation,
 } from "../lib/vacilando/agent-session-lifecycle.mjs";
+import { LANE_INSTRUCTION_MAX } from "../lib/vacilando/lanes.mjs";
 import { listAgentSessionsForLane, resetAgentSessionsForTests, activeAgentSessionForLane, patchAgentSession } from "../lib/vacilando/agent-session.mjs";
 import {
   assessSessionStartCapacity,
@@ -161,6 +163,65 @@ await test("existing live agent refuses duplicate start", async () => {
   assert.equal(second.ok, false);
   assert.equal(second.error, "agent_already_running");
   assert.equal(listAgentSessionsForLane(created.lane.lane_id, ROOT).length, 1);
+});
+
+await test("finished leftover Claude pane does not occupy session-start capacity", async () => {
+  const created = makeComms();
+  bindDurableLane(created.lane.lane_id, {
+    ...created.lane.binding,
+    tmux_session: "alloy-comms",
+  }, { root: ROOT });
+  const queued = createQueuedRun({
+    laneId: created.lane.lane_id,
+    instruction: "Finish inbound SMS.",
+    worktreePath: WT,
+    root: ROOT,
+  });
+  assert.equal(queued.ok, true);
+  assert.equal(transitionExecutionRun(queued.run.run_id, "EXECUTING", { root: ROOT, origin: "operator" }).ok, true);
+  assert.equal(transitionExecutionRun(queued.run.run_id, "COMPLETE", { root: ROOT, origin: "operator" }).ok, true);
+  setAlloyAdapterImplForTests({
+    listPanes: () => [
+      { session: "alloy-comms", command: "claude", cwd: WT },
+      { session: "alloy-a", command: "claude", cwd: "/x/a" },
+      { session: "alloy-b", command: "claude", cwd: "/x/b" },
+    ],
+  });
+  const cap = await assessSessionStartCapacity({ root: ROOT });
+  assert.equal(cap.active_providers, 2);
+  assert.equal(cap.ok, true);
+  assert.equal(cap.occupying.some((p) => p.session === "alloy-comms"), false);
+});
+
+await test("operator start at capacity fails closed instead of silent queue", async () => {
+  const created = makeComms();
+  setAlloyAdapterImplForTests({
+    listPanes: () => [
+      { session: "alloy-a", command: "claude", cwd: "/x/a" },
+      { session: "alloy-b", command: "claude", cwd: "/x/b" },
+      { session: "alloy-c", command: "claude", cwd: "/x/c" },
+    ],
+  });
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: created.lane.lane_id,
+      claude: { presence: "absent" },
+      tmux: { alive: false },
+      worktree: { path: WT },
+    }),
+    startRuntime: async () => { throw new Error("must not start without capacity"); },
+  });
+  const out = await startLaneAgentSession({
+    laneId: created.lane.lane_id,
+    root: ROOT,
+    origin: "operator",
+  });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, "provider_capacity");
+  assert.equal(out.active_providers, 3);
+  assert.equal(out.max_providers, 3);
+  assert.equal(out.occupying_names.length, 3);
+  assert.equal(listAgentSessionsForLane(created.lane.lane_id, ROOT).length, 0);
 });
 
 await test("capacity unavailable queues start and does not FAILED", async () => {
@@ -349,6 +410,30 @@ await test("adopted and newly created bindings share startLaneAgentSession", asy
   assert.equal(one.ok, true, one.error);
   assert.equal(two.ok, true, two.error);
   assert.equal(ids.length, 2);
+});
+
+await test("orientation paste stays under the send limit for a large queued instruction", () => {
+  const huge = `${"Participant Runtime Productization. ".repeat(800)}END`;
+  assert.ok(huge.length > LANE_INSTRUCTION_MAX);
+  const text = buildContinuationInstruction({
+    run: {
+      run_id: "erun_bigbigbigbig",
+      lane_id: "lane_aaaaaaaaaaaa",
+      instruction: huge,
+      state: "QUEUED",
+      worktree_path: WT,
+    },
+    handoff: {
+      remaining_work: huge,
+      next_action: "Orient on this Development Lane. Do not start approved work until you report ORIENTED.",
+    },
+    git: { branch: "agent/claude/4-x", head: "abc", dirty: false },
+    successorSessionId: "agsess_test",
+  });
+  assert.ok(text.length <= LANE_INSTRUCTION_MAX, text.length);
+  assert.match(text, /Orient first/);
+  assert.match(text, /queued on this Execution Run/);
+  assert.equal(text.includes(huge.slice(0, 80)), false);
 });
 
 await test("reconcile retries orientation when Claude is ready but not oriented", async () => {

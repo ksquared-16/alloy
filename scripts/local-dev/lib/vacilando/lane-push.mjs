@@ -305,7 +305,13 @@ export function testPushPayload({ lane_id } = {}) {
   };
 }
 
-export const OUTCOME_PUSH_STATES = Object.freeze(["COMPLETE", "NEEDS_INPUT", "FAILED"]);
+/**
+ * ABANDONED notifies too. It was excluded, so a run that Vacilando closed on
+ * the operator's behalf ended in silence — measured on this host: 73 abandonment
+ * events and not one push. That is the outcome the operator most needs to hear
+ * about, because it is the one they did not ask for.
+ */
+export const OUTCOME_PUSH_STATES = Object.freeze(["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"]);
 
 export function outcomePushKey(runId, state) {
   return `${String(runId || "").trim()}:${String(state || "").trim().toUpperCase()}`;
@@ -336,6 +342,11 @@ export function outcomePushPayload({ lane_id, title, state, reason } = {}) {
     body = extra ? `needs your input. ${extra}` : "needs your input.";
   } else if (st === "FAILED") {
     body = "could not continue.";
+  } else if (st === "ABANDONED") {
+    const extra = String(reason || "").trim().slice(0, 140);
+    body = extra
+      ? `was closed as no longer live (${extra}). Open the lane to continue it.`
+      : "was closed as no longer live. Open the lane to continue it.";
   }
   return {
     type: `execution_run.${st.toLowerCase()}`,
@@ -364,7 +375,7 @@ export async function pushRunOutcome(run, {
     lane_id: run.lane_id,
     title: label || run.lane_id,
     state,
-    reason: state === "NEEDS_INPUT" ? run.state_reason : null,
+    reason: ["NEEDS_INPUT", "ABANDONED"].includes(state) ? run.state_reason : null,
   });
   const out = await sendPushToSubscriptions(payload, { root, send });
   if (out?.ok && Number(out.sent || 0) > 0) {

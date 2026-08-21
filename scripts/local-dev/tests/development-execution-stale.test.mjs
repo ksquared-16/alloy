@@ -215,10 +215,31 @@ await test("6. provider session is not touched by stale classify", async () => {
 });
 
 await test("7. worktree/branch/HEAD are not mutated by reconcile", async () => {
+  // The invariant is "reconcile never MUTATES the worktree", not "the word git
+  // never appears". Liveness now reads git control-file mtimes (read-only stat),
+  // so assert the invariant directly instead of banning substrings.
   const src = readFileSync(join(HERE, "../lib/vacilando/execution-stale.mjs"), "utf8");
-  assert.equal(/\bgit\b/.test(src), false);
-  assert.equal(src.includes("worktree"), false);
-  assert.equal(src.includes("checkout"), false);
+  const code = src
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+
+  // No subprocess: reconcile can never shell out to git.
+  assert.equal(/child_process|execSync|spawnSync|\bspawn\(|\bexec\(/.test(code), false);
+
+  // No mutating git verbs.
+  for (const verb of ["checkout", "reset", "clean", "commit", "stash", "rebase", "merge"]) {
+    assert.equal(new RegExp(`\\b${verb}\\b`).test(code), false, `mutating git verb: ${verb}`);
+  }
+
+  // No filesystem writes of any kind from the reconcile module.
+  for (const w of ["writeFileSync", "appendFileSync", "renameSync", "rmSync", "unlinkSync", "mkdirSync"]) {
+    assert.equal(code.includes(w), false, `filesystem mutation: ${w}`);
+  }
+
+  // Positive control: the guard is looking at real source, and the read-only
+  // probe it is meant to permit is actually present.
+  assert.equal(code.includes("statSync"), true);
+  assert.equal(code.includes("classifyExecutionRunStale"), true);
 });
 
 await test("8. no resource request leaked after abandon", async () => {
@@ -395,6 +416,30 @@ await test("still settling soak is not abandoned", async () => {
   assert.equal(cls.reason, "still_settling");
   assert.ok(STALE_SETTLE_MS > 30_000);
   assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0);
+});
+
+await test("a long queue wait is not settle time", async () => {
+  // The run was CREATED hours ago and only just began EXECUTING. Measuring
+  // settle from creation would make it abandonable the moment it starts.
+  const now = Date.now();
+  const run = seedExecuting({ instruction: SOAK, startMs: now - 30_000 });
+  run.created_at = new Date(now - 6 * 60 * 60 * 1000).toISOString();
+  seedSend(SOAK, now - 30_000, now - 21_000);
+  const cls = classifyExecutionRunStale(run, collectStaleRunFacts(run, { root: ROOT, nowMs: now }));
+  assert.equal(cls.class, "active");
+  assert.equal(cls.reason, "still_settling");
+  assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0);
+});
+
+await test("settle is measured even when started_at predates the field", async () => {
+  // A run restored from an older store has no started_at; the EXECUTING
+  // transition is the fallback clock, never created_at.
+  const now = Date.now();
+  const run = seedExecuting({ instruction: SOAK, startMs: now - 30_000 });
+  run.started_at = null;
+  run.created_at = new Date(now - 6 * 60 * 60 * 1000).toISOString();
+  const cls = classifyExecutionRunStale(run, collectStaleRunFacts(run, { root: ROOT, nowMs: now }));
+  assert.equal(cls.class, "active");
 });
 
 await test("idle governed resume does not block a new send forever", async () => {

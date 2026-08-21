@@ -24,13 +24,18 @@ import os from "node:os";
 import { basename, join } from "node:path";
 
 import { REPO_ROOT } from "./knowledge.mjs";
-
-const HOME = os.homedir();
-const WT_ROOT = join(HOME, "Code", "alloy-worktrees");
-const META_DIR = join(HOME, ".local", "state", "alloy-dev", "metadata");
+import { resolveRuntimeConfig } from "./workspace-facts.mjs";
 
 const CACHE_TTL_MS = 10000;
 const cache = new Map(); // slot -> { at, identity }
+
+function runtimeLayout() {
+  const cfg = resolveRuntimeConfig();
+  return {
+    wtRoot: cfg.worktree_root || join(os.homedir(), "Code", "alloy-worktrees"),
+    metaDir: cfg.metadata_dir || join(os.homedir(), ".local", "state", "alloy-dev", "metadata"),
+  };
+}
 
 function gitBranch(worktreePath) {
   if (!worktreePath || !existsSync(worktreePath)) return null;
@@ -50,9 +55,10 @@ export function runtimeHost() {
 
 /** Read the slot registry entry (metadata) for a slot. */
 function registryEntry(slot) {
+  const { metaDir } = runtimeLayout();
   try {
-    for (const f of readdirSync(META_DIR).filter((x) => x.endsWith(".env"))) {
-      const t = readFileSync(join(META_DIR, f), "utf8");
+    for (const f of readdirSync(metaDir).filter((x) => x.endsWith(".env"))) {
+      const t = readFileSync(join(metaDir, f), "utf8");
       const g = (k) => (t.match(new RegExp(`^${k}="?([^"\n]*)"?`, "m")) || [])[1] || null;
       if (Number(g("ALLOY_WORKTREE_SLOT")) === slot) {
         const branch = g("ALLOY_WORKTREE_BRANCH");
@@ -89,7 +95,8 @@ export function resolveSlotIdentity(slot, { force = false } = {}) {
     identity = { ok: false, slot, worktree_name: null, worktree_path: null, branch: null, provider: null, port: null, host, is_host: false,
       conflict: { kind: "unregistered_slot", detail: `Slot ${slot} has no registry entry.` } };
   } else {
-    const worktree_path = join(WT_ROOT, reg.worktree_name);
+    const { wtRoot } = runtimeLayout();
+    const worktree_path = join(wtRoot, reg.worktree_name);
     const exists = existsSync(worktree_path);
     const actualBranch = exists ? gitBranch(worktree_path) : null;
     let conflict = null;

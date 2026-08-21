@@ -44,6 +44,7 @@ import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
 import { readDirectorLog, recordAsk } from "./vacilando/commands/director.mjs";
 import { createRequest, updateRequest, readRequests, pendingCount, recoverInterrupted, REQUEST_TYPES } from "./vacilando/commands/director-requests.mjs";
 import { sendViaProvider } from "./vacilando/provider-runtime.mjs";
+import { worktreePathForName } from "./vacilando/workspace-facts.mjs";
 import { writeAuditEvent } from "./vacilando/commands/audit.mjs";
 import { computeCloseout } from "./vacilando/closeout.mjs";
 import { prForWorktree } from "./vacilando/github.mjs";
@@ -72,6 +73,7 @@ import { listCapabilities, getCapability, registerCapability } from "./vacilando
 import { assembleConversation, listConversations } from "./vacilando/conversation.mjs";
 import { getProductDefinitionForCapability } from "./vacilando/product-definition.mjs";
 import { resolveSlotIdentity, runtimeHost, hostRegistration, listSlotIdentities, hostIdentity } from "./vacilando/identity.mjs";
+import { getLocalNode, publicExecutionNode } from "./vacilando/execution-node.mjs";
 import { getDevelopmentLane, getLaneOutput, listDevelopmentLanes, LANE_ID_RE, normalizeLaneId, unexpectedLaneControlFields } from "./vacilando/lanes.mjs";
 import { connectExistingWorkRequest, createNewLaneRequest, listAdoptionCandidates, renameLaneRequest } from "./vacilando/lane-identity-api.mjs";
 import { attachLaneInstructions, enrichOutputRuntime } from "./vacilando/lane-runtime.mjs";
@@ -788,7 +790,7 @@ const INSTRUCTION_TIMEOUT_MS = 600000; // 10 min for a worker instruction
 function runDirectorSend(reqRec, sprint) {
   const t0 = Date.now();
   const timeout = reqRec.request_type === "quick-ask" ? QUICK_TIMEOUT_MS : INSTRUCTION_TIMEOUT_MS;
-  const cwd = sprint?.worktree ? `${process.env.HOME}/Code/alloy-worktrees/${sprint.worktree}` : null;
+  const cwd = sprint?.worktree ? worktreePathForName(sprint.worktree) : null;
   let settled = false;
   updateRequest(reqRec.request_id, { status: "starting", started_at: new Date().toISOString() });
   // If the provider turn is genuinely running (didn't fast-fail on auth), show it.
@@ -1044,6 +1046,32 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "close_stale_failed", detail: String(e && e.message || e) });
         }
       }
+      const laneRecoverMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/recover$/);
+      if (laneRecoverMatch && req.method === "POST") {
+        const laneId = decodeURIComponent(laneRecoverMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["run_id"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { recoverExecutionRun, listExecutionRunsForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id
+            || listExecutionRunsForLane(laneId).find((r) => r.state === "ABANDONED")?.run_id;
+          if (!runId) return sendJson(res, 404, { ok: false, error: "run_not_found" });
+          const out = recoverExecutionRun(runId, {
+            laneId,
+            origin: "operator",
+            reason: "operator_continued_run",
+          });
+          const status = out.ok
+            ? 200
+            : (["lane_has_active_run", "run_irreversible"].includes(out.error) ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
+        }
+      }
       const laneSendMatch = path.match(/^\/api\/lanes\/([^/]+)\/instruction$/);
       if (laneSendMatch) {
         const laneId = normalizeLaneId(laneSendMatch[1]);
@@ -1146,7 +1174,7 @@ export function createVacilandoServer() {
           const extra = unexpectedLaneControlFields(body.value || {});
           if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
           const { startLaneAgentSession } = await import("./vacilando/agent-session-lifecycle.mjs");
-          const out = await startLaneAgentSession({ laneId });
+          const out = await startLaneAgentSession({ laneId, origin: "operator" });
           const status = out.ok ? 200
             : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" || out.error === "provider_capacity" ? 409 : 400);
           return sendJson(res, status, out);
@@ -1635,10 +1663,15 @@ export function createVacilandoServer() {
         const lines = linesRaw != null && /^\d+$/.test(linesRaw) ? Number(linesRaw) : undefined;
         const mode = url.searchParams.get("mode") || undefined;
         try {
+          let laneProvider = null;
+          try {
+            const { getDurableLane } = await import("./vacilando/development-lane.mjs");
+            laneProvider = getDurableLane(laneId)?.binding?.provider || null;
+          } catch { laneProvider = null; }
           const out = enrichOutputRuntime(await getLaneOutput(laneId, {
             ...(lines != null ? { maxLines: lines } : {}),
             ...(mode ? { mode } : {}),
-          }));
+          }), undefined, { provider: laneProvider });
           const status = out.ok ? 200 : (out.error === "invalid_lane_id" ? 400 : out.error === "pane_unavailable" ? 503 : 404);
           return sendJson(res, status, out);
         } catch (e) {
@@ -1694,6 +1727,7 @@ export function createVacilandoServer() {
 
     // ---- Runtime host identity (system host — never a worker slot) ----
     if (path === "/api/host") return sendJson(res, 200, hostIdentity());
+    if (path === "/api/node") return sendJson(res, 200, publicExecutionNode(getLocalNode(RUNTIME_ROOT_DIR)));
 
     // ---- Trust: explicit CATEGORIES, with browser-certification coverage ----
     if (path === "/api/trust") {

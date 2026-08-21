@@ -105,9 +105,7 @@ export function presenceLine(lane) {
 }
 
 export function agentLabel(lane) {
-  if (lane?.claude?.presence === "present") return "Claude";
-  if (lane?.tmux?.alive) return "Session";
-  return "Offline";
+  return laneProviderLabel(lane);
 }
 
 /** Cheap summary from the existing /api/resources snapshot. Does not fetch. */
@@ -137,6 +135,14 @@ export function deliveryNotice(result) {
     return { kind: "ok", text: "Delivered to the existing session." };
   }
   if (result?.ok && (result.status === "queued" || result.admission_queued)) {
+    if (result.replaced) {
+      return {
+        kind: "ok",
+        text: result.session_required
+          ? "Instruction updated. Work is still queued until a session starts."
+          : "Instruction updated. Still waiting for execution capacity.",
+      };
+    }
     if (result.session_required) {
       return { kind: "ok", text: "Work queued. No agent session is running." };
     }
@@ -199,6 +205,7 @@ export const LANE_EXECUTION_POSTURES = Object.freeze([
   "IDLE",
   "QUEUED_FOR_CAPACITY",
   "STARTING",
+  "CONNECTED",
   "RUNNING",
   "FINISHING",
   "READY_TO_RELEASE",
@@ -206,8 +213,90 @@ export const LANE_EXECUTION_POSTURES = Object.freeze([
   "FAILED",
 ]);
 
+const LIVE_AGENT_SESSION_STATES = new Set(["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"]);
+
+
+export function laneProviderKind(lane) {
+  const raw = String(lane?.binding?.provider || lane?.agent_session?.provider || "").toLowerCase();
+  if (raw === "cursor" || raw === "cursor-agent" || raw === "cursor_ide") return "cursor";
+  if (raw === "claude" || raw === "claudecode") return "claude";
+  if (lane?.claude?.presence === "present") return "claude";
+  return raw || null;
+}
+
+/**
+ * The agent's name for operator-facing sentences ("Cursor is running").
+ * Unlike laneProviderLabel, this never degrades to "Offline"/"Session" — those
+ * read wrong inside a sentence about the agent.
+ */
+/** Slot 1 -> 3011 … slot 6 -> 3016. The permanent per-slot port map. */
+export const LANE_FIRST_AGENT_PORT = 3011;
+
+export function lanePort(lane) {
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  if (!Number.isInteger(slot) || slot < 1 || slot > 6) return null;
+  return LANE_FIRST_AGENT_PORT + (slot - 1);
+}
+
+/**
+ * The lane's assigned localhost. This is the permanent slot port, not a probe:
+ * it says where this lane's server belongs, never that one is currently up.
+ */
+export function laneLocalhostUrl(lane) {
+  const port = lanePort(lane);
+  return port ? `http://localhost:${port}` : null;
+}
+
+/**
+ * Stale login / update-required banner. Computed from the output already on
+ * screen, so it needs no new capture and no server round trip. It states the
+ * fix as a command the operator can run, and never claims anything about the
+ * Execution Run.
+ */
+export function renderProviderHealth(health) {
+  if (!health?.kind) return "";
+  const fix = health.fix_command
+    ? `<code class="gw-health-fix">${esc(health.fix_command)}</code>`
+    : "";
+  return `<aside class="gw-health" data-gw-provider-health data-kind="${esc(health.kind)}" data-provider="${esc(health.provider || "unknown")}">
+    <span class="gw-health-h">${esc(health.title)}</span>
+    <span class="gw-health-detail">${esc(health.detail || "")}</span>
+    ${fix}
+  </aside>`;
+}
+
+export function renderLaneLocalhost(lane) {
+  const url = laneLocalhostUrl(lane);
+  if (!url) return "";
+  return `<div class="gw-localhost" data-gw-localhost>
+    <span class="gw-localhost-h">Localhost</span>
+    <a class="gw-localhost-url" href="${esc(url)}" target="_blank" rel="noreferrer noopener">${esc(url)}</a>
+    <span class="gw-localhost-note">Assigned port for this slot</span>
+  </div>`;
+}
+
+export function laneAgentLabel(lane) {
+  const kind = laneProviderKind(lane);
+  if (kind === "cursor") return "Cursor";
+  if (kind === "claude") return "Claude";
+  // An OFFLINE Claude lane still has Claude presence telemetry attached, and
+  // must keep its name — "Agent is not running" would lose real information.
+  // Cursor lanes are named by binding.provider above, so they never land here.
+  if (lane && Object.prototype.hasOwnProperty.call(lane, "claude")) return "Claude";
+  return "Agent";
+}
+
+export function laneProviderLabel(lane) {
+  const kind = laneProviderKind(lane);
+  if (kind === "cursor") return "Cursor";
+  if (kind === "claude") return "Claude";
+  if (lane?.tmux?.alive) return "Session";
+  return "Offline";
+}
+
 function liveAgentOnLane(lane) {
-  return lane?.claude?.presence === "present" || lane?.runtime === "online";
+  if (lane?.claude?.presence === "present" || lane?.runtime === "online") return true;
+  return LIVE_AGENT_SESSION_STATES.has(String(lane?.agent_session?.state || ""));
 }
 
 function laneIsBound(lane) {
@@ -324,12 +413,13 @@ export function deriveLaneExecutionPosture(lane) {
     };
   }
   if (sess === "STARTING" || sess === "VERIFYING" || sess === "RESTARTING") {
+    const who = laneProviderLabel(lane);
     return {
       state: "STARTING",
       label: "Starting",
       mark: "●",
-      hint: "Starting Claude",
-      headline: sess === "STARTING" ? "Starting Claude…" : "Orienting Claude…",
+      hint: `Starting ${who}`,
+      headline: sess === "STARTING" ? `Starting ${who}…` : `Orienting ${who}…`,
       tone: "run",
       slot,
       queue_position: null,
@@ -343,7 +433,7 @@ export function deriveLaneExecutionPosture(lane) {
       mark: "◷",
       hint: n ? `Queued for capacity · #${n}` : "Queued for capacity",
       headline: `Queued for capacity${pos}`,
-      tone: "run",
+      tone: "queued",
       slot: null,
       queue_position: n || null,
     };
@@ -360,16 +450,50 @@ export function deriveLaneExecutionPosture(lane) {
       queue_position: null,
     };
   }
+  if (liveAgent && !runState && lane?.previous_run?.state === "COMPLETE") {
+    return {
+      state: "READY_TO_RELEASE",
+      label: "Work complete",
+      mark: "✓",
+      hint: "Work complete · Runtime ready to release",
+      headline: "Work complete · Runtime ready to release",
+      tone: "complete",
+      slot,
+      queue_position: null,
+    };
+  }
   const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(runState);
   if (liveAgent || liveRun) {
-    const executing = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING"].includes(runState);
+    const who = laneProviderLabel(lane);
+    const waitLabel = run?.resource_wait?.label;
+    const runLabels = {
+      EXECUTING: "Executing",
+      VALIDATING: "Validating",
+      WAITING_RESOURCE: waitLabel
+        ? (/^waiting\b/i.test(String(waitLabel)) ? String(waitLabel) : `Waiting for ${waitLabel}`)
+        : "Waiting",
+      RECOVERING: "Recovering",
+      QUEUED: "Queued",
+    };
+    if (!liveRun && liveAgent) {
+      return {
+        state: "CONNECTED",
+        label: "Connected",
+        mark: "●",
+        hint: `${who} connected`,
+        headline: `${who} connected`,
+        tone: "run",
+        slot,
+        queue_position: null,
+      };
+    }
     return {
       state: "RUNNING",
-      label: "Running",
+      label: runLabels[runState] || "Running",
       mark: "●",
-      hint: executing ? "Current work executing" : "Running",
-      headline: liveAgent ? "Running · Claude connected" : "Running",
-      tone: "run",
+      hint: runLabels[runState] || "Current work executing",
+      headline: liveAgent ? `${runLabels[runState] || "Running"} · ${who}` : (runLabels[runState] || "Running"),
+      tone: runState === "RECOVERING" ? "recovering" : "run",
       slot,
       queue_position: null,
     };
@@ -377,7 +501,7 @@ export function deriveLaneExecutionPosture(lane) {
   if (bound && !liveAgent) {
     return {
       state: "IDLE",
-      label: "Idle",
+      label: "No session",
       mark: "○",
       hint: "No agent session",
       headline: "Idle · No agent session",
@@ -398,12 +522,17 @@ export function deriveLaneExecutionPosture(lane) {
   };
 }
 
+export function occupiesClaudeProviderCapacity(lane, cap = null) {
+  const posture = cap || deriveLaneExecutionPosture(lane);
+  if (laneProviderKind(lane) === "cursor") return false;
+  if (posture.state === "READY_TO_RELEASE") return false;
+  return ["RUNNING", "STARTING", "CONNECTED", "FINISHING", "NEEDS_INPUT", "WAITING_ON_DIRECTOR", "UPDATING_DIRECTOR"].includes(posture.state);
+}
+
 export function summarizeExecutionCapacity(lanes, provision = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   const rows = list.map((lane) => ({ lane, cap: deriveLaneExecutionPosture(lane) }));
-  const running = rows.filter((r) =>
-    ["RUNNING", "STARTING", "READY_TO_RELEASE", "FINISHING", "NEEDS_INPUT", "WAITING_ON_DIRECTOR", "UPDATING_DIRECTOR"].includes(r.cap.state)
-  );
+  const running = rows.filter((r) => occupiesClaudeProviderCapacity(r.lane, r.cap));
   const queued = rows
     .filter((r) => r.cap.state === "QUEUED_FOR_CAPACITY")
     .sort((a, b) => (Number(a.cap.queue_position) || 99) - (Number(b.cap.queue_position) || 99));
@@ -476,6 +605,17 @@ export function renderLaneRuntimeControls(lane, cap) {
       <p class="gw-runtime-line">Waiting on Director${esc(slotNote)}</p>
       <p class="gw-runtime-d">${esc(why)}</p>
       <p class="gw-runtime-d">${esc(action)}</p>
+    </aside>`;
+  }
+  if (posture.state === "CONNECTED") {
+    const who = laneProviderLabel(lane);
+    const release = who === "Cursor" ? "" : `<div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
+      </div>`;
+    return `<aside class="gw-runtime" data-gw-runtime data-posture="CONNECTED">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">${esc(who)} connected${esc(slotNote)}</p>
+      ${release}
     </aside>`;
   }
   if (posture.state === "RUNNING") {
@@ -582,10 +722,13 @@ export function outputBodyText(output, outputText, { pending = false } = {}) {
 }
 
 export function claudeRunStatus(lane) {
-  const running = lane?.claude?.presence === "present" || lane?.runtime === "online";
+  const running = lane?.claude?.presence === "present" || lane?.runtime === "online"
+    || LIVE_AGENT_SESSION_STATES.has(String(lane?.agent_session?.state || ""));
+  const who = laneAgentLabel(lane);
   return {
     running,
-    label: running ? "Claude is running" : "Claude is not running",
+    provider: laneProviderKind(lane),
+    label: running ? `${who} is running` : `${who} is not running`,
   };
 }
 
@@ -731,6 +874,22 @@ export function deriveLaneStatus({
 
   if (session === "unavailable") {
     const bound = Boolean(lane?.worktree?.path || lane?.binding?.worktree_path);
+    const cap = deriveLaneExecutionPosture(lane);
+    if (cap.state === "QUEUED_FOR_CAPACITY") {
+      return {
+        session: "offline",
+        activity: "queued",
+        attention: "none",
+        headline: cap.headline,
+        listHint: cap.label,
+      };
+    }
+    if (cap.state === "STARTING") {
+      return { session: "offline", activity: "starting", attention: "none", headline: cap.headline, listHint: cap.label };
+    }
+    if (cap.state === "CONNECTED" || cap.state === "RUNNING") {
+      return { session: "offline", activity: cap.state.toLowerCase(), attention: "none", headline: cap.headline, listHint: cap.label };
+    }
     if (lane?.durable && !bound) {
       return {
         session: "offline",
@@ -743,17 +902,17 @@ export function deriveLaneStatus({
     if (lane?.durable) {
       const sess = lane.agent_session?.state;
       if (sess === "STARTING") {
-        return { session: "offline", activity: "starting", attention: "none", headline: "Starting Claude…", listHint: "Starting Claude" };
+        return { session: "offline", activity: "starting", attention: "none", headline: cap.headline || "Starting…", listHint: "Starting" };
       }
       if (sess === "VERIFYING" || sess === "RESTARTING") {
-        return { session: "offline", activity: "orienting", attention: "none", headline: "Orienting Claude…", listHint: "Orienting Claude" };
+        return { session: "offline", activity: "orienting", attention: "none", headline: cap.headline || "Orienting…", listHint: "Starting" };
       }
       return {
         session: "offline",
         activity: "offline",
         attention: "none",
         headline: "No agent session running",
-        listHint: "No agent session",
+        listHint: "No session",
       };
     }
     return {
@@ -983,7 +1142,8 @@ export function notificationClickHash(laneId) {
 export function executionRunListHint(run, lane) {
   if (lane) {
     const cap = deriveLaneExecutionPosture(lane);
-    if (cap.state !== "RUNNING") return cap.hint;
+    if (cap.state === "CONNECTED" && !run?.state) return cap.hint || cap.label;
+    if (cap.state !== "RUNNING" && cap.state !== "CONNECTED") return cap.hint;
   }
   const bound = Boolean(lane?.binding?.worktree_path || lane?.worktree?.path);
   const liveAgent = lane?.claude?.presence === "present" || lane?.runtime === "online";
@@ -1171,25 +1331,32 @@ export function renderCurrentWork(run, nowMs = Date.now()) {
   </aside>`;
 }
 
-export function renderLaneSessionCallout(lane) {
+export function renderLaneSessionCallout(lane, extras = {}) {
   if (!lane?.durable) return "";
   const bound = Boolean(lane.worktree?.path || lane.binding?.worktree_path);
+  const who = laneProviderLabel(lane);
   const sessState = lane.agent_session?.state;
   if (sessState === "STARTING") {
     return `<aside class="gw-session-callout" data-gw-session-callout data-starting>
       <div class="gw-work-h">Agent</div>
-      <p class="gw-lead">Starting Claude…</p>
+      <p class="gw-lead">Starting ${esc(who)}…</p>
     </aside>`;
   }
   if (sessState === "VERIFYING" || sessState === "RESTARTING") {
     return `<aside class="gw-session-callout" data-gw-session-callout data-orienting>
       <div class="gw-work-h">Agent</div>
-      <p class="gw-lead">Orienting Claude…</p>
+      <p class="gw-lead">Orienting ${esc(who)}…</p>
     </aside>`;
   }
-  if (lane.claude?.presence === "present" || lane.runtime === "online") return "";
+  if (liveAgentOnLane(lane)) return "";
   if (!bound) return "";
-  if (lane.admission?.state === "QUEUED" && lane.execution_run?.state_reason === "waiting_for_execution_capacity") {
+  const cap = extras.executionCapacity;
+  const occupying = Array.isArray(cap?.running) ? cap.running.map((r) => r.name).filter(Boolean) : [];
+  const atProviderCap = who !== "Cursor"
+    && cap
+    && Number(cap.available) === 0
+    && occupying.length > 0;
+  if (lane.admission?.state === "QUEUED" && lane.execution_run?.state_reason === "waiting_for_execution_capacity" && !atProviderCap) {
     const n = lane.admission?.queue_position;
     return `<aside class="gw-session-callout" data-gw-session-callout data-queued>
       <div class="gw-work-h">Agent</div>
@@ -1198,7 +1365,11 @@ export function renderLaneSessionCallout(lane) {
     </aside>`;
   }
   const title = "No agent session";
-  const detail = "Existing worktree is connected. Start a persistent Claude session to continue queued work.";
+  const detail = atProviderCap
+    ? `Claude is at ${cap.active}/${cap.max_active}. Running: ${occupying.join(", ")}. Release one to start this session.`
+    : (who === "Cursor"
+      ? "Existing worktree is connected. Attach this Cursor session to continue work."
+      : "Existing worktree is connected. Start a persistent Claude session to continue queued work.");
   const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
   return `<aside class="gw-session-callout" data-gw-session-callout>
     <div class="gw-work-h">Agent</div>
@@ -1222,13 +1393,45 @@ export function previousRunHint(run) {
   return executionRunListHint(run);
 }
 
+/**
+ * ABANDONED is not FAILED and not COMPLETE. When the lane and worktree still
+ * match, it is a recoverable state and the operator gets the canonical
+ * continuation action — never "make a new run to continue the same sprint".
+ */
+export function abandonedRecoveryNotice(run) {
+  if (run?.state !== "ABANDONED") return null;
+  if (run.recoverable) {
+    return {
+      recoverable: true,
+      label: "Abandoned · lane and worktree still match",
+      detail: "Vacilando closed this run, but the lane still looks recoverable. Continue it instead of starting a new run.",
+      action: "Continue this run",
+    };
+  }
+  const why = {
+    lane_has_active_run: "Newer work is already running on this lane.",
+    binding_mismatch: "The lane is no longer bound to this run's worktree.",
+    lane_missing: "The Development Lane no longer exists.",
+    recovery_budget_exhausted: "This run has been recovered too many times.",
+  }[run.recovery_blocked_reason] || "This run can no longer be recovered.";
+  return { recoverable: false, label: "Abandoned", detail: why, action: null };
+}
+
 export function renderPreviousWork(run) {
   if (!run?.state) return "";
-  const hint = previousRunHint(run) || run.state;
+  const notice = abandonedRecoveryNotice(run);
+  const hint = notice?.label || previousRunHint(run) || run.state;
   const tone = executionRunTone(run);
-  return `<aside class="gw-work is-previous${tone ? ` is-${tone}` : ""}" data-gw-previous-run data-run-state="${esc(run.state)}">
+  const recover = notice?.recoverable
+    ? `<div class="gw-work-recover">
+      <span class="gw-work-detail">${esc(notice.detail)}</span>
+      <button type="button" class="btn sm gw-run-recover" data-gw-run-recover data-run-id="${esc(run.run_id || "")}">${esc(notice.action)}</button>
+    </div>`
+    : (notice ? `<span class="gw-work-detail">${esc(notice.detail)}</span>` : "");
+  return `<aside class="gw-work is-previous${tone ? ` is-${tone}` : ""}${notice?.recoverable ? " is-recoverable" : ""}" data-gw-previous-run data-run-state="${esc(run.state)}"${notice ? ` data-recoverable="${notice.recoverable ? "1" : "0"}"` : ""}>
     <span class="gw-work-h">Previous run</span>
     <span class="gw-work-state">${esc(hint)}</span>
+    ${recover}
   </aside>`;
 }
 
@@ -1300,18 +1503,35 @@ export function agentSessionLine(telemetry, nowMs = Date.now()) {
   return bits.length ? bits.join(" · ") : null;
 }
 
+function laneListStatus(lane, attention) {
+  const cap = deriveLaneExecutionPosture(lane);
+  if (attention?.listHint === "New output") {
+    return { label: "New output", mark: cap.mark, tone: "needs" };
+  }
+  if (cap.state === "RUNNING" || cap.state === "CONNECTED") {
+    const hint = executionRunListHint(lane.execution_run, lane);
+    return {
+      label: hint || cap.label,
+      mark: cap.mark,
+      tone: executionRunTone(lane.execution_run) || cap.tone,
+    };
+  }
+  return {
+    label: cap.label,
+    mark: cap.mark,
+    tone: executionRunTone(lane.execution_run) || cap.tone,
+  };
+}
+
 function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const id = lane.lane_id;
   const active = laneMatchesId(lane, selectedId) ? " is-active" : "";
   const git = gitLine(lane.git, lane.source_control);
-  const cap = deriveLaneExecutionPosture(lane);
-  const hint = attentionByLane?.[id]?.listHint
-    || (cap.state === "RUNNING"
-      ? (executionRunListHint(lane.execution_run, lane) || cap.hint)
-      : cap.hint);
-  const tone = executionRunTone(lane.execution_run) || cap.tone;
+  const st = laneListStatus(lane, attentionByLane?.[id]);
+  const hint = st.label;
+  const tone = st.tone;
   const attn = hint
-    ? `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(hint)}</span>`
+    ? `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(hint)}</span>`
     : "";
   const wait = lane.execution_run?.resource_wait;
   const runState = lane.execution_run?.state;
@@ -1334,14 +1554,13 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
     queue = `<span class="gw-lane-queue">${esc(wait.label)}</span>`;
   }
   const ctx = contextCompact(telemetryByLane?.[id]);
-  const meta = ctx
-    ? `${agentLabel(lane)} · ${ctx}`
-    : (liveAgentOnLane(lane) ? `${cap.label} · Claude` : cap.label);
+  const who = agentLabel(lane);
+  const meta = ctx ? `${who} · ${ctx}` : who;
   const when = ago(lane.last_activity_ms);
   const activity = when ? `<span class="gw-lane-ab">Active ${esc(when)} ago</span>` : "";
   return `<a class="gw-lane${active}" data-gw-lane="${esc(id)}" href="${esc(laneDetailHash(id))}">
     <span class="gw-lane-title">${esc(lane.label || id)}</span>
-    <span class="gw-lane-posture${tone ? ` is-${tone}` : ""}">${esc(cap.mark)} ${esc(cap.label)}</span>
+    <span class="gw-lane-posture${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}</span>
     ${attn}
     ${queue}
     <span class="gw-lane-meta">${esc(meta)}</span>
@@ -1373,16 +1592,29 @@ export function renderOutput(text, { pending = false } = {}) {
   return `<pre class="gw-output" data-gw-output tabindex="0"${pendingAttr}>${esc(body)}</pre>`;
 }
 
+/**
+ * The output panel is named for what it SHOWS, not for who produced it: the
+ * same panel serves Claude and Cursor lanes. It reads "Recent output" while
+ * work is in flight and "Completed output" once the run has finished.
+ */
+export function outputPanelHeading(lane) {
+  const state = lane?.execution_run?.state || lane?.previous_run?.state || null;
+  if (!lane?.execution_run && lane?.previous_run?.state === "COMPLETE") return "Completed output";
+  if (state === "COMPLETE") return "Completed output";
+  return "Recent output";
+}
+
 /** Honest truncation / review chrome. Does not parse TUI glyphs. */
-export function outputReviewHint(output) {
+export function outputReviewHint(output, { lane = null } = {}) {
+  const panelHeading = outputPanelHeading(lane);
   if (!output || output.ok === false) return null;
   const mode = output.mode || "recent";
   if (mode === "latest_response") {
     if (!output.available) {
       return {
         kind: "latest_unavailable",
-        heading: "Latest Claude Response",
-        text: "Latest Claude response is not available from the session transcript. Switch back to recent terminal output.",
+        heading: "Latest response",
+        text: "The latest assistant response is not available from the session transcript. Switch back to recent output.",
         showRecent: true,
         showLatest: false,
         showExtended: true,
@@ -1390,10 +1622,10 @@ export function outputReviewHint(output) {
     }
     return {
       kind: "latest",
-      heading: "Latest Claude Response",
+      heading: "Latest response",
       text: output.truncated
-        ? "Latest Claude response (length-capped)."
-        : "Latest Claude response from the session transcript. This is the assistant message, not full terminal/tool output.",
+        ? "Latest assistant response (length-capped)."
+        : "Latest assistant response from the session transcript. This is the assistant message, not full terminal/tool output.",
       showRecent: true,
       showLatest: false,
       showExtended: true,
@@ -1405,7 +1637,7 @@ export function outputReviewHint(output) {
       : "Retained terminal history.";
     return {
       kind: output.truncated ? "extended_truncated" : "extended",
-      heading: "Claude",
+      heading: panelHeading,
       text: extra,
       showRecent: true,
       showLatest: true,
@@ -1416,15 +1648,15 @@ export function outputReviewHint(output) {
     || (output.alternate_screen === true && Number(output.history_size) === 0);
   const historyMore = Number(output.history_size) > Number(output.returned_lines || output.line_count || 0);
   const truncated = Boolean(output.truncated);
-  let text = "Recent output";
+  let text = panelHeading;
   if (viewportOnly) {
-    text = "Showing the visible pane. Claude’s TUI does not keep tmux scrollback. Earlier output is not currently shown.";
+    text = "Showing the visible pane. The agent’s TUI does not keep tmux scrollback. Earlier output is not currently shown.";
   } else if (truncated || historyMore) {
     text = "Showing recent output. Earlier output is not currently shown.";
   }
   return {
     kind: viewportOnly ? "viewport_only" : (truncated || historyMore ? "truncated" : "recent"),
-    heading: "Claude",
+    heading: panelHeading,
     text,
     showRecent: false,
     showLatest: true,
@@ -1432,12 +1664,12 @@ export function outputReviewHint(output) {
   };
 }
 
-export function renderOutputChrome(output) {
-  const hint = outputReviewHint(output);
+export function renderOutputChrome(output, { lane = null } = {}) {
+  const hint = outputReviewHint(output, { lane });
   if (!hint) return "";
   const btns = [];
   if (hint.showLatest) {
-    btns.push(`<button type="button" class="btn sm gw-output-latest" data-gw-output-latest>Latest Claude response</button>`);
+    btns.push(`<button type="button" class="btn sm gw-output-latest" data-gw-output-latest>Latest response</button>`);
   }
   if (hint.showExtended) {
     btns.push(`<button type="button" class="btn sm gw-output-more" data-gw-output-more>Load more</button>`);
@@ -1469,11 +1701,13 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
-export function renderComposer({ disabled, notice, draft, max = LANE_INSTRUCTION_MAX, idleStart = false } = {}) {
+export function renderComposer({ disabled, notice, draft, max = LANE_INSTRUCTION_MAX, idleStart = false, queueUntilSession = false } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
     : "";
-  const placeholder = idleStart ? "Start work — write an instruction…" : "Write an instruction…";
+  const placeholder = queueUntilSession
+    ? "Write an instruction — it will queue until a session starts…"
+    : idleStart ? "Start work — write an instruction…" : "Write an instruction…";
   const sendLabel = idleStart ? "Start work" : "Send";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
@@ -1899,8 +2133,8 @@ export function renderGatewayShell({
     output,
     outputText,
   });
-  const hint = outputReviewHint(output);
-  const heading = hint?.heading || "Latest Claude Response";
+  const hint = outputReviewHint(output, { lane });
+  const heading = hint?.heading || outputPanelHeading(lane);
   const cap = deriveLaneExecutionPosture(lane);
   const workStatus = `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
   const bodyText = outputBodyText(output, outputText, { pending });
@@ -1911,17 +2145,22 @@ export function renderGatewayShell({
         <div class="gw-stage-status" data-gw-stage-status>
           ${workStatus}
         </div>
+        ${renderProviderHealth(output?.provider_health)}
         <div class="gw-thread" data-gw-thread>
           <div class="gw-output-h">
             <span>${esc(heading)}</span>
             ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
           </div>
-          ${renderOutputChrome(output)}
+          ${renderOutputChrome(output, { lane })}
           ${renderOutput(bodyText, { pending })}
         </div>
         ${renderClaudeRunStatus(lane, telemetry)}
         ${renderOperatorDecisionBar(lane?.execution_run)}
-        ${renderComposer({ ...(composer || {}), idleStart: cap.state === "IDLE" })}
+        ${renderComposer({
+          ...(composer || {}),
+          idleStart: cap.state === "IDLE",
+          queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
+        })}
       </div>
       <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
         <div class="gw-lane-compact">
@@ -1932,6 +2171,7 @@ export function renderGatewayShell({
           </div>
           ${renderContextRefreshButton(lane, { compact: true })}
         </div>
+        ${renderLaneLocalhost(lane)}
         <details class="gw-lane-fold" data-gw-lane-fold ${laneFoldOpen ? "open" : ""}>
           <summary class="gw-lane-fold-sum">Lane details</summary>
           <div class="gw-lane-top">
@@ -1948,7 +2188,7 @@ export function renderGatewayShell({
           </div>
           <div class="gw-aside-body">
             ${renderLaneRuntimeControls(lane, cap)}
-            ${renderLaneSessionCallout(lane)}
+            ${renderLaneSessionCallout(lane, { executionCapacity })}
             ${renderRecentSystemActivity(lane?.recent_system_activity)}
             ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
             ${statusHtml}
@@ -1964,10 +2204,8 @@ export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane) {
   if (!list.length) return `<div class="gw-empty-rail">No lanes</div>`;
   return list.map((lane) => {
     const active = lane.lane_id === selectedId ? " active" : "";
-    const cap = deriveLaneExecutionPosture(lane);
-    const hint = attentionByLane?.[lane.lane_id]?.listHint
-      || executionRunListHint(lane.execution_run, lane);
-    const tone = executionRunTone(lane.execution_run) || cap.tone;
+    const st = laneListStatus(lane, attentionByLane?.[lane.lane_id]);
+    const tone = st.tone;
     const wait = lane.execution_run?.resource_wait;
     const runState = lane.execution_run?.state;
     let queue = "";
@@ -1984,9 +2222,10 @@ export function railHtml(lanes, selectedId, attentionByLane, telemetryByLane) {
     else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) queue = ` · #${wait.queue_position} in queue`;
     else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") queue = " · Exclusive timing window";
     else if (runState === "VALIDATING" && wait?.label) queue = ` · ${wait.label}`;
-    const attn = hint ? `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(cap.mark)} ${esc(hint)}${esc(queue)}</span>` : "";
+    const attn = `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}${esc(queue)}</span>`;
     const ctx = contextCompact(telemetryByLane?.[lane.lane_id]);
-    const meta = ctx ? `${agentLabel(lane)} · ${ctx}` : (liveAgentOnLane(lane) ? `${cap.label} · Claude` : cap.label);
+    const who = agentLabel(lane);
+    const meta = ctx ? `${who} · ${ctx}` : who;
     return `<a class="mission-rail-item${active}" data-route="lanes/${esc(lane.lane_id)}" data-gw-lane="${esc(lane.lane_id)}">
       <span class="mission-rail-title">${esc(lane.label || lane.lane_id)}<span class="mission-rail-meta">${esc(meta)}</span></span>
       ${attn}

@@ -608,6 +608,46 @@ alloy_file_mtime_human() {
     || printf 'unknown'
 }
 
+# The full typecheck's heap is a RESOURCE CONTRACT, not a config preference.
+# alloy-config.example declares 8192 and web/package.json declares 8192, but an
+# installed config can drift below that; this host's was pinned at 4096, which
+# is why `vac run typecheck` died with SIGABRT (reported as class=config) while
+# `typecheck:tests` — which carries a hardcoded 8192 fallback — passed. A floor
+# enforced here means config drift can no longer undersize the compiler.
+#
+# MEASURED on this host (not assumed), same commit, same tsconfig.build.json:
+#   --max-old-space-size=4096 -> rc=134 SIGABRT, class=config, aborted after 98s,
+#                                peak RSS 4177MB (it ran into its own ceiling)
+#   --max-old-space-size=8192 -> rc=0, class=ok, finished in 86s,
+#                                peak RSS 4399MB
+# The compiler genuinely needs ~4.4GB for the full build graph, so 4096 is
+# structurally insufficient rather than merely tight. 8192 clears the measured
+# peak with roughly 1.9x headroom; it is not a blind increase.
+ALLOY_TYPECHECK_MIN_HEAP_MB="${ALLOY_TYPECHECK_MIN_HEAP_MB:-8192}"
+
+alloy_apply_heap_floor() {
+  # $1 = command string. Raises --max-old-space-size below the floor; adds it to
+  # a bare `node …tsc` invocation that declares none.
+  local cmd="$1" floor="${ALLOY_TYPECHECK_MIN_HEAP_MB}" declared=""
+  [[ -n "$cmd" ]] || { printf '%s' "$cmd"; return 0; }
+  declared="$(printf '%s' "$cmd" | sed -n 's/.*--max-old-space-size=\([0-9][0-9]*\).*/\1/p')"
+  if [[ -n "$declared" ]]; then
+    if (( declared < floor )); then
+      printf '%s' "$cmd" | sed "s/--max-old-space-size=${declared}/--max-old-space-size=${floor}/"
+      printf 'note: raised typecheck heap %sMB -> %sMB (broker resource contract)\n' \
+        "$declared" "$floor" >&2
+      return 0
+    fi
+    printf '%s' "$cmd"
+    return 0
+  fi
+  if [[ "$cmd" == node[[:space:]]* ]]; then
+    printf '%s' "${cmd/node /node --max-old-space-size=${floor} }"
+    return 0
+  fi
+  printf '%s' "$cmd"
+}
+
 alloy_export_node_defaults() {
   export NODE_OPTIONS="${NODE_OPTIONS:-$NODE_OPTIONS_DEFAULT}"
 }

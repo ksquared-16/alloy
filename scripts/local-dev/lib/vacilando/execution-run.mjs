@@ -14,6 +14,7 @@ import { LANE_ID_RE, LANE_INSTRUCTION_MAX } from "./lanes.mjs";
 import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
+import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
 export const EXECUTION_RUN_MAX_LANES = 32;
@@ -35,6 +36,8 @@ export const RUN_STATES = Object.freeze([
 ]);
 
 export const TERMINAL_RUN_STATES = Object.freeze(["COMPLETE", "FAILED", "ABANDONED"]);
+/** Truly irreversible. ABANDONED is terminal for scheduling, but recoverable. */
+export const IRREVERSIBLE_RUN_STATES = Object.freeze(["COMPLETE", "FAILED"]);
 export const RUN_ORIGINS = Object.freeze(["operator", "agent", "governor", "system", "certification"]);
 
 const LEGAL = Object.freeze({
@@ -42,11 +45,16 @@ const LEGAL = Object.freeze({
   EXECUTING: ["WAITING_RESOURCE", "VALIDATING", "NEEDS_INPUT", "RECOVERING", "COMPLETE", "FAILED", "ABANDONED"],
   WAITING_RESOURCE: ["EXECUTING", "VALIDATING", "NEEDS_INPUT", "FAILED"],
   VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED"],
-  RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "FAILED"],
+  // COMPLETE is reachable from RECOVERING: work that finished must never be
+  // impossible to close merely because Vacilando abandoned the run mid-sprint.
+  RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"],
   NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "FAILED"],
   COMPLETE: [],
   FAILED: [],
-  ABANDONED: [],
+  // ABANDONED is recoverable, not dead. RECOVERING is its ONLY exit, and it is
+  // reachable only through recoverExecutionRun() with proven worker ownership.
+  // Arbitrary ABANDONED -> EXECUTING stays illegal.
+  ABANDONED: ["RECOVERING"],
 });
 
 const REPORT_STATES = new Set([
@@ -114,6 +122,11 @@ export function isTerminalRunState(state) {
   return TERMINAL_RUN_STATES.includes(state);
 }
 
+/** COMPLETE/FAILED can never be reopened. ABANDONED can be recovered. */
+export function isIrreversibleRunState(state) {
+  return IRREVERSIBLE_RUN_STATES.includes(state);
+}
+
 export function isLegalRunTransition(from, to) {
   return (LEGAL[from] || []).includes(to);
 }
@@ -174,7 +187,7 @@ export function listExecutionRunsForLane(laneId, root = runtimeRoot()) {
 }
 
 export function gatewayRuntimeRoot() {
-  return join(homedir(), ".local", "state", "alloy-dev", "gateway");
+  return vacilandoGatewayRoot();
 }
 
 export function candidateRuntimeRoots() {
@@ -241,6 +254,22 @@ function appendTransition(run, { from, to, reason, origin, nowMs }) {
   return rec;
 }
 
+/**
+ * Worker liveness. A report that does not change state is still positive proof
+ * that the worker is alive. Before this existed, `vac run-status <run> executing`
+ * on an already-EXECUTING run was discarded as a noop, so a working agent left
+ * no evidence at all and the governor read it as an orphan.
+ */
+function touchWorkerLiveness(run, { nowMs, origin, progress = null }) {
+  if (origin !== "agent") return false;
+  run.last_worker_report_at = iso(nowMs);
+  run.worker_report_count = (Number(run.worker_report_count) || 0) + 1;
+  if (progress) {
+    run.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+  }
+  return true;
+}
+
 function appendRunEvent(rec, root) {
   try {
     const path = executionRunEventsPath(root);
@@ -296,7 +325,7 @@ function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
       at: run.updated_at,
     }, root);
   }
-  if (["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(run.state)) {
+  if (["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(run.state)) {
     return scheduleOutcomePush(run, root);
   }
   return Promise.resolve(null);
@@ -317,13 +346,23 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     origin: run.origin || null,
     mission_id: run.mission_id || null,
     worktree_path: run.worktree_path || null,
+    node_id: run.node_id || null,
     latest_progress: run.latest_progress || null,
     completion_report: run.completion_report || null,
     resource_wait: run.resource_wait || null,
     governed_action: run.governed_action || null,
     checkpoint_ready: Boolean(run.checkpoint_ready),
     checkpoint_summary: run.checkpoint_summary || null,
+    last_worker_report_at: run.last_worker_report_at || null,
+    worker_report_count: Number(run.worker_report_count) || 0,
+    recovery_state: run.recovery_state || null,
+    recovered_count: Number(run.recovered_count) || 0,
   };
+  if (run.state === "ABANDONED") {
+    const probe = executionRunRecoverability(run);
+    out.recoverable = Boolean(probe.recoverable);
+    out.recovery_blocked_reason = probe.recoverable ? null : probe.reason;
+  }
   if (includeInstruction) out.instruction = run.instruction;
   if (includeTransitions) out.transitions = run.transitions || [];
   return out;
@@ -453,9 +492,13 @@ export function createQueuedRun({
     agent_session_id: null,
     resource_wait: null,
     recovery_state: null,
+    last_worker_report_at: null,
+    worker_report_count: 0,
+    recovered_count: 0,
     worktree_path: worktreePath
       ? String(worktreePath)
       : (getDurableLane(id, root)?.binding?.worktree_path || null),
+    node_id: localNodeId(root),
     mission_id: getDurableLane(id, root)?.mission_id || null,
     output_fingerprint_at_send: null,
     transitions: [],
@@ -495,11 +538,22 @@ export function transitionExecutionRun(runId, toState, {
   const to = String(toState || "").toUpperCase();
   if (!RUN_STATES.includes(to)) return { ok: false, error: "invalid_state" };
   if (found.state === to) {
+    // Same-state report. Not a transition, but still liveness evidence: persist
+    // it so the stale governor can tell a working agent from an orphan.
+    const touched = touchWorkerLiveness(found, { nowMs, origin, progress });
+    if (touched || progress) {
+      if (progress && !touched) {
+        found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
+      }
+      found.updated_at = iso(nowMs);
+      if (phase !== undefined) found.current_phase = bound(phase, 80);
+      writeStore(putRun(store, found), root);
+    }
     // Retry push if the first dispatch never delivered. Dedup lives in lane-push.
-    const push = ["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(to)
+    const push = ["COMPLETE", "NEEDS_INPUT", "FAILED", "ABANDONED"].includes(to)
       ? emitOutcomeEvent(found, root, { recordEvent: false })
       : Promise.resolve(null);
-    return { ok: true, run: found, noop: true, push };
+    return { ok: true, run: found, noop: true, heartbeat: touched, push };
   }
   if (!isLegalRunTransition(found.state, to)) {
     return { ok: false, error: "illegal_transition", from: found.state, to };
@@ -547,6 +601,7 @@ export function transitionExecutionRun(runId, toState, {
   if (resource_wait?.governed_action) found.governed_action = resource_wait.governed_action;
   if (fingerprint) found.output_fingerprint_at_send = found.output_fingerprint_at_send || String(fingerprint);
   if (worktreePath && !found.worktree_path) found.worktree_path = String(worktreePath);
+  touchWorkerLiveness(found, { nowMs, origin });
   appendTransition(found, { from, to, reason, origin, nowMs });
   writeStore(putRun(store, found), root);
   const push = emitOutcomeEvent(found, root);
@@ -575,6 +630,15 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     if (fields.checkpoint_requested !== undefined) found.checkpoint_requested = Boolean(fields.checkpoint_requested);
     if (fields.state_reason !== undefined) found.state_reason = fields.state_reason == null ? null : bound(fields.state_reason, EXECUTION_RUN_REASON_MAX);
     if (fields.governed_action !== undefined) found.governed_action = fields.governed_action || null;
+    if (fields.recovery_state !== undefined) found.recovery_state = fields.recovery_state || null;
+    if (fields.recovered_count !== undefined) found.recovered_count = Number(fields.recovered_count) || 0;
+    if (fields.completed_at !== undefined) found.completed_at = fields.completed_at || null;
+    if (fields.instruction !== undefined) {
+      const text = String(fields.instruction ?? "");
+      if (!text.trim()) return { ok: false, error: "instruction_empty" };
+      if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
+      found.instruction = text;
+    }
     found.updated_at = iso(nowMs);
     writeStore(putRun(store, found), root);
     return { ok: true, run: found };
@@ -605,6 +669,152 @@ export function cwdOwnsRun(run, cwd) {
   return here === root || here.startsWith(`${root}/`);
 }
 
+export const RECOVERY_MAX_PER_RUN = 8;
+
+/**
+ * Would recovery succeed right now? A dry run of recoverExecutionRun's ownership
+ * gate, used by the UI so an ABANDONED run can be shown as recoverable and
+ * offered a continuation action instead of forcing a fake new run.
+ */
+export function executionRunRecoverability(run, { root = null } = {}) {
+  if (!run?.run_id) return { recoverable: false, reason: "no_run" };
+  if (isIrreversibleRunState(run.state)) return { recoverable: false, reason: "irreversible" };
+  if (run.state === "RECOVERING") return { recoverable: false, reason: "already_recovering" };
+  if (run.state !== "ABANDONED") return { recoverable: false, reason: "not_abandoned" };
+  const storeRoot = root || (findExecutionRun(run.run_id)?.root) || runtimeRoot();
+  const lane = getDurableLane(run.lane_id, storeRoot);
+  if (!lane) return { recoverable: false, reason: "lane_missing" };
+  const bound = lane?.binding?.worktree_path || null;
+  if (!run.worktree_path || !bound || realOrSelf(bound) !== realOrSelf(run.worktree_path)) {
+    return { recoverable: false, reason: "binding_mismatch" };
+  }
+  const active = activeRunForLane(run.lane_id, storeRoot);
+  if (active && active.run_id !== run.run_id) {
+    return { recoverable: false, reason: "lane_has_active_run", active_run_id: active.run_id };
+  }
+  if ((Number(run.recovered_count) || 0) >= RECOVERY_MAX_PER_RUN) {
+    return { recoverable: false, reason: "recovery_budget_exhausted" };
+  }
+  return { recoverable: true, reason: "ownership_provable", abandoned_reason: run.state_reason || null };
+}
+
+/**
+ * Canonical ABANDONED -> RECOVERING path (Phase 3).
+ *
+ * Recovery is never automatic on state alone. It requires positive ownership
+ * proof, so an abandoned run cannot be hijacked by another lane or worktree:
+ *
+ *   1. the run is ABANDONED (COMPLETE/FAILED stay irreversible);
+ *   2. the durable lane still exists;
+ *   3. the claimed lane matches the run's lane;
+ *   4. the claimant proves worktree ownership (cwd inside the run's worktree),
+ *      or is the operator acting on a lane whose binding still matches;
+ *   5. the lane has no other active run to displace.
+ *
+ * History is never rewritten: the abandonment transition is preserved and the
+ * recovery is appended after it.
+ */
+export function recoverExecutionRun(runId, {
+  laneId = null,
+  cwd = null,
+  origin = "agent",
+  reason = null,
+  nowMs = Date.now(),
+  root = null,
+} = {}) {
+  const found = root ? { run: getExecutionRun(runId, root), root } : findExecutionRun(runId);
+  if (!found?.run) return { ok: false, error: "run_not_found" };
+  const run = found.run;
+  const storeRoot = found.root;
+
+  if (isIrreversibleRunState(run.state)) {
+    return { ok: false, error: "run_irreversible", state: run.state };
+  }
+  if (run.state === "RECOVERING") {
+    // Idempotent: a duplicate recovery attempt is a no-op, not a second recovery.
+    return { ok: true, run, already_recovering: true, noop: true };
+  }
+  if (run.state !== "ABANDONED") {
+    return { ok: true, run, not_abandoned: true, noop: true };
+  }
+
+  const lane = getDurableLane(run.lane_id, storeRoot);
+  if (!lane) return { ok: false, error: "lane_missing" };
+
+  if (laneId) {
+    const claimed = canonicalLaneStoreId(laneId, storeRoot);
+    const owned = canonicalLaneStoreId(run.lane_id, storeRoot);
+    if (claimed !== owned && String(laneId) !== run.lane_id) {
+      return { ok: false, error: "lane_mismatch" };
+    }
+  }
+
+  let proof = null;
+  if (cwd) {
+    if (!cwdOwnsRun(run, cwd)) return { ok: false, error: "worktree_mismatch" };
+    proof = "worktree_cwd";
+  } else if (origin === "operator") {
+    const bound_ = lane?.binding?.worktree_path || null;
+    if (!run.worktree_path || !bound_ || realOrSelf(bound_) !== realOrSelf(run.worktree_path)) {
+      return { ok: false, error: "binding_mismatch" };
+    }
+    proof = "operator_binding";
+  } else {
+    return { ok: false, error: "ownership_unproven" };
+  }
+
+  const active = activeRunForLane(run.lane_id, storeRoot);
+  if (active && active.run_id !== run.run_id) {
+    return { ok: false, error: "lane_has_active_run", active_run_id: active.run_id };
+  }
+  if ((Number(run.recovered_count) || 0) >= RECOVERY_MAX_PER_RUN) {
+    return { ok: false, error: "recovery_budget_exhausted" };
+  }
+
+  const abandonedAt = run.completed_at || run.updated_at;
+  const out = transitionExecutionRun(run.run_id, "RECOVERING", {
+    reason: reason || "ownership_proven_recovery",
+    origin: origin === "operator" ? "operator" : "agent",
+    nowMs,
+    root: storeRoot,
+  });
+  if (!out.ok) return out;
+
+  patchRunFields(run.run_id, {
+    recovery_state: {
+      recovered_at: iso(nowMs),
+      abandoned_at: abandonedAt || null,
+      abandoned_reason: run.state_reason || null,
+      ownership_proof: proof,
+      origin,
+    },
+    recovered_count: (Number(run.recovered_count) || 0) + 1,
+    completed_at: null,
+  }, { nowMs, root: storeRoot });
+
+  appendRunEvent({
+    type: "execution_run.recovered",
+    run_id: run.run_id,
+    lane_id: run.lane_id,
+    ownership_proof: proof,
+    abandoned_reason: run.state_reason || null,
+    abandoned_at: abandonedAt || null,
+    origin,
+    at: iso(nowMs),
+  }, storeRoot);
+
+  return {
+    ok: true,
+    recovered: true,
+    ownership_proof: proof,
+    run: getExecutionRun(run.run_id, storeRoot) || out.run,
+  };
+}
+
+function realOrSelf(p) {
+  try { return realpathSync(String(p)); } catch { return resolve(String(p)); }
+}
+
 export function reportRunState(runId, state, {
   reason = null,
   summary = null,
@@ -631,6 +841,24 @@ export function reportRunState(runId, state, {
   }
   if (cwd && !cwdOwnsRun(run, cwd)) {
     return { ok: false, error: "worktree_mismatch" };
+  }
+  // Phase 3/4: a worker reporting on a run Vacilando abandoned is itself proof
+  // the abandonment was wrong. Recover it (ownership already proven above by
+  // lane + cwd) rather than answering illegal_transition and stranding a live
+  // sprint with no way to reach COMPLETE.
+  let autoRecovered = null;
+  if (run.state === "ABANDONED") {
+    const rec = recoverExecutionRun(run.run_id, {
+      laneId: expectedLaneId || run.lane_id,
+      cwd: cwd || null,
+      origin: cwd ? "agent" : origin,
+      reason: "worker_reported_on_abandoned_run",
+      nowMs,
+      root: storeRoot,
+    });
+    if (!rec.ok) return rec;
+    autoRecovered = rec.recovered ? rec.ownership_proof : null;
+    Object.assign(run, getExecutionRun(run.run_id, storeRoot) || run);
   }
   const ready = checkpoint_ready === true || String(checkpoint_ready).toLowerCase() === "true" || String(checkpoint_ready) === "1";
   if (ready) {
@@ -680,6 +908,7 @@ export function reportRunState(runId, state, {
       })).catch(() => {});
     } catch { /* */ }
   }
+  if (autoRecovered && out.ok) out.recovered = autoRecovered;
   if (out.ok && ready) {
     return afterCheckpointReport(out, run.lane_id, storeRoot, nowMs, summary || checkpoint_summary);
   }

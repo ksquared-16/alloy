@@ -29,6 +29,7 @@ import { PROVIDERS } from "../providers.mjs";
 import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, ADAPTERS } from "../provider-runtime.mjs";
 import { recordReview } from "./review.mjs";
 import { preserveOutputs, discardGenerated } from "../closeout.mjs";
+import { resolveRuntimeConfig, worktreePathForName } from "../workspace-facts.mjs";
 
 // --------------------------------------------------------------------------
 // Declarative input validation (fail-closed).
@@ -579,7 +580,7 @@ const COMMANDS = {
     },
     run: async (v, snap, ctx) => {
       const s = sprintBySlot(snap, v.slot);
-      const cwd = s?.worktree ? `${process.env.HOME}/Code/alloy-worktrees/${s.worktree}` : null;
+      const cwd = s?.worktree ? worktreePathForName(s.worktree) : null;
       // Worker Runtime → Provider Runtime (single owner does the shared auth
       // pre-check; the worker never authenticates the provider itself).
       const response = await sendViaProvider({ provider: s?.provider, message: v.message, cwd });
@@ -715,13 +716,13 @@ const COMMANDS = {
 // real fixed-argv adapters. NOT executed during QA (preview only) per safety.
 // --------------------------------------------------------------------------
 const branchOf = (snap, slot) => sprintBySlot(snap, slot)?.branch || null;
-const wtPath = (snap, slot) => `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, slot)?.worktree}`;
+const wtPath = (snap, slot) => worktreePathForName(sprintBySlot(snap, slot)?.worktree);
 
 Object.assign(COMMANDS, {
   "repository.commit": {
     key: "repository.commit", title: "Commit", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
     input: { slot: { type: "slot", required: true }, message: { type: "text", required: true }, allow_empty: { type: "bool" } },
-    buildArgv: (v, snap) => ["-C", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`, "commit", ...(v.allow_empty ? ["--allow-empty"] : ["-a"]), "-m", v.message],
+    buildArgv: (v, snap) => ["-C", worktreePathForName(sprintBySlot(snap, v.slot)?.worktree), "commit", ...(v.allow_empty ? ["--allow-empty"] : ["-a"]), "-m", v.message],
     resolveTarget: (v, snap) => target("repository", `commit on ${branchOf(snap, v.slot)}`, { slot: v.slot }),
     eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
     preview: (v, t, snap) => ({ summary: `Create a commit on ${branchOf(snap, v.slot)}.`, authoritative_target: `git commit ${v.allow_empty ? "--allow-empty " : "-a "}-m "${v.message}"`, effects: [v.allow_empty ? "Creates an empty commit (no file changes) — safe for fixture certification." : "Commits all tracked changes in the worktree.", "Local only — does not push."] }),
@@ -730,7 +731,7 @@ Object.assign(COMMANDS, {
   "repository.push": {
     key: "repository.push", title: "Push branch", risk: "consequential", execution: "cli", bin: "git", confirmation: "required",
     input: { slot: { type: "slot", required: true } },
-    buildArgv: (v, snap) => ["-C", `${process.env.HOME}/Code/alloy-worktrees/${sprintBySlot(snap, v.slot)?.worktree}`, "push", "-u", "origin", branchOf(snap, v.slot)],
+    buildArgv: (v, snap) => ["-C", worktreePathForName(sprintBySlot(snap, v.slot)?.worktree), "push", "-u", "origin", branchOf(snap, v.slot)],
     resolveTarget: (v, snap) => target("repository", `push ${branchOf(snap, v.slot)}`, { slot: v.slot }),
     eligibility: (t, snap, v) => (sprintBySlot(snap, v.slot) ? { eligible: true } : { eligible: false, reason: "slot not occupied" }),
     preview: (v, t, snap) => ({ summary: `Push ${branchOf(snap, v.slot)} to origin.`, authoritative_target: `git push -u origin ${branchOf(snap, v.slot)}`, effects: ["Publishes local commits to the remote branch. Does not open a PR, merge, or promote.", "Release is never auto-approved."] }),
@@ -801,15 +802,16 @@ Object.assign(COMMANDS, {
       if (w.dirty) return { ok: false, error: "worktree has uncommitted changes — deletion blocked" };
       if (w.ahead > 0) return { ok: false, error: `worktree has ${w.ahead} unmerged commit(s) — deletion blocked` };
       try {
-        execFileSync("git", ["-C", join(os.homedir(), "Alloy"), "worktree", "remove", w.path], { timeout: 30000, stdio: "pipe" });
+        execFileSync("git", ["-C", resolveRuntimeConfig().canonical_repo, "worktree", "remove", w.path], { timeout: 30000, stdio: "pipe" });
       } catch (e) {
         return { ok: false, error: `git worktree remove failed: ${String(e.stderr || e.message || e).slice(0, 200)}` };
       }
       // Free the slot: archive its metadata (never --force, never touch history).
       let slot_freed = false;
       try {
-        const metaDir = join(os.homedir(), ".local", "state", "alloy-dev", "metadata");
-        const finDir = join(os.homedir(), ".local", "state", "alloy-dev", "finished");
+        const cfg = resolveRuntimeConfig();
+        const metaDir = cfg.metadata_dir;
+        const finDir = join(cfg.runtime_root, "finished");
         const src = join(metaDir, `${w.worktree}.env`);
         if (existsSync(src)) { if (!existsSync(finDir)) mkdirSync(finDir, { recursive: true }); renameSync(src, join(finDir, `${w.worktree}.env`)); slot_freed = true; }
       } catch { /* worktree is gone regardless; slot archival is best-effort */ }
