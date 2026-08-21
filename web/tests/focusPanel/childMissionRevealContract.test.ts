@@ -115,7 +115,10 @@ describe("child mission reveal contract — siblings at different stages", () =>
             commitCriticalFor(WRIGLEY, "waitlist", "Review waitlist position"),
             { attentionSubjectId: LENNON },
         );
-        for (const key of ["household", "children", "billing_preview"]) {
+        // `as const` so the loop variable keeps the FocusPanelCardKey union — a bare string[] is not
+        // assignable to the keyed Map lookups, and `typecheck:tests` (tsconfig.json) catches it even
+        // though the build's tsconfig.build.json does not include tests.
+        for (const key of ["household", "children", "billing_preview"] as const) {
             expect(out.cardReadiness.get(key)).toBe("ready");
             expect(out.cardModels.get(key)).toEqual(before.cardModels.get(key));
         }
