@@ -215,6 +215,7 @@ export const LANE_EXECUTION_POSTURES = Object.freeze([
 
 const LIVE_AGENT_SESSION_STATES = new Set(["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"]);
 
+
 export function laneProviderKind(lane) {
   const raw = String(lane?.binding?.provider || lane?.agent_session?.provider || "").toLowerCase();
   if (raw === "cursor" || raw === "cursor-agent" || raw === "cursor_ide") return "cursor";
@@ -244,6 +245,24 @@ export function lanePort(lane) {
 export function laneLocalhostUrl(lane) {
   const port = lanePort(lane);
   return port ? `http://localhost:${port}` : null;
+}
+
+/**
+ * Stale login / update-required banner. Computed from the output already on
+ * screen, so it needs no new capture and no server round trip. It states the
+ * fix as a command the operator can run, and never claims anything about the
+ * Execution Run.
+ */
+export function renderProviderHealth(health) {
+  if (!health?.kind) return "";
+  const fix = health.fix_command
+    ? `<code class="gw-health-fix">${esc(health.fix_command)}</code>`
+    : "";
+  return `<aside class="gw-health" data-gw-provider-health data-kind="${esc(health.kind)}" data-provider="${esc(health.provider || "unknown")}">
+    <span class="gw-health-h">${esc(health.title)}</span>
+    <span class="gw-health-detail">${esc(health.detail || "")}</span>
+    ${fix}
+  </aside>`;
 }
 
 export function renderLaneLocalhost(lane) {
@@ -2126,6 +2145,7 @@ export function renderGatewayShell({
         <div class="gw-stage-status" data-gw-stage-status>
           ${workStatus}
         </div>
+        ${renderProviderHealth(output?.provider_health)}
         <div class="gw-thread" data-gw-thread>
           <div class="gw-output-h">
             <span>${esc(heading)}</span>

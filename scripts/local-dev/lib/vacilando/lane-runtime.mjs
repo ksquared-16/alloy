@@ -10,6 +10,7 @@ import { dirname, join } from "node:path";
 
 import { LANE_ID_RE, LANE_INSTRUCTION_MAX } from "./lanes.mjs";
 import { canonicalLaneStoreId } from "./development-lane.mjs";
+import { detectProviderHealth } from "./provider-health.mjs";
 
 export const LANE_RUNTIME_SCHEMA = "vacilando.lane.runtime.v1";
 export const LANE_RUNTIME_MAX_LANES = 32;
@@ -144,13 +145,24 @@ export function attachLaneInstructions(lanes, root = runtimeRoot()) {
   });
 }
 
-export function enrichOutputRuntime(output, root = runtimeRoot()) {
+export function enrichOutputRuntime(output, root = runtimeRoot(), { provider = null } = {}) {
   if (!output || !output.lane_id) return output;
+  // Stale login / update-required is computed once, server-side, and travels on
+  // the output payload. The Gateway view is a static browser asset and cannot
+  // import from lib/, so it must not compute this itself.
+  let health = null;
+  if (output.text) {
+    try { health = detectProviderHealth(output.text, { provider }); } catch { health = null; }
+  }
   const last = output.fingerprint
     ? maybeSetSendBaseline(output.lane_id, output.fingerprint, Date.now(), root)
     : readLaneInstruction(output.lane_id, root);
-  if (!last) return output;
-  return { ...output, last_instruction: last };
+  if (!last && !health) return output;
+  return {
+    ...output,
+    ...(last ? { last_instruction: last } : {}),
+    ...(health ? { provider_health: health } : {}),
+  };
 }
 
 /**

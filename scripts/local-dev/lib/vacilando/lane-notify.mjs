@@ -10,11 +10,37 @@ import {
 } from "./lane-runtime.mjs";
 import { pushPayloadForLane, sendPushToSubscriptions } from "./lane-push.mjs";
 import { listExecutionRunsForLane } from "./execution-run.mjs";
+import { detectProviderHealth, providerHealthKey, providerHealthPushPayload } from "./provider-health.mjs";
 
 export const NOTIFY_WATCH_INTERVAL_MS = 8_000;
 export const NOTIFY_WATCH_MAX_MS = 30 * 60 * 1000;
 
 const watches = new Map();
+/** One notification per lane per condition, not one per poll. */
+const providerHealthNotified = new Set();
+
+export function resetProviderHealthNotificationsForTests() {
+  providerHealthNotified.clear();
+}
+
+/**
+ * A lane sitting on a login prompt looks perfectly healthy by every durable
+ * signal. Tell the operator, once, with the command that fixes it.
+ */
+export async function notifyProviderHealth(laneId, text, {
+  provider = null,
+  sendPush = sendPushToSubscriptions,
+  seen = providerHealthNotified,
+} = {}) {
+  const health = detectProviderHealth(text, { provider });
+  if (!health) return { ok: true, notified: false, reason: "healthy" };
+  const key = providerHealthKey(laneId, health);
+  if (seen.has(key)) return { ok: true, notified: false, reason: "already_notified", health };
+  seen.add(key);
+  const payload = providerHealthPushPayload(laneId, health);
+  try { await sendPush(payload); } catch { /* push failure must not break the watch */ }
+  return { ok: true, notified: true, health, payload };
+}
 
 export function resetLaneNotifyWatchesForTests() {
   for (const rec of watches.values()) {
@@ -66,6 +92,12 @@ async function tickWatch(laneId, rec) {
     }
     const out = await rec.getOutput(laneId);
     if (!out?.ok || !out.fingerprint) return;
+    if (out.text) {
+      await notifyProviderHealth(laneId, out.text, {
+        provider: rec.provider,
+        sendPush: rec.sendPush,
+      });
+    }
     if (!rec.baselined) {
       maybeSetSendBaseline(laneId, out.fingerprint, Date.now());
       rec.baselined = true;
@@ -91,6 +123,7 @@ export function startOutputWatch(laneId, {
   sendPush = sendPushToSubscriptions,
   resolveLabel = defaultLabel,
   hasManagedRun = defaultHasManagedRun,
+  provider = null,
 } = {}) {
   const id = String(laneId || "");
   if (!id) return { ok: false };
@@ -103,6 +136,7 @@ export function startOutputWatch(laneId, {
     sendPush,
     resolveLabel,
     hasManagedRun,
+    provider,
     inflight: false,
     baselined: false,
   };

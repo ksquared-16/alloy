@@ -1663,10 +1663,15 @@ export function createVacilandoServer() {
         const lines = linesRaw != null && /^\d+$/.test(linesRaw) ? Number(linesRaw) : undefined;
         const mode = url.searchParams.get("mode") || undefined;
         try {
+          let laneProvider = null;
+          try {
+            const { getDurableLane } = await import("./vacilando/development-lane.mjs");
+            laneProvider = getDurableLane(laneId)?.binding?.provider || null;
+          } catch { laneProvider = null; }
           const out = enrichOutputRuntime(await getLaneOutput(laneId, {
             ...(lines != null ? { maxLines: lines } : {}),
             ...(mode ? { mode } : {}),
-          }));
+          }), undefined, { provider: laneProvider });
           const status = out.ok ? 200 : (out.error === "invalid_lane_id" ? 400 : out.error === "pane_unavailable" ? 503 : 404);
           return sendJson(res, status, out);
         } catch (e) {

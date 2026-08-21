@@ -154,6 +154,25 @@ export function inferClaudePresence(pane) {
   return "unknown";
 }
 
+/**
+ * Provider-aware presence. inferClaudePresence only ever recognised Claude, so
+ * a Cursor lane read as "unknown" and the Gateway showed it as not running.
+ * Claude detection is unchanged; Cursor is recognised on its own terms.
+ */
+export function inferAgentPresence(pane, { provider = null } = {}) {
+  const p = String(provider || "").toLowerCase();
+  const cmd = String(pane?.command || "");
+  const title = String(pane?.title || "");
+  if (p === "cursor" || /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) {
+    if (/cursor/i.test(cmd) || /cursor/i.test(title)) return "present";
+    // Cursor's TUI reports a bare version the same way Claude's does.
+    if (/^\d+\.\d+\.\d+$/.test(cmd)) return "present";
+    if (pane?.dead) return "absent";
+    return "unknown";
+  }
+  return inferClaudePresence(pane);
+}
+
 export function selectPrimaryPane(panes) {
   if (!Array.isArray(panes) || !panes.length) return null;
   const claude = panes.find((p) => inferClaudePresence(p) === "present");

@@ -1492,10 +1492,15 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
     const mode = q("mode") || undefined;
     const { getLaneOutput } = await import("./lanes.mjs");
     const { enrichOutputRuntime } = await import("./lane-runtime.mjs");
+    let laneProvider = null;
+    try {
+      const { getDurableLane } = await import("./development-lane.mjs");
+      laneProvider = getDurableLane(id)?.binding?.provider || null;
+    } catch { laneProvider = null; }
     const out = enrichOutputRuntime(await getLaneOutput(id, {
       ...(lines != null ? { maxLines: lines } : {}),
       ...(mode ? { mode } : {}),
-    }));
+    }), undefined, { provider: laneProvider });
     if (!out.ok) {
       const status = out.error === "invalid_lane_id" || out.error === "missing_lane_id" ? 400
         : out.error === "pane_unavailable" ? 503
