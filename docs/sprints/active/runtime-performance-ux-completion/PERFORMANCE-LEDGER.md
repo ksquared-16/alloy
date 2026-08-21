@@ -108,6 +108,71 @@ sets, re-resolving 3 of 4 keys. Kept open as O-4.
 
 ---
 
+## WAVE 8 — readiness policy settled; Surface 9 measured
+
+### Priority 1 — readiness policy: KEEP the current bounded idle set
+
+Three operator behaviours against one build (policy compared by behaviour, not by code change):
+
+| policy | prep before click | target prepared | first usable | fully hydrated |
+|---|---|---|---|---|
+| control — click as soon as tiles paint | 1 | no | 8,482ms | 16,441ms |
+| **hover** the tile, 2.5s settle | 6 | **yes** | **4,035ms** | 14,491ms |
+| **idle** 30s settled | 9 | yes | **395ms** | **395ms** |
+
+**The decisive finding: preparation must COMPLETE, not merely start.** Hover marked the target
+"prepared" and still took 4,035ms — the answer was in flight, not warm. A provisioning answer takes
+~5-6s warm, so lead time, not request count, is the scarce resource. Typical hover-to-click gives
+~2.5s and cannot cover it.
+
+**The bounded set is coverage, not waste.** Two different prepared destinations both land
+sub-400ms:
+
+  waitlist  395ms      all  314ms
+
+Whichever visible destination the operator picks is warm. Narrowing to "active/default only" would
+leave the other five at ~8s, and hover cannot substitute. (`registration` / `tours` report null
+because they hold 0 rows, so the harness's "usable" predicate cannot fire — a harness limit, not a
+product failure.)
+
+**Recommendation: keep policy A.** The honest refinement is not narrowing the set but protecting
+lead time.
+
+### Priority 2 — Surface 9 (Save): MEASURED, with a full reversible round trip
+
+Sanctioned field: Lennon → Children drill-in → Special Instructions, routed through
+`identityInlineChildSave` to `/api/admin/customer-members/…`.
+
+| phase | write | restore |
+|---|---|---|
+| Edit → control | 13ms | 14ms |
+| **T1 visible acknowledgement** | **83ms** | **77ms** |
+| **T3 local/card convergence** | **84ms** | **77ms** |
+| T2 server completion | **3,238ms** | 3,100ms |
+| T4 durable reload agreement | proven (`perf-probe-…` present) | proven (back to "—") |
+
+**Acknowledgement and convergence are premium** — sub-100ms, and the UI converges *before* the
+server responds, then reconciles. No full card reset, no false success, no jarring refresh.
+
+**The item to fix is T2: ~3.1-3.2s server completion** on the shared child-scoped mutation owner.
+Per the standing rule that is the shared mutation/projection owner's cost, not the field's.
+
+**Firefly left exactly as found**, verified by reload: Allergies / Medical Notes / Special
+Instructions all "—".
+
+#### Two harness errors worth remembering
+
+Both produced plausible but FALSE results before being caught:
+
+* Setting `el.value` + dispatching `input` does not reach a React controlled input. The field
+  committed UNCHANGED and the run reported a clean `200` with credible timings — **a no-op save
+  measured as a real one**. Only `persisted=false` on reload exposed it.
+* Binding the Edit control by ancestor text matched a container holding several fields and returned
+  the WRONG control; the mutation went to `/api/admin/persons/…`, a person-scoped field. Correct
+  binding is document order from the deepest short label match.
+
+---
+
 ## WAVE 7 — readiness made live: the operator journey is now sub-second
 
 ### CORRECTION to wave 6
