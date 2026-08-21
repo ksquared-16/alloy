@@ -203,8 +203,23 @@ function genuineRecentActivity(facts) {
   return (facts.now_ms - facts.activity_ms) <= STALE_ACTIVITY_RECENT_MS;
 }
 
+/**
+ * When the run last began EXECUTING. `started_at` is stamped on the first
+ * EXECUTING transition; the transition scan covers runs restored from older
+ * stores that predate that field.
+ */
+function lastExecutingAt(run) {
+  const fromStarted = parseMs(run?.started_at);
+  if (fromStarted != null) return fromStarted;
+  const exec = [...(run?.transitions || [])].reverse().find((t) => t?.to_state === "EXECUTING");
+  return parseMs(exec?.occurred_at || exec?.at);
+}
+
 function pastSettle(run, facts) {
-  const start = parseMs(run?.started_at) || parseMs(run?.created_at) || facts.delivered_ms;
+  // Queue wait is NOT settle time. `created_at` must never be the clock: a run
+  // can sit QUEUED for hours and then start, and measuring settle from creation
+  // makes it eligible for auto-abandon the instant it begins executing.
+  const start = lastExecutingAt(run) ?? facts.delivered_ms;
   if (start == null) return false;
   return facts.now_ms - start >= STALE_SETTLE_MS;
 }

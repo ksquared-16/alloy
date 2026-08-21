@@ -418,6 +418,30 @@ await test("still settling soak is not abandoned", async () => {
   assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0);
 });
 
+await test("a long queue wait is not settle time", async () => {
+  // The run was CREATED hours ago and only just began EXECUTING. Measuring
+  // settle from creation would make it abandonable the moment it starts.
+  const now = Date.now();
+  const run = seedExecuting({ instruction: SOAK, startMs: now - 30_000 });
+  run.created_at = new Date(now - 6 * 60 * 60 * 1000).toISOString();
+  seedSend(SOAK, now - 30_000, now - 21_000);
+  const cls = classifyExecutionRunStale(run, collectStaleRunFacts(run, { root: ROOT, nowMs: now }));
+  assert.equal(cls.class, "active");
+  assert.equal(cls.reason, "still_settling");
+  assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0);
+});
+
+await test("settle is measured even when started_at predates the field", async () => {
+  // A run restored from an older store has no started_at; the EXECUTING
+  // transition is the fallback clock, never created_at.
+  const now = Date.now();
+  const run = seedExecuting({ instruction: SOAK, startMs: now - 30_000 });
+  run.started_at = null;
+  run.created_at = new Date(now - 6 * 60 * 60 * 1000).toISOString();
+  const cls = classifyExecutionRunStale(run, collectStaleRunFacts(run, { root: ROOT, nowMs: now }));
+  assert.equal(cls.class, "active");
+});
+
 await test("idle governed resume does not block a new send forever", async () => {
   const start = Date.now() - 4 * 60 * 60 * 1000;
   const now = Date.now();
