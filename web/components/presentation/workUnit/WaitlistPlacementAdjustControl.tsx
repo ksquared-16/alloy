@@ -5,6 +5,7 @@
  * (POST /api/admin/placement-candidates/[id]/manual-position). No queue-local rank mutation.
  */
 
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import { useCallback, useEffect, useId, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
@@ -85,23 +86,36 @@ function WaitlistPlacementAdjustModal({
         return () => window.removeEventListener("keydown", onKey);
     }, [onClose]);
 
+    /*
+     * CONVERGE, NEVER RELOAD.
+     *
+     * Both fallbacks here used to call `window.location.reload()`. Whether they fired depended on
+     * whether attention happened to carry a lens, so adjusting a waitlist position reloaded the whole
+     * document SOMETIMES — which is precisely how an unexplained "the app just refreshed" is
+     * experienced, and why it reads as random rather than reproducible.
+     *
+     * The reload was doing real work: it guaranteed the operator saw the new order. So it is replaced
+     * by the canonical signal that carries the SAME guarantee, not by nothing.
+     * `placement_manual_order` is registered as a queue-membership-changing action key, so listeners
+     * refetch rows AND counts on the broadcast rather than patching a row they can see. The lens path
+     * is unchanged — it already converged correctly.
+     */
     const refreshQueue = useCallback(() => {
         const current = kernel.attention.get();
-        if (!current?.lens && !current?.target) {
-            window.location.reload();
-            return;
+        const lens = current?.lens ?? current?.destination?.workViewId;
+        if (current && (current.lens || current.target)) {
+            kernel.provisioning.invalidate(provisioningKey(current));
         }
-        kernel.provisioning.invalidate(provisioningKey(current));
-        const lens = current.lens ?? current.destination?.workViewId;
         if (lens) {
             kernel.attention.move({
                 scope: ATTENTION_SCOPE.LENS,
                 lens,
                 source: "work_view_selection" satisfies AttentionSource,
             });
-        } else {
-            window.location.reload();
+            return;
         }
+        // No lens to re-commit: tell every derived surface to re-read instead of reloading the page.
+        broadcastWorkspaceMutation("placement_manual_order");
     }, [kernel]);
 
     async function submit(action: "move" | "reset") {

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -60,6 +61,19 @@ function WorkspaceCommandRailActionsBody({ actions, defaultDepartmentId }: Props
                         department_id: defaultDepartmentId,
                         work_unit_id: null,
                     },
+                    /*
+                     * CONVERGE, DO NOT REFRESH.
+                     *
+                     * Without an `invalidate` the action client falls back to `router.refresh()` —
+                     * its documented legacy behaviour — so every command run from this rail
+                     * re-rendered the whole route. That is the same command converging surgically
+                     * from the record header and refreshing the page from here.
+                     *
+                     * This rail carries NO entity id (`entityId: null`), so there is no row for
+                     * listeners to match: the honest signal is the surface-neutral broadcast, which
+                     * is exactly what it exists for. No new cache, no second client truth.
+                     */
+                    invalidate: (opts) => broadcastWorkspaceMutation(opts?.action_key ?? action.key),
                 }),
             );
         },
