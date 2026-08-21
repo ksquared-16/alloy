@@ -336,3 +336,64 @@ measured value, so the gap is explicit rather than implied by silence.
 **Budgets are per performance class.** A cold-start number and a prepared-journey number are not
 comparable and must never be averaged into one figure; §1 exists because conflating them is how a
 premium journey gets reported as a regression, and a cold path gets reported as fine.
+
+
+---
+
+## 12. Activity cold readiness — investigated, NO CHANGE MADE
+
+**Result: the prepare-the-timeline hypothesis is DISPROVED. No code was changed.** Recorded in full
+because the disproof is the useful artifact — the next person to look at "Activity is slow" should
+not rebuild a prefetch that already exists and already works.
+
+### What was measured
+
+| transition | result |
+|---|---|
+| Summary → Activity, mode switch | **15 ms** |
+| Summary → Activity, content usable (record just opened) | 1,905–3,998 ms (n=6, high variance) |
+| Summary → Activity, content usable (record open ~12 s) | **315–327 ms (n=6, ±6 ms)** |
+| subject switch while in Activity | 47 ms |
+| Activity → Summary | 183 ms |
+
+### The hypothesis, and how it died
+
+The first A/B looked decisive: issuing `/api/admin/activity?…&limit=100` from the page before the
+click took usable from **1,944 ms → 326 ms**, reproducible six times with a ±6 ms spread. The tight
+spread is what made it convincing — and what should have been the warning, because a *contention*
+effect does not produce ±6 ms.
+
+Three controls killed it:
+
+1. **The app already fetches it.** `prewarmFocusPanelActivityMode` fires ~14 s before the click, and
+   NO activity request occurs after the click — the timeline was never on the click path. (It is
+   requested **twice**; see waste below.)
+2. **Recency was not the variable.** Warming 12 s ahead instead of 1.5 s ahead gave the same ~320 ms.
+3. **The decisive control — wait 12 s and fetch NOTHING — also gave 319–324 ms.**
+
+So the variable was never the fetch. It is **settling time**. The 1.5 s wait-only control (1,169 /
+2,277 ms) straddled both populations and was too noisy to expose that; only the 12 s wait-only
+control separated them.
+
+> **Methodology rule earned here: a control must match the treatment on EVERY dimension, including
+> the ones that look incidental.** The treatment carried a delay; the first control carried a
+> *different* delay. That single mismatch turned "waiting helps" into "prefetching helps" and would
+> have bought a prefetch this codebase already has.
+
+### What Activity slowness actually is
+
+Switching to Activity within the first seconds of opening a record makes the cockpit compete with
+that record's own in-flight preparation. The cascade is dominated by the **Communications runtime the
+cockpit composes** — `family-workspace` alone spans 2,136 → 6,265 ms, plus three
+`threads/*/messages`, `identities`, and `drawer-recipients`.
+
+**Owner: Communications** (see the duplicate-loader handoff). Out of scope for this slot by
+instruction, and NOT a readiness problem — the readiness is already there and already correct.
+
+### Waste observed (not fixed)
+
+- `/api/admin/activity?…&limit=100` is requested **twice** per record during prewarm.
+- The ribbon renders `RIBBON_EVENT_COUNT = 3` events from a **100-event** payload.
+- `takeOpportunityDrawerActivityPrefetch` is consumed only by `OpportunityDrawerVmTabPanes` (the VM
+  drawer), not by the inline Activity cockpit — so the prefetched snapshot warms the network and the
+  server, but the cockpit does not read the slot.
