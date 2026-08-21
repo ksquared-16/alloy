@@ -695,6 +695,15 @@ export function FormEmbedClient({
     // ordinary public Form link has no objective, so this is false and nothing about it changes.
     const participantPhase = enrollmentObjective ? (enrollmentPhase ?? enrollmentObjective.phase) : null;
     const sharedCollectionInProgress = participantPhase === "shared_collection";
+    /**
+     * True exactly when `EnrollmentConversationCard` renders its own conversation viewport.
+     *
+     * The handoff and the review are ordinary cards in ordinary page flow; only the LIVE
+     * conversation sizes itself to the screen, and only it needs the frame's padding to stand down.
+     * `shared_collection` is precisely that phase — the handoff is `artifact_review`, which is also
+     * the only phase `documentFlow` can be true in, so there is nothing further to exclude.
+     */
+    const conversationOwnsViewport = sharedCollectionInProgress;
 
     /**
      * THE REVIEW INVARIANT: review is only reachable when there is something to review.
@@ -925,7 +934,19 @@ export function FormEmbedClient({
         <IntakeFrame
             packetName={packetProgress?.packet_name}
             previewBanner={showPreviewBanner ? <PreviewBanner /> : null}
-            contentClassName={clsx(submitting && "pointer-events-none opacity-90")}
+            contentClassName={clsx(
+                submitting && "pointer-events-none opacity-90",
+                /**
+                 * THE CONVERSATION OWNS THE SCREEN.
+                 *
+                 * The frame's standing `pb-20` is right for a scrolling form and wrong for a
+                 * conversation: the thread sizes itself to the remaining viewport, so eighty pixels
+                 * of padding underneath it pushes the anchored composer below the fold and the
+                 * parent has to scroll the page to find where to reply. While shared collection is
+                 * in progress the frame gets out of the way.
+                 */
+                conversationOwnsViewport && "!pb-4",
+            )}
         >
             {/*
               * V1.2 — the conversational Enrollment turn, ABOVE the packet flow.
@@ -941,7 +962,7 @@ export function FormEmbedClient({
             {enrollmentObjective && (!documentFlow || reviewStep === "handoff") ? (
                 // In the document flow the conversation is its OWN state: it ends with a handoff
                 // and the review is a fresh page, not more scroll below the transcript.
-                <div className="mb-6">
+                <div className={conversationOwnsViewport ? undefined : "mb-6"}>
                     <EnrollmentConversationCard
                         token={token}
                         initialObjective={enrollmentObjective}
