@@ -13,11 +13,13 @@
 import { execFile } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
-import os from "node:os";
 
-const HOME = os.homedir();
-const WT_ROOT = join(HOME, "Code", "alloy-worktrees");
-const EVID_STORE_ROOT = join(HOME, ".local", "state", "alloy-dev", "evidence");
+import { resolveRuntimeConfig, worktreePathForName } from "./workspace-facts.mjs";
+
+const EVID_STORE_ROOT = join(
+  process.env.ALLOY_RUNTIME_ROOT?.trim() || resolveRuntimeConfig().runtime_root,
+  "evidence",
+);
 const BASE = "origin/staging";
 
 function git(wt, args, { timeout = 15000 } = {}) {
@@ -70,9 +72,9 @@ const DISCARDABLE = new Set(["qa-evidence", "screenshot", "report", "verificatio
  */
 export async function preserveOutputs(sprint) {
   if (!sprint?.worktree) return { ok: false, error: "worker could not be resolved (thin snapshot) — try again" };
-  const wt = join(WT_ROOT, sprint.worktree);
+  const wt = worktreePathForName(sprint.worktree);
   const dest = join(EVID_STORE_ROOT, sprint.worktree, "preserved");
-  if (!existsSync(wt)) return { ok: false, error: "worktree not found" };
+  if (!wt || !existsSync(wt)) return { ok: false, error: "worktree not found" };
   mkdirSync(dest, { recursive: true });
   const copied = [];
   // 1) the full evidence dir
@@ -98,8 +100,8 @@ export async function preserveOutputs(sprint) {
  */
 export async function discardGenerated(sprint, { requirePreserved = true } = {}) {
   if (!sprint?.worktree) return { ok: false, error: "worker could not be resolved (thin snapshot) — try again" };
-  const wt = join(WT_ROOT, sprint.worktree);
-  if (!existsSync(wt)) return { ok: false, error: "worktree not found" };
+  const wt = worktreePathForName(sprint.worktree);
+  if (!wt || !existsSync(wt)) return { ok: false, error: "worktree not found" };
   const preservedDir = join(EVID_STORE_ROOT, sprint.worktree, "preserved");
   if (requirePreserved && !existsSync(preservedDir)) return { ok: false, error: "preserve outputs first (nothing has been copied to the durable store)" };
   const porcelain = (await git(wt, ["status", "--porcelain=v1", "-uall"])).out;
@@ -128,8 +130,8 @@ export async function discardGenerated(sprint, { requirePreserved = true } = {})
  *   opts.pendingRequests: count of not-yet-terminal Director requests (from the request store)
  */
 export async function computeCloseout(sprint, opts = {}) {
-  const wt = join(WT_ROOT, sprint.worktree);
-  if (!existsSync(wt)) return { ok: false, error: "worktree not found", worktree: sprint.worktree };
+  const wt = worktreePathForName(sprint.worktree);
+  if (!wt || !existsSync(wt)) return { ok: false, error: "worktree not found", worktree: sprint.worktree };
 
   // ---- repository ----
   const ahead = Number((await git(wt, ["rev-list", "--count", `${BASE}..HEAD`])).out || 0);

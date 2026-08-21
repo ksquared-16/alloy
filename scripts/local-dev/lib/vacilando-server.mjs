@@ -44,6 +44,7 @@ import { workerOutputs, evidenceFilePath } from "./vacilando/outputs.mjs";
 import { readDirectorLog, recordAsk } from "./vacilando/commands/director.mjs";
 import { createRequest, updateRequest, readRequests, pendingCount, recoverInterrupted, REQUEST_TYPES } from "./vacilando/commands/director-requests.mjs";
 import { sendViaProvider } from "./vacilando/provider-runtime.mjs";
+import { worktreePathForName } from "./vacilando/workspace-facts.mjs";
 import { writeAuditEvent } from "./vacilando/commands/audit.mjs";
 import { computeCloseout } from "./vacilando/closeout.mjs";
 import { prForWorktree } from "./vacilando/github.mjs";
@@ -789,7 +790,7 @@ const INSTRUCTION_TIMEOUT_MS = 600000; // 10 min for a worker instruction
 function runDirectorSend(reqRec, sprint) {
   const t0 = Date.now();
   const timeout = reqRec.request_type === "quick-ask" ? QUICK_TIMEOUT_MS : INSTRUCTION_TIMEOUT_MS;
-  const cwd = sprint?.worktree ? `${process.env.HOME}/Code/alloy-worktrees/${sprint.worktree}` : null;
+  const cwd = sprint?.worktree ? worktreePathForName(sprint.worktree) : null;
   let settled = false;
   updateRequest(reqRec.request_id, { status: "starting", started_at: new Date().toISOString() });
   // If the provider turn is genuinely running (didn't fast-fail on auth), show it.
@@ -1147,7 +1148,7 @@ export function createVacilandoServer() {
           const extra = unexpectedLaneControlFields(body.value || {});
           if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
           const { startLaneAgentSession } = await import("./vacilando/agent-session-lifecycle.mjs");
-          const out = await startLaneAgentSession({ laneId });
+          const out = await startLaneAgentSession({ laneId, origin: "operator" });
           const status = out.ok ? 200
             : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" || out.error === "provider_capacity" ? 409 : 400);
           return sendJson(res, status, out);

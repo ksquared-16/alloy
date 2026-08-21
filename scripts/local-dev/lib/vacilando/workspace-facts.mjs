@@ -121,6 +121,14 @@ export function resolveRuntimeConfig() {
   };
 }
 
+/** Worktree directory for a managed name. Honors ALLOY_WORKTREE_ROOT, then config. */
+export function worktreePathForName(name) {
+  const n = String(name || "").trim();
+  if (!n) return null;
+  const root = process.env.ALLOY_WORKTREE_ROOT?.trim() || resolveRuntimeConfig().worktree_root;
+  return join(root, n);
+}
+
 function metaGet(file, key) {
   const raw = kvRaw(file, key);
   if (raw == null || !isSafeValue(raw)) return "";

@@ -339,7 +339,7 @@ export async function evaluateAdmissionQueue({
   const cap = alreadyBoundPeek
     ? await (async () => {
       const { assessSessionStartCapacity } = await import("./alloy-dev-adapter.mjs");
-      return assessSessionStartCapacity();
+      return assessSessionStartCapacity({ root });
     })()
     : await canProvisionNow(root);
   const available = cap && typeof cap === "object"

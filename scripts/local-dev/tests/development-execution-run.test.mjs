@@ -38,6 +38,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = mkdtempSync(join(tmpdir(), "vac-erun-"));
 const WT = mkdtempSync(join(tmpdir(), "vac-erun-wt-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
+process.env.VACILANDO_DURABLE_LANES = "0";
 
 const IDENTITY_WT = "/Users/Kelly/Code/alloy-worktrees/wt1-access-identity-v2";
 const WT_ROOT = "/Users/Kelly/Code/alloy-worktrees";
@@ -350,6 +351,7 @@ await test("vac run-status reports from the owning worktree and refuses others",
 await test("active and completed runs survive reread; history is bounded", async () => {
   const { out } = await startRun("persist me");
   const again = readExecutionRunStore(ROOT);
+  assert.equal(again.lanes["alloy-identity"].runs[0].run_id, out.run_id);
   assert.equal(again.lanes["alloy-identity"].runs[0].run_id, out.run_id);
   assert.equal(existsSync(executionRunStorePath(ROOT)), true);
   reportRunState(out.run_id, "complete", { root: ROOT, origin: "agent", summary: "done" });

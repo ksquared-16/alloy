@@ -55,6 +55,13 @@ const { createAdmissionRequest, resetAdmissionsForTests } = await import("../lib
 const { createDurableLane, ensureVacilandoSpecialistLane, resetDevelopmentLanesForTests } = await import("../lib/vacilando/development-lane.mjs");
 const { cmdAdoptWorktree, cmdAttachCursorSession } = await import("../lib/vacilando/commands/node-ops.mjs");
 const { resetAgentSessionsForTests, activeAgentSessionForLane } = await import("../lib/vacilando/agent-session.mjs");
+const {
+  attachLaneAgentSessions,
+  startLaneAgentSession,
+  setAgentSessionLifecycleImplForTests,
+  resetAgentSessionLifecycleForTests,
+} = await import("../lib/vacilando/agent-session-lifecycle.mjs");
+const { resetAlloyAdapterImplForTests, setAlloyAdapterImplForTests } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
 
 let pass = 0;
 let fail = 0;
@@ -130,6 +137,51 @@ await test("Vacilando lane binds this Cursor worktree without becoming a new lan
   assert.equal(out.session.provider_session_id, "7ec93a3d-0d28-4b05-b78b-86761d3048f8");
   assert.equal(out.session.state, "ACTIVE");
   assert.equal(activeAgentSessionForLane(laneId, ROOT).lane_id, laneId);
+});
+
+await test("Start Session on a Cursor-bound lane attaches without Claude capacity", async () => {
+  resetDevelopmentLanesForTests(ROOT);
+  resetAgentSessionsForTests(ROOT);
+  resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  setAlloyAdapterImplForTests({
+    listPanes: () => {
+      throw new Error("Cursor start must not inspect Claude tmux panes");
+    },
+  });
+  setAgentSessionLifecycleImplForTests({
+    startRuntime: async () => {
+      throw new Error("Cursor start must not spawn tmux Claude");
+    },
+    spawnClaude: () => {
+      throw new Error("Cursor start must not spawn Claude");
+    },
+  });
+  const vac = ensureVacilandoSpecialistLane({ root: ROOT });
+  const bound = cmdAttachCursorSession({
+    laneId: vac.lane.lane_id,
+    worktree: "wt1-vacilando-mac-mini-readiness",
+    providerSessionId: "conv-cursor-1",
+    root: ROOT,
+  });
+  assert.equal(bound.ok, true, bound.error);
+  const start = await startLaneAgentSession({ laneId: vac.lane.lane_id, root: ROOT });
+  assert.equal(start.ok, true, start.error);
+  assert.equal(start.provider, "cursor");
+  assert.equal(start.adopted, true);
+  assert.equal(start.queued, undefined);
+  const [projected] = attachLaneAgentSessions([{
+    lane_id: vac.lane.lane_id,
+    durable: true,
+    binding: bound.lane.binding,
+    worktree: { path: WT1 },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  }], ROOT);
+  assert.equal(projected.runtime, "online");
+  assert.equal(projected.agent_session?.provider, "cursor");
+  assert.equal(projected.agent_session?.state, "ACTIVE");
+  assert.equal(projected.start_session, null);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

@@ -1510,6 +1510,9 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-work.is-recovering .gw-work-state{color:var(--run);}
 .gw-work.is-ready{border:0;background:transparent;}
 .gw-work.is-ready .gw-work-state{color:var(--green-ink);}
+.gw-lane-posture.is-queued{color:var(--plan);}
+.gw-lane-attn.is-queued{color:#c4d4c8;}
+.gw-lane-attn.is-ready{color:#b7d4c0;}
 .gw-lane-attn.is-needs{color:var(--review);}
 .gw-lane-attn.is-failed{color:var(--blocked);}
 .gw-lane-attn.is-complete{color:var(--ink-3);font-weight:600;}

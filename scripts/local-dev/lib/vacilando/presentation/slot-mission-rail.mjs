@@ -5,7 +5,6 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { TOOLKIT_DIR } from "../sources.mjs";
 import { getMission, readMissions } from "../commands/missions.mjs";
@@ -15,9 +14,7 @@ import { displayMissionTitle } from "./mission-conversation.mjs";
 import { isFixtureMission } from "./mission-filters.mjs";
 import { deriveMissionPosture } from "../mission-posture.mjs";
 import { missionHealthVm } from "./mission-health.mjs";
-
-const META_DIR = join(homedir(), ".local", "state", "alloy-dev", "metadata");
-const WT_ROOT = join(homedir(), "Code", "alloy-worktrees");
+import { resolveRuntimeConfig, worktreePathForName } from "../workspace-facts.mjs";
 
 function healthBits(missionId) {
   if (!missionId || String(missionId).startsWith("slot_")) {
@@ -51,17 +48,19 @@ function parseEnvFile(path) {
 
 function listActiveSlotMetadata() {
   const bySlot = new Map();
-  if (!existsSync(META_DIR)) return bySlot;
-  for (const f of readdirSync(META_DIR)) {
+  const metaDir = resolveRuntimeConfig().metadata_dir;
+  if (!existsSync(metaDir)) return bySlot;
+  for (const f of readdirSync(metaDir)) {
     if (!f.endsWith(".env") || !/^wt[1-6]-/.test(f)) continue;
-    const meta = parseEnvFile(join(META_DIR, f));
+    const meta = parseEnvFile(join(metaDir, f));
     if (!meta) continue;
     const slot = Number(meta.ALLOY_WORKTREE_SLOT || f.match(/^wt([1-6])-/)?.[1]);
     if (!slot || slot < 1 || slot > 6) continue;
+    const worktree = meta.ALLOY_WORKTREE_NAME || f.replace(/\.env$/, "");
     bySlot.set(slot, {
       slot,
-      worktree: meta.ALLOY_WORKTREE_NAME || f.replace(/\.env$/, ""),
-      path: meta.ALLOY_WORKTREE_PATH || join(WT_ROOT, f.replace(/\.env$/, "")),
+      worktree,
+      path: meta.ALLOY_WORKTREE_PATH || worktreePathForName(worktree),
       branch: meta.ALLOY_WORKTREE_BRANCH || null,
       provider: meta.ALLOY_AGENT || null,
       sprintName: meta.ALLOY_SPRINT_NAME || null,

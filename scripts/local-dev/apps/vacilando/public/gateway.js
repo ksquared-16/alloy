@@ -1412,14 +1412,20 @@ document.addEventListener("click", async (e) => {
       G.notice = out.ok
         ? { kind: "ok", text: out.queued
           ? "Queued for execution capacity."
-          : (out.adopted ? "Existing Claude session adopted." : "Starting Claude…") }
+          : (out.adopted
+            ? (out.provider === "cursor" ? "Cursor session attached." : "Existing Claude session adopted.")
+            : (out.provider === "cursor" ? "Cursor session started." : "Starting Claude…")) }
         : { kind: "err", text: out.error === "agent_already_running"
-          ? "A Claude session is already running on this lane."
+          ? (out.provider === "cursor" ? "A Cursor session is already attached to this lane." : "A Claude session is already running on this lane.")
           : (out.error === "binding_missing"
             ? "This lane has no worktree binding yet."
             : (out.error === "runtime_pane_missing"
               ? "No runtime pane is available to start a session."
-              : (out.error || "Could not start session."))) };
+              : (out.error === "provider_capacity"
+                ? (Array.isArray(out.occupying_names) && out.occupying_names.length
+                  ? `Claude is at ${out.active_providers}/${out.max_providers}. Running: ${out.occupying_names.join(", ")}. Release one to start this session.`
+                  : "Claude is at capacity. Release a running lane to start this session.")
+                : (out.error || "Could not start session.")))) };
       await fetchLanes();
       if (G.selected) await fetchLane(G.selected);
       paint();

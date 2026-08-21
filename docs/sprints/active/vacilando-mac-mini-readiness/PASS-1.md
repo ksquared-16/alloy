@@ -47,6 +47,7 @@ Classification: **1** intentional host configuration · **2** configurable but c
 | Durable lanes with absolute worktree paths | live `lanes.json` `worktree_path: /Users/Kelly/Code/alloy-worktrees/...` | 2 | Binding now carries `node_id`. Restore marks bindings stale. |
 | `execution_node: "local"` | `execution-admission.mjs`, `alloy-dev-adapter.mjs` | 3 | New admissions/capacity reports stamp `node_id`. `"local"` remains an alias. |
 | Slot identity META_DIR / WT_ROOT hardcoded under `$HOME` | `identity.mjs` | 3 | Now uses `resolveRuntimeConfig()`. |
+| Hot-path `$HOME/Code/alloy-worktrees` bypasses | `github.mjs`, `resources.mjs`, `vacilando-server.mjs`, `commands/registry.mjs`, `closeout.mjs`, `outputs.mjs`, `day-ops.mjs`, `evidence-experience.mjs`, `slot-mission-rail.mjs`, `mission-local-server.mjs` | 3 | Follow-up from host inventory: these now use `worktreePathForName()` / `resolveRuntimeConfig()`. Trusted-host still accepts `/Users/Kelly/Alloy`. |
 | Trusted-host canonical checkout | `resolveCanonicalRepoRoot()`, `trusted-host-*.sh` | 1 | Preserved. Consequential GitHub/DB actions stay on the configured canonical repo, not development lanes. |
 | Docker / `alloy-stack` | local-docker doctrine | 1 | Shared stack; never `supabase start`. Mini must join, not invent a stack. |
 | tmux session names `alloy-*` | `lanes.mjs`, live bindings | 1 | Host-local. Invalidated on restore. |

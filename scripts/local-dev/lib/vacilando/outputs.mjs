@@ -11,9 +11,10 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import os from "node:os";
 import { extname, join } from "node:path";
 
+import { worktreePathForName } from "./workspace-facts.mjs";
+
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim() || join(os.homedir(), ".local", "state", "alloy-dev");
 const EVIDENCE_ROOT = join(RUNTIME_ROOT, "evidence");
-const WORKTREE_ROOT = join(os.homedir(), "Code", "alloy-worktrees");
 const IMG = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
 function git(args, cwd) {
@@ -62,11 +63,11 @@ function safeHead(full, ext) {
 
 /** Full outputs stream for one worker session, newest first. */
 export async function workerOutputs(worktree) {
-  const path = join(WORKTREE_ROOT, worktree);
+  const path = worktreePathForName(worktree);
   const items = evidenceArtifacts(worktree);
 
   // commits
-  if (existsSync(path)) {
+  if (path && existsSync(path)) {
     const log = await git(["log", "-8", "--pretty=format:%H%x1f%h%x1f%an%x1f%cI%x1f%s"], path);
     for (const line of log.split("\n").filter(Boolean)) {
       const [, short, author, iso, subject] = line.split("\x1f");

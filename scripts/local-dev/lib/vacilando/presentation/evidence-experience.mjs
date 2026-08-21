@@ -6,7 +6,6 @@
  */
 import { existsSync } from "node:fs";
 import { basename, extname, isAbsolute, join, normalize, resolve } from "node:path";
-import os from "node:os";
 import { listEvidence, acceptanceEvidenceCoverage, canCertifyMission, listValidationRuns } from "../evidence.mjs";
 import { getBrief } from "../mission-brief.mjs";
 import { getMission } from "../commands/missions.mjs";
@@ -15,6 +14,7 @@ import {
   getLatestAcceptedDeliverableReview,
   deliverableReviewVm,
 } from "../deliverable-review.mjs";
+import { resolveRuntimeConfig } from "../workspace-facts.mjs";
 
 const IMG_EXT = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp"]);
 
@@ -266,9 +266,9 @@ export function resolveEvidenceFilePath(artifact, {
   if (!uri || String(uri).startsWith("http://") || String(uri).startsWith("https://")) {
     return null;
   }
-  const runtimeRoot = process.env.ALLOY_RUNTIME_ROOT?.trim()
-    || join(os.homedir(), ".local", "state", "alloy-dev");
-  const worktreeRoot = join(os.homedir(), "Code", "alloy-worktrees");
+  const cfg = resolveRuntimeConfig();
+  const runtimeRoot = process.env.ALLOY_RUNTIME_ROOT?.trim() || cfg.runtime_root;
+  const worktreeRoot = process.env.ALLOY_WORKTREE_ROOT?.trim() || cfg.worktree_root;
   const candidates = [];
   if (isAbsolute(uri)) candidates.push(normalize(uri));
   else {

@@ -10,10 +10,16 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import os from "node:os";
 
-const PAUSE_DIR = join(os.homedir(), ".local", "state", "alloy-dev", "pause-state");
-const META_DIR = join(os.homedir(), ".local", "state", "alloy-dev", "metadata");
+import { resolveRuntimeConfig } from "./workspace-facts.mjs";
+
+function pauseDir() {
+  return join(resolveRuntimeConfig().runtime_root, "pause-state");
+}
+
+function metaDir() {
+  return resolveRuntimeConfig().metadata_dir;
+}
 
 function whichBin(name) {
   try {
@@ -24,9 +30,10 @@ function whichBin(name) {
 }
 
 function listPausedSlots() {
-  if (!existsSync(PAUSE_DIR)) return [];
+  const dir = pauseDir();
+  if (!existsSync(dir)) return [];
   try {
-    return readdirSync(PAUSE_DIR)
+    return readdirSync(dir)
       .filter((f) => f.endsWith(".json") || /^\d+$/.test(f) || f.startsWith("slot"))
       .map((f) => f.replace(/\.json$/, "").replace(/^slot-?/, ""))
       .filter(Boolean);
@@ -36,11 +43,12 @@ function listPausedSlots() {
 }
 
 function listActiveSlotsFromMetadata() {
-  if (!existsSync(META_DIR)) return [];
+  const dir = metaDir();
+  if (!existsSync(dir)) return [];
   const out = [];
   try {
-    for (const f of readdirSync(META_DIR).filter((x) => x.endsWith(".env"))) {
-      const t = readFileSync(join(META_DIR, f), "utf8");
+    for (const f of readdirSync(dir).filter((x) => x.endsWith(".env"))) {
+      const t = readFileSync(join(dir, f), "utf8");
       const g = (k) => (t.match(new RegExp(`^${k}="?([^"\\n]*)"?`, "m")) || [])[1] || null;
       const slot = Number(g("ALLOY_WORKTREE_SLOT"));
       const life = g("ALLOY_WORKER_LIFECYCLE") || "";

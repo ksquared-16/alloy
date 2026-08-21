@@ -363,9 +363,9 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const extra = unexpectedLaneControlFields(v);
     if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
     const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
-    const out = await startLaneAgentSession({ laneId });
+    const out = await startLaneAgentSession({ laneId, origin: "operator" });
     const status = out.ok ? 200
-      : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" ? 409 : 400);
+      : (out.error === "runtime_pane_missing" || out.error === "agent_already_running" || out.error === "binding_missing" || out.error === "provider_capacity" ? 409 : 400);
     return { status, body: out };
   }
 
