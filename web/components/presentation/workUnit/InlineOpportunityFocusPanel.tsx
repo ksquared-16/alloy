@@ -416,7 +416,31 @@ export function InlineOpportunityFocusPanel() {
             : null;
     // Attention subject leads. Settlement loads the family opportunity VM for Household/Children/
     // Billing, but the header must still name the focused child — not "Kurzman Family".
-    const headerTitle = childDisplayName || (visible ? drawerTitle : null);
+    /**
+     * IDENTITY COMMITS FROM THE CLICK, NOT FROM PROVISIONING.
+     *
+     * `childDisplayName` comes from the answer's identity truth, which arrives with the
+     * provisioning answer — measured at 11.9s on a row -> row switch. The seed comes from the
+     * clicked row's canonical `QueueRowContext` (`row_subject.display_name`) and is now keyed on
+     * LIVE attention, so it names the selected child at the click. Preferring it is what makes
+     * identity follow the operator instead of trailing eleven seconds behind; it is also
+     * latest-click-wins applied to identity, since attention always carries the newest intent.
+     *
+     * ATOMIC SUBJECT COHERENCE IS PRESERVED. The header names the child (Attention) while the body
+     * renders the family opportunity (Settlement) — the certified composition. Those two only
+     * disagree when the body is HOLDING a prior payload across a settlement change, i.e. a switch
+     * to a different FAMILY. In exactly that case we keep the previous behaviour and let the held
+     * subject own the header, so the panel never shows one child's name over another family's
+     * cards. Within one family — every child of the same household, which is the common switch and
+     * the measured defect — the body is already the correct family VM and there is nothing to
+     * mismatch.
+     */
+    const seedSubjectTitle = drawer.opportunityQueuePreviewSeed?.title?.trim() || null;
+    const bodyHoldsPriorSettlement = resolved == null && heldPrior != null;
+    const headerTitle =
+        (!bodyHoldsPriorSettlement ? seedSubjectTitle : null)
+        || childDisplayName
+        || (visible ? drawerTitle : null);
     const seedTitle =
         childDisplayName || drawer.opportunityQueuePreviewSeed?.title?.trim() || opportunitySingular;
     const seedContextChips = useMemo(

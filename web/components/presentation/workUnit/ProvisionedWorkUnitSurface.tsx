@@ -26,6 +26,7 @@ import { OperationalSubjectProvider } from "@/components/presentation/workUnit/O
 import { CHILD_PRIMARY_ACTION_ABSENCE_COPY } from "@/lib/runtime/provisioning/childPrimaryActionAbsenceCopy";
 import { focusPanelSeedForSubject } from "@/lib/presentation/runtime/focusPanelSeedFromQueueRow";
 import { hasOperatorSelectedWorkView } from "@/lib/runtime/provisioning/contextualFocusAnswer";
+import { useAttentionSubject } from "@/lib/runtime/kernel/useAttentionCardFocus";
 
 declare global {
     interface Window {
@@ -199,14 +200,32 @@ export function ProvisionedWorkUnitSurface() {
         window.__ALLOY_QUEUE_ROW_SURFACE_DIAG__ = diag;
     }, [effectiveModel, publishedOverlay, processKey, workViewId]);
 
+    /**
+     * Keyed on LIVE attention, not the committed Record of Attention.
+     *
+     * The seed is the instant-identity carrier, and the queue rows it reads are already on the
+     * client — but keying it on `committedOp` meant it only moved when the provisioning answer
+     * committed, measured at 11.9s on a row -> row switch. For eleven seconds the operator saw the
+     * previous child's name over an already-acknowledged click. Attention (K1) moves on the click
+     * itself, so the identity is available immediately from canonical row context.
+     *
+     * Falls back to the committed subject when attention names a subject this queue has no row for
+     * (e.g. straight after a Work View switch), which is the pre-existing cold-open behaviour.
+     */
+    const attentionSubject = useAttentionSubject();
     const identitySeed = useMemo(
         () =>
             focusPanelSeedForSubject(
+                attentionSubject ?? (committedOp ? committedOp.recordOfAttention.id : null),
+                effectiveModel?.queue.rows,
+                effectiveModel?.queue.rowConfig,
+            )
+            ?? focusPanelSeedForSubject(
                 committedOp ? committedOp.recordOfAttention.id : null,
                 effectiveModel?.queue.rows,
                 effectiveModel?.queue.rowConfig,
             ),
-        [committedOp, effectiveModel?.queue.rows, effectiveModel?.queue.rowConfig],
+        [attentionSubject, committedOp, effectiveModel?.queue.rows, effectiveModel?.queue.rowConfig],
     );
 
     if (!effectiveModel || !committed) return null;

@@ -41,3 +41,25 @@ export function useAttentionCardFocus(): { focus: AttentionCardFocus | null; sub
         [ref?.aspect, ref?.subject],
     );
 }
+
+/**
+ * The subject attention is CURRENTLY on — K1, updated the moment `attention.move` runs, not when
+ * the provisioning answer commits.
+ *
+ * The Focus Panel's identity seed was keyed on the COMMITTED operational subject, so the
+ * "instant-identity" seed was only instant on cold open. On a row -> row switch the committed
+ * subject does not move until the provisioning answer lands, which measured 11.9s — the operator
+ * read the PREVIOUS child's name for eleven seconds while their click was already acknowledged.
+ * Keying the seed on live attention makes the identity available at the click, from canonical
+ * queue-row context that the client already holds.
+ */
+export function useAttentionSubject(): string | null {
+    const kernel = useRuntimeKernelOptional();
+    const subscribe = useMemo(
+        () => (kernel ? (fn: () => void) => kernel.attention.subscribe(fn) : NO_SUBSCRIBE),
+        [kernel],
+    );
+    const getSnapshot = useCallback(() => (kernel ? kernel.attention.get() : null), [kernel]);
+    const ref = useSyncExternalStore(subscribe, getSnapshot, kernel ? getSnapshot : NO_REF);
+    return ref?.subject ?? null;
+}
