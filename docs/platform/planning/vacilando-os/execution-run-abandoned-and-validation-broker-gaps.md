@@ -1,11 +1,13 @@
 ---
-owner: vacilando
-status: open
-raised_by: slot 4 — Participant Runtime productization (lane_2cea84351d90)
-raised_on: 2026-08-21
+owner: platform
+status: sprint
+last_reviewed: 2026-08-21
+supersedes: []
 ---
 
 # Follow-up for the Vacilando lane: an ABANDONED run has no recovery, and the validation broker cannot typecheck this repo
+
+**Raised by:** slot 4, Participant Runtime productization (`lane_2cea84351d90`), 2026-08-21.
 
 Four defects observed during one sprint on `lane_2cea84351d90`. All are orchestration/tooling debt.
 **None of them is Participant Runtime product work, and none was repaired on that branch.** This
