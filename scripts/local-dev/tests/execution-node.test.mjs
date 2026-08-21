@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.VACILANDO_SKIP_NODE_PROBE = "1";
@@ -22,6 +22,7 @@ const {
   readExecutionNode,
   resetExecutionNodeForTests,
   resolveExecutionNodeRef,
+  bindWorkerCliToGatewayRoot,
 } = await import("../lib/vacilando/execution-node.mjs");
 
 let pass = 0;
@@ -73,6 +74,32 @@ await test("missing store is reconstructed without inventing a second identity o
   assert.equal(raw.node_id, first);
   const again = readExecutionNode(ROOT);
   assert.equal(again.node_id, first);
+});
+
+await test("worker CLI remaps the default toolkit root onto the Gateway store", () => {
+  const prevA = process.env.ALLOY_RUNTIME_ROOT;
+  const prevG = process.env.VACILANDO_GATEWAY_ROOT;
+  try {
+    process.env.ALLOY_RUNTIME_ROOT = join(homedir(), ".local", "state", "alloy-dev");
+    delete process.env.VACILANDO_GATEWAY_ROOT;
+    const root = bindWorkerCliToGatewayRoot();
+    assert.equal(root, join(homedir(), ".local", "state", "alloy-dev", "gateway"));
+    assert.equal(process.env.ALLOY_RUNTIME_ROOT, root);
+  } finally {
+    process.env.ALLOY_RUNTIME_ROOT = prevA;
+    if (prevG == null) delete process.env.VACILANDO_GATEWAY_ROOT;
+    else process.env.VACILANDO_GATEWAY_ROOT = prevG;
+  }
+});
+
+await test("worker CLI keeps an explicit fixture runtime root", () => {
+  const prevA = process.env.ALLOY_RUNTIME_ROOT;
+  try {
+    process.env.ALLOY_RUNTIME_ROOT = ROOT;
+    assert.equal(bindWorkerCliToGatewayRoot(), ROOT);
+  } finally {
+    process.env.ALLOY_RUNTIME_ROOT = prevA;
+  }
 });
 
 rmSync(ROOT, { recursive: true, force: true });

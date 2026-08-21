@@ -7,6 +7,7 @@
  * Mission id is inherited from the durable lane binding when omitted.
  * Does not create a parallel request system.
  */
+import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 import { requestGovernedAction } from "./lib/vacilando/governed-action-request.mjs";
 
 function usage(code = 2) {

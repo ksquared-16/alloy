@@ -35,6 +35,28 @@ export function vacilandoGatewayRoot() {
   return join(homedir(), ".local", "state", "alloy-dev", "gateway");
 }
 
+const DEFAULT_TOOLKIT_RUNTIME = join(homedir(), ".local", "state", "alloy-dev");
+
+/**
+ * Worker protocol CLIs (`vac run-status`, `vac governed-action`) must write
+ * the same store the Gateway process uses. Alloy config sets ALLOY_RUNTIME_ROOT
+ * to the toolkit root; Gateway isolates under …/gateway. Without this remap,
+ * a live run is invisible to the app and gets abandoned as missing.
+ *
+ * Explicit test/fixture roots (anything other than the default toolkit path)
+ * are left alone.
+ */
+export function bindWorkerCliToGatewayRoot() {
+  const current = process.env.ALLOY_RUNTIME_ROOT?.trim().replace(/\/+$/, "") || "";
+  if (current && current !== DEFAULT_TOOLKIT_RUNTIME) return current;
+  const root = vacilandoGatewayRoot();
+  process.env.ALLOY_RUNTIME_ROOT = root;
+  if (!process.env.VACILANDO_GATEWAY_ROOT?.trim()) {
+    process.env.VACILANDO_GATEWAY_ROOT = root;
+  }
+  return root;
+}
+
 export function newNodeId() {
   return `node_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
