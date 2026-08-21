@@ -20,7 +20,10 @@ import { composeSnapshot } from "./lib/vacilando/compose.mjs";
 import { collectRaw } from "./lib/vacilando/sources.mjs";
 import { startVacilandoServer } from "./lib/vacilando-server.mjs";
 import {
+  cmdAttachCursorSession,
+  cmdAdoptWorktree,
   cmdBackup,
+  cmdBindLane,
   cmdEnsureVacilandoLane,
   cmdNode,
   cmdRestore,
@@ -80,6 +83,9 @@ async function main() {
       "  backup [--out DIR]       Backup durable Vacilando state (no secrets)\n" +
       "  restore --from DIR --to ROOT   Restore into an isolated runtime root\n" +
       "  ensure-lane vacilando    Adopt/create the Vacilando specialist lane\n" +
+      "  adopt-worktree --name NAME --worktree WT_NAME [--provider claude|cursor]\n" +
+      "  bind-lane --lane ID --worktree WT_NAME [--provider claude|cursor]\n" +
+      "  attach-cursor --lane vacilando --worktree WT_NAME [--session ID]\n" +
       "  help\n");
     return;
   }
@@ -141,6 +147,37 @@ async function main() {
       process.exit(2);
     }
     const out = cmdEnsureVacilandoLane();
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
+    return;
+  }
+  if (cmd === "adopt-worktree") {
+    const out = cmdAdoptWorktree({
+      name: opt("--name", null),
+      worktree: opt("--worktree", args[1] || null),
+      provider: opt("--provider", null),
+    });
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
+    return;
+  }
+  if (cmd === "bind-lane") {
+    const out = cmdBindLane({
+      laneId: opt("--lane", args[1] || null),
+      worktree: opt("--worktree", null),
+      provider: opt("--provider", null),
+    });
+    process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
+    if (!out.ok) process.exit(1);
+    return;
+  }
+  if (cmd === "attach-cursor") {
+    const out = cmdAttachCursorSession({
+      laneId: opt("--lane", "vacilando"),
+      worktree: opt("--worktree", null),
+      providerSessionId: opt("--session", null),
+      model: opt("--model", null),
+    });
     process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
     if (!out.ok) process.exit(1);
     return;

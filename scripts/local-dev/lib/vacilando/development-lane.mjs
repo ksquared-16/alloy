@@ -13,6 +13,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 import { localNodeId } from "./execution-node.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 
 export const DEVELOPMENT_LANE_SCHEMA = "vacilando.development_lane.v1";
 export const DURABLE_LANE_ID_RE = /^lane_[a-f0-9]{12}$/;
@@ -133,7 +134,7 @@ function normalizeBinding(binding, { root, previous = null } = {}) {
     slot: Object.prototype.hasOwnProperty.call(binding, "slot")
       ? coerceSlot(binding.slot, null)
       : coerceSlot(previous?.slot, null),
-    provider: binding.provider || previous?.provider || "claude",
+    provider: normalizeExecutionProvider(binding.provider || previous?.provider, "claude") || "claude",
     stale: false,
     status: "bound",
     last_node_id: previous?.node_id && previous.node_id !== nodeId ? previous.node_id : (previous?.last_node_id || null),
@@ -442,7 +443,7 @@ export function releaseDurableLaneRuntimeBinding(laneId, { nowMs = Date.now(), r
     tmux_session: null,
     tmux_pane: null,
     slot: null,
-    provider: rec.binding?.provider || "claude",
+    provider: normalizeExecutionProvider(rec.binding?.provider, "claude") || "claude",
     stale: true,
     status: "idle",
     last_node_id: rec.binding?.node_id || rec.binding?.last_node_id || null,
@@ -591,7 +592,7 @@ export function adoptLegacyIdentityLane({
       tmux_session: IDENTITY_TMUX,
       tmux_pane: observation?.tmux?.pane_id || null,
       slot: observation?.slot ?? 1,
-      provider: "claude",
+      provider: normalizeExecutionProvider(observation?.provider, "claude") || "claude",
     },
   });
   if (!created.ok) return created;
@@ -645,7 +646,7 @@ export function connectExistingWork({
       tmux_session: candidate.tmux_session || null,
       tmux_pane: candidate.tmux_pane || null,
       slot: candidate.slot,
-      provider: candidate.provider || "claude",
+      provider: normalizeExecutionProvider(candidate.provider, "claude") || "claude",
     },
   });
   if (!created.ok) return created;

@@ -12,6 +12,7 @@ import { basename, join } from "node:path";
 import { gitFactsForPath, readAllMetadata, resolveRuntimeConfig, TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { isRuntimeAdoptionBlocked } from "./development-lane.mjs";
 import { localNodeId } from "./execution-node.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import {
   inferClaudePresence,
   isAllowlistedSession,
@@ -37,6 +38,7 @@ export function parseCandidateId(id) {
 function suggestedName(worktreeName, sprint) {
   const n = String(worktreeName || "").replace(/^wt\d+-/, "").replace(/-/g, " ");
   if (/communications/i.test(n)) return "Communications";
+  if (/enrollment/i.test(n)) return "Enrollment";
   if (/records|roster/i.test(n)) return "Records / Roster";
   if (/identity|access/i.test(n)) return "Access & Identity";
   if (sprint && !/v2|phase|t00/i.test(sprint)) {
@@ -208,8 +210,9 @@ export async function provisionLaneBinding({ lane, run } = {}) {
   if (!realProvisionAllowed()) {
     return { ok: false, error: "provision_adapter_disabled", skip_queue: true };
   }
+  const provider = normalizeExecutionProvider(lane?.binding?.provider, "claude") || "claude";
   const name = sprintSlugFromLaneName(lane?.name, lane?.lane_id);
-  const args = [name, "--provider", "claude", "--slot", "auto", "--without-server"];
+  const args = [name, "--provider", provider, "--slot", "auto", "--without-server"];
   if (run?.instruction || run?.run_id) {
     args.push("--objective", String(lane?.name || name));
   }
@@ -238,7 +241,7 @@ export async function provisionLaneBinding({ lane, run } = {}) {
       branch,
       tmux_session: worktree ? `alloy-${String(worktree).replace(/^wt\d+-/, "").slice(0, 40)}` : null,
       slot: Number.isInteger(slot) ? slot : null,
-      provider: "claude",
+      provider,
     },
   };
 }
