@@ -223,6 +223,50 @@ export function laneProviderKind(lane) {
   return raw || null;
 }
 
+/**
+ * The agent's name for operator-facing sentences ("Cursor is running").
+ * Unlike laneProviderLabel, this never degrades to "Offline"/"Session" — those
+ * read wrong inside a sentence about the agent.
+ */
+/** Slot 1 -> 3011 … slot 6 -> 3016. The permanent per-slot port map. */
+export const LANE_FIRST_AGENT_PORT = 3011;
+
+export function lanePort(lane) {
+  const slot = Number(lane?.slot ?? lane?.binding?.slot);
+  if (!Number.isInteger(slot) || slot < 1 || slot > 6) return null;
+  return LANE_FIRST_AGENT_PORT + (slot - 1);
+}
+
+/**
+ * The lane's assigned localhost. This is the permanent slot port, not a probe:
+ * it says where this lane's server belongs, never that one is currently up.
+ */
+export function laneLocalhostUrl(lane) {
+  const port = lanePort(lane);
+  return port ? `http://localhost:${port}` : null;
+}
+
+export function renderLaneLocalhost(lane) {
+  const url = laneLocalhostUrl(lane);
+  if (!url) return "";
+  return `<div class="gw-localhost" data-gw-localhost>
+    <span class="gw-localhost-h">Localhost</span>
+    <a class="gw-localhost-url" href="${esc(url)}" target="_blank" rel="noreferrer noopener">${esc(url)}</a>
+    <span class="gw-localhost-note">Assigned port for this slot</span>
+  </div>`;
+}
+
+export function laneAgentLabel(lane) {
+  const kind = laneProviderKind(lane);
+  if (kind === "cursor") return "Cursor";
+  if (kind === "claude") return "Claude";
+  // An OFFLINE Claude lane still has Claude presence telemetry attached, and
+  // must keep its name — "Agent is not running" would lose real information.
+  // Cursor lanes are named by binding.provider above, so they never land here.
+  if (lane && Object.prototype.hasOwnProperty.call(lane, "claude")) return "Claude";
+  return "Agent";
+}
+
 export function laneProviderLabel(lane) {
   const kind = laneProviderKind(lane);
   if (kind === "cursor") return "Cursor";
@@ -659,10 +703,13 @@ export function outputBodyText(output, outputText, { pending = false } = {}) {
 }
 
 export function claudeRunStatus(lane) {
-  const running = lane?.claude?.presence === "present" || lane?.runtime === "online";
+  const running = lane?.claude?.presence === "present" || lane?.runtime === "online"
+    || LIVE_AGENT_SESSION_STATES.has(String(lane?.agent_session?.state || ""));
+  const who = laneAgentLabel(lane);
   return {
     running,
-    label: running ? "Claude is running" : "Claude is not running",
+    provider: laneProviderKind(lane),
+    label: running ? `${who} is running` : `${who} is not running`,
   };
 }
 
@@ -1327,13 +1374,45 @@ export function previousRunHint(run) {
   return executionRunListHint(run);
 }
 
+/**
+ * ABANDONED is not FAILED and not COMPLETE. When the lane and worktree still
+ * match, it is a recoverable state and the operator gets the canonical
+ * continuation action — never "make a new run to continue the same sprint".
+ */
+export function abandonedRecoveryNotice(run) {
+  if (run?.state !== "ABANDONED") return null;
+  if (run.recoverable) {
+    return {
+      recoverable: true,
+      label: "Abandoned · lane and worktree still match",
+      detail: "Vacilando closed this run, but the lane still looks recoverable. Continue it instead of starting a new run.",
+      action: "Continue this run",
+    };
+  }
+  const why = {
+    lane_has_active_run: "Newer work is already running on this lane.",
+    binding_mismatch: "The lane is no longer bound to this run's worktree.",
+    lane_missing: "The Development Lane no longer exists.",
+    recovery_budget_exhausted: "This run has been recovered too many times.",
+  }[run.recovery_blocked_reason] || "This run can no longer be recovered.";
+  return { recoverable: false, label: "Abandoned", detail: why, action: null };
+}
+
 export function renderPreviousWork(run) {
   if (!run?.state) return "";
-  const hint = previousRunHint(run) || run.state;
+  const notice = abandonedRecoveryNotice(run);
+  const hint = notice?.label || previousRunHint(run) || run.state;
   const tone = executionRunTone(run);
-  return `<aside class="gw-work is-previous${tone ? ` is-${tone}` : ""}" data-gw-previous-run data-run-state="${esc(run.state)}">
+  const recover = notice?.recoverable
+    ? `<div class="gw-work-recover">
+      <span class="gw-work-detail">${esc(notice.detail)}</span>
+      <button type="button" class="btn sm gw-run-recover" data-gw-run-recover data-run-id="${esc(run.run_id || "")}">${esc(notice.action)}</button>
+    </div>`
+    : (notice ? `<span class="gw-work-detail">${esc(notice.detail)}</span>` : "");
+  return `<aside class="gw-work is-previous${tone ? ` is-${tone}` : ""}${notice?.recoverable ? " is-recoverable" : ""}" data-gw-previous-run data-run-state="${esc(run.state)}"${notice ? ` data-recoverable="${notice.recoverable ? "1" : "0"}"` : ""}>
     <span class="gw-work-h">Previous run</span>
     <span class="gw-work-state">${esc(hint)}</span>
+    ${recover}
   </aside>`;
 }
 
@@ -1494,16 +1573,29 @@ export function renderOutput(text, { pending = false } = {}) {
   return `<pre class="gw-output" data-gw-output tabindex="0"${pendingAttr}>${esc(body)}</pre>`;
 }
 
+/**
+ * The output panel is named for what it SHOWS, not for who produced it: the
+ * same panel serves Claude and Cursor lanes. It reads "Recent output" while
+ * work is in flight and "Completed output" once the run has finished.
+ */
+export function outputPanelHeading(lane) {
+  const state = lane?.execution_run?.state || lane?.previous_run?.state || null;
+  if (!lane?.execution_run && lane?.previous_run?.state === "COMPLETE") return "Completed output";
+  if (state === "COMPLETE") return "Completed output";
+  return "Recent output";
+}
+
 /** Honest truncation / review chrome. Does not parse TUI glyphs. */
-export function outputReviewHint(output) {
+export function outputReviewHint(output, { lane = null } = {}) {
+  const panelHeading = outputPanelHeading(lane);
   if (!output || output.ok === false) return null;
   const mode = output.mode || "recent";
   if (mode === "latest_response") {
     if (!output.available) {
       return {
         kind: "latest_unavailable",
-        heading: "Latest Claude Response",
-        text: "Latest Claude response is not available from the session transcript. Switch back to recent terminal output.",
+        heading: "Latest response",
+        text: "The latest assistant response is not available from the session transcript. Switch back to recent output.",
         showRecent: true,
         showLatest: false,
         showExtended: true,
@@ -1511,10 +1603,10 @@ export function outputReviewHint(output) {
     }
     return {
       kind: "latest",
-      heading: "Latest Claude Response",
+      heading: "Latest response",
       text: output.truncated
-        ? "Latest Claude response (length-capped)."
-        : "Latest Claude response from the session transcript. This is the assistant message, not full terminal/tool output.",
+        ? "Latest assistant response (length-capped)."
+        : "Latest assistant response from the session transcript. This is the assistant message, not full terminal/tool output.",
       showRecent: true,
       showLatest: false,
       showExtended: true,
@@ -1526,7 +1618,7 @@ export function outputReviewHint(output) {
       : "Retained terminal history.";
     return {
       kind: output.truncated ? "extended_truncated" : "extended",
-      heading: "Claude",
+      heading: panelHeading,
       text: extra,
       showRecent: true,
       showLatest: true,
@@ -1537,15 +1629,15 @@ export function outputReviewHint(output) {
     || (output.alternate_screen === true && Number(output.history_size) === 0);
   const historyMore = Number(output.history_size) > Number(output.returned_lines || output.line_count || 0);
   const truncated = Boolean(output.truncated);
-  let text = "Recent output";
+  let text = panelHeading;
   if (viewportOnly) {
-    text = "Showing the visible pane. Claude’s TUI does not keep tmux scrollback. Earlier output is not currently shown.";
+    text = "Showing the visible pane. The agent’s TUI does not keep tmux scrollback. Earlier output is not currently shown.";
   } else if (truncated || historyMore) {
     text = "Showing recent output. Earlier output is not currently shown.";
   }
   return {
     kind: viewportOnly ? "viewport_only" : (truncated || historyMore ? "truncated" : "recent"),
-    heading: "Claude",
+    heading: panelHeading,
     text,
     showRecent: false,
     showLatest: true,
@@ -1553,12 +1645,12 @@ export function outputReviewHint(output) {
   };
 }
 
-export function renderOutputChrome(output) {
-  const hint = outputReviewHint(output);
+export function renderOutputChrome(output, { lane = null } = {}) {
+  const hint = outputReviewHint(output, { lane });
   if (!hint) return "";
   const btns = [];
   if (hint.showLatest) {
-    btns.push(`<button type="button" class="btn sm gw-output-latest" data-gw-output-latest>Latest Claude response</button>`);
+    btns.push(`<button type="button" class="btn sm gw-output-latest" data-gw-output-latest>Latest response</button>`);
   }
   if (hint.showExtended) {
     btns.push(`<button type="button" class="btn sm gw-output-more" data-gw-output-more>Load more</button>`);
@@ -2022,8 +2114,8 @@ export function renderGatewayShell({
     output,
     outputText,
   });
-  const hint = outputReviewHint(output);
-  const heading = hint?.heading || "Latest Claude Response";
+  const hint = outputReviewHint(output, { lane });
+  const heading = hint?.heading || outputPanelHeading(lane);
   const cap = deriveLaneExecutionPosture(lane);
   const workStatus = `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
   const bodyText = outputBodyText(output, outputText, { pending });
@@ -2039,7 +2131,7 @@ export function renderGatewayShell({
             <span>${esc(heading)}</span>
             ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
           </div>
-          ${renderOutputChrome(output)}
+          ${renderOutputChrome(output, { lane })}
           ${renderOutput(bodyText, { pending })}
         </div>
         ${renderClaudeRunStatus(lane, telemetry)}
@@ -2059,6 +2151,7 @@ export function renderGatewayShell({
           </div>
           ${renderContextRefreshButton(lane, { compact: true })}
         </div>
+        ${renderLaneLocalhost(lane)}
         <details class="gw-lane-fold" data-gw-lane-fold ${laneFoldOpen ? "open" : ""}>
           <summary class="gw-lane-fold-sum">Lane details</summary>
           <div class="gw-lane-top">

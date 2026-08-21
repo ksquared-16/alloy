@@ -1664,8 +1664,12 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: latest.text,
     listReady: true,
   });
-  assert.match(html, /Latest Claude Response/);
+  // The panel is named for what it shows, not for who produced it: one panel
+  // serves both Claude and Cursor lanes.
+  assert.match(html, /Latest response/);
+  assert.equal(html.includes("Latest Claude Response"), false);
   assert.match(html, /data-gw-output-recent/);
+  // The agent name IS provider-aware in sentences about the agent.
   assert.match(html, /Claude is running/);
   assert.match(html, /data-gw-claude-run/);
   assert.equal(html.includes("data-gw-output-latest>"), false);

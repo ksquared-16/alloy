@@ -228,6 +228,20 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     return { status, body: out };
   }
 
+  if (path === "/api/v2/lane/run/recover" || path === "/api/v2/lanes/run/recover") {
+    const id = v.lane_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { recoverExecutionRun, listExecutionRunsForLane } = await import("./execution-run.mjs");
+    const runId = v.run_id || v.runId
+      || listExecutionRunsForLane(id).find((r) => r.state === "ABANDONED")?.run_id;
+    if (!runId) return { status: 404, body: { ok: false, error: "run_not_found" } };
+    const out = recoverExecutionRun(runId, { laneId: id, origin: "operator", reason: "operator_continued_run" });
+    const status = out.ok
+      ? 200
+      : (["lane_has_active_run", "run_irreversible"].includes(out.error) ? 409 : 400);
+    return { status, body: out };
+  }
+
   if (path === "/api/v2/lane/run/report" || path === "/api/v2/lanes/run/report") {
     const laneId = v.lane_id || v.id;
     if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };

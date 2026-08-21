@@ -1046,6 +1046,32 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "close_stale_failed", detail: String(e && e.message || e) });
         }
       }
+      const laneRecoverMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/recover$/);
+      if (laneRecoverMatch && req.method === "POST") {
+        const laneId = decodeURIComponent(laneRecoverMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["run_id"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { recoverExecutionRun, listExecutionRunsForLane } = await import("./vacilando/execution-run.mjs");
+          const runId = body.value?.run_id
+            || listExecutionRunsForLane(laneId).find((r) => r.state === "ABANDONED")?.run_id;
+          if (!runId) return sendJson(res, 404, { ok: false, error: "run_not_found" });
+          const out = recoverExecutionRun(runId, {
+            laneId,
+            origin: "operator",
+            reason: "operator_continued_run",
+          });
+          const status = out.ok
+            ? 200
+            : (["lane_has_active_run", "run_irreversible"].includes(out.error) ? 409 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
+        }
+      }
       const laneSendMatch = path.match(/^\/api\/lanes\/([^/]+)\/instruction$/);
       if (laneSendMatch) {
         const laneId = normalizeLaneId(laneSendMatch[1]);

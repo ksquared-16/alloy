@@ -1305,6 +1305,50 @@ document.addEventListener("click", async (e) => {
     }
     return;
   }
+  const recoverRun = e.target?.closest?.("[data-gw-run-recover]");
+  if (recoverRun) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (recoverRun.disabled) return;
+    const laneId = G.selected || G.lane?.lane_id;
+    const runId = recoverRun.getAttribute("data-run-id") || G.lane?.previous_run?.run_id;
+    if (!laneId) return;
+    recoverRun.disabled = true;
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/run/recover`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(runId ? { run_id: runId } : {}),
+      });
+      const out = await r.json().catch(() => ({}));
+      if (out.ok) {
+        G.notice = {
+          kind: "ok",
+          text: out.already_recovering
+            ? "That run is already recovering."
+            : "Run recovered. Its history is preserved and it can continue to completion.",
+        };
+        await fetchLanes();
+        if (laneId) await fetchLane(laneId);
+      } else {
+        const why = {
+          lane_has_active_run: "Newer work is already running on this lane, so the old run was not reopened.",
+          run_irreversible: "That run is COMPLETE or FAILED and cannot be reopened.",
+          binding_mismatch: "The lane is no longer bound to that run's worktree.",
+          lane_missing: "The Development Lane no longer exists.",
+          recovery_budget_exhausted: "That run has been recovered too many times.",
+        }[out.error];
+        G.notice = { kind: "err", text: why || out.error || "Could not recover that run." };
+        recoverRun.disabled = false;
+      }
+      paint();
+    } catch {
+      recoverRun.disabled = false;
+      G.notice = { kind: "err", text: "Could not recover that run." };
+      paint();
+    }
+    return;
+  }
   const closeStale = e.target?.closest?.("[data-gw-close-stale]");
   if (closeStale) {
     e.preventDefault();

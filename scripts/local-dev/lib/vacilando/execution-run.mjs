@@ -358,6 +358,11 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     recovery_state: run.recovery_state || null,
     recovered_count: Number(run.recovered_count) || 0,
   };
+  if (run.state === "ABANDONED") {
+    const probe = executionRunRecoverability(run);
+    out.recoverable = Boolean(probe.recoverable);
+    out.recovery_blocked_reason = probe.recoverable ? null : probe.reason;
+  }
   if (includeInstruction) out.instruction = run.instruction;
   if (includeTransitions) out.transitions = run.transitions || [];
   return out;
@@ -665,6 +670,33 @@ export function cwdOwnsRun(run, cwd) {
 }
 
 export const RECOVERY_MAX_PER_RUN = 8;
+
+/**
+ * Would recovery succeed right now? A dry run of recoverExecutionRun's ownership
+ * gate, used by the UI so an ABANDONED run can be shown as recoverable and
+ * offered a continuation action instead of forcing a fake new run.
+ */
+export function executionRunRecoverability(run, { root = null } = {}) {
+  if (!run?.run_id) return { recoverable: false, reason: "no_run" };
+  if (isIrreversibleRunState(run.state)) return { recoverable: false, reason: "irreversible" };
+  if (run.state === "RECOVERING") return { recoverable: false, reason: "already_recovering" };
+  if (run.state !== "ABANDONED") return { recoverable: false, reason: "not_abandoned" };
+  const storeRoot = root || (findExecutionRun(run.run_id)?.root) || runtimeRoot();
+  const lane = getDurableLane(run.lane_id, storeRoot);
+  if (!lane) return { recoverable: false, reason: "lane_missing" };
+  const bound = lane?.binding?.worktree_path || null;
+  if (!run.worktree_path || !bound || realOrSelf(bound) !== realOrSelf(run.worktree_path)) {
+    return { recoverable: false, reason: "binding_mismatch" };
+  }
+  const active = activeRunForLane(run.lane_id, storeRoot);
+  if (active && active.run_id !== run.run_id) {
+    return { recoverable: false, reason: "lane_has_active_run", active_run_id: active.run_id };
+  }
+  if ((Number(run.recovered_count) || 0) >= RECOVERY_MAX_PER_RUN) {
+    return { recoverable: false, reason: "recovery_budget_exhausted" };
+  }
+  return { recoverable: true, reason: "ownership_provable", abandoned_reason: run.state_reason || null };
+}
 
 /**
  * Canonical ABANDONED -> RECOVERING path (Phase 3).
