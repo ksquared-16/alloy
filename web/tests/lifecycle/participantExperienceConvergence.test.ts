@@ -187,8 +187,19 @@ describe("controls are semantic, not one text box", () => {
 
     it("the card renders each control kind rather than one input", () => {
         const card = read("app/forms/embed/[token]/EnrollmentConversationCard.tsx");
-        expect(card).toContain('data-participant-control="boolean"');
-        expect(card).toContain('data-participant-control="options"');
+        const composer = read("app/forms/embed/[token]/ParticipantComposer.tsx");
+        /**
+         * A closed choice is rendered AS a closed choice.
+         *
+         * The productization pass moved booleans and enums out of bordered control blocks and into
+         * suggested replies — conversationally, which is what a specialist offering two answers
+         * looks like. The property is unchanged and still marked in the DOM: the card names the
+         * authored control kind, and the reply group carries it. What must never happen is either
+         * kind degrading to a free-text box, which is what this asserts.
+         */
+        expect(card).toContain('suggestionKind = "boolean"');
+        expect(card).toContain('suggestionKind = "options"');
+        expect(composer).toContain('"data-participant-control": controlKind');
         expect(card).toContain("participantQuestion(objective)");
     });
 });

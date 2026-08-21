@@ -1,17 +1,17 @@
 "use client";
 
 /**
- * The participant's conversational Enrollment surface (V1.2).
+ * The participant's conversational Enrollment surface.
  *
- * Rendered INSIDE the existing public token page, above the packet flow, using the existing
- * `ParentIntakeShell` primitives. There is no second participant application, no new route and no
- * new visual language — a parent opens the same link they already had.
+ * Rendered INSIDE the existing public token page using the existing `ParentIntakeShell` primitives.
+ * There is no second participant application, no new route and no new visual language — a parent
+ * opens the same link they already had.
  *
  * ## What this component may and may not decide
  *
  * It sends the participant's WORDS and nothing else. It never names a field, a requirement, a
- * semantic key, a stage or a command: the server resolves the current turn from session state, so a
- * tampered browser can at most answer a question the platform already chose to ask.
+ * semantic key, a stage or an instruction: the server resolves the current turn from session state,
+ * so a tampered browser can at most answer a question the platform already chose to ask.
  *
  * ## The provider is invisible here
  *
@@ -19,6 +19,13 @@
  * field-appropriate control, so the screen behaves identically whether interpretation is enabled,
  * disabled, or failing. When the runtime could not read a free-text answer it says so in product
  * language and leaves the controls in place — enhancement, never a dependency.
+ *
+ * ## Why it is a thread
+ *
+ * The previous surface stacked question, answer, question, answer, six filled buttons and an input
+ * at roughly one weight. A parent had to parse it. The conversation now has a viewport of its own:
+ * history recedes upward, the current exchange owns the eye, and the composer is anchored at the
+ * bottom where a reply belongs. See `ParticipantThread.tsx` and `ParticipantComposer.tsx`.
  */
 
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
@@ -30,12 +37,27 @@ import {
     optionalAffirmLabel,
     optionalSkipLabel,
     participantIntro,
+    participantProgressDisplay,
     participantQuestion,
-    progressLine,
+    participantQuestionSegments,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import { IntakeCard, IntakeHeading } from "./ParentIntakeShell";
+import {
+    ConversationProgress,
+    ConversationViewport,
+    ThreadSaid,
+    ThreadSupporting,
+    ThreadTurn,
+    type ThreadDepth,
+} from "./ParticipantThread";
+import {
+    Composer,
+    SuggestedReplies,
+    ThinkingAffordance,
+    type SuggestedReply,
+} from "./ParticipantComposer";
 
 export type EnrollmentConversationCardProps = {
     readonly token: string;
@@ -52,16 +74,16 @@ export type EnrollmentConversationCardProps = {
     /**
      * Whether the host actually has an artifact to render beneath this card.
      *
-     * The handoff copy points DOWN the page. Saying "review it below" when there is nothing below
+     * The handoff copy points at the paperwork. Saying "review it" when there is nothing to review
      * is a lie the participant cannot act on, so the card refuses to say it.
      */
     readonly artifactRenderable?: boolean;
     /**
      * Reports a value the conversation has settled, and which artifact fields it fills.
      *
-     * The paperwork below must already show what the parent just said. Without this the review
-     * rendered an empty box for an answer given seconds earlier — the value was in the session, and
-     * the surface had not been told.
+     * The paperwork must already show what the parent just said. Without this the review rendered an
+     * empty box for an answer given seconds earlier — the value was in the session, and the surface
+     * had not been told.
      */
     readonly onValueSettled?: (fieldIds: readonly string[], value: unknown) => void;
 };
@@ -78,6 +100,9 @@ type TurnResponse = {
     error?: string;
 };
 
+/** One settled exchange, held locally for this sitting only. */
+type Exchange = { said: string; answered: string };
+
 export function EnrollmentConversationCard({
     token,
     initialObjective,
@@ -91,10 +116,10 @@ export function EnrollmentConversationCard({
      * What the parent has already settled, newest last.
      *
      * The surface used to REPLACE itself on every turn, which made a short conversation feel like an
-     * interrogation: each answer erased the evidence that anything had happened. Settled facts now
-     * stay on screen and the next question appears beneath them.
+     * interrogation: each answer erased the evidence that anything had happened. Settled exchanges
+     * now stay in the thread and recede.
      */
-    const [settled, setSettled] = useState<{ said: string; answered: string }[]>([]);
+    const [settled, setSettled] = useState<Exchange[]>([]);
     /** Whether the parent has asked to correct the value currently being confirmed. */
     const [correcting, setCorrecting] = useState(false);
     /** The parent said yes to an optional question and is now telling us the detail. */
@@ -109,6 +134,13 @@ export function EnrollmentConversationCard({
     /** A free-text reply is being interpreted — the honest "thinking" state. */
     const [interpreting, setInterpreting] = useState(false);
     const [busy, setBusy] = useState(false);
+    /**
+     * True from the instant the parent answers until the next turn arrives.
+     *
+     * The answered exchange is already in the thread, so the outgoing question must not also render
+     * as the current one — that is the double-question a chat surface must never show.
+     */
+    const [awaitingTurn, setAwaitingTurn] = useState(false);
     /**
      * Guards the request itself, not just the button.
      *
@@ -128,8 +160,8 @@ export function EnrollmentConversationCard({
             setNotice(null);
 
             /**
-             * IMMEDIATE acknowledgement. The section resolves the moment the parent clicks; the
-             * request continues behind it.
+             * IMMEDIATE acknowledgement. The exchange lands in the thread the moment the parent
+             * acts; the request continues behind it.
              *
              * This is presentation, not a claim of persistence: nothing here says "saved". If the
              * server refuses, the entry is rolled back below and the question returns — so the
@@ -142,14 +174,17 @@ export function EnrollmentConversationCard({
             // while interpretation is actually running — never as decoration.
             const isFreeText = typeof payload.text === "string" && payload.text !== "yes";
             if (isFreeText) setInterpreting(true);
-            // Same instant as the transcript entry: the artifact shows the answer as it is given.
+            // Same instant as the thread entry: the artifact shows the answer as it is given.
             if (payload.value !== undefined && objective.next_turn.field_ids.length > 0) {
                 onValueSettled?.(objective.next_turn.field_ids, payload.value);
             }
             if (payload.text === "yes" && objective.next_turn.field_ids.length > 0) {
                 onValueSettled?.(objective.next_turn.field_ids, objective.next_turn.proposed_value);
             }
-            if (optimistic) setSettled((prev) => [...prev, { said: asked, answered: optimistic }]);
+            if (optimistic) {
+                setSettled((prev) => [...prev, { said: asked, answered: optimistic }]);
+                setAwaitingTurn(true);
+            }
             setCorrecting(false);
             setElaborating(false);
             setText("");
@@ -159,13 +194,14 @@ export function EnrollmentConversationCard({
                     {
                         method: "POST",
                         headers: { "content-type": "application/json" },
-                        // WORDS ONLY. No field key, no requirement id, no command — the server owns
-                        // every one of those and reads them from the session's current turn.
+                        // WORDS ONLY. No identifier of any kind — the server owns every one of
+                        // those and reads them from the session's current turn.
                         body: JSON.stringify(payload),
                     },
                 );
                 const json = (await res.json()) as TurnResponse;
                 if (!json.ok || !json.data) {
+                    if (optimistic) setSettled((prev) => prev.slice(0, -1));
                     setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
                     return;
                 }
@@ -188,7 +224,7 @@ export function EnrollmentConversationCard({
                 onPhaseChange?.(json.data.objective.phase);
                 if (json.data.objective.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
             } catch {
-                // Roll the optimistic entry back rather than leave a resolved-looking section for
+                // Roll the optimistic entry back rather than leave a resolved-looking exchange for
                 // something the platform never accepted.
                 if (optimistic) setSettled((prev) => prev.slice(0, -1));
                 setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
@@ -196,6 +232,7 @@ export function EnrollmentConversationCard({
                 inFlight.current = false;
                 setBusy(false);
                 setInterpreting(false);
+                setAwaitingTurn(false);
             }
         },
         [token, onArtifactHandoff, onPhaseChange, onValueSettled, objective],
@@ -226,24 +263,29 @@ export function EnrollmentConversationCard({
     }
 
     if (control.kind === "handoff") {
-        // Shared collection is done. Alloy says so in the same voice it has used throughout, the
-        // conversation so far stays above it, and the POPULATED artifact follows below — with the
-        // acknowledgment and signature where they belong, in the document. The signature prompt is
-        // NOT spoken here: it belongs beside the signature itself, which is the review's last
-        // phase, not its first line.
+        /**
+         * The conversation is over. It ENDS — it does not scroll on into the document.
+         *
+         * The transcript stays above so the parent can see what was agreed, Alloy says what it did,
+         * and the host renders [Review paperwork] beneath. The signature prompt is NOT spoken here:
+         * it belongs beside the signature itself, at the end of the review.
+         */
         return (
             <IntakeCard>
-                {settled.length > 0 ? (
-                    <div className="mb-7 flex flex-col gap-4" data-participant-settled="true">
-                        {settled.map((entry, i) => (
-                            <div key={i} className="flex flex-col gap-1.5">
-                                <Said who="alloy" settled>{entry.said}</Said>
-                                <Said who="parent" settled>{entry.answered}</Said>
-                            </div>
-                        ))}
-                    </div>
-                ) : null}
-                <Said who="alloy">{participantQuestion(objective)}</Said>
+                <div className="flex flex-col gap-5" data-participant-settled="true">
+                    {settled.map((entry, i) => (
+                        <ThreadExchange
+                            key={i}
+                            exchange={entry}
+                            depth={i === settled.length - 1 ? "recent" : "history"}
+                        />
+                    ))}
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">
+                            {participantQuestion(objective)}
+                        </ThreadSaid>
+                    </ThreadTurn>
+                </div>
             </IntakeCard>
         );
     }
@@ -260,165 +302,200 @@ export function EnrollmentConversationCard({
      * the parent who has nothing to say to type something untrue.
      */
     const optionalUnanswered = affirmLabel != null && !elaborating;
+    const progress = participantProgressDisplay(objective);
+
+    /**
+     * THE SHORTCUTS, DEMOTED.
+     *
+     * Convenience beside a conversation, not the conversation itself: at most two quiet pills, and
+     * only where the platform genuinely has a shortcut to offer. Everything they do is also sayable
+     * in the composer, so nothing is reachable only by pressing one.
+     */
+    const suggestions: SuggestedReply[] = [];
+    /** Which authored control the pills stand for — see `SuggestedReplies`. */
+    let suggestionKind: string | undefined;
+    if (control.kind === "choice_or_text" && !correcting) {
+        suggestionKind = "confirm";
+        suggestions.push({
+            label: control.affirm,
+            emphasis: true,
+            onSelect: () => void submit({ text: "yes", settledAs: displayValue(turn.proposed_value) }),
+        });
+        suggestions.push({
+            // Correcting is a UI transition, not a turn: it reveals the typed control the authored
+            // Form uses. No round trip, and nothing is claimed to the platform.
+            label: control.deny,
+            onSelect: () => setCorrecting(true),
+        });
+    } else if (optionalUnanswered && skipLabel && affirmLabel) {
+        suggestionKind = "optional";
+        suggestions.push({
+            label: skipLabel,
+            emphasis: true,
+            // Resolves the turn outright — no redundant Continue after a binary answer. The label IS
+            // the answer. Writing null would leave the need unmet and the question would come back
+            // forever; "No known allergies" is both true and what a specialist would write down.
+            onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }),
+        });
+        suggestions.push({
+            // Local: reveals the authored control for the parent who does have something to tell us.
+            label: affirmLabel,
+            onSelect: () => setElaborating(true),
+        });
+    } else if (control.kind === "boolean") {
+        suggestionKind = "boolean";
+        suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
+        suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
+    } else if (control.kind === "options") {
+        suggestionKind = "options";
+        for (const option of control.options) {
+            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
+        }
+    } else if (skipLabel && elaborating) {
+        suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
+    }
+
+    /**
+     * The typed control, shown only when a keyboard answer alone would not do.
+     *
+     * A date is the reference case: the deterministic path has to work with the provider disabled,
+     * so a date of birth gets a real date picker beside the composer rather than instructions about
+     * how to phrase one.
+     */
+    const typed: ParticipantValueControl | null =
+        control.kind === "choice_or_text"
+            ? correcting
+                ? control.correction
+                : null
+            : control.kind === "value" && !optionalUnanswered
+              ? control
+              : null;
 
     return (
-        <IntakeCard>
-            {/* Settled sections stay on screen — the conversation reads as a growing record of what
-                has been agreed, not a sequence of screens that erase each other. */}
-            {settled.length > 0 ? (
-                <div className="mb-7 flex flex-col gap-4" data-participant-settled="true">
-                    {settled.map((entry, i) => (
-                        <div key={i} className="flex flex-col gap-1.5">
-                            <Said who="alloy" settled>{entry.said}</Said>
-                            <Said who="parent" settled>{entry.answered}</Said>
-                        </div>
-                    ))}
-                </div>
-            ) : null}
-
-            {/* Alloy's opening line, spoken once and then left in the transcript above. */}
-            {intro && settled.length === 0 ? (
-                <div className="mb-5" data-participant-intro="true">
-                    <Said who="alloy">{intro}</Said>
-                </div>
-            ) : null}
-
-            {/* The current question, in the same voice as everything above it. No card, no heading
-                chrome, no step counter — one continuous conversation. */}
-            <div className="mb-5">
-                <Said who="alloy">{participantQuestion(objective)}</Said>
-                {clarification ? (
-                    // The provider's bounded clarifying question, in Alloy's voice. The turn and
-                    // its deterministic controls are UNCHANGED beneath it.
-                    <p
-                        className="pt-2 text-[16px] leading-snug text-alloy-midnight"
-                        data-participant-clarification="true"
-                    >
-                        {clarification}
-                    </p>
-                ) : null}
-                {/* The ask-once promise, said the way a specialist would say it. Slice 2.4 makes it
-                    true; a parent should hear the reassurance, not the ratio. */}
-                {turn.resolves_occurrences > 1 ? (
-                    <p className="pt-1 text-[13px] text-alloy-midnight/45">
-                        I&rsquo;ll use it everywhere it&rsquo;s needed, so you only tell me once.
-                    </p>
-                ) : null}
-            </div>
-
-            {control.kind === "choice_or_text" ? (
-                correcting ? (
-                    <ValueControl
-                        control={control.correction}
-                        busy={busy}
-                        text={text}
-                        setText={setText}
-                        onSubmit={(value, shown) => void submit({ value, settledAs: shown })}
-                    />
-                ) : (
+        <ConversationViewport
+            followSignal={`${settled.length}:${participantQuestion(objective)}:${clarification ?? ""}`}
+            progress={progress ? <ConversationProgress label={progress.label} percent={progress.percent} /> : null}
+            thread={
                 <>
-                <div className="flex flex-wrap gap-2">
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() =>
-                            void submit({ text: "yes", settledAs: displayValue(turn.proposed_value) })
-                        }
-                        className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-                    >
-                        {control.affirm}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={busy}
-                        // Correcting is a UI transition, not a turn: it reveals the typed control the
-                        // authored Form uses. No round trip, and nothing is claimed to the platform.
-                        onClick={() => setCorrecting(true)}
-                        className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight disabled:opacity-50"
-                    >
-                        {control.deny}
-                    </button>
-                </div>
-                <FreeTextReply busy={busy} interpreting={interpreting} onSend={(words) => void submit({ text: words, settledAs: words })} />
+                    {/* Alloy's opening line, spoken once and then left in the transcript above. */}
+                    {intro && settled.length === 0 ? (
+                        <ThreadTurn who="alloy" depth="recent">
+                            <ThreadSaid who="alloy" depth="recent">{intro}</ThreadSaid>
+                        </ThreadTurn>
+                    ) : null}
+
+                    {settled.map((entry, i) => (
+                        <ThreadExchange
+                            key={i}
+                            exchange={entry}
+                            depth={
+                                // The exchange in flight reads as the live one; otherwise the newest
+                                // settled exchange stays legible and everything older recedes.
+                                awaitingTurn && i === settled.length - 1
+                                    ? "current"
+                                    : i === settled.length - 1
+                                      ? "recent"
+                                      : "history"
+                            }
+                        />
+                    ))}
+
+                    {/* THE CURRENT QUESTION — the largest thing on the screen, and never rendered
+                        while its own answer is still in flight above it. */}
+                    {awaitingTurn ? null : (
+                        <ThreadTurn who="alloy" depth="current">
+                            <ThreadSaid who="alloy" depth="current">
+                                {participantQuestionSegments(objective).map((segment, i) =>
+                                    segment.emphasis ? (
+                                        <strong key={i} className="font-semibold">{segment.text}</strong>
+                                    ) : (
+                                        <span key={i}>{segment.text}</span>
+                                    ),
+                                )}
+                            </ThreadSaid>
+                            {clarification ? (
+                                // The provider's bounded clarifying question, in Alloy's voice. The
+                                // turn and its deterministic controls are UNCHANGED beneath it.
+                                <span data-participant-clarification="true">
+                                    <ThreadSupporting tone="speaking">{clarification}</ThreadSupporting>
+                                </span>
+                            ) : null}
+                            {/* The ask-once promise, said the way a specialist would say it. A
+                                parent should hear the reassurance, not the ratio. */}
+                            {turn.resolves_occurrences > 1 ? (
+                                <ThreadSupporting>
+                                    I&rsquo;ll use it everywhere it&rsquo;s needed, so you only tell me once.
+                                </ThreadSupporting>
+                            ) : null}
+                            {notice ? <ThreadSupporting>{notice}</ThreadSupporting> : null}
+                        </ThreadTurn>
+                    )}
+
+                    {interpreting ? (
+                        <ThreadTurn who="alloy" depth="current">
+                            <ThinkingAffordance />
+                        </ThreadTurn>
+                    ) : null}
                 </>
-                )
-            ) : optionalUnanswered ? (
-                <div className="flex flex-wrap gap-2" data-participant-control="optional">
-                    <button
-                        type="button"
-                        disabled={busy}
-                        // Resolves the turn outright — no redundant Continue after a binary answer.
-                        // The label IS the answer. Writing null would leave the need `missing` and
-                        // the question would come back forever; "No known allergies" is both true
-                        // and what a specialist would write on the form.
-                        onClick={() => void submit({ value: skipLabel, settledAs: skipLabel ?? "Nothing to add" })}
-                        className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[15px] font-medium text-white disabled:opacity-50"
-                    >
-                        {skipLabel}
-                    </button>
-                    <button
-                        type="button"
-                        disabled={busy}
-                        // Local: reveals the authored control for the parent who does have something
-                        // to tell us. Nothing is submitted by saying yes.
-                        onClick={() => setElaborating(true)}
-                        className="rounded-xl border border-alloy-midnight/12 px-4 py-2.5 text-[15px] font-medium text-alloy-midnight disabled:opacity-50"
-                    >
-                        {affirmLabel}
-                    </button>
-                    <div className="w-full">
-                        <FreeTextReply busy={busy} interpreting={interpreting} onSend={(words) => void submit({ text: words, settledAs: words })} />
-                    </div>
-                </div>
-            ) : (
-                <ValueControl
-                    control={control}
-                    busy={busy}
-                    text={text}
-                    setText={setText}
-                    onSubmit={(value, shown) => void submit({ value, settledAs: shown })}
-                />
-            )}
+            }
+            dock={
+                <>
+                    {/*
+                      * THE LIVE REGION, always mounted.
+                      *
+                      * A screen reader announces changes to a region that already exists; one that
+                      * appears with its own message is frequently missed. So the current question
+                      * and any notice are announced from here, and the visual thread above stays
+                      * free of duplicate assistive markup.
+                      */}
+                    <p className="sr-only" aria-live="polite" role="status">
+                        {notice ?? clarification ?? participantQuestion(objective)}
+                    </p>
+                    {typed ? (
+                        <TypedAnswer
+                            control={typed}
+                            busy={busy}
+                            text={text}
+                            setText={setText}
+                            onSubmit={(value, shown) => void submit({ value, settledAs: shown })}
+                        />
+                    ) : null}
+                    <SuggestedReplies replies={suggestions} busy={busy} controlKind={suggestionKind} />
+                    <Composer
+                        busy={busy}
+                        placeholder="Message Alloy…"
+                        focusSignal={participantQuestion(objective)}
+                        onSend={(words) => void submit({ text: words, settledAs: words })}
+                    />
+                </>
+            }
+        />
+    );
+}
 
-            <div className="mt-4 flex items-center gap-3">
-                {/* No "Saving…" — persistence is the platform's business, not a participant-facing
-                    step. Confirming resolves the section immediately and the request follows it;
-                    `inFlight` already makes a duplicate submit impossible. */}
-                {progressLine(objective) ? (
-                    <span className="text-[13px] text-alloy-midnight/40">{progressLine(objective)}</span>
-                ) : null}
-                {skipLabel && elaborating ? (
-                    <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void submit({ value: skipLabel, settledAs: skipLabel })}
-                        className="text-[13px] text-alloy-midnight/60 underline underline-offset-2 disabled:opacity-50"
-                        data-participant-skip="true"
-                    >
-                        {skipLabel}
-                    </button>
-                ) : null}
-            </div>
-
-            {notice ? (
-                <p aria-live="polite" className="mt-3 text-[13px] text-alloy-midnight/70">
-                    {notice}
-                </p>
-            ) : null}
-        </IntakeCard>
+/** One settled exchange, rendered as the two turns it was. */
+function ThreadExchange({ exchange, depth }: { exchange: Exchange; depth: ThreadDepth }): ReactNode {
+    return (
+        <>
+            <ThreadTurn who="alloy" depth={depth}>
+                <ThreadSaid who="alloy" depth={depth}>{exchange.said}</ThreadSaid>
+            </ThreadTurn>
+            <ThreadTurn who="parent" depth={depth}>
+                <ThreadSaid who="parent" depth={depth}>{exchange.answered}</ThreadSaid>
+            </ThreadTurn>
+        </>
     );
 }
 
 /**
- * The typed control for one value — the SAME component whether the parent is supplying a missing
- * fact or correcting a known one.
+ * The typed control for one value — the SAME control whether the parent is supplying a missing fact
+ * or correcting a known one.
  *
- * Every branch is driven by the AUTHORED field type. A date is a date input with the browser's own
- * date guardrails plus an explicit ISO check, so an impossible date cannot be submitted; a boolean
- * is two buttons; a closed choice is its options. There is no generic text fallback for a typed
- * field — that fallback was the defect.
+ * It sits in the dock ABOVE the composer, compact and captioned, so the conversation keeps its
+ * shape while a date of birth still gets the browser's own date guardrails plus an explicit check.
+ * Booleans and closed choices never reach here: those are suggested replies, which is what they are.
  */
-function ValueControl({
+function TypedAnswer({
     control,
     busy,
     text,
@@ -429,52 +506,13 @@ function ValueControl({
     busy: boolean;
     text: string;
     setText: (next: string) => void;
-    /** `shown` is what the settled section displays — the value as a parent reads it. */
+    /** `shown` is what the thread displays — the value as a parent reads it. */
     onSubmit: (value: unknown, shown: string) => void;
 }) {
-    if (control.kind === "boolean") {
-        return (
-            <div className="flex flex-wrap gap-2" data-participant-control="boolean">
-                <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onSubmit(true, control.affirm)}
-                    className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
-                >
-                    {control.affirm}
-                </button>
-                <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onSubmit(false, control.deny)}
-                    className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight disabled:opacity-50"
-                >
-                    {control.deny}
-                </button>
-            </div>
-        );
-    }
-
-    if (control.kind === "options") {
-        return (
-            <div className="flex flex-wrap gap-2" data-participant-control="options">
-                {control.options.map((option) => (
-                    <button
-                        key={option}
-                        type="button"
-                        disabled={busy}
-                        onClick={() => onSubmit(option, option)}
-                        className="rounded-xl border border-alloy-midnight/15 px-4 py-2.5 text-[14px] font-medium text-alloy-midnight disabled:opacity-50"
-                    >
-                        {option}
-                    </button>
-                ))}
-            </div>
-        );
-    }
+    if (control.kind === "boolean" || control.kind === "options") return null;
 
     // A date must BE a date. The input type gives the picker and the browser's own validation; the
-    // ISO check refuses anything that reaches the handler anyway, so "31 February" cannot be sent.
+    // check refuses anything that reaches the handler anyway, so "31 February" cannot be sent.
     const isDate = control.inputType === "date";
     const validDate = (raw: string) => {
         const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
@@ -486,147 +524,45 @@ function ValueControl({
     const shown = isDate ? displayValue(text) : text.trim();
 
     return (
-        <div className="flex flex-col gap-3" data-participant-control={control.inputType}>
-            <label className="text-[13px] text-alloy-midnight/60" htmlFor="enrollment-turn-value">
-                {control.label}
-            </label>
-            {control.multiline ? (
-                <textarea
-                    id="enrollment-turn-value"
-                    value={text}
-                    disabled={busy}
-                    rows={3}
-                    onChange={(e) => setText(e.target.value)}
-                    className="rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[14px]"
-                />
-            ) : (
-                <input
-                    id="enrollment-turn-value"
-                    type={control.inputType}
-                    value={text}
-                    disabled={busy}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && ready) onSubmit(text.trim(), shown);
-                    }}
-                    className="rounded-xl border border-alloy-midnight/15 px-3 py-2.5 text-[14px]"
-                />
-            )}
-            <div>
-                <button
-                    type="button"
-                    disabled={busy || !ready}
-                    onClick={() => onSubmit(text.trim(), shown)}
-                    className="rounded-xl bg-alloy-midnight px-4 py-2.5 text-[14px] font-medium text-white disabled:opacity-50"
+        <div className="mb-2.5 flex flex-wrap items-end gap-2" data-participant-control={control.inputType}>
+            <div className="flex min-w-[160px] flex-col gap-1">
+                <label
+                    className="text-[11px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40"
+                    htmlFor="enrollment-turn-value"
                 >
-                    Continue
-                </button>
+                    {control.label}
+                </label>
+                {control.multiline ? (
+                    <textarea
+                        id="enrollment-turn-value"
+                        value={text}
+                        disabled={busy}
+                        rows={2}
+                        onChange={(e) => setText(e.target.value)}
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-alloy-juniper/45"
+                    />
+                ) : (
+                    <input
+                        id="enrollment-turn-value"
+                        type={control.inputType}
+                        value={text}
+                        disabled={busy}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && ready) onSubmit(text.trim(), shown);
+                        }}
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[16px] text-alloy-midnight outline-none focus:border-alloy-juniper/45"
+                    />
+                )}
             </div>
-        </div>
-    );
-}
-
-/**
- * "Or just reply" — the participant's words, sent as WORDS.
- *
- * The server interprets deterministically first ("Yep" settles with no provider), and only where
- * that cannot read the answer does governed interpretation run — which is why the thinking state
- * appears here and only while a free-text reply is actually in flight. The buttons above remain
- * the shortcuts; this is the conversational path beside them, never a replacement.
- */
-function FreeTextReply({
-    busy,
-    interpreting,
-    onSend,
-}: {
-    busy: boolean;
-    interpreting: boolean;
-    onSend: (words: string) => void;
-}) {
-    const [words, setWords] = useState("");
-    const ready = words.trim().length > 0;
-    return (
-        <div className="mt-3" data-participant-freetext="true">
-            <div className="flex items-center gap-2">
-                <input
-                    type="text"
-                    value={words}
-                    disabled={busy}
-                    placeholder="Or just reply here…"
-                    onChange={(e) => setWords(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === "Enter" && ready && !busy) {
-                            onSend(words.trim());
-                            setWords("");
-                        }
-                    }}
-                    className="w-full max-w-[380px] rounded-xl border border-alloy-midnight/12 px-3 py-2 text-[14px] placeholder:text-alloy-midnight/35"
-                />
-                <button
-                    type="button"
-                    disabled={busy || !ready}
-                    onClick={() => {
-                        onSend(words.trim());
-                        setWords("");
-                    }}
-                    className="rounded-xl border border-alloy-midnight/15 px-3 py-2 text-[14px] font-medium text-alloy-midnight disabled:opacity-40"
-                >
-                    Send
-                </button>
-            </div>
-            {interpreting ? (
-                <p className="animate-pulse pt-2 text-[13px] text-alloy-midnight/45" data-participant-thinking="true">
-                    Thinking…
-                </p>
-            ) : null}
-        </div>
-    );
-}
-
-/**
- * One line of the conversation.
- *
- * Alloy speaks in the primary voice; the parent's own answers are echoed back quietly beside them.
- * Deliberately NOT chat bubbles — a parent at an office table is not messaging an app, they are
- * being helped through paperwork. Two weights and an alignment carry the whole distinction.
- *
- * The transcript is DERIVED. Durable truth is the runtime's need state; this is what has been said
- * about it in this sitting, held locally and rebuilt from nothing on reload.
- */
-function Said({
-    who,
-    settled = false,
-    children,
-}: {
-    who: "alloy" | "parent";
-    /** A turn that has been answered recedes; the current question owns the eye. */
-    settled?: boolean;
-    children: ReactNode;
-}) {
-    if (who === "parent") {
-        return (
-            <p
-                className={
-                    settled
-                        ? "pl-4 text-[14px] font-medium text-alloy-bend-pine/85"
-                        : "pl-4 text-[15px] font-medium text-alloy-bend-pine"
-                }
-                data-said="parent"
+            <button
+                type="button"
+                disabled={busy || !ready}
+                onClick={() => onSubmit(text.trim(), shown)}
+                className="min-h-[44px] rounded-xl bg-alloy-midnight px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper disabled:opacity-40"
             >
-                {children}
-            </p>
-        );
-    }
-    return (
-        <p
-            className={
-                settled
-                    ? "text-[14px] leading-relaxed text-alloy-midnight/45"
-                    : "text-[19px] font-medium leading-snug text-alloy-midnight"
-            }
-            data-said="alloy"
-        >
-            {children}
-        </p>
+                Use this
+            </button>
+        </div>
     );
 }
