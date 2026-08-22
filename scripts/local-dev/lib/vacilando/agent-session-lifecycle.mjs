@@ -50,6 +50,7 @@ import {
   getDurableLane,
   isRuntimeAdoptionBlocked,
   listDurableLanes,
+  setLanePreferredProvider,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
@@ -1202,6 +1203,32 @@ function occupyingLaneSummaries(cap, root) {
   });
 }
 
+function supersedeObservationOnlyCursorSession(lane, rec, { nowMs, root }) {
+  const existing = activeAgentSessionForLane(rec.lane_id, root);
+  if (!existing || existing.provider !== "cursor") return existing;
+  if (cursorExecutableTransport(lane).ok) return existing;
+  endAgentSession(existing.agent_session_id, {
+    reason: "observation_only_superseded",
+    nowMs,
+    root,
+  });
+  return null;
+}
+
+function bindClaudeExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "claude",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
+  } catch { /* preferred already Claude is fine */ }
+  return out;
+}
+
 async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
   const found = await observeLane(laneId);
   if (!found) return { ok: false, error: "lane_not_found" };
@@ -1288,6 +1315,8 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     };
   }
 
+  supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
+
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
       return { ok: false, error: "duplicate_claude" };
@@ -1310,9 +1339,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     });
     if (!created.ok) return created;
     sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    bindClaudeExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
     };
@@ -1389,8 +1424,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
       };
     }
     createdRuntime = started;
-    bindDurableLane(rec.lane_id, {
-      ...rec.binding,
+    bindClaudeExecutable(rec, {
       tmux_session: started.tmux_session,
       tmux_pane: started.pane_id,
       worktree_path: boundPath,
@@ -1424,6 +1458,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
       tmux_session: createdRuntime.tmux_session,
@@ -1491,6 +1526,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     ok: true,
     started: true,
     status: "starting",
+    provider: "claude",
     agent_session_id: created.session.agent_session_id,
     tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
     start_session_implemented: true,

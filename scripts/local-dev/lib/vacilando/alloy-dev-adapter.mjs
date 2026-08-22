@@ -526,6 +526,19 @@ export async function startPersistentAgentSession({
   if (sessionExists(session)) {
     const pane = sessionPane(session);
     if (pane?.cwd && pane.cwd !== cwd && pane.cwd !== `${cwd}`) {
+      if (existingTmuxSession) {
+        return { ok: false, error: "tmux_cwd_mismatch", tmux_session: session, cwd: pane.cwd };
+      }
+      const fallback = tmuxSessionNameForLane(null, worktreeName);
+      if (!fallback || fallback === session) {
+        return { ok: false, error: "tmux_cwd_mismatch", tmux_session: session, cwd: pane.cwd };
+      }
+      session = fallback;
+    }
+  }
+  if (sessionExists(session)) {
+    const pane = sessionPane(session);
+    if (pane?.cwd && pane.cwd !== cwd && pane.cwd !== `${cwd}`) {
       return { ok: false, error: "tmux_cwd_mismatch", tmux_session: session, cwd: pane.cwd };
     }
   } else {

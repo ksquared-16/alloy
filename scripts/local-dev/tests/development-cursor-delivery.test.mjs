@@ -40,7 +40,13 @@ writeFileSync(join(ROOT, "metadata", "wt5-vacilando-gateway-v2.env"), [
 
 const { ensureVacilandoSpecialistLane, resetDevelopmentLanesForTests, getDurableLane, setLanePreferredProvider } = await import("../lib/vacilando/development-lane.mjs");
 const { cmdAttachCursorSession } = await import("../lib/vacilando/commands/node-ops.mjs");
-const { resetAgentSessionsForTests } = await import("../lib/vacilando/agent-session.mjs");
+const { resetAgentSessionsForTests, activeAgentSessionForLane, listAgentSessionsForLane } = await import("../lib/vacilando/agent-session.mjs");
+const {
+  startLaneAgentSession,
+  setAgentSessionLifecycleImplForTests,
+  resetAgentSessionLifecycleForTests,
+} = await import("../lib/vacilando/agent-session-lifecycle.mjs");
+const { setAlloyAdapterImplForTests, resetAlloyAdapterImplForTests } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
 const { deliverManagedLaneInstruction } = await import("../lib/vacilando/execution-run-send.mjs");
 const { CURSOR_DELIVERY_UNAVAILABLE } = await import("../lib/vacilando/lanes.mjs");
 const {
@@ -173,6 +179,72 @@ await test("governor fails EXECUTING without delivery ack after timeout; Claude 
   assert.equal(late.count, 1);
   assert.equal(getExecutionRun(created.run.run_id, ROOT).state, "FAILED");
   assert.equal(getExecutionRun(created.run.run_id, ROOT).state_reason, "delivery_unacknowledged");
+});
+
+await test("preferred Claude start supersedes observation-only Cursor and binds Claude", async () => {
+  resetDevelopmentLanesForTests(ROOT);
+  resetAgentSessionsForTests(ROOT);
+  resetExecutionRunsForTests(ROOT);
+  resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  setAlloyAdapterImplForTests({ listPanes: () => [] });
+  const vac = ensureVacilandoSpecialistLane({ root: ROOT });
+  const bound = cmdAttachCursorSession({
+    laneId: vac.lane.lane_id,
+    worktree: "wt5-vacilando-gateway-v2",
+    providerSessionId: "de15219d-59f5-4841-9182-05b2687a72a6",
+    root: ROOT,
+  });
+  assert.equal(bound.ok, true, bound.error);
+  const cursorSess = activeAgentSessionForLane(vac.lane.lane_id, ROOT);
+  assert.equal(cursorSess.provider, "cursor");
+  setLanePreferredProvider(vac.lane.lane_id, "claude", { root: ROOT });
+  let observed = 0;
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => {
+      observed += 1;
+      const base = {
+        lane_id: vac.lane.lane_id,
+        durable: true,
+        worktree: { path: WT, managed: true, name: "wt5-vacilando-gateway-v2" },
+        binding: getDurableLane(vac.lane.lane_id, ROOT).binding,
+        preferred_provider: "claude",
+      };
+      if (observed === 1) {
+        return { ...base, tmux: { alive: false, session: null }, claude: { presence: "absent" } };
+      }
+      return {
+        ...base,
+        tmux: { alive: true, session: "alloy-vacilando", pane_id: "%99", cwd: WT, command: "claude" },
+        claude: { presence: "present" },
+      };
+    },
+    startRuntime: async () => ({
+      ok: true,
+      tmux_session: "alloy-vacilando",
+      pane_id: "%99",
+      cwd: WT,
+      created: { tmux: true, provider: true },
+    }),
+    spawnClaude: async () => {
+      throw new Error("spawnClaude must not run after startRuntime created the provider");
+    },
+  });
+  const start = await startLaneAgentSession({ laneId: vac.lane.lane_id, root: ROOT, origin: "operator" });
+  assert.equal(start.ok, true, start.error);
+  assert.equal(start.provider, "claude");
+  const rec = getDurableLane(vac.lane.lane_id, ROOT);
+  assert.equal(rec.binding.provider, "claude");
+  assert.equal(rec.preferred_provider, "claude");
+  assert.equal(rec.binding.tmux_session, "alloy-vacilando");
+  assert.equal(rec.binding.worktree_path, WT);
+  const live = activeAgentSessionForLane(vac.lane.lane_id, ROOT);
+  assert.equal(live.provider, "claude");
+  assert.notEqual(live.agent_session_id, cursorSess.agent_session_id);
+  const ended = listAgentSessionsForLane(vac.lane.lane_id, ROOT).find((s) => s.agent_session_id === cursorSess.agent_session_id);
+  assert.equal(ended.state, "ENDED");
+  assert.equal(ended.end_reason, "observation_only_superseded");
+  assert.equal(ended.provider_session_id, "de15219d-59f5-4841-9182-05b2687a72a6");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
