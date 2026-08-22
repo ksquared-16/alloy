@@ -553,8 +553,8 @@ TTL — that is the precise remaining work, not a mystery.
 | Workspace | T1/T2 immediate | ✓ | ✓ | ✓ | six-answer readiness payload (measured, deferred) | **yes** |
 | Work Unit | premium, prepared | ✓ rows+totals converge | ✓ | ✓ | — | **yes** |
 | Focus Panel Summary | premium | ✓ identity converges | ✓ | ✓ | Assignments card reads record patch late | **yes** |
-| Activity | shell premium | ✓ | ✓ | ✓ | cascade/timeline not re-measured this wave | partial |
-| Operations | T1 109 ms · T3 119 ms | ✓ targeted day/lens | ✓ | ✓ fixed (staff, children) | **reopen refetches 6/7**; `data-comms-tab` naming debt | partial |
+| Activity | first meaningful **401 ms** | ✓ | ✓ | ✓ identities duplicate fixed | timeline initial read 100 events / 61 KB, needs a demand-driven path before bounding | **yes** |
+| Operations | T1 109 ms · T3 119 ms | ✓ targeted day/lens | ✓ | ✓ fixed (staff, children) | `data-comms-tab` naming debt only | **yes** |
 | Processing | certified prior | ✓ | ✓ | ✓ | — | **yes** |
 | Work Items | ✓ | ✓ | ✓ | ✓ | Assigned vs Mine vocabulary | **yes** |
 | Communications | open 29→15, reopen 27→14 | ✓ | ✓ | ✓ one owner incl. warm cache | 3 unrelated resources still ×2 | **yes** |
@@ -579,6 +579,55 @@ key and reported `false`), the override IS present and IS spliced into the sort 
 Real classification: **C — a higher-precedence rule legitimately wins.** Tuple element 0 is the cohort
 label compared as a string, and PassA's un-normalised `"infant"` sorts before
 `"infant — 0–18 months"`. Reconciling PassA removes the anomaly. The pin itself works.
+
+## 5m. Activity cascade, timeline boundary, and the Operations reopen retraction
+
+### Operations reopen — RETRACTED, the behaviour is correct
+
+| step | requests |
+|---|---|
+| first open | 7 |
+| reopen (immediate) | **0** |
+| second reopen | **0** |
+| reopen after >30 s | 6 (the operating-day class only) |
+
+All six are **VALID FRESHNESS REFRESH**, not unnecessary cold reload: `roster`, `roster?date`,
+`scheduling?view=roster`, `?view=assignment_roster` and the two adjacent `week_of` reads belong to
+`dayCache` (staleMs 30 s). `scheduling?view=sites` belongs to `referenceCache` (5 min) and is reused
+across all reopens. `warm()` returns cached data without fetching inside the window, so nothing is
+bypassing the owner.
+
+I reported "reopen refetches 6/7" twice. It was my probe: ~56 s of intermediate steps ran before the
+"tight" reopen, so the 30 s entries were legitimately stale. **Operations is certified.**
+
+### Activity cascade (Priority 2) — does not compete
+
+Activity click → **first meaningful content 401 ms**, and only three requests follow:
+
+| request | classification |
+|---|---|
+| `communications/family-workspace` (no thread_id) | REQUIRED FOR CURRENT FOCUS PANEL — the composer surface sharing the panel |
+| `communications/family-workspace?thread_id=…` | SECONDARY — one thread's workspace |
+| `communications/identities?channel=email` | was **DUPLICATE** ×2 → **fixed**, now ×1 (3.1 → 1.5 KB) |
+
+No Activity request is blocked by Communications: first meaningful content lands at 401 ms while the
+72 KB of family-workspace enrichment runs alongside it. The two family-workspace calls carry
+different query shapes, so they are two scopes, not a duplicate.
+
+### Timeline (Priority 3) — half the finding is stale, half is justified
+
+**Fetched ONCE, not twice.** `/api/admin/activity?…&limit=100` — a single request on record open, and
+**zero on subject switch** (warm). The second consumer (`OpportunityDrawerVmTabPanes`) reads the
+prefetched snapshot rather than refetching, so ownership is already correct.
+
+The payload is real: **100 events, 61.1 KB**, for a ribbon rendering ~3.
+
+**Deliberately NOT reduced.** There is no pagination or offset for activity anywhere, and
+"View all activity" only switches panel mode — it issues no deeper read. Lowering the initial limit
+would therefore make events 26–100 **unreachable**: a functional regression disguised as an
+optimisation. Bounding this read requires a demand-driven "load older" path to exist first, which is a
+product change beyond a convergence wave — and the interaction is already premium at 401 ms, which the
+instruction explicitly says not to optimise for its own sake. Carried as an explicit, sized item.
 
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
