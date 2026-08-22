@@ -1,5 +1,9 @@
 "use client";
 
+import {
+    bustCommunicationsTemplatesFetchDedupe,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -188,6 +192,9 @@ function buildSampleContext(): Record<string, unknown> {
     return ctx;
 }
 
+/** Coalesces the open-time race only; every mutation busts it before the next read. */
+const LIST_DEDUPE_TTL_MS = 10_000;
+
 export default function TemplatesWorkspace() {
     const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [templates, setTemplates] = useState<TemplateRow[]>(initialTemplatesFromWarm);
@@ -256,7 +263,16 @@ export default function TemplatesWorkspace() {
         if (statusFilter) params.set("status", statusFilter);
         const qs = params.toString();
         try {
-            const res = await fetch(`${TEMPLATES_API}${qs ? `?${qs}` : ""}`, { credentials: "include" });
+            /*
+             * Bounded in-flight reuse is safe here ONLY because every mutation below busts this
+             * owner first (law: a mutable list may use dedupe only when its mutations invalidate it).
+             * Measured before this: the identical templates URL ×3 on open and ×4 on reopen.
+             */
+            const res = await dedupeAdminFetchWithTtl(
+                `${TEMPLATES_API}${qs ? `?${qs}` : ""}`,
+                { credentials: "include" },
+                LIST_DEDUPE_TTL_MS,
+            );
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to load templates");
             setTemplates(Array.isArray(json.templates) ? (json.templates as TemplateRow[]) : []);
@@ -451,6 +467,7 @@ export default function TemplatesWorkspace() {
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to save template");
             const savedId = String((json.template as TemplateRow).id);
+            bustCommunicationsTemplatesFetchDedupe();
             await loadList();
             await selectTemplate(savedId);
         } catch (e) {
@@ -501,6 +518,7 @@ export default function TemplatesWorkspace() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to archive template");
+            bustCommunicationsTemplatesFetchDedupe();
             await loadList();
             await selectTemplate(selectedId);
         } catch (e) {
@@ -549,7 +567,8 @@ export default function TemplatesWorkspace() {
                 }
             }
             if (errors.length) {
-                await loadList();
+                bustCommunicationsTemplatesFetchDedupe();
+            await loadList();
                 throw new Error(errors[0]);
             }
         },

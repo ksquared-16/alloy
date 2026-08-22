@@ -43,7 +43,10 @@ import {
     CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
-import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    bustCommunicationsAnnouncementsFetchDedupe,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
 import {
     getCommunicationsWarmActiveTemplates,
     getCommunicationsWarmAnnouncements,
@@ -200,8 +203,9 @@ function initialActiveTemplatesFromWarm(): TemplateOption[] {
  * in-flight request. The warm contract is unchanged, no cache is added, and freshness is unchanged
  * beyond a few seconds of coalescing.
  *
- * Deliberately NOT applied to the announcements list or the templates list: this workspace mutates
- * those, and reloading them after a save must never be served from a TTL cache.
+ * The MUTABLE lists (announcements here, templates in TemplatesWorkspace) also use this owner now,
+ * but only because every canonical mutation busts it first — dedupe coalesces the open-time race, it
+ * never becomes the freshness owner for data the surface itself writes.
  */
 const REFERENCE_TTL_MS = 15_000;
 
@@ -339,7 +343,11 @@ export default function AnnouncementsWorkspace() {
             setError(null);
         }
         try {
-            const res = await fetch(ANNOUNCEMENTS_API, { credentials: "include" });
+            /*
+             * Same contract as the templates list: bounded reuse is safe because every mutation
+             * below busts this owner before the reload it triggers.
+             */
+            const res = await dedupeAdminFetchWithTtl(ANNOUNCEMENTS_API, { credentials: "include" }, REFERENCE_TTL_MS);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to load announcements");
             setList(Array.isArray(json.announcements) ? (json.announcements as AnnouncementRow[]) : []);
@@ -626,6 +634,7 @@ export default function AnnouncementsWorkspace() {
                 throw new Error(typeof tJson.error === "string" ? tJson.error : "Failed to save audience");
             }
 
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             if (id) await selectAnnouncement(id);
         } catch (e) {
@@ -649,6 +658,7 @@ export default function AnnouncementsWorkspace() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to schedule");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {
@@ -666,6 +676,7 @@ export default function AnnouncementsWorkspace() {
             const res = await fetch(`${ANNOUNCEMENTS_API}/${selectedId}/cancel`, { method: "POST", credentials: "include" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to cancel");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {
@@ -683,6 +694,7 @@ export default function AnnouncementsWorkspace() {
             const res = await fetch(`${ANNOUNCEMENTS_API}/${selectedId}/archive`, { method: "POST", credentials: "include" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to archive announcement");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {
