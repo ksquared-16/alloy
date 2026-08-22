@@ -46,6 +46,12 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     // refetch rows AND counts rather than patching a row that may not be on screen at all.
     "child.add",
     "enrollment.start",
+    // A child RENAME changes row LABELS wherever that child is drawn — the queue row, the
+    // Assignments card, Operations — and this set is explicitly "membership, sort order, OR ROW
+    // LABELS/COUNTS". Proven live: without it the identity signal fired, totals re-resolved, and the
+    // Assignments card next to the edited card kept the old name, because the mutated opportunity is
+    // not the visible row's entity id and nothing else made the event actionable.
+    "inquiry_child_identity",
 ]);
 
 /**

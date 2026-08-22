@@ -62,6 +62,36 @@ export function bustCommunicationsBindingsFetchDedupe(): void {
     }
 }
 
+/**
+ * Bust the coalesced / TTL cache for the Communications TEMPLATES list after any template mutation.
+ *
+ * The templates list is MUTABLE, so it may only use bounded/in-flight reuse if every canonical
+ * mutation busts this owner before the next read. Without that a create/edit/archive would be
+ * followed by a reload served from the TTL entry, and the operator would not see their own save —
+ * the same failure `bustCommunicationsBindingsFetchDedupe` exists to prevent, one resource over.
+ *
+ * The substring match deliberately covers `?status=active` too: Announcements reads that projection
+ * as its template picker, so a template mutation must invalidate it as well.
+ */
+export function bustCommunicationsTemplatesFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/templates")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/templates")) inflight.delete(key);
+    }
+}
+
+/** Bust the coalesced / TTL cache for the Communications ANNOUNCEMENTS list after any mutation. */
+export function bustCommunicationsAnnouncementsFetchDedupe(): void {
+    for (const key of shortCache.keys()) {
+        if (key.includes("/api/admin/communications/announcements")) shortCache.delete(key);
+    }
+    for (const key of inflight.keys()) {
+        if (key.includes("/api/admin/communications/announcements")) inflight.delete(key);
+    }
+}
+
 /** Test-only — clears in-flight and TTL caches between vitest cases. */
 export function resetWorkspaceAdminFetchDedupeForTests(): void {
     inflight.clear();

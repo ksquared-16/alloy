@@ -13,6 +13,7 @@
  * field. Absence is reported as absence; nothing is substituted.
  */
 
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { useEffect, useState } from "react";
 
 import {
@@ -43,9 +44,17 @@ export function useOrgSendingIdentity(enabled: boolean): OrgSendingIdentityState
         setLoading(true);
         void (async () => {
             try {
-                const res = await fetch("/api/admin/communications/identities?channel=email", {
-                    credentials: "include",
-                });
+                /*
+                 * The org's sending identity is stable org configuration, but this hook fetched it
+                 * per consumer — so every mounted composer issued the same request. Measured on an
+                 * Activity click: the identical URL twice, purely because two composers were mounted.
+                 * Through the canonical dedupe owner they join one request (law 43).
+                 */
+                const res = await dedupeAdminFetchWithTtl(
+                    "/api/admin/communications/identities?channel=email",
+                    { credentials: "include" },
+                    30_000,
+                );
                 if (!res.ok) return;
                 const json = (await res.json()) as IdentityPayload;
                 const row = json.default_identity ?? null;

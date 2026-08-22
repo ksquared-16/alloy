@@ -1,3 +1,4 @@
+import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { NextRequest, NextResponse } from "next/server";
 
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -100,6 +101,14 @@ function emptyPage(cohort: string) {
     });
 }
 
+type PersonIdentityRow = {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    full_name: string | null;
+    date_of_birth: string | null;
+};
+
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
@@ -201,8 +210,9 @@ export async function GET(request: NextRequest) {
 
         const householdIds = [...new Set(rows.map((r) => r.customer_id).filter(Boolean))] as string[];
         const memberIds = rows.map((r) => r.id);
+        const childPersonIds = [...new Set(rows.map((r) => r.person_id).filter(Boolean))] as string[];
 
-        const [householdsRes, participationRes, placementsRes, agreementsRes] = await Promise.all([
+        const [householdsRes, participationRes, placementsRes, agreementsRes, personsRes] = await Promise.all([
             householdIds.length > 0
                 ? supabase.from("customers").select("id, name").eq("org_id", ctx.orgId).in("id", householdIds)
                 : Promise.resolve({ data: [] as { id: string; name: string | null }[] }),
@@ -229,7 +239,25 @@ export async function GET(request: NextRequest) {
                 .select("customer_member_id, status")
                 .eq("org_id", ctx.orgId)
                 .in("customer_member_id", memberIds),
+            /*
+             * LAW 34 — `persons` owns identity for a person-backed child. The note above is right that
+             * a projection KEYED on persons would empty this surface, because `person_id` is nullable
+             * and most children have none; that is why this is a LEFT-JOIN-shaped enrichment and the
+             * member row remains the fallback. What it may not do is let the member mirror outrank a
+             * Person that exists — that made `customer_members` a second writable identity authority.
+             */
+            childPersonIds.length > 0
+                ? supabase
+                      .from("persons")
+                      .select("id, first_name, last_name, full_name, date_of_birth")
+                      .eq("org_id", ctx.orgId)
+                      .in("id", childPersonIds)
+                : Promise.resolve({ data: [] as PersonIdentityRow[] }),
         ]);
+
+        const personById = new Map(
+            ((personsRes.data ?? []) as PersonIdentityRow[]).map((p) => [p.id, p]),
+        );
 
         const householdNameById = new Map(
             ((householdsRes.data ?? []) as { id: string; name: string | null }[]).map((h) => [h.id, h.name])
@@ -318,9 +346,16 @@ export async function GET(request: NextRequest) {
                 customerMemberId: r.id,
                 personId: r.person_id,
                 displayName:
-                    (r.display_name ?? "").trim() ||
-                    [r.first_name, r.last_name].filter(Boolean).join(" ").trim() ||
-                    "Child",
+                    resolveInquiryChildIdentityFields({
+                        personId: r.person_id,
+                        person: r.person_id ? (personById.get(r.person_id) ?? null) : null,
+                        member: {
+                            first_name: r.first_name,
+                            last_name: r.last_name,
+                            display_name: r.display_name,
+                            dob: r.dob,
+                        },
+                    }).display_name || "Child",
                 dateOfBirth: r.dob,
                 householdId: r.customer_id,
                 householdName: r.customer_id ? (householdNameById.get(r.customer_id) ?? null) : null,

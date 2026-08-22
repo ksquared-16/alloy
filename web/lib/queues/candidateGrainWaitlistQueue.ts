@@ -724,7 +724,25 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
                         bucket: TIER_GENERAL_WAITLIST_BUCKET,
                         sort_tuple: [] as Array<string | number | null>,
                         link_mode: b.link_mode,
-                        active_override_kinds: [] as string[],
+                        /*
+                         * ── AN OPERATOR'S PIN MUST AT LEAST BE VISIBLE ──
+                         *
+                         * This was hardcoded `[]`, so `rowHasManualPinOverride` could only ever return
+                         * false on the child-grain waitlist — which is why a stored pin was neither
+                         * applied NOR explained: `runtime_position_precedence_note` ("Ranked below
+                         * manually adjusted row(s)") was unreachable by construction. Measured live:
+                         * Wrigley pinned to ordinal 1, rendering at 2/12, precedenceNote `none`.
+                         *
+                         * The bundle has carried this all along. Carrying it through changes NO
+                         * ordering — `sort_tuple` on this projection stays empty, so nothing is
+                         * re-sorted — it only lets the surface say that a manual adjustment is in play.
+                         *
+                         * The pin's ordering EFFECT still requires the evaluated projection (this path
+                         * emits an empty sort tuple, so there is no tuple for a manual precedence to be
+                         * spliced into). That is a deliberate placement-behaviour change and is carried
+                         * as the remaining half of law 36.
+                         */
+                        active_override_kinds: b.active_overrides.map((o) => o.override_kind),
                         is_synthetic_fallback: b.candidate.is_synthetic_fallback === true,
                         wait_since: b.candidate.wait_since,
                     })),

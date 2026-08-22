@@ -331,25 +331,41 @@ export async function summarizeOperationalTaskCounts(params: {
     | { ok: true; open: number; due_soon: number; overdue: number }
     | { ok: false; error: string; message: string }
 > {
-    const listed = await listOperationalTasksForWorkspace({
-        supabase: params.supabase,
-        orgId: params.orgId,
-        userId: "",
-        filter: "open",
-        limit: 200,
-    });
-    if (!listed.ok) return listed;
-    const now = Date.now();
-    const soonCutoff = now + 24 * 60 * 60 * 1000;
-    let due_soon = 0;
-    let overdue = 0;
-    for (const r of listed.rows) {
-        const t = Date.parse(r.due_at);
-        if (Number.isNaN(t)) continue;
-        if (t < now) overdue += 1;
-        else if (t <= soonCutoff) due_soon += 1;
+    /*
+     * COUNTED IN THE DATABASE, NOT OVER A PAGE.
+     *
+     * These counts were derived by listing open tasks with `limit: 200` and measuring the array. That
+     * makes 200 the silent ceiling of `open`, and makes `overdue` / `due_soon` counts of whatever
+     * happened to fit on that page ordered by due date — so an org with more than 200 open work items
+     * would be told a number that is wrong and looks plausible. A badge is a denominator claim; it has
+     * to be counted, not sampled.
+     */
+    const now = new Date();
+    const soonCutoff = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const base = () =>
+        params.supabase
+            .from("operational_tasks")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", params.orgId)
+            .eq("status", "open");
+
+    const [openRes, overdueRes, dueSoonRes] = await Promise.all([
+        base(),
+        base().lt("due_at", now.toISOString()),
+        base().gte("due_at", now.toISOString()).lte("due_at", soonCutoff.toISOString()),
+    ]);
+
+    const failed = [openRes, overdueRes, dueSoonRes].find((r) => r.error);
+    if (failed?.error) {
+        return { ok: false, error: "DB_COUNT_FAILED", message: failed.error.message };
     }
-    return { ok: true, open: listed.rows.length, due_soon, overdue };
+
+    return {
+        ok: true,
+        open: openRes.count ?? 0,
+        due_soon: dueSoonRes.count ?? 0,
+        overdue: overdueRes.count ?? 0,
+    };
 }
 
 export async function getOperationalTaskById(params: {

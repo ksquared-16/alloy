@@ -375,10 +375,25 @@ function ProgramsPublicationObjectWorkspace(props: {
     }, [orgId, reload]);
 
     // Retained Continuity restore → replace-sync URL (no history loop).
+    //
+    // A `router.replace` to the address already displayed is not a no-op: the App Router still issues
+    // an RSC round trip for it. That is what made a program save look like it bought its freshness with
+    // a route refresh — the freshness actually comes from the configuration invalidation below, and the
+    // RSC was this sync re-asserting a URL that had not changed. Syncing only a DIFFERENT href keeps
+    // the Continuity restore behaviour and removes the round trip.
     useEffect(() => {
         if (!shouldSyncRoute || !selectedProgramId) return;
+        const nextHref = organizationProgramsHref(selectedProgramId, activeSection);
+        const currentHref =
+            typeof window === "undefined"
+                ? null
+                : `${window.location.pathname}${window.location.search}`;
+        if (currentHref === nextHref) {
+            setShouldSyncRoute(false);
+            return;
+        }
         skipHistorySyncRef.current = true;
-        router.replace(organizationProgramsHref(selectedProgramId, activeSection), { scroll: false });
+        router.replace(nextHref, { scroll: false });
         setShouldSyncRoute(false);
     }, [activeSection, router, selectedProgramId, shouldSyncRoute]);
 

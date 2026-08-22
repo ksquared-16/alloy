@@ -99,7 +99,18 @@ export default function RecordsStaffSection({
     const load = useCallback(async () => {
         setError(null);
         try {
-            const res = await fetch("/api/admin/staff/directory?include_ended=true");
+            /*
+             * Through the canonical dedupe owner this file already imports, not a raw fetch.
+             * The staff directory has no warm owner of its own, so every remount re-issued it — and
+             * because the deduped/warm loaders around it absorb React's double-invoke while this one
+             * did not, Operations' Staff tab was the only place the second request showed through.
+             * Measured on the Operations Staff tab: the identical URL twice.
+             */
+            const res = await dedupeAdminFetchWithTtl(
+                "/api/admin/staff/directory?include_ended=true",
+                { credentials: "include" },
+                15_000,
+            );
             const json = (await res.json()) as { staff?: StaffEntry[]; error?: string };
             if (!res.ok) throw new Error(json.error ?? "Could not load staff");
             setStaff(json.staff ?? []);
