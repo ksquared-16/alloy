@@ -16,6 +16,7 @@ import {
   SCM_POLICY,
   attachLaneSourceControl,
   deriveSourceControlPosture,
+  laneNeedsGitSync,
   maybeCreateCheckpoint,
   maybeSyncFromBase,
   resetSourceControlForTests,
@@ -193,6 +194,29 @@ await test("resource wait dirty without explicit ready is not committed", async 
   const out = await maybeCreateCheckpoint({ laneId: rec.lane_id, root: ROOT });
   assert.equal(out.error, "checkpoint_not_explicit");
   assert.equal(commits, 0);
+});
+
+await test("Git merge/ancestry: active diverged, clean active, completed merged, stale worktree, unknown", () => {
+  assert.equal(deriveSourceControlPosture({ git: { state: "clean", ahead: 2, behind: 88 } }).posture, "SYNC_REQUIRED");
+  assert.equal(deriveSourceControlPosture({ git: { state: "clean", ahead: 0, behind: 0 } }).posture, "CURRENT");
+  assert.equal(deriveSourceControlPosture({
+    git: { state: "clean", ahead: 0, behind: 88, head_in_base: true },
+    lane: { previous_run: { state: "COMPLETE" }, execution_run: null },
+  }).posture, "MERGED");
+  assert.equal(deriveSourceControlPosture({
+    git: { state: "clean", ahead: 0, behind: 204 },
+    lane: { previous_run: { state: "COMPLETE" }, execution_run: null, agent_session: { state: "IDLE" } },
+  }).posture, "MERGED");
+  assert.equal(deriveSourceControlPosture({ git: { state: "unknown" } }).posture, "UNKNOWN");
+  assert.equal(laneNeedsGitSync({ execution_run: { state: "EXECUTING" } }), true);
+  assert.equal(laneNeedsGitSync({ previous_run: { state: "COMPLETE" } }), false);
+  const attached = attachLaneSourceControl([{
+    lane_id: "lane_bbbbbbbbbbbb",
+    git: { state: "clean", ahead: 0, behind: 88, head_in_base: true, branch: "agent/old" },
+    previous_run: { state: "COMPLETE" },
+  }], ROOT);
+  assert.equal(attached[0].source_control.posture, "MERGED");
+  assert.equal(attached[0].source_control.scheduled_sync, false);
 });
 
 rmSync(ROOT, { recursive: true, force: true });

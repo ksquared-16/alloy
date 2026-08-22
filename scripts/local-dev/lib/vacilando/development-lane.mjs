@@ -420,6 +420,19 @@ export function renameDurableLane(laneId, name, { nowMs = Date.now(), root = run
   return { ok: true, lane: rec, previous_name: previous, substrate_mutated: false };
 }
 
+export function setLanePreferredProvider(laneId, provider, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const next = normalizeExecutionProvider(provider, "");
+  if (!next) return { ok: false, error: "unsupported_provider" };
+  rec.preferred_provider = next;
+  rec.updated_at = iso(nowMs);
+  const store = readDevelopmentLaneStore(root);
+  store.lanes[rec.lane_id] = rec;
+  writeStore(store, root);
+  return { ok: true, lane: rec };
+}
+
 export function setDurableLaneExecutionCapacity(laneId, capacity, { nowMs = Date.now(), root = runtimeRoot() } = {}) {
   const rec = getDurableLane(laneId, root);
   if (!rec) return { ok: false, error: "lane_not_found" };

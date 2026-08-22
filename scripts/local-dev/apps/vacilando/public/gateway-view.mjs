@@ -10,6 +10,16 @@ export const OUTPUT_BURST_WINDOW_MS = 20000;
 export const LIST_POLL_MS = 15000;
 export const TELEMETRY_POLL_MS = 15000;
 export const DESKTOP_MIN_PX = 861;
+export const STALE_WORK_MS = 120_000;
+export const LANE_LIST_GROUP_ORDER = Object.freeze(["active", "needs_input", "idle", "completed", "offline"]);
+
+export function outputIsOlder(next, current) {
+  if (!next || !current) return false;
+  const nr = Number(next.revision);
+  const cr = Number(current.revision);
+  if (!Number.isFinite(nr) || !Number.isFinite(cr)) return false;
+  return nr < cr;
+}
 export const MOBILE_MAX_PX = 860;
 export const STATUS_OPEN_KEY = "vac.gw.statusOpen";
 export const LANE_FOLD_KEY = "vac.gw.laneFold";
@@ -84,14 +94,34 @@ export function ago(ms, nowMs = Date.now()) {
 
 export function gitLine(git, sourceControl) {
   if (sourceControl?.posture === "CONFLICT") return "Conflict";
-  if (sourceControl?.posture === "SYNC_REQUIRED") return `Sync required · ${sourceControl.behind} behind`;
-  if (sourceControl?.posture === "SYNC_RECOMMENDED") return `Sync recommended · ${sourceControl.behind} behind`;
+  if (sourceControl?.posture === "MERGED") return "Merged";
+  if (sourceControl?.posture === "UNKNOWN") return "Git unknown";
+  if (sourceControl?.posture === "SYNC_REQUIRED") return `Behind · ${sourceControl.behind}`;
+  if (sourceControl?.posture === "SYNC_RECOMMENDED") return `Behind · ${sourceControl.behind}`;
   if (sourceControl?.posture === "CHECKPOINT_DUE") return "Checkpoint due";
   if (sourceControl?.posture === "CURRENT" && git?.state === "clean") return "Git healthy";
+  if (git?.state === "unknown" || git?.state === "missing") return "Git unknown";
   const st = git?.state === "clean" ? "Clean" : git?.state === "dirty" ? "Dirty" : (git?.state || "Unknown");
   const ahead = Number.isFinite(git?.ahead) ? git.ahead : 0;
   const behind = Number.isFinite(git?.behind) ? git.behind : 0;
+  if (git?.head_in_base === true && ahead === 0) return "Merged";
   return `${st} · ↑${ahead} · ↓${behind}`;
+}
+
+export function gitListState(lane) {
+  const scm = lane?.source_control;
+  if (!scm && !lane?.git) return null;
+  if (scm?.posture === "MERGED" || (lane?.git?.head_in_base === true && !(Number(lane?.git?.ahead) > 0))) {
+    return null;
+  }
+  if (scm?.posture === "UNKNOWN" || lane?.git?.state === "unknown" || lane?.git?.state === "missing") {
+    return null;
+  }
+  if (scm?.posture === "SYNC_REQUIRED" || scm?.posture === "SYNC_RECOMMENDED") {
+    return gitLine(lane.git, scm);
+  }
+  if (scm?.posture === "CONFLICT") return "Conflict";
+  return null;
 }
 
 export function presenceLine(lane) {
@@ -119,8 +149,11 @@ export function machineLine(res) {
   return bits.join(" · ");
 }
 
-export function buildSendBody(instruction) {
-  return { instruction: String(instruction ?? "") };
+export function buildSendBody(instruction, extra = {}) {
+  const body = { instruction: String(instruction ?? "") };
+  const provider = String(extra?.provider || "").toLowerCase();
+  if (provider === "claude" || provider === "cursor") body.provider = provider;
+  return body;
 }
 
 export function sendPayload(laneId, instruction) {
@@ -217,7 +250,9 @@ const LIVE_AGENT_SESSION_STATES = new Set(["ACTIVE", "STARTING", "VERIFYING", "R
 
 
 export function laneProviderKind(lane) {
-  const raw = String(lane?.binding?.provider || lane?.agent_session?.provider || "").toLowerCase();
+  const raw = String(
+    lane?.binding?.provider || lane?.agent_session?.provider || lane?.preferred_provider || "",
+  ).toLowerCase();
   if (raw === "cursor" || raw === "cursor-agent" || raw === "cursor_ide") return "cursor";
   if (raw === "claude" || raw === "claudecode") return "claude";
   if (lane?.claude?.presence === "present") return "claude";
@@ -522,6 +557,120 @@ export function deriveLaneExecutionPosture(lane) {
   };
 }
 
+export function workOutputIsStale(lane, output, nowMs = Date.now()) {
+  const run = lane?.execution_run;
+  if (!["EXECUTING", "VALIDATING", "RECOVERING"].includes(run?.state)) return false;
+  const captured = output?.captured_at ? Date.parse(output.captured_at) : NaN;
+  if (Number.isFinite(captured)) return nowMs - captured > STALE_WORK_MS;
+  if (!output) return false;
+  const activity = Number(lane?.last_activity_ms);
+  if (!Number.isFinite(activity)) return false;
+  return nowMs - activity > STALE_WORK_MS;
+}
+
+export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now() } = {}) {
+  const cap = deriveLaneExecutionPosture(lane);
+  const run = lane?.execution_run;
+  const prev = lane?.previous_run;
+  const stale = workOutputIsStale(lane, output, nowMs);
+  const liveAgent = liveAgentOnLane(lane);
+  const who = laneProviderLabel(lane);
+
+  if (cap.state === "UPDATING_DIRECTOR") {
+    return { key: "waiting", label: "Updating Director", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "NEEDS_APPROVAL") {
+    return { key: "needs_input", label: "Needs approval", group: "needs_input", tone: "needs", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
+  }
+  if (cap.state === "WAITING_ON_DIRECTOR") {
+    return { key: "waiting", label: "Waiting on Director", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT") {
+    return { key: "needs_input", label: "Needs input", group: "needs_input", tone: "needs", mark: "!", hint: cap.hint || "Needs input", headline: "Needs input", live: false, stale: false };
+  }
+  if (cap.state === "FAILED" || run?.state === "FAILED") {
+    return { key: "failed", label: "Failed", group: "completed", tone: "failed", mark: "×", hint: "Failed", headline: "Failed", live: false, stale: false };
+  }
+  if (run?.runtime_posture?.state === "SESSION_ROTATING") {
+    return { key: "working", label: "Refreshing Claude context", group: "active", tone: "run", mark: "●", hint: "Current work preserved", headline: "Refreshing Claude context", live: true, stale: false };
+  }
+  if (stale) {
+    return { key: "stale", label: "Stale", group: "active", tone: "needs", mark: "!", hint: "Provider output has not advanced", headline: "Stale · output has not advanced", live: false, stale: true };
+  }
+  if (run?.runtime_posture?.state === "RECOVERING" || run?.state === "RECOVERING" || lane?.runtime_posture?.state === "RECOVERING") {
+    return { key: "recovering", label: "Recovering", group: "active", tone: "recovering", mark: "●", hint: run?.runtime_posture?.reason || lane?.runtime_posture?.reason || cap.hint, headline: cap.headline || "Recovering", live: true, stale: false };
+  }
+  if (run?.state === "VALIDATING" || cap.label === "Validating") {
+    return { key: "validating", label: "Validating", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "QUEUED_FOR_CAPACITY") {
+    return { key: "waiting", label: "Queued for capacity", group: "active", tone: "queued", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
+  }
+  if (run?.state === "WAITING_RESOURCE") {
+    const wait = run.resource_wait;
+    if (run.runtime_posture?.state === "QUIESCED" || lane?.runtime_posture?.state === "QUIESCED") {
+      return { key: "waiting", label: "Quiesced", group: "active", tone: "quiesced", mark: "◷", hint: run.runtime_posture?.reason || lane?.runtime_posture?.reason || "Quiesced", headline: "Quiesced", live: true, stale: false };
+    }
+    if (wait?.exclusive_phase && wait.exclusive_phase !== "EXCLUSIVE_ACTIVE") {
+      return { key: "waiting", label: "Preparing exclusive timing", group: "active", tone: "run", mark: "◷", hint: wait.exclusive_detail || wait.label || "Preparing exclusive timing", headline: "Preparing exclusive timing", live: true, stale: false };
+    }
+    if (wait?.resuming) {
+      const available = wait.label ? `${wait.label} available` : "Resuming…";
+      return { key: "waiting", label: available, group: "active", tone: "ready", mark: "●", hint: "Resuming…", headline: available, live: true, stale: false };
+    }
+    if (wait?.ready_to_resume) {
+      return { key: "waiting", label: "Ready to resume", group: "active", tone: "ready", mark: "●", hint: wait.label || "Ready to resume", headline: "Ready to resume", live: true, stale: false };
+    }
+    return { key: "waiting", label: cap.label || "Waiting", group: "active", tone: "run", mark: cap.mark, hint: wait?.queue_position ? `#${wait.queue_position} in queue` : cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "STARTING") {
+    return { key: "working", label: cap.label || "Starting", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "RUNNING" || run?.state === "EXECUTING") {
+    return { key: "working", label: "Working", group: "active", tone: "run", mark: "●", hint: who, headline: `Working · ${who}`, live: true, stale: false };
+  }
+  if (run?.state === "COMPLETE") {
+    return { key: "complete", label: "Complete", group: "completed", tone: "complete", mark: "✓", hint: "Complete", headline: "Complete", live: false, stale: false };
+  }
+  if (!run && prev?.state === "COMPLETE") {
+    return { key: liveAgent ? "ready" : "idle", label: liveAgent ? "Ready" : "Idle", group: "idle", tone: "", mark: liveAgent ? "●" : "○", hint: liveAgent ? `${who} ready` : "Idle", headline: liveAgent ? "Ready" : "Idle", live: false, stale: false };
+  }
+  if (lane?.runtime === "offline" && !run && !liveAgent) {
+    return { key: "offline", label: "Offline", group: "offline", tone: "", mark: "○", hint: "Offline", headline: "Offline", live: false, stale: false };
+  }
+  if (cap.state === "CONNECTED" || (liveAgent && !run)) {
+    return { key: "ready", label: "Ready", group: "idle", tone: "", mark: "●", hint: `${who} ready`, headline: "Ready", live: false, stale: false };
+  }
+  return { key: "idle", label: "Idle", group: "idle", tone: "", mark: "○", hint: cap.hint || "Idle", headline: "Idle", live: false, stale: false };
+}
+
+export function laneUpdatedMs(lane) {
+  const run = lane?.execution_run || lane?.previous_run;
+  const fromRun = Date.parse(run?.updated_at || run?.completed_at || run?.started_at || run?.created_at || "");
+  const activity = Number(lane?.last_activity_ms);
+  const observed = Date.parse(lane?.observed_at || "");
+  return Math.max(
+    Number.isFinite(fromRun) ? fromRun : 0,
+    Number.isFinite(activity) ? activity : 0,
+    Number.isFinite(observed) ? observed : 0,
+  );
+}
+
+export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now() } = {}) {
+  const list = Array.isArray(lanes) ? [...lanes] : [];
+  const rank = (lane) => {
+    const st = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
+    const gi = LANE_LIST_GROUP_ORDER.indexOf(st.group);
+    return gi < 0 ? LANE_LIST_GROUP_ORDER.length : gi;
+  };
+  list.sort((a, b) => {
+    const dg = rank(a) - rank(b);
+    if (dg !== 0) return dg;
+    return laneUpdatedMs(b) - laneUpdatedMs(a);
+  });
+  return list;
+}
+
 export function occupiesClaudeProviderCapacity(lane, cap = null) {
   const posture = cap || deriveLaneExecutionPosture(lane);
   if (laneProviderKind(lane) === "cursor") return false;
@@ -694,6 +843,7 @@ export function applyFetchedOutput(selectedId, requestedId, current, next) {
   if (!next) return current;
   const belongs = selectedId === requestedId || (next.lane_id && next.lane_id === selectedId);
   if (!belongs) return current;
+  if (current && outputIsOlder(next, current)) return current;
   return {
     ...next,
     lane_id: next.lane_id || selectedId || requestedId,
@@ -709,13 +859,15 @@ export function outputBelongsToLane(output, selectedId, lane) {
 }
 
 export function outputBodyText(output, outputText, { pending = false } = {}) {
-  if (output?.mode === "latest_response" && output.available === false) {
-    return "Latest Claude response is not available from the session transcript.";
+  if (output?.ok === false && !outputText && !output?.text) {
+    return pending ? "Refreshing output…" : "Output unavailable";
+  }
+  if (output?.mode === "latest_response" && output.available === false && !outputText && !output?.text) {
+    return pending ? "Refreshing output…" : "Output unavailable";
   }
   const raw = outputText == null ? (output?.text == null ? "" : String(output.text)) : String(outputText);
   if (!raw) {
     if (pending) return "Refreshing output…";
-    if (output?.mode === "latest_response") return "No latest Claude response in the session transcript yet.";
     return "";
   }
   return raw;
@@ -1131,7 +1283,8 @@ export function copyableOutputText({ selectedId, output, outputText } = {}) {
 export function renderCopyControl({ text, feedback } = {}) {
   const disabled = !text;
   const label = feedback === "copied" ? "Copied" : feedback === "failed" ? "Copy failed" : "Copy";
-  return `<button type="button" class="btn gw-copy" data-gw-copy ${disabled ? "disabled" : ""}>${esc(label)}</button>`;
+  const mark = feedback === "copied" ? "✓" : "⧉";
+  return `<button type="button" class="btn gw-copy gw-copy-icon" data-gw-copy aria-label="${esc(label)}" title="${esc(label)}" ${disabled ? "disabled" : ""}><span class="gw-copy-mark" aria-hidden="true">${mark}</span><span class="gw-copy-label">${esc(label)}</span></button>`;
 }
 
 export function notificationClickHash(laneId) {
@@ -1509,74 +1662,46 @@ export function agentSessionLine(telemetry, nowMs = Date.now()) {
 }
 
 function laneListStatus(lane, attention) {
-  const cap = deriveLaneExecutionPosture(lane);
+  const work = canonicalLaneWorkState(lane);
   if (attention?.listHint === "New output") {
-    return { label: "New output", mark: cap.mark, tone: "needs" };
-  }
-  if (cap.state === "RUNNING" || cap.state === "CONNECTED") {
-    const hint = executionRunListHint(lane.execution_run, lane);
-    return {
-      label: hint || cap.label,
-      mark: cap.mark,
-      tone: executionRunTone(lane.execution_run) || cap.tone,
-    };
+    return { label: "New output", mark: work.mark, tone: "needs" };
   }
   return {
-    label: cap.label,
-    mark: cap.mark,
-    tone: executionRunTone(lane.execution_run) || cap.tone,
+    label: work.label,
+    mark: work.mark,
+    tone: work.tone,
   };
 }
 
 function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const id = lane.lane_id;
   const active = laneMatchesId(lane, selectedId) ? " is-active" : "";
-  const git = gitLine(lane.git, lane.source_control);
+  const work = canonicalLaneWorkState(lane);
   const st = laneListStatus(lane, attentionByLane?.[id]);
-  const hint = st.label;
-  const tone = st.tone;
-  const attn = hint
-    ? `<span class="gw-lane-attn${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(hint)}</span>`
-    : "";
-  const wait = lane.execution_run?.resource_wait;
-  const runState = lane.execution_run?.state;
-  let queue = "";
-  if (lane.runtime_posture?.state === "SESSION_ROTATING" || lane.execution_run?.runtime_posture?.state === "SESSION_ROTATING") {
-    queue = `<span class="gw-lane-queue">Refreshing Claude context</span>`;
-  } else if (lane.runtime_posture?.state === "RECOVERING" || lane.execution_run?.runtime_posture?.state === "RECOVERING") {
-    queue = `<span class="gw-lane-queue">${esc(lane.runtime_posture?.reason || lane.execution_run?.runtime_posture?.reason || "Resource ownership")}</span>`;
-  } else if (lane.runtime_posture?.state === "QUIESCED") {
-    queue = `<span class="gw-lane-queue">${esc(lane.runtime_posture.reason || "Runtime timing certification")}</span>`;
-  } else if (runState === "WAITING_RESOURCE" && wait?.exclusive_phase && wait.exclusive_phase !== "EXCLUSIVE_ACTIVE") {
-    queue = `<span class="gw-lane-queue">${esc(wait.exclusive_detail || "Preparing exclusive timing")}</span>`;
-  } else if (runState === "WAITING_RESOURCE" && wait?.resuming) {
-    queue = `<span class="gw-lane-queue">Resuming…</span>`;
-  } else if (runState === "WAITING_RESOURCE" && !wait?.ready_to_resume && wait?.queue_position) {
-    queue = `<span class="gw-lane-queue">#${esc(String(wait.queue_position))} in queue</span>`;
-  } else if (runState === "VALIDATING" && wait?.resource_key === "runtime_timing_certification") {
-    queue = `<span class="gw-lane-queue">Exclusive timing window</span>`;
-  } else if (runState === "VALIDATING" && wait?.label) {
-    queue = `<span class="gw-lane-queue">${esc(wait.label)}</span>`;
-  }
-  const ctx = contextCompact(telemetryByLane?.[id]);
+  const git = gitListState(lane);
   const who = agentLabel(lane);
-  const meta = ctx ? `${who} · ${ctx}` : who;
-  const when = ago(lane.last_activity_ms);
-  const activity = when ? `<span class="gw-lane-ab">Active ${esc(when)} ago</span>` : "";
-  return `<a class="gw-lane${active}" data-gw-lane="${esc(id)}" href="${esc(laneDetailHash(id))}">
+  const summary = work.hint && work.hint !== work.label && work.hint !== who && work.hint !== `${who} ready`
+    ? work.hint
+    : (lane.execution_run?.latest_progress || lane.previous_run?.completion_report?.summary || "");
+  const whenMs = laneUpdatedMs(lane);
+  const when = whenMs ? ago(whenMs) : "";
+  const activity = when ? `<span class="gw-lane-when">${esc(when)} ago</span>` : "";
+  const gitEl = git ? `<span class="gw-lane-git-state">${esc(git)}</span>` : "";
+  const extra = summary && summary !== st.label
+    ? `<span class="gw-lane-summary">${esc(String(summary).slice(0, 140))}</span>`
+    : "";
+  return `<a class="gw-lane${active}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
     <span class="gw-lane-title">${esc(lane.label || id)}</span>
-    <span class="gw-lane-posture${tone ? ` is-${tone}` : ""}">${esc(st.mark)} ${esc(st.label)}</span>
-    ${attn}
-    ${queue}
-    <span class="gw-lane-meta">${esc(meta)}</span>
-    <span class="gw-lane-git">${esc(lane.worktree?.name || lane.git?.branch || "—")}</span>
-    <span class="gw-lane-ab">${esc(git)}${lane.git?.branch ? ` · ${esc(lane.git.branch)}` : ""}</span>
+    <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
+    <span class="gw-lane-meta">${esc(who)}</span>
+    ${extra}
     ${activity}
+    ${gitEl}
   </a>`;
 }
 
-export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane } = {}) {
-  const list = Array.isArray(lanes) ? lanes : [];
+export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, nowMs = Date.now() } = {}) {
+  const list = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { nowMs });
   const add = `<a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a>`;
   if (!list.length) {
     return `<div class="gw-lanes" data-gw-lanes>
@@ -1700,11 +1825,11 @@ export function renderOutputChrome(output, { lane = null, lastInstruction = null
 
 export function renderLastInstruction(rec, nowMs = Date.now()) {
   if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
-  return `<aside class="gw-last" data-gw-last>
-    <div class="gw-last-h">Your last instruction</div>
-    <div class="gw-last-text">${esc(rec.instruction)}</div>
-    <div class="gw-last-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Delivered"))}</div>
-  </aside>`;
+  return `<article class="gw-msg gw-msg-user" data-gw-last>
+    <div class="gw-msg-label">You</div>
+    <div class="gw-msg-body gw-last-text">${esc(rec.instruction)}</div>
+    <div class="gw-msg-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"))}</div>
+  </article>`;
 }
 
 export function renderRecentSystemActivity(items) {
@@ -1716,22 +1841,38 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
-export function renderComposer({ disabled, notice, draft, max = LANE_INSTRUCTION_MAX, idleStart = false, queueUntilSession = false } = {}) {
+export function renderComposer({
+  disabled,
+  notice,
+  draft,
+  max = LANE_INSTRUCTION_MAX,
+  idleStart = false,
+  queueUntilSession = false,
+  provider = null,
+} = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
     : "";
   const placeholder = queueUntilSession
     ? "Write an instruction — it will queue until a session starts…"
     : idleStart ? "Start work — write an instruction…" : "Write an instruction…";
-  const sendLabel = idleStart ? "Start work" : "Send";
+  const sendLabel = idleStart ? "Start" : "Send";
+  const current = provider === "cursor" ? "cursor" : "claude";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
-    <textarea id="gw-instruction" name="instruction" rows="3" maxlength="${max}"
-      placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
-    <div class="gw-composer-row">
-      <span class="gw-count" data-gw-count></span>
-      <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
-      <button class="btn primary gw-send" type="submit" data-gw-send ${disabled ? "disabled" : ""}>${esc(sendLabel)}</button>
+    <div class="gw-composer-box">
+      <textarea id="gw-instruction" name="instruction" rows="1" maxlength="${max}"
+        placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
+      <div class="gw-composer-row">
+        <div class="gw-provider" role="radiogroup" aria-label="Agent">
+          <button type="button" class="gw-provider-opt" data-gw-provider-opt="claude" aria-pressed="${current === "claude" ? "true" : "false"}">Claude</button>
+          <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}">Cursor</button>
+        </div>
+        <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
+        <span class="gw-count" data-gw-count></span>
+        <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
+        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled ? "disabled" : ""}>${esc(sendLabel)}</button>
+      </div>
     </div>
     ${n}
   </form>`;
@@ -2128,19 +2269,13 @@ export function renderGatewayShell({
       ${renderStatus(null, resources, statusOpts)}
     </div>`;
   }
-  const st = deriveLaneStatus({
-    lane,
-    output: output || { text: outputText, fingerprint: null, ok: true },
-    lastInstruction: lastInstruction || lane?.last_instruction,
-    viewing: true,
-    nowMs,
-  });
+  const work = canonicalLaneWorkState(lane, { output: output || { text: outputText }, nowMs });
   const pending = Boolean(outputPending) && !(outputText && String(outputText).trim());
   const ctxLine = contextCompact(telemetry);
   const statusHtml = renderStatus(lane, resources, {
     open: Boolean(statusOpen),
     summary: statusSummaryLine(lane, telemetry),
-    sessionLine: st.headline,
+    sessionLine: work.headline,
     telemetry,
     developmentResources,
     lanes,
@@ -2151,34 +2286,49 @@ export function renderGatewayShell({
     output,
     outputText,
   });
-  const hint = outputReviewHint(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction });
-  const heading = hint?.heading || outputPanelHeading(lane);
   const cap = deriveLaneExecutionPosture(lane);
-  const workStatus = `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
   const bodyText = outputBodyText(output, outputText, { pending });
+  const liveAttr = work.live ? ` data-gw-live="1"` : "";
+  const liveMark = work.live
+    ? `<span class="gw-live-dot" data-gw-live-dot>${work.stale ? "Stale" : "Working"}</span>`
+    : "";
+  const details = `<details class="gw-details" data-gw-details>
+          <summary>Details</summary>
+          <div class="gw-details-body">
+            ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
+            ${renderContextRefreshButton(lane)}
+            ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
+            ${renderClaudeRunStatus(lane, telemetry)}
+            ${renderProviderHealth(output?.provider_health)}
+            ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
+            ${renderLaneRuntimeControls(lane, cap)}
+            ${renderLaneSessionCallout(lane, { executionCapacity })}
+            ${renderRecentSystemActivity(lane?.recent_system_activity)}
+            ${statusHtml}
+          </div>
+        </details>`;
   return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
         <div class="gw-stage-status" data-gw-stage-status>
-          ${workStatus}
+          <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}">${esc(work.label)}</span>
         </div>
-        ${renderProviderHealth(output?.provider_health)}
         <div class="gw-thread" data-gw-thread>
           ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
-          <div class="gw-output-h">
-            <span>${esc(heading)}</span>
+          <article class="gw-msg gw-msg-assistant"${liveAttr}>
             ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
-          </div>
-          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
-          ${renderOutput(bodyText, { pending })}
+            ${liveMark}
+            ${renderOutput(bodyText, { pending })}
+          </article>
         </div>
-        ${renderClaudeRunStatus(lane, telemetry)}
         ${renderOperatorDecisionBar(lane?.execution_run)}
+        ${details}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
+          provider: laneProviderKind(lane) || lane?.preferred_provider || lane?.binding?.provider,
         })}
       </div>
       <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
@@ -2186,9 +2336,9 @@ export function renderGatewayShell({
           <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
           <div class="gw-lane-compact-id">
             <h1>${esc(lane?.label || selectedId)}</h1>
-            <p class="gw-presence" data-gw-presence>${esc(cap.headline || st.headline)}</p>
+            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
           </div>
-          ${renderContextRefreshButton(lane, { compact: true })}
+          ${renderNotificationControls(notify || {})}
         </div>
         ${renderLaneLocalhost(lane)}
         <details class="gw-lane-fold" data-gw-lane-fold ${laneFoldOpen ? "open" : ""}>
@@ -2198,18 +2348,11 @@ export function renderGatewayShell({
               <a class="gw-back gw-back-desktop" data-gw-back href="#/lanes">← Lanes</a>
               <header class="gw-lane-h">
                 <h1>${esc(lane?.label || selectedId)}</h1>
-                <p class="gw-presence" data-gw-presence>${esc(cap.headline || st.headline)}</p>
-                ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
+                <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
                 <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
               </header>
             </div>
             ${renderNotificationControls(notify || {})}
-          </div>
-          <div class="gw-aside-body">
-            ${renderLaneRuntimeControls(lane, cap)}
-            ${renderLaneSessionCallout(lane, { executionCapacity })}
-            ${renderRecentSystemActivity(lane?.recent_system_activity)}
-            ${statusHtml}
           </div>
         </details>
       </aside>

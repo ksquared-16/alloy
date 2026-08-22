@@ -205,6 +205,13 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
     return { status, body: out };
   }
+  if (path === "/api/v2/lane/preferred-provider" || path === "/api/v2/lanes/preferred-provider") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { setLanePreferredProvider } = await import("./development-lane.mjs");
+    const out = setLanePreferredProvider(laneId, v.provider);
+    return { status: out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 400), body: out };
+  }
   if (path === "/api/v2/lane/instruction" || path === "/api/v2/lanes/instruction") {
     const id = v.lane_id || v.id;
     if (!id) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
@@ -212,7 +219,7 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const extra = forbidden.filter((k) => v[k] != null && v[k] !== "");
     if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
     const { deliverManagedLaneInstruction, laneInstructionHttpStatus } = await import("./execution-run-send.mjs");
-    const out = await deliverManagedLaneInstruction(id, v.instruction, { actor: actorDefault });
+    const out = await deliverManagedLaneInstruction(id, v.instruction, { actor: actorDefault, provider: v.provider });
     return { status: laneInstructionHttpStatus(out), body: out };
   }
 
@@ -376,6 +383,10 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const { unexpectedLaneControlFields } = await import("./lanes.mjs");
     const extra = unexpectedLaneControlFields(v);
     if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
+    if (v.provider) {
+      const { setLanePreferredProvider } = await import("./development-lane.mjs");
+      setLanePreferredProvider(laneId, v.provider);
+    }
     const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
     const out = await startLaneAgentSession({ laneId, origin: "operator" });
     const status = out.ok ? 200

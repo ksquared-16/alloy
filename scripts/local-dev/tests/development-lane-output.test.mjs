@@ -6,7 +6,12 @@
  */
 import assert from "node:assert/strict";
 
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { validateInput, getCommand } from "../lib/vacilando/commands/registry.mjs";
+import { collectLatestCursorResponse, encodeCursorProjectDir } from "../lib/vacilando/providers/cursor/telemetry.mjs";
 import {
   LANE_OUTPUT_DEFAULT_LINES,
   LANE_OUTPUT_EXTENDED_LINES,
@@ -313,6 +318,67 @@ await test("pane facts parse alternate-screen empty history", () => {
   assert.equal(facts.alternate_screen, true);
   assert.equal(facts.history_size, 0);
   assert.equal(facts.pane_height, 24);
+});
+
+await test("lane output identifies provider, session, and monotonic revision", async () => {
+  const out = await getLaneOutput("alloy-identity", laneOpts());
+  assert.equal(out.ok, true);
+  assert.equal(typeof out.revision, "number");
+  assert.equal(Number.isFinite(out.revision), true);
+  assert.equal(typeof out.captured_at, "string");
+  const later = await getLaneOutput("alloy-identity", laneOpts({ extra: { nowMs: 1_700_000_000_500 } }));
+  assert.equal(later.revision >= out.revision, true);
+});
+
+await test("Claude latest_response collector can be substituted and still carries identity", async () => {
+  const first = await getLaneOutput("alloy-identity", laneOpts({
+    extra: {
+      mode: "latest_response",
+      collectLatestResponse: () => ({
+        available: true,
+        text: "Claude turn one",
+        truncated: false,
+        timestamp: "2026-08-22T12:00:00.000Z",
+        session_id: "claude-session-1",
+        mtime_ms: 1000,
+      }),
+    },
+  }));
+  const second = await getLaneOutput("alloy-identity", laneOpts({
+    extra: {
+      mode: "latest_response",
+      collectLatestResponse: () => ({
+        available: true,
+        text: "Claude turn two — the answer",
+        truncated: false,
+        timestamp: "2026-08-22T12:00:08.000Z",
+        session_id: "claude-session-1",
+        mtime_ms: 8000,
+      }),
+    },
+  }));
+  assert.equal(first.text, "Claude turn one");
+  assert.equal(second.text, "Claude turn two — the answer");
+  assert.equal(second.revision > first.revision, true);
+  assert.equal(second.session_id, "claude-session-1");
+});
+
+await test("Cursor transcript collector advances when the session file grows", () => {
+  const projects = mkdtempSync(join(tmpdir(), "vac-cursor-proj-"));
+  const cwd = "/Users/Kelly/Code/alloy-worktrees/wt5-vacilando-gateway-v2";
+  const enc = encodeCursorProjectDir(cwd);
+  const sid = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+  const dir = join(projects, enc, "agent-transcripts", sid);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, `${sid}.jsonl`);
+  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn one" }] } })}\n`);
+  const first = collectLatestCursorResponse({ cwd, sessionId: sid, projectsDir: projects });
+  assert.equal(first.available, true);
+  assert.equal(first.text, "Cursor turn one");
+  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn one" }] } })}\n${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn two — live" }] } })}\n`);
+  const second = collectLatestCursorResponse({ cwd, sessionId: sid, projectsDir: projects });
+  assert.equal(second.text, "Cursor turn two — live");
+  assert.equal(second.mtime_ms >= first.mtime_ms, true);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

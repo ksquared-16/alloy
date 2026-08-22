@@ -32,6 +32,7 @@ import {
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { collectLatestClaudeResponse } from "./providers/claude/telemetry.mjs";
+import { collectLatestCursorResponse } from "./providers/cursor/telemetry.mjs";
 
 export const LANE_SCHEMA = "vacilando.lane.v1";
 export const LANE_OUTPUT_SCHEMA = "vacilando.lane.output.v1";
@@ -261,6 +262,8 @@ export function composeLane({ pane, gitFacts = null, slot = null, worktreeRoot, 
         state: gitFacts.git || "unknown",
         ahead: ab.ahead,
         behind: ab.behind,
+        head: gitFacts.head || null,
+        head_in_base: gitFacts.head_in_base ?? null,
       }
       : { branch: null, state: "unknown", ahead: 0, behind: 0 },
     slot,
@@ -363,6 +366,7 @@ export async function listDevelopmentLanes({
             conflict: Boolean(facts?.conflict),
             last_commit_at: facts?.last_commit_at || null,
             head: facts?.head || null,
+            head_in_base: facts?.head_in_base ?? null,
           },
           worktree: {
             name: rec.binding.worktree_name || projected.worktree?.name,
@@ -422,6 +426,7 @@ export function projectDurableObservation(rec, observations = []) {
     execution_capacity: rec.execution_capacity || null,
     mission_id: rec.mission_id || null,
     mission_bound_at: rec.mission_bound_at || null,
+    preferred_provider: rec.preferred_provider || rec.binding?.provider || null,
   };
 }
 
@@ -519,7 +524,7 @@ function clientTriedTmuxOverride(opts) {
   return CONTROL_OVERRIDE_KEYS.some((k) => opts[k] != null && opts[k] !== "");
 }
 
-function unavailable(laneId, error, nowMs) {
+function unavailable(laneId, error, nowMs, extra = {}) {
   return {
     ok: false,
     available: false,
@@ -528,6 +533,34 @@ function unavailable(laneId, error, nowMs) {
     error,
     captured_at: new Date(nowMs ?? Date.now()).toISOString(),
     text: null,
+    revision: nowMs ?? Date.now(),
+    provider: extra.provider || null,
+    session_id: extra.session_id || null,
+    run_id: extra.run_id || null,
+  };
+}
+
+export function outputRevisionMs(capturedAt, nowMs = Date.now()) {
+  const ms = Date.parse(capturedAt);
+  return Number.isFinite(ms) ? ms : nowMs;
+}
+
+function laneOutputProvider(lane) {
+  const raw = String(lane?.binding?.provider || lane?.preferred_provider || lane?.agent_session?.provider || "").toLowerCase();
+  if (raw === "cursor" || raw === "cursor-agent" || raw === "cursor_ide") return "cursor";
+  if (raw === "claude" || raw === "claudecode" || raw === "claude-code") return "claude";
+  return raw || null;
+}
+
+function withOutputIdentity(out, lane, nowMs) {
+  const capturedAt = out.captured_at || new Date(nowMs).toISOString();
+  return {
+    ...out,
+    captured_at: capturedAt,
+    revision: Number.isFinite(Number(out.revision)) ? Number(out.revision) : outputRevisionMs(capturedAt, nowMs),
+    provider: out.provider || laneOutputProvider(lane),
+    session_id: out.session_id || lane?.agent_session?.provider_session_id || lane?.agent_session?.agent_session_id || null,
+    run_id: out.run_id || lane?.execution_run?.run_id || null,
   };
 }
 
@@ -577,46 +610,108 @@ async function latestResponseForLane(lane, durableId, nowMs, opts = {}) {
       sessionId = activeAgentSessionForLane(durableId, opts.runtimeRoot)?.provider_session_id || null;
     } catch { /* presentation-only */ }
   }
-  const collect = opts.collectLatestResponse || collectLatestClaudeResponse;
+  const provider = laneOutputProvider(lane);
+  const collect = opts.collectLatestResponse
+    || (provider === "cursor" ? collectLatestCursorResponse : collectLatestClaudeResponse);
+  const source = provider === "cursor" ? "cursor_agent_transcript" : "claude_code_session_transcript";
   let result;
   try {
-    result = collect({ cwd, sessionId, configDir: opts.claudeConfigDir });
+    result = collect({
+      cwd,
+      sessionId,
+      configDir: opts.claudeConfigDir,
+      projectsDir: opts.cursorProjectsDir,
+    });
   } catch {
     result = { available: false, error: "latest_response_failed", text: null };
   }
+  const capturedAt = result?.timestamp || (Number.isFinite(result?.mtime_ms) ? new Date(result.mtime_ms).toISOString() : new Date(nowMs).toISOString());
   if (!result?.available) {
-    return {
+    return withOutputIdentity({
       ok: true,
       available: false,
       schema_version: LANE_OUTPUT_SCHEMA,
       lane_id: durableId,
       mode: "latest_response",
-      source: "claude_code_session_transcript",
+      source,
       error: result?.error || "latest_response_unavailable",
-      captured_at: new Date(nowMs).toISOString(),
+      captured_at: capturedAt,
+      revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : nowMs,
       text: null,
       fingerprint: null,
       line_count: 0,
       truncated: false,
       empty: true,
-    };
+    }, lane, nowMs);
   }
   const text = String(result.text || "");
-  return {
+  return withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
     lane_id: durableId,
     mode: "latest_response",
-    source: "claude_code_session_transcript",
+    source,
     session_id: result.session_id || sessionId,
-    captured_at: result.timestamp || new Date(nowMs).toISOString(),
+    captured_at: capturedAt,
+    revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : outputRevisionMs(capturedAt, nowMs),
     text,
     fingerprint: outputFingerprint(text),
     line_count: text === "" ? 0 : text.split("\n").length,
     truncated: Boolean(result.truncated),
     empty: text.length === 0,
-  };
+  }, lane, nowMs);
+}
+
+function cursorTranscriptOutput(lane, durableId, nowMs, opts = {}) {
+  const cwd = lane?.worktree?.path || lane?.tmux?.cwd || null;
+  const collect = opts.collectLatestResponse || collectLatestCursorResponse;
+  let result;
+  try {
+    result = collect({
+      cwd,
+      sessionId: opts.sessionId || lane?.agent_session?.provider_session_id || null,
+      projectsDir: opts.cursorProjectsDir,
+    });
+  } catch {
+    result = { available: false, error: "transcript_unreadable", text: null };
+  }
+  const capturedAt = result?.timestamp || (Number.isFinite(result?.mtime_ms) ? new Date(result.mtime_ms).toISOString() : new Date(nowMs).toISOString());
+  const text = result?.available ? String(result.text || "") : "";
+  if (!result?.available) {
+    return withOutputIdentity({
+      ok: false,
+      available: false,
+      schema_version: LANE_OUTPUT_SCHEMA,
+      lane_id: durableId,
+      mode: opts.mode || "recent",
+      source: "cursor_agent_transcript",
+      error: result?.error || "output_unavailable",
+      captured_at: capturedAt,
+      revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : nowMs,
+      text: null,
+      fingerprint: null,
+      line_count: 0,
+      truncated: false,
+      empty: true,
+    }, lane, nowMs);
+  }
+  return withOutputIdentity({
+    ok: true,
+    available: true,
+    schema_version: LANE_OUTPUT_SCHEMA,
+    lane_id: durableId,
+    mode: opts.mode || "recent",
+    source: "cursor_agent_transcript",
+    session_id: result.session_id || null,
+    captured_at: capturedAt,
+    revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : outputRevisionMs(capturedAt, nowMs),
+    text,
+    fingerprint: outputFingerprint(text),
+    line_count: text === "" ? 0 : text.split("\n").length,
+    truncated: Boolean(result.truncated),
+    empty: text.length === 0,
+  }, lane, nowMs);
 }
 
 /**
@@ -641,7 +736,12 @@ export async function getLaneOutput(laneId, opts = {}) {
     return latestResponseForLane(lane, durableId, nowMs, opts);
   }
 
-  if (!lane?.tmux?.alive) return unavailable(durableId, "pane_unavailable", nowMs);
+  if (!lane?.tmux?.alive) {
+    if (laneOutputProvider(lane) === "cursor") {
+      return cursorTranscriptOutput(lane, durableId, nowMs, { ...opts, mode });
+    }
+    return unavailable(durableId, "pane_unavailable", nowMs, { provider: laneOutputProvider(lane) });
+  }
 
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return unavailable(durableId, "pane_unavailable", nowMs);
@@ -664,12 +764,13 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const bounded = boundVisibleText(cap.stdout, { maxLines, maxChars });
   const viewportOnly = facts.alternate_screen === true && Number(facts.history_size) === 0;
-  return {
+  return withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
     lane_id: durableId,
     mode,
+    source: "tmux_pane",
     captured_at: new Date(nowMs).toISOString(),
     text: bounded.text,
     fingerprint: outputFingerprint(bounded.text),
@@ -683,7 +784,7 @@ export async function getLaneOutput(laneId, opts = {}) {
     history_limit: facts.history_limit,
     pane_height: facts.pane_height,
     viewport_only: viewportOnly,
-  };
+  }, lane, nowMs);
 }
 
 // --------------------------------------------------------------------------
