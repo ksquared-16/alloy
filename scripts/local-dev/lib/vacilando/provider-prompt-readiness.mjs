@@ -347,6 +347,31 @@ export function promptReadinessSummary(assessment) {
 }
 
 /** Public, bounded shape stored on the run's delivery record. */
+/**
+ * Blocker kinds that need a human AT THE TERMINAL. None of them can be answered
+ * from the Vacilando composer — typing there would paste an instruction into a
+ * dialog, not answer it. A send blocked by one of these is not "needs input";
+ * it is undelivered.
+ */
+export const OPERATOR_TERMINAL_BLOCKERS = Object.freeze([
+  "permission", "onboarding", "setup", "trust", "update", "login", "resume_picker", "selection", "error_modal",
+]);
+
+/**
+ * Is this refusal a standing dialog, or a passing condition?
+ *
+ * A modal waits for a person at the keyboard and will not clear on its own — a
+ * run parked on one must fail rather than sit protected forever. `busy`,
+ * `unknown` and `capture_unavailable` are transient: the agent is mid-turn, or
+ * the screen was briefly unreadable, and a later retry is the right answer.
+ */
+export function promptBlockNeedsTerminalOperator(assessment) {
+  if (!assessment) return false;
+  if (assessment.state !== "blocked") return false;
+  const kind = assessment.blocker?.kind || assessment.blocker_kind || null;
+  return OPERATOR_TERMINAL_BLOCKERS.includes(kind);
+}
+
 export function publicPromptReadiness(assessment) {
   if (!assessment) return null;
   return {
@@ -354,6 +379,7 @@ export function publicPromptReadiness(assessment) {
     state: assessment.state,
     provider: assessment.provider || null,
     blocker_kind: assessment.blocker?.kind || null,
+    needs_terminal_operator: promptBlockNeedsTerminalOperator(assessment),
     signal: assessment.blocker?.signal || assessment.evidence || null,
     summary: promptReadinessSummary(assessment),
   };

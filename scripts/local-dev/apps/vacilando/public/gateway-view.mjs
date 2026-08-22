@@ -188,6 +188,23 @@ export function deliveryNotice(result) {
   // first time this fired; say what the pane was doing instead.
   if (result?.error === "provider_prompt_not_ready") {
     const why = summaryText(result.prompt_readiness?.summary) || summaryText(result.blocking_screen);
+    // A dialog the composer cannot reach is a different situation from a busy
+    // agent, and the operator has to be told which one they are looking at —
+    // one needs them at the terminal, the other needs nothing at all.
+    if (result.needs_terminal_operator === true || result.prompt_readiness?.needs_terminal_operator === true) {
+      return {
+        kind: "err",
+        text: `Your instruction was not sent. ${why || "The agent's terminal is showing a prompt."} `
+          + "This prompt has to be answered in the agent's terminal — Vacilando cannot answer it for you. "
+          + "Answer it there, then send again.",
+      };
+    }
+    if (result.status === "queued" || result.admission_queued) {
+      return {
+        kind: "ok",
+        text: `Not sent yet — ${why ? `${why.charAt(0).toLowerCase()}${why.slice(1)}` : "the agent is not at a prompt."} Queued; it will be delivered when the agent is ready.`,
+      };
+    }
     return {
       kind: "err",
       text: why
@@ -225,6 +242,8 @@ export function deliveryErrorText(error) {
       return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
     case "provider_prompt_not_ready":
       return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
+    case "undelivered_provider_prompt_block":
+      return "Not sent. The agent's terminal is showing a permission prompt, which has to be answered in the terminal — it cannot be answered from here.";
     default:
       return error ? `Delivery refused (${error}).` : "Delivery failed.";
   }

@@ -14,6 +14,7 @@ import {
   activeRunForLane,
   createQueuedRun,
   executionEnvelope,
+  isTerminalRunState,
   lastInstructionFromRun,
   publicExecutionRun,
   transitionExecutionRun,
@@ -78,18 +79,79 @@ async function markDeliveryAcknowledged(run, out, {
   return getExecutionRun(run.run_id, root) || run;
 }
 
+export const UNDELIVERED_PROMPT_BLOCK = "undelivered_provider_prompt_block";
+
 /**
- * The pane was not at an actionable prompt, so nothing was pasted. The run must
- * not become EXECUTING: no agent has the instruction. It becomes NEEDS_INPUT
- * with the blocking screen summarized, instruction preserved for retry once the
- * operator clears the modal.
+ * A non-terminal run whose instruction was refused at the readiness gate and
+ * never reached the provider.
+ *
+ * Recognises runs parked by the older NEEDS_INPUT behaviour as well as the
+ * current QUEUED one, because lanes stuck that way exist in the store right now
+ * and must be recoverable without hand-editing JSON.
  */
-async function needsInputForPromptNotReady({ run, out, nowMs, root, size, laneId }) {
+export function undeliveredPromptBlocked(run) {
+  if (!run) return false;
+  if (isTerminalRunState(run.state)) return false;
+  if (run.delivery?.acknowledged === true) return false;
+  if (run.started_at) return false;
+  const err = run.delivery?.error || null;
+  const reason = run.state_reason || null;
+  return err === "provider_prompt_not_ready"
+    || reason === "provider_prompt_not_ready"
+    || reason === UNDELIVERED_PROMPT_BLOCK
+    || reason === "waiting_for_ready_prompt";
+}
+
+/**
+ * Operator Send is a NEW turn, not an answer to a dialog the composer cannot
+ * reach. Close the undelivered run so the send creates a fresh one; its
+ * instruction is preserved on the failed run for reference.
+ */
+function supersedeUndeliveredPromptBlock(run, { root, nowMs }) {
+  const out = transitionExecutionRun(run.run_id, "FAILED", {
+    reason: UNDELIVERED_PROMPT_BLOCK,
+    origin: "operator",
+    nowMs,
+    root,
+    completion_report: {
+      summary: "Not sent — the agent terminal was showing a prompt that cannot be answered from Vacilando. Superseded by a new instruction.",
+    },
+  });
+  return out.ok;
+}
+
+/**
+ * The pane was not at an actionable prompt, so nothing was pasted.
+ *
+ * This used to park the run in NEEDS_INPUT, which was wrong in a way that stuck
+ * the lane. NEEDS_INPUT means "the agent asked the operator something", and the
+ * operator answers it from the Vacilando composer. A Claude permission dialog
+ * is the opposite: it can only be answered at the terminal, and the composer
+ * cannot reach it. Worse, NEEDS_INPUT is protective — the governor will not
+ * close it — and the next Send was treated as a decision reply, so it retried
+ * the paste into the same blocked pane. The lane could not move.
+ *
+ *   a standing dialog (permission / onboarding / trust / login / update /
+ *   setup / resume picker)  -> FAIL the run. It needs a person at the keyboard,
+ *   it will not clear on its own, and the instruction was never delivered.
+ *
+ *   a passing condition (mid-turn, unreadable screen) -> keep the run QUEUED
+ *   and let admission retry it once the pane is actually ready.
+ *
+ * Either way the instruction is preserved and the run never claims to have
+ * been delivered.
+ */
+async function refuseUndeliveredPromptBlock({ run, out, nowMs, root, size, laneId }) {
   const { transitionExecutionRun, patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
   const { PROMPT_NOT_READY_ERROR } = await import("./provider-prompt-readiness.mjs");
   const readiness = out?.prompt_readiness || null;
-  const summary = readiness?.summary
-    || "The agent pane was not at an actionable prompt, so the instruction was not delivered.";
+  const needsTerminal = readiness?.needs_terminal_operator === true;
+  const detail = readiness?.summary
+    || "The agent terminal was not at a prompt, so the instruction was not sent.";
+  const summary = needsTerminal
+    ? `Not sent — ${detail} This prompt can only be answered in the agent's terminal, not from Vacilando.`
+    : `Not sent — ${detail}`;
+
   patchRunFields(run.run_id, {
     delivery: {
       ...(run.delivery || {}),
@@ -98,26 +160,53 @@ async function needsInputForPromptNotReady({ run, out, nowMs, root, size, laneId
       at: new Date(nowMs).toISOString(),
       instruction_fingerprint: instructionFingerprint(run.instruction),
       prompt_readiness: readiness,
+      needs_terminal_operator: needsTerminal,
     },
+    state_reason: needsTerminal ? UNDELIVERED_PROMPT_BLOCK : "waiting_for_ready_prompt",
   }, { nowMs, root });
-  const next = transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
-    reason: PROMPT_NOT_READY_ERROR,
+
+  if (!needsTerminal) {
+    // Transient. Leave it QUEUED so admission can deliver it when the pane is
+    // ready, rather than failing work nobody has refused.
+    const { createAdmissionRequest, evaluateAdmissionQueue } = await import("./execution-admission.mjs");
+    try {
+      createAdmissionRequest({ laneId, runId: run.run_id, nowMs, root });
+      await evaluateAdmissionQueue({ root, nowMs });
+    } catch { /* it stays QUEUED for the next sweep either way */ }
+    return decorate({
+      ok: false,
+      schema_version: "vacilando.lane.send.v1",
+      lane_id: laneId,
+      status: "queued",
+      error: PROMPT_NOT_READY_ERROR,
+      instruction_size: size,
+      delivered_at: null,
+      prompt_readiness: readiness,
+      needs_terminal_operator: false,
+      blocking_screen: summary,
+      admission_queued: true,
+    }, getExecutionRun(run.run_id, root) || run);
+  }
+
+  const failed = transitionExecutionRun(run.run_id, "FAILED", {
+    reason: UNDELIVERED_PROMPT_BLOCK,
     origin: "system",
     nowMs,
     root,
     progress: summary,
     completion_report: { summary },
   });
-  const resolved = next.ok ? next.run : (getExecutionRun(run.run_id, root) || run);
+  const resolved = failed.ok ? failed.run : (getExecutionRun(run.run_id, root) || run);
   return decorate({
     ok: false,
     schema_version: "vacilando.lane.send.v1",
     lane_id: laneId,
-    status: "needs_input",
+    status: "failed",
     error: PROMPT_NOT_READY_ERROR,
     instruction_size: size,
     delivered_at: null,
     prompt_readiness: readiness,
+    needs_terminal_operator: true,
     blocking_screen: summary,
   }, resolved);
 }
@@ -285,6 +374,16 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   } catch { /* send still proceeds; active-run check below is authoritative */ }
 
   let active = activeRunForLane(laneId, root);
+  // Never continue into a run whose instruction never reached the provider.
+  // Continuing it retried the paste into the same blocked pane, and because
+  // NEEDS_INPUT is protective the governor could not close it either — the lane
+  // had no way forward at all.
+  if (active && undeliveredPromptBlocked(active)) {
+    if (supersedeUndeliveredPromptBlock(active, { root, nowMs })) {
+      staleClosed = true;
+      active = null;
+    }
+  }
   if (active?.state === "QUEUED") {
     try {
       const { getDurableLane } = await import("./development-lane.mjs");
@@ -443,7 +542,7 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   }
 
   if (out.error === "provider_prompt_not_ready") {
-    return needsInputForPromptNotReady({ run, out, nowMs, root, size, laneId });
+    return refuseUndeliveredPromptBlock({ run, out, nowMs, root, size, laneId });
   }
 
   try {
@@ -530,10 +629,17 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     return decorate(out, exec.ok ? exec.run : next);
   }
   if (out.error === "provider_prompt_not_ready") {
-    const refused = await needsInputForPromptNotReady({
+    const refused = await refuseUndeliveredPromptBlock({
       run, out, nowMs, root, size: String(run.instruction || "").length, laneId: run.lane_id,
     });
-    return { ok: false, deferred: false, error: out.error, delivery: out, run: refused.execution_run || run, needs_input: true };
+    return {
+      ok: false,
+      deferred: refused.status === "queued",
+      error: out.error,
+      delivery: out,
+      run: refused.execution_run || run,
+      needs_terminal_operator: refused.needs_terminal_operator === true,
+    };
   }
   return { ok: false, deferred: true, error: out.error || "delivery_failed", delivery: out, run };
 }

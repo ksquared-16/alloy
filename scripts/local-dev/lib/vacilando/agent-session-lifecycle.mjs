@@ -27,6 +27,7 @@ import {
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } from "./lanes.mjs";
+import { PROMPT_NOT_READY_ERROR } from "./provider-prompt-readiness.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -519,7 +520,38 @@ export async function requestSessionRotation({
     dedupeKey: `handoff:${handoffId}`,
   });
   if (!delivered?.ok) {
-    return { ok: false, error: "handoff_delivery_failed", delivery: delivered, handoff_id: handoffId };
+    // The session was patched to HANDOFF before the instruction was delivered,
+    // so a refused paste left it there with the handoff still "requested" —
+    // and maybeAdvanceSessionRotation only ever aborts a handoff that reached
+    // "ready". The session stayed HANDOFF forever. Rotation that could not
+    // start must put the session back exactly as it found it.
+    const rec = readHandoffs(root);
+    if (rec.handoffs[handoffId]) {
+      rec.handoffs[handoffId].state = "failed";
+      rec.handoffs[handoffId].failed_at = iso(nowMs);
+      rec.handoffs[handoffId].error = delivered?.error || "handoff_delivery_failed";
+      writeHandoffs(rec, root);
+    }
+    const promptBlocked = delivered?.error === PROMPT_NOT_READY_ERROR;
+    restoreSessionAfterFailedRotation(session, {
+      root,
+      error: promptBlocked ? PROMPT_NOT_READY_ERROR : "handoff_delivery_failed",
+      escalate: !promptBlocked,
+      extra: {
+        origin,
+        handoff_id: handoffId,
+        reason: promptBlocked
+          ? "Context refresh could not start: the agent terminal is showing a prompt that must be answered there."
+          : undefined,
+      },
+    });
+    return {
+      ok: false,
+      error: "handoff_delivery_failed",
+      delivery: delivered,
+      handoff_id: handoffId,
+      session_restored: "ACTIVE",
+    };
   }
   if (!run) {
     const rec = store.handoffs[handoffId];
@@ -561,7 +593,7 @@ function resolveRunContext({ runId, laneId, root = null } = {}) {
   return null;
 }
 
-function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } = {}) {
+function restoreSessionAfterFailedRotation(session, { root, error, extra = {}, escalate = true } = {}) {
   if (!session?.agent_session_id) return;
   const trigger = session.rotation_trigger && typeof session.rotation_trigger === "object"
     ? { ...session.rotation_trigger, attempted: true }
@@ -573,7 +605,13 @@ function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } 
   emitAgentSessionEvent("rotation_failed", session, root, { error, ...extra });
   const auto = trigger?.origin === "automatic" || extra.origin === "automatic";
   const run = session.run_id ? getExecutionRun(session.run_id, root) : null;
-  if (auto && run) {
+  // A rotation blocked by a terminal dialog must NOT escalate the run to
+  // NEEDS_INPUT. That is the same trap the send path just stopped setting: the
+  // operator cannot answer a Claude permission prompt from the composer, and a
+  // NEEDS_INPUT run is protected from the governor. The work is still fine —
+  // it is the terminal that needs a person, which the provider-health banner
+  // and Details already say.
+  if (escalate && auto && run) {
     escalateNeedsInput(run, extra.reason || `Automatic context rotation failed: ${error}`, Date.now(), root).catch(() => {});
   }
 }
@@ -1125,6 +1163,29 @@ export async function maybeAdvanceSessionRotation(lane, { root = runtimeRoot(), 
   const session = activeAgentSessionForLane(lane.lane_id, root);
   if (!session || session.state !== "HANDOFF" || !session.handoff_id) return auto;
   const handoff = getHandoff(session.handoff_id, root);
+  // A handoff that never left "requested" means the outgoing agent never
+  // received the request. With Claude still present there is nothing to hand
+  // off TO and nothing to wait for, so after a bounded wait the session goes
+  // back to ACTIVE rather than sitting in HANDOFF indefinitely.
+  if (handoff && handoff.state !== "ready") {
+    const requestedAt = Date.parse(handoff.failed_at || handoff.created_at || "");
+    const stalled = handoff.state === "failed"
+      || (Number.isFinite(requestedAt) && (nowMs - requestedAt) > ROTATION_POLICY.exit_wait_ms);
+    if (stalled && laneClaudePresent(lane)) {
+      restoreSessionAfterFailedRotation(session, {
+        root,
+        error: handoff.error || "handoff_never_delivered",
+        escalate: handoff.error !== PROMPT_NOT_READY_ERROR,
+        extra: {
+          handoff_state: handoff.state,
+          waited_ms: Number.isFinite(requestedAt) ? nowMs - requestedAt : null,
+          origin: session.rotation_trigger?.origin,
+          reason: "Context refresh never started; the session was left running.",
+        },
+      });
+      return { ok: false, error: "handoff_never_delivered", aborted: true, restored: "ACTIVE" };
+    }
+  }
   if (handoff?.state !== "ready") return auto?.deferred ? auto : { ok: true, skipped: true };
   if (laneClaudePresent(lane)) {
     const started = Date.parse(handoff.ready_at || handoff.created_at || "");

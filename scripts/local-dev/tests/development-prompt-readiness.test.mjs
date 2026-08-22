@@ -307,23 +307,31 @@ await test("a ready pane is pasted into, and the pre-paste baseline is returned"
 
 // ------------------------------------------------ 3. run state on not-ready --
 
-await test("a not-ready pane yields NEEDS_INPUT, never EXECUTING, instruction preserved", async () => {
+await test("a not-ready pane never becomes EXECUTING, and never parks as NEEDS_INPUT", async () => {
+  // This test used to assert NEEDS_INPUT. That law was wrong and it stuck a
+  // lane: NEEDS_INPUT means the agent asked the OPERATOR something answerable
+  // from the composer, it is protected from the governor, and the next Send was
+  // treated as a decision reply that re-pasted into the same blocked pane.
+  // A Claude permission dialog can only be answered at the terminal, so an
+  // undelivered instruction now FAILS the run instead.
   const h = harness(ONBOARDING_PANE);
   const out = await deliverManagedLaneInstruction(LANE, "VACILANDO_READY_PANE_REPAIR_20260822 do the work", h.opts);
   assert.equal(out.ok, false);
   assert.equal(out.error, PROMPT_NOT_READY_ERROR);
-  assert.equal(out.status, "needs_input");
+  assert.equal(out.status, "failed");
+  assert.equal(out.needs_terminal_operator, true);
   assert.match(out.blocking_screen, /onboarding/i);
-  assert.equal(laneInstructionHttpStatus(out), 409);
 
   const runs = listExecutionRunsForLane(LANE, ROOT);
   assert.equal(runs.length, 1);
   const run = runs[0];
-  assert.equal(run.state, "NEEDS_INPUT");
+  assert.equal(run.state, "FAILED");
+  assert.equal(run.state_reason, "undelivered_provider_prompt_block");
   assert.equal(run.started_at, null, "a run nobody received must not look started");
   assert.equal(run.delivery.acknowledged, false);
   assert.equal(run.delivery.error, PROMPT_NOT_READY_ERROR);
   assert.match(run.instruction, /VACILANDO_READY_PANE_REPAIR_20260822/, "instruction is preserved for retry");
+  assert.equal(pasted(h.calls), false, "and nothing was typed into the dialog");
 });
 
 await test("a ready pane delivers end to end and binds the run to its pre-paste baseline", async () => {
