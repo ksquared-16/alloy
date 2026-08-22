@@ -371,11 +371,12 @@ await test("Cursor transcript collector advances when the session file grows", (
   const dir = join(projects, enc, "agent-transcripts", sid);
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `${sid}.jsonl`);
-  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn one" }] } })}\n`);
+  // Real Cursor IDE JSONL puts role on the envelope, not on message.
+  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text: "Cursor turn one" }] } })}\n`);
   const first = collectLatestCursorResponse({ cwd, sessionId: sid, projectsDir: projects });
   assert.equal(first.available, true);
   assert.equal(first.text, "Cursor turn one");
-  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn one" }] } })}\n${JSON.stringify({ role: "assistant", message: { role: "assistant", content: [{ type: "text", text: "Cursor turn two — live" }] } })}\n`);
+  writeFileSync(file, `${JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text: "Cursor turn one" }] } })}\n${JSON.stringify({ role: "assistant", message: { content: [{ type: "text", text: "Cursor turn two — live" }] } })}\n`);
   const second = collectLatestCursorResponse({ cwd, sessionId: sid, projectsDir: projects });
   assert.equal(second.text, "Cursor turn two — live");
   assert.equal(second.mtime_ms >= first.mtime_ms, true);

@@ -276,7 +276,7 @@ export function collectClaudeSessionTelemetry({
 export function extractAssistantText(obj) {
   if (!obj || typeof obj !== "object") return "";
   const msg = obj.message && typeof obj.message === "object" ? obj.message : obj;
-  const role = msg.role || (obj.type === "assistant" ? "assistant" : null);
+  const role = msg.role || obj.role || (obj.type === "assistant" ? "assistant" : null);
   if (role !== "assistant" && obj.type !== "assistant") return "";
   const content = msg.content;
   if (typeof content === "string") return content.trim();
