@@ -838,7 +838,45 @@ export async function attachOpportunityInquiryChildrenShell(
   }
 
   const memberMap = new Map(memList.map((m) => [m.id, m]));
+
+  /*
+   * ── LAW 34: A PERSON-BACKED CHILD'S IDENTITY COMES FROM `persons` ──
+   *
+   * `resolveInquiryChildIdentityFields` has always been person-first — but it can only be person-first
+   * if the person is actually LOADED. This map was constructed empty and never filled, so `pmap.get(pid)`
+   * missed for every child, `person` arrived null, and the resolver silently took its
+   * `customer_members` fallback branch for person-backed children too.
+   *
+   * That is not a cosmetic miss. It is precisely how a child could read "Lennon Kurzman" on every
+   * operator surface while `persons` held `perf-probe-1787311039569`: the surfaces were showing the
+   * member mirror, the placement projection (which loads persons through its own join) was showing the
+   * canonical row, and identity edits — which write `persons` — were invisible to the editor that made
+   * them. The editor then baselined on the member, so re-typing the correct value wrote nothing at all.
+   *
+   * Loading the children's persons here fixes every consumer of `_inquiry_children` at once — Children,
+   * Assignment, Focus Panel header, drawer VM, Records and the queue row projections all read this one
+   * record. One authority, resolved once, rather than a rule re-implemented per card.
+   */
   const pmap = new Map<string, WarmPersonRow>();
+  const childPersonIds = [
+    ...new Set(
+      [...memList, ...bootstrapList]
+        .map((m) => trimOrNull(m.person_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (childPersonIds.length > 0) {
+    const tChildPersons0 = Date.now();
+    const { data: childPersons } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
+      .eq("org_id", orgId)
+      .in("id", childPersonIds);
+    for (const row of (childPersons ?? []) as WarmPersonRow[]) {
+      if (row?.id) pmap.set(row.id, row);
+    }
+    cph.child_persons_ms = Date.now() - tChildPersons0;
+  }
 
   const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
@@ -2422,8 +2460,36 @@ export async function respondOpportunityEntityGet(
     }
   }
 
+  /*
+   * ── LAW 34: IDENTITY CANNOT BE DEFERRED TO A LATER PASS ──
+   *
+   * Member-linked `persons` rows were deferred to Pass 6 for first-paint cost. That is a sound
+   * instinct for RELATIONSHIP data and a wrong one for IDENTITY: `resolveInquiryChildIdentityFields`
+   * needs the person to be present, and when it is missing the resolver does not wait — it silently
+   * returns the `customer_members` mirror. So the deferral did not postpone a name, it CHANGED which
+   * store owned it, and the record shipped with the fallback as if it were canonical.
+   *
+   * A child's name is first-paint content; there is no later in which to render it. One batched,
+   * id-indexed query is the honest price, and it is the same query Pass 6 would have issued anyway.
+   */
+  const identityPersonIdsMissing = memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid));
+  if (identityPersonIdsMissing.length > 0) {
+    const tIdent0 = Date.now();
+    const { data: identityPersonRows } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
+      .eq("org_id", orgId)
+      .in("id", identityPersonIdsMissing);
+    for (const pr of (identityPersonRows ?? []) as WarmPersonRow[]) {
+      if (pr.id) pmap.set(pr.id, pr);
+    }
+    hydrateGraphTimings.child_identity_person_lookup_ms = Date.now() - tIdent0;
+  }
+  // The graph is only "pending" for persons still absent AFTER identity has been resolved.
+  out._member_person_graph_pending = memberLinkedPersonIdsDeferred.some((pid) => !pmap.has(pid));
+
   let person_lookup_missing_count =
-    memberLinkedPersonIdsDeferred.length +
+    memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid)).length +
     oppRolesPersonPrefetchIds.filter((pid) => !pmap.has(pid)).length;
 
   lapSegment("customer_member_linked_person_lookup");
