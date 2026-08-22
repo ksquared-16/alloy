@@ -295,6 +295,38 @@ not a permanent stored rank", and the precedence note exists precisely to descri
 ranks below others — so whether a manual pin should outrank priority is a placement-policy decision,
 and shipping it would silently reorder a live tenant's waitlist. Surfaced, not decided.
 
+## 5f. Work Items counts — classified (step 8)
+
+| label | query owner | scope | user filter | status | overdue definition | selection-dependent | denominator |
+|---|---|---|---|---|---|---|---|
+| KPI `Assigned` | `WorkItemsKpiStrip.deriveQueueAssignmentCounts` | org | **anyone** with `assigned_to_user_id` | open | — | no | `operational_tasks` only |
+| KPI `Waiting` | same | org | no assignee | open | — | no | `operational_tasks` only |
+| KPI `Due Soon` / `Overdue` | `summarizeOperationalTaskCounts` | org | none (`userId: ""`) | open | `due_at < now` | no | `operational_tasks` only |
+| View `Mine` | `workItemQueueScope` | org | **current user** | open | — | yes | all sources |
+| View `Overdue` | `workItemQueueScope` | org | none | open | `due_at < now` | yes | all sources |
+| Folders / Sources | `workItemQueueScope` | org | none | open | — | **yes** | all sources |
+
+**Class: VALID DIFFERENT METRICS / BAD VOCABULARY — plus one real denominator defect.**
+
+- `Assigned 1` vs `Mine 0` are not in conflict: one counts work assigned to *anyone*, the other work
+  assigned to *me*. The words do not say so.
+- `Overdue 1` vs `Overdue 9` is the same word over two different denominators: the KPI strip counts
+  only the `operational_tasks` table, while the queue beneath it aggregates Processing (8) and
+  Communications (2) work as well. Proven empirically — the summary endpoint returns `open: 1` while
+  the queue lists 11.
+- Sidebar totals changing on selection is correct behaviour (they describe the filtered set), but they
+  are rendered like absolute totals.
+
+**Fixed here:** `summarizeOperationalTaskCounts` derived its numbers by listing open tasks with
+`limit: 200` and measuring the array, so `open` silently saturated at 200 and `overdue`/`due_soon`
+counted only what fitted on that page. Now three exact `count: "exact", head: true` queries. A badge is
+a denominator claim; it has to be counted, not sampled.
+
+**Not forced to match, per instruction.** The remaining item is vocabulary: the KPI strip sits directly
+above a queue it does not describe. Recommendation — either scope the strip to the same multi-source
+row set the queue uses, or label it for what it counts ("Tasks" vs "Work Items"). That is a product
+vocabulary decision, not a convergence defect.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
