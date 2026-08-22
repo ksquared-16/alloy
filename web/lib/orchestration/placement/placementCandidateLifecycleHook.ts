@@ -15,7 +15,7 @@ import { __testing as backfillTesting } from "@/lib/orchestration/placement/back
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { resolvePlacementCandidateSiteId } from "@/lib/orchestration/placement/resolvePlacementCandidateSiteId";
-import { resolvePlacementCandidateCohortFromMember } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
+import { resolvePlacementCandidateCohortForQueue } from "@/lib/orchestration/placement/resolvePlacementCandidateCohortForQueue";
 
 const { buildCandidateRowsForOpportunity, normalizeOcmRow } = backfillTesting;
 
@@ -49,12 +49,42 @@ function derivePlacementCandidateSeedRow(input: {
         ocmLocationId: metaStr(input.facts, "location_id"),
         opportunityLocationId: input.oppLocationId,
     });
-    const cohort = resolvePlacementCandidateCohortFromMember({
+    /*
+     * ── ONE COHORT OWNER (Priority 2) ──
+     *
+     * This derived its cohort from `resolvePlacementCandidateCohortFromMember` — the RAW resolution —
+     * while the live child-grain projection derives through `resolvePlacementCandidateCohortForQueue`,
+     * every branch of which ends in `normalizePlacementWaitlistCohort`. So ensure said `infant` where
+     * the projection said `infant_0_18_months`, for the same child, from the same facts.
+     *
+     * That single disagreement produced both defects this program has been chasing: it made the seed
+     * key differ from the projection's cohort (so a normalisation minted a rival candidate), and it
+     * made a survivor rule keyed on the ensure cohort disagree with the row that actually projects
+     * (so the repair oscillated). Routed through the projection's own resolver — not a copy of it.
+     */
+    const cohort = resolvePlacementCandidateCohortForQueue({
+        storedKey: "",
+        storedLabel: "",
+        ocmProgramRoomCohortKey: metaStr(input.facts, "program_room_cohort_key"),
+        ocmMetadata: input.facts,
         programKey: input.programKey,
-        programRoomCohortKey: metaStr(input.facts, "program_room_cohort_key"),
         dateOfBirth: input.dob,
     });
-    const seedKey = `pc_v1_pi:${input.opportunityId}:${input.customerMemberId}:${cohort.program_room_cohort_key || "unknown_program_room"}`;
+    /*
+     * ── STABLE CANDIDATE IDENTITY (Priority 1) ──
+     *
+     * The cohort is GONE from the key. A child does not become a new semantic placement candidate
+     * because their cohort label normalised or they aged into the next room — cohort is mutable
+     * ranking state on a stable subject, and putting it in the key is what let rival active
+     * candidates exist at all.
+     *
+     * The subject is (opportunity, customer_member). Existing rows carry the old cohort-bearing key,
+     * so the first ensure pass after this change misses on seed key — and the subject-uniqueness
+     * check then finds the incumbent and MOVES it onto the stable key rather than inserting. The
+     * migration is therefore self-applying and preserves `wait_since`, overrides and history,
+     * because the candidate id never changes.
+     */
+    const seedKey = `pc_v2_subject:${input.opportunityId}:${input.customerMemberId}`;
     return {
         seedKey,
         row: {
