@@ -107,16 +107,38 @@ type PersonIdentityRow = {
     last_name: string | null;
     full_name: string | null;
     date_of_birth: string | null;
+    /** Carries `profile_photo_document_id`; read here so the photo projection need not re-query. */
+    metadata?: Record<string, unknown> | null;
 };
 
 export async function GET(request: NextRequest) {
+    /*
+     * Segment timing, same convention as `participantServerTiming` / `queueRowsServerTiming`:
+     * durations only, never ids or subject data. R1 existed because nobody could see WHERE this
+     * route spent its time — the answer (photo resolution, not the cohort query) was the opposite
+     * of what the endpoint duration alone suggested.
+     */
+    const startedAt = Date.now();
+    const segments = new Map<string, number>();
+    const mark = (name: string, from: number) => segments.set(name, Math.max(0, Date.now() - from));
+    const serverTiming = () => {
+        segments.set("total", Math.max(0, Date.now() - startedAt));
+        return [...segments].map(([name, dur]) => `${name};dur=${dur}`).join(", ");
+    };
+
+    let phase = Date.now();
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+    mark("auth", phase);
 
+    phase = Date.now();
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    mark("ctx", phase);
 
+    phase = Date.now();
     const access = await getAdminAccessContextCached();
+    mark("access", phase);
     if (!access.ok) {
         return NextResponse.json({ ok: false, error: "FORBIDDEN" }, { status: access.status });
     }
@@ -140,17 +162,20 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
 
     try {
+        phase = Date.now();
         const envelope = await resolveSearchAccessEnvelope(
             supabase,
             ctx.orgId,
             scopeDimensionsFromAccess(access)
         );
+        mark("envelope", phase);
         // The operator can reach nothing: an empty population is the honest answer, not an error.
         if (envelope.impossible) return emptyPage(cohort);
         if (envelope.restricted && allowListIsImpossible(envelope.allowedCustomerIds)) {
             return emptyPage(cohort);
         }
 
+        phase = Date.now();
         const page = await queryChildCohortPage({
             supabase,
             orgId: ctx.orgId,
@@ -161,6 +186,7 @@ export async function GET(request: NextRequest) {
             limit,
             offset,
         });
+        mark("cohort", phase);
 
         if (page.memberIds.length === 0) {
             return NextResponse.json({
@@ -176,11 +202,13 @@ export async function GET(request: NextRequest) {
         }
 
         // Hydrate ONLY this page. The cohort decided WHO; this decides what to show about them.
+        phase = Date.now();
         const { data, error } = await supabase
             .from("customer_members")
             .select("id, person_id, customer_id, display_name, first_name, last_name, dob, is_active")
             .eq("org_id", ctx.orgId)
             .in("id", page.memberIds);
+        mark("hydrate", phase);
         if (error) throw new Error(error.message);
 
         const byId = new Map(
@@ -212,6 +240,7 @@ export async function GET(request: NextRequest) {
         const memberIds = rows.map((r) => r.id);
         const childPersonIds = [...new Set(rows.map((r) => r.person_id).filter(Boolean))] as string[];
 
+        phase = Date.now();
         const [householdsRes, participationRes, placementsRes, agreementsRes, personsRes] = await Promise.all([
             householdIds.length > 0
                 ? supabase.from("customers").select("id, name").eq("org_id", ctx.orgId).in("id", householdIds)
@@ -249,11 +278,12 @@ export async function GET(request: NextRequest) {
             childPersonIds.length > 0
                 ? supabase
                       .from("persons")
-                      .select("id, first_name, last_name, full_name, date_of_birth")
+                      .select("id, first_name, last_name, full_name, date_of_birth, metadata")
                       .eq("org_id", ctx.orgId)
                       .in("id", childPersonIds)
                 : Promise.resolve({ data: [] as PersonIdentityRow[] }),
         ]);
+        mark("batch", phase);
 
         const personById = new Map(
             ((personsRes.data ?? []) as PersonIdentityRow[]).map((p) => [p.id, p]),
@@ -304,6 +334,7 @@ export async function GET(request: NextRequest) {
             }
         }
 
+        phase = Date.now();
         const siteIds = [...new Set(siteByMember.values())];
         const siteLabelById = new Map<string, string | null>();
         if (siteIds.length > 0) {
@@ -316,15 +347,28 @@ export async function GET(request: NextRequest) {
                 siteLabelById.set(s.id, s.label);
             }
         }
+        mark("sites", phase);
 
         /*
          * Canonical avatars, resolved once for the page. The projection is keyed on `person_id`
          * and injects `resolved_photo_url` — the exact keys the Focus Panel's identity adapter
          * reads — so the same child resolves the same photo here, in Search, and on the card.
          */
+        /*
+         * ONE CANONICAL READ PER FACT.
+         *
+         * `projectResolvedProfilePhotosOntoRows` will fetch `persons.metadata` itself when it is not
+         * given it — and the batch above has ALREADY read `persons` for exactly this page's people.
+         * Letting it re-read was a second query for a fact this request had in hand. The helper has
+         * always accepted `metadataByPersonId` for this; the caller simply never passed it.
+         */
+        phase = Date.now();
         const rowsWithPhotos = await projectResolvedProfilePhotosOntoRows({
             supabase,
             orgId: ctx.orgId,
+            metadataByPersonId: new Map(
+                ((personsRes.data ?? []) as PersonIdentityRow[]).map((p) => [p.id, p.metadata ?? null]),
+            ),
             actor: documentActorFromAdminParts({
                 ok: true,
                 userId: ctx.userId,
@@ -335,6 +379,7 @@ export async function GET(request: NextRequest) {
             }),
             rows: rows as unknown as Record<string, unknown>[],
         });
+        mark("photos", phase);
         const photoByMember = new Map(
             rowsWithPhotos.map((r) => [String(r.id), (r.resolved_photo_url as string | null) ?? null]),
         );
@@ -371,16 +416,19 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        return NextResponse.json({
-            ok: true,
-            children,
-            cohort,
-            total: page.total,
-            hasMore: page.hasMore,
-            nextOffset: page.nextOffset,
-            limit,
-            offset,
-        });
+        return NextResponse.json(
+            {
+                ok: true,
+                children,
+                cohort,
+                total: page.total,
+                hasMore: page.hasMore,
+                nextOffset: page.nextOffset,
+                limit,
+                offset,
+            },
+            { headers: { "Server-Timing": serverTiming() } },
+        );
     } catch (e) {
         console.error("[records-children]", e);
         return NextResponse.json(
