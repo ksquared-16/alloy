@@ -23,6 +23,7 @@ SUITES=(
   "development-prompt-readiness.test.mjs"
   "development-agent-report.test.mjs"
   "development-prompt-block-recovery.test.mjs"
+  "development-create-lane-chat.test.mjs"
 )
 
 PASS=0

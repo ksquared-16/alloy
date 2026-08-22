@@ -345,7 +345,9 @@ test("keyboard-open composer and safe areas survive the new panel", () => {
   // The composer becomes one field plus Send, or it takes the conversation's
   // whole share: 160px of composer left an 11px thread.
   assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-composer-box\{flex-direction:row/);
-  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-provider\{display:none;\}/);
+  // Scoped to the LANE composer: on the start screen the provider is part of
+  // the decision being made, so it stays visible while typing.
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-lane-stage:not\(:has\(\.gw-start\)\) \.gw-provider\{display:none;\}/);
   assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-new-update\{display:none;\}/);
 });
 

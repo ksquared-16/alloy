@@ -1563,6 +1563,19 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-report-result dt{color:var(--ink-3);text-transform:capitalize;}
 .gw-report-result dd{margin:0;overflow-wrap:anywhere;}
 
+/* Starting a lane uses the lane skeleton: header, scrollable body, pinned
+   composer. The intro scrolls; the composer never leaves the screen. */
+.gw-start{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.gw-start-intro{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 2px 0;}
+.gw-start-intro .gw-lead{margin:0;}
+.gw-start-composer{flex:0 0 auto;}
+.gw-start-composer textarea{min-height:96px;}
+.gw-start-composer .gw-composer-h{
+  position:static;width:auto;height:auto;clip:auto;overflow:visible;
+  font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:700;
+  margin-bottom:6px;
+}
+
 /* A quiet way down when something arrives while the operator is reading further
    up. Never a jump — the page must not move under a reader. */
 .gw-new-update{
@@ -1893,13 +1906,21 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
      slice landed on empty space. Let it size to the thread instead. */
   :root[data-gw-keyboard] .gw-msg-assistant{min-height:0;}
   :root[data-gw-keyboard] .gw-output{min-height:6rem;}
+  /* 16px or iOS zooms the whole page on focus — the same rule the lane
+     composer already follows. */
+  .gw-start-composer textarea{font-size:16px;min-height:88px;max-height:min(30dvh,180px);}
+  .gw.is-start .gw-composer{padding-bottom:max(10px, env(safe-area-inset-bottom, 0px));}
+  :root[data-gw-keyboard] .gw-start-intro{display:none;}
   :root[data-gw-keyboard] .gw-msg-user{display:none;}
   /* Keyboard open, minus both safe areas, leaves ~270px. A 156px composer and a
      floating pill took all of it and the conversation collapsed to nothing.
      While typing, the composer is the field and Send — the provider toggle and
      the update affordance can wait. */
   :root[data-gw-keyboard] .gw-new-update{display:none;}
-  :root[data-gw-keyboard] .gw-provider{display:none;}
+  /* On a LANE the provider is already chosen, so the toggle can stand down for
+     space while typing. On the start screen it is part of the decision the
+     operator is making — hiding it there would remove the question. */
+  :root[data-gw-keyboard] .gw-lane-stage:not(:has(.gw-start)) .gw-provider{display:none;}
   /* Keyboard open on a 363px visual viewport leaves 270px once both safe areas
      are removed. A 160px composer left the conversation an 11px sliver. While
      typing the composer is one field and Send, side by side. */
@@ -1907,7 +1928,14 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
     padding:6px 8px;box-shadow:none;border-radius:16px;
     padding-bottom:max(6px, env(safe-area-inset-bottom, 0px));
   }
+  /* The single-row keyboard composer belongs to a LANE, where the field is a
+     quick reply. The start screen's field is the whole point of the screen —
+     collapsing it into a row left a 40px-wide box beside the label. */
   :root[data-gw-keyboard] .gw-composer-box{flex-direction:row;align-items:flex-end;gap:8px;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-box{flex-direction:column;align-items:stretch;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-h{display:none;}
+  :root[data-gw-keyboard] .gw-start-composer textarea{min-height:72px;max-height:34dvh;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-row{margin-top:8px;justify-content:space-between;}
   :root[data-gw-keyboard] .gw-composer textarea{min-height:44px;max-height:76px;flex:1 1 auto;}
   :root[data-gw-keyboard] .gw-composer-row{margin-top:0;flex:0 0 auto;}
   :root[data-gw-keyboard] .gw-send{min-height:44px;min-width:72px;padding:8px 12px;}

@@ -1260,16 +1260,18 @@ await test("Connect Existing Work flow is renderable without path entry", () => 
   assert.match(already, /Open Communications/);
 });
 
-await test("Create New Lane form has no substrate fields", () => {
-  const html = renderCreateLaneFlow({ name: "Processing" });
-  assert.match(html, /New Development Lane/);
-  assert.match(html, /Initial work/);
-  assert.match(html, /Claude Code/);
-  assert.match(html, /Cursor/);
-  assert.match(html, /gw-create-provider/);
+await test("starting a lane exposes no substrate fields", () => {
+  // The guard that matters: the operator never picks a worktree, a tmux session
+  // or a slot. The surface around it changed — it is a chat composer now, not a
+  // Name/Provider/Initial-work form — so the label assertions moved with it.
+  const html = renderCreateLaneFlow({});
   assert.equal(html.includes("worktree"), false);
   assert.equal(html.includes("tmux"), false);
   assert.equal(html.includes("slot"), false);
+  assert.match(html, /gw-create-instruction/);
+  assert.match(html, /gw-create-provider/);
+  assert.match(html, /Claude/);
+  assert.match(html, /Cursor/);
   assert.match(gwSrc, /\/api\/lanes\/create/);
 });
 

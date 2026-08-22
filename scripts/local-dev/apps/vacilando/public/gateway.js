@@ -1129,14 +1129,21 @@ async function submitConnect() {
 
 async function submitCreate() {
   if (G.connect.submitting) return;
-  const nameEl = document.getElementById("gw-create-name");
   const instEl = document.getElementById("gw-create-instruction");
   const provEl = document.getElementById("gw-create-provider");
-  const name = nameEl ? nameEl.value : G.connect.name;
   const instruction = instEl ? instEl.value : G.connect.instruction;
-  const provider = provEl?.value === "cursor" ? "cursor" : "claude";
-  G.connect.name = name;
+  const provider = provEl?.value === "cursor" ? "cursor" : (G.connect.provider === "cursor" ? "cursor" : "claude");
+  // The lane names itself from the first message; there is no name to collect.
+  const name = "";
+  if (!String(instruction).trim()) {
+    G.connect.error = "name_or_instruction_required";
+    paint();
+    const box = document.getElementById("gw-create-instruction");
+    if (box) box.focus();
+    return;
+  }
   G.connect.instruction = instruction;
+  G.connect.provider = provider;
   G.connect.submitting = true;
   G.connect.error = null;
   paint();
@@ -1148,9 +1155,7 @@ async function submitCreate() {
     });
     const j = await r.json();
     if (!j.ok) {
-      G.connect.error = j.error === "path_refused"
-        ? "Execution substrate fields are not accepted."
-        : (j.error || "Create failed");
+      G.connect.error = j.error || "create_failed";
       G.connect.submitting = false;
       paint();
       return;
@@ -1159,6 +1164,7 @@ async function submitCreate() {
     G.connect.submitting = false;
     G.connect.instruction = "";
     G.connect.name = "";
+    G.connect.error = null;
     try { await fetchLanes(); } catch { /* */ }
     if (id) location.hash = View.laneDetailHash(id);
   } catch {
@@ -1552,6 +1558,20 @@ document.addEventListener("click", async (e) => {
     e.preventDefault();
     e.stopPropagation();
     scrollThreadToLatest();
+    return;
+  }
+  const createProvider = e.target?.closest?.("[data-gw-create-provider]");
+  if (createProvider) {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = createProvider.getAttribute("data-gw-create-provider");
+    if (next !== "claude" && next !== "cursor") return;
+    G.connect.provider = next;
+    const hidden = document.getElementById("gw-create-provider");
+    if (hidden) hidden.value = next;
+    document.querySelectorAll("[data-gw-create-provider]").forEach((b) => {
+      b.setAttribute("aria-pressed", b.getAttribute("data-gw-create-provider") === next ? "true" : "false");
+    });
     return;
   }
   const msgMore = e.target?.closest?.("[data-gw-msg-more]");

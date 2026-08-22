@@ -2633,23 +2633,62 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
   </details>`;
 }
 
+/**
+ * Starting a lane is starting a conversation.
+ *
+ * It used to be a form: Name, then a Provider dropdown, then "Initial work" —
+ * three fields to fill in before anything could happen, with the name demanded
+ * before the operator had said what the lane was even for. And on a phone the
+ * whole form overflowed a container with `overflow:hidden`, so the Start button
+ * and the bottom of the message box were simply cut off.
+ *
+ * Now it is a composer: one message, a provider preference beside Send, and the
+ * lane names itself from what you wrote. Rename Lane is in Details when the
+ * first line stops fitting.
+ */
 export function renderCreateLaneFlow(create = {}) {
-  const err = create.error ? `<div class="gw-notice err">${esc(create.error)}</div>` : "";
-  return `<h1>New Development Lane</h1>
-    <p class="gw-lead">The lane is created immediately. Execution starts when capacity is available.</p>
-    <form class="gw-connect" data-gw-create>
-      <label class="gw-composer-h" for="gw-create-name">Name</label>
-      <input id="gw-create-name" name="name" maxlength="80" value="${esc(create.name || "")}" placeholder="Processing" />
-      <label class="gw-composer-h" for="gw-create-provider">Provider</label>
-      <select id="gw-create-provider" name="provider">
-        <option value="claude" selected>Claude Code</option>
-        <option value="cursor">Cursor</option>
-      </select>
-      <label class="gw-composer-h" for="gw-create-instruction">Initial work</label>
-      <textarea id="gw-create-instruction" name="instruction" rows="8" maxlength="${LANE_INSTRUCTION_MAX}" placeholder="Approved initial instruction…">${esc(create.instruction || "")}</textarea>
-      <button class="btn primary" type="submit" data-gw-create-submit ${create.submitting ? "disabled" : ""}>Create Lane</button>
+  const err = create.error ? `<div class="gw-notice err">${esc(createErrorText(create.error))}</div>` : "";
+  const provider = create.provider === "cursor" ? "cursor" : "claude";
+  const draft = create.instruction || "";
+  return `<div class="gw-start" data-gw-start>
+    <div class="gw-start-intro">
+      <p class="gw-lead">Say what this lane should work on. It starts from your first message, and takes its name from it — you can rename it any time in Details.</p>
+    </div>
+    <form class="gw-composer gw-start-composer" data-gw-create>
+      <div class="gw-composer-box">
+        <label class="gw-composer-h" for="gw-create-instruction">First message</label>
+        <textarea id="gw-create-instruction" name="instruction" rows="4"
+          maxlength="${LANE_INSTRUCTION_MAX}" autofocus
+          placeholder="What should this lane work on?">${esc(draft)}</textarea>
+        <div class="gw-composer-row">
+          <div class="gw-provider" role="radiogroup" aria-label="Agent">
+            <button type="button" class="gw-provider-opt" data-gw-create-provider="claude" aria-pressed="${provider === "claude" ? "true" : "false"}">Claude</button>
+            <button type="button" class="gw-provider-opt" data-gw-create-provider="cursor" aria-pressed="${provider === "cursor" ? "true" : "false"}">Cursor</button>
+          </div>
+          <input type="hidden" id="gw-create-provider" name="provider" value="${esc(provider)}" />
+          <button class="btn primary gw-send" type="submit" data-gw-create-submit ${create.submitting ? "disabled" : ""}>${create.submitting ? "Starting…" : "Start"}</button>
+        </div>
+      </div>
       ${err}
-    </form>`;
+    </form>
+  </div>`;
+}
+
+export function createErrorText(error) {
+  switch (error) {
+    case "name_or_instruction_required":
+      return "Write a first message to start this lane.";
+    case "instruction_too_large":
+      return "That first message is too long.";
+    case "name_too_large":
+      return "That first line is too long to use as a name — shorten it or rename later.";
+    case "already_connected":
+      return "A lane for this work already exists.";
+    case "path_refused":
+      return "Execution substrate fields are not accepted.";
+    default:
+      return error ? String(error) : "Could not start the lane.";
+  }
 }
 
 export function renderSourceControl(lane) {
@@ -2801,12 +2840,20 @@ export function renderGatewayShell({
     </div>`;
   }
   if (kind === "create") {
-    return `<div class="gw is-detail" data-gw data-gw-mode="create">${list}
+    // Same skeleton as a lane: compact header, scrollable body, pinned
+    // composer. The old markup put a tall form straight into .gw-main, which is
+    // overflow:hidden — so on a phone the message box and Start button were cut
+    // off with no way to scroll to them.
+    return `<div class="gw is-detail is-start" data-gw data-gw-mode="create">${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
-        ${renderCreateLaneFlow(connect || {})}
+        <div class="gw-lane-stage" data-gw-stage>
+          <header class="gw-chat-head" data-gw-chat-head>
+            <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
+            <div class="gw-chat-id"><h1 class="gw-chat-title">New lane</h1></div>
+          </header>
+          ${renderCreateLaneFlow(connect || {})}
+        </div>
       </section>
-      ${renderStatus(null, resources, statusOpts)}
     </div>`;
   }
   if (kind === "loading") {
