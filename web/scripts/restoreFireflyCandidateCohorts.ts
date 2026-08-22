@@ -110,10 +110,18 @@ async function main() {
         if (cohort !== row.expected_damaged_cohort) {
             failures.push(`${row.candidate_id} (${row.child}): cohort is "${cohort}", expected damaged "${row.expected_damaged_cohort}" — refusing (concurrent change?)`);
         }
-        const meta = (live.metadata ?? {}) as { cohort_resolution?: { program_room_cohort_key?: string } };
+        const meta = (live.metadata ?? {}) as {
+            cohort_resolution?: { program_room_cohort_key?: string; program_room_group_label?: string };
+        };
         const evidence = String(meta.cohort_resolution?.program_room_cohort_key ?? "");
         if (evidence !== row.expected_original_cohort) {
-            failures.push(`${row.candidate_id} (${row.child}): evidence is "${evidence}", table says "${row.expected_original_cohort}" — refusing`);
+            failures.push(`${row.candidate_id} (${row.child}): cohort evidence is "${evidence}", table says "${row.expected_original_cohort}" — refusing`);
+        }
+        // Director precondition: the label must also be present in the immutable evidence, so a
+        // label restore can never write a value this artifact invented.
+        const evidenceLabel = String(meta.cohort_resolution?.program_room_group_label ?? "");
+        if (evidenceLabel !== row.expected_original_label) {
+            failures.push(`${row.candidate_id} (${row.child}): label evidence is "${evidenceLabel}", table says "${row.expected_original_label}" — refusing`);
         }
         if (String(live.status ?? "") !== "active") {
             failures.push(`${row.candidate_id} (${row.child}): status is "${String(live.status)}", expected active — refusing`);

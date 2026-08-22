@@ -7,8 +7,6 @@ import {
     loadActiveCandidatesBySubject,
     movePlacementCandidateToDerivedCohort,
     placementCandidateSubjectKey,
-    retireDuplicateActiveCandidates,
-    revertDuplicateRepair,
 } from "@/lib/orchestration/placement/placementCandidateSubjectUniqueness";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { __testing as backfillTesting } from "@/lib/orchestration/placement/backfill/placementCandidateBackfill";
@@ -304,8 +302,6 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
 
     const nowIso = new Date().toISOString();
     const rows: Record<string, unknown>[] = [];
-    /** Cohort the ensure pass derives NOW per subject — the survivor rule for duplicate repair. */
-    const derivedCohortBySubject = new Map<string, string | null>();
     /** Cohort transitions of candidates these children already have — moves, never inserts. */
     const reconcileMoves: Array<{
         candidateId: string;
@@ -337,19 +333,6 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             dob: cm?.dob ?? null,
             programKey,
         });
-        /*
-         * Recorded for EVERY child, before any `continue`. This is the survivor rule for duplicate
-         * repair, and the common case is precisely the one that skips: when the seed key already
-         * exists we still need to know which cohort the ensure pass derives, or the repair falls back
-         * to "earliest" and can retire the candidate the projection is actually resolving.
-         */
-        derivedCohortBySubject.set(
-            placementCandidateSubjectKey({
-                opportunityId: child.opportunityId,
-                customerMemberId: child.customerMemberId,
-            }),
-            (derived.row.program_room_cohort_key as string | null) ?? null,
-        );
         if (existingSeedKeys.has(derived.seedKey)) {
             skippedExisting += 1;
             continue;
@@ -396,12 +379,21 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
      * resolution the projection uses. Prevention above is unaffected and stays always-on: it only ever
      * moves a candidate the child already has, which cannot oscillate.
      */
-    if (process.env.ALLOY_PLACEMENT_DUPLICATE_REPAIR === "1") {
-        await retireDuplicateActiveCandidates(supabase, { orgId, opportunityIds, derivedCohortBySubject });
-    } else {
-        // Disabled must mean no repair state is left standing — undo our own supersessions.
-        await revertDuplicateRepair(supabase, { orgId, opportunityIds });
-    }
+    /*
+     * ── NO BUSINESS-FACT REPAIR ON A READ PATH ──
+     *
+     * Both the duplicate repair AND its rollback used to run here. The rollback was defensible as a
+     * one-time undo and it did its job (Firefly is restored), but it is still a write triggered by an
+     * operator opening a Work View, and that is the exact pattern that produced two regressions.
+     *
+     * Candidate ENSURE stays — creating a missing candidate is this path's bounded, explicit contract.
+     * Reconciling or repairing the business facts of candidates that already exist is not, and now
+     * lives only in an explicit governed operation with deterministic preconditions
+     * (`scripts/restoreFireflyCandidateCohorts.ts` is the worked example).
+     *
+     * `retireDuplicateActiveCandidates` / `revertDuplicateRepair` remain exported for that governed
+     * use. They are deliberately unreachable from here.
+     */
 
     if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
     const { error } = await supabase.from("placement_candidates").insert(rows);
