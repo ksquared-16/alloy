@@ -1,0 +1,51 @@
+{
+  "list_summary_leak": [],
+  "list": [
+    {
+      "label": "Vacilando",
+      "status": "Working",
+      "group": "active"
+    },
+    {
+      "label": "Trust Runtime",
+      "status": "Needs input",
+      "group": "needs_input"
+    },
+    {
+      "label": "Communications",
+      "status": "Idle",
+      "group": "idle"
+    },
+    {
+      "label": "Runtime Performance",
+      "status": "Ready",
+      "group": "idle"
+    },
+    {
+      "label": "Lifecycle Cert",
+      "status": "Offline",
+      "group": "offline"
+    },
+    {
+      "label": "Processing",
+      "status": "Offline",
+      "group": "offline"
+    },
+    {
+      "label": "Access & Identity",
+      "status": "Offline",
+      "group": "offline"
+    }
+  ],
+  "completed": {
+    "visibleChars": 1818,
+    "outputH": 828,
+    "scrollH": 828,
+    "fullyVisible": true,
+    "runState": "Needs input · Claude",
+    "clipboardChars": 2153,
+    "copyFeedback": "Copy"
+  },
+  "completed_summary_leak": [],
+  "errors": []
+}
