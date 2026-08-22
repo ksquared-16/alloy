@@ -1912,7 +1912,68 @@ export function renderLaneList(lanes, selectedId, { loading = false, attentionBy
  * pushes it out. Showing it as the reply is what let a completion vanish on the
  * next poll.
  */
-export function assistantMessageSource(lane, { output = null, outputText = "" } = {}) {
+/**
+ * A run that reported through the status-only CLI still has structured,
+ * run-bound facts: the summary the worker sent with `vac run-status --summary`,
+ * and the state_reason it gave — which for NEEDS_INPUT is the question itself.
+ *
+ * REGRESSION THIS CLOSES. When the conversation moved to structured reports,
+ * every lane that had not adopted `vac run-report` rendered "No agent report on
+ * this run yet" — the Runtime Performance lane sat at NEEDS_INPUT with a real
+ * summary and a real blocking question in the store, and the operator was shown
+ * nothing at all. Refusing to print the pane was right; refusing to print the
+ * run's own structured summary was not.
+ */
+export function statusSummaryMessage(run) {
+  if (!run) return null;
+  const parts = [];
+  const seen = new Set();
+  const push = (value) => {
+    const text = summaryText(value);
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(text);
+  };
+  // Most specific first: the reason a run stopped is what the operator needs.
+  push(run.state_reason);
+  push(run.completion_report);
+  push(run.latest_progress);
+  push(run.resource_wait);
+  if (!parts.length) return null;
+  return parts.join("\n\n");
+}
+
+/** Report type a status-only run maps onto, for labelling only. */
+function statusReportType(state) {
+  if (state === "NEEDS_INPUT") return "needs_input";
+  if (state === "COMPLETE") return "completion";
+  if (state === "FAILED") return "failure";
+  return "progress";
+}
+
+/**
+ * The provider's own last message, parsed out of the session transcript.
+ *
+ * This is NOT a pane capture: `latest_response` comes from the Claude Code
+ * session transcript with `source: claude_code_session_transcript`, so it is an
+ * attributed assistant message with no TUI chrome and no viewport bound. A lane
+ * that has not adopted `vac run-report` still wrote a real answer, and this is
+ * where it lives — observed on the Runtime Performance lane: 2,862 characters
+ * of summary in the transcript behind a 90-character status string.
+ */
+export function transcriptResponse(latestResponse) {
+  const r = latestResponse;
+  if (!r || r.ok === false) return null;
+  if (r.mode !== "latest_response") return null;
+  if (r.available === false) return null;
+  if (r.source && r.source !== "claude_code_session_transcript") return null;
+  const text = String(r.text || "");
+  return text.trim() ? { text, truncated: r.truncated === true, at: r.captured_at || null } : null;
+}
+
+export function assistantMessageSource(lane, { output = null, outputText = "", latestResponse = null } = {}) {
   const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
   if (report?.message) {
     return {
@@ -1922,8 +1983,52 @@ export function assistantMessageSource(lane, { output = null, outputText = "" } 
       terminal: false,
     };
   }
-  const run = lane?.execution_run;
-  const working = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(run?.state);
+  const run = lane?.execution_run || lane?.previous_run || null;
+  const state = run?.state || null;
+  // No structured report, but the provider did write an answer. Prefer the
+  // transcript message over the bounded status one-liner: the operator asked
+  // for the summary, and the summary is here.
+  const transcript = transcriptResponse(latestResponse)
+    || transcriptResponse(output);
+  if (transcript) {
+    return {
+      kind: "transcript",
+      report: {
+        type: statusReportType(state),
+        message: transcript.text,
+        revision: null,
+        phase: null,
+        reason: null,
+        choices: null,
+        result: null,
+        transcript_only: true,
+        truncated: transcript.truncated,
+      },
+      text: transcript.text,
+      terminal: false,
+    };
+  }
+  // A lane still on the status-only CLI: show what it actually reported, said
+  // plainly to be a status summary rather than a full agent message.
+  const status = statusSummaryMessage(run);
+  if (status) {
+    return {
+      kind: "status",
+      report: {
+        type: statusReportType(state),
+        message: status,
+        revision: null,
+        phase: null,
+        reason: null,
+        choices: null,
+        result: null,
+        status_only: true,
+      },
+      text: status,
+      terminal: false,
+    };
+  }
+  const working = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(state);
   if (working) {
     // No report yet. A restrained working state is honest; raw TUI content
     // dressed as a reply is not.
@@ -2050,18 +2155,24 @@ export function renderReportChoices(choices) {
  * report yet the operator gets a restrained working state, never TUI text.
  */
 export function renderAssistantMessage(source, { pending = false } = {}) {
-  if (source?.kind === "report" && source.report) {
+  if (["report", "status", "transcript"].includes(source?.kind) && source.report) {
     const r = source.report;
     const meta = REPORT_TONE[r.type] || REPORT_TONE.progress;
-    return `<div class="gw-report" data-gw-report data-report-type="${esc(r.type)}" data-report-id="${esc(r.report_id || "")}" data-report-revision="${esc(String(r.revision ?? ""))}">
+    const statusOnly = r.status_only === true;
+    const transcriptOnly = r.transcript_only === true;
+    return `<div class="gw-report${statusOnly ? " is-status-only" : ""}" data-gw-report data-report-type="${esc(r.type)}" data-report-source="${esc(source.kind)}" data-report-id="${esc(r.report_id || "")}" data-report-revision="${esc(String(r.revision ?? ""))}">
       <div class="gw-report-h">
         <span class="gw-report-kind is-${esc(meta.tone)}">${esc(meta.label)}</span>
+        ${statusOnly ? `<span class="gw-report-phase">status summary</span>` : ""}
+        ${transcriptOnly ? `<span class="gw-report-phase">session transcript</span>` : ""}
         ${r.phase ? `<span class="gw-report-phase">${esc(r.phase)}</span>` : ""}
       </div>
       ${r.reason ? `<p class="gw-report-reason">${esc(r.reason)}</p>` : ""}
       <div class="gw-report-body" data-gw-report-body>${renderReportMarkdown(r.message)}</div>
       ${renderReportChoices(r.choices)}
       ${renderReportResult(r.result)}
+      ${statusOnly ? `<p class="gw-report-note" data-gw-report-note>This lane reports with <code>vac run-status</code>, so this is its status summary rather than a full message. Full terminal output is under Details.</p>` : ""}
+      ${transcriptOnly ? `<p class="gw-report-note" data-gw-report-note>The agent's own last message, read from the session transcript. This lane has not adopted <code>vac run-report</code>${r.truncated ? ", and the transcript capped this response" : ""}.</p>` : ""}
     </div>`;
   }
   if (source?.kind === "working" || pending) {
@@ -2070,8 +2181,10 @@ export function renderAssistantMessage(source, { pending = false } = {}) {
       <p class="gw-report-waiting" data-gw-report-waiting>Working… the agent has not sent an update yet.</p>
     </div>`;
   }
+  // Nothing structured at all. Even here the operator gets a route to the facts
+  // rather than a dead end.
   return `<div class="gw-report is-empty" data-gw-report data-report-type="none">
-    <p class="gw-report-waiting">No agent report on this run yet.</p>
+    <p class="gw-report-waiting">This run has not reported a summary. Raw terminal output is under Details.</p>
   </div>`;
 }
 
@@ -2621,6 +2734,7 @@ export function renderGatewayShell({
   developmentResources,
   connect,
   executionCapacity,
+  latestResponse = null,
   asideOpen = false,
   userMessageExpanded = false,
 } = {}) {
@@ -2704,7 +2818,7 @@ export function renderGatewayShell({
     outputText,
     lane,
   });
-  const assistant = assistantMessageSource(lane, { output, outputText });
+  const assistant = assistantMessageSource(lane, { output, outputText, latestResponse });
   const cap = deriveLaneExecutionPosture(lane);
   const bodyText = outputBodyText(output, outputText, { pending });
   const liveAttr = work.live ? ` data-gw-live="1"` : "";

@@ -1521,6 +1521,10 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-report-phase{font-size:12px;color:var(--ink-3);}
 .gw-report-reason{margin:0;font-size:12.5px;color:var(--ink-2);}
 .gw-report-waiting{margin:0;font-size:13.5px;color:var(--ink-3);font-style:italic;}
+/* A lane still on the status-only CLI. Its summary is real and is shown; the
+   label says what it is so it is never mistaken for a full agent message. */
+.gw-report-note{margin:6px 0 0;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line-soft,var(--line));padding-top:6px;}
+.gw-report-note code{font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;}
 .gw-report-body{
   flex:1 1 auto;min-width:0;min-height:0;overflow:auto;
   font-size:14px;line-height:1.5;overflow-wrap:anywhere;

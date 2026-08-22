@@ -28,6 +28,7 @@ const G = {
   statusOpen: null,
   laneFoldOpen: null,
   asideOpen: null,
+  latestResponse: null,
   userMessageExpanded: false,
   lastNotified: {},
   telemetry: null,
@@ -583,6 +584,29 @@ async function fetchOutput(id, { mode = "recent" } = {}) {
   return G.output;
 }
 
+/**
+ * A lane that has not adopted `vac run-report` still wrote a real answer — it
+ * is in the session transcript. Fetch it so the conversation shows the summary
+ * instead of the bounded status one-liner. Skipped entirely once a structured
+ * report exists, because the report is authoritative.
+ */
+function laneHasStructuredReport(lane) {
+  return Boolean(lane?.execution_run?.agent_report?.message || lane?.previous_run?.agent_report?.message);
+}
+
+async function fetchLatestResponse(id) {
+  if (!id) return null;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=latest_response`);
+    const j = await r.json();
+    if (!View.outputBelongsToLane(j, id, G.lane)) return G.latestResponse;
+    G.latestResponse = j;
+    return j;
+  } catch {
+    return G.latestResponse;
+  }
+}
+
 async function fetchTelemetry(id) {
   const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/telemetry`);
   const j = await r.json();
@@ -758,6 +782,7 @@ function paint() {
     output: outputForSelected,
     outputText: outputForSelected?.text || "",
     outputPending: Boolean(G.selected && G.lane && !outputForSelected),
+    latestResponse: G.latestResponse?.lane_id === G.selected ? G.latestResponse : null,
     composer,
     resources: resources(),
     lastInstruction: lastInstructionFor(G.selected),
@@ -835,6 +860,7 @@ async function promoteCompletedOutput(laneId) {
   if (G.finalizedOutput) return;
   const prev = G.output;
   await fetchOutput(laneId, { mode: "latest_response" }).catch(() => {});
+  if (!laneHasStructuredReport(G.lane)) await fetchLatestResponse(laneId).catch(() => {});
   if (!G.output?.available || !String(G.output?.text || "").trim()) {
     G.outputMode = "recent";
     G.output = G.recentOutput || prev;
@@ -862,6 +888,14 @@ function startOutputPoll(laneId) {
         if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
           applyContextRefreshWatch();
+        }
+        // The conversation needs the agent's own message. If the lane has not
+        // adopted `vac run-report`, that message lives in the session
+        // transcript, so fetch it alongside the pane.
+        if (!laneHasStructuredReport(G.lane)) {
+          await fetchLatestResponse(laneId);
+        } else if (G.latestResponse) {
+          G.latestResponse = null;
         }
         const paneOut = paneOutputForLane(laneId);
         const pre = document.querySelector("[data-gw-output]");
@@ -1123,6 +1157,12 @@ async function show(r) {
       fetchLane(hydrateId).catch(() => { if (gen === G.showGen && G.selected === hydrateId && !G.lane) G.lane = null; }),
     ]);
     if (gen !== G.showGen) return;
+    // Opening a lane must show its message immediately, not one poll later. A
+    // lane still on `vac run-status` keeps its real answer in the transcript.
+    if (G.selected === hydrateId && !laneHasStructuredReport(G.lane)) {
+      await fetchLatestResponse(hydrateId).catch(() => {});
+      if (gen !== G.showGen) return;
+    }
     if (G.selected === hydrateId && !G.lane && (G.lanes || []).some((l) => View.laneMatchesId(l, hydrateId))) {
       commitKnownLane(hydrateId);
     }

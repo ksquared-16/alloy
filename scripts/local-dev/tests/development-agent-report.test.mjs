@@ -50,7 +50,7 @@ const {
   normalizeReportType,
   submitAgentReport,
 } = await import("../lib/vacilando/execution-run-report.mjs");
-const { assistantMessageSource, copyableOutputText, copySourcePlan, renderAssistantMessage, renderReportMarkdown, renderGatewayShell, renderTerminalDiagnostics } =
+const { assistantMessageSource, copyableOutputText, copySourcePlan, renderAssistantMessage, renderReportMarkdown, renderGatewayShell, renderTerminalDiagnostics, transcriptResponse } =
   await import("../apps/vacilando/public/gateway-view.mjs");
 const { outcomePushPayload, pushRunOutcome, savePushSubscription } = await import("../lib/vacilando/lane-push.mjs");
 
@@ -396,6 +396,129 @@ test("hard-wrapped source lines are one paragraph, as in Markdown", () => {
   assert.match(mixed, /<li>bullet<\/li>/);
   assert.match(mixed, /<h3 class="gw-md-h">Heading<\/h3>/);
   assert.match(mixed, /<p class="gw-md-p">tail<\/p>/);
+});
+
+test("a status-only lane still shows its summary — never an empty bubble", () => {
+  // REGRESSION. When the conversation moved to structured reports, every lane
+  // that had not adopted `vac run-report` rendered "No agent report on this run
+  // yet". Observed live: the Runtime Performance lane sat at NEEDS_INPUT with a
+  // real summary AND its blocking question in the store, and showed nothing.
+  const run = newRun();
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    root: ROOT,
+    origin: "agent",
+    reason: "PR 495 open, 9/9 CI pass; merge not authorized by this instruction",
+    progress: "Promotion complete to the merge authorization boundary",
+    completion_report: { summary: "Promotion complete to the merge authorization boundary" },
+  });
+  const stored = publicExecutionRun(getExecutionRun(run.run_id, ROOT));
+  assert.equal(stored.agent_report, null, "this lane never sent a structured report");
+
+  const lane = { lane_id: LANE, label: "Runtime Performance", execution_run: stored };
+  const src = assistantMessageSource(lane, { outputText: "❯ raw pane chrome" });
+  assert.equal(src.kind, "status");
+  assert.equal(src.report.type, "needs_input");
+  // The reason comes FIRST: for NEEDS_INPUT it is the question the operator
+  // has to answer.
+  assert.match(src.text, /^PR 495 open/);
+  assert.match(src.text, /Promotion complete to the merge authorization boundary/);
+  // Deduplicated: latest_progress and completion_report carry the same string.
+  assert.equal((src.text.match(/Promotion complete/g) || []).length, 1);
+  assert.equal(src.text.includes("raw pane chrome"), false, "still never the pane");
+
+  const html = renderAssistantMessage(src);
+  assert.match(html, /data-report-source="status"/);
+  assert.match(html, /status summary/);
+  assert.match(html, /vac run-status/);
+  assert.match(html, /Full terminal output is under Details/);
+  assert.match(html, /PR 495 open/);
+
+  // No structured facts at all is the ONLY empty case, and even it routes the
+  // operator to the terminal instead of dead-ending.
+  const bare = assistantMessageSource({ lane_id: LANE, execution_run: null }, {});
+  assert.equal(bare.kind, "none");
+  assert.match(renderAssistantMessage(bare), /Raw terminal output is under Details/);
+});
+
+test("no terminal state can render an empty assistant message", () => {
+  // The law, stated once: if a run stopped, the operator is told why.
+  for (const [state, opts] of [
+    ["COMPLETE", { completion_report: { summary: "Shipped and verified" } }],
+    ["FAILED", { reason: "build_failed" }],
+    ["NEEDS_INPUT", { reason: "Which default do you want?" }],
+  ]) {
+    const run = newRun();
+    transitionExecutionRun(run.run_id, state, { root: ROOT, origin: "agent", ...opts });
+    const lane = { lane_id: LANE, execution_run: publicExecutionRun(getExecutionRun(run.run_id, ROOT)) };
+    const src = assistantMessageSource(lane, {});
+    assert.equal(src.kind, "status", `${state} must not fall through to an empty bubble`);
+    assert.ok(src.text.trim().length > 0, `${state} rendered nothing`);
+  }
+});
+
+test("a lane without run-report shows the agent's transcript message, not a one-liner", () => {
+  // THE ACTUAL COMPLAINT. The Runtime Performance lane reported a 90-character
+  // string through `vac run-status` while its real 2,862-character summary sat
+  // in the session transcript. The operator asked for the summary; the bounded
+  // status line is not it.
+  const run = newRun();
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    root: ROOT, origin: "agent",
+    reason: "merge not authorized by this instruction",
+    completion_report: { summary: "Promotion complete to the merge authorization boundary" },
+  });
+  const lane = { lane_id: LANE, execution_run: publicExecutionRun(getExecutionRun(run.run_id, ROOT)) };
+  const transcript = [
+    "Promotion is complete to the merge authorization boundary.",
+    "",
+    "## PR #495",
+    "",
+    "| Field | Value |",
+    "|---|---|",
+    "| CI | 9/9 pass |",
+    "",
+    "**I did not merge** — the instruction ended at opening the PR.",
+  ].join("\n");
+  const latest = {
+    ok: true, available: true, mode: "latest_response",
+    source: "claude_code_session_transcript", lane_id: LANE,
+    text: transcript, truncated: false, captured_at: "2026-08-22T16:16:32.746Z",
+  };
+
+  const src = assistantMessageSource(lane, { latestResponse: latest, outputText: "❯ raw pane" });
+  assert.equal(src.kind, "transcript");
+  assert.equal(src.text, transcript, "the whole message, verbatim");
+  // The point of the fix: the operator gets the message, not the one-liner.
+  const statusOnly = assistantMessageSource(lane, {}).text;
+  assert.ok(src.text.length > statusOnly.length * 1.5, "the transcript message must beat the status summary");
+
+  const html = renderAssistantMessage(src);
+  assert.match(html, /data-report-source="transcript"/);
+  assert.match(html, /session transcript/);
+  assert.match(html, /vac run-report/);
+  assert.match(html, /I did not merge/);
+  assert.match(html, /<table class="gw-md-table">/);
+  assert.equal(html.includes("raw pane"), false);
+
+  // A pane capture is NOT a transcript, whatever mode it claims.
+  assert.equal(transcriptResponse({ ok: true, mode: "recent", text: "pane", source: "tmux_pane" }), null);
+  assert.equal(transcriptResponse({ ok: true, mode: "latest_response", available: false, text: "" }), null);
+  assert.equal(transcriptResponse({ ok: false, mode: "latest_response", text: "x" }), null);
+  assert.equal(transcriptResponse({ ok: true, mode: "latest_response", source: "tmux_pane", text: "x" }), null);
+
+  // With no transcript it still falls back to the status summary, never empty.
+  assert.equal(assistantMessageSource(lane, {}).kind, "status");
+});
+
+test("a structured report always outranks the status summary and the transcript", () => {
+  const run = newRun();
+  transitionExecutionRun(run.run_id, "EXECUTING", { root: ROOT, origin: "agent", progress: "bounded one-liner" });
+  report(run.run_id, { type: "progress", message: "The full agent message." });
+  const lane = { lane_id: LANE, execution_run: publicExecutionRun(getExecutionRun(run.run_id, ROOT)) };
+  const latest = { ok: true, available: true, mode: "latest_response", source: "claude_code_session_transcript", lane_id: LANE, text: "an older transcript turn" };
+  const src = assistantMessageSource(lane, { latestResponse: latest });
+  assert.equal(src.kind, "report", "the structured report is authoritative");
+  assert.equal(src.text, "The full agent message.");
 });
 
 test("markdown is escaped before it is marked up", () => {
