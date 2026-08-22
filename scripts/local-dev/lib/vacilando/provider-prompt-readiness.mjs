@@ -155,12 +155,23 @@ const BLOCKER_SIGNATURES = Object.freeze([
  */
 const PROMPT_AFFORDANCES = Object.freeze([
   // The composer caret. Claude Code draws U+276F ("❯"); other TUIs draw ">".
-  // Verified against a live pane — matching only ">" false-negatives every real
-  // Claude prompt, which would refuse every delivery.
-  /(^|\n)\s*[│|]?\s*[>❯]\s*(\n|\s*[│|]\s*\n|$)/,
+  // Matching only ">" false-negatives every real Claude prompt.
+  //
+  // A caret at the start of a line, followed by a space, IS the composer —
+  // whether it is empty or the operator has already typed into it. The earlier
+  // pair of patterns required either an EMPTY caret line or a caret line that
+  // was the last line of the capture, and a composer holding text is neither:
+  // the TUI footer always follows it. A live pane reading `❯ merge it` was
+  // therefore classified "unknown" and the send refused.
+  /(^|\n)[ \t]*[│|]?[ \t]*[>❯][ \t]/,
+  /(^|\n)[ \t]*[│|]?[ \t]*[>❯][ \t]*(\n|$)/,
+  // Footer hints. Claude Code varies this line by mode and context, so match
+  // any of its stable fragments rather than one full phrasing.
   /\? for shortcuts/i,
   /\bshift\s*\+\s*tab to cycle\b/i,
-  /(^|\n)\s*[>❯]\s+\S[^\n]{0,200}$/,
+  /\bauto mode (on|off)\b/i,
+  /\bfor agents\b/i,
+  /\bto manage\b/i,
   /type your (message|instruction|request)/i,
   /ctrl\s*\+\s*c to (quit|exit)/i,
 ]);

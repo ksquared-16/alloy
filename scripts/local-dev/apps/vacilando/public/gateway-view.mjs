@@ -183,6 +183,18 @@ export function deliveryNotice(result) {
     }
     return { kind: "ok", text: "Work queued. Waiting for execution capacity." };
   }
+  // A refused send carries WHY from the readiness gate. An opaque
+  // "Delivery refused (provider_prompt_not_ready)" is what the operator saw the
+  // first time this fired; say what the pane was doing instead.
+  if (result?.error === "provider_prompt_not_ready") {
+    const why = summaryText(result.prompt_readiness?.summary) || summaryText(result.blocking_screen);
+    return {
+      kind: "err",
+      text: why
+        ? `Not sent — ${why.charAt(0).toLowerCase()}${why.slice(1)} Open Details to see the terminal.`
+        : deliveryErrorText(result.error),
+    };
+  }
   return { kind: "err", text: deliveryErrorText(result?.error) };
 }
 
@@ -211,6 +223,8 @@ export function deliveryErrorText(error) {
       return "Delivery failed. The instruction was not submitted.";
     case "cursor_delivery_unavailable":
       return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
+    case "provider_prompt_not_ready":
+      return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
     default:
       return error ? `Delivery refused (${error}).` : "Delivery failed.";
   }

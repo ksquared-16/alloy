@@ -28,6 +28,7 @@ const {
   detectPromptBlocker,
   promptReadinessAllowsSend,
 } = await import("../lib/vacilando/provider-prompt-readiness.mjs");
+const viewModule = await import("../apps/vacilando/public/gateway-view.mjs");
 const {
   bindOutputToRun,
   outputFingerprint,
@@ -202,6 +203,73 @@ await test("the real Claude Code footer and caret are recognised, idle and mid-t
   // A passive "Restart to update" notice is not an update MODAL. Treating it as
   // one would block delivery on every pane that has ever seen an update.
   assert.equal(detectPromptBlocker(composer, { provider: "claude" }), null);
+});
+
+await test("a composer holding typed text is READY — the footer varies", () => {
+  // REGRESSION, from a live refusal. The operator could not send to the Runtime
+  // Performance lane: its pane read `❯ merge it` — the composer with their text
+  // already in it — and the gate classified it "unknown" and refused.
+  //
+  // Two patterns had to both miss for that: one required an EMPTY caret line,
+  // the other required the caret line to be the LAST line of the capture. A
+  // composer holding text is neither, because the footer always follows it.
+  // The footer itself was no help — Claude Code varies that line, and this one
+  // said "auto mode on · PR #495 · 1 shell · ← for agents · ↓ to manage" with
+  // no "shift+tab to cycle" anywhere.
+  const live = [
+    "  Run state reported as NEEDS_INPUT on lane_73a897409906: merge authorization is",
+    "  yours.",
+    "",
+    "✻ Sautéed for 1h 15m 33s · 1 shell still running",
+    "                                        ✔ Update installed · Restart to update",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "❯ merge it",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on · PR #495 · 1 shell · ← for agents · ↓ to manage",
+  ].join("\n");
+  const a = assessPanePromptReadiness(live, { provider: "claude" });
+  assert.equal(a.state, "ready", "a composer with text in it is an actionable prompt");
+  assert.equal(promptReadinessAllowsSend(a).allow, true);
+
+  // An empty composer with the same footer variant is equally ready.
+  const empty = live.replace("❯ merge it", "❯");
+  assert.equal(assessPanePromptReadiness(empty, { provider: "claude" }).state, "ready");
+
+  // Footer fragments this build actually emits, each sufficient on its own.
+  for (const footer of [
+    "  ⏵⏵ auto mode on · ← for agents · ↓ to manage",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+    "  ? for shortcuts",
+  ]) {
+    assert.equal(assessPanePromptReadiness(`some output\n${footer}`, { provider: "claude" }).state, "ready", footer);
+  }
+
+  // The broader caret rule must NOT swallow a numbered menu — blockers are
+  // evaluated first, and a caret-marked choice list is still a modal.
+  assert.equal(assessPanePromptReadiness("Teach auto mode about your environment?\n ❯ 1. Yes\n   2. No", { provider: "claude" }).state, "blocked");
+  assert.equal(assessPanePromptReadiness("Do you want to allow Claude to run this command?\n ❯ 1. Yes\n   2. No", { provider: "claude" }).state, "blocked");
+  // And a mid-turn pane is still busy, caret or no caret.
+  assert.equal(assessPanePromptReadiness("❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "busy");
+});
+
+await test("a refused send tells the operator what the pane was doing", () => {
+  // What they actually saw was "Delivery refused (provider_prompt_not_ready)".
+  const { deliveryNotice, deliveryErrorText } = viewModule;
+  const withReason = deliveryNotice({
+    ok: false,
+    error: "provider_prompt_not_ready",
+    prompt_readiness: { summary: 'The agent is mid-turn ("esc to interrupt"), not at an actionable prompt.' },
+  });
+  assert.equal(withReason.kind, "err");
+  assert.match(withReason.text, /Not sent/);
+  assert.match(withReason.text, /mid-turn/);
+  assert.match(withReason.text, /Open Details/);
+  assert.equal(withReason.text.includes("provider_prompt_not_ready"), false, "never show the operator a raw error code");
+
+  const bare = deliveryNotice({ ok: false, error: "provider_prompt_not_ready" });
+  assert.match(bare.text, /not at a prompt/);
+  assert.equal(bare.text.includes("provider_prompt_not_ready"), false);
+  assert.equal(deliveryErrorText("provider_prompt_not_ready").includes("provider_prompt_not_ready"), false);
 });
 
 await test("a screen that cannot be captured defers to the pane-presence contract", () => {
