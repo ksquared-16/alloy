@@ -28,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useCommittedFocus, useRuntimeKernel } from "@/lib/runtime/kernel/RuntimeKernelContext";
 import { prewarmRecordWork } from "@/lib/presentation/runtime/useRecordWorkRuntime";
+import { resolveQueueRowOpportunityId } from "@/lib/presentation/runtime/queueRowWarmTarget";
 import { seedOpportunityStageWork } from "@/lib/adminV2/viewModel/drawer/opportunity/stageWork/opportunityStageWorkResource";
 import { prepareOperationalDestination } from "@/lib/runtime/prep/prepareOperationalDestination";
 import { prefetchWorkUnitProvisioning } from "@/lib/runtime/kernel/workUnitProvisioningPrefetch";
@@ -56,7 +57,20 @@ import { useWorkUnitEntryMovement } from "@/lib/runtime/kernel/useWorkUnitEntryG
  * why first-use rows lagged while re-visited rows were instant. This closes that gap on the same
  * anticipatory seam (the URL cache K2's `EntryResource` already consumes via `consumeFreshProvisioning`).
  */
-function prewarmSubjectDestination(target: string, lens: string | null, subjectId: string): void {
+function prewarmSubjectDestination(
+    target: string,
+    lens: string | null,
+    subjectId: string,
+    /**
+     * The opportunity whose record-work VM is worth warming for this subject, or null when the
+     * subject has none. NOT defaulted from `subjectId`: `prewarmRecordWork` builds
+     * `/view-models/drawer/opportunity/<id>`, so a subject id that is not an opportunity produces a
+     * request that can only 404. The caller states what it knows; this refuses to guess.
+     *
+     * Provisioning is unaffected — it takes a SUBJECT of any grain and stays on `subjectId`.
+     */
+    opportunityId: string | null,
+): void {
     const id = subjectId.trim();
     if (!id || !target) return;
     // AMPLIFICATION FIX: this warms NEIGHBOUR queue-row subjects (provisioning + VM). While the
@@ -67,7 +81,8 @@ function prewarmSubjectDestination(target: string, lens: string | null, subjectI
     if (isWorkUnitPrimaryRevealActive()) { recordRevealGateEvent("subject_warm_suppressed", id); return; }
     recordRevealGateEvent("subject_warm_emitted", id);
     void prefetchWorkUnitProvisioning(target, { lens: lens ?? null, subject: id });
-    void prewarmRecordWork(id);
+    const opportunity = opportunityId?.trim();
+    if (opportunity) void prewarmRecordWork(opportunity);
 }
 import { workUnitSurfaceModelFromSnapshot } from "@/lib/runtime/provisioning/workUnitSurfaceModelFromSnapshot";
 import { useWorkUnitSettlement, mergeWorkUnitSettlement } from "./useWorkUnitSettlement";
@@ -397,11 +412,20 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
     // collapsing the pending-skeleton window on the destination. Fire-and-forget; the loader dedups.
     const prefetchRecord = useCallback(
         (row: QueueRowModel) => {
-            if (row.entityType !== "opportunity" || row.entityId == null) return;
+            if (row.entityId == null) return;
             const current = kernel.attention.get();
             // Hover is the strongest first-use signal — warm the COMPLETE commit-critical answer
             // (provisioning + VM + stage-work) so even a never-visited row commits with zero network.
-            prewarmSubjectDestination(current?.target ?? "", current?.lens ?? null, String(row.entityId));
+            //
+            // `row.entityType === "opportunity"` used to gate this. That guard passes for every
+            // child-grain Enrollment row and then `row.entityId` is a participation id, so the VM
+            // warm 404'd on every hover of a Waitlist row. The canonical rule decides instead.
+            prewarmSubjectDestination(
+                current?.target ?? "",
+                current?.lens ?? null,
+                String(row.entityId),
+                resolveQueueRowOpportunityId(row),
+            );
         },
         [kernel],
     );
@@ -500,8 +524,10 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         for (let d = 1; d <= 2; d++) {
             for (const j of [idx - d, idx + d]) {
                 const r = rows[j];
-                if (r && r.entityType === "opportunity" && r.entityId && r.entityId !== selectedSubjectId) {
-                    neighbours.push(String(r.entityId));
+                if (r && r.entityId && r.entityId !== selectedSubjectId) {
+                    // `subjectId|opportunityId` — the subject drives provisioning, the opportunity
+                    // (absent for an unanchored child row) drives the VM warm. Same rule as hover.
+                    neighbours.push(`${String(r.entityId)}|${resolveQueueRowOpportunityId(r) ?? ""}`);
                 }
             }
         }
@@ -514,8 +540,16 @@ export function useCommittedWorkUnitSurfaceRuntime(): CommittedWorkUnitSurfaceRu
         const run = () => {
             // Read attention at fire time — the committed work unit + lens the neighbours share.
             const current = kernel.attention.get();
-            for (const id of ids)
-                prewarmSubjectDestination(current?.target ?? "", current?.lens ?? null, id);
+            for (const entry of ids) {
+                const [subjectId, opportunityId] = entry.split("|");
+                if (!subjectId) continue;
+                prewarmSubjectDestination(
+                    current?.target ?? "",
+                    current?.lens ?? null,
+                    subjectId,
+                    opportunityId || null,
+                );
+            }
         };
         const w = window as Window & {
             requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
