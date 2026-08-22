@@ -96,7 +96,7 @@ describe("duplicate repair", () => {
         const out = await retireDuplicateActiveCandidates(db, {
             orgId: "org",
             opportunityIds: [OPP],
-            derivedCohortBySubject: new Map([[SUBJECT, "infant_0_18_months"]]),
+            survivorBySubject: new Map([[SUBJECT, "live"]]),
         });
         expect(out.duplicates_found).toBe(1);
         expect(out.retired).toBe(1);
@@ -117,26 +117,28 @@ describe("duplicate repair", () => {
         const out = await retireDuplicateActiveCandidates(db, {
             orgId: "org",
             opportunityIds: [OPP],
-            derivedCohortBySubject: new Map([[SUBJECT, "infant"]]),
+            survivorBySubject: new Map([[SUBJECT, "keep"]]),
         });
         expect(out.overrides_migrated).toBe(1);
         expect(overrides[0]!.placement_candidate_id).toBe("keep");
         expect(candidates.find((c) => c.id === "drop")!.status).toBe("withdrawn");
     });
 
-    it("when no cohort matches, the EARLIEST survives — a child never loses queue time to a repair", async () => {
+    it("REFUSES to guess when no survivor is named — an implicit default is the contested rule", async () => {
+        /*
+         * The original version fell back to "earliest" here. That default retired the candidate the
+         * projection was actually resolving, and the next pass reinstated it and retired the other —
+         * the oscillation that damaged a live tenant. There is no default any more.
+         */
         const candidates = [
             candidate("older", "toddler", "2026-08-01"),
             candidate("newer", "toddler_2_3_years", "2026-08-09"),
         ];
         const db = stubSupabase({ candidates, overrides: [] });
-        await retireDuplicateActiveCandidates(db, {
-            orgId: "org",
-            opportunityIds: [OPP],
-            derivedCohortBySubject: new Map([[SUBJECT, "something_else"]]),
-        });
-        expect(candidates.find((c) => c.id === "older")!.status).toBe("active");
-        expect(candidates.find((c) => c.id === "newer")!.status).toBe("withdrawn");
+        const out = await retireDuplicateActiveCandidates(db, { orgId: "org", opportunityIds: [OPP] });
+        expect(out.skipped_no_survivor_decision).toBe(1);
+        expect(out.retired).toBe(0);
+        expect(candidates.every((c) => c.status === "active")).toBe(true);
     });
 
     it("a subject with one candidate is untouched — repair is idempotent", async () => {

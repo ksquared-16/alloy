@@ -148,6 +148,8 @@ export type DuplicateRepairOutcome = {
     overrides_migrated: number;
     /** Survivors this repair had previously retired under a less-informed rule. */
     reinstated: number;
+    /** Duplicated subjects left untouched because no explicit survivor was supplied. */
+    skipped_no_survivor_decision: number;
 };
 
 type CandidateForRepair = {
@@ -165,11 +167,14 @@ export async function retireDuplicateActiveCandidates(
     args: {
         orgId: string;
         opportunityIds: readonly string[];
-        /** Cohort the ensure pass derives now, by subject key. Absent → fall back to earliest. */
-        derivedCohortBySubject?: Map<string, string | null>;
+        /**
+         * REQUIRED per duplicated subject: the candidate id that survives. There is deliberately no
+         * fallback — see the note at the survivor selection below.
+         */
+        survivorBySubject?: Map<string, string>;
     },
 ): Promise<DuplicateRepairOutcome> {
-    const out: DuplicateRepairOutcome = { subjects_examined: 0, duplicates_found: 0, retired: 0, overrides_migrated: 0, reinstated: 0 };
+    const out: DuplicateRepairOutcome = { subjects_examined: 0, duplicates_found: 0, retired: 0, overrides_migrated: 0, reinstated: 0, skipped_no_survivor_decision: 0 };
     const ids = [...new Set(args.opportunityIds.map((v) => v.trim()).filter(Boolean))];
     if (!ids.length) return out;
 
@@ -224,12 +229,23 @@ export async function retireDuplicateActiveCandidates(
         if (list.length < 2) continue;
         out.duplicates_found += 1;
 
-        const derived = args.derivedCohortBySubject?.get(subjectKey) ?? null;
-        const byDerivedCohort = derived ? list.find((c) => c.program_room_cohort_key === derived) : undefined;
-        const earliest = [...list].sort((a, b) =>
-            String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")),
-        )[0]!;
-        const survivor = byDerivedCohort ?? earliest;
+        /*
+         * ── THE SURVIVOR MUST BE DECIDED, NOT DEFAULTED ──
+         *
+         * This used to fall back to "earliest" whenever the derived cohort was unavailable, and that
+         * default is what retired the candidate the projection was actually resolving — then the next
+         * pass reinstated it and retired the other. An implicit default IS the contested rule.
+         *
+         * So there is no default any more. A caller must name the survivor for each subject; a subject
+         * without an explicit decision is reported and skipped, never guessed. Priority 4 will supply
+         * that decision from the same resolution the projection uses.
+         */
+        const survivorId = args.survivorBySubject?.get(subjectKey) ?? null;
+        const survivor = survivorId ? list.find((c) => c.id === survivorId) : undefined;
+        if (!survivor) {
+            out.skipped_no_survivor_decision += 1;
+            continue;
+        }
         const losers = list.filter((c) => c.id !== survivor.id);
         if (!losers.length) continue;
 

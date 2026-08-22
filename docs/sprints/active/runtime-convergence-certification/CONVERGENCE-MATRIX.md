@@ -411,6 +411,39 @@ key/label and OCM context, ensure has only process-instance facts. One resolver 
 sufficient. And a migration that changes an identity key changes it for every row at once, so any
 write it performs beyond identity is a mass mutation by definition.
 
+## 5i. RESTORATION EXECUTED — Firefly clean (Director-approved)
+
+Ran under approval with `RESTORE_LABEL=1`. Evidence in `evidence/`
+(`post-regression-snapshot.json`, `repair-table.json`, `post-restoration-snapshot.json`).
+
+| check | result |
+|---|---|
+| 15/15 cohort keys == immutable evidence | **PASS** |
+| 15/15 group labels == immutable evidence | **PASS** |
+| section distribution | **12 / 1 / 2 / 1 / 1** — recorded baseline |
+| candidate ids · subject keys · `wait_since` · status · linkage · metadata | **0 diffs** vs frozen snapshot |
+| pins | `ec6dce10` on Wrigley, `489a6460` on PassA — unmoved |
+| counts | 20 candidates · 17 rows · 0 inserted · 0 deleted |
+| three consecutive Work View reads | **ZERO mutation** (identity, cohort, label, override) |
+
+One flag resolved as out of scope: `ee36c3b1`'s stored label `Infant` differs from its evidence
+`infant` — pre-existing, byte-identical before and after, and not one of the 15. The verification
+asserted all 20 rather than the 15 in scope.
+
+### Hardening shipped with it
+
+- **No business-fact repair on any read path.** The duplicate repair *and* its rollback are gone from
+  the Work View ensure path. Candidate ensure stays — creating a missing candidate is that path's
+  bounded contract; reconciling facts of candidates that already exist is not.
+- **The survivor rule is fail-closed.** The repair has no default any more: a caller must name the
+  survivor per subject, and a subject without an explicit decision is reported and skipped. The old
+  "earliest" fallback is precisely what retired the projecting candidate and then flip-flopped.
+- **Multi-row mass-mutation guard** (`identityMigrationMassMutationContract.test.ts`): a heterogeneous
+  fixture — infant, toddler, pre-k, preschool, school-age, unresolved, pinned, overridden — asserts
+  only the seed key moves. A single-row test passes this bug all the way through, because the move
+  looks correct on one candidate whose derived cohort happens to match. Positive-controlled:
+  reintroducing the cohort write fails 3 of 4 with the exact production message.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
