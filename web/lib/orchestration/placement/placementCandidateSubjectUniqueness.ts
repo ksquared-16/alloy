@@ -278,3 +278,47 @@ export async function retireDuplicateActiveCandidates(
 
     return out;
 }
+
+
+/**
+ * ROLLBACK — undo this repair's own supersessions.
+ *
+ * Only rows carrying OUR marker are touched, so an operator withdrawal is never resurrected. Runs
+ * when the repair is disabled, because "disabled" must mean no repair state is left standing; it is
+ * idempotent and monotonic (once no markers remain it is a no-op), which is precisely what the gated
+ * repair is not.
+ */
+export async function revertDuplicateRepair(
+    supabase: SupabaseClient,
+    args: { orgId: string; opportunityIds: readonly string[] },
+): Promise<{ reinstated: number }> {
+    const ids = [...new Set(args.opportunityIds.map((v) => v.trim()).filter(Boolean))];
+    if (!ids.length) return { reinstated: 0 };
+
+    const { data, error } = await supabase
+        .from("placement_candidates")
+        .select("id, metadata, status")
+        .eq("org_id", args.orgId)
+        .eq("status", "withdrawn")
+        .in("opportunity_id", ids);
+    if (error) return { reinstated: 0 };
+
+    let reinstated = 0;
+    for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
+        const meta =
+            raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
+                ? (raw.metadata as Record<string, unknown>)
+                : null;
+        if (!meta?.superseded_by_placement_candidate_id) continue;
+        const id = typeof raw.id === "string" ? raw.id : "";
+        if (!id) continue;
+        const { superseded_by_placement_candidate_id: _a, superseded_reason: _b, ...rest } = meta;
+        const { error: upErr } = await supabase
+            .from("placement_candidates")
+            .update({ status: "active", metadata: rest })
+            .eq("org_id", args.orgId)
+            .eq("id", id);
+        if (!upErr) reinstated += 1;
+    }
+    return { reinstated };
+}

@@ -8,6 +8,7 @@ import {
     movePlacementCandidateToDerivedCohort,
     placementCandidateSubjectKey,
     retireDuplicateActiveCandidates,
+    revertDuplicateRepair,
 } from "@/lib/orchestration/placement/placementCandidateSubjectUniqueness";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { __testing as backfillTesting } from "@/lib/orchestration/placement/backfill/placementCandidateBackfill";
@@ -367,6 +368,9 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
      */
     if (process.env.ALLOY_PLACEMENT_DUPLICATE_REPAIR === "1") {
         await retireDuplicateActiveCandidates(supabase, { orgId, opportunityIds, derivedCohortBySubject });
+    } else {
+        // Disabled must mean no repair state is left standing — undo our own supersessions.
+        await revertDuplicateRepair(supabase, { orgId, opportunityIds });
     }
 
     if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
