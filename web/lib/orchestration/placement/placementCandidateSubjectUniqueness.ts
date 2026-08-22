@@ -96,9 +96,24 @@ export async function movePlacementCandidateToDerivedCohort(
         programRoomGroupLabel: string | null;
     },
 ): Promise<boolean> {
+    /*
+     * ── THE MOVE WRITES THE KEY, NEVER THE COHORT ──
+     *
+     * It used to write both, and that was a mistake with live consequences: making the key stable
+     * meant every existing candidate missed on seed key at once, so a single Work View read rewrote
+     * EVERY candidate's stored cohort to the ensure-derived value. The projection sections by that
+     * stored value, so the waitlist re-sectioned (12/1/2/1/1 → 2/14/1) — real operator-visible
+     * reordering, out of what was supposed to be an identity migration.
+     *
+     * Routing ensure through the projection's resolver made the two agree on the SHAPE of the answer,
+     * but not on the INPUTS: the projection resolves with the candidate's stored key/label and OCM
+     * context, while ensure has only process-instance facts. Same owner, different inputs, different
+     * answer — "one resolver" is necessary and not sufficient.
+     *
+     * Cohort is maintained by its own sync path. This function reconciles IDENTITY, so it touches
+     * identity only.
+     */
     const patch: Record<string, unknown> = { seed_key: args.seedKey };
-    if (args.programRoomCohortKey != null) patch.program_room_cohort_key = args.programRoomCohortKey;
-    if (args.programRoomGroupLabel != null) patch.program_room_group_label = args.programRoomGroupLabel;
 
     const { error } = await supabase
         .from("placement_candidates")
