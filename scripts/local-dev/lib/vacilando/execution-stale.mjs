@@ -71,6 +71,8 @@ import { join } from "node:path";
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
 const SESSION_BUSY = new Set(["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]);
+/** Paste/submit still landing. After this, a new operator instruction is a new turn. */
+export const OPERATOR_SUPERSEDE_GRACE_MS = 20 * 1000;
 const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE", "NEEDS_INPUT"]);
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
@@ -376,6 +378,30 @@ function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
     nowMs,
     root,
     completion_report: { summary: summary || "This turn finished. The agent session remains." },
+  });
+}
+
+/**
+ * Operator Send is a new turn. An EXECUTING run with an idle (not rotating)
+ * session must not 409 forever because of a leftover heartbeat or ACTIVE pane.
+ */
+export function canOperatorSupersedeRun(run, facts = {}) {
+  if (!run || run.state !== "EXECUTING") return false;
+  if (facts.open_resource || facts.in_flight_continuation) return false;
+  if (SESSION_BUSY.has(facts.session_state)) return false;
+  const delivered = facts.delivered_ms;
+  const nowMs = facts.now_ms || Date.now();
+  if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
+  return true;
+}
+
+export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() } = {}) {
+  return completeIdleRun(run, {
+    root,
+    nowMs,
+    origin: "operator",
+    reason: "operator_follow_up",
+    summary: "Operator sent a new instruction. Previous turn closed.",
   });
 }
 

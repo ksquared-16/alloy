@@ -198,6 +198,16 @@ await test("target identity mismatch refuses", async () => {
   assert.equal(mismatch.error, "target_mismatch");
 });
 
+await test("cursor node pane with matching cwd is a valid send target", () => {
+  const ok = validateSendTarget({
+    lane_id: "alloy-identity",
+    worktree: { managed: true, path: IDENTITY_WT },
+    binding: { provider: "cursor" },
+    tmux: { alive: true, cwd: IDENTITY_WT, command: "node", title: "Vacilando Mac Mini", pane_id: "%1" },
+  });
+  assert.equal(ok.ok, true);
+});
+
 await test("oversized input refuses", async () => {
   const opts = baseOpts();
   const huge = "x".repeat(LANE_INSTRUCTION_MAX + 1);

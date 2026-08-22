@@ -203,6 +203,7 @@ export function createDurableLane({
   origin = "adopted",
   work_class = WORK_CLASS_PRODUCT,
   scarce_resource_priority = null,
+  preferred_provider = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -249,6 +250,10 @@ export function createDurableLane({
     scarce_resource_priority: typeof scarce_resource_priority === "number"
       ? scarce_resource_priority
       : (coerceWorkClass(work_class) === WORK_CLASS_RUNTIME_SELF ? RUNTIME_SELF_RESOURCE_PRIORITY : 0),
+    preferred_provider: normalizeExecutionProvider(
+      preferred_provider || binding?.provider,
+      "claude",
+    ) || "claude",
     binding: binding ? normalizeBinding(binding, { root }) : null,
   };
   const store = readDevelopmentLaneStore(root);
@@ -803,6 +808,7 @@ export function publicDurableLane(rec) {
     updated_at: rec.updated_at,
     mission_id: rec.mission_id || null,
     mission_bound_at: rec.mission_bound_at || null,
+    preferred_provider: normalizeExecutionProvider(rec.preferred_provider || rec.binding?.provider, "claude") || "claude",
     execution_capacity: rec.execution_capacity || null,
   };
 }

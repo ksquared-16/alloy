@@ -167,6 +167,9 @@ export function inferAgentPresence(pane, { provider = null } = {}) {
     if (/cursor/i.test(cmd) || /cursor/i.test(title)) return "present";
     // Cursor's TUI reports a bare version the same way Claude's does.
     if (/^\d+\.\d+\.\d+$/.test(cmd)) return "present";
+    // Bound Cursor Agent panes often report as `node` with an operator-set
+    // tmux title (not "Cursor Agent"). Command + provider is the live signal.
+    if (/^node(\b|$)/i.test(cmd) && !pane?.dead) return "present";
     if (pane?.dead) return "absent";
     return "unknown";
   }
@@ -741,11 +744,12 @@ export function validateSendTarget(lane) {
   const cwd = String(lane.tmux.cwd || "");
   const wt = String(lane.worktree.path);
   if (!cwd || (cwd !== wt && !cwd.startsWith(`${wt}/`))) return { ok: false, error: "target_mismatch" };
-  const presence = inferClaudePresence({
+  const provider = String(lane.binding?.provider || lane.preferred_provider || "").toLowerCase();
+  const presence = inferAgentPresence({
     command: lane.tmux.command,
     title: lane.tmux.title,
     dead: !lane.tmux.alive,
-  });
+  }, { provider: provider || undefined });
   if (presence !== "present") return { ok: false, error: "target_mismatch" };
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return { ok: false, error: "pane_unavailable" };

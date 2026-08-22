@@ -126,7 +126,7 @@ function seedExecuting({ instruction, startMs, origin = "operator" }) {
   return exec.run;
 }
 
-await test("1. genuinely active run still blocks new send", async () => {
+await test("1. operator follow-up is a new turn even with a leftover heartbeat", async () => {
   const now = Date.now();
   const run = seedExecuting({ instruction: PRODUCT, startMs: now });
   reportRunState(run.run_id, "executing", {
@@ -144,10 +144,35 @@ await test("1. genuinely active run still blocks new send", async () => {
     notifyIntervalMs: 60_000,
     nowMs: now + 90_000,
   });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(activeRunForLane(LANE, ROOT).instruction, "another job");
+});
+
+await test("1b. a rotating session still blocks a new send", async () => {
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });
+  seedSend(PRODUCT, now - 60_000, now - 50_000);
+  const created = createAgentSession({
+    laneId: LANE,
+    runId: run.run_id,
+    root: ROOT,
+    nowMs: now,
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.session.state, "STARTING");
+  const second = await deliverManagedLaneInstruction(LANE, "another job", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now,
+  });
   assert.equal(second.ok, false);
   assert.equal(second.error, "current_run_active");
   assert.equal(activeRunForLane(LANE, ROOT).run_id, run.run_id);
-  assert.equal(activeRunForLane(LANE, ROOT).state, "EXECUTING");
 });
 
 await test("2. historical pre-reporting run can become stale", async () => {
@@ -481,7 +506,8 @@ await test("idle governed resume does not block a new send forever", async () =>
   assert.equal(second.ok, true, second.error);
   assert.equal(second.stale_run_closed, true);
   assert.equal(second.execution_run.instruction, "Next Identity instruction");
-  assert.equal(getExecutionRun(run.run_id, ROOT).state, "ABANDONED");
+  const closed = getExecutionRun(run.run_id, ROOT);
+  assert.ok(["COMPLETE", "ABANDONED"].includes(closed.state), closed.state);
 });
 
 await test("idle ACTIVE session does not keep a finished turn Executing", async () => {

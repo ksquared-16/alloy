@@ -137,6 +137,8 @@ await test("the banner states the fix as a runnable command", async () => {
 await test("presence detection recognises Cursor, not only Claude", async () => {
   assert.equal(inferAgentPresence({ command: "cursor-agent" }, { provider: "cursor" }), "present");
   assert.equal(inferAgentPresence({ command: "1.2.3" }, { provider: "cursor" }), "present");
+  assert.equal(inferAgentPresence({ command: "node", title: "Vacilando Mac Mini" }, { provider: "cursor" }), "present");
+  assert.equal(inferAgentPresence({ command: "node" }, {}), "unknown");
   assert.equal(inferAgentPresence({ command: "zsh", dead: true }, { provider: "cursor" }), "absent");
   // Claude behaviour is unchanged.
   assert.equal(inferAgentPresence({ command: "claude" }, {}), "present");

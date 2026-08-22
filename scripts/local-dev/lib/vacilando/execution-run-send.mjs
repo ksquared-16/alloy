@@ -17,7 +17,12 @@ import {
   publicExecutionRun,
   transitionExecutionRun,
 } from "./execution-run.mjs";
-import { reconcileLaneBeforeSend } from "./execution-stale.mjs";
+import {
+  canOperatorSupersedeRun,
+  collectStaleRunFacts,
+  completeRunForOperatorFollowUp,
+  reconcileLaneBeforeSend,
+} from "./execution-stale.mjs";
 import { isLaneSendInProgress, sendLaneInstruction, wouldDuplicateLaneSend } from "./lanes.mjs";
 
 function decorate(out, run, extra = {}) {
@@ -45,10 +50,15 @@ function bindingExists(rec) {
 
 async function laneHasEligibleSession(laneId) {
   try {
-    const { getDevelopmentLane } = await import("./lanes.mjs");
+    const { getDevelopmentLane, inferAgentPresence } = await import("./lanes.mjs");
     const { laneClaudePresent } = await import("./agent-session-lifecycle.mjs");
     const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
-    return Boolean(found?.ok && laneClaudePresent(found.lane));
+    if (!found?.ok) return false;
+    const preferred = String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase();
+    if (preferred === "cursor") {
+      return inferAgentPresence(found.lane?.tmux || {}, { provider: "cursor" }) === "present";
+    }
+    return Boolean(laneClaudePresent(found.lane));
   } catch {
     return false;
   }
@@ -140,7 +150,7 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     staleClosed = Boolean(rec.stale_run_closed);
   } catch { /* send still proceeds; active-run check below is authoritative */ }
 
-  const active = activeRunForLane(laneId, root);
+  let active = activeRunForLane(laneId, root);
   if (active?.state === "QUEUED") {
     try {
       const { getDurableLane } = await import("./development-lane.mjs");
@@ -152,7 +162,19 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     return refused(laneId, "current_run_active", nowMs, size, active);
   }
   if (active && active.state !== "NEEDS_INPUT") {
-    return refused(laneId, "current_run_active", nowMs, size, active);
+    try {
+      const facts = collectStaleRunFacts(active, { root, nowMs });
+      if (canOperatorSupersedeRun(active, facts)) {
+        const closed = completeRunForOperatorFollowUp(active, { root, nowMs });
+        if (closed.ok && !closed.noop) {
+          staleClosed = true;
+          active = null;
+        }
+      }
+    } catch { /* fall through to current_run_active */ }
+    if (active && active.state !== "NEEDS_INPUT") {
+      return refused(laneId, "current_run_active", nowMs, size, active);
+    }
   }
 
   if (isLaneSendInProgress(laneId)) {

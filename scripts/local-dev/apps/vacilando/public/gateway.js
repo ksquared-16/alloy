@@ -849,8 +849,10 @@ async function submitCreate() {
   if (G.connect.submitting) return;
   const nameEl = document.getElementById("gw-create-name");
   const instEl = document.getElementById("gw-create-instruction");
+  const provEl = document.getElementById("gw-create-provider");
   const name = nameEl ? nameEl.value : G.connect.name;
   const instruction = instEl ? instEl.value : G.connect.instruction;
+  const provider = provEl?.value === "cursor" ? "cursor" : "claude";
   G.connect.name = name;
   G.connect.instruction = instruction;
   G.connect.submitting = true;
@@ -860,7 +862,7 @@ async function submitCreate() {
     const r = await gwFetch("/api/lanes/create", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name, provider: "claude", instruction }),
+      body: JSON.stringify({ name, provider, instruction }),
     });
     const j = await r.json();
     if (!j.ok) {
