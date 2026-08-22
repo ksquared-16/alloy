@@ -33,6 +33,12 @@ import {
 } from "./development-lane.mjs";
 import { collectLatestClaudeResponse } from "./providers/claude/telemetry.mjs";
 import { collectLatestCursorResponse } from "./providers/cursor/telemetry.mjs";
+import {
+  PROMPT_NOT_READY_ERROR,
+  assessPanePromptReadiness,
+  promptReadinessAllowsSend,
+  publicPromptReadiness,
+} from "./provider-prompt-readiness.mjs";
 
 export const LANE_SCHEMA = "vacilando.lane.v1";
 export const LANE_OUTPUT_SCHEMA = "vacilando.lane.output.v1";
@@ -721,6 +727,28 @@ function cursorTranscriptOutput(lane, durableId, nowMs, opts = {}) {
  * Bounded observation of a discovered Development Lane's tmux pane.
  * mode=recent is polled; mode=extended / latest_response are operator-requested.
  */
+/**
+ * Persist receipt confirmation the first time this run's own token appears in
+ * advanced output. After that the run's output is its own, even once the
+ * envelope scrolls out of the capture window.
+ */
+async function maybeConfirmInstructionReceipt(run, out, opts = {}) {
+  if (!run?.run_id || opts.skipRunCorrelation || opts.listPanes) return run;
+  if (!runReceiptToken(run) || runReceiptConfirmed(run)) return run;
+  if (!textProvesInstructionReceipt(run, out?.text, out?.fingerprint)) return run;
+  try {
+    const { noteInstructionReceipt } = await import("./execution-run.mjs");
+    const noted = noteInstructionReceipt(run.run_id, {
+      text: out.text,
+      fingerprint: out.fingerprint,
+      nowMs: opts.nowMs ?? Date.now(),
+    });
+    return noted?.run || run;
+  } catch {
+    return run;
+  }
+}
+
 export async function getLaneOutput(laneId, opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
   const mode = normalizeOutputMode(opts.mode);
@@ -775,7 +803,7 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const bounded = boundVisibleText(cap.stdout, { maxLines, maxChars });
   const viewportOnly = facts.alternate_screen === true && Number(facts.history_size) === 0;
-  return bindOutputToRun(withOutputIdentity({
+  const observed = withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
@@ -795,7 +823,9 @@ export async function getLaneOutput(laneId, opts = {}) {
     history_limit: facts.history_limit,
     pane_height: facts.pane_height,
     viewport_only: viewportOnly,
-  }, lane, nowMs), correlatedRun);
+  }, lane, nowMs);
+  correlatedRun = await maybeConfirmInstructionReceipt(correlatedRun, observed, opts);
+  return bindOutputToRun(observed, correlatedRun);
 }
 
 // --------------------------------------------------------------------------
@@ -901,6 +931,36 @@ function runAcknowledgedDelivery(run) {
   return Boolean(run.started_at);
 }
 
+/**
+ * The per-run receipt token. The execution envelope opens with the run id, so
+ * the run id appearing in pane output is direct evidence that THIS instruction
+ * reached the provider. Runs delivered before receipt tracking existed carry no
+ * token and are governed by the older baseline rule alone.
+ */
+export function runReceiptToken(run) {
+  return run?.delivery?.receipt_token || null;
+}
+
+export function runReceiptConfirmed(run) {
+  return run?.delivery?.receipt_confirmed === true;
+}
+
+/**
+ * Does captured text prove receipt of this run's instruction? Requires both:
+ * the token is present, and the text has moved past the pre-paste baseline.
+ * Either alone is insufficient — the token can be echoed by an operator paste,
+ * and movement alone can be the PREVIOUS turn still rendering.
+ */
+export function textProvesInstructionReceipt(run, text, fingerprint = null) {
+  const token = runReceiptToken(run);
+  if (!token) return false;
+  const body = String(text || "");
+  if (!body.includes(token)) return false;
+  const baseline = run.output_fingerprint_at_send || run.delivery?.output_baseline_fingerprint || null;
+  if (baseline && fingerprint && fingerprint === baseline) return false;
+  return true;
+}
+
 export function bindOutputToRun(out, run) {
   if (!out) return out;
   if (!run?.run_id) return out;
@@ -944,6 +1004,23 @@ export function bindOutputToRun(out, run) {
       run_id: run.run_id,
     };
   }
+  // Output that advanced past the baseline is still not THIS run's output until
+  // the run's own receipt token appears in it. Without this, a pane finishing
+  // the PREVIOUS turn reads as the new instruction being worked on — which is
+  // exactly how a stale completion was attributed to a newer run.
+  if (delivered && live && runReceiptToken(run) && !runReceiptConfirmed(run)
+      && !textProvesInstructionReceipt(run, out.text, out.fingerprint)) {
+    return {
+      ...out,
+      available: false,
+      text: null,
+      fingerprint: out.fingerprint || null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_instruction_receipt",
+      run_id: run.run_id,
+    };
+  }
   return { ...out, run_id: out.run_id || run.run_id };
 }
 
@@ -960,7 +1037,7 @@ export function wouldDuplicateLaneSend(laneId, instruction, nowMs = Date.now(), 
   return prev.hash === hash && (nowMs - prev.at) >= 0 && (nowMs - prev.at) < windowMs;
 }
 
-function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreePath }) {
+function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreePath, readiness, baseline }) {
   const rec = {
     ok,
     schema_version: LANE_SEND_SCHEMA,
@@ -972,7 +1049,55 @@ function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreeP
     audit_id: auditId || null,
   };
   if (worktreePath) rec.worktree_path = worktreePath;
+  if (readiness) rec.prompt_readiness = publicPromptReadiness(readiness);
+  if (baseline) {
+    rec.output_baseline_fingerprint = baseline.fingerprint || null;
+    rec.output_baseline_captured_at = baseline.captured_at || null;
+  }
   return rec;
+}
+
+/**
+ * Read the pane immediately before pasting. Two facts come out of one capture:
+ * whether the pane is at an actionable prompt, and the exact output baseline
+ * this delivery is bound to. Both must come from the SAME read — a baseline
+ * taken after the paste already contains the instruction, and a readiness check
+ * taken earlier can describe a screen that has since changed.
+ */
+async function prePasteObservation(target, { tmux, capturePane, provider, nowMs }) {
+  let text = "";
+  let captured = false;
+  try {
+    if (typeof capturePane === "function") {
+      const cap = await capturePane(target, { historyLines: LANE_OUTPUT_RECENT_LINES });
+      if (cap?.ok) {
+        text = String(cap.stdout ?? cap.text ?? "");
+        captured = true;
+      }
+    } else if (typeof tmux === "function") {
+      const cap = await tmux(capturePaneArgv(target, LANE_OUTPUT_RECENT_LINES));
+      if (cap?.ok) {
+        text = String(cap.stdout ?? "");
+        captured = true;
+      }
+    }
+  } catch {
+    captured = false;
+    text = "";
+  }
+  const bounded = boundVisibleText(text, {
+    maxLines: LANE_OUTPUT_RECENT_LINES,
+    maxChars: LANE_OUTPUT_RECENT_CHARS,
+  });
+  return {
+    readiness: assessPanePromptReadiness(bounded.text, {
+      provider: provider || null,
+      captured: captured && Boolean(bounded.text.trim()),
+    }),
+    baseline: captured && bounded.text
+      ? { fingerprint: outputFingerprint(bounded.text), captured_at: new Date(nowMs).toISOString() }
+      : null,
+  };
 }
 
 async function defaultDeliverInstruction({ target, instruction, bufferName, tmux }) {
@@ -1074,6 +1199,30 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
     }
 
     const tmux = opts.tmux || runTmux;
+
+    // Readiness is decided BEFORE the paste, from a live read of the pane. A
+    // successful paste-buffer is not evidence an agent read anything.
+    const observed = await prePasteObservation(targetCheck.target, {
+      tmux,
+      capturePane: opts.capturePane,
+      provider: String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null,
+      nowMs,
+    });
+    const gate = promptReadinessAllowsSend(observed.readiness, {
+      strictCapture: opts.strictPromptCapture === true,
+    });
+    if (!gate.allow) {
+      return auditAndReturn(sendResult({
+        ok: false,
+        laneId: durableId,
+        error: PROMPT_NOT_READY_ERROR,
+        status: "refused",
+        nowMs,
+        size,
+        readiness: observed.readiness,
+      }));
+    }
+
     const delivered = await defaultDeliverInstruction({
       target: targetCheck.target,
       instruction: body.instruction,
@@ -1081,7 +1230,7 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
       tmux,
     });
     if (!delivered.ok) {
-      return auditAndReturn(sendResult({ ok: false, laneId: durableId, error: "delivery_failed", status: "failed", nowMs, size }));
+      return auditAndReturn(sendResult({ ok: false, laneId: durableId, error: "delivery_failed", status: "failed", nowMs, size, readiness: observed.readiness }));
     }
 
     lastDelivered.set(id, { hash, at: nowMs, size });
@@ -1094,6 +1243,8 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
       nowMs,
       size,
       worktreePath: found.lane?.worktree?.path || null,
+      readiness: observed.readiness,
+      baseline: observed.baseline,
     }));
   } finally {
     laneSendLocks.delete(id);

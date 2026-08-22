@@ -20,6 +20,7 @@ SUITES=(
   "development-gateway-run-recovery-ui.test.mjs"
   "development-gateway-ui.test.mjs"
   "development-provider-health.test.mjs"
+  "development-prompt-readiness.test.mjs"
 )
 
 PASS=0

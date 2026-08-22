@@ -57,10 +57,69 @@ async function markDeliveryAcknowledged(run, out, {
         ? instructionFingerprint(instruction)
         : (run.delivery?.instruction_fingerprint || null),
       provider_session_id: out?.session_id || out?.provider_session_id || null,
+      // The receipt token is what later proves output belongs to THIS run.
+      // Delivery starts unconfirmed: a paste that tmux accepted is not yet
+      // evidence a provider read anything.
+      receipt_token: run.run_id,
+      receipt_confirmed: false,
+      prompt_readiness: out?.prompt_readiness || run.delivery?.prompt_readiness || null,
+      output_baseline_fingerprint: out?.output_baseline_fingerprint
+        || run.delivery?.output_baseline_fingerprint
+        || null,
+      output_baseline_captured_at: out?.output_baseline_captured_at
+        || run.delivery?.output_baseline_captured_at
+        || null,
       error: null,
     },
+    // Bind the run to the baseline captured immediately BEFORE the paste, not
+    // to the first capture that happens to arrive after it.
+    output_fingerprint_at_send: out?.output_baseline_fingerprint || undefined,
   }, { nowMs, root });
   return getExecutionRun(run.run_id, root) || run;
+}
+
+/**
+ * The pane was not at an actionable prompt, so nothing was pasted. The run must
+ * not become EXECUTING: no agent has the instruction. It becomes NEEDS_INPUT
+ * with the blocking screen summarized, instruction preserved for retry once the
+ * operator clears the modal.
+ */
+async function needsInputForPromptNotReady({ run, out, nowMs, root, size, laneId }) {
+  const { transitionExecutionRun, patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const { PROMPT_NOT_READY_ERROR } = await import("./provider-prompt-readiness.mjs");
+  const readiness = out?.prompt_readiness || null;
+  const summary = readiness?.summary
+    || "The agent pane was not at an actionable prompt, so the instruction was not delivered.";
+  patchRunFields(run.run_id, {
+    delivery: {
+      ...(run.delivery || {}),
+      acknowledged: false,
+      error: PROMPT_NOT_READY_ERROR,
+      at: new Date(nowMs).toISOString(),
+      instruction_fingerprint: instructionFingerprint(run.instruction),
+      prompt_readiness: readiness,
+    },
+  }, { nowMs, root });
+  const next = transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    reason: PROMPT_NOT_READY_ERROR,
+    origin: "system",
+    nowMs,
+    root,
+    progress: summary,
+    completion_report: { summary },
+  });
+  const resolved = next.ok ? next.run : (getExecutionRun(run.run_id, root) || run);
+  return decorate({
+    ok: false,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: laneId,
+    status: "needs_input",
+    error: PROMPT_NOT_READY_ERROR,
+    instruction_size: size,
+    delivered_at: null,
+    prompt_readiness: readiness,
+    blocking_screen: summary,
+  }, resolved);
 }
 
 export function laneInstructionHttpStatus(out) {
@@ -69,6 +128,8 @@ export function laneInstructionHttpStatus(out) {
   if (e === "invalid_lane_id" || e === "instruction_empty" || e === "instruction_too_large" || e === "unexpected_control_field" || e === "missing_lane_id") return 400;
   if (e === "send_in_progress" || e === "duplicate_send" || e === "current_run_active") return 409;
   if (e === "pane_unavailable" || e === "target_mismatch" || e === "delivery_failed" || e === "cursor_delivery_unavailable") return 503;
+  // The pane is alive but showing a modal only a human can clear.
+  if (e === "provider_prompt_not_ready") return 409;
   return 404;
 }
 
@@ -381,6 +442,10 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     return decorate(out, run, { stale_run_closed: staleClosed });
   }
 
+  if (out.error === "provider_prompt_not_ready") {
+    return needsInputForPromptNotReady({ run, out, nowMs, root, size, laneId });
+  }
+
   try {
     const { getDurableLane } = await import("./development-lane.mjs");
     const rec = getDurableLane(laneId, root);
@@ -463,6 +528,12 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
       worktreePath: out.worktree_path || opts.worktreePath || null,
     });
     return decorate(out, exec.ok ? exec.run : next);
+  }
+  if (out.error === "provider_prompt_not_ready") {
+    const refused = await needsInputForPromptNotReady({
+      run, out, nowMs, root, size: String(run.instruction || "").length, laneId: run.lane_id,
+    });
+    return { ok: false, deferred: false, error: out.error, delivery: out, run: refused.execution_run || run, needs_input: true };
   }
   return { ok: false, deferred: true, error: out.error || "delivery_failed", delivery: out, run };
 }

@@ -60,8 +60,10 @@ import {
   patchRunFields,
   publicExecutionRun,
   readExecutionRunStore,
+  runCompletionAdmissible,
   transitionExecutionRun,
 } from "./execution-run.mjs";
+import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
@@ -381,7 +383,37 @@ export function classifyExecutionRunStale(run, facts = {}) {
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
 }
 
-function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
+/**
+ * Close an idle turn as COMPLETE — but only when the completion is actually
+ * attributable to THIS run.
+ *
+ * A run delivered through the receipt-tracking path carries its own token. If
+ * that token was never observed in advanced pane output, nothing on this lane
+ * has proven the instruction reached a provider, and an idle pane is showing
+ * some EARLIER turn. Completing on that evidence is how a stale completion gets
+ * attached to a newer instruction. Such a run is abandoned instead: terminal for
+ * scheduling, recoverable, and never a false claim that work finished.
+ */
+function completeIdleRun(run, { root, nowMs, origin, reason, summary, attributionRequired = false }) {
+  if (attributionRequired && runReceiptToken(run) && !runReceiptConfirmed(run)) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: "completion_not_attributable",
+      summary: "Not completed: this run's instruction receipt was never observed in provider output.",
+    });
+  }
+  const admissible = runCompletionAdmissible(run);
+  if (attributionRequired && !admissible.ok) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: admissible.error,
+      summary: "Not completed: the instruction was never delivered to a provider.",
+    });
+  }
   return transitionExecutionRun(run.run_id, "COMPLETE", {
     reason,
     origin,
@@ -405,6 +437,11 @@ export function canOperatorSupersedeRun(run, facts = {}) {
   return true;
 }
 
+/**
+ * Operator Send closes the previous turn. This is an explicit operator act on a
+ * run they can see, not an inference from pane output, so it does not require
+ * receipt attribution — the operator moving on is the authority.
+ */
 export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() } = {}) {
   return completeIdleRun(run, {
     root,
@@ -417,12 +454,17 @@ export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() }
 
 function closeClassifiedRun(run, cls, { root, nowMs, origin }) {
   if (cls.reason === "turn_finished_session_remains") {
+    // Inferred from an idle pane, not from a worker report. Attribution is
+    // mandatory here: without it, the PREVIOUS turn's finished screen closes
+    // this run. Operator follow-up (below) is an explicit operator act and is
+    // governed differently.
     return completeIdleRun(run, {
       root,
       nowMs,
       origin,
       reason: cls.reason,
       summary: cls.summary,
+      attributionRequired: true,
     });
   }
   return abandonRun(run, {
