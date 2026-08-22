@@ -11,6 +11,7 @@ import {
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import { isCommunicationsProjectedWorkItem } from "@/lib/workItems/mapCommunicationThreadToWorkItemRow";
+import { isProcessingProjectedWorkItem } from "@/lib/workItems/mapProcessingCaseToWorkItemRow";
 import type { OperationalTaskWorkspaceFilter } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
 export type WorkItemFolderKey =
@@ -180,7 +181,7 @@ export function filterTasksByView(
         case "due_soon":
             return tasks.filter(
                 (t) =>
-                    !isCommunicationsProjectedWorkItem(t) &&
+                    hasAuthoritativeDueCommitment(t) &&
                     isOpenTask(t) &&
                     operationalTaskDueUrgency({ status: t.status, dueAtIso: t.due_at }) === "due_soon"
             );
@@ -188,10 +189,33 @@ export function filterTasksByView(
             return [];
         case "due_today":
         case "overdue":
-            return tasks.filter((t) => !isCommunicationsProjectedWorkItem(t));
+            return tasks.filter(hasAuthoritativeDueCommitment);
         default:
             return tasks;
     }
+}
+
+/**
+ * ── ONLY A SOURCE THAT OWNS A DUE COMMITMENT MAY CONTRIBUTE TO A DUE METRIC ──
+ *
+ * `due_at` is not the same fact across the federated queue. `operational_tasks` stores a real
+ * operator commitment. The two projections DERIVE one:
+ *
+ *   Communications → `due_at` is the thread's LAST ACTIVITY time, so every comms work item is
+ *                    "overdue" the instant it exists.
+ *   Processing     → `due_at` is `statusChangedAt + 1 day @ 17:00`, so every processing case is
+ *                    "overdue" a day after it appears, whatever anyone committed to.
+ *
+ * Communications was already excluded here; Processing was not, and that asymmetry is the whole of
+ * the reported disagreement. On Firefly the unified queue showed **Overdue 9** — one real overdue
+ * task plus eight processing cases older than a day — beside a KPI strip reading **Overdue 1**. The
+ * KPI was the honest number; the 9 counted a commitment nobody had made.
+ *
+ * So a derived due date contributes UNSUPPORTED to due metrics rather than a plausible-looking
+ * number. The rows stay in the queue and in Open/All Work; they simply stop claiming to be late.
+ */
+export function hasAuthoritativeDueCommitment(task: MyTasksTaskRow): boolean {
+    return !isCommunicationsProjectedWorkItem(task) && !isProcessingProjectedWorkItem(task);
 }
 
 export function taskMatchesSource(task: MyTasksTaskRow, source: WorkItemSourceKey): boolean {
