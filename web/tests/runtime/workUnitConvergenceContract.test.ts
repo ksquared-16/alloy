@@ -235,3 +235,23 @@ describe("the subscription actually calls the right refreshes", () => {
         off();
     });
 });
+
+describe("organization config does not buy freshness with a route refresh", () => {
+    /*
+     * The measured RSC on a Program save came from a Continuity URL sync that called
+     * `router.replace(href)` with the address ALREADY displayed — the App Router still issues an RSC
+     * round trip for that. Freshness itself comes from `publishConfigurationInvalidation` +
+     * `invalidateProgramsCollection`, which were always correct (law 32).
+     */
+    it("the URL sync only runs for a different href", () => {
+        const src = read("components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx");
+        expect(src).toContain("currentHref === nextHref");
+        expect(src).toContain("router.replace(nextHref");
+    });
+
+    it("the save still publishes canonical configuration invalidation", () => {
+        const src = read("components/adminV2/settings/programs/ProgramsPublicationWorkspace.tsx");
+        expect(src).toContain("invalidateProgramsCollection(orgId");
+        expect(src).toContain("publishConfigurationInvalidation(");
+    });
+});
