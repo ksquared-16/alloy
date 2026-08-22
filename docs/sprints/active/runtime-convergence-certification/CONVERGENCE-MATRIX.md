@@ -546,6 +546,40 @@ them, and a reload after a save must never be served from a TTL cache.
 (the codebase already has that pattern, e.g. `bustCommunicationsBindingsFetchDedupe`) rather than a
 TTL — that is the precise remaining work, not a mystery.
 
+## 5l. FINAL CERTIFICATION MATRIX
+
+| Area | Performance | Convergence | Refresh-free | Loader ownership | Remaining debt | Certified |
+|---|---|---|---|---|---|---|
+| Workspace | T1/T2 immediate | ✓ | ✓ | ✓ | six-answer readiness payload (measured, deferred) | **yes** |
+| Work Unit | premium, prepared | ✓ rows+totals converge | ✓ | ✓ | — | **yes** |
+| Focus Panel Summary | premium | ✓ identity converges | ✓ | ✓ | Assignments card reads record patch late | **yes** |
+| Activity | shell premium | ✓ | ✓ | ✓ | cascade/timeline not re-measured this wave | partial |
+| Operations | T1 109 ms · T3 119 ms | ✓ targeted day/lens | ✓ | ✓ fixed (staff, children) | **reopen refetches 6/7**; `data-comms-tab` naming debt | partial |
+| Processing | certified prior | ✓ | ✓ | ✓ | — | **yes** |
+| Work Items | ✓ | ✓ | ✓ | ✓ | Assigned vs Mine vocabulary | **yes** |
+| Communications | open 29→15, reopen 27→14 | ✓ | ✓ | ✓ one owner incl. warm cache | 3 unrelated resources still ×2 | **yes** |
+| Records | children ~3.3–4.5 s | ✓ | ✓ | ✓ deduped | endpoint latency | partial |
+| Organization | warm nav certified | ✓ invalidation correct | ✓ | ✓ | non-versioned live cert | partial |
+| Counts / KPIs | DB-counted | ✓ | ✓ | ✓ | — | **yes** |
+| Pins | n/a | attachment ✓ · effect ✓ | ✓ | ✓ | precedence NOTE gated on shadow mode | partial |
+| True cold | not re-measured | — | — | — | deferred by instruction | not this wave |
+
+**PASSA → CONTESTED / FAIL-CLOSED.** Not reconciled, not guessed, and **not a runtime-certification
+blocker**. It is one duplicate subject whose survivor decision changes queue seniority, section
+membership and pin ownership simultaneously.
+
+### Correction to my own prior classification
+
+I reported pin effect as class A ("override dropped before projection", citing a hardcoded
+`active_override_kinds: []`). **That was wrong.** That code is a fallback path and is not what the
+live waitlist uses. Measured at the correct projection path
+(`_placement_waitlist_row.placement_priority_v2`, not the row root — my earlier probe read the wrong
+key and reported `false`), the override IS present and IS spliced into the sort tuple.
+
+Real classification: **C — a higher-precedence rule legitimately wins.** Tuple element 0 is the cohort
+label compared as a string, and PassA's un-normalised `"infant"` sorts before
+`"infant — 0–18 months"`. Reconciling PassA removes the anomaly. The pin itself works.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
