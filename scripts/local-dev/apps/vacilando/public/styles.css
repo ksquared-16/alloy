@@ -1495,7 +1495,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-msg-user .gw-msg-more{margin-top:6px;min-height:44px;padding:6px 10px;}
 .gw-msg-meta,.gw-last-meta{margin-top:6px;font-size:11.5px;color:var(--ink-3);}
 .gw-msg-assistant{
-  position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  /* flex:1 1 auto inside a SCROLLING column does not grow — it shrinks to
+     min-content and the reply overflows its own bubble. Measured on an iPhone
+     14 Pro: the bubble was 123px tall while the <pre> inside it needed 176px.
+     A real minimum on the bubble, and the pre fills it. */
+  position:relative;flex:0 0 auto;display:flex;flex-direction:column;
+  min-height:min(58vh, 24rem);
   background:var(--card);border:1px solid var(--line);border-radius:16px 16px 16px 6px;
   padding:8px 8px 8px;min-width:0;
 }
@@ -1532,6 +1537,8 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 }
 .gw-aside-title{font-size:15px;font-weight:700;}
 .gw-aside-id h1{margin:0;font-size:18px;letter-spacing:-.02em;}
+/* Controlled entirely by .is-aside-open; never by the [hidden] attribute,
+   which display:block would silently override. */
 .gw-aside-scrim{display:none;}
 
 /* The copy control sits in its own row instead of floating over the output.
@@ -1779,8 +1786,17 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   /* The reply gets a real floor on mobile too; the user message is clamped, so
      nothing above it can take this space back. */
   .gw-output{max-height:none;font-size:13px;min-height:9rem;}
-  .gw-msg-assistant{flex:1 1 auto;min-height:0;}
+  .gw-msg-assistant{flex:0 0 auto;min-height:min(58vh, 22rem);}
   .gw-msg-user{max-width:100%;}
+  /* Keyboard open: the conversation must stay readable while typing. The
+     topbar and the status line stand down, and the reply sizes to the visual
+     viewport instead of the (unshrunk) layout viewport. */
+  :root[data-gw-keyboard] .topbar{display:none;}
+  :root[data-gw-keyboard] .gw-stage-status{display:none;}
+  :root[data-gw-keyboard] .gw-chat-head{padding-top:2px;}
+  :root[data-gw-keyboard] .gw-msg-assistant{min-height:max(7rem, calc(var(--gw-vvh, 100dvh) * 0.34));}
+  :root[data-gw-keyboard] .gw-output{min-height:6rem;}
+  :root[data-gw-keyboard] .gw-msg-user{display:none;}
   .gw-lane-stage{padding-bottom:0;}
   .gw.is-detail .gw-composer{
     position:static;

@@ -431,7 +431,7 @@ export function staleAdmissionClaim(lane, nowMs = Date.now()) {
   };
 }
 
-export function deriveLaneExecutionPosture(lane) {
+export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
   const liveAgent = liveAgentOnLane(lane);
@@ -538,7 +538,7 @@ export function deriveLaneExecutionPosture(lane) {
       queue_position: null,
     };
   }
-  const staleClaim = staleAdmissionClaim(lane);
+  const staleClaim = staleAdmissionClaim(lane, nowMs);
   if (staleClaim) {
     return {
       state: "QUEUED_STALE",
@@ -661,7 +661,7 @@ export function workOutputIsStale(lane, output, nowMs = Date.now()) {
 }
 
 export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now() } = {}) {
-  const cap = deriveLaneExecutionPosture(lane);
+  const cap = deriveLaneExecutionPosture(lane, { nowMs });
   const run = lane?.execution_run;
   const prev = lane?.previous_run;
   const stale = workOutputIsStale(lane, output, nowMs);
@@ -1416,7 +1416,13 @@ export function copySourcePlan(output, { lane = null } = {}) {
   if (mode === "extended" && !output?.truncated) {
     return { needsFetch: false, mode, reason: "already_complete" };
   }
+  // A viewport-only pane is bounded by definition: the agent TUI keeps no tmux
+  // scrollback, so what is on screen is a WINDOW onto the response, never the
+  // response. Copying it hands over whatever happened to be visible.
+  const viewportOnly = output?.viewport_only === true
+    || (output?.alternate_screen === true && Number(output?.history_size) === 0);
   const bounded = Boolean(output?.truncated)
+    || viewportOnly
     || Number(output?.history_size) > Number(output?.returned_lines || output?.line_count || 0);
   if (mode === "recent" && !bounded) {
     return { needsFetch: false, mode: "recent", reason: "pane_is_whole" };
@@ -1424,7 +1430,9 @@ export function copySourcePlan(output, { lane = null } = {}) {
   const finished = !lane?.execution_run
     || ["COMPLETE", "FAILED"].includes(String(lane?.execution_run?.state || ""));
   const cursorLane = laneProviderKind(lane) === "cursor";
-  if (finished && !cursorLane) {
+  // A viewport-only pane has no retained history to fall back on, so the
+  // transcript's assistant message is the only complete source there is.
+  if ((finished || viewportOnly) && !cursorLane) {
     return { needsFetch: true, mode: "latest_response", fallback: "extended", reason: "complete_final_response" };
   }
   return { needsFetch: true, mode: "extended", fallback: null, reason: "retained_history" };
@@ -2562,7 +2570,7 @@ export function renderGatewayShell({
           cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
         })}
       </div>
-      <div class="gw-aside-scrim" data-gw-aside-close hidden></div>
+      <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
       ${detailsPanel}
     </section>
   </div>`;

@@ -613,7 +613,33 @@ function preserveComposer() {
     end: ta.selectionEnd,
     provider: document.getElementById("gw-composer-provider")?.value || null,
     outputScroll: document.querySelector("[data-gw-output]")?.scrollTop ?? null,
+    thread: threadScrollState(),
   };
+}
+
+/**
+ * The thread is the scroller now that the assistant bubble has a real height,
+ * and it was never scrolled — so a repaint left the newest reply below the fold
+ * with the composer sitting on top of it. Pin to the bottom unless the operator
+ * has deliberately scrolled up to read back.
+ */
+const THREAD_BOTTOM_SLACK_PX = 48;
+
+function threadScrollState() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return null;
+  const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+  return { top: el.scrollTop, atBottom: distance <= THREAD_BOTTOM_SLACK_PX };
+}
+
+function restoreThreadScroll(saved) {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  if (saved && saved.atBottom === false) {
+    el.scrollTop = saved.top;
+    return;
+  }
+  el.scrollTop = el.scrollHeight;
 }
 
 function restoreComposer(saved) {
@@ -635,13 +661,33 @@ function restoreComposer(saved) {
   const pre = document.querySelector("[data-gw-output]");
   if (pre && saved.outputScroll != null && saved.focused) pre.scrollTop = saved.outputScroll;
   else if (pre) pre.scrollTop = pre.scrollHeight;
+  restoreThreadScroll(saved.thread);
 }
 
 function syncGatewayViewport() {
   const vv = window.visualViewport;
   const h = vv ? Math.round(vv.height) : window.innerHeight;
+  // Capture BEFORE the shrink: once the container is smaller, "at bottom" is no
+  // longer computable from the new geometry.
+  const before = threadScrollState();
   document.documentElement.style.setProperty("--gw-vvh", `${h}px`);
   document.documentElement.style.setProperty("--gw-vvo", `${vv ? Math.round(vv.offsetTop) : 0}px`);
+  // The iOS keyboard shrinks the visual viewport without repainting. The thread
+  // keeps its old scrollTop, so opening the keyboard pushed the newest reply out
+  // of view and left the operator looking at the tail of their own message.
+  // The on-screen keyboard leaves ~60px of thread once the topbar, header,
+  // status line and composer have taken their share — the conversation becomes
+  // unreadable exactly while the operator is writing about it. Mark the state so
+  // non-essential chrome can stand down.
+  const keyboardOpen = Boolean(vv) && h < window.innerHeight * 0.75;
+  document.documentElement.toggleAttribute("data-gw-keyboard", keyboardOpen);
+  // Layout has not settled inside this frame, so scrollHeight is stale and the
+  // browser clamps the assignment. Pin again once it has.
+  requestAnimationFrame(() => {
+    restoreThreadScroll(before);
+    requestAnimationFrame(() => restoreThreadScroll(before));
+  });
+  setTimeout(() => restoreThreadScroll(before), 120);
 }
 
 function bindGatewayViewport() {
@@ -730,8 +776,7 @@ function paint() {
   });
   paintRail();
   restoreComposer(saved);
-  const fold = view.querySelector("[data-gw-lane-fold]");
-  if (fold && window.innerWidth >= 861) fold.open = true;
+  if (!saved) restoreThreadScroll(null);
   const count = view.querySelector("[data-gw-count]");
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
