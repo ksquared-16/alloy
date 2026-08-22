@@ -1078,11 +1078,11 @@ export function createVacilandoServer() {
         if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction");
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction" && k !== "provider" && k !== "lane_id");
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const instruction = body.value?.instruction;
-          const out = await deliverManagedLaneInstruction(laneId, instruction);
+          const out = await deliverManagedLaneInstruction(laneId, instruction, { provider: body.value?.provider });
           const status = laneInstructionHttpStatus(out);
           return sendJson(res, status, out);
         } catch (e) {
