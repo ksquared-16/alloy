@@ -24,8 +24,17 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:14px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
 svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh;}
-.app:has(.gw.is-detail){height:var(--gw-vvh, 100dvh);min-height:0;overflow:hidden;margin-top:var(--gw-vvo, 0px);}
-.app:has(.gw.is-detail) .rail{height:var(--gw-vvh, 100dvh);}
+/* --gw-vvh is the VISUAL viewport height, but `body` insets the app by the
+   safe areas, so the app box starts below the notch and must be that much
+   shorter or its bottom — the composer — falls outside the visible region.
+   With a 59px top and 34px bottom inset the composer sat 25px below the
+   keyboard-shrunk viewport. Invisible on a simulator that reports 0 insets;
+   plainly wrong on the device. */
+.app:has(.gw.is-detail){
+  height:calc(var(--gw-vvh, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height:0;overflow:hidden;margin-top:var(--gw-vvo, 0px);
+}
+.app:has(.gw.is-detail) .rail{height:calc(var(--gw-vvh, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));}
 .app:has(.gw.is-detail) .main{min-height:0;height:100%;overflow:hidden;}
 .app:has(.gw.is-detail) .topbar{flex:0 0 auto;}
 .view:has(.gw.is-detail){flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));}
@@ -1554,6 +1563,20 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-report-result dt{color:var(--ink-3);text-transform:capitalize;}
 .gw-report-result dd{margin:0;overflow-wrap:anywhere;}
 
+/* A quiet way down when something arrives while the operator is reading further
+   up. Never a jump — the page must not move under a reader. */
+.gw-new-update{
+  /* In normal flow between the thread and the composer. An absolutely
+     positioned pill would need a positioned ancestor whose height it cannot
+     know; this cannot drift. */
+  flex:0 0 auto;align-self:center;
+  margin:4px 0 0;min-height:36px;padding:6px 14px;
+  border:1px solid var(--line-strong,var(--line));border-radius:999px;
+  background:var(--card);color:var(--ink);box-shadow:var(--shadow);
+  font-size:12.5px;font-weight:650;cursor:pointer;
+}
+.gw-new-update[hidden]{display:none;}
+
 /* Raw terminal: diagnostics, never the answer. */
 .gw-terminal{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);}
 .gw-terminal-sum{cursor:pointer;list-style:none;min-height:44px;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;font-weight:650;}
@@ -1811,7 +1834,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
     padding:max(10px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
     overscroll-behavior:contain;
   }
-  .gw.is-aside-open .gw-lane-aside,.gw.is-aside-open .gw-lane-chrome{transform:translateX(0);}
+  /* Closed: not merely off-screen. A transformed element still takes keyboard
+     focus and still answers hit-testing at its translated position. */
+  .gw-lane-aside,.gw-lane-chrome{visibility:hidden;pointer-events:none;}
+  .gw.is-aside-open .gw-lane-aside,.gw.is-aside-open .gw-lane-chrome{
+    transform:translateX(0);visibility:visible;pointer-events:auto;
+  }
   .gw-aside-head{display:flex;}
   .gw.is-aside-open .gw-aside-scrim{
     display:block;position:fixed;inset:0;z-index:55;
@@ -1823,13 +1851,21 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
      in a full-width card below both. Automatic updates are the normal
      behaviour; manual refresh lives in Details as recovery. */
   .app:has(.gw.is-detail) .topbar{display:none;}
+  /* The SHELL owns the safe-area inset — `body` already pads
+     env(safe-area-inset-top). This header re-applied the same inset, so on a
+     device reporting 59px the app spent it twice: 59 (body) + 8 (view) + 59
+     (header) = 131px of dead space above the lane name on a 660px viewport.
+     The header is sticky inside the shell's padding box, so top:0 already sits
+     below the safe area. Compact padding only, and never the inset again. */
   .gw-chat-head{
     position:sticky;top:0;z-index:8;
     background:var(--bg);
-    padding:max(8px, env(safe-area-inset-top, 0px)) 0 8px;
+    padding:6px 0 8px;
+    min-height:0;
     border-bottom:1px solid var(--line-soft, var(--line));
   }
   .gw-chat-title{font-size:16px;}
+  .view:has(.gw.is-detail){padding-top:2px;}
   .gw-lane-stage{flex:1 1 auto;min-height:0;overflow:hidden;}
   .gw-claude-run{display:none;}
   .gw-decision-bar{display:block;}
@@ -1852,9 +1888,29 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   :root[data-gw-keyboard] .topbar{display:none;}
   :root[data-gw-keyboard] .gw-chat-id .gw-work-state{display:none;}
   :root[data-gw-keyboard] .gw-chat-head{padding-top:2px;}
-  :root[data-gw-keyboard] .gw-msg-assistant{min-height:max(7rem, calc(var(--gw-vvh, 100dvh) * 0.34));}
+  /* With the keyboard up the thread is ~100px. A 7rem floor on the bubble is
+     larger than its own scroller, so the bubble overflowed and the visible
+     slice landed on empty space. Let it size to the thread instead. */
+  :root[data-gw-keyboard] .gw-msg-assistant{min-height:0;}
   :root[data-gw-keyboard] .gw-output{min-height:6rem;}
   :root[data-gw-keyboard] .gw-msg-user{display:none;}
+  /* Keyboard open, minus both safe areas, leaves ~270px. A 156px composer and a
+     floating pill took all of it and the conversation collapsed to nothing.
+     While typing, the composer is the field and Send — the provider toggle and
+     the update affordance can wait. */
+  :root[data-gw-keyboard] .gw-new-update{display:none;}
+  :root[data-gw-keyboard] .gw-provider{display:none;}
+  /* Keyboard open on a 363px visual viewport leaves 270px once both safe areas
+     are removed. A 160px composer left the conversation an 11px sliver. While
+     typing the composer is one field and Send, side by side. */
+  :root[data-gw-keyboard] .gw.is-detail .gw-composer{
+    padding:6px 8px;box-shadow:none;border-radius:16px;
+    padding-bottom:max(6px, env(safe-area-inset-bottom, 0px));
+  }
+  :root[data-gw-keyboard] .gw-composer-box{flex-direction:row;align-items:flex-end;gap:8px;}
+  :root[data-gw-keyboard] .gw-composer textarea{min-height:44px;max-height:76px;flex:1 1 auto;}
+  :root[data-gw-keyboard] .gw-composer-row{margin-top:0;flex:0 0 auto;}
+  :root[data-gw-keyboard] .gw-send{min-height:44px;min-width:72px;padding:8px 12px;}
   .gw-lane-stage{padding-bottom:0;}
   .gw.is-detail .gw-composer{
     position:static;

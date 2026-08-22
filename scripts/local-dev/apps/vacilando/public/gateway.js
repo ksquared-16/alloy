@@ -28,7 +28,13 @@ const G = {
   statusOpen: null,
   laneFoldOpen: null,
   asideOpen: null,
+  asideHistory: false,
   latestResponse: null,
+  threadEntered: false,
+  threadLaneId: null,
+  threadKey: null,
+  threadNewUpdate: false,
+  threadUserScrolled: false,
   userMessageExpanded: false,
   lastNotified: {},
   telemetry: null,
@@ -657,14 +663,104 @@ function threadScrollState() {
   return { top: el.scrollTop, atBottom: distance <= THREAD_BOTTOM_SLACK_PX };
 }
 
+/**
+ * Identity of what the conversation is currently showing. Used to tell a
+ * genuinely new message from the same message re-rendered by a poll.
+ */
+function threadMessageKey() {
+  const rep = document.querySelector("[data-gw-report]");
+  if (!rep) return null;
+  return [
+    G.selected,
+    rep.getAttribute("data-report-type"),
+    rep.getAttribute("data-report-id") || "",
+    rep.getAttribute("data-report-revision") || "",
+    String(document.querySelector("[data-gw-report-body]")?.textContent?.length || 0),
+  ].join("|");
+}
+
+/**
+ * Where a lane opens.
+ *
+ * At the START of the latest exchange — the top of the operator's own last
+ * message — so the answer is read from its beginning. Pinning to the bottom
+ * dropped the reader into the middle of a long completion; pinning to the top
+ * of the whole thread showed old turns.
+ */
+function positionThreadForEntry() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  const user = el.querySelector(".gw-msg-user");
+  if (user) {
+    el.scrollTop = Math.max(0, user.offsetTop - el.offsetTop);
+    return;
+  }
+  const msg = el.querySelector(".gw-msg-assistant");
+  el.scrollTop = msg ? Math.max(0, msg.offsetTop - el.offsetTop) : 0;
+}
+
+/**
+ * A poll must not move the page under someone who is reading. Follow only when
+ * they are already at the bottom; otherwise hold position and, if the message
+ * actually changed, offer a quiet way down.
+ */
 function restoreThreadScroll(saved) {
   const el = document.querySelector("[data-gw-thread]");
   if (!el) return;
+  const key = threadMessageKey();
+
+  if (!G.threadEntered || G.threadLaneId !== G.selected) {
+    G.threadEntered = true;
+    G.threadLaneId = G.selected;
+    G.threadKey = key;
+    G.threadNewUpdate = false;
+    G.threadUserScrolled = false;
+    positionThreadForEntry();
+    bindThreadScrollWatch();
+    return;
+  }
+
+  const changed = key !== G.threadKey;
+  G.threadKey = key;
+
   if (saved && saved.atBottom === false) {
     el.scrollTop = saved.top;
+    // Only when the operator actually scrolled. Entry positions the thread at
+    // the start of the latest exchange, which is "not at bottom" by
+    // construction — flagging that as a missed update is a false positive on
+    // the very first paint.
+    if (changed && G.threadUserScrolled) setNewUpdateAffordance(true);
     return;
   }
   el.scrollTop = el.scrollHeight;
+  setNewUpdateAffordance(false);
+}
+
+/** A scroll the operator performed, as opposed to one we performed for them. */
+function bindThreadScrollWatch() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el || el.dataset.gwScrollWatch === "1") return;
+  el.dataset.gwScrollWatch = "1";
+  el.addEventListener("scroll", () => {
+    G.threadUserScrolled = true;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance <= THREAD_BOTTOM_SLACK_PX) setNewUpdateAffordance(false);
+  }, { passive: true });
+}
+
+/** A subtle affordance, never a jump. */
+function setNewUpdateAffordance(on) {
+  if (G.threadNewUpdate === on) return;
+  G.threadNewUpdate = on;
+  const el = document.querySelector("[data-gw-new-update]");
+  if (el) el.hidden = !on;
+}
+
+function scrollThreadToLatest() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+  setNewUpdateAffordance(false);
 }
 
 function restoreComposer(saved) {
@@ -705,14 +801,18 @@ function syncGatewayViewport() {
   // unreadable exactly while the operator is writing about it. Mark the state so
   // non-essential chrome can stand down.
   const keyboardOpen = Boolean(vv) && h < window.innerHeight * 0.75;
+  const wasKeyboardOpen = document.documentElement.hasAttribute("data-gw-keyboard");
   document.documentElement.toggleAttribute("data-gw-keyboard", keyboardOpen);
+  // Opening the keyboard is a writing gesture: show the newest content, which
+  // is what a reply is about to respond to.
+  const pin = keyboardOpen && !wasKeyboardOpen ? { atBottom: true } : before;
   // Layout has not settled inside this frame, so scrollHeight is stale and the
   // browser clamps the assignment. Pin again once it has.
   requestAnimationFrame(() => {
-    restoreThreadScroll(before);
-    requestAnimationFrame(() => restoreThreadScroll(before));
+    restoreThreadScroll(pin);
+    requestAnimationFrame(() => restoreThreadScroll(pin));
   });
-  setTimeout(() => restoreThreadScroll(before), 120);
+  setTimeout(() => restoreThreadScroll(pin), 120);
 }
 
 function bindGatewayViewport() {
@@ -746,19 +846,46 @@ function statusOpenNow() {
 }
 
 /**
- * Open state of the single lane details panel. Desktop keeps it open beside the
- * conversation; mobile opens it as a slide-over on demand.
+ * Open state of the single lane details panel.
+ *
+ * Desktop keeps it beside the conversation — there it is a column, not an
+ * overlay, so a persisted preference is right. Mobile ALWAYS opens a lane on
+ * the chat: the panel is an overlay, and restoring it across navigation put
+ * diagnostics in front of the conversation the operator asked for. Only an
+ * explicit tap opens it, and only for the current visit.
  */
+function isMobileWidth() {
+  return window.innerWidth <= View.MOBILE_MAX_PX;
+}
+
 function asideOpenNow() {
+  if (isMobileWidth()) return G.asideOpen === true;
   if (G.asideOpen != null) return G.asideOpen;
   G.asideOpen = View.readLaneFoldOpen(storage(), window.innerWidth);
   return G.asideOpen;
 }
 
-function setAsideOpen(open) {
-  G.asideOpen = Boolean(open);
-  View.writeLaneFoldOpen(G.asideOpen, storage());
+function setAsideOpen(open, { restoreFocus = false, fromHistory = false } = {}) {
+  const next = Boolean(open);
+  const wasOpen = asideOpenNow();
+  G.asideOpen = next;
+  if (!fromHistory) {
+    if (next && !wasOpen) pushDetailsHistoryEntry();
+    else if (!next && wasOpen) dropDetailsHistoryEntry();
+  }
+  // The persisted preference is a DESKTOP preference. Writing it on mobile is
+  // what made Details reappear on the next lane.
+  if (!isMobileWidth()) View.writeLaneFoldOpen(next, storage());
   paint();
+  if (!next && wasOpen && restoreFocus) {
+    const btn = document.querySelector("[data-gw-aside-toggle]");
+    if (btn) btn.focus();
+  }
+}
+
+/** Entering a lane is always chat-first. */
+function resetAsideForLaneEntry() {
+  if (isMobileWidth()) G.asideOpen = false;
 }
 
 function paint() {
@@ -783,6 +910,7 @@ function paint() {
     outputText: outputForSelected?.text || "",
     outputPending: Boolean(G.selected && G.lane && !outputForSelected),
     latestResponse: G.latestResponse?.lane_id === G.selected ? G.latestResponse : null,
+    newUpdate: G.threadNewUpdate,
     composer,
     resources: resources(),
     lastInstruction: lastInstructionFor(G.selected),
@@ -803,6 +931,7 @@ function paint() {
   paintRail();
   restoreComposer(saved);
   if (!saved) restoreThreadScroll(null);
+  bindThreadScrollWatch();
   const count = view.querySelector("[data-gw-count]");
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
@@ -1146,6 +1275,12 @@ async function show(r) {
   }
 
   if (G.selected) {
+    if (G.threadLaneId !== G.selected) {
+      G.threadEntered = false;
+      G.threadNewUpdate = false;
+      G.asideHistory = false;
+      resetAsideForLaneEntry();
+    }
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1326,6 +1461,46 @@ document.addEventListener("submit", (e) => {
   }
 }, true);
 
+/**
+ * Back closes Details before it leaves the lane.
+ *
+ * An open Details panel covers the header, so the Back control sits behind it —
+ * correct for a modal overlay, but it means a Back gesture would otherwise leave
+ * the lane with the panel still open. Opening Details pushes one history entry
+ * against the SAME hash; Back pops it, we close the panel, and the router sees
+ * no route change. No event interception, no URL rewriting.
+ */
+function pushDetailsHistoryEntry() {
+  if (G.asideHistory) return;
+  try {
+    history.pushState({ gwDetails: true }, "", window.location.hash || "");
+    G.asideHistory = true;
+  } catch { G.asideHistory = false; }
+}
+
+function dropDetailsHistoryEntry() {
+  if (!G.asideHistory) return;
+  G.asideHistory = false;
+  try { history.back(); } catch { /* the panel is closed either way */ }
+}
+
+window.addEventListener("popstate", () => {
+  if (!G.asideHistory) return;
+  G.asideHistory = false;
+  if (asideOpenNow()) setAsideOpen(false, { restoreFocus: true, fromHistory: true });
+});
+
+// Escape closes Details first — it should not drop the operator out of the lane
+// while a panel is covering it.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!G.visible || routeName() !== "lanes" || !G.selected) return;
+  if (!asideOpenNow()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  setAsideOpen(false, { restoreFocus: true });
+}, true);
+
 document.addEventListener("toggle", (e) => {
   const details = e.target;
   if (!details || !details.closest?.("[data-gw-status]") || details.tagName !== "DETAILS") return;
@@ -1369,7 +1544,14 @@ document.addEventListener("click", async (e) => {
   if (asideClose) {
     e.preventDefault();
     e.stopPropagation();
-    setAsideOpen(false);
+    setAsideOpen(false, { restoreFocus: true });
+    return;
+  }
+  const newUpdate = e.target?.closest?.("[data-gw-new-update]");
+  if (newUpdate) {
+    e.preventDefault();
+    e.stopPropagation();
+    scrollThreadToLatest();
     return;
   }
   const msgMore = e.target?.closest?.("[data-gw-msg-more]");

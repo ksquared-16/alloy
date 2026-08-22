@@ -2735,6 +2735,7 @@ export function renderGatewayShell({
   connect,
   executionCapacity,
   latestResponse = null,
+  newUpdate = false,
   asideOpen = false,
   userMessageExpanded = false,
 } = {}) {
@@ -2829,7 +2830,7 @@ export function renderGatewayShell({
   // used to be split between an inline <details> under the thread and a second
   // "Lane details" fold in the aside, so the same lane facts appeared twice and
   // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel">
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideOpen ? "" : ' aria-hidden="true" inert'}>
         <div class="gw-aside-head">
           <div class="gw-aside-title">Details</div>
           <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
@@ -2881,6 +2882,7 @@ export function renderGatewayShell({
             ${renderAssistantMessage(assistant, { pending })}
           </article>
         </div>
+        <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderOperatorDecisionBar(lane?.execution_run)}
         ${renderComposer({
           ...(composer || {}),

@@ -328,7 +328,9 @@ test("keyboard-open composer and safe areas survive the new panel", () => {
   assert.match(mobile, /\.gw-lane-aside,\.gw-lane-chrome\{[\s\S]*?env\(safe-area-inset-bottom, 0px\)\)/);
   // The consolidated header is sticky and clears the Dynamic Island.
   assert.match(mobile, /\.gw-chat-head\{[\s\S]*?position:sticky/);
-  assert.match(mobile, /\.gw-chat-head\{[\s\S]*?padding:max\(8px, env\(safe-area-inset-top, 0px\)\)/);
+  // The header no longer re-applies the inset — the shell owns it. See the
+  // "exactly ONE owner" test above.
+  assert.match(mobile, /\.gw-chat-head\{[\s\S]*?padding:6px 0 8px/);
 
   // Measured on an iPhone 14 Pro with the keyboard up: topbar + header + status
   // + composer left 61px of thread, so the reply the operator was writing about
@@ -337,7 +339,83 @@ test("keyboard-open composer and safe areas survive the new panel", () => {
   assert.match(gwSrc, /data-gw-keyboard/);
   assert.match(mobile, /:root\[data-gw-keyboard\] \.topbar\{display:none/);
   assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-chat-id \.gw-work-state\{display:none/);
-  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-msg-assistant\{min-height:max\(7rem/);
+  // With the keyboard up the thread is ~75px; a 7rem floor on the bubble was
+  // larger than its own scroller, so the visible slice landed on empty space.
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-msg-assistant\{min-height:0;\}/);
+  // The composer becomes one field plus Send, or it takes the conversation's
+  // whole share: 160px of composer left an 11px thread.
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-composer-box\{flex-direction:row/);
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-provider\{display:none;\}/);
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-new-update\{display:none;\}/);
+});
+
+test("the safe-area inset has exactly ONE owner", () => {
+  // ROOT CAUSE of the dead band under the status bar. `body` pads
+  // env(safe-area-inset-top) and the lane header re-applied the same inset, so
+  // a device reporting 59px spent it twice: 59 (body) + 8 (view) + 59 (header)
+  // = 131px above the lane name on a 660px viewport. Measured in the browser
+  // with the insets substituted, since headless Chromium reports them as 0.
+  const shellOwners = css.match(/^body\{[^}]*env\(safe-area-inset-top\)/m);
+  assert.ok(shellOwners, "the shell must still own the inset");
+  const mobile = css.slice(css.indexOf("@media (max-width:860px)"), css.lastIndexOf("@media (min-width:861px)"));
+  const headerRule = mobile.slice(mobile.indexOf(".gw-chat-head{"), mobile.indexOf("}", mobile.indexOf(".gw-chat-head{")));
+  assert.equal(/safe-area-inset-top/.test(headerRule), false, "the header must not re-apply the inset the shell already applied");
+  assert.match(headerRule, /padding:6px 0 8px/);
+  assert.match(headerRule, /position:sticky/);
+  assert.match(headerRule, /min-height:0/);
+  // A fixed overlay is outside the shell's padding box, so it keeps its own.
+  const asideRule = mobile.slice(mobile.indexOf(".gw-lane-aside,.gw-lane-chrome{"), mobile.indexOf("}", mobile.indexOf(".gw-lane-aside,.gw-lane-chrome{")));
+  assert.match(asideRule, /safe-area-inset-top/);
+  // And the app box must subtract what the shell inset, or its bottom — the
+  // composer — falls outside the visible region.
+  assert.match(css, /\.app:has\(\.gw\.is-detail\)\{[\s\S]*?calc\(var\(--gw-vvh, 100dvh\) - env\(safe-area-inset-top, 0px\) - env\(safe-area-inset-bottom, 0px\)\)/);
+});
+
+test("a closed Details panel contributes no space and no interaction surface", () => {
+  const lane = boundLane();
+  const closed = renderGatewayShell({ lanes: [lane], selectedId: lane.lane_id, lane, outputText: "x", listReady: true, nowMs: NOW, asideOpen: false });
+  assert.match(closed, /id="gw-details-panel"[^>]*aria-hidden="true"[^>]*inert/);
+  const open = renderGatewayShell({ lanes: [lane], selectedId: lane.lane_id, lane, outputText: "x", listReady: true, nowMs: NOW, asideOpen: true });
+  assert.equal(/id="gw-details-panel"[^>]*inert/.test(open), false);
+  assert.match(open, /class="gw is-detail is-aside-open"/);
+
+  const mobile = css.slice(css.indexOf("@media (max-width:860px)"), css.lastIndexOf("@media (min-width:861px)"));
+  // Off-screen is not enough: a transformed element still takes focus and still
+  // answers hit-testing where it sits.
+  assert.match(mobile, /\.gw-lane-aside,\.gw-lane-chrome\{visibility:hidden;pointer-events:none;\}/);
+  assert.match(mobile, /is-aside-open[\s\S]{0,140}visibility:visible;pointer-events:auto/);
+});
+
+test("Details is chat-first: never restored across a lane entry, only opened by hand", () => {
+  // The persisted preference is a DESKTOP preference — writing it on mobile is
+  // what made Details reappear in front of the next lane's conversation.
+  assert.match(gwSrc, /function resetAsideForLaneEntry/);
+  assert.match(gwSrc, /if \(isMobileWidth\(\)\) return G\.asideOpen === true/);
+  assert.match(gwSrc, /if \(!isMobileWidth\(\)\) View\.writeLaneFoldOpen/);
+  const entry = gwSrc.slice(gwSrc.indexOf("if (G.threadLaneId !== G.selected)"), gwSrc.indexOf("startOutputPoll(G.selected)"));
+  assert.match(entry, /resetAsideForLaneEntry\(\)/);
+  assert.match(entry, /G\.threadEntered = false/);
+  // Opening pushes one history entry, so Back dismisses the panel and stays.
+  assert.match(gwSrc, /function pushDetailsHistoryEntry/);
+  assert.match(gwSrc, /addEventListener\("popstate"/);
+  assert.match(gwSrc, /setAsideOpen\(false, \{ restoreFocus: true \}\)/);
+});
+
+test("a lane opens at the start of the latest exchange, and polling never moves a reader", () => {
+  assert.match(gwSrc, /function positionThreadForEntry/);
+  const fn = gwSrc.slice(gwSrc.indexOf("function positionThreadForEntry"), gwSrc.indexOf("function restoreThreadScroll"));
+  assert.match(fn, /\.gw-msg-user/, "entry aligns to the operator's own last message");
+  assert.match(fn, /user\.offsetTop - el\.offsetTop/);
+  // The affordance requires a scroll the OPERATOR performed. Entry position is
+  // "not at bottom" by construction; flagging that is a false positive.
+  assert.match(gwSrc, /if \(changed && G\.threadUserScrolled\) setNewUpdateAffordance\(true\)/);
+  assert.match(gwSrc, /function bindThreadScrollWatch/);
+  assert.match(gwSrc, /function threadMessageKey/);
+  const shell = renderGatewayShell({ lanes: [boundLane()], selectedId: "lane_db3431e755a8", lane: boundLane(), outputText: "x", listReady: true, nowMs: NOW, newUpdate: true });
+  assert.match(shell, /data-gw-new-update/);
+  assert.match(shell, /New update/);
+  const hidden = renderGatewayShell({ lanes: [boundLane()], selectedId: "lane_db3431e755a8", lane: boundLane(), outputText: "x", listReady: true, nowMs: NOW, newUpdate: false });
+  assert.match(hidden, /data-gw-new-update hidden/);
 });
 
 test("the thread pins to the newest message and honours a deliberate scroll-up", () => {
