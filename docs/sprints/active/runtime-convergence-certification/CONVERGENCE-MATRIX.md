@@ -163,6 +163,63 @@ The five per-open `provisioning-answer` calls are **five distinct `work_view_id`
 duplicates** — stripping the query string makes them read as one repeated call, which is the exact
 false finding the previous phase recorded.
 
+## 5b. LIVE CERTIFICATION (managed runtime on current HEAD)
+
+The managed dev server was rebound to this lane's HEAD and **proved** to be serving it before any
+browser evidence was accepted: the served client chunk `lib_presentation_a6aaa381._.js` contains
+`subscribeWorkUnitConvergence`, which exists only at this HEAD.
+
+### Work Unit convergence — CERTIFIED
+
+| | before the fix | after |
+|---|---|---|
+| signal | `placement_manual_order` | same |
+| queue rows (`provisioning-answer`) | **not refetched** | **refetched** |
+| totals (`queue-view-totals`) | **not refetched** | **refetched** |
+| KPIs / record VM | refetched | refetched |
+| document loads / RSC / remount | 0 | **0** |
+| selected subject | — | **preserved** (SUBJECT-scope re-commit) |
+| restore | — | exact, all 16 positions |
+
+### Child identity — root cause PROVEN, residue REMOVED
+
+The census used the product's own read-only endpoint
+(`GET /api/admin/opportunities/{id}/placement-candidates`) plus a live rename, not SQL.
+
+Candidate `ba8cdcf5` had **both** `customer_member_id` and `person_id` set, and its metadata held no
+probe string — so the earlier "orphaned candidate / metadata fallback" hypothesis was **wrong**.
+Renaming the last name changed the projection to `perf-probe-1787311039569 KurzmanRC`, which proves
+the projection composes `persons.first_name + persons.last_name`.
+
+**Class: DUPLICATE WRITABLE IDENTITY TRUTH, caused by a read/write owner split.**
+
+- `patchInquiryChildIdentityFromDrawer` writes **`persons`** when the child is person-linked, and
+  never touches `customer_members` (exclusive branch).
+- The Children card, the drawer VM, the durable-child subject and `/api/admin/records/children` all
+  read **`customer_members`**.
+- Only the placement projection reads `persons`.
+
+So the first identity edit diverges the two copies, the divergence is invisible on every surface the
+operator normally uses, **and it cannot be repaired through the UI**: the editor's baseline is the
+member copy, so typing the correct value produces no write at all. That is exactly how
+`perf-probe-1787311039569` survived — a prior probe wrote `persons`, and every later attempt to
+"restore" it was a silent no-op.
+
+Repaired through the canonical mutation owner (`PATCH /api/admin/persons/{id}`, the same org-scoped
+route the Children card itself calls, which recomputes `full_name`). Verified: projection, row title,
+Records, persons scan all read `Lennon Kurzman`; **0 of 20 candidates now mismatch**.
+
+### Identity convergence — PARTIAL
+
+`inquiry_child_identity` is now registered as label-changing (the set is documented as "membership,
+sort order, OR ROW LABELS/COUNTS"). With it: queue rows converge, totals converge, `0` document loads
+and `0` RSC, restore exact.
+
+**Still stale: the Assignments (`scheduling`) card.** Its memos are correct
+(`evidence ← context`, `subjects ← [evidence, context.truth]`), so the patched truth is not reaching
+sibling cards — meaning the Children card was showing its OWN optimistic edit rather than converging
+from `dispatchOpportunityDrawerRecordPatch`. Open defect, precisely localized, not guessed at.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
