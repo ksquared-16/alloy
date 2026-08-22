@@ -368,6 +368,49 @@ duplicate repair cannot know which row is live. That is the work Decision 1 stil
 is blocked behind it by its own sequencing ("Do NOT fix this until duplicate candidates are
 reconciled").
 
+## 5h. INCIDENT — cohort data regression on Firefly (open, needs Director repair)
+
+**What I changed.** Decision 1 removed the cohort from the candidate key
+(`pc_v2_subject:{opportunity}:{customer_member}`). Existing rows carried the old cohort-bearing key,
+so the design was that they would miss on seed key once and be MOVED onto the stable key by the
+subject-uniqueness check — an identity migration that preserves `wait_since`, overrides and history.
+
+**What went wrong.** The move wrote the cohort as well as the key. Because the key format changed for
+*every* candidate at once, a single Work View read rewrote every stored cohort to the ensure-derived
+value — and ensure, lacking a program key or OCM context, resolves `unknown_program_room` for most.
+
+**Damage, measured:** 14 of 17 candidates now store `unknown_program_room`, and the waitlist
+re-sectioned from **12 / 1 / 2 / 1 / 1** to **infant 2 / unspecified 14 / toddler 1**. Stable across
+repeated reads; no further drift (the move now writes identity only, shipped).
+
+**What is NOT damaged:** all 17 children still project, no candidate was deleted, all 20 candidates
+remain `active`, and both pins are intact on their original candidates.
+
+**Why I did not attempt a third repair.** Restoring requires each candidate's original
+`program_room_cohort_key`, and I hold those for only a few. Re-deriving them from DOB is a guess, and
+guessing on live tenant data is what produced this. Two implicit repairs have now each caused a
+regression; a third would be indefensible.
+
+**Restoration spec — the recorded baseline.**
+
+| section | children (original position) |
+|---|---|
+| infant (`infant_0_18_months`, PassA `infant`) | PassA 1/12 · Wrigley 2/12 · TestProcess3 3/12 · TestProcess4 4/12 · TestProcess5 5/12 · TestProcess6 6/12 · PassB 7/12 · TestProcess10 8/12 · TestProcess7 9/12 · TestProcess8 10/12 · TestProcess11 11/12 · TestProcess9 12/12 |
+| pre-k | Test Process 1/1 (dob 2022-08-18) |
+| school age | Test Process2 1/2 (dob 2021-08-08) · Marisol Vega 2/2 (dob 2021-03-14) |
+| (own section) | Tomas Rivera 1/1 |
+| toddler (`toddler_2_3_years`) | Lennon Kurzman 1/1 |
+
+Known exact original values: `698f850a` `infant_0_18_months` · `ba8cdcf5` `toddler_2_3_years` ·
+`9e230cf8` / `504bf3f3` `infant_0_18_months`. Unchanged throughout: `0cad23a8` `infant`,
+`ee36c3b1` `infant`, `94984f6c` `infant_0_18_months`, `27de6932` `toddler`.
+
+**The lesson, frozen as law 39.** Routing ensure through the projection's resolver made the two agree
+on the SHAPE of the answer but not on the INPUTS — the projection resolves with the candidate's stored
+key/label and OCM context, ensure has only process-instance facts. One resolver is necessary and not
+sufficient. And a migration that changes an identity key changes it for every row at once, so any
+write it performs beyond identity is a mass mutation by definition.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
