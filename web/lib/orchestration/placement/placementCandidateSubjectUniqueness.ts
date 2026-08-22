@@ -131,6 +131,8 @@ export type DuplicateRepairOutcome = {
     duplicates_found: number;
     retired: number;
     overrides_migrated: number;
+    /** Survivors this repair had previously retired under a less-informed rule. */
+    reinstated: number;
 };
 
 type CandidateForRepair = {
@@ -140,6 +142,7 @@ type CandidateForRepair = {
     program_room_cohort_key: string | null;
     created_at: string | null;
     metadata: Record<string, unknown> | null;
+    status: string;
 };
 
 export async function retireDuplicateActiveCandidates(
@@ -151,21 +154,36 @@ export async function retireDuplicateActiveCandidates(
         derivedCohortBySubject?: Map<string, string | null>;
     },
 ): Promise<DuplicateRepairOutcome> {
-    const out: DuplicateRepairOutcome = { subjects_examined: 0, duplicates_found: 0, retired: 0, overrides_migrated: 0 };
+    const out: DuplicateRepairOutcome = { subjects_examined: 0, duplicates_found: 0, retired: 0, overrides_migrated: 0, reinstated: 0 };
     const ids = [...new Set(args.opportunityIds.map((v) => v.trim()).filter(Boolean))];
     if (!ids.length) return out;
 
+    /*
+     * ACTIVE **and** previously-superseded rows are loaded, because this repair must be able to correct
+     * ITSELF. The survivor rule depends on the cohort the ensure pass derives now; if that information
+     * was unavailable on an earlier run the rule degrades to "earliest", which can retire the candidate
+     * the projection actually resolves. A one-way repair would then leave that mistake permanent.
+     * Only rows this function retired are reconsidered — an operator withdrawal carries no marker and
+     * is never resurrected.
+     */
     const { data, error } = await supabase
         .from("placement_candidates")
         .select("id, opportunity_id, customer_member_id, program_room_cohort_key, created_at, metadata, is_synthetic_fallback, status")
         .eq("org_id", args.orgId)
-        .eq("status", "active")
+        .in("status", ["active", "withdrawn"])
         .in("opportunity_id", ids);
     if (error) return out;
 
     const bySubject = new Map<string, CandidateForRepair[]>();
     for (const raw of (data ?? []) as Array<Record<string, unknown>>) {
         if (raw.is_synthetic_fallback === true) continue;
+        const meta =
+            raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
+                ? (raw.metadata as Record<string, unknown>)
+                : null;
+        const status = typeof raw.status === "string" ? raw.status : "";
+        // A withdrawal without OUR marker is an operator decision. Leave it alone.
+        if (status !== "active" && !meta?.superseded_by_placement_candidate_id) continue;
         const opportunity_id = typeof raw.opportunity_id === "string" ? raw.opportunity_id : "";
         const customer_member_id = typeof raw.customer_member_id === "string" ? raw.customer_member_id : "";
         const id = typeof raw.id === "string" ? raw.id : "";
@@ -179,10 +197,8 @@ export async function retireDuplicateActiveCandidates(
             program_room_cohort_key:
                 typeof raw.program_room_cohort_key === "string" ? raw.program_room_cohort_key : null,
             created_at: typeof raw.created_at === "string" ? raw.created_at : null,
-            metadata:
-                raw.metadata && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
-                    ? (raw.metadata as Record<string, unknown>)
-                    : null,
+            metadata: meta,
+            status,
         });
         bySubject.set(key, list);
     }
@@ -201,6 +217,24 @@ export async function retireDuplicateActiveCandidates(
         const survivor = byDerivedCohort ?? earliest;
         const losers = list.filter((c) => c.id !== survivor.id);
         if (!losers.length) continue;
+
+        // Reinstate a survivor this repair had previously retired under a worse rule.
+        if (survivor.status !== "active") {
+            const { error: reErr } = await supabase
+                .from("placement_candidates")
+                .update({
+                    status: "active",
+                    metadata: (() => {
+                        const { superseded_by_placement_candidate_id: _a, superseded_reason: _b, ...rest } =
+                            survivor.metadata ?? {};
+                        return rest;
+                    })(),
+                })
+                .eq("org_id", args.orgId)
+                .eq("id", survivor.id);
+            if (reErr) continue;
+            out.reinstated += 1;
+        }
 
         // Migrate active overrides BEFORE retiring, so a failure never strands an operator decision
         // on a withdrawn record.
@@ -225,6 +259,7 @@ export async function retireDuplicateActiveCandidates(
         }
 
         for (const loser of losers) {
+            if (loser.status !== "active") continue; // already retired by an earlier run
             const { error: retErr } = await supabase
                 .from("placement_candidates")
                 .update({

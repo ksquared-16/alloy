@@ -306,10 +306,12 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             dob: cm?.dob ?? null,
             programKey,
         });
-        if (existingSeedKeys.has(derived.seedKey)) {
-            skippedExisting += 1;
-            continue;
-        }
+        /*
+         * Recorded for EVERY child, before any `continue`. This is the survivor rule for duplicate
+         * repair, and the common case is precisely the one that skips: when the seed key already
+         * exists we still need to know which cohort the ensure pass derives, or the repair falls back
+         * to "earliest" and can retire the candidate the projection is actually resolving.
+         */
         derivedCohortBySubject.set(
             placementCandidateSubjectKey({
                 opportunityId: child.opportunityId,
@@ -317,6 +319,10 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             }),
             (derived.row.program_room_cohort_key as string | null) ?? null,
         );
+        if (existingSeedKeys.has(derived.seedKey)) {
+            skippedExisting += 1;
+            continue;
+        }
         // Same rule as the single path: a missed seed key may still be a cohort transition of a
         // candidate this child already has. Move it rather than adding a rival.
         const incumbent = activeBySubject.get(
