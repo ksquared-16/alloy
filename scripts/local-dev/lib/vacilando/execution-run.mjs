@@ -369,7 +369,20 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
 }
 
 export function lastInstructionFromRun(run) {
-  if (!run?.instruction || !run.started_at) return null;
+  if (!run?.instruction) return null;
+  if (!run.started_at) {
+    if (run.state !== "QUEUED") return null;
+    return {
+      instruction: run.instruction,
+      delivered_at: null,
+      queued_at: run.updated_at || run.created_at || null,
+      status: "queued",
+      instruction_size: run.instruction.length,
+      run_id: run.run_id,
+      run_state: run.state,
+      output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    };
+  }
   return {
     instruction: run.instruction,
     delivered_at: run.started_at,

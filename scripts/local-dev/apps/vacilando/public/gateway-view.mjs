@@ -154,7 +154,7 @@ export function deliveryNotice(result) {
 export function deliveryErrorText(error) {
   switch (error) {
     case "current_run_active":
-      return "This lane still has an open run. If Claude already finished, close that run, then send the new instruction.";
+      return "This lane still has an open run. If the agent already finished, send again in a moment — a leftover heartbeat should not block a new instruction.";
     case "duplicate_send":
       return "Same instruction was just sent. Wait a moment before sending it again.";
     case "send_in_progress":
@@ -1380,7 +1380,12 @@ export function renderLaneSessionCallout(lane, extras = {}) {
 }
 
 export function lastInstructionMeta(rec, nowMs = Date.now()) {
-  if (!rec || rec.status !== "delivered") return null;
+  if (!rec) return null;
+  if (rec.status === "queued") {
+    const when = rec.queued_at ? ago(Date.parse(rec.queued_at), nowMs) : null;
+    return when ? `Queued · ${when} ago — not yet in the agent pane` : "Queued — not yet in the agent pane";
+  }
+  if (rec.status !== "delivered") return null;
   const when = rec.delivered_at ? ago(Date.parse(rec.delivered_at), nowMs) : null;
   return when ? `Delivered · ${when} ago` : "Delivered";
 }
@@ -1605,10 +1610,11 @@ export function outputPanelHeading(lane) {
 }
 
 /** Honest truncation / review chrome. Does not parse TUI glyphs. */
-export function outputReviewHint(output, { lane = null } = {}) {
+export function outputReviewHint(output, { lane = null, lastInstruction = null } = {}) {
   const panelHeading = outputPanelHeading(lane);
   if (!output || output.ok === false) return null;
   const mode = output.mode || "recent";
+  const cursorLane = laneProviderKind(lane) === "cursor";
   if (mode === "latest_response") {
     if (!output.available) {
       return {
@@ -1648,24 +1654,33 @@ export function outputReviewHint(output, { lane = null } = {}) {
     || (output.alternate_screen === true && Number(output.history_size) === 0);
   const historyMore = Number(output.history_size) > Number(output.returned_lines || output.line_count || 0);
   const truncated = Boolean(output.truncated);
+  const lastText = String(lastInstruction?.instruction || "").trim();
+  const lastMissing = Boolean(
+    lastInstruction?.status === "delivered"
+    && lastText
+    && output.text
+    && !String(output.text).includes(lastText.slice(0, 32)),
+  );
   let text = panelHeading;
-  if (viewportOnly) {
+  if (lastMissing) {
+    text = "Showing the visible pane. Your last send is above this snapshot — the agent TUI often does not scroll to the newest turn.";
+  } else if (viewportOnly) {
     text = "Showing the visible pane. The agent’s TUI does not keep tmux scrollback. Earlier output is not currently shown.";
   } else if (truncated || historyMore) {
     text = "Showing recent output. Earlier output is not currently shown.";
   }
   return {
-    kind: viewportOnly ? "viewport_only" : (truncated || historyMore ? "truncated" : "recent"),
+    kind: lastMissing ? "last_send_not_in_pane" : (viewportOnly ? "viewport_only" : (truncated || historyMore ? "truncated" : "recent")),
     heading: panelHeading,
     text,
     showRecent: false,
-    showLatest: true,
+    showLatest: !cursorLane,
     showExtended: !viewportOnly && (truncated || historyMore),
   };
 }
 
-export function renderOutputChrome(output, { lane = null } = {}) {
-  const hint = outputReviewHint(output, { lane });
+export function renderOutputChrome(output, { lane = null, lastInstruction = null } = {}) {
+  const hint = outputReviewHint(output, { lane, lastInstruction });
   if (!hint) return "";
   const btns = [];
   if (hint.showLatest) {
@@ -1684,11 +1699,11 @@ export function renderOutputChrome(output, { lane = null } = {}) {
 }
 
 export function renderLastInstruction(rec, nowMs = Date.now()) {
-  if (!rec || rec.status !== "delivered" || !rec.instruction) return "";
+  if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
   return `<aside class="gw-last" data-gw-last>
     <div class="gw-last-h">Your last instruction</div>
     <div class="gw-last-text">${esc(rec.instruction)}</div>
-    <div class="gw-last-meta">${esc(lastInstructionMeta(rec, nowMs) || "Delivered")}</div>
+    <div class="gw-last-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Delivered"))}</div>
   </aside>`;
 }
 
@@ -1736,7 +1751,7 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
     return `<div class="gw-status-block" data-gw-agent>
     <div class="gw-status-h">Agent</div>
     <dl class="gw-kv">
-      <dt>Provider</dt><dd>Claude Code</dd>
+      <dt>Provider</dt><dd>${esc(laneProviderLabel(extras.lane) || "Claude Code")}</dd>
       <dt>Session</dt><dd>None</dd>
       <dt>Runtime</dt><dd>Offline</dd>
     </dl>
@@ -1747,7 +1762,9 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
   const usage = telemetry?.usage || {};
   const token = (n) => formatTokenCount(n) || "—";
   const recommended = extras.lane?.session_rotation?.need === "recommended";
-  const refresh = extras.lane?.lane_id && !rotating
+  const who = laneProviderLabel(extras.lane) || "Claude Code";
+  const cursorLane = laneProviderKind(extras.lane) === "cursor";
+  const refresh = extras.lane?.lane_id && !rotating && !cursorLane
     ? `<button type="button" class="btn gw-session-refresh" data-gw-session-refresh data-lane-id="${esc(extras.lane.lane_id)}">Refresh Claude Context</button>`
     : "";
   const laneBlock = economics
@@ -1764,7 +1781,7 @@ export function renderAgentTelemetry(telemetry, nowMs = Date.now(), extras = {})
   return `<div class="gw-status-block" data-gw-agent>
     <div class="gw-status-h">Agent</div>
     <dl class="gw-kv">
-      <dt>Provider</dt><dd>Claude Code</dd>
+      <dt>Provider</dt><dd>${esc(who)}</dd>
       <dt>Session</dt><dd>${esc(rotating ? "Refreshing Claude context…" : sess)}</dd>
       <dt>Model</dt><dd>${esc(telemetry?.agent?.model || extras.lane?.agent_session?.model || "—")}</dd>
       <dt>Context</dt><dd>${esc(ctx)}</dd>
@@ -1923,6 +1940,7 @@ export function renderCreateLaneFlow(create = {}) {
       <label class="gw-composer-h" for="gw-create-provider">Provider</label>
       <select id="gw-create-provider" name="provider">
         <option value="claude" selected>Claude Code</option>
+        <option value="cursor">Cursor</option>
       </select>
       <label class="gw-composer-h" for="gw-create-instruction">Initial work</label>
       <textarea id="gw-create-instruction" name="instruction" rows="8" maxlength="${LANE_INSTRUCTION_MAX}" placeholder="Approved initial instruction…">${esc(create.instruction || "")}</textarea>
@@ -2133,7 +2151,7 @@ export function renderGatewayShell({
     output,
     outputText,
   });
-  const hint = outputReviewHint(output, { lane });
+  const hint = outputReviewHint(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction });
   const heading = hint?.heading || outputPanelHeading(lane);
   const cap = deriveLaneExecutionPosture(lane);
   const workStatus = `${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}`;
@@ -2147,11 +2165,12 @@ export function renderGatewayShell({
         </div>
         ${renderProviderHealth(output?.provider_health)}
         <div class="gw-thread" data-gw-thread>
+          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
           <div class="gw-output-h">
             <span>${esc(heading)}</span>
             ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
           </div>
-          ${renderOutputChrome(output, { lane })}
+          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderOutput(bodyText, { pending })}
         </div>
         ${renderClaudeRunStatus(lane, telemetry)}
@@ -2190,7 +2209,6 @@ export function renderGatewayShell({
             ${renderLaneRuntimeControls(lane, cap)}
             ${renderLaneSessionCallout(lane, { executionCapacity })}
             ${renderRecentSystemActivity(lane?.recent_system_activity)}
-            ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
             ${statusHtml}
           </div>
         </details>

@@ -194,6 +194,7 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
   const created = createDurableLane({
     name: named.name,
     origin: "created",
+    preferred_provider: provider,
     nowMs,
   });
   if (!created.ok) {

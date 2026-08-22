@@ -33,9 +33,14 @@
  *
  * Liveness is now positive and cheap (no pane capture, no transcript parse):
  *   - worker heartbeat  — any agent-origin report, including same-state
- *   - agent session     — an active-ish durable session for the lane
+ *   - session BUSY      — STARTING / HANDOFF / RESTARTING / VERIFYING
  *   - worktree activity — git HEAD/index mtime, one stat call
  *   - open resources / in-flight continuations / protective states (as before)
+ *
+ * A durable session in ACTIVE is NOT run liveness. Claude and Cursor keep an
+ * ACTIVE session between turns so the next instruction has a pane. Treating
+ * that as "this Execution Run is still in flight" left lanes on Executing
+ * after recent output was already done, and blocked a second prompt.
  *
  * Terminal choice: ABANDONED, not FAILED.
  *   FAILED = the work itself failed.
@@ -66,6 +71,8 @@ import { join } from "node:path";
 const OPEN_REQUEST = new Set(["REQUESTED", "QUEUED", "GRANTED"]);
 const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
 const SESSION_BUSY = new Set(["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]);
+/** Paste/submit still landing. After this, a new operator instruction is a new turn. */
+export const OPERATOR_SUPERSEDE_GRACE_MS = 20 * 1000;
 const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE", "NEEDS_INPUT"]);
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
@@ -292,9 +299,6 @@ export function classifyExecutionRunStale(run, facts = {}) {
   if (evidence.worker_heartbeat_recent) {
     return { class: "active", reason: "worker_heartbeat", evidence };
   }
-  if (evidence.session_alive) {
-    return { class: "active", reason: "agent_session_alive", evidence };
-  }
   if (evidence.worktree_activity_recent) {
     return { class: "active", reason: "worktree_activity", evidence };
   }
@@ -309,11 +313,13 @@ export function classifyExecutionRunStale(run, facts = {}) {
     return { class: "active", reason: "still_settling", evidence };
   }
 
-  // Everything protective is exhausted. Auto-abandon still requires POSITIVE
-  // evidence that no viable worker remains: no live agent session, no worker
-  // heartbeat ever, and no worktree movement. Absence of reports alone is
-  // ambiguous and is left for the operator, never auto-terminalized.
-  const noLiveSignals = !evidence.session_alive && !evidence.worktree_activity_recent;
+  // Everything protective is exhausted. An idle ACTIVE session is the resting
+  // state of a persistent agent, not proof this run still owns in-flight work.
+  // Auto-close then requires: no busy session, no worker heartbeat ever, and
+  // no worktree movement. A reported run that later goes silent stays
+  // ambiguous for the operator unless the heartbeat-gone path fires.
+  const sessionBusy = SESSION_BUSY.has(merged.session_state);
+  const noLiveSignals = !sessionBusy && !evidence.worktree_activity_recent;
   // Tier 1: the run never spoke at all. Nothing on this lane has proven the
   // reporting protocol works, so an orphan is the likeliest reading.
   const neverReported = noLiveSignals && evidence.worker_report_count === 0;
@@ -335,6 +341,14 @@ export function classifyExecutionRunStale(run, facts = {}) {
     };
   }
   if (neverReported && !evidence.has_agent_report) {
+    if (evidence.session_alive && !sessionBusy) {
+      return {
+        class: "stale",
+        reason: "turn_finished_session_remains",
+        evidence,
+        summary: "This turn finished. The agent session is still available for the next instruction.",
+      };
+    }
     return {
       class: "stale",
       reason: "orphaned_pre_protocol_run",
@@ -355,6 +369,59 @@ export function classifyExecutionRunStale(run, facts = {}) {
     return { class: "ambiguous", reason: "managed_reports_without_recent_activity", evidence };
   }
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
+}
+
+function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
+  return transitionExecutionRun(run.run_id, "COMPLETE", {
+    reason,
+    origin,
+    nowMs,
+    root,
+    completion_report: { summary: summary || "This turn finished. The agent session remains." },
+  });
+}
+
+/**
+ * Operator Send is a new turn. An EXECUTING run with an idle (not rotating)
+ * session must not 409 forever because of a leftover heartbeat or ACTIVE pane.
+ */
+export function canOperatorSupersedeRun(run, facts = {}) {
+  if (!run || run.state !== "EXECUTING") return false;
+  if (facts.open_resource || facts.in_flight_continuation) return false;
+  if (SESSION_BUSY.has(facts.session_state)) return false;
+  const delivered = facts.delivered_ms;
+  const nowMs = facts.now_ms || Date.now();
+  if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
+  return true;
+}
+
+export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() } = {}) {
+  return completeIdleRun(run, {
+    root,
+    nowMs,
+    origin: "operator",
+    reason: "operator_follow_up",
+    summary: "Operator sent a new instruction. Previous turn closed.",
+  });
+}
+
+function closeClassifiedRun(run, cls, { root, nowMs, origin }) {
+  if (cls.reason === "turn_finished_session_remains") {
+    return completeIdleRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: cls.reason,
+      summary: cls.summary,
+    });
+  }
+  return abandonRun(run, {
+    root,
+    nowMs,
+    origin,
+    reason: cls.reason,
+    summary: cls.summary,
+  });
 }
 
 function abandonRun(run, { root, nowMs, origin, reason, summary }) {
@@ -393,12 +460,10 @@ export function reconcileStaleExecutionRuns({
     const facts = collectStaleRunFacts(run, { root, nowMs, sendStore, resourceStore });
     const cls = classifyExecutionRunStale(run, facts);
     if (cls.class !== "stale") continue;
-    const out = abandonRun(run, {
+    const out = closeClassifiedRun(run, cls, {
       root,
       nowMs,
       origin: "governor",
-      reason: cls.reason,
-      summary: cls.summary,
     });
     if (out.ok && !out.noop) abandoned.push(out.run);
   }
@@ -420,12 +485,10 @@ export function closeStaleExecutionRun(runId, {
   if (cls.class === "active") {
     return { ok: false, error: "run_still_active", reason: cls.reason, run: publicExecutionRun(run) };
   }
-  const out = abandonRun(run, {
+  const out = closeClassifiedRun(run, cls, {
     root,
     nowMs,
     origin: origin === "operator" || origin === "governor" ? origin : "operator",
-    reason: "operator_closed_stale_run",
-    summary: "Abandoned: operator closed stale or incomplete previous work.",
   });
   if (!out.ok) return out;
   return { ok: true, run: publicExecutionRun(out.run, { includeInstruction: true, includeTransitions: true }) };

@@ -399,10 +399,19 @@ await test("successful send records latest instruction; failed send does not", (
     listReady: true,
   });
   assert.match(html, /Your last instruction/);
+  assert.match(html, /data-gw-thread[\s\S]*data-gw-last/);
   assert.match(html, /Reconcile the remaining Access/);
   assert.match(html, /Delivered/);
   const failed = renderLastInstruction({ instruction: "nope", status: "failed" });
   assert.equal(failed, "");
+  const queued = renderLastInstruction({
+    instruction: "resume closure",
+    status: "queued",
+    queued_at: "2026-08-22T00:44:08.360Z",
+  });
+  assert.match(queued, /Your last instruction/);
+  assert.match(queued, /resume closure/);
+  assert.match(queued, /Queued/);
   assert.match(gwSrc, /result\?\.ok && \(result\.status === "delivered" \|\| result\.status === "queued"\)/);
   assert.match(gwSrc, /last_instruction/);
 });
@@ -1231,6 +1240,8 @@ await test("Create New Lane form has no substrate fields", () => {
   assert.match(html, /New Development Lane/);
   assert.match(html, /Initial work/);
   assert.match(html, /Claude Code/);
+  assert.match(html, /Cursor/);
+  assert.match(html, /gw-create-provider/);
   assert.equal(html.includes("worktree"), false);
   assert.equal(html.includes("tmux"), false);
   assert.equal(html.includes("slot"), false);

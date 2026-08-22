@@ -20,6 +20,8 @@ import {
   executionRunStorePath,
   findExecutionRun,
   inspectLaneRun,
+  lastInstructionFromRun,
+  getExecutionRun,
   isLegalRunTransition,
   listExecutionRunsForLane,
   publicExecutionRun,
@@ -228,6 +230,25 @@ await test("one active run per lane; second instruction is refused", async () =>
   assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, 1);
 });
 
+await test("operator follow-up after grace closes leftover executing work", async () => {
+  const { out } = await startRun("first job");
+  const firstId = out.run_id;
+  const second = await deliverManagedLaneInstruction("alloy-identity", "second job", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: Date.now() + 30_000,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.notEqual(second.run_id, firstId);
+  assert.equal(getExecutionRun(firstId, ROOT).state, "COMPLETE");
+  assert.equal(getExecutionRun(firstId, ROOT).state_reason, "operator_follow_up");
+  assert.equal(activeRunForLane("alloy-identity", ROOT).instruction, "second job");
+});
+
 await test("NEEDS_INPUT continues the same run instead of creating another", async () => {
   const { out } = await startRun("original");
   const id = out.run_id;
@@ -368,6 +389,18 @@ await test("active and completed runs survive reread; history is bounded", async
     reportRunState(r.run_id, "complete", { root: ROOT, origin: "agent", summary: `done ${i}` });
   }
   assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, EXECUTION_RUN_MAX_PER_LANE);
+});
+
+await test("queued run last instruction is visible before pane delivery", () => {
+  const last = lastInstructionFromRun({
+    run_id: "erun_queued",
+    state: "QUEUED",
+    instruction: "queued hello",
+    updated_at: "2026-08-22T00:44:08.360Z",
+  });
+  assert.equal(last.status, "queued");
+  assert.equal(last.instruction, "queued hello");
+  assert.equal(lastInstructionFromRun({ state: "FAILED", instruction: "x" }), null);
 });
 
 await test("last-instruction UX is preserved and overlays from a started run", async () => {
