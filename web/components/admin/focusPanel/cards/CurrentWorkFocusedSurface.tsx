@@ -27,7 +27,10 @@ import { ReadinessSummary } from "@/components/admin/focusPanel/cards/CurrentWor
 import CurrentWorkActionButtonContent from "@/components/admin/focusPanel/cards/CurrentWorkActionButtonContent";
 import CurrentWorkContextStrip from "@/components/admin/focusPanel/cards/CurrentWorkContextStrip";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
-import type { CurrentWorkActivityPreviewItem } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
+import {
+    currentWorkActivityRowKey,
+    type CurrentWorkActivityPreviewItem,
+} from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import { isCurrentWorkActionExecutable } from "@/lib/adminV2/runtime/focusPanel/currentWork/executeCurrentWorkAction";
 import { resolveCurrentWorkActionButtons } from "@/lib/adminV2/runtime/focusPanel/currentWork/resolveCurrentWorkActionButtons";
 import type {
@@ -313,7 +316,7 @@ export default function CurrentWorkFocusedSurface({
                                 <p className="alloy-os-currentwork__focused-section-title">Recent activity</p>
                                 <ul className="alloy-os-currentwork__focused-activity-list">
                                     {activity.map((item, index) => (
-                                        <li key={`${item.label}-${index}`} className="alloy-os-currentwork__focused-activity-item">
+                                        <li key={currentWorkActivityRowKey(item, index)} className="alloy-os-currentwork__focused-activity-item">
                                             <span>{item.label}</span>
                                             {item.occurredAt ?
                                                 <span className="alloy-os-currentwork__focused-activity-when">{item.occurredAt}</span>

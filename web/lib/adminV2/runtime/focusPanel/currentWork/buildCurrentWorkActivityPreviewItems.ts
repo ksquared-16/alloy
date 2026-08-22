@@ -45,6 +45,7 @@ function timelineEventToPreviewKind(eventType: ActivityTimelineEntry["eventType"
 function toPreviewItem(entry: LeadActivityPreviewEntry): CurrentWorkActivityPreviewItem {
     const detail = entry.detail?.trim() || null;
     return {
+        id: entry.id ?? null,
         label: entry.label,
         detail,
         category: detail ? null : (KIND_CATEGORY[entry.kind] ?? null),
@@ -101,6 +102,14 @@ export function resolveCanonicalCurrentWorkActivityEntries(
     });
     // Newest-first compact subset — keep Tour scheduled visible when invitation spam would starve it.
     return preferTourScheduledTimelineEntries(timeline, limit).map((entry) => ({
+        /*
+         * NAMESPACE THE CANONICAL ID BY ITS SOURCE.
+         *
+         * `entry.id` is the canonical event row id when one exists, and the SAME row id can appear
+         * both as a direct event and under a related scope. Namespacing by source keeps two
+         * legitimately separate rows separate without deduplicating either of them.
+         */
+        id: `${entry.source}:${entry.relatedScope ?? "direct"}:${entry.id}`,
         kind: timelineEventToPreviewKind(entry.eventType),
         label: entry.title,
         detail: entry.detail,
