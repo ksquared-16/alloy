@@ -853,6 +853,9 @@ export function renderExecutionCapacity(summary) {
       <dt>Running</dt><dd>${esc(running)}</dd>
       <dt>Queued</dt><dd>${esc(queued)}</dd>
       <dt>Available</dt><dd>${esc(String(summary.available ?? 0))}</dd>
+      ${(summary.provider_holders || []).length
+        ? `<dt>Agents running</dt><dd>${esc((summary.provider_holders || []).map((h) => summaryText(h?.name) || summaryText(h?.path)).filter(Boolean).join(", "))}</dd>`
+        : ""}
       ${(summary.stale_claims || []).length
         ? `<dt>Stale claims</dt><dd>${esc((summary.stale_claims || []).map((s) => s.name).join(", "))}</dd>`
         : ""}
@@ -860,7 +863,31 @@ export function renderExecutionCapacity(summary) {
   </div>`;
 }
 
-export function renderLaneRuntimeControls(lane, cap) {
+/**
+ * Who is actually holding the agent capacity, and the two ways to free some.
+ * Driven by the live provider count, so the names match the number.
+ */
+export function renderCapacityHolders(capacity) {
+  if (!capacity) return "";
+  const max = Number(capacity.max_active ?? capacity.max_providers) || 0;
+  const active = Number(capacity.active_providers ?? capacity.active) || 0;
+  if (!max || active < max) return "";
+  const holders = (capacity.provider_holders || [])
+    .map((h) => summaryText(h?.name) || summaryText(h?.path))
+    .filter(Boolean);
+  const named = holders.length
+    ? `<ul class="gw-capacity-holders" data-gw-capacity-holders>${
+        holders.map((h) => `<li>${esc(h)}</li>`).join("")
+      }</ul>`
+    : "";
+  return `<div class="gw-capacity-block" data-gw-capacity-block>
+    <p class="gw-runtime-d">All ${esc(String(max))} agent${max === 1 ? "" : "s"} are in use:</p>
+    ${named}
+    <p class="gw-runtime-d">Free one with <strong>Release execution capacity</strong> in that lane's Details — the lane, worktree and branch all stay — or raise the limit with <code>ALLOY_MAX_ACTIVE_PROVIDERS</code>.</p>
+  </div>`;
+}
+
+export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
   if (!lane) return "";
   const posture = cap || deriveLaneExecutionPosture(lane);
   const slot = posture.slot;
@@ -929,10 +956,13 @@ export function renderLaneRuntimeControls(lane, cap) {
   }
   if (posture.state === "QUEUED_FOR_CAPACITY") {
     const n = posture.queue_position ? ` · #${posture.queue_position}` : "";
+    // "No capacity" with nothing else said is the whole complaint: the operator
+    // cannot see who holds it or what to do. Name the agents and the remedies.
     return `<aside class="gw-runtime" data-gw-runtime data-posture="QUEUED_FOR_CAPACITY">
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">Queued for capacity${esc(n)}</p>
-      <p class="gw-runtime-d">Vacilando starts this lane when capacity is free. You do not pick a slot.</p>
+      ${renderCapacityHolders(capacity)}
+      <p class="gw-runtime-d">Vacilando starts this lane as soon as an agent frees up. You do not pick a slot.</p>
     </aside>`;
   }
   if (posture.state === "IDLE") {
@@ -2929,7 +2959,7 @@ export function renderGatewayShell({
           ${renderClaudeRunStatus(lane, telemetry)}
           ${renderProviderHealth(output?.provider_health)}
           ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderLaneRuntimeControls(lane, cap)}
+          ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
           ${renderLaneSessionCallout(lane, { executionCapacity })}
           ${renderRecentSystemActivity(lane?.recent_system_activity)}
           ${renderTerminalDiagnostics(bodyText, { pending, output })}

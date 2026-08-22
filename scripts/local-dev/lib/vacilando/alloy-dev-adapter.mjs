@@ -155,7 +155,48 @@ export function sprintSlugFromLaneName(name, laneId) {
 }
 
 /** Alloy answers: can this queued lane safely be provisioned now? */
-export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
+/**
+ * Which worktrees are currently running an agent, from live evidence.
+ *
+ * `providerPanes` is a list of {cwd, command, title, dead} — the same pane facts
+ * lane discovery already reads. A worktree counts as running an agent only when
+ * a live pane sits inside it AND that pane looks like an agent.
+ */
+export function agentBearingWorktreePaths(providerPanes = []) {
+  const paths = new Set();
+  for (const pane of providerPanes || []) {
+    if (!pane || pane.dead) continue;
+    const cwd = String(pane.cwd || "").replace(/\/+$/, "");
+    if (!cwd) continue;
+    const cmd = String(pane.command || "");
+    const title = String(pane.title || "");
+    // Same contract lane presence uses: a named agent, or the TUI reporting its
+    // own semver as the process name. A shell or a node script is NOT an agent.
+    const isAgent = /claude|cursor[- ]?agent/i.test(cmd)
+      || /claude|cursor[- ]?agent/i.test(title)
+      || /^\d+\.\d+\.\d+$/.test(cmd);
+    if (isAgent) paths.add(cwd);
+  }
+  return paths;
+}
+
+/**
+ * Host capacity for starting another agent.
+ *
+ * WHY THIS COUNTS PANES. It used to count METADATA: every worktree whose
+ * `lifecycle` was not "finished" was treated as running an agent, and a worktree
+ * whose `agent_status` was EMPTY counted as active too. Measured on this host,
+ * that reported 5 active providers against a cap of 3 while only ONE of those
+ * five worktrees had a live agent in it — three sprints had ended without their
+ * metadata being marked finished, and a fourth had never recorded a status. New
+ * lanes were refused for capacity that nothing was using.
+ *
+ * A slot is a place to work; a provider is a running process. Only the second
+ * is scarce, so only the second is counted — and it is counted from live panes,
+ * which cannot go stale. Metadata is still the fallback when pane facts are not
+ * available, but "unknown status" no longer means "active".
+ */
+export function assessProvisionCapacity({ cfg = null, metadata = null, providerPanes = null } = {}) {
   const runtime = cfg || resolveRuntimeConfig();
   const meta = metadata || readAllMetadata(runtime);
   const occupied = meta.filter((m) => {
@@ -166,10 +207,35 @@ export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
   });
   const freeSlots = Math.max(0, 6 - occupied.length);
   const maxProviders = Number(process.env.ALLOY_MAX_ACTIVE_PROVIDERS || 3);
-  const activeProviders = occupied.filter((m) => {
-    const st = String(m.agent_status || "").toLowerCase();
-    return st === "active" || st === "open" || st === "";
-  }).length;
+
+  let activeProviders;
+  let holders;
+  let countedFrom;
+  if (Array.isArray(providerPanes)) {
+    // Live truth: every agent-bearing pane on the host, whether or not a slot
+    // record exists for it. Two of this host's busiest worktrees have no
+    // metadata file at all, so a metadata-only count under-counts them exactly
+    // as badly as it over-counts the dormant ones.
+    const live = agentBearingWorktreePaths(providerPanes);
+    activeProviders = live.size;
+    holders = [...live].map((path) => {
+      const m = occupied.find((x) => String(x.path || "").replace(/\/+$/, "") === path);
+      return { path, name: m?.name || path.split("/").pop() || null, slot: m?.slot ?? null };
+    });
+    countedFrom = "live_panes";
+  } else {
+    activeProviders = occupied.filter((m) => {
+      const st = String(m.agent_status || "").toLowerCase();
+      // An empty status is UNKNOWN, not running. Treating it as active is what
+      // let a dormant worktree hold a provider slot indefinitely.
+      return st === "active" || st === "open";
+    }).length;
+    holders = occupied
+      .filter((m) => ["active", "open"].includes(String(m.agent_status || "").toLowerCase()))
+      .map((m) => ({ path: m.path, name: m.name || null, slot: m.slot ?? null }));
+    countedFrom = "metadata";
+  }
+
   const blockers = [];
   if (freeSlots <= 0) blockers.push("no_free_slot");
   if (activeProviders >= maxProviders) blockers.push("provider_capacity");
@@ -180,6 +246,9 @@ export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
     occupied_slots: occupied.length,
     active_providers: activeProviders,
     max_providers: maxProviders,
+    // Who is actually holding the capacity, so a refusal can name them.
+    provider_holders: holders,
+    counted_from: countedFrom,
     blockers,
     execution_node: localNodeId(),
   };

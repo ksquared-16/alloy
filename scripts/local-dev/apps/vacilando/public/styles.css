@@ -1590,6 +1590,10 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 }
 .gw-new-update[hidden]{display:none;}
 
+.gw-capacity-block{display:flex;flex-direction:column;gap:4px;}
+.gw-capacity-holders{margin:0;padding-left:1.1em;font-size:12.5px;color:var(--ink-2);}
+.gw-capacity-holders li{overflow-wrap:anywhere;}
+
 /* Raw terminal: diagnostics, never the answer. */
 .gw-terminal{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);}
 .gw-terminal-sum{cursor:pointer;list-style:none;min-height:44px;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;font-weight:650;}

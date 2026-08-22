@@ -397,7 +397,15 @@ export async function releaseLaneExecutionCapacity(laneId, {
 
 export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot() } = {}) {
   const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
-  const provision = assessProvisionCapacity({ root });
+  // Same live count the admission gate uses, so the number the operator READS
+  // is the number that decides whether their lane starts.
+  let providerPanes = null;
+  try {
+    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+    const raw = await listTmuxPanesRaw();
+    if (raw?.ok) providerPanes = parseTmuxPaneLines(raw.stdout);
+  } catch { /* metadata fallback */ }
+  const provision = assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
   const { summarizeExecutionCapacity } = await import("../../apps/vacilando/public/gateway-view.mjs");
   const ui = summarizeExecutionCapacity(lanes, {
     max_active: provision.max_providers,
@@ -408,7 +416,9 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
     max_active: provision.max_providers,
     occupied_slots: provision.occupied_slots,
     free_slots: provision.free_slots,
-    active_providers: ui.active,
+    active_providers: provision.active_providers,
+    provider_holders: provision.provider_holders || [],
+    counted_from: provision.counted_from || null,
     available: ui.available,
     blockers: ui.available > 0
       ? (provision.blockers || []).filter((b) => b !== "provider_capacity")

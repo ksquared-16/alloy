@@ -292,10 +292,29 @@ export function resetAdmissionsForTests(root = runtimeRoot()) {
   resetAdmissionImplForTests();
 }
 
+/**
+ * Live pane facts for the capacity check. Best-effort: if tmux cannot be read
+ * the assessment falls back to metadata, which is stale-prone but never worse
+ * than what it replaced.
+ */
+async function hostProviderPanes() {
+  try {
+    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+    const raw = await listTmuxPanesRaw();
+    if (!raw?.ok) return null;
+    return parseTmuxPaneLines(raw.stdout);
+  } catch {
+    return null;
+  }
+}
+
 async function canProvisionNow(root) {
   if (capacityImpl) return capacityImpl({ root });
   const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
-  return assessProvisionCapacity({ root });
+  // Count what is RUNNING, not what a metadata file last claimed. Stale
+  // lifecycle records were refusing new lanes for capacity nothing was using.
+  const providerPanes = await hostProviderPanes();
+  return assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
 }
 
 async function provisionBinding(lane, run, rec) {
