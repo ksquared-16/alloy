@@ -352,11 +352,22 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
     }
 
     /*
-     * Heal what prevention cannot reach. Duplicates already on the tenant stay duplicates forever
-     * otherwise, and they are not harmless — an operator pin can be recorded against the candidate the
-     * projection never reads. Idempotent: once a subject has one active candidate this is a no-op.
+     * ── HEALING IS NOT A SIDE EFFECT OF A PAGE LOAD ──
+     *
+     * This ran on every Work View read and it was wrong twice over. The survivor rule keys on the
+     * cohort the ENSURE pass derives, but the projection resolves a different (normalised) cohort, so
+     * the two disagree about which candidate is live — and a repair that runs on every read then
+     * FLIPS the survivor back and forth on real tenant data. Observed on Firefly: one pass retired the
+     * projecting candidate, the next reinstated it and retired the other.
+     *
+     * A repair with a contested survivor rule must be explicit, reviewable and run once — never
+     * implicit and continuous. Gated off by default until the survivor rule is derived from the same
+     * resolution the projection uses. Prevention above is unaffected and stays always-on: it only ever
+     * moves a candidate the child already has, which cannot oscillate.
      */
-    await retireDuplicateActiveCandidates(supabase, { orgId, opportunityIds, derivedCohortBySubject });
+    if (process.env.ALLOY_PLACEMENT_DUPLICATE_REPAIR === "1") {
+        await retireDuplicateActiveCandidates(supabase, { orgId, opportunityIds, derivedCohortBySubject });
+    }
 
     if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
     const { error } = await supabase.from("placement_candidates").insert(rows);
