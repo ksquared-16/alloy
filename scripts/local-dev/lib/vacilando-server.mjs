@@ -1218,6 +1218,30 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "runtime_release_failed", detail: String(e && e.message || e) });
         }
       }
+      // Provider lifecycle: suspend puts the computation down and keeps every
+      // durable thing; resume brings it back in the same worktree and session.
+      const providerMatch = path.match(/^\/api\/lanes\/([^/]+)\/provider\/(suspend|resume)$/);
+      if (providerMatch) {
+        const laneId = normalizeLaneId(providerMatch[1]);
+        const action = providerMatch[2];
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "confirm");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const mod = await import("./vacilando/provider-suspension.mjs");
+          const out = action === "suspend"
+            ? await mod.suspendLaneProvider(laneId, { origin: "operator", confirm: body.value?.confirm === true })
+            : await mod.resumeLaneProvider(laneId, { origin: "operator" });
+          const status = out.ok ? 200
+            : (out.error === "confirm_required" ? 409
+              : (out.error === "lane_not_found" ? 404 : 400));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: `provider_${action}_failed`, detail: String(e && e.message || e) });
+        }
+      }
       const refreshMatch = path.match(/^\/api\/lanes\/([^/]+)\/agent-session\/refresh$/);
       if (refreshMatch) {
         const laneId = normalizeLaneId(refreshMatch[1]);

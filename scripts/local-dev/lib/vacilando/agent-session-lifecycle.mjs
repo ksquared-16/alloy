@@ -26,7 +26,8 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction } from "./lanes.mjs";
+import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } from "./lanes.mjs";
+import { PROMPT_NOT_READY_ERROR } from "./provider-prompt-readiness.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -50,6 +51,7 @@ import {
   getDurableLane,
   isRuntimeAdoptionBlocked,
   listDurableLanes,
+  setLanePreferredProvider,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
@@ -518,7 +520,38 @@ export async function requestSessionRotation({
     dedupeKey: `handoff:${handoffId}`,
   });
   if (!delivered?.ok) {
-    return { ok: false, error: "handoff_delivery_failed", delivery: delivered, handoff_id: handoffId };
+    // The session was patched to HANDOFF before the instruction was delivered,
+    // so a refused paste left it there with the handoff still "requested" —
+    // and maybeAdvanceSessionRotation only ever aborts a handoff that reached
+    // "ready". The session stayed HANDOFF forever. Rotation that could not
+    // start must put the session back exactly as it found it.
+    const rec = readHandoffs(root);
+    if (rec.handoffs[handoffId]) {
+      rec.handoffs[handoffId].state = "failed";
+      rec.handoffs[handoffId].failed_at = iso(nowMs);
+      rec.handoffs[handoffId].error = delivered?.error || "handoff_delivery_failed";
+      writeHandoffs(rec, root);
+    }
+    const promptBlocked = delivered?.error === PROMPT_NOT_READY_ERROR;
+    restoreSessionAfterFailedRotation(session, {
+      root,
+      error: promptBlocked ? PROMPT_NOT_READY_ERROR : "handoff_delivery_failed",
+      escalate: !promptBlocked,
+      extra: {
+        origin,
+        handoff_id: handoffId,
+        reason: promptBlocked
+          ? "Context refresh could not start: the agent terminal is showing a prompt that must be answered there."
+          : undefined,
+      },
+    });
+    return {
+      ok: false,
+      error: "handoff_delivery_failed",
+      delivery: delivered,
+      handoff_id: handoffId,
+      session_restored: "ACTIVE",
+    };
   }
   if (!run) {
     const rec = store.handoffs[handoffId];
@@ -560,7 +593,7 @@ function resolveRunContext({ runId, laneId, root = null } = {}) {
   return null;
 }
 
-function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } = {}) {
+function restoreSessionAfterFailedRotation(session, { root, error, extra = {}, escalate = true } = {}) {
   if (!session?.agent_session_id) return;
   const trigger = session.rotation_trigger && typeof session.rotation_trigger === "object"
     ? { ...session.rotation_trigger, attempted: true }
@@ -572,7 +605,13 @@ function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } 
   emitAgentSessionEvent("rotation_failed", session, root, { error, ...extra });
   const auto = trigger?.origin === "automatic" || extra.origin === "automatic";
   const run = session.run_id ? getExecutionRun(session.run_id, root) : null;
-  if (auto && run) {
+  // A rotation blocked by a terminal dialog must NOT escalate the run to
+  // NEEDS_INPUT. That is the same trap the send path just stopped setting: the
+  // operator cannot answer a Claude permission prompt from the composer, and a
+  // NEEDS_INPUT run is protected from the governor. The work is still fine —
+  // it is the terminal that needs a person, which the provider-health banner
+  // and Details already say.
+  if (escalate && auto && run) {
     escalateNeedsInput(run, extra.reason || `Automatic context rotation failed: ${error}`, Date.now(), root).catch(() => {});
   }
 }
@@ -1124,6 +1163,29 @@ export async function maybeAdvanceSessionRotation(lane, { root = runtimeRoot(), 
   const session = activeAgentSessionForLane(lane.lane_id, root);
   if (!session || session.state !== "HANDOFF" || !session.handoff_id) return auto;
   const handoff = getHandoff(session.handoff_id, root);
+  // A handoff that never left "requested" means the outgoing agent never
+  // received the request. With Claude still present there is nothing to hand
+  // off TO and nothing to wait for, so after a bounded wait the session goes
+  // back to ACTIVE rather than sitting in HANDOFF indefinitely.
+  if (handoff && handoff.state !== "ready") {
+    const requestedAt = Date.parse(handoff.failed_at || handoff.created_at || "");
+    const stalled = handoff.state === "failed"
+      || (Number.isFinite(requestedAt) && (nowMs - requestedAt) > ROTATION_POLICY.exit_wait_ms);
+    if (stalled && laneClaudePresent(lane)) {
+      restoreSessionAfterFailedRotation(session, {
+        root,
+        error: handoff.error || "handoff_never_delivered",
+        escalate: handoff.error !== PROMPT_NOT_READY_ERROR,
+        extra: {
+          handoff_state: handoff.state,
+          waited_ms: Number.isFinite(requestedAt) ? nowMs - requestedAt : null,
+          origin: session.rotation_trigger?.origin,
+          reason: "Context refresh never started; the session was left running.",
+        },
+      });
+      return { ok: false, error: "handoff_never_delivered", aborted: true, restored: "ACTIVE" };
+    }
+  }
   if (handoff?.state !== "ready") return auto?.deferred ? auto : { ok: true, skipped: true };
   if (laneClaudePresent(lane)) {
     const started = Date.parse(handoff.ready_at || handoff.created_at || "");
@@ -1202,6 +1264,32 @@ function occupyingLaneSummaries(cap, root) {
   });
 }
 
+function supersedeObservationOnlyCursorSession(lane, rec, { nowMs, root }) {
+  const existing = activeAgentSessionForLane(rec.lane_id, root);
+  if (!existing || existing.provider !== "cursor") return existing;
+  if (cursorExecutableTransport(lane).ok) return existing;
+  endAgentSession(existing.agent_session_id, {
+    reason: "observation_only_superseded",
+    nowMs,
+    root,
+  });
+  return null;
+}
+
+function bindClaudeExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "claude",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
+  } catch { /* preferred already Claude is fine */ }
+  return out;
+}
+
 async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
   const found = await observeLane(laneId);
   if (!found) return { ok: false, error: "lane_not_found" };
@@ -1224,8 +1312,11 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   }
 
   const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
+  const preferred = normalizeExecutionProvider(rec?.preferred_provider, bound || "claude");
   let provider;
-  if (bound === "cursor") {
+  if (preferred === "claude") {
+    provider = "claude";
+  } else if (preferred === "cursor" || bound === "cursor") {
     provider = "cursor";
   } else if (laneClaudePresent(found)) {
     provider = "claude";
@@ -1233,6 +1324,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     provider = laneProviderKind(found, rec);
   }
   if (provider === "cursor") {
+    const transport = cursorExecutableTransport(found);
+    if (!transport.ok) {
+      return {
+        ok: false,
+        error: CURSOR_DELIVERY_UNAVAILABLE,
+        start_session_implemented: true,
+        observation_only: true,
+      };
+    }
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
       if (existing.state !== "ACTIVE") {
@@ -1276,6 +1376,8 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     };
   }
 
+  supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
+
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
       return { ok: false, error: "duplicate_claude" };
@@ -1298,9 +1400,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     });
     if (!created.ok) return created;
     sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    bindClaudeExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
     };
@@ -1377,8 +1485,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
       };
     }
     createdRuntime = started;
-    bindDurableLane(rec.lane_id, {
-      ...rec.binding,
+    bindClaudeExecutable(rec, {
       tmux_session: started.tmux_session,
       tmux_pane: started.pane_id,
       worktree_path: boundPath,
@@ -1412,6 +1519,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
       tmux_session: createdRuntime.tmux_session,
@@ -1479,6 +1587,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     ok: true,
     started: true,
     status: "starting",
+    provider: "claude",
     agent_session_id: created.session.agent_session_id,
     tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
     start_session_implemented: true,

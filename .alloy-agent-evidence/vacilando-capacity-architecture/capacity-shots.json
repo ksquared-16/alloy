@@ -1,0 +1,60 @@
+{
+  "list": [
+    {
+      "label": "Vacilando",
+      "status": "Working",
+      "group": "active"
+    },
+    {
+      "label": "Trust Runtime",
+      "status": "Needs input · suspended",
+      "group": "needs_input"
+    },
+    {
+      "label": "Surfaces",
+      "status": "Idle",
+      "group": "idle"
+    },
+    {
+      "label": "Communications",
+      "status": "Idle",
+      "group": "idle"
+    },
+    {
+      "label": "Runtime Performance",
+      "status": "Ready",
+      "group": "idle"
+    },
+    {
+      "label": "Lifecycle Cert",
+      "status": "Offline",
+      "group": "offline"
+    },
+    {
+      "label": "Processing",
+      "status": "Offline",
+      "group": "offline"
+    },
+    {
+      "label": "Access & Identity",
+      "status": "Offline",
+      "group": "offline"
+    }
+  ],
+  "suspended": {
+    "header": "Needs input · suspended · Claude",
+    "posture": "PROVIDER_SUSPENDED",
+    "text": "Runtime Provider suspended This lane is waiting on you. Its agent was stopped so another lane could run — the question, conversation, run, worktree and branch are all kept. Replying resumes it automatically. Manual participant QA by Kelly on the minted journey",
+    "hasResume": true
+  },
+  "active": {
+    "posture": "RUNNING",
+    "hasSuspend": true,
+    "hasRelease": true,
+    "saysNoDelete": true,
+    "capacity": "Execution capacity Active2 / 3 Runningwt5-runtime-performance-ux-completion, wt5-vacilando-gateway-v2 QueuedNone Available1"
+  },
+  "errors": [
+    "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+  ]
+}

@@ -27,6 +27,15 @@ const G = {
   sawRefreshProgress: false,
   statusOpen: null,
   laneFoldOpen: null,
+  asideOpen: null,
+  asideHistory: false,
+  latestResponse: null,
+  threadEntered: false,
+  threadLaneId: null,
+  threadKey: null,
+  threadNewUpdate: false,
+  threadUserScrolled: false,
+  userMessageExpanded: false,
   lastNotified: {},
   telemetry: null,
   telemetryByLane: {},
@@ -225,12 +234,39 @@ async function writeClipboardText(text) {
   if (!ok) throw new Error("copy_failed");
 }
 
-async function copyActiveOutput() {
-  const text = View.copyableOutputText({
-    selectedId: G.selected,
+/**
+ * The copy icon must yield the COMPLETE assistant response.
+ *
+ * In "recent" mode `output.text` is a bounded snapshot of the visible pane, so
+ * copying it silently handed over a fragment. When the visible output is
+ * bounded, fetch the complete text first — the transcript's assistant message
+ * for a finished run, retained history otherwise — and fall back to whatever is
+ * on screen only if that fetch yields nothing.
+ */
+async function completeCopyText() {
+  const id = G.selected;
+  const visible = View.copyableOutputText({
+    selectedId: id,
     output: G.output,
-    outputText: G.output?.lane_id === G.selected ? G.output?.text : "",
+    outputText: G.output?.lane_id === id ? G.output?.text : "",
+    lane: G.lane,
   });
+  const plan = View.copySourcePlan(G.output, { lane: G.lane });
+  if (!id || !plan.needsFetch) return visible;
+  for (const mode of [plan.mode, plan.fallback].filter(Boolean)) {
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=${encodeURIComponent(mode)}`);
+      const j = await r.json();
+      if (!View.outputBelongsToLane(j, id, G.lane)) continue;
+      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text, lane: G.lane });
+      if (full && (!visible || full.length >= visible.length)) return full;
+    } catch { /* fall through to the visible snapshot */ }
+  }
+  return visible;
+}
+
+async function copyActiveOutput() {
+  const text = await completeCopyText();
   if (!text) return;
   try {
     await writeClipboardText(text);
@@ -554,6 +590,29 @@ async function fetchOutput(id, { mode = "recent" } = {}) {
   return G.output;
 }
 
+/**
+ * A lane that has not adopted `vac run-report` still wrote a real answer — it
+ * is in the session transcript. Fetch it so the conversation shows the summary
+ * instead of the bounded status one-liner. Skipped entirely once a structured
+ * report exists, because the report is authoritative.
+ */
+function laneHasStructuredReport(lane) {
+  return Boolean(lane?.execution_run?.agent_report?.message || lane?.previous_run?.agent_report?.message);
+}
+
+async function fetchLatestResponse(id) {
+  if (!id) return null;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=latest_response`);
+    const j = await r.json();
+    if (!View.outputBelongsToLane(j, id, G.lane)) return G.latestResponse;
+    G.latestResponse = j;
+    return j;
+  } catch {
+    return G.latestResponse;
+  }
+}
+
 async function fetchTelemetry(id) {
   const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/telemetry`);
   const j = await r.json();
@@ -585,7 +644,123 @@ function preserveComposer() {
     end: ta.selectionEnd,
     provider: document.getElementById("gw-composer-provider")?.value || null,
     outputScroll: document.querySelector("[data-gw-output]")?.scrollTop ?? null,
+    thread: threadScrollState(),
   };
+}
+
+/**
+ * The thread is the scroller now that the assistant bubble has a real height,
+ * and it was never scrolled — so a repaint left the newest reply below the fold
+ * with the composer sitting on top of it. Pin to the bottom unless the operator
+ * has deliberately scrolled up to read back.
+ */
+const THREAD_BOTTOM_SLACK_PX = 48;
+
+function threadScrollState() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return null;
+  const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+  return { top: el.scrollTop, atBottom: distance <= THREAD_BOTTOM_SLACK_PX };
+}
+
+/**
+ * Identity of what the conversation is currently showing. Used to tell a
+ * genuinely new message from the same message re-rendered by a poll.
+ */
+function threadMessageKey() {
+  const rep = document.querySelector("[data-gw-report]");
+  if (!rep) return null;
+  return [
+    G.selected,
+    rep.getAttribute("data-report-type"),
+    rep.getAttribute("data-report-id") || "",
+    rep.getAttribute("data-report-revision") || "",
+    String(document.querySelector("[data-gw-report-body]")?.textContent?.length || 0),
+  ].join("|");
+}
+
+/**
+ * Where a lane opens.
+ *
+ * At the START of the latest exchange — the top of the operator's own last
+ * message — so the answer is read from its beginning. Pinning to the bottom
+ * dropped the reader into the middle of a long completion; pinning to the top
+ * of the whole thread showed old turns.
+ */
+function positionThreadForEntry() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  const user = el.querySelector(".gw-msg-user");
+  if (user) {
+    el.scrollTop = Math.max(0, user.offsetTop - el.offsetTop);
+    return;
+  }
+  const msg = el.querySelector(".gw-msg-assistant");
+  el.scrollTop = msg ? Math.max(0, msg.offsetTop - el.offsetTop) : 0;
+}
+
+/**
+ * A poll must not move the page under someone who is reading. Follow only when
+ * they are already at the bottom; otherwise hold position and, if the message
+ * actually changed, offer a quiet way down.
+ */
+function restoreThreadScroll(saved) {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  const key = threadMessageKey();
+
+  if (!G.threadEntered || G.threadLaneId !== G.selected) {
+    G.threadEntered = true;
+    G.threadLaneId = G.selected;
+    G.threadKey = key;
+    G.threadNewUpdate = false;
+    G.threadUserScrolled = false;
+    positionThreadForEntry();
+    bindThreadScrollWatch();
+    return;
+  }
+
+  const changed = key !== G.threadKey;
+  G.threadKey = key;
+
+  if (saved && saved.atBottom === false) {
+    el.scrollTop = saved.top;
+    // Only when the operator actually scrolled. Entry positions the thread at
+    // the start of the latest exchange, which is "not at bottom" by
+    // construction — flagging that as a missed update is a false positive on
+    // the very first paint.
+    if (changed && G.threadUserScrolled) setNewUpdateAffordance(true);
+    return;
+  }
+  el.scrollTop = el.scrollHeight;
+  setNewUpdateAffordance(false);
+}
+
+/** A scroll the operator performed, as opposed to one we performed for them. */
+function bindThreadScrollWatch() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el || el.dataset.gwScrollWatch === "1") return;
+  el.dataset.gwScrollWatch = "1";
+  el.addEventListener("scroll", () => {
+    G.threadUserScrolled = true;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (distance <= THREAD_BOTTOM_SLACK_PX) setNewUpdateAffordance(false);
+  }, { passive: true });
+}
+
+/** A subtle affordance, never a jump. */
+function setNewUpdateAffordance(on) {
+  if (G.threadNewUpdate === on) return;
+  G.threadNewUpdate = on;
+  const el = document.querySelector("[data-gw-new-update]");
+  if (el) el.hidden = !on;
+}
+
+function scrollThreadToLatest() {
+  const el = document.querySelector("[data-gw-thread]");
+  if (!el) return;
+  el.scrollTop = el.scrollHeight;
+  setNewUpdateAffordance(false);
 }
 
 function restoreComposer(saved) {
@@ -607,13 +782,37 @@ function restoreComposer(saved) {
   const pre = document.querySelector("[data-gw-output]");
   if (pre && saved.outputScroll != null && saved.focused) pre.scrollTop = saved.outputScroll;
   else if (pre) pre.scrollTop = pre.scrollHeight;
+  restoreThreadScroll(saved.thread);
 }
 
 function syncGatewayViewport() {
   const vv = window.visualViewport;
   const h = vv ? Math.round(vv.height) : window.innerHeight;
+  // Capture BEFORE the shrink: once the container is smaller, "at bottom" is no
+  // longer computable from the new geometry.
+  const before = threadScrollState();
   document.documentElement.style.setProperty("--gw-vvh", `${h}px`);
   document.documentElement.style.setProperty("--gw-vvo", `${vv ? Math.round(vv.offsetTop) : 0}px`);
+  // The iOS keyboard shrinks the visual viewport without repainting. The thread
+  // keeps its old scrollTop, so opening the keyboard pushed the newest reply out
+  // of view and left the operator looking at the tail of their own message.
+  // The on-screen keyboard leaves ~60px of thread once the topbar, header,
+  // status line and composer have taken their share — the conversation becomes
+  // unreadable exactly while the operator is writing about it. Mark the state so
+  // non-essential chrome can stand down.
+  const keyboardOpen = Boolean(vv) && h < window.innerHeight * 0.75;
+  const wasKeyboardOpen = document.documentElement.hasAttribute("data-gw-keyboard");
+  document.documentElement.toggleAttribute("data-gw-keyboard", keyboardOpen);
+  // Opening the keyboard is a writing gesture: show the newest content, which
+  // is what a reply is about to respond to.
+  const pin = keyboardOpen && !wasKeyboardOpen ? { atBottom: true } : before;
+  // Layout has not settled inside this frame, so scrollHeight is stale and the
+  // browser clamps the assignment. Pin again once it has.
+  requestAnimationFrame(() => {
+    restoreThreadScroll(pin);
+    requestAnimationFrame(() => restoreThreadScroll(pin));
+  });
+  setTimeout(() => restoreThreadScroll(pin), 120);
 }
 
 function bindGatewayViewport() {
@@ -646,10 +845,47 @@ function statusOpenNow() {
   return G.statusOpen;
 }
 
-function laneFoldOpenNow() {
-  if (G.laneFoldOpen != null) return G.laneFoldOpen;
-  G.laneFoldOpen = View.readLaneFoldOpen(storage(), window.innerWidth);
-  return G.laneFoldOpen;
+/**
+ * Open state of the single lane details panel.
+ *
+ * Desktop keeps it beside the conversation — there it is a column, not an
+ * overlay, so a persisted preference is right. Mobile ALWAYS opens a lane on
+ * the chat: the panel is an overlay, and restoring it across navigation put
+ * diagnostics in front of the conversation the operator asked for. Only an
+ * explicit tap opens it, and only for the current visit.
+ */
+function isMobileWidth() {
+  return window.innerWidth <= View.MOBILE_MAX_PX;
+}
+
+function asideOpenNow() {
+  if (isMobileWidth()) return G.asideOpen === true;
+  if (G.asideOpen != null) return G.asideOpen;
+  G.asideOpen = View.readLaneFoldOpen(storage(), window.innerWidth);
+  return G.asideOpen;
+}
+
+function setAsideOpen(open, { restoreFocus = false, fromHistory = false } = {}) {
+  const next = Boolean(open);
+  const wasOpen = asideOpenNow();
+  G.asideOpen = next;
+  if (!fromHistory) {
+    if (next && !wasOpen) pushDetailsHistoryEntry();
+    else if (!next && wasOpen) dropDetailsHistoryEntry();
+  }
+  // The persisted preference is a DESKTOP preference. Writing it on mobile is
+  // what made Details reappear on the next lane.
+  if (!isMobileWidth()) View.writeLaneFoldOpen(next, storage());
+  paint();
+  if (!next && wasOpen && restoreFocus) {
+    const btn = document.querySelector("[data-gw-aside-toggle]");
+    if (btn) btn.focus();
+  }
+}
+
+/** Entering a lane is always chat-first. */
+function resetAsideForLaneEntry() {
+  if (isMobileWidth()) G.asideOpen = false;
 }
 
 function paint() {
@@ -673,11 +909,14 @@ function paint() {
     output: outputForSelected,
     outputText: outputForSelected?.text || "",
     outputPending: Boolean(G.selected && G.lane && !outputForSelected),
+    latestResponse: G.latestResponse?.lane_id === G.selected ? G.latestResponse : null,
+    newUpdate: G.threadNewUpdate,
     composer,
     resources: resources(),
     lastInstruction: lastInstructionFor(G.selected),
     statusOpen: statusOpenNow(),
-    laneFoldOpen: laneFoldOpenNow(),
+    asideOpen: asideOpenNow(),
+    userMessageExpanded: G.userMessageExpanded,
     attentionByLane: map,
     telemetry: G.telemetry?.lane_id === G.selected ? G.telemetry : null,
     telemetryByLane: G.telemetryByLane,
@@ -691,8 +930,8 @@ function paint() {
   });
   paintRail();
   restoreComposer(saved);
-  const fold = view.querySelector("[data-gw-lane-fold]");
-  if (fold && window.innerWidth >= 861) fold.open = true;
+  if (!saved) restoreThreadScroll(null);
+  bindThreadScrollWatch();
   const count = view.querySelector("[data-gw-count]");
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
@@ -750,6 +989,7 @@ async function promoteCompletedOutput(laneId) {
   if (G.finalizedOutput) return;
   const prev = G.output;
   await fetchOutput(laneId, { mode: "latest_response" }).catch(() => {});
+  if (!laneHasStructuredReport(G.lane)) await fetchLatestResponse(laneId).catch(() => {});
   if (!G.output?.available || !String(G.output?.text || "").trim()) {
     G.outputMode = "recent";
     G.output = G.recentOutput || prev;
@@ -772,11 +1012,19 @@ function startOutputPoll(laneId) {
         await fetchOutput(laneId, { mode: "recent" });
         const watching = G.watchRefresh || View.contextRefreshStatus(G.lane)?.kind === "progress";
         const runState = G.lane?.execution_run?.state;
-        const liveRun = ["EXECUTING", "QUEUED", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+        const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
           || (G.burstUntil && Date.now() < G.burstUntil);
         if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
           applyContextRefreshWatch();
+        }
+        // The conversation needs the agent's own message. If the lane has not
+        // adopted `vac run-report`, that message lives in the session
+        // transcript, so fetch it alongside the pane.
+        if (!laneHasStructuredReport(G.lane)) {
+          await fetchLatestResponse(laneId);
+        } else if (G.latestResponse) {
+          G.latestResponse = null;
         }
         const paneOut = paneOutputForLane(laneId);
         const pre = document.querySelector("[data-gw-output]");
@@ -881,14 +1129,21 @@ async function submitConnect() {
 
 async function submitCreate() {
   if (G.connect.submitting) return;
-  const nameEl = document.getElementById("gw-create-name");
   const instEl = document.getElementById("gw-create-instruction");
   const provEl = document.getElementById("gw-create-provider");
-  const name = nameEl ? nameEl.value : G.connect.name;
   const instruction = instEl ? instEl.value : G.connect.instruction;
-  const provider = provEl?.value === "cursor" ? "cursor" : "claude";
-  G.connect.name = name;
+  const provider = provEl?.value === "cursor" ? "cursor" : (G.connect.provider === "cursor" ? "cursor" : "claude");
+  // The lane names itself from the first message; there is no name to collect.
+  const name = "";
+  if (!String(instruction).trim()) {
+    G.connect.error = "name_or_instruction_required";
+    paint();
+    const box = document.getElementById("gw-create-instruction");
+    if (box) box.focus();
+    return;
+  }
   G.connect.instruction = instruction;
+  G.connect.provider = provider;
   G.connect.submitting = true;
   G.connect.error = null;
   paint();
@@ -900,9 +1155,7 @@ async function submitCreate() {
     });
     const j = await r.json();
     if (!j.ok) {
-      G.connect.error = j.error === "path_refused"
-        ? "Execution substrate fields are not accepted."
-        : (j.error || "Create failed");
+      G.connect.error = j.error || "create_failed";
       G.connect.submitting = false;
       paint();
       return;
@@ -911,6 +1164,7 @@ async function submitCreate() {
     G.connect.submitting = false;
     G.connect.instruction = "";
     G.connect.name = "";
+    G.connect.error = null;
     try { await fetchLanes(); } catch { /* */ }
     if (id) location.hash = View.laneDetailHash(id);
   } catch {
@@ -1027,6 +1281,12 @@ async function show(r) {
   }
 
   if (G.selected) {
+    if (G.threadLaneId !== G.selected) {
+      G.threadEntered = false;
+      G.threadNewUpdate = false;
+      G.asideHistory = false;
+      resetAsideForLaneEntry();
+    }
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1038,6 +1298,12 @@ async function show(r) {
       fetchLane(hydrateId).catch(() => { if (gen === G.showGen && G.selected === hydrateId && !G.lane) G.lane = null; }),
     ]);
     if (gen !== G.showGen) return;
+    // Opening a lane must show its message immediately, not one poll later. A
+    // lane still on `vac run-status` keeps its real answer in the transcript.
+    if (G.selected === hydrateId && !laneHasStructuredReport(G.lane)) {
+      await fetchLatestResponse(hydrateId).catch(() => {});
+      if (gen !== G.showGen) return;
+    }
     if (G.selected === hydrateId && !G.lane && (G.lanes || []).some((l) => View.laneMatchesId(l, hydrateId))) {
       commitKnownLane(hydrateId);
     }
@@ -1059,6 +1325,40 @@ async function show(r) {
     G.notifyRestored = true;
     restoreGatewayNotifications().catch(() => {});
   }
+}
+
+/**
+ * Suspend or resume the provider on a lane. Neither deletes durable work; the
+ * canonical lifecycle owner enforces that, this just asks.
+ */
+async function providerLifecycle(laneId, action) {
+  const id = laneId || G.selected;
+  if (!id || G.releasing) return;
+  G.releasing = true;
+  G.notice = { kind: "idle", text: action === "suspend" ? "Suspending the agent…" : "Resuming the agent…" };
+  paint();
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/provider/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(action === "suspend" ? { confirm: true } : {}),
+    });
+    const result = await r.json();
+    G.notice = result?.ok
+      ? {
+        kind: "ok",
+        text: action === "suspend"
+          ? "Agent suspended. The lane, branch, worktree and conversation are kept — replying resumes it."
+          : "Agent resuming in the same worktree and session.",
+      }
+      : { kind: "err", text: View.providerLifecycleErrorText(result?.error, action) };
+    try { await fetchLane(id); } catch { /* */ }
+    try { await fetchLanes(); } catch { /* */ }
+  } catch {
+    G.notice = { kind: "err", text: `Could not ${action} the agent.` };
+  }
+  G.releasing = false;
+  paint();
 }
 
 async function releaseRuntime() {
@@ -1201,13 +1501,48 @@ document.addEventListener("submit", (e) => {
   }
 }, true);
 
+/**
+ * Back closes Details before it leaves the lane.
+ *
+ * An open Details panel covers the header, so the Back control sits behind it —
+ * correct for a modal overlay, but it means a Back gesture would otherwise leave
+ * the lane with the panel still open. Opening Details pushes one history entry
+ * against the SAME hash; Back pops it, we close the panel, and the router sees
+ * no route change. No event interception, no URL rewriting.
+ */
+function pushDetailsHistoryEntry() {
+  if (G.asideHistory) return;
+  try {
+    history.pushState({ gwDetails: true }, "", window.location.hash || "");
+    G.asideHistory = true;
+  } catch { G.asideHistory = false; }
+}
+
+function dropDetailsHistoryEntry() {
+  if (!G.asideHistory) return;
+  G.asideHistory = false;
+  try { history.back(); } catch { /* the panel is closed either way */ }
+}
+
+window.addEventListener("popstate", () => {
+  if (!G.asideHistory) return;
+  G.asideHistory = false;
+  if (asideOpenNow()) setAsideOpen(false, { restoreFocus: true, fromHistory: true });
+});
+
+// Escape closes Details first — it should not drop the operator out of the lane
+// while a panel is covering it.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  if (!G.visible || routeName() !== "lanes" || !G.selected) return;
+  if (!asideOpenNow()) return;
+  e.preventDefault();
+  e.stopPropagation();
+  setAsideOpen(false, { restoreFocus: true });
+}, true);
+
 document.addEventListener("toggle", (e) => {
   const details = e.target;
-  if (details?.closest?.("[data-gw-lane-fold]") && details.matches?.("[data-gw-lane-fold]")) {
-    G.laneFoldOpen = details.open;
-    View.writeLaneFoldOpen(details.open, storage());
-    return;
-  }
   if (!details || !details.closest?.("[data-gw-status]") || details.tagName !== "DETAILS") return;
   G.statusOpen = details.open;
   View.writeStatusOpen(details.open, storage());
@@ -1238,6 +1573,49 @@ document.addEventListener("click", async (e) => {
   if (!notify) {
     document.querySelectorAll("details[data-gw-notify][open]").forEach((el) => { el.open = false; });
   }
+  const asideToggle = e.target?.closest?.("[data-gw-aside-toggle]");
+  if (asideToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    setAsideOpen(!asideOpenNow());
+    return;
+  }
+  const asideClose = e.target?.closest?.("[data-gw-aside-close]");
+  if (asideClose) {
+    e.preventDefault();
+    e.stopPropagation();
+    setAsideOpen(false, { restoreFocus: true });
+    return;
+  }
+  const newUpdate = e.target?.closest?.("[data-gw-new-update]");
+  if (newUpdate) {
+    e.preventDefault();
+    e.stopPropagation();
+    scrollThreadToLatest();
+    return;
+  }
+  const createProvider = e.target?.closest?.("[data-gw-create-provider]");
+  if (createProvider) {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = createProvider.getAttribute("data-gw-create-provider");
+    if (next !== "claude" && next !== "cursor") return;
+    G.connect.provider = next;
+    const hidden = document.getElementById("gw-create-provider");
+    if (hidden) hidden.value = next;
+    document.querySelectorAll("[data-gw-create-provider]").forEach((b) => {
+      b.setAttribute("aria-pressed", b.getAttribute("data-gw-create-provider") === next ? "true" : "false");
+    });
+    return;
+  }
+  const msgMore = e.target?.closest?.("[data-gw-msg-more]");
+  if (msgMore) {
+    e.preventDefault();
+    e.stopPropagation();
+    G.userMessageExpanded = !G.userMessageExpanded;
+    paint();
+    return;
+  }
   const copy = e.target?.closest?.("[data-gw-copy]");
   if (copy) {
     e.preventDefault();
@@ -1252,6 +1630,7 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     const next = providerOpt.getAttribute("data-gw-provider-opt");
     if (next !== "claude" && next !== "cursor") return;
+    if (providerOpt.disabled || providerOpt.getAttribute("aria-disabled") === "true") return;
     const hidden = document.getElementById("gw-composer-provider");
     if (hidden) hidden.value = next;
     document.querySelectorAll("[data-gw-provider-opt]").forEach((btn) => {
@@ -1286,6 +1665,20 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     G.notice = { kind: "ok", text: "Lane stays running for follow-up work." };
     paint();
+    return;
+  }
+  const providerBtn = e.target?.closest?.("[data-gw-provider-suspend],[data-gw-provider-resume]");
+  if (providerBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const suspend = providerBtn.hasAttribute("data-gw-provider-suspend");
+    // Interrupting live work is the operator's call to make explicitly. A
+    // parked lane needs no confirmation — nothing is interrupted.
+    if (suspend && providerBtn.getAttribute("data-gw-confirm") === "1"
+        && !window.confirm("This lane is working. Suspend its agent anyway?\n\nThe lane, branch, worktree and conversation are all kept.")) {
+      return;
+    }
+    providerLifecycle(providerBtn.getAttribute("data-lane-id"), suspend ? "suspend" : "resume");
     return;
   }
   const releaseRuntimeBtn = e.target?.closest?.("[data-gw-runtime-release]");

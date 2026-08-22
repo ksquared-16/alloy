@@ -15,6 +15,7 @@ import {
   publicDurableLane,
   renameDurableLane,
   validateLaneName,
+  deriveLaneNameFromInstruction,
 } from "./development-lane.mjs";
 import { getDevelopmentLane, listDevelopmentLanes } from "./lanes.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
@@ -184,13 +185,26 @@ export function renameLaneRequest(laneId, body = {}, { actor = "operator", nowMs
 export async function createNewLaneRequest(body = {}, { actor = "operator", nowMs = Date.now() } = {}) {
   const extra = pathLikeFields(body);
   if (extra.length) return { status: 400, body: { ok: false, error: "path_refused", fields: extra } };
-  const named = validateLaneName(body.name);
-  if (!named.ok) return { status: 400, body: { ok: false, error: named.error } };
+  const instructionText = body.instruction != null ? String(body.instruction) : "";
+  // A name is no longer required to start. If the operator did not give one,
+  // the opening message names the lane — and Rename Lane changes it later.
+  const requestedName = String(body.name ?? "").trim()
+    || deriveLaneNameFromInstruction(instructionText);
+  const named = validateLaneName(requestedName);
+  if (!named.ok) {
+    return {
+      status: 400,
+      body: {
+        ok: false,
+        error: named.error === "name_empty" ? "name_or_instruction_required" : named.error,
+      },
+    };
+  }
   const provider = normalizeExecutionProvider(body.provider, "claude");
   if (!provider) {
     return { status: 400, body: { ok: false, error: "unsupported_provider" } };
   }
-  const instruction = body.instruction != null ? String(body.instruction) : "";
+  const instruction = instructionText;
   const created = createDurableLane({
     name: named.name,
     origin: "created",

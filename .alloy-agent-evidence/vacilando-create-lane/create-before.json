@@ -1,0 +1,34 @@
+{
+  "viewportH": 660,
+  "main": {
+    "top": 61,
+    "bottom": 510,
+    "h": 449
+  },
+  "mainOverflow": "hidden",
+  "form": {
+    "top": 280,
+    "bottom": 585,
+    "h": 305
+  },
+  "textarea": {
+    "top": 392,
+    "bottom": 546,
+    "h": 154
+  },
+  "submit": {
+    "top": 561,
+    "bottom": 585,
+    "h": 24
+  },
+  "textareaFullyVisible": true,
+  "submitFullyVisible": true,
+  "formClippedByMain": true,
+  "canScrollMain": true,
+  "fields": [
+    "Name",
+    "Provider",
+    "Initial work"
+  ],
+  "fontPx": 14
+}

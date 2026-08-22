@@ -149,14 +149,6 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
       throw new Error("Cursor start must not inspect Claude tmux panes");
     },
   });
-  setAgentSessionLifecycleImplForTests({
-    startRuntime: async () => {
-      throw new Error("Cursor start must not spawn tmux Claude");
-    },
-    spawnClaude: () => {
-      throw new Error("Cursor start must not spawn Claude");
-    },
-  });
   const vac = ensureVacilandoSpecialistLane({ root: ROOT });
   const bound = cmdAttachCursorSession({
     laneId: vac.lane.lane_id,
@@ -165,11 +157,28 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
     root: ROOT,
   });
   assert.equal(bound.ok, true, bound.error);
+  setLanePreferredProvider(vac.lane.lane_id, "cursor", { root: ROOT });
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: vac.lane.lane_id,
+      durable: true,
+      worktree: { path: WT1, managed: true, name: "wt1-vacilando-mac-mini-readiness" },
+      tmux: { alive: false, session: null, pane_id: null },
+      binding: bound.lane.binding,
+      preferred_provider: "cursor",
+      claude: { presence: "absent" },
+    }),
+    startRuntime: async () => {
+      throw new Error("Cursor start must not spawn tmux Claude");
+    },
+    spawnClaude: () => {
+      throw new Error("Cursor start must not spawn Claude");
+    },
+  });
   const start = await startLaneAgentSession({ laneId: vac.lane.lane_id, root: ROOT });
-  assert.equal(start.ok, true, start.error);
-  assert.equal(start.provider, "cursor");
-  assert.equal(start.adopted, true);
-  assert.equal(start.queued, undefined);
+  assert.equal(start.ok, false, start.error);
+  assert.equal(start.error, "cursor_delivery_unavailable");
+  assert.equal(start.observation_only, true);
   const [projected] = attachLaneAgentSessions([{
     lane_id: vac.lane.lane_id,
     durable: true,

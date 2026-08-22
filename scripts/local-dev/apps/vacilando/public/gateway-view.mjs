@@ -22,7 +22,9 @@ export function outputIsOlder(next, current) {
 }
 export const MOBILE_MAX_PX = 860;
 export const STATUS_OPEN_KEY = "vac.gw.statusOpen";
+/** Persisted open/closed state of the single lane details panel. */
 export const LANE_FOLD_KEY = "vac.gw.laneFold";
+export const DETAILS_PANEL_KEY = LANE_FOLD_KEY;
 export const VIEWED_KEY_PREFIX = "vac.gw.viewed.";
 
 export function decodeLaneId(value) {
@@ -181,6 +183,35 @@ export function deliveryNotice(result) {
     }
     return { kind: "ok", text: "Work queued. Waiting for execution capacity." };
   }
+  // A refused send carries WHY from the readiness gate. An opaque
+  // "Delivery refused (provider_prompt_not_ready)" is what the operator saw the
+  // first time this fired; say what the pane was doing instead.
+  if (result?.error === "provider_prompt_not_ready") {
+    const why = summaryText(result.prompt_readiness?.summary) || summaryText(result.blocking_screen);
+    // A dialog the composer cannot reach is a different situation from a busy
+    // agent, and the operator has to be told which one they are looking at —
+    // one needs them at the terminal, the other needs nothing at all.
+    if (result.needs_terminal_operator === true || result.prompt_readiness?.needs_terminal_operator === true) {
+      return {
+        kind: "err",
+        text: `Your instruction was not sent. ${why || "The agent's terminal is showing a prompt."} `
+          + "This prompt has to be answered in the agent's terminal — Vacilando cannot answer it for you. "
+          + "Answer it there, then send again.",
+      };
+    }
+    if (result.status === "queued" || result.admission_queued) {
+      return {
+        kind: "ok",
+        text: `Not sent yet — ${why ? `${why.charAt(0).toLowerCase()}${why.slice(1)}` : "the agent is not at a prompt."} Queued; it will be delivered when the agent is ready.`,
+      };
+    }
+    return {
+      kind: "err",
+      text: why
+        ? `Not sent — ${why.charAt(0).toLowerCase()}${why.slice(1)} Open Details to see the terminal.`
+        : deliveryErrorText(result.error),
+    };
+  }
   return { kind: "err", text: deliveryErrorText(result?.error) };
 }
 
@@ -207,8 +238,33 @@ export function deliveryErrorText(error) {
       return "Send was refused: extra targeting fields are not allowed.";
     case "delivery_failed":
       return "Delivery failed. The instruction was not submitted.";
+    case "cursor_delivery_unavailable":
+      return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
+    case "provider_prompt_not_ready":
+      return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
+    case "undelivered_provider_prompt_block":
+      return "Not sent. The agent's terminal is showing a permission prompt, which has to be answered in the terminal — it cannot be answered from here.";
     default:
       return error ? `Delivery refused (${error}).` : "Delivery failed.";
+  }
+}
+
+export function providerLifecycleErrorText(error, action = "suspend") {
+  switch (error) {
+    case "confirm_required":
+      return "That lane is working. Confirm to interrupt it.";
+    case "question_not_durable":
+      return "Not suspended: the question could not be stored durably first, and suspending would lose it.";
+    case "provider_stop_failed":
+      return "The agent process would not stop. Nothing was changed and no capacity was freed.";
+    case "no_agent_session":
+      return "There is no agent attached to this lane.";
+    case "provider_start_failed":
+      return "The agent could not be started. The lane and its work are unchanged.";
+    case "lane_not_found":
+      return "This Development Lane is no longer available.";
+    default:
+      return error ? `Could not ${action} the agent (${error}).` : `Could not ${action} the agent.`;
   }
 }
 
@@ -323,7 +379,9 @@ export function laneAgentLabel(lane) {
 
 export function laneProviderLabel(lane) {
   const kind = laneProviderKind(lane);
-  if (kind === "cursor") return "Cursor";
+  if (kind === "cursor") {
+    return Boolean(lane?.tmux?.alive) ? "Cursor" : "Cursor (read-only)";
+  }
   if (kind === "claude") return "Claude";
   if (lane?.tmux?.alive) return "Session";
   return "Offline";
@@ -353,7 +411,79 @@ export function isGovernedDirectorWait(run) {
   return key === "director_governed_action" || Boolean(run?.resource_wait?.governed_request_id);
 }
 
-export function deriveLaneExecutionPosture(lane) {
+/**
+ * Every "summary" field on the wire is not a string.
+ *
+ * `execution_run.latest_progress` is an OBJECT — `{summary, at}` — while
+ * `completion_report` is `{summary}` and `resource_wait.label` is a plain
+ * string. A lane row that did `String(latest_progress)` printed the literal
+ * text "[object Object]" to the operator, live, on three lanes at once. Read
+ * the summary through one accessor so a shape change can never print again.
+ */
+export function summaryText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const s = summaryText(v);
+      if (s) return s;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    for (const key of ["summary", "label", "text", "detail", "title", "reason", "message"]) {
+      const s = summaryText(value[key]);
+      if (s) return s;
+    }
+    return "";
+  }
+  return "";
+}
+
+/** A queued admission older than this, on a lane that cannot be provisioned. */
+export const STALE_ADMISSION_MS = 10 * 60 * 1000;
+
+/**
+ * Proof — not a guess — that a "Queued for capacity" claim is dead.
+ *
+ * Observed on this host: Lifecycle Cert and Processing sat at "Queued for
+ * capacity" for three days. Neither lane has a worktree binding, so neither can
+ * ever be provisioned, and the only code path that clears an admission
+ * (releaseLaneExecutionCapacity) returned `already_idle` before reaching it.
+ * They were queued behind capacity they were structurally unable to receive.
+ *
+ * Returns null unless ALL of these hold — it must never demote live work:
+ *   - the admission is open (QUEUED / ADMITTED / PROVISIONING)
+ *   - the lane has no runtime binding, so provisioning cannot start
+ *   - no agent session and no live run
+ *   - it has been queued past STALE_ADMISSION_MS
+ */
+export function staleAdmissionClaim(lane, nowMs = Date.now()) {
+  const adm = lane?.admission || lane?.execution_run?.admission || null;
+  const state = String(adm?.state || "").toUpperCase();
+  if (!adm || !["QUEUED", "ADMITTED", "PROVISIONING"].includes(state)) return null;
+  if (liveAgentOnLane(lane)) return null;
+  const runState = lane?.execution_run?.state || null;
+  if (["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT"].includes(runState)) return null;
+  if (laneIsBound(lane)) return null;
+  const since = Date.parse(adm.requested_at || lane?.execution_run?.created_at || "");
+  if (!Number.isFinite(since)) return null;
+  const waitedMs = nowMs - since;
+  if (waitedMs < STALE_ADMISSION_MS) return null;
+  const blockers = Array.isArray(lane?.binding_blockers) ? lane.binding_blockers : [];
+  const why = summaryText(blockers[0]) || "Lane has no worktree binding";
+  return {
+    admission_id: adm.admission_id || null,
+    admission_state: state,
+    queued_since: adm.requested_at || null,
+    waited_ms: waitedMs,
+    reason: why,
+    detail: `Queued ${ago(since, nowMs)} ago for capacity it cannot receive: ${why}.`,
+  };
+}
+
+export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
   const liveAgent = liveAgentOnLane(lane);
@@ -404,6 +534,23 @@ export function deriveLaneExecutionPosture(lane) {
         ? "Updating Director · governed capabilities"
         : (needsApproval ? `Needs approval · ${title}` : `Waiting on Director · ${title}`),
       tone: "run",
+      slot,
+      queue_position: null,
+    };
+  }
+  // A parked lane whose provider was put down. The work is entirely intact, so
+  // "Working" would be false and "Offline" would suggest it was lost. Checked
+  // before NEEDS_INPUT, which would otherwise claim it and hide the suspension.
+  if (lane?.agent_session?.state === "SUSPENDED"
+      || run?.provider_suspension?.state === "SUSPENDED") {
+    const label = runState === "WAITING_RESOURCE" ? "Waiting for resource" : "Needs input";
+    return {
+      state: "PROVIDER_SUSPENDED",
+      label: `${label} · suspended`,
+      mark: "!",
+      hint: "Provider suspended; the question and all work are kept",
+      headline: `${label} · provider suspended`,
+      tone: runState === "WAITING_RESOURCE" ? "queued" : "needs",
       slot,
       queue_position: null,
     };
@@ -460,6 +607,20 @@ export function deriveLaneExecutionPosture(lane) {
       queue_position: null,
     };
   }
+  const staleClaim = staleAdmissionClaim(lane, nowMs);
+  if (staleClaim) {
+    return {
+      state: "QUEUED_STALE",
+      label: "Stale capacity claim",
+      mark: "○",
+      hint: staleClaim.detail,
+      headline: `Stale capacity claim · ${staleClaim.reason}`,
+      tone: "",
+      slot: null,
+      queue_position: null,
+      stale_claim: staleClaim,
+    };
+  }
   if (queued && !liveAgent) {
     const pos = n ? ` · #${n}` : "";
     return {
@@ -497,7 +658,7 @@ export function deriveLaneExecutionPosture(lane) {
       queue_position: null,
     };
   }
-  const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(runState);
+  const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING"].includes(runState);
   if (liveAgent || liveRun) {
     const who = laneProviderLabel(lane);
     const waitLabel = run?.resource_wait?.label;
@@ -569,7 +730,7 @@ export function workOutputIsStale(lane, output, nowMs = Date.now()) {
 }
 
 export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now() } = {}) {
-  const cap = deriveLaneExecutionPosture(lane);
+  const cap = deriveLaneExecutionPosture(lane, { nowMs });
   const run = lane?.execution_run;
   const prev = lane?.previous_run;
   const stale = workOutputIsStale(lane, output, nowMs);
@@ -584,6 +745,17 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   }
   if (cap.state === "WAITING_ON_DIRECTOR") {
     return { key: "waiting", label: "Waiting on Director", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  if (cap.state === "PROVIDER_SUSPENDED") {
+    const parked = run?.state === "WAITING_RESOURCE";
+    return {
+      key: "needs_input", label: cap.label,
+      // Durable blocked work belongs with what wants the operator — not with
+      // running work, and not with offline lanes.
+      group: parked ? "active" : "needs_input",
+      tone: cap.tone, mark: cap.mark, hint: cap.hint, headline: cap.headline,
+      live: false, stale: false,
+    };
   }
   if (cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT") {
     return { key: "needs_input", label: "Needs input", group: "needs_input", tone: "needs", mark: "!", hint: cap.hint || "Needs input", headline: "Needs input", live: false, stale: false };
@@ -602,6 +774,11 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   }
   if (run?.state === "VALIDATING" || cap.label === "Validating") {
     return { key: "validating", label: "Validating", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
+  }
+  // A stale claim is not work. Leaving it in the "active" band pushed real
+  // running lanes down the list behind three-day-old ghosts.
+  if (cap.state === "QUEUED_STALE") {
+    return { key: "stale_claim", label: "Stale capacity claim", group: "idle", tone: "", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
   }
   if (cap.state === "QUEUED_FOR_CAPACITY") {
     return { key: "waiting", label: "Queued for capacity", group: "active", tone: "queued", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
@@ -675,6 +852,8 @@ export function occupiesClaudeProviderCapacity(lane, cap = null) {
   const posture = cap || deriveLaneExecutionPosture(lane);
   if (laneProviderKind(lane) === "cursor") return false;
   if (posture.state === "READY_TO_RELEASE") return false;
+  // Suspended means the process is down: durable work, no computation.
+  if (posture.state === "PROVIDER_SUSPENDED") return false;
   return ["RUNNING", "STARTING", "CONNECTED", "FINISHING", "NEEDS_INPUT", "WAITING_ON_DIRECTOR", "UPDATING_DIRECTOR"].includes(posture.state);
 }
 
@@ -682,6 +861,7 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   const rows = list.map((lane) => ({ lane, cap: deriveLaneExecutionPosture(lane) }));
   const running = rows.filter((r) => occupiesClaudeProviderCapacity(r.lane, r.cap));
+  const stale = rows.filter((r) => r.cap.state === "QUEUED_STALE");
   const queued = rows
     .filter((r) => r.cap.state === "QUEUED_FOR_CAPACITY")
     .sort((a, b) => (Number(a.cap.queue_position) || 99) - (Number(b.cap.queue_position) || 99));
@@ -701,27 +881,64 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
       name: r.lane.label || r.lane.name || r.lane.lane_id,
       queue_position: r.cap.queue_position,
     })),
+    stale_claims: stale.map((r) => ({
+      lane_id: r.lane.lane_id,
+      name: r.lane.label || r.lane.name || r.lane.lane_id,
+      reason: r.cap.stale_claim?.reason || null,
+    })),
   };
 }
 
 export function renderExecutionCapacity(summary) {
   if (!summary || typeof summary !== "object") return "";
-  const running = (summary.running || []).map((r) => r.name).filter(Boolean).join(", ") || "None";
+  // ONE number, and it is the one that governs admission: live provider
+  // processes. Showing the lane-posture count beside a longer list of running
+  // agents was two counters disagreeing in the same panel.
+  const holders = (summary.provider_holders || []).map((h) => summaryText(h?.name) || summaryText(h?.path)).filter(Boolean);
+  const running = (holders.length ? holders : (summary.running || []).map((r) => r.name).filter(Boolean)).join(", ") || "None";
   const queued = (summary.queued || []).map((q) => (
     q.queue_position ? `${q.name} #${q.queue_position}` : q.name
   )).filter(Boolean).join(", ") || "None";
   return `<div class="gw-status-block" data-gw-capacity>
     <div class="gw-status-h">Execution capacity</div>
     <dl class="gw-kv">
-      <dt>Active</dt><dd>${esc(String(summary.active ?? 0))} / ${esc(String(summary.max_active ?? 3))}</dd>
+      <dt>Active</dt><dd>${esc(String(summary.active_providers ?? summary.active ?? 0))} / ${esc(String(summary.max_active ?? 3))}</dd>
       <dt>Running</dt><dd>${esc(running)}</dd>
       <dt>Queued</dt><dd>${esc(queued)}</dd>
-      <dt>Available</dt><dd>${esc(String(summary.available ?? 0))}</dd>
+      <dt>Available</dt><dd>${esc(String(Math.max(0, Number(summary.max_active ?? 3) - Number(summary.active_providers ?? summary.active ?? 0))))}</dd>
+      ${summary.degraded ? `<dt>Counting</dt><dd>degraded — live process inspection unavailable</dd>` : ""}
+      ${(summary.stale_claims || []).length
+        ? `<dt>Stale claims</dt><dd>${esc((summary.stale_claims || []).map((s) => s.name).join(", "))}</dd>`
+        : ""}
     </dl>
   </div>`;
 }
 
-export function renderLaneRuntimeControls(lane, cap) {
+/**
+ * Who is actually holding the agent capacity, and the two ways to free some.
+ * Driven by the live provider count, so the names match the number.
+ */
+export function renderCapacityHolders(capacity) {
+  if (!capacity) return "";
+  const max = Number(capacity.max_active ?? capacity.max_providers) || 0;
+  const active = Number(capacity.active_providers ?? capacity.active) || 0;
+  if (!max || active < max) return "";
+  const holders = (capacity.provider_holders || [])
+    .map((h) => summaryText(h?.name) || summaryText(h?.path))
+    .filter(Boolean);
+  const named = holders.length
+    ? `<ul class="gw-capacity-holders" data-gw-capacity-holders>${
+        holders.map((h) => `<li>${esc(h)}</li>`).join("")
+      }</ul>`
+    : "";
+  return `<div class="gw-capacity-block" data-gw-capacity-block>
+    <p class="gw-runtime-d">All ${esc(String(max))} agent${max === 1 ? "" : "s"} are in use:</p>
+    ${named}
+    <p class="gw-runtime-d">Free one with <strong>Release execution capacity</strong> in that lane's Details — the lane, worktree and branch all stay — or raise the limit with <code>ALLOY_MAX_ACTIVE_PROVIDERS</code>.</p>
+  </div>`;
+}
+
+export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
   if (!lane) return "";
   const posture = cap || deriveLaneExecutionPosture(lane);
   const slot = posture.slot;
@@ -758,9 +975,11 @@ export function renderLaneRuntimeControls(lane, cap) {
   }
   if (posture.state === "CONNECTED") {
     const who = laneProviderLabel(lane);
-    const release = who === "Cursor" ? "" : `<div class="gw-runtime-actions">
+    const release = laneProviderKind(lane) === "cursor" ? "" : `<div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-suspend data-lane-id="${id}">Suspend provider</button>
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
-      </div>`;
+      </div>
+      <p class="gw-runtime-d">Neither deletes the lane, its branch or its worktree.</p>`;
     return `<aside class="gw-runtime" data-gw-runtime data-posture="CONNECTED">
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">${esc(who)} connected${esc(slotNote)}</p>
@@ -772,16 +991,45 @@ export function renderLaneRuntimeControls(lane, cap) {
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">${esc(posture.headline || "Running")}${esc(slotNote)}</p>
       <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-suspend data-gw-confirm="1" data-lane-id="${id}">Suspend provider</button>
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
+      </div>
+      <p class="gw-runtime-d">This lane is working — suspending interrupts it. Neither action deletes the lane, its branch or its worktree.</p>
+    </aside>`;
+  }
+  if (posture.state === "PROVIDER_SUSPENDED") {
+    const q = lane?.execution_run?.provider_suspension?.resume_state?.question || null;
+    return `<aside class="gw-runtime" data-gw-runtime data-posture="PROVIDER_SUSPENDED">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">Provider suspended${esc(slotNote)}</p>
+      <p class="gw-runtime-d">This lane is waiting on you. Its agent was stopped so another lane could run — the question, conversation, run, worktree and branch are all kept. Replying resumes it automatically.</p>
+      ${q ? `<p class="gw-runtime-d gw-runtime-q">${esc(String(q).split("\n")[0].slice(0, 160))}</p>` : ""}
+      <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-resume data-lane-id="${id}">Resume provider</button>
+      </div>
+    </aside>`;
+  }
+  if (posture.state === "QUEUED_STALE") {
+    const claim = posture.stale_claim || {};
+    return `<aside class="gw-runtime" data-gw-runtime data-posture="QUEUED_STALE">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">Stale capacity claim</p>
+      <p class="gw-runtime-d">${esc(claim.detail || "This lane is queued for capacity it cannot receive.")}</p>
+      <p class="gw-runtime-d">Releasing cancels the dead admission through the capacity owner. The durable lane, worktree and branch stay.</p>
+      <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release capacity</button>
       </div>
     </aside>`;
   }
   if (posture.state === "QUEUED_FOR_CAPACITY") {
     const n = posture.queue_position ? ` · #${posture.queue_position}` : "";
+    // "No capacity" with nothing else said is the whole complaint: the operator
+    // cannot see who holds it or what to do. Name the agents and the remedies.
     return `<aside class="gw-runtime" data-gw-runtime data-posture="QUEUED_FOR_CAPACITY">
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">Queued for capacity${esc(n)}</p>
-      <p class="gw-runtime-d">Vacilando starts this lane when capacity is free. You do not pick a slot.</p>
+      ${renderCapacityHolders(capacity)}
+      <p class="gw-runtime-d">Vacilando starts this lane as soon as an agent frees up. You do not pick a slot.</p>
     </aside>`;
   }
   if (posture.state === "IDLE") {
@@ -992,6 +1240,7 @@ export function writeStatusOpen(open, storage) {
   try { storage?.setItem(STATUS_OPEN_KEY, open ? "open" : "closed"); } catch { /* */ }
 }
 
+/** Desktop keeps the details panel open; mobile opens it on demand. */
 export function laneFoldDefault({ widthPx, stored } = {}) {
   if (stored === "open") return true;
   if (stored === "closed") return false;
@@ -1267,7 +1516,11 @@ export function renderNotificationControls(state = {}) {
 }
 
 /** Active lane output only — never last instruction, metadata, or another lane. */
-export function copyableOutputText({ selectedId, output, outputText } = {}) {
+export function copyableOutputText({ selectedId, output, outputText, lane = null } = {}) {
+  // The copy icon copies what the operator is reading. When a report owns the
+  // conversation that is the stored message, verbatim — not the pane behind it.
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) return String(report.message);
   if (output && selectedId && output.lane_id && output.lane_id !== selectedId) return null;
   if (output && output.ok === false) return null;
   const raw = output && Object.prototype.hasOwnProperty.call(output, "text")
@@ -1278,6 +1531,51 @@ export function copyableOutputText({ selectedId, output, outputText } = {}) {
   if (!s.trim()) return null;
   if (s === "Refreshing output…") return null;
   return s;
+}
+
+/**
+ * What the copy icon must copy.
+ *
+ * `output.text` in "recent" mode is a bounded 120-line snapshot of the visible
+ * pane — copying it hands the operator a fragment of the response and calls it
+ * the response. When the visible output is bounded, copy fetches the complete
+ * text first: the transcript's assistant message for a finished run, retained
+ * history otherwise.
+ */
+export function copySourcePlan(output, { lane = null } = {}) {
+  // A stored report IS the message. It is already complete and already local —
+  // there is nothing to fetch and nothing a pane could add.
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) {
+    return { needsFetch: false, mode: "agent_report", reason: "stored_report" };
+  }
+  const mode = output?.mode || "recent";
+  if (mode === "latest_response" && output?.available !== false) {
+    return { needsFetch: false, mode, reason: "already_complete" };
+  }
+  if (mode === "extended" && !output?.truncated) {
+    return { needsFetch: false, mode, reason: "already_complete" };
+  }
+  // A viewport-only pane is bounded by definition: the agent TUI keeps no tmux
+  // scrollback, so what is on screen is a WINDOW onto the response, never the
+  // response. Copying it hands over whatever happened to be visible.
+  const viewportOnly = output?.viewport_only === true
+    || (output?.alternate_screen === true && Number(output?.history_size) === 0);
+  const bounded = Boolean(output?.truncated)
+    || viewportOnly
+    || Number(output?.history_size) > Number(output?.returned_lines || output?.line_count || 0);
+  if (mode === "recent" && !bounded) {
+    return { needsFetch: false, mode: "recent", reason: "pane_is_whole" };
+  }
+  const finished = !lane?.execution_run
+    || ["COMPLETE", "FAILED"].includes(String(lane?.execution_run?.state || ""));
+  const cursorLane = laneProviderKind(lane) === "cursor";
+  // A viewport-only pane has no retained history to fall back on, so the
+  // transcript's assistant message is the only complete source there is.
+  if ((finished || viewportOnly) && !cursorLane) {
+    return { needsFetch: true, mode: "latest_response", fallback: "extended", reason: "complete_final_response" };
+  }
+  return { needsFetch: true, mode: "extended", fallback: null, reason: "retained_history" };
 }
 
 export function renderCopyControl({ text, feedback } = {}) {
@@ -1520,8 +1818,8 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   const title = "No agent session";
   const detail = atProviderCap
     ? `Claude is at ${cap.active}/${cap.max_active}. Running: ${occupying.join(", ")}. Release one to start this session.`
-    : (who === "Cursor"
-      ? "Existing worktree is connected. Attach this Cursor session to continue work."
+    : (laneProviderKind(lane) === "cursor"
+      ? "Cursor transcript is read-only. Start a Claude session to send instructions."
       : "Existing worktree is connected. Start a persistent Claude session to continue queued work.");
   const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
   return `<aside class="gw-session-callout" data-gw-session-callout>
@@ -1673,6 +1971,28 @@ function laneListStatus(lane, attention) {
   };
 }
 
+/**
+ * The one readable summary for a lane row. Every candidate goes through
+ * summaryText(), so an object-shaped field is read, not stringified.
+ */
+export function laneRowSummary(lane, work, who) {
+  const hint = summaryText(work?.hint);
+  if (hint && hint !== work?.label && hint !== who && hint !== `${who} ready`) {
+    return hint.slice(0, 140);
+  }
+  const candidates = [
+    lane?.execution_run?.latest_progress,
+    lane?.execution_run?.completion_report,
+    lane?.execution_run?.resource_wait,
+    lane?.previous_run?.completion_report,
+  ];
+  for (const c of candidates) {
+    const text = summaryText(c);
+    if (text) return text.slice(0, 140);
+  }
+  return "";
+}
+
 function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const id = lane.lane_id;
   const active = laneMatchesId(lane, selectedId) ? " is-active" : "";
@@ -1680,23 +2000,21 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const st = laneListStatus(lane, attentionByLane?.[id]);
   const git = gitListState(lane);
   const who = agentLabel(lane);
-  const summary = work.hint && work.hint !== work.label && work.hint !== who && work.hint !== `${who} ready`
-    ? work.hint
-    : (lane.execution_run?.latest_progress || lane.previous_run?.completion_report?.summary || "");
+  const summary = laneRowSummary(lane, work, who);
   const whenMs = laneUpdatedMs(lane);
-  const when = whenMs ? ago(whenMs) : "";
-  const activity = when ? `<span class="gw-lane-when">${esc(when)} ago</span>` : "";
-  const gitEl = git ? `<span class="gw-lane-git-state">${esc(git)}</span>` : "";
+  const when = whenMs ? `${ago(whenMs)} ago` : "";
+  // One canonical status and one readable summary. Agent, elapsed time and git
+  // state used to each get their own line, so a row was five stacked strings
+  // and none of them was the answer to "what is this lane doing".
+  const metaBits = [who, when, git].filter(Boolean).join(" · ");
   const extra = summary && summary !== st.label
-    ? `<span class="gw-lane-summary">${esc(String(summary).slice(0, 140))}</span>`
+    ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
   return `<a class="gw-lane${active}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
     <span class="gw-lane-title">${esc(lane.label || id)}</span>
     <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
-    <span class="gw-lane-meta">${esc(who)}</span>
     ${extra}
-    ${activity}
-    ${gitEl}
+    <span class="gw-lane-meta">${esc(metaBits)}</span>
   </a>`;
 }
 
@@ -1713,6 +2031,312 @@ export function renderLaneList(lanes, selectedId, { loading = false, attentionBy
     <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
     ${list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")}
   </div>`;
+}
+
+/**
+ * The assistant message.
+ *
+ * The conversation is driven by the run's structured agent report, never by the
+ * pane. A pane capture is a bounded window onto a terminal — it scrolls, it is
+ * truncated by construction, and it holds the PREVIOUS turn until the next one
+ * pushes it out. Showing it as the reply is what let a completion vanish on the
+ * next poll.
+ */
+/**
+ * A run that reported through the status-only CLI still has structured,
+ * run-bound facts: the summary the worker sent with `vac run-status --summary`,
+ * and the state_reason it gave — which for NEEDS_INPUT is the question itself.
+ *
+ * REGRESSION THIS CLOSES. When the conversation moved to structured reports,
+ * every lane that had not adopted `vac run-report` rendered "No agent report on
+ * this run yet" — the Runtime Performance lane sat at NEEDS_INPUT with a real
+ * summary and a real blocking question in the store, and the operator was shown
+ * nothing at all. Refusing to print the pane was right; refusing to print the
+ * run's own structured summary was not.
+ */
+export function statusSummaryMessage(run) {
+  if (!run) return null;
+  const parts = [];
+  const seen = new Set();
+  const push = (value) => {
+    const text = summaryText(value);
+    if (!text) return;
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    parts.push(text);
+  };
+  // Most specific first: the reason a run stopped is what the operator needs.
+  push(run.state_reason);
+  push(run.completion_report);
+  push(run.latest_progress);
+  push(run.resource_wait);
+  if (!parts.length) return null;
+  return parts.join("\n\n");
+}
+
+/** Report type a status-only run maps onto, for labelling only. */
+function statusReportType(state) {
+  if (state === "NEEDS_INPUT") return "needs_input";
+  if (state === "COMPLETE") return "completion";
+  if (state === "FAILED") return "failure";
+  return "progress";
+}
+
+/**
+ * The provider's own last message, parsed out of the session transcript.
+ *
+ * This is NOT a pane capture: `latest_response` comes from the Claude Code
+ * session transcript with `source: claude_code_session_transcript`, so it is an
+ * attributed assistant message with no TUI chrome and no viewport bound. A lane
+ * that has not adopted `vac run-report` still wrote a real answer, and this is
+ * where it lives — observed on the Runtime Performance lane: 2,862 characters
+ * of summary in the transcript behind a 90-character status string.
+ */
+export function transcriptResponse(latestResponse) {
+  const r = latestResponse;
+  if (!r || r.ok === false) return null;
+  if (r.mode !== "latest_response") return null;
+  if (r.available === false) return null;
+  if (r.source && r.source !== "claude_code_session_transcript") return null;
+  const text = String(r.text || "");
+  return text.trim() ? { text, truncated: r.truncated === true, at: r.captured_at || null } : null;
+}
+
+export function assistantMessageSource(lane, { output = null, outputText = "", latestResponse = null } = {}) {
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) {
+    return {
+      kind: "report",
+      report,
+      text: report.message,
+      terminal: false,
+    };
+  }
+  const run = lane?.execution_run || lane?.previous_run || null;
+  const state = run?.state || null;
+  // No structured report, but the provider did write an answer. Prefer the
+  // transcript message over the bounded status one-liner: the operator asked
+  // for the summary, and the summary is here.
+  const transcript = transcriptResponse(latestResponse)
+    || transcriptResponse(output);
+  if (transcript) {
+    return {
+      kind: "transcript",
+      report: {
+        type: statusReportType(state),
+        message: transcript.text,
+        revision: null,
+        phase: null,
+        reason: null,
+        choices: null,
+        result: null,
+        transcript_only: true,
+        truncated: transcript.truncated,
+      },
+      text: transcript.text,
+      terminal: false,
+    };
+  }
+  // A lane still on the status-only CLI: show what it actually reported, said
+  // plainly to be a status summary rather than a full agent message.
+  const status = statusSummaryMessage(run);
+  if (status) {
+    return {
+      kind: "status",
+      report: {
+        type: statusReportType(state),
+        message: status,
+        revision: null,
+        phase: null,
+        reason: null,
+        choices: null,
+        result: null,
+        status_only: true,
+      },
+      text: status,
+      terminal: false,
+    };
+  }
+  const working = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(state);
+  if (working) {
+    // No report yet. A restrained working state is honest; raw TUI content
+    // dressed as a reply is not.
+    return { kind: "working", report: null, text: "", terminal: false };
+  }
+  return { kind: "none", report: null, text: "", terminal: false };
+}
+
+const REPORT_TONE = Object.freeze({
+  progress: { label: "Working", tone: "run" },
+  needs_input: { label: "Needs your input", tone: "needs" },
+  completion: { label: "Complete", tone: "complete" },
+  failure: { label: "Failed", tone: "failed" },
+});
+
+/**
+ * Minimal, escape-first Markdown. Every character is escaped BEFORE any markup
+ * is applied, so a report can never inject HTML into the operator's Gateway no
+ * matter what an agent puts in it.
+ */
+export function renderReportMarkdown(text) {
+  const lines = String(text || "").split("\n");
+  const out = [];
+  let inCode = false;
+  let list = null;
+  let table = null;
+
+  let para = [];
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  // Consecutive non-blank lines are ONE paragraph, as in Markdown. Emitting a
+  // <p> per source line turned every hard-wrapped sentence into a separate
+  // block with a gap through the middle of it.
+  const closePara = () => {
+    if (!para.length) return;
+    out.push(`<p class="gw-md-p">${inline(para.join(" "))}</p>`);
+    para = [];
+  };
+  const closeTable = () => {
+    if (!table) return;
+    out.push("<table class=\"gw-md-table\"><thead><tr>"
+      + table.head.map((c) => `<th>${inline(c)}</th>`).join("")
+      + "</tr></thead><tbody>"
+      + table.rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")
+      + "</tbody></table>");
+    table = null;
+  };
+  const inline = (raw) => esc(raw)
+    .replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, (_m, c) => `<strong>${c}</strong>`);
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    if (/^\s*```/.test(line)) {
+      closePara(); closeList(); closeTable();
+      out.push(inCode ? "</code></pre>" : "<pre class=\"gw-md-code\"><code>");
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode) { out.push(`${esc(raw)}\n`); continue; }
+    if (!line.trim()) { closePara(); closeList(); closeTable(); continue; }
+
+    const cells = line.trim().match(/^\|(.+)\|$/);
+    if (cells) {
+      const parts = cells[1].split("|").map((c) => c.trim());
+      if (/^[\s|:-]+$/.test(line)) continue;
+      closePara(); closeList();
+      if (!table) table = { head: parts, rows: [] };
+      else table.rows.push(parts);
+      continue;
+    }
+    closeTable();
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      closePara(); closeList();
+      const level = Math.min(6, Math.max(2, h[1].length + 1));
+      out.push(`<h${level} class="gw-md-h">${inline(h[2])}</h${level}>`);
+      continue;
+    }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if (ul) {
+      closePara();
+      if (list !== "ul") { closeList(); out.push("<ul class=\"gw-md-list\">"); list = "ul"; }
+      out.push(`<li>${inline(ul[1])}</li>`);
+      continue;
+    }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ol) {
+      closePara();
+      if (list !== "ol") { closeList(); out.push("<ol class=\"gw-md-list\">"); list = "ol"; }
+      out.push(`<li>${inline(ol[1])}</li>`);
+      continue;
+    }
+    closeList();
+    para.push(line.trim());
+  }
+  if (inCode) out.push("</code></pre>");
+  closePara(); closeList(); closeTable();
+  return out.join("");
+}
+
+export function renderReportResult(result) {
+  if (!result || typeof result !== "object") return "";
+  const rows = Object.entries(result).map(([k, v]) => {
+    const value = Array.isArray(v) ? v.join(", ") : String(v);
+    return `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(value)}</dd>`;
+  });
+  if (!rows.length) return "";
+  return `<dl class="gw-report-result" data-gw-report-result>${rows.join("")}</dl>`;
+}
+
+export function renderReportChoices(choices) {
+  const list = Array.isArray(choices) ? choices.filter((c) => c?.label) : [];
+  if (!list.length) return "";
+  return `<ul class="gw-report-choices" data-gw-report-choices>${
+    list.map((c) => `<li><span class="gw-report-choice-label">${esc(c.label)}</span>${
+      c.detail ? `<span class="gw-report-choice-detail">${esc(c.detail)}</span>` : ""
+    }</li>`).join("")
+  }</ul>`;
+}
+
+/**
+ * The assistant bubble body. A stored report renders as the message; with no
+ * report yet the operator gets a restrained working state, never TUI text.
+ */
+export function renderAssistantMessage(source, { pending = false } = {}) {
+  if (["report", "status", "transcript"].includes(source?.kind) && source.report) {
+    const r = source.report;
+    const meta = REPORT_TONE[r.type] || REPORT_TONE.progress;
+    const statusOnly = r.status_only === true;
+    const transcriptOnly = r.transcript_only === true;
+    return `<div class="gw-report${statusOnly ? " is-status-only" : ""}" data-gw-report data-report-type="${esc(r.type)}" data-report-source="${esc(source.kind)}" data-report-id="${esc(r.report_id || "")}" data-report-revision="${esc(String(r.revision ?? ""))}">
+      <div class="gw-report-h">
+        <span class="gw-report-kind is-${esc(meta.tone)}">${esc(meta.label)}</span>
+        ${statusOnly ? `<span class="gw-report-phase">status summary</span>` : ""}
+        ${transcriptOnly ? `<span class="gw-report-phase">session transcript</span>` : ""}
+        ${r.phase ? `<span class="gw-report-phase">${esc(r.phase)}</span>` : ""}
+      </div>
+      ${r.reason ? `<p class="gw-report-reason">${esc(r.reason)}</p>` : ""}
+      <div class="gw-report-body" data-gw-report-body>${renderReportMarkdown(r.message)}</div>
+      ${renderReportChoices(r.choices)}
+      ${renderReportResult(r.result)}
+      ${statusOnly ? `<p class="gw-report-note" data-gw-report-note>This lane reports with <code>vac run-status</code>, so this is its status summary rather than a full message. Full terminal output is under Details.</p>` : ""}
+      ${transcriptOnly ? `<p class="gw-report-note" data-gw-report-note>The agent's own last message, read from the session transcript. This lane has not adopted <code>vac run-report</code>${r.truncated ? ", and the transcript capped this response" : ""}.</p>` : ""}
+    </div>`;
+  }
+  if (source?.kind === "working" || pending) {
+    return `<div class="gw-report is-working" data-gw-report data-report-type="working">
+      <div class="gw-report-h"><span class="gw-report-kind is-run">Working</span></div>
+      <p class="gw-report-waiting" data-gw-report-waiting>Working… the agent has not sent an update yet.</p>
+    </div>`;
+  }
+  // Nothing structured at all. Even here the operator gets a route to the facts
+  // rather than a dead end.
+  return `<div class="gw-report is-empty" data-gw-report data-report-type="none">
+    <p class="gw-report-waiting">This run has not reported a summary. Raw terminal output is under Details.</p>
+  </div>`;
+}
+
+/**
+ * Raw pane text, in Details, labelled for what it is.
+ *
+ * It stays because it is genuinely useful — transport receipt, readiness,
+ * liveness, debugging. It is fenced off from the conversation so it can never
+ * again be mistaken for the assistant's answer.
+ */
+export function renderTerminalDiagnostics(text, { pending = false, output = null } = {}) {
+  const body = String(text || "");
+  const bounded = output?.truncated === true
+    || output?.viewport_only === true
+    || Number(output?.history_size) > Number(output?.returned_lines || output?.line_count || 0);
+  return `<details class="gw-terminal" data-gw-terminal>
+    <summary class="gw-terminal-sum">Raw terminal output <span class="gw-terminal-tag">diagnostic</span></summary>
+    <div class="gw-terminal-body">
+      <p class="gw-terminal-note">Not the assistant's response. This is a bounded capture of the agent's terminal, kept for transport receipt, readiness and debugging.${bounded ? " It is truncated by the pane." : ""}</p>
+      ${renderOutput(body, { pending })}
+    </div>
+  </details>`;
 }
 
 export function renderOutput(text, { pending = false } = {}) {
@@ -1823,11 +2447,41 @@ export function renderOutputChrome(output, { lane = null, lastInstruction = null
   </div>`;
 }
 
-export function renderLastInstruction(rec, nowMs = Date.now()) {
+/** Mobile lines the clamped user message shows before "View more". */
+export const USER_MESSAGE_CLAMP_LINES = 6;
+/** Characters that fit one clamped mobile line at the message font size. */
+const MOBILE_CHARS_PER_LINE = 44;
+
+/**
+ * Does this instruction need a View more control?
+ *
+ * An unclamped instruction is `flex:0 0 auto` in the thread, so a long one took
+ * the whole scroller and squeezed the assistant reply into two rows. Estimating
+ * from wrapped lines keeps the decision pure and testable; CSS line-clamp does
+ * the actual clamping so the two can never disagree about WHAT is shown.
+ */
+export function userMessageNeedsClamp(text, { lines = USER_MESSAGE_CLAMP_LINES, charsPerLine = MOBILE_CHARS_PER_LINE } = {}) {
+  const raw = String(text || "");
+  if (!raw.trim()) return false;
+  let wrapped = 0;
+  for (const line of raw.split("\n")) {
+    wrapped += Math.max(1, Math.ceil(line.length / charsPerLine));
+    if (wrapped > lines) return true;
+  }
+  return false;
+}
+
+export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false } = {}) {
   if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
-  return `<article class="gw-msg gw-msg-user" data-gw-last>
+  const clampable = userMessageNeedsClamp(rec.instruction);
+  const open = !clampable || expanded;
+  const toggle = clampable
+    ? `<button type="button" class="btn sm gw-msg-more" data-gw-msg-more aria-expanded="${open ? "true" : "false"}">${open ? "View less" : "View more"}</button>`
+    : "";
+  return `<article class="gw-msg gw-msg-user${clampable && !open ? " is-clamped" : ""}" data-gw-last${clampable ? ' data-gw-clampable="1"' : ""}>
     <div class="gw-msg-label">You</div>
-    <div class="gw-msg-body gw-last-text">${esc(rec.instruction)}</div>
+    <div class="gw-msg-body gw-last-text" data-gw-msg-text>${esc(rec.instruction)}</div>
+    ${toggle}
     <div class="gw-msg-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"))}</div>
   </article>`;
 }
@@ -1849,6 +2503,7 @@ export function renderComposer({
   idleStart = false,
   queueUntilSession = false,
   provider = null,
+  cursorSendAvailable = false,
 } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
@@ -1857,7 +2512,11 @@ export function renderComposer({
     ? "Write an instruction — it will queue until a session starts…"
     : idleStart ? "Start work — write an instruction…" : "Write an instruction…";
   const sendLabel = idleStart ? "Start" : "Send";
-  const current = provider === "cursor" ? "cursor" : "claude";
+  const current = cursorSendAvailable && provider === "cursor" ? "cursor" : "claude";
+  const cursorDisabled = cursorSendAvailable ? "" : " disabled";
+  const cursorTitle = cursorSendAvailable
+    ? "Send with Cursor"
+    : "Cursor is read-only here: no executable transport is attached";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <div class="gw-composer-box">
@@ -1866,7 +2525,7 @@ export function renderComposer({
       <div class="gw-composer-row">
         <div class="gw-provider" role="radiogroup" aria-label="Agent">
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="claude" aria-pressed="${current === "claude" ? "true" : "false"}">Claude</button>
-          <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}">Cursor</button>
+          <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}"${cursorDisabled} title="${esc(cursorTitle)}">Cursor</button>
         </div>
         <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
         <span class="gw-count" data-gw-count></span>
@@ -2071,23 +2730,62 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
   </details>`;
 }
 
+/**
+ * Starting a lane is starting a conversation.
+ *
+ * It used to be a form: Name, then a Provider dropdown, then "Initial work" —
+ * three fields to fill in before anything could happen, with the name demanded
+ * before the operator had said what the lane was even for. And on a phone the
+ * whole form overflowed a container with `overflow:hidden`, so the Start button
+ * and the bottom of the message box were simply cut off.
+ *
+ * Now it is a composer: one message, a provider preference beside Send, and the
+ * lane names itself from what you wrote. Rename Lane is in Details when the
+ * first line stops fitting.
+ */
 export function renderCreateLaneFlow(create = {}) {
-  const err = create.error ? `<div class="gw-notice err">${esc(create.error)}</div>` : "";
-  return `<h1>New Development Lane</h1>
-    <p class="gw-lead">The lane is created immediately. Execution starts when capacity is available.</p>
-    <form class="gw-connect" data-gw-create>
-      <label class="gw-composer-h" for="gw-create-name">Name</label>
-      <input id="gw-create-name" name="name" maxlength="80" value="${esc(create.name || "")}" placeholder="Processing" />
-      <label class="gw-composer-h" for="gw-create-provider">Provider</label>
-      <select id="gw-create-provider" name="provider">
-        <option value="claude" selected>Claude Code</option>
-        <option value="cursor">Cursor</option>
-      </select>
-      <label class="gw-composer-h" for="gw-create-instruction">Initial work</label>
-      <textarea id="gw-create-instruction" name="instruction" rows="8" maxlength="${LANE_INSTRUCTION_MAX}" placeholder="Approved initial instruction…">${esc(create.instruction || "")}</textarea>
-      <button class="btn primary" type="submit" data-gw-create-submit ${create.submitting ? "disabled" : ""}>Create Lane</button>
+  const err = create.error ? `<div class="gw-notice err">${esc(createErrorText(create.error))}</div>` : "";
+  const provider = create.provider === "cursor" ? "cursor" : "claude";
+  const draft = create.instruction || "";
+  return `<div class="gw-start" data-gw-start>
+    <div class="gw-start-intro">
+      <p class="gw-lead">Say what this lane should work on. It starts from your first message, and takes its name from it — you can rename it any time in Details.</p>
+    </div>
+    <form class="gw-composer gw-start-composer" data-gw-create>
+      <div class="gw-composer-box">
+        <label class="gw-composer-h" for="gw-create-instruction">First message</label>
+        <textarea id="gw-create-instruction" name="instruction" rows="4"
+          maxlength="${LANE_INSTRUCTION_MAX}" autofocus
+          placeholder="What should this lane work on?">${esc(draft)}</textarea>
+        <div class="gw-composer-row">
+          <div class="gw-provider" role="radiogroup" aria-label="Agent">
+            <button type="button" class="gw-provider-opt" data-gw-create-provider="claude" aria-pressed="${provider === "claude" ? "true" : "false"}">Claude</button>
+            <button type="button" class="gw-provider-opt" data-gw-create-provider="cursor" aria-pressed="${provider === "cursor" ? "true" : "false"}">Cursor</button>
+          </div>
+          <input type="hidden" id="gw-create-provider" name="provider" value="${esc(provider)}" />
+          <button class="btn primary gw-send" type="submit" data-gw-create-submit ${create.submitting ? "disabled" : ""}>${create.submitting ? "Starting…" : "Start"}</button>
+        </div>
+      </div>
       ${err}
-    </form>`;
+    </form>
+  </div>`;
+}
+
+export function createErrorText(error) {
+  switch (error) {
+    case "name_or_instruction_required":
+      return "Write a first message to start this lane.";
+    case "instruction_too_large":
+      return "That first message is too long.";
+    case "name_too_large":
+      return "That first line is too long to use as a name — shorten it or rename later.";
+    case "already_connected":
+      return "A lane for this work already exists.";
+    case "path_refused":
+      return "Execution substrate fields are not accepted.";
+    default:
+      return error ? String(error) : "Could not start the lane.";
+  }
 }
 
 export function renderSourceControl(lane) {
@@ -2205,7 +2903,10 @@ export function renderGatewayShell({
   developmentResources,
   connect,
   executionCapacity,
-  laneFoldOpen = false,
+  latestResponse = null,
+  newUpdate = false,
+  asideOpen = false,
+  userMessageExpanded = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane });
@@ -2236,12 +2937,20 @@ export function renderGatewayShell({
     </div>`;
   }
   if (kind === "create") {
-    return `<div class="gw is-detail" data-gw data-gw-mode="create">${list}
+    // Same skeleton as a lane: compact header, scrollable body, pinned
+    // composer. The old markup put a tall form straight into .gw-main, which is
+    // overflow:hidden — so on a phone the message box and Start button were cut
+    // off with no way to scroll to them.
+    return `<div class="gw is-detail is-start" data-gw data-gw-mode="create">${list}
       <section class="gw-main">
-        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
-        ${renderCreateLaneFlow(connect || {})}
+        <div class="gw-lane-stage" data-gw-stage>
+          <header class="gw-chat-head" data-gw-chat-head>
+            <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
+            <div class="gw-chat-id"><h1 class="gw-chat-title">New lane</h1></div>
+          </header>
+          ${renderCreateLaneFlow(connect || {})}
+        </div>
       </section>
-      ${renderStatus(null, resources, statusOpts)}
     </div>`;
   }
   if (kind === "loading") {
@@ -2285,77 +2994,83 @@ export function renderGatewayShell({
     selectedId: lane?.lane_id || selectedId,
     output,
     outputText,
+    lane,
   });
+  const assistant = assistantMessageSource(lane, { output, outputText, latestResponse });
   const cap = deriveLaneExecutionPosture(lane);
   const bodyText = outputBodyText(output, outputText, { pending });
   const liveAttr = work.live ? ` data-gw-live="1"` : "";
   const liveMark = work.live
     ? `<span class="gw-live-dot" data-gw-live-dot>${work.stale ? "Stale" : "Working"}</span>`
     : "";
-  const details = `<details class="gw-details" data-gw-details>
-          <summary>Details</summary>
-          <div class="gw-details-body">
-            ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
-            ${renderContextRefreshButton(lane)}
-            ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
-            ${renderClaudeRunStatus(lane, telemetry)}
-            ${renderProviderHealth(output?.provider_health)}
-            ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-            ${renderLaneRuntimeControls(lane, cap)}
-            ${renderLaneSessionCallout(lane, { executionCapacity })}
-            ${renderRecentSystemActivity(lane?.recent_system_activity)}
-            ${statusHtml}
+  // ONE details panel. Everything that is not the conversation lives here — it
+  // used to be split between an inline <details> under the thread and a second
+  // "Lane details" fold in the aside, so the same lane facts appeared twice and
+  // neither place was complete.
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideOpen ? "" : ' aria-hidden="true" inert'}>
+        <div class="gw-aside-head">
+          <div class="gw-aside-title">Details</div>
+          <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
+        </div>
+        <div class="gw-aside-body">
+          <div class="gw-aside-id">
+            <h1>${esc(lane?.label || selectedId)}</h1>
+            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
+            <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
           </div>
-        </details>`;
-  return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
+          ${renderNotificationControls(notify || {})}
+          ${renderLaneLocalhost(lane)}
+          ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
+          ${renderContextRefreshButton(lane)}
+          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
+          ${renderClaudeRunStatus(lane, telemetry)}
+          ${renderProviderHealth(output?.provider_health)}
+          ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
+          ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
+          ${renderLaneSessionCallout(lane, { executionCapacity })}
+          ${renderRecentSystemActivity(lane?.recent_system_activity)}
+          ${renderTerminalDiagnostics(bodyText, { pending, output })}
+          ${statusHtml}
+        </div>
+      </aside>`;
+  // The chat status line is ONE line: canonical state, then who is on the lane.
+  const providerBit = laneProviderLabel(lane);
+  const statusLine = [work.label, providerBit].filter(Boolean).join(" · ");
+  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
-        <div class="gw-stage-status" data-gw-stage-status>
-          <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}">${esc(work.label)}</span>
-        </div>
+        <header class="gw-chat-head" data-gw-chat-head>
+          <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
+          <div class="gw-chat-id">
+            <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
+            <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}" data-gw-stage-status>${esc(statusLine)}</span>
+          </div>
+          <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
+            aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
+        </header>
         <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
-          <article class="gw-msg gw-msg-assistant"${liveAttr}>
-            ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
-            ${liveMark}
-            ${renderOutput(bodyText, { pending })}
+          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, { expanded: Boolean(userMessageExpanded) })}
+          <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
+            <div class="gw-msg-tools">
+              ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
+              ${liveMark}
+            </div>
+            ${renderAssistantMessage(assistant, { pending })}
           </article>
         </div>
+        <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderOperatorDecisionBar(lane?.execution_run)}
-        ${details}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
-          provider: laneProviderKind(lane) || lane?.preferred_provider || lane?.binding?.provider,
+          provider: lane?.preferred_provider || "claude",
+          cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
         })}
       </div>
-      <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
-        <div class="gw-lane-compact">
-          <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
-          <div class="gw-lane-compact-id">
-            <h1>${esc(lane?.label || selectedId)}</h1>
-            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-          </div>
-          ${renderNotificationControls(notify || {})}
-        </div>
-        ${renderLaneLocalhost(lane)}
-        <details class="gw-lane-fold" data-gw-lane-fold ${laneFoldOpen ? "open" : ""}>
-          <summary class="gw-lane-fold-sum">Lane details</summary>
-          <div class="gw-lane-top">
-            <div class="gw-lane-heading">
-              <a class="gw-back gw-back-desktop" data-gw-back href="#/lanes">← Lanes</a>
-              <header class="gw-lane-h">
-                <h1>${esc(lane?.label || selectedId)}</h1>
-                <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-                <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
-              </header>
-            </div>
-            ${renderNotificationControls(notify || {})}
-          </div>
-        </details>
-      </aside>
+      <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
+      ${detailsPanel}
     </section>
   </div>`;
 }

@@ -346,7 +346,8 @@ await test("output hydrates separately from lane identity", () => {
     outputPending: true,
     listReady: true,
   });
-  assert.match(pending, /gw-lane-h/);
+  assert.match(pending, /gw-chat-title/);
+  assert.match(pending, /gw-aside-id/);
   assert.match(pending, /Refreshing output/);
   const ready = renderGatewayShell({
     lanes: [identity],
@@ -638,11 +639,18 @@ await test("Copy copies active lane output text only", () => {
   const failed = renderCopyControl({ text: "x", feedback: "failed" });
   assert.match(failed, /Copy failed/);
   assert.match(gwSrc, /copyActiveOutput/);
-  const copyFn = gwSrc.slice(gwSrc.indexOf("async function copyActiveOutput"), gwSrc.indexOf("async function registerPushSubscription"));
-  assert.equal(copyFn.includes("/output"), false);
-  assert.equal(copyFn.includes("fetchOutput"), false);
+  // Copy must yield the COMPLETE assistant response. In "recent" mode the
+  // visible text is a bounded pane snapshot, so copying it handed over a
+  // fragment; the copy path now fetches the complete text for the SELECTED lane
+  // only. It still never re-captures a pane and never touches another lane.
+  const copyFn = gwSrc.slice(gwSrc.indexOf("async function completeCopyText"), gwSrc.indexOf("async function registerPushSubscription"));
   assert.equal(copyFn.includes("capture-pane"), false);
   assert.match(copyFn, /copyableOutputText/);
+  assert.match(copyFn, /copySourcePlan/);
+  assert.match(copyFn, /outputBelongsToLane/);
+  assert.match(copyFn, /encodeURIComponent\(id\)/);
+  assert.match(copyFn, /const id = G\.selected/);
+  assert.equal(copyFn.includes("G.lanes"), false);
   assert.match(css, /\.gw-copy\{[^}]*min-height:44px/);
 });
 
@@ -707,7 +715,7 @@ await test("notification permission is never requested automatically on Gateway"
   assert.match(html, /gw-notify-pop/);
   assert.match(html, /gw-notify-sum/);
   assert.match(html, /aria-label="Notifications"/);
-  assert.match(html, /gw-lane-top/);
+  assert.match(html, /gw-aside-body/);
   assert.match(css, /\.gw-notify:hover \.gw-notify-pop/);
   const enableFn = gwSrc.slice(gwSrc.indexOf("async function enableGatewayNotifications"));
   assert.match(gwSrc, /if \(!saved\.ok \|\| body\?\.ok === false\)/);
@@ -1108,10 +1116,14 @@ await test("session rotation overlay and refresh control stay in Development Sta
     listReady: true,
     laneFoldOpen: false,
   });
-  assert.match(readyShell, /data-gw-lane-fold/);
-  assert.match(readyShell, /Lane details/);
+  // One details panel, not an inline <details> plus a second "Lane details"
+  // fold that showed a different subset of the same lane.
+  assert.match(readyShell, /data-gw-aside/);
+  assert.match(readyShell, /data-gw-aside-toggle/);
+  assert.equal(readyShell.includes("data-gw-lane-fold"), false);
+  assert.equal(readyShell.includes("Lane details"), false);
   assert.match(readyShell, /data-gw-session-refresh/);
-  assert.match(css, /gw-lane-fold/);
+  assert.match(css, /gw-lane-aside/);
   assert.equal(css.includes("max-height:22vh"), false);
   assert.ok(css.includes(".gw-claude-run{display:none;}"));
   assert.equal(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"), false);
@@ -1248,16 +1260,18 @@ await test("Connect Existing Work flow is renderable without path entry", () => 
   assert.match(already, /Open Communications/);
 });
 
-await test("Create New Lane form has no substrate fields", () => {
-  const html = renderCreateLaneFlow({ name: "Processing" });
-  assert.match(html, /New Development Lane/);
-  assert.match(html, /Initial work/);
-  assert.match(html, /Claude Code/);
-  assert.match(html, /Cursor/);
-  assert.match(html, /gw-create-provider/);
+await test("starting a lane exposes no substrate fields", () => {
+  // The guard that matters: the operator never picks a worktree, a tmux session
+  // or a slot. The surface around it changed — it is a chat composer now, not a
+  // Name/Provider/Initial-work form — so the label assertions moved with it.
+  const html = renderCreateLaneFlow({});
   assert.equal(html.includes("worktree"), false);
   assert.equal(html.includes("tmux"), false);
   assert.equal(html.includes("slot"), false);
+  assert.match(html, /gw-create-instruction/);
+  assert.match(html, /gw-create-provider/);
+  assert.match(html, /Claude/);
+  assert.match(html, /Cursor/);
   assert.match(gwSrc, /\/api\/lanes\/create/);
 });
 
@@ -1338,7 +1352,9 @@ await test("offline bound lane shows Start Session without failing work", () => 
   assert.match(replaced.text, /Instruction updated/);
   const composer = renderComposer({ queueUntilSession: true });
   assert.match(composer, /queue until a session starts/);
-  assert.doesNotMatch(composer, /disabled/);
+  assert.doesNotMatch(composer, /data-gw-send[^>]*disabled/);
+  assert.doesNotMatch(composer, /<textarea[^>]*disabled/);
+  assert.match(composer, /data-gw-provider-opt="cursor"[^>]*disabled/);
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1748,13 +1764,21 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(html, /data-gw-composer/);
   assert.match(html, /data-gw-output/);
   assert.match(html, /data-gw-stage/);
-  const asideIdx = html.indexOf("data-gw-aside");
+  // The toggle button also carries a data-gw-aside* attribute, so anchor on the
+  // panel itself.
+  const asideIdx = html.indexOf('id="gw-details-panel"');
   const stageIdx = html.indexOf("data-gw-stage");
   const threadIdx = html.indexOf("data-gw-thread");
   const composerIdx = html.indexOf("data-gw-composer");
   const outputIdx = html.indexOf("data-gw-output");
   const claudeIdx = html.indexOf("data-gw-claude-run");
-  assert.equal(stageIdx > 0 && threadIdx > stageIdx && outputIdx > threadIdx && claudeIdx > outputIdx && composerIdx > claudeIdx && asideIdx > composerIdx, true);
+  const messageIdx = html.indexOf("data-gw-report");
+  // The stage is the conversation and nothing else: thread, then the structured
+  // assistant message, then the composer. The raw pane is no longer part of the
+  // conversation at all — it is diagnostics inside the one details panel, which
+  // comes after the whole stage.
+  assert.equal(stageIdx > 0 && threadIdx > stageIdx && messageIdx > threadIdx && composerIdx > messageIdx, true);
+  assert.equal(asideIdx > composerIdx && claudeIdx > asideIdx && outputIdx > asideIdx, true);
   assert.match(css, /\.gw-thread\{[^}]*overflow:auto/);
   assert.match(css, /\.gw-output\{[^}]*overflow:auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*minmax\(0, 66fr\) minmax\(0, 33fr\)/);
@@ -1877,6 +1901,11 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   };
   assert.equal(deriveLaneExecutionPosture(cursorLive).state, "CONNECTED");
   assert.equal(deriveLaneExecutionPosture(cursorLive).label, "Connected");
+  assert.notEqual(canonicalLaneWorkState({
+    ...cursorLive,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }).label, "Working");
+  assert.match(railHtml([cursorLive], cursorLive.lane_id), /read-only/);
   assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
   assert.match(railHtml([cursorLive], cursorLive.lane_id), /Cursor/);
   const leftover = deriveLaneExecutionPosture({
@@ -1904,6 +1933,11 @@ await test("canonical work state maps live execution to Working and stale heartb
   }, { nowMs: now });
   assert.equal(working.label, "Working");
   assert.equal(working.group, "active");
+  const queued = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }, { nowMs: now });
+  assert.notEqual(queued.label, "Working");
   const validating = canonicalLaneWorkState({
     ...identity,
     execution_run: { state: "VALIDATING" },
@@ -1964,11 +1998,12 @@ await test("conversation detail has user and assistant messages with icon copy, 
   assert.match(html, /function ok\(\) \{\}/);
   assert.match(html, /data-gw-provider-opt="claude"/);
   assert.match(html, /data-gw-provider-opt="cursor"/);
-  assert.match(html, /data-gw-details/);
+  assert.match(html, /data-gw-provider-opt="cursor"[^>]*disabled/);
+  assert.match(html, /data-gw-aside/);
   assert.equal(html.includes("Latest assistant response from the session transcript"), false);
   const copyBtn = html.slice(html.indexOf("data-gw-copy") - 120, html.indexOf("data-gw-copy") + 80);
   assert.equal(copyBtn.includes("Load more"), false);
-  assert.match(html, /data-gw-details/);
+  assert.match(html, /data-gw-aside/);
   assert.match(css, /data-gw-provider-opt|gw-provider-opt/);
 });
 

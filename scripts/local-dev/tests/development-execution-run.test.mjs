@@ -275,7 +275,12 @@ await test("legal transitions accepted; illegal rejected; terminals hold", async
   const created = createQueuedRun({ laneId: "alloy-identity", instruction: "x", worktreePath: WT, root: ROOT });
   const id = created.run.run_id;
   assert.equal(isLegalRunTransition("QUEUED", "EXECUTING"), true);
-  assert.equal(isLegalRunTransition("QUEUED", "NEEDS_INPUT"), false);
+  // QUEUED -> NEEDS_INPUT is legal since the ready-pane repair: an instruction
+  // that could not be delivered because the pane showed a modal needs the
+  // operator, and must not be forced through EXECUTING to say so.
+  assert.equal(isLegalRunTransition("QUEUED", "NEEDS_INPUT"), true);
+  assert.equal(isLegalRunTransition("QUEUED", "VALIDATING"), false);
+  assert.equal(isLegalRunTransition("QUEUED", "COMPLETE"), false);
   assert.equal(transitionExecutionRun(id, "VALIDATING", { root: ROOT }).error, "illegal_transition");
   assert.equal(transitionExecutionRun(id, "EXECUTING", { root: ROOT, origin: "operator" }).ok, true);
   assert.equal(transitionExecutionRun(id, "VALIDATING", { root: ROOT, origin: "agent" }).ok, true);
@@ -400,7 +405,9 @@ await test("queued run last instruction is visible before pane delivery", () => 
   });
   assert.equal(last.status, "queued");
   assert.equal(last.instruction, "queued hello");
-  assert.equal(lastInstructionFromRun({ state: "FAILED", instruction: "x" }), null);
+  const failed = lastInstructionFromRun({ state: "FAILED", instruction: "x" });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.instruction, "x");
 });
 
 await test("last-instruction UX is preserved and overlays from a started run", async () => {

@@ -88,6 +88,33 @@ export function newDurableLaneId() {
   return `lane_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
+/**
+ * A lane's first name comes from its first message.
+ *
+ * Creating a lane used to demand a name up front, before the operator had said
+ * what the lane was for — a form to fill in before a conversation could start.
+ * Starting a chat should not require naming it: the opening message already
+ * says what this is, and Rename Lane is there when it stops fitting.
+ */
+export function deriveLaneNameFromInstruction(raw, { max = 48 } = {}) {
+  for (const line of String(raw ?? "").split("\n")) {
+    const text = line
+      .replace(/^\s*#{1,6}\s*/, "")      // markdown heading
+      .replace(/^\s*[-*+]\s+/, "")        // bullet
+      .replace(/^\s*\d+[.)]\s+/, "")      // ordered item
+      .replace(/[`*_>]/g, "")              // inline emphasis / quote marks
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!text) continue;
+    if (text.length <= max) return text;
+    // Cut on a word boundary so the name reads like a phrase, not a truncation.
+    const cut = text.slice(0, max);
+    const space = cut.lastIndexOf(" ");
+    return (space > max * 0.5 ? cut.slice(0, space) : cut).trim() + "…";
+  }
+  return "";
+}
+
 export function validateLaneName(raw) {
   const name = String(raw ?? "").trim().replace(/\s+/g, " ");
   if (!name) return { ok: false, error: "name_empty" };

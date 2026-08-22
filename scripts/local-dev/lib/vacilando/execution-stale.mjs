@@ -57,14 +57,17 @@ import {
   getExecutionRun,
   isCertificationInstruction,
   isTerminalRunState,
+  patchRunFields,
   publicExecutionRun,
   readExecutionRunStore,
+  runCompletionAdmissible,
   transitionExecutionRun,
 } from "./execution-run.mjs";
+import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, setLanePreferredProvider } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -94,6 +97,15 @@ export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
  * movement, and no heartbeat for this long — never on silence alone.
  */
 export const ABANDON_AFTER_HEARTBEAT_MS = 4 * 60 * 60 * 1000;
+/** QUEUED→EXECUTING requires a provider ack. Fail closed if none arrives. */
+export const DELIVERY_ACK_TIMEOUT_MS = 30 * 1000;
+
+export function runHasDeliveryAck(run) {
+  if (run?.delivery && typeof run.delivery === "object") {
+    return run.delivery.acknowledged === true;
+  }
+  return Boolean(run?.started_at);
+}
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -371,7 +383,37 @@ export function classifyExecutionRunStale(run, facts = {}) {
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
 }
 
-function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
+/**
+ * Close an idle turn as COMPLETE — but only when the completion is actually
+ * attributable to THIS run.
+ *
+ * A run delivered through the receipt-tracking path carries its own token. If
+ * that token was never observed in advanced pane output, nothing on this lane
+ * has proven the instruction reached a provider, and an idle pane is showing
+ * some EARLIER turn. Completing on that evidence is how a stale completion gets
+ * attached to a newer instruction. Such a run is abandoned instead: terminal for
+ * scheduling, recoverable, and never a false claim that work finished.
+ */
+function completeIdleRun(run, { root, nowMs, origin, reason, summary, attributionRequired = false }) {
+  if (attributionRequired && runReceiptToken(run) && !runReceiptConfirmed(run)) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: "completion_not_attributable",
+      summary: "Not completed: this run's instruction receipt was never observed in provider output.",
+    });
+  }
+  const admissible = runCompletionAdmissible(run);
+  if (attributionRequired && !admissible.ok) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: admissible.error,
+      summary: "Not completed: the instruction was never delivered to a provider.",
+    });
+  }
   return transitionExecutionRun(run.run_id, "COMPLETE", {
     reason,
     origin,
@@ -395,6 +437,11 @@ export function canOperatorSupersedeRun(run, facts = {}) {
   return true;
 }
 
+/**
+ * Operator Send closes the previous turn. This is an explicit operator act on a
+ * run they can see, not an inference from pane output, so it does not require
+ * receipt attribution — the operator moving on is the authority.
+ */
 export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() } = {}) {
   return completeIdleRun(run, {
     root,
@@ -407,12 +454,17 @@ export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() }
 
 function closeClassifiedRun(run, cls, { root, nowMs, origin }) {
   if (cls.reason === "turn_finished_session_remains") {
+    // Inferred from an idle pane, not from a worker report. Attribution is
+    // mandatory here: without it, the PREVIOUS turn's finished screen closes
+    // this run. Operator follow-up (below) is an explicit operator act and is
+    // governed differently.
     return completeIdleRun(run, {
       root,
       nowMs,
       origin,
       reason: cls.reason,
       summary: cls.summary,
+      attributionRequired: true,
     });
   }
   return abandonRun(run, {
@@ -468,6 +520,59 @@ export function reconcileStaleExecutionRuns({
     if (out.ok && !out.noop) abandoned.push(out.run);
   }
   return { ok: true, abandoned, count: abandoned.length };
+}
+
+/**
+ * Fail runs that never received a provider delivery acknowledgement.
+ * Cursor observation (transcript readability) is not delivery. Claude QUEUED
+ * waiting for a real agent session is not failed here.
+ */
+export function reconcileUndeliveredRuns({
+  root,
+  nowMs = Date.now(),
+} = {}) {
+  const store = readExecutionRunStore(root);
+  const failed = [];
+  for (const id of Object.keys(store.lanes || {})) {
+    const pack = store.lanes[id];
+    if (!pack?.current_run_id) continue;
+    const run = (pack.runs || []).find((r) => r.run_id === pack.current_run_id);
+    if (!run || isTerminalRunState(run.state) || runHasDeliveryAck(run)) continue;
+    const rec = getDurableLane(run.lane_id, root);
+    const selected = String(
+      run.delivery?.provider || rec?.preferred_provider || rec?.binding?.provider || "",
+    ).toLowerCase();
+    const createdMs = parseMs(run.created_at) ?? parseMs(run.updated_at) ?? nowMs;
+    const timedOut = nowMs - createdMs >= DELIVERY_ACK_TIMEOUT_MS;
+    const cursorUndelivered = selected === "cursor";
+    const executingWithoutAck = run.state === "EXECUTING" && timedOut;
+    if (!cursorUndelivered && !executingWithoutAck) continue;
+    const reason = cursorUndelivered ? "cursor_delivery_unavailable" : "delivery_unacknowledged";
+    const summary = cursorUndelivered
+      ? "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached."
+      : "No provider delivery acknowledgement for this instruction.";
+    patchRunFields(run.run_id, {
+      delivery: {
+        ...(run.delivery && typeof run.delivery === "object" ? run.delivery : {}),
+        acknowledged: false,
+        provider: cursorUndelivered ? "cursor" : (run.delivery?.provider || selected || null),
+        error: reason,
+        at: new Date(nowMs).toISOString(),
+      },
+    }, { nowMs, root });
+    const out = transitionExecutionRun(run.run_id, "FAILED", {
+      reason,
+      origin: "governor",
+      nowMs,
+      root,
+      completion_report: { summary },
+    });
+    if (cursorUndelivered && rec?.lane_id) {
+      try { setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root }); } catch { /* retry with Claude */ }
+    }
+    if (out.ok) failed.push(out.run);
+  }
+  return { ok: true, failed, count: failed.length };
 }
 
 export function closeStaleExecutionRun(runId, {
