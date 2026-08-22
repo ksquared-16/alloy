@@ -76,7 +76,7 @@ export function paneRunsProvider(pane) {
  * split window shows the same agent through two panes; counting it twice would
  * consume a seat that does not exist.
  */
-export function correlateProviderProcesses({ panes = [], lanes = [], sessions = [] } = {}) {
+export function correlateProviderProcesses({ panes = [], lanes = [], sessions = [], runStateFor = null } = {}) {
   const byWorktree = new Map();
   const byTmux = new Map();
   for (const lane of lanes) {
@@ -94,8 +94,14 @@ export function correlateProviderProcesses({ panes = [], lanes = [], sessions = 
   for (const pane of panes) {
     const provider = paneRunsProvider(pane);
     if (!provider) continue;
-    const key = pane.pid ? `pid:${pane.pid}` : `pane:${pane.pane_id || ""}`;
-    if (!key || key === "pane:") continue;
+    // PID is the true process identity; pane id distinguishes panes when tmux
+    // did not report one. Falling back to session+cwd matters because dropping
+    // an agent we cannot key is the UNSAFE direction for a capacity count — it
+    // would under-report seats and let the ceiling be exceeded.
+    const key = pane.pid
+      ? `pid:${pane.pid}`
+      : (pane.pane_id ? `pane:${pane.pane_id}` : `where:${pane.session || ""}|${normalizePath(pane.cwd)}`);
+    if (key === "where:|") continue;
     if (seen.has(key)) continue;
 
     const cwd = normalizePath(pane.cwd);
@@ -119,7 +125,13 @@ export function correlateProviderProcesses({ panes = [], lanes = [], sessions = 
       lane_id: lane?.lane_id || null,
       lane_name: lane?.name || lane?.label || null,
       session_state: lane ? (sessionByLane.get(lane.lane_id)?.state || null) : null,
-      run_state: lane?.execution_run?.state || null,
+      // A DURABLE lane record carries no execution_run — that projection lives
+      // in the run store. Without resolving it every attributed process looked
+      // idle and the count fell to zero, which is the unsafe direction: the
+      // ceiling would never bind at all.
+      run_state: lane?.execution_run?.state
+        || (lane && typeof runStateFor === "function" ? runStateFor(lane.lane_id) : null)
+        || null,
     });
   }
   return [...seen.values()];
@@ -139,13 +151,22 @@ export function processConsumesCapacity(proc, { suspended = false } = {}) {
   const session = proc.session_state || null;
   if (STARTING_SESSION_STATES.includes(session)) return true;
   if (ACTIVE_RUN_STATES.includes(run)) return true;
-  // A live agent with no run is a session someone left open. It is genuinely
-  // holding a seat, so it counts — and `Release execution capacity` is how the
-  // operator gets it back.
-  if (!run && session === "ACTIVE") return true;
-  if (PARKED_RUN_STATES.includes(run)) return false;
-  if (["COMPLETE", "FAILED", "ABANDONED"].includes(run)) return false;
-  return Boolean(session === "ACTIVE");
+  // An agent we cannot attribute to any lane is still a real process on the
+  // machine. We cannot say it is idle — we cannot say anything about it — so
+  // the conservative reading is that it holds a seat. This is the only case
+  // where "unknown" counts, and it counts because the PROCESS is known even
+  // though its work is not.
+  if (!proc.lane_id) return true;
+  // Everything else does not, per the governing table: QUEUED without a
+  // provider, IDLE/READY, COMPLETE, FAILED, offline, parked.
+  //
+  // I had this wrong: a live agent with no run was counted as consuming, on the
+  // reasoning that the process is real. But capacity is defined by computation
+  // being NEEDED, not by a process existing — an idle session between turns is
+  // exactly the READY row, and counting it made a leftover pane hold a seat
+  // that nothing was using. `Release execution capacity` reclaims the process
+  // itself; the ceiling is not the mechanism for that.
+  return false;
 }
 
 /**
@@ -160,6 +181,7 @@ export function assessProviderCapacity({
   lanes = [],
   sessions = [],
   suspendedLaneIds = [],
+  runStateFor = null,
   ceiling = configuredProviderCeiling(),
 } = {}) {
   if (!Array.isArray(panes)) {
@@ -177,7 +199,7 @@ export function assessProviderCapacity({
     };
   }
   const suspended = new Set(suspendedLaneIds || []);
-  const processes = correlateProviderProcesses({ panes, lanes, sessions });
+  const processes = correlateProviderProcesses({ panes, lanes, sessions, runStateFor });
   const counted = processes.filter((p) => processConsumesCapacity(p, { suspended: suspended.has(p.lane_id) }));
   const active = counted.length;
   const available = Math.max(0, ceiling - active);

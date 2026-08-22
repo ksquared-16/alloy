@@ -79,6 +79,13 @@ await test("one process is counted once, however many panes show it", () => {
     lanes,
   });
   assert.equal(procs.length, 1, "a split window must not consume two seats");
+  // A pane with no pid and no pane id must still be counted — dropping an agent
+  // under-reports seats, which is the unsafe direction.
+  const noIds = correlateProviderProcesses({
+    panes: [{ session: "alloy-x", command: "claude", cwd: "/w/x", dead: false }],
+    lanes: [],
+  });
+  assert.equal(noIds.length, 1, "an unkeyed agent pane is still a process");
   assert.equal(procs[0].lane_id, "lane_a");
 });
 
@@ -100,25 +107,33 @@ await test("a process is correlated to the lane that owns it, and never to two",
 });
 
 await test("the capacity table: thinking counts, parked and terminal do not", () => {
+  // Every fixture carries a lane_id: these are ATTRIBUTED processes. An
+  // unattributable agent is covered separately below.
+  const L = (o) => ({ lane_id: "lane_x", ...o });
   const yes = [
-    { run_state: "EXECUTING", session_state: "ACTIVE" },
-    { run_state: "VALIDATING", session_state: "ACTIVE" },
-    { run_state: "RECOVERING", session_state: "ACTIVE" },
-    { run_state: null, session_state: "STARTING" },
-    { run_state: null, session_state: "ACTIVE" },
+    L({ run_state: "EXECUTING", session_state: "ACTIVE" }),
+    L({ run_state: "VALIDATING", session_state: "ACTIVE" }),
+    L({ run_state: "RECOVERING", session_state: "ACTIVE" }),
+    L({ run_state: null, session_state: "STARTING" }),
   ];
   for (const p of yes) assert.equal(processConsumesCapacity(p), true, JSON.stringify(p));
   const no = [
-    { run_state: "QUEUED", session_state: null },
-    { run_state: "NEEDS_INPUT", session_state: "ACTIVE" },
-    { run_state: "WAITING_RESOURCE", session_state: "ACTIVE" },
-    { run_state: "COMPLETE", session_state: "ACTIVE" },
-    { run_state: "FAILED", session_state: "ACTIVE" },
-    { run_state: null, session_state: "ENDED" },
+    L({ run_state: "QUEUED", session_state: null }),
+    L({ run_state: "NEEDS_INPUT", session_state: "ACTIVE" }),
+    L({ run_state: "WAITING_RESOURCE", session_state: "ACTIVE" }),
+    L({ run_state: "COMPLETE", session_state: "ACTIVE" }),
+    L({ run_state: "FAILED", session_state: "ACTIVE" }),
+    L({ run_state: null, session_state: "ENDED" }),
+    // READY: a live session between turns needs no computation. Counting it
+    // made a leftover pane hold a seat nothing was using.
+    L({ run_state: null, session_state: "ACTIVE" }),
   ];
   for (const p of no) assert.equal(processConsumesCapacity(p), false, JSON.stringify(p));
+  // An agent we cannot attribute to any lane is a real process we can say
+  // nothing about, so it holds a seat — the one case where unknown counts.
+  assert.equal(processConsumesCapacity({ lane_id: null, run_state: null, session_state: null }), true);
   // Suspension overrides everything.
-  assert.equal(processConsumesCapacity({ run_state: "EXECUTING", session_state: "ACTIVE" }, { suspended: true }), false);
+  assert.equal(processConsumesCapacity(L({ run_state: "EXECUTING", session_state: "ACTIVE" }), { suspended: true }), false);
   assert.deepEqual([...ACTIVE_RUN_STATES], ["EXECUTING", "VALIDATING", "RECOVERING"]);
 });
 
@@ -161,8 +176,9 @@ await test("a lane with no slot is entirely valid", () => {
     lanes: [{ lane_id: "lane_ns", name: "No slot", binding: { worktree_path: "/w/noslot" } }],
     sessions: [{ lane_id: "lane_ns", state: "ACTIVE" }],
   });
-  assert.equal(cap.active, 1);
-  assert.equal(cap.holders[0].lane_id, "lane_ns");
+  assert.equal(cap.active, 0, "a slotless lane with an idle session consumes nothing");
+  assert.equal(cap.processes.length, 1, "but its process is still correlated and visible");
+  assert.equal(cap.processes[0].lane_id, "lane_ns");
 });
 
 // ------------------------------------------------------- §3 suspension lifecycle --
@@ -396,7 +412,18 @@ await test("the refusal names a safe lane to free", () => {
       { lane_id: "a", state: "ACTIVE" }, { lane_id: "b", state: "ACTIVE" }, { lane_id: "c", state: "ACTIVE" },
     ],
   });
-  // Run states come from the lane projection; simulate the parked one.
+  // Give each a run that genuinely needs computation, then park the middle one.
+  for (const p of cap.processes) p.run_state = "EXECUTING";
+  const busy = assessProviderCapacity({
+    panes: [pane({ pid: "1", cwd: "/w/a" }), pane({ pid: "2", cwd: "/w/b" }), pane({ pid: "3", cwd: "/w/c" })],
+    lanes: [
+      { lane_id: "a", name: "Runtime Performance", binding: { worktree_path: "/w/a" }, execution_run: { state: "EXECUTING" } },
+      { lane_id: "b", name: "Trust Runtime", binding: { worktree_path: "/w/b" }, execution_run: { state: "EXECUTING" } },
+      { lane_id: "c", name: "Vacilando", binding: { worktree_path: "/w/c" }, execution_run: { state: "EXECUTING" } },
+    ],
+    sessions: [{ lane_id: "a", state: "ACTIVE" }, { lane_id: "b", state: "ACTIVE" }, { lane_id: "c", state: "ACTIVE" }],
+  });
+  Object.assign(cap, busy);
   cap.holders[1].run_state = "NEEDS_INPUT";
   const pick = suggestCapacityRelease(cap);
   assert.equal(pick.name, "Trust Runtime");
@@ -404,6 +431,32 @@ await test("the refusal names a safe lane to free", () => {
   assert.equal(cap.active, 3);
   assert.equal(cap.available, 0);
   assert.equal(configuredProviderCeiling({}), 3);
+});
+
+await test("an attributed process is judged on what its run is DOING", () => {
+  // A durable lane record carries no execution_run — that projection lives in
+  // the run store. Without resolving it, every attributed process looked idle
+  // and the host count fell to ZERO while three agents were running. That is
+  // the unsafe direction: the ceiling stops binding entirely.
+  const lanes = [{ lane_id: "lane_busy", name: "Busy", binding: { worktree_path: "/w/busy" } }];
+  const panes = [pane({ pid: "77", cwd: "/w/busy" })];
+  const sessions = [{ lane_id: "lane_busy", state: "ACTIVE" }];
+
+  const blind = assessProviderCapacity({ panes, lanes, sessions });
+  assert.equal(blind.active, 0, "with no run projection it reads as idle");
+
+  const resolved = assessProviderCapacity({
+    panes, lanes, sessions, runStateFor: (id) => (id === "lane_busy" ? "EXECUTING" : null),
+  });
+  assert.equal(resolved.active, 1, "resolved from the run store, it is real computation");
+  assert.equal(resolved.holders[0].lane_id, "lane_busy");
+  assert.equal(resolved.holders[0].run_state, "EXECUTING");
+
+  // And a resolver that reports parked work still frees the seat.
+  const parked = assessProviderCapacity({
+    panes, lanes, sessions, runStateFor: () => "NEEDS_INPUT",
+  });
+  assert.equal(parked.active, 0);
 });
 
 await test("a provisioned worktree gets a tmux session name tmux can accept", async () => {

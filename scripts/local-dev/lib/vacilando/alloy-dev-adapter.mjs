@@ -547,33 +547,63 @@ export function claudePaneOccupiesCapacity(pane, lanes, root, {
  * Capacity to start a provider on an *existing* binding. Does not require a
  * free sprint slot — the worktree already occupies one.
  */
+/**
+ * Capacity for starting one more provider.
+ *
+ * Delegates to the canonical owner (provider-capacity.mjs) so the whole system
+ * agrees on one number. This used to carry its own pane predicate — a third
+ * counter alongside the lane-posture count and the metadata count — which could
+ * disagree with the one that governs admission and knew nothing about suspended
+ * providers.
+ */
 export async function assessSessionStartCapacity({ maxProviders = null, root = null } = {}) {
-  const max = Number(maxProviders ?? process.env.ALLOY_MAX_ACTIVE_PROVIDERS ?? 3);
-  const live = await liveClaudePanes();
   const runtime = root || process.env.ALLOY_RUNTIME_ROOT?.trim() || undefined;
+  const { assessProviderCapacity, configuredProviderCeiling } = await import("./provider-capacity.mjs");
+  const { suspendedLaneIds } = await import("./provider-suspension.mjs");
+  const { listCurrentAgentSessions } = await import("./agent-session.mjs");
+  const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+
+  const ceiling = Number(maxProviders ?? configuredProviderCeiling());
+  // Honour the adapter's own pane seam first: tests inject panes through it,
+  // and bypassing it made this function read the live machine from a test.
+  let panes = null;
+  try {
+    const injected = listPanesImpl ? await listPanesImpl() : null;
+    if (Array.isArray(injected)) panes = injected;
+  } catch { panes = null; }
+  if (!panes) {
+    try {
+      const raw = await listTmuxPanesRaw();
+      if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+    } catch { panes = null; }
+  }
   const lanes = listDurableLanes(runtime);
-  const {
-    activeRunForLane,
-    isTerminalRunState,
-    listExecutionRunsForLane,
-  } = await import("./execution-run.mjs");
-  const runFns = { activeRunForLane, isTerminalRunState, listExecutionRunsForLane };
-  const occupyingPanes = live.filter((p) => claudePaneOccupiesCapacity(p, lanes, runtime, runFns));
-  const active = occupyingPanes.length;
-  const blockers = [];
-  if (!(max > 0)) blockers.push("provider_capacity");
-  if (active >= max) blockers.push("provider_capacity");
+  const sessions = listCurrentAgentSessions(runtime);
+  const { activeRunForLane } = await import("./execution-run.mjs");
+  const cap = assessProviderCapacity({
+    panes,
+    lanes,
+    sessions,
+    ceiling,
+    // Durable lane records hold no run projection; resolve it from the run
+    // store so an attributed process is judged on what it is actually doing.
+    runStateFor: (laneId) => {
+      try { return activeRunForLane(laneId, runtime)?.state || null; } catch { return null; }
+    },
+    suspendedLaneIds: suspendedLaneIds(lanes.map((l) => ({
+      ...l,
+      agent_session: sessions.find((s) => s.lane_id === l.lane_id) || null,
+    }))),
+  });
   return {
-    ok: blockers.length === 0,
-    available: blockers.length === 0,
-    active_providers: active,
-    max_providers: max,
-    blockers,
+    ok: cap.ok,
+    available: cap.ok,
+    active_providers: cap.active,
+    max_providers: cap.ceiling,
+    blockers: cap.blockers,
+    degraded: cap.degraded,
     kind: "session_start",
-    occupying: occupyingPanes.map((p) => ({
-      session: p?.session || null,
-      cwd: p?.cwd || null,
-    })),
+    occupying: (cap.holders || []).map((h) => ({ session: h.tmux_session || null, cwd: h.worktree_path || null, lane_id: h.lane_id })),
   };
 }
 
