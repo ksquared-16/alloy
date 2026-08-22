@@ -1,8 +1,7 @@
 /**
  * CHILD-GRAIN ROWS for the provisioning answer (R1).
  *
- * NOTE — no `import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
-import "server-only"` here, deliberately. `workUnitProvisioningAnswer.ts` (which this serves)
+ * NOTE — no `import "server-only"` here, deliberately. `workUnitProvisioningAnswer.ts` (which this serves)
  * does not use it either, and adding it made every test that transitively imports the answer fail to
  * collect with "Cannot find package 'server-only'" — the same inherited breakage that already keeps
  * `d1ProvisioningAnswerRoute.test.ts` red. The module is reachable only from the server composer; buying a
@@ -27,6 +26,8 @@ import "server-only"` here, deliberately. `workUnitProvisioningAnswer.ts` (which
  *     vintages (`docs/runtime/GRAIN-AUTHORITY-MAP.md` §4). This module normalizes at the boundary, so the
  *     Runtime never inherits that ambiguity.
  */
+
+import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
