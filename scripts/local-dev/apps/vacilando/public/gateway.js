@@ -27,6 +27,8 @@ const G = {
   sawRefreshProgress: false,
   statusOpen: null,
   laneFoldOpen: null,
+  asideOpen: null,
+  userMessageExpanded: false,
   lastNotified: {},
   telemetry: null,
   telemetryByLane: {},
@@ -225,12 +227,38 @@ async function writeClipboardText(text) {
   if (!ok) throw new Error("copy_failed");
 }
 
-async function copyActiveOutput() {
-  const text = View.copyableOutputText({
-    selectedId: G.selected,
+/**
+ * The copy icon must yield the COMPLETE assistant response.
+ *
+ * In "recent" mode `output.text` is a bounded snapshot of the visible pane, so
+ * copying it silently handed over a fragment. When the visible output is
+ * bounded, fetch the complete text first — the transcript's assistant message
+ * for a finished run, retained history otherwise — and fall back to whatever is
+ * on screen only if that fetch yields nothing.
+ */
+async function completeCopyText() {
+  const id = G.selected;
+  const visible = View.copyableOutputText({
+    selectedId: id,
     output: G.output,
-    outputText: G.output?.lane_id === G.selected ? G.output?.text : "",
+    outputText: G.output?.lane_id === id ? G.output?.text : "",
   });
+  const plan = View.copySourcePlan(G.output, { lane: G.lane });
+  if (!id || !plan.needsFetch) return visible;
+  for (const mode of [plan.mode, plan.fallback].filter(Boolean)) {
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=${encodeURIComponent(mode)}`);
+      const j = await r.json();
+      if (!View.outputBelongsToLane(j, id, G.lane)) continue;
+      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text });
+      if (full && (!visible || full.length >= visible.length)) return full;
+    } catch { /* fall through to the visible snapshot */ }
+  }
+  return visible;
+}
+
+async function copyActiveOutput() {
+  const text = await completeCopyText();
   if (!text) return;
   try {
     await writeClipboardText(text);
@@ -646,10 +674,20 @@ function statusOpenNow() {
   return G.statusOpen;
 }
 
-function laneFoldOpenNow() {
-  if (G.laneFoldOpen != null) return G.laneFoldOpen;
-  G.laneFoldOpen = View.readLaneFoldOpen(storage(), window.innerWidth);
-  return G.laneFoldOpen;
+/**
+ * Open state of the single lane details panel. Desktop keeps it open beside the
+ * conversation; mobile opens it as a slide-over on demand.
+ */
+function asideOpenNow() {
+  if (G.asideOpen != null) return G.asideOpen;
+  G.asideOpen = View.readLaneFoldOpen(storage(), window.innerWidth);
+  return G.asideOpen;
+}
+
+function setAsideOpen(open) {
+  G.asideOpen = Boolean(open);
+  View.writeLaneFoldOpen(G.asideOpen, storage());
+  paint();
 }
 
 function paint() {
@@ -677,7 +715,8 @@ function paint() {
     resources: resources(),
     lastInstruction: lastInstructionFor(G.selected),
     statusOpen: statusOpenNow(),
-    laneFoldOpen: laneFoldOpenNow(),
+    asideOpen: asideOpenNow(),
+    userMessageExpanded: G.userMessageExpanded,
     attentionByLane: map,
     telemetry: G.telemetry?.lane_id === G.selected ? G.telemetry : null,
     telemetryByLane: G.telemetryByLane,
@@ -1203,11 +1242,6 @@ document.addEventListener("submit", (e) => {
 
 document.addEventListener("toggle", (e) => {
   const details = e.target;
-  if (details?.closest?.("[data-gw-lane-fold]") && details.matches?.("[data-gw-lane-fold]")) {
-    G.laneFoldOpen = details.open;
-    View.writeLaneFoldOpen(details.open, storage());
-    return;
-  }
   if (!details || !details.closest?.("[data-gw-status]") || details.tagName !== "DETAILS") return;
   G.statusOpen = details.open;
   View.writeStatusOpen(details.open, storage());
@@ -1237,6 +1271,28 @@ document.addEventListener("click", async (e) => {
   const notify = e.target?.closest?.("[data-gw-notify]");
   if (!notify) {
     document.querySelectorAll("details[data-gw-notify][open]").forEach((el) => { el.open = false; });
+  }
+  const asideToggle = e.target?.closest?.("[data-gw-aside-toggle]");
+  if (asideToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    setAsideOpen(!asideOpenNow());
+    return;
+  }
+  const asideClose = e.target?.closest?.("[data-gw-aside-close]");
+  if (asideClose) {
+    e.preventDefault();
+    e.stopPropagation();
+    setAsideOpen(false);
+    return;
+  }
+  const msgMore = e.target?.closest?.("[data-gw-msg-more]");
+  if (msgMore) {
+    e.preventDefault();
+    e.stopPropagation();
+    G.userMessageExpanded = !G.userMessageExpanded;
+    paint();
+    return;
   }
   const copy = e.target?.closest?.("[data-gw-copy]");
   if (copy) {

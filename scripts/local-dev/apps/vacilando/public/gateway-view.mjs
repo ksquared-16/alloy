@@ -22,7 +22,9 @@ export function outputIsOlder(next, current) {
 }
 export const MOBILE_MAX_PX = 860;
 export const STATUS_OPEN_KEY = "vac.gw.statusOpen";
+/** Persisted open/closed state of the single lane details panel. */
 export const LANE_FOLD_KEY = "vac.gw.laneFold";
+export const DETAILS_PANEL_KEY = LANE_FOLD_KEY;
 export const VIEWED_KEY_PREFIX = "vac.gw.viewed.";
 
 export function decodeLaneId(value) {
@@ -357,6 +359,78 @@ export function isGovernedDirectorWait(run) {
   return key === "director_governed_action" || Boolean(run?.resource_wait?.governed_request_id);
 }
 
+/**
+ * Every "summary" field on the wire is not a string.
+ *
+ * `execution_run.latest_progress` is an OBJECT — `{summary, at}` — while
+ * `completion_report` is `{summary}` and `resource_wait.label` is a plain
+ * string. A lane row that did `String(latest_progress)` printed the literal
+ * text "[object Object]" to the operator, live, on three lanes at once. Read
+ * the summary through one accessor so a shape change can never print again.
+ */
+export function summaryText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    for (const v of value) {
+      const s = summaryText(v);
+      if (s) return s;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    for (const key of ["summary", "label", "text", "detail", "title", "reason", "message"]) {
+      const s = summaryText(value[key]);
+      if (s) return s;
+    }
+    return "";
+  }
+  return "";
+}
+
+/** A queued admission older than this, on a lane that cannot be provisioned. */
+export const STALE_ADMISSION_MS = 10 * 60 * 1000;
+
+/**
+ * Proof — not a guess — that a "Queued for capacity" claim is dead.
+ *
+ * Observed on this host: Lifecycle Cert and Processing sat at "Queued for
+ * capacity" for three days. Neither lane has a worktree binding, so neither can
+ * ever be provisioned, and the only code path that clears an admission
+ * (releaseLaneExecutionCapacity) returned `already_idle` before reaching it.
+ * They were queued behind capacity they were structurally unable to receive.
+ *
+ * Returns null unless ALL of these hold — it must never demote live work:
+ *   - the admission is open (QUEUED / ADMITTED / PROVISIONING)
+ *   - the lane has no runtime binding, so provisioning cannot start
+ *   - no agent session and no live run
+ *   - it has been queued past STALE_ADMISSION_MS
+ */
+export function staleAdmissionClaim(lane, nowMs = Date.now()) {
+  const adm = lane?.admission || lane?.execution_run?.admission || null;
+  const state = String(adm?.state || "").toUpperCase();
+  if (!adm || !["QUEUED", "ADMITTED", "PROVISIONING"].includes(state)) return null;
+  if (liveAgentOnLane(lane)) return null;
+  const runState = lane?.execution_run?.state || null;
+  if (["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT"].includes(runState)) return null;
+  if (laneIsBound(lane)) return null;
+  const since = Date.parse(adm.requested_at || lane?.execution_run?.created_at || "");
+  if (!Number.isFinite(since)) return null;
+  const waitedMs = nowMs - since;
+  if (waitedMs < STALE_ADMISSION_MS) return null;
+  const blockers = Array.isArray(lane?.binding_blockers) ? lane.binding_blockers : [];
+  const why = summaryText(blockers[0]) || "Lane has no worktree binding";
+  return {
+    admission_id: adm.admission_id || null,
+    admission_state: state,
+    queued_since: adm.requested_at || null,
+    waited_ms: waitedMs,
+    reason: why,
+    detail: `Queued ${ago(since, nowMs)} ago for capacity it cannot receive: ${why}.`,
+  };
+}
+
 export function deriveLaneExecutionPosture(lane) {
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
@@ -462,6 +536,20 @@ export function deriveLaneExecutionPosture(lane) {
       tone: "run",
       slot,
       queue_position: null,
+    };
+  }
+  const staleClaim = staleAdmissionClaim(lane);
+  if (staleClaim) {
+    return {
+      state: "QUEUED_STALE",
+      label: "Stale capacity claim",
+      mark: "○",
+      hint: staleClaim.detail,
+      headline: `Stale capacity claim · ${staleClaim.reason}`,
+      tone: "",
+      slot: null,
+      queue_position: null,
+      stale_claim: staleClaim,
     };
   }
   if (queued && !liveAgent) {
@@ -607,6 +695,11 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   if (run?.state === "VALIDATING" || cap.label === "Validating") {
     return { key: "validating", label: "Validating", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
   }
+  // A stale claim is not work. Leaving it in the "active" band pushed real
+  // running lanes down the list behind three-day-old ghosts.
+  if (cap.state === "QUEUED_STALE") {
+    return { key: "stale_claim", label: "Stale capacity claim", group: "idle", tone: "", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
+  }
   if (cap.state === "QUEUED_FOR_CAPACITY") {
     return { key: "waiting", label: "Queued for capacity", group: "active", tone: "queued", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: false, stale: false };
   }
@@ -686,6 +779,7 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
   const list = Array.isArray(lanes) ? lanes : [];
   const rows = list.map((lane) => ({ lane, cap: deriveLaneExecutionPosture(lane) }));
   const running = rows.filter((r) => occupiesClaudeProviderCapacity(r.lane, r.cap));
+  const stale = rows.filter((r) => r.cap.state === "QUEUED_STALE");
   const queued = rows
     .filter((r) => r.cap.state === "QUEUED_FOR_CAPACITY")
     .sort((a, b) => (Number(a.cap.queue_position) || 99) - (Number(b.cap.queue_position) || 99));
@@ -705,6 +799,11 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
       name: r.lane.label || r.lane.name || r.lane.lane_id,
       queue_position: r.cap.queue_position,
     })),
+    stale_claims: stale.map((r) => ({
+      lane_id: r.lane.lane_id,
+      name: r.lane.label || r.lane.name || r.lane.lane_id,
+      reason: r.cap.stale_claim?.reason || null,
+    })),
   };
 }
 
@@ -721,6 +820,9 @@ export function renderExecutionCapacity(summary) {
       <dt>Running</dt><dd>${esc(running)}</dd>
       <dt>Queued</dt><dd>${esc(queued)}</dd>
       <dt>Available</dt><dd>${esc(String(summary.available ?? 0))}</dd>
+      ${(summary.stale_claims || []).length
+        ? `<dt>Stale claims</dt><dd>${esc((summary.stale_claims || []).map((s) => s.name).join(", "))}</dd>`
+        : ""}
     </dl>
   </div>`;
 }
@@ -777,6 +879,18 @@ export function renderLaneRuntimeControls(lane, cap) {
       <p class="gw-runtime-line">${esc(posture.headline || "Running")}${esc(slotNote)}</p>
       <div class="gw-runtime-actions">
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
+      </div>
+    </aside>`;
+  }
+  if (posture.state === "QUEUED_STALE") {
+    const claim = posture.stale_claim || {};
+    return `<aside class="gw-runtime" data-gw-runtime data-posture="QUEUED_STALE">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">Stale capacity claim</p>
+      <p class="gw-runtime-d">${esc(claim.detail || "This lane is queued for capacity it cannot receive.")}</p>
+      <p class="gw-runtime-d">Releasing cancels the dead admission through the capacity owner. The durable lane, worktree and branch stay.</p>
+      <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release capacity</button>
       </div>
     </aside>`;
   }
@@ -996,6 +1110,7 @@ export function writeStatusOpen(open, storage) {
   try { storage?.setItem(STATUS_OPEN_KEY, open ? "open" : "closed"); } catch { /* */ }
 }
 
+/** Desktop keeps the details panel open; mobile opens it on demand. */
 export function laneFoldDefault({ widthPx, stored } = {}) {
   if (stored === "open") return true;
   if (stored === "closed") return false;
@@ -1282,6 +1397,37 @@ export function copyableOutputText({ selectedId, output, outputText } = {}) {
   if (!s.trim()) return null;
   if (s === "Refreshing output…") return null;
   return s;
+}
+
+/**
+ * What the copy icon must copy.
+ *
+ * `output.text` in "recent" mode is a bounded 120-line snapshot of the visible
+ * pane — copying it hands the operator a fragment of the response and calls it
+ * the response. When the visible output is bounded, copy fetches the complete
+ * text first: the transcript's assistant message for a finished run, retained
+ * history otherwise.
+ */
+export function copySourcePlan(output, { lane = null } = {}) {
+  const mode = output?.mode || "recent";
+  if (mode === "latest_response" && output?.available !== false) {
+    return { needsFetch: false, mode, reason: "already_complete" };
+  }
+  if (mode === "extended" && !output?.truncated) {
+    return { needsFetch: false, mode, reason: "already_complete" };
+  }
+  const bounded = Boolean(output?.truncated)
+    || Number(output?.history_size) > Number(output?.returned_lines || output?.line_count || 0);
+  if (mode === "recent" && !bounded) {
+    return { needsFetch: false, mode: "recent", reason: "pane_is_whole" };
+  }
+  const finished = !lane?.execution_run
+    || ["COMPLETE", "FAILED"].includes(String(lane?.execution_run?.state || ""));
+  const cursorLane = laneProviderKind(lane) === "cursor";
+  if (finished && !cursorLane) {
+    return { needsFetch: true, mode: "latest_response", fallback: "extended", reason: "complete_final_response" };
+  }
+  return { needsFetch: true, mode: "extended", fallback: null, reason: "retained_history" };
 }
 
 export function renderCopyControl({ text, feedback } = {}) {
@@ -1677,6 +1823,28 @@ function laneListStatus(lane, attention) {
   };
 }
 
+/**
+ * The one readable summary for a lane row. Every candidate goes through
+ * summaryText(), so an object-shaped field is read, not stringified.
+ */
+export function laneRowSummary(lane, work, who) {
+  const hint = summaryText(work?.hint);
+  if (hint && hint !== work?.label && hint !== who && hint !== `${who} ready`) {
+    return hint.slice(0, 140);
+  }
+  const candidates = [
+    lane?.execution_run?.latest_progress,
+    lane?.execution_run?.completion_report,
+    lane?.execution_run?.resource_wait,
+    lane?.previous_run?.completion_report,
+  ];
+  for (const c of candidates) {
+    const text = summaryText(c);
+    if (text) return text.slice(0, 140);
+  }
+  return "";
+}
+
 function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const id = lane.lane_id;
   const active = laneMatchesId(lane, selectedId) ? " is-active" : "";
@@ -1684,23 +1852,21 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const st = laneListStatus(lane, attentionByLane?.[id]);
   const git = gitListState(lane);
   const who = agentLabel(lane);
-  const summary = work.hint && work.hint !== work.label && work.hint !== who && work.hint !== `${who} ready`
-    ? work.hint
-    : (lane.execution_run?.latest_progress || lane.previous_run?.completion_report?.summary || "");
+  const summary = laneRowSummary(lane, work, who);
   const whenMs = laneUpdatedMs(lane);
-  const when = whenMs ? ago(whenMs) : "";
-  const activity = when ? `<span class="gw-lane-when">${esc(when)} ago</span>` : "";
-  const gitEl = git ? `<span class="gw-lane-git-state">${esc(git)}</span>` : "";
+  const when = whenMs ? `${ago(whenMs)} ago` : "";
+  // One canonical status and one readable summary. Agent, elapsed time and git
+  // state used to each get their own line, so a row was five stacked strings
+  // and none of them was the answer to "what is this lane doing".
+  const metaBits = [who, when, git].filter(Boolean).join(" · ");
   const extra = summary && summary !== st.label
-    ? `<span class="gw-lane-summary">${esc(String(summary).slice(0, 140))}</span>`
+    ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
   return `<a class="gw-lane${active}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
     <span class="gw-lane-title">${esc(lane.label || id)}</span>
     <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
-    <span class="gw-lane-meta">${esc(who)}</span>
     ${extra}
-    ${activity}
-    ${gitEl}
+    <span class="gw-lane-meta">${esc(metaBits)}</span>
   </a>`;
 }
 
@@ -1827,11 +1993,41 @@ export function renderOutputChrome(output, { lane = null, lastInstruction = null
   </div>`;
 }
 
-export function renderLastInstruction(rec, nowMs = Date.now()) {
+/** Mobile lines the clamped user message shows before "View more". */
+export const USER_MESSAGE_CLAMP_LINES = 6;
+/** Characters that fit one clamped mobile line at the message font size. */
+const MOBILE_CHARS_PER_LINE = 44;
+
+/**
+ * Does this instruction need a View more control?
+ *
+ * An unclamped instruction is `flex:0 0 auto` in the thread, so a long one took
+ * the whole scroller and squeezed the assistant reply into two rows. Estimating
+ * from wrapped lines keeps the decision pure and testable; CSS line-clamp does
+ * the actual clamping so the two can never disagree about WHAT is shown.
+ */
+export function userMessageNeedsClamp(text, { lines = USER_MESSAGE_CLAMP_LINES, charsPerLine = MOBILE_CHARS_PER_LINE } = {}) {
+  const raw = String(text || "");
+  if (!raw.trim()) return false;
+  let wrapped = 0;
+  for (const line of raw.split("\n")) {
+    wrapped += Math.max(1, Math.ceil(line.length / charsPerLine));
+    if (wrapped > lines) return true;
+  }
+  return false;
+}
+
+export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false } = {}) {
   if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
-  return `<article class="gw-msg gw-msg-user" data-gw-last>
+  const clampable = userMessageNeedsClamp(rec.instruction);
+  const open = !clampable || expanded;
+  const toggle = clampable
+    ? `<button type="button" class="btn sm gw-msg-more" data-gw-msg-more aria-expanded="${open ? "true" : "false"}">${open ? "View less" : "View more"}</button>`
+    : "";
+  return `<article class="gw-msg gw-msg-user${clampable && !open ? " is-clamped" : ""}" data-gw-last${clampable ? ' data-gw-clampable="1"' : ""}>
     <div class="gw-msg-label">You</div>
-    <div class="gw-msg-body gw-last-text">${esc(rec.instruction)}</div>
+    <div class="gw-msg-body gw-last-text" data-gw-msg-text>${esc(rec.instruction)}</div>
+    ${toggle}
     <div class="gw-msg-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"))}</div>
   </article>`;
 }
@@ -2214,7 +2410,8 @@ export function renderGatewayShell({
   developmentResources,
   connect,
   executionCapacity,
-  laneFoldOpen = false,
+  asideOpen = false,
+  userMessageExpanded = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane });
@@ -2301,38 +2498,62 @@ export function renderGatewayShell({
   const liveMark = work.live
     ? `<span class="gw-live-dot" data-gw-live-dot>${work.stale ? "Stale" : "Working"}</span>`
     : "";
-  const details = `<details class="gw-details" data-gw-details>
-          <summary>Details</summary>
-          <div class="gw-details-body">
-            ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
-            ${renderContextRefreshButton(lane)}
-            ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
-            ${renderClaudeRunStatus(lane, telemetry)}
-            ${renderProviderHealth(output?.provider_health)}
-            ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-            ${renderLaneRuntimeControls(lane, cap)}
-            ${renderLaneSessionCallout(lane, { executionCapacity })}
-            ${renderRecentSystemActivity(lane?.recent_system_activity)}
-            ${statusHtml}
+  // ONE details panel. Everything that is not the conversation lives here — it
+  // used to be split between an inline <details> under the thread and a second
+  // "Lane details" fold in the aside, so the same lane facts appeared twice and
+  // neither place was complete.
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel">
+        <div class="gw-aside-head">
+          <div class="gw-aside-title">Details</div>
+          <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
+        </div>
+        <div class="gw-aside-body">
+          <div class="gw-aside-id">
+            <h1>${esc(lane?.label || selectedId)}</h1>
+            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
+            <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
           </div>
-        </details>`;
-  return `<div class="gw is-detail" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
+          ${renderNotificationControls(notify || {})}
+          ${renderLaneLocalhost(lane)}
+          ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
+          ${renderContextRefreshButton(lane)}
+          ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
+          ${renderClaudeRunStatus(lane, telemetry)}
+          ${renderProviderHealth(output?.provider_health)}
+          ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
+          ${renderLaneRuntimeControls(lane, cap)}
+          ${renderLaneSessionCallout(lane, { executionCapacity })}
+          ${renderRecentSystemActivity(lane?.recent_system_activity)}
+          ${statusHtml}
+        </div>
+      </aside>`;
+  // The chat status line is ONE line: canonical state, then who is on the lane.
+  const providerBit = laneProviderLabel(lane);
+  const statusLine = [work.label, providerBit].filter(Boolean).join(" · ");
+  return `<div class="gw is-detail${asideOpen ? " is-aside-open" : ""}" data-gw data-gw-mode="detail" data-lane-id="${esc(lane?.lane_id || selectedId)}">
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
+        <header class="gw-chat-head">
+          <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
+          <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
+          <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
+            aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
+        </header>
         <div class="gw-stage-status" data-gw-stage-status>
-          <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}">${esc(work.label)}</span>
+          <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}">${esc(statusLine)}</span>
         </div>
         <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs)}
+          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, { expanded: Boolean(userMessageExpanded) })}
           <article class="gw-msg gw-msg-assistant"${liveAttr}>
-            ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
-            ${liveMark}
+            <div class="gw-msg-tools">
+              ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
+              ${liveMark}
+            </div>
             ${renderOutput(bodyText, { pending })}
           </article>
         </div>
         ${renderOperatorDecisionBar(lane?.execution_run)}
-        ${details}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",
@@ -2341,31 +2562,8 @@ export function renderGatewayShell({
           cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
         })}
       </div>
-      <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>
-        <div class="gw-lane-compact">
-          <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
-          <div class="gw-lane-compact-id">
-            <h1>${esc(lane?.label || selectedId)}</h1>
-            <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-          </div>
-          ${renderNotificationControls(notify || {})}
-        </div>
-        ${renderLaneLocalhost(lane)}
-        <details class="gw-lane-fold" data-gw-lane-fold ${laneFoldOpen ? "open" : ""}>
-          <summary class="gw-lane-fold-sum">Lane details</summary>
-          <div class="gw-lane-top">
-            <div class="gw-lane-heading">
-              <a class="gw-back gw-back-desktop" data-gw-back href="#/lanes">← Lanes</a>
-              <header class="gw-lane-h">
-                <h1>${esc(lane?.label || selectedId)}</h1>
-                <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
-                <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
-              </header>
-            </div>
-            ${renderNotificationControls(notify || {})}
-          </div>
-        </details>
-      </aside>
+      <div class="gw-aside-scrim" data-gw-aside-close hidden></div>
+      ${detailsPanel}
     </section>
   </div>`;
 }

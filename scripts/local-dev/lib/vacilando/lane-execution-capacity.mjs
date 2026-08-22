@@ -22,7 +22,7 @@ import {
   releaseDurableLaneRuntimeBinding,
   setDurableLaneExecutionCapacity,
 } from "./development-lane.mjs";
-import { activeRunForLane, isTerminalRunState, listExecutionRunsForLane } from "./execution-run.mjs";
+import { activeRunForLane, isTerminalRunState, listExecutionRunsForLane, transitionExecutionRun } from "./execution-run.mjs";
 import {
   ADMISSION_OCCUPYING,
   admissionForLane,
@@ -151,6 +151,80 @@ async function reevaluateAdmission(root) {
 }
 
 /**
+ * Is this lane's open admission a claim it cannot possibly be granted?
+ *
+ * Proof, not inference. All of these must hold:
+ *   - the lane has no runtime binding, so provisioning cannot start
+ *   - an admission is open (QUEUED / ADMITTED / PROVISIONING)
+ *   - the run behind it never started
+ * A lane that is merely waiting its turn WITH a binding is untouched.
+ */
+export function staleAdmissionFacts(rec, { root = runtimeRoot() } = {}) {
+  if (!rec?.lane_id) return { stale: false, reason: "lane_not_found" };
+  const bound = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session) || Boolean(rec.binding?.worktree_path);
+  if (bound) return { stale: false, reason: "lane_is_bound" };
+  const adm = admissionForLane(rec.lane_id, root);
+  const state = String(adm?.state || "").toUpperCase();
+  if (!adm || !["QUEUED", "ADMITTED", "PROVISIONING"].includes(state)) {
+    return { stale: false, reason: "no_open_admission" };
+  }
+  const run = latestRunForLane(rec.lane_id, root);
+  if (run?.started_at) return { stale: false, reason: "run_started" };
+  if (run && UNSAFE_RUN.has(run.state)) return { stale: false, reason: "unsafe_in_flight" };
+  return {
+    stale: true,
+    admission_id: adm.admission_id,
+    admission_state: state,
+    requested_at: adm.requested_at || null,
+    run_id: run?.run_id || null,
+    run_state: run?.state || null,
+    reason: "lane_has_no_runtime_binding",
+  };
+}
+
+/**
+ * Cancel a proven-dead admission through the canonical capacity owner
+ * (execution-admission), and fail its run with the same reason so the ledger
+ * and the queue tell one story. Never invents a second capacity store.
+ */
+export function cancelUnprovisionableAdmission(rec, {
+  origin = "operator",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const facts = staleAdmissionFacts(rec, { root });
+  if (!facts.stale) return { cancelled: false, ...facts };
+  const out = transitionAdmission(facts.admission_id, "CANCELLED", {
+    reason: facts.reason,
+    nowMs,
+    root,
+  });
+  if (!out.ok) return { cancelled: false, ...facts, error: out.error };
+  let runClosed = null;
+  if (facts.run_id && facts.run_state && !isTerminalRunState(facts.run_state)) {
+    const failed = transitionExecutionRun(facts.run_id, "FAILED", {
+      reason: "unprovisionable_admission",
+      origin,
+      nowMs,
+      root,
+      completion_report: {
+        summary: "Queued for capacity this lane cannot receive: no runtime binding. Admission cancelled; instruction preserved.",
+      },
+    });
+    runClosed = failed.ok ? failed.run.state : null;
+  }
+  return {
+    cancelled: true,
+    admission_id: facts.admission_id,
+    prior_admission_state: facts.admission_state,
+    requested_at: facts.requested_at,
+    run_id: facts.run_id,
+    run_state: runClosed || facts.run_state,
+    reason: facts.reason,
+  };
+}
+
+/**
  * Governed release of temporary execution capacity.
  * Preserves durable lane identity and worktree/branch.
  */
@@ -178,12 +252,21 @@ export async function releaseLaneExecutionCapacity(laneId, {
 
   const hasCapacity = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session);
   if (!hasCapacity) {
+    // A lane with no runtime binding cannot be provisioned. If it is ALSO
+    // holding an open admission, that admission is a claim on capacity it can
+    // never receive — and this early return was the reason nothing ever cleared
+    // it. Observed: two lanes reading "Queued for capacity" for three days.
+    const stale = cancelUnprovisionableAdmission(rec, { origin, nowMs, root });
+    if (stale?.cancelled) {
+      try { await reevaluateAdmission(root); } catch { /* queue re-evaluates on the next tick */ }
+    }
     return {
       ok: true,
       already_idle: true,
       command: RELEASE_COMMAND,
       lane_id: rec.lane_id,
       execution_capacity: { state: "IDLE" },
+      ...(stale?.cancelled ? { stale_admission_cancelled: stale } : {}),
     };
   }
 
