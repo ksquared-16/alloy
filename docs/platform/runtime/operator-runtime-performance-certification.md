@@ -22,11 +22,42 @@ casually redefined.
 
 | class | measured | operator relevance |
 |---|---|---|
-| **TRUE COLD / DIRECT ENTRY** | ~11.7 s to first usable | diagnostic + resilience. No operator takes this path. |
+| **TRUE COLD / DIRECT ENTRY** | **T3 ~1.0 s** to first usable (T4 ~3.4 s hydrated) | deep links, reloads, new tabs — see the R2 correction below |
 | **PREPARED CANONICAL JOURNEY** | **~0.4 s** to a complete surface | the operating experience |
 
 A direct-URL cold number must never be quoted as the operator experience. The cold cell bypasses
-Workspace readiness *and* the in-place K1 entry gesture; it measures a route the product does not use.
+Workspace readiness *and* the in-place K1 entry gesture, so it is a different class — but it is a
+path operators *do* take (a bookmarked or pasted link, a reload, a new tab), so it is not purely
+diagnostic.
+
+**R2 CORRECTION (2026-08-22) — the 11.7 s figure is DISPROVED.** It could not be reproduced on a
+production build at `0b51beb4d` on any of six fresh-process cold samples:
+
+| mark | cold direct (6 samples) | prepared control | dev server, first hit |
+|---|---|---|---|
+| T3 first usable | **839–2,527 ms** (median ~1.0 s) | **343 ms** | **5,029 ms** |
+| T4 all cells hydrated | **3,076–4,978 ms** (median ~3.4 s) | — | **7,944 ms** |
+
+Two things produced the old number, and neither is production runtime:
+
+1. **Dev-server compilation.** The same harness against `next dev` gives T3 5,029 ms / T4 7,944 ms
+   *with an already-warm `.next/dev` cache*; a genuinely cold cache adds the whole route compile on
+   top. That is the class of number 11.7 s belongs to.
+2. **Host load.** The single slowest cold sample (T3 2,527 ms) coincided with a load average of
+   **18.60**; the other five ran at 3.9–4.2 and none exceeded T3 1,490 ms. The host gate exists for
+   exactly this reason (§6) and a cold number taken without it is not admissible.
+
+**What was NOT cold.** The database is remote Supabase, so restarting the server process does not
+reset remote DB or page-cache warmth. Every cell above shares that condition equally, which is why
+they are comparable to each other — but none of them is a claim about a cold database.
+
+**The operator is not blocked before T4.** A Work View switch issued at t=1,368 ms — while two Focus
+Panel cells were still holding — was accepted and responded in **293 ms**, inside the certified
+switch budget. Subject identity and two truthful cards are present at T3; the remaining cells fill
+progressively behind a usable surface.
+
+Direct revisit is 580 ms and the prepared revisit 295 ms, so nothing about the cold path degrades
+the certified journey. **Do not open cold-path optimisation work against the 11.7 s figure.**
 
 ## 2. Certified production measurements
 
@@ -373,7 +404,7 @@ measured value, so the gap is explicit rather than implied by silence.
 | Command destination commit | T2 | < 200 ms | not yet measured | **owed** |
 | `/organization` warm navigation | T2 | < 300 ms | not yet measured | **owed** |
 | Prepared path | cumulative layout shift | **0** | 0 | **met** |
-| True cold / direct entry | T3 Work Unit | (no budget — see §1) | 11,708 ms | accepted class |
+| True cold / direct entry | T3 Work Unit | (no budget — see §1) | **839–2,527 ms** (median ~1.0 s) | **remeasured (R2); 11,708 ms disproved** |
 
 **Budgets are per performance class.** A cold-start number and a prepared-journey number are not
 comparable and must never be averaged into one figure; §1 exists because conflating them is how a
@@ -717,7 +748,9 @@ silently stopped working entirely could not pass.
 - **Vacilando** — ABANDONED execution-run checkpoint transition.
 
 ### TRUE-COLD TECHNICAL DEBT
-- Work Unit bare cold path: 11,708 ms (accepted class; see §1).
+- ~~Work Unit bare cold path: 11,708 ms~~ — **DISPROVED by R2 (§1).** Remeasured on a production
+  build at `0b51beb4d`: T3 median ~1.0 s, T4 median ~3.4 s, over six fresh-process samples. The old
+  figure is a dev-compilation and host-load artifact. No cold-path optimisation is owed.
 - `/organization` first entry to a route family: 1,486–2,594 ms. **Nav-intent prefetch measurably
   does not help** — do not "fix" it with one.
 
