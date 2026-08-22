@@ -176,6 +176,34 @@ await test("an actionable prompt is READY; a mid-turn pane and an unknown screen
   assert.equal(promptReadinessAllowsSend(unknown).allow, false);
 });
 
+await test("the real Claude Code footer and caret are recognised, idle and mid-turn", () => {
+  // Captured verbatim from a live Claude Code pane (%13). The composer caret is
+  // U+276F, and the busy marker shares one footer line with the mode hint — so
+  // "shift+tab to cycle" alone must never be read as an actionable prompt.
+  const footer = "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents";
+  const composer = [
+    "  ⎿  Tip: Use /btw to ask a quick side question",
+    "                                        ✔ Update installed · Restart to update",
+    "────────────────────────────────────────────────────────────────────────────",
+    "❯                                                      ",
+    "────────────────────────────────────────────────────────────────────────────",
+  ].join("\n");
+
+  const busy = assessPanePromptReadiness(`${composer}\n${footer}`, { provider: "claude" });
+  assert.equal(busy.state, "busy", "a live turn is not an actionable prompt");
+
+  const idle = assessPanePromptReadiness(
+    `${composer}\n  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents`,
+    { provider: "claude" },
+  );
+  assert.equal(idle.state, "ready");
+  assert.equal(promptReadinessAllowsSend(idle).allow, true);
+
+  // A passive "Restart to update" notice is not an update MODAL. Treating it as
+  // one would block delivery on every pane that has ever seen an update.
+  assert.equal(detectPromptBlocker(composer, { provider: "claude" }), null);
+});
+
 await test("a screen that cannot be captured defers to the pane-presence contract", () => {
   const none = assessPanePromptReadiness("", { provider: "claude" });
   assert.equal(none.state, "capture_unavailable");

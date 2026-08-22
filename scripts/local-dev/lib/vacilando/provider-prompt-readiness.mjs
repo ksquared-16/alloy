@@ -154,10 +154,13 @@ const BLOCKER_SIGNATURES = Object.freeze([
  * the tail so scrollback cannot supply them.
  */
 const PROMPT_AFFORDANCES = Object.freeze([
-  /(^|\n)\s*[│|]?\s*>\s*(\n|\s*[│|]\s*\n|$)/,
+  // The composer caret. Claude Code draws U+276F ("❯"); other TUIs draw ">".
+  // Verified against a live pane — matching only ">" false-negatives every real
+  // Claude prompt, which would refuse every delivery.
+  /(^|\n)\s*[│|]?\s*[>❯]\s*(\n|\s*[│|]\s*\n|$)/,
   /\? for shortcuts/i,
   /\bshift\s*\+\s*tab to cycle\b/i,
-  /(^|\n)\s*>\s+\S[^\n]{0,200}$/,
+  /(^|\n)\s*[>❯]\s+\S[^\n]{0,200}$/,
   /type your (message|instruction|request)/i,
   /ctrl\s*\+\s*c to (quit|exit)/i,
 ]);
