@@ -157,7 +157,14 @@ export default function RecordsChildrenSection({
         setError(null);
         void (async () => {
             try {
-                const res = await fetch(buildUrl(0), { credentials: "include" });
+                /*
+                 * Same correction as the Staff section, and it matters more here: this projection is
+                 * the slowest read on the surface (~3.3-4.5s), and Operations' Children tab issued the
+                 * identical URL twice. Routed through the canonical dedupe owner already imported
+                 * below — the URL carries cohort/site/search, so a genuine filter change still misses
+                 * the cache and refetches, which is the intended behaviour.
+                 */
+                const res = await dedupeAdminFetchWithTtl(buildUrl(0), { credentials: "include" }, 15_000);
                 const json = (await res.json()) as {
                     ok?: boolean;
                     children?: ChildEntry[];
