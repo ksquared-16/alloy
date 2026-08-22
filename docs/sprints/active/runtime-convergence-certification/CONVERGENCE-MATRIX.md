@@ -444,6 +444,61 @@ asserted all 20 rather than the 15 in scope.
   looks correct on one candidate whose derived cohort happens to match. Positive-controlled:
   reintroducing the cohort write fails 3 of 4 with the exact production message.
 
+## 5j. Priority 4–6 — duplicates reconciled, pins certified, counts converged
+
+### Duplicate reconciliation (census → explicit survivors)
+
+| set | class | survivor | outcome |
+|---|---|---|---|
+| Lennon | **E** stale duplicate | `ba8cdcf5` | retired `27de6932` |
+| Wrigley | **A+B** aligned | `698f850a` | retired `0cad23a8` |
+| PassA | **D** contested | — | **refused by the owner** (`skipped_no_survivor_decision: 1`) |
+
+Census ran through the governed read-only path (`scripts/placementDuplicateCensus.ts`) because
+`seed_key` is not in the admin read model and diagnostics are not a reason to widen a product surface.
+
+Verified live: rows 17→17 · sections identical · **order unchanged** · 20 candidates, 0 inserted,
+0 deleted · exactly two status flips · cohort/label/`wait_since`/member/overrides byte-identical ·
+three consecutive reads produce zero mutation and recreate no duplicate.
+
+**PassA is contested on three independent facts, which is why it is deferred rather than decided:**
+its pin (ordinal 2, cohort-scoped to `infant_0_18_months`) is on `94984f6c`, which does **not**
+project; `ee36c3b1` projects, holds the stable key and cohort `infant`, and has no pin; `wait_since`
+differs by a day, so the survivor decides queue seniority; the cohorts differ, so it also decides
+section membership; and keeping the projecting row means rebinding a cohort-scoped override onto a
+candidate in another cohort. **Director decision needed.**
+
+### Pins
+
+**Attachment CERTIFIED** — both pins identical after fresh load, Work View switch + return, and
+workspace reopen, and both survived the identity migration, the cohort regression, its restoration and
+reconciliation. The reconciliation contract's other branch is proven too: when the loser held the pin,
+the owner refused.
+
+**Effect still absent (law 36 open).** `projectionCarriesOverrides: false` — the child-grain
+projection carries no `active_override_kinds`, so Wrigley, pinned to ordinal 1, sits at **2/12** and
+`runtime_position_precedence_note` is `none`: neither the reordering nor the explanation written for
+exactly this case can reach the operator.
+
+### Work Items counts — FEDERATED COUNT MODEL DEFECT, fixed
+
+| label | owner | scope | denominator | note |
+|---|---|---|---|---|
+| KPI Assigned | `WorkItemsKpiStrip` | org | `operational_tasks` | assigned to **anyone** |
+| KPI Due Soon / Overdue | `summarizeOperationalTaskCounts` | org | `operational_tasks`, DB-counted | real commitments |
+| View Mine | `workItemQueueScope` | org | all sources | assigned to **me** |
+| View Overdue / Due Today | `workItemQueueScope` | org | sources owning a due commitment | **fixed** |
+| Folders / Sources | `workItemQueueScope` | org | all sources | filter-relative by design |
+
+`due_at` is not the same fact across sources: stored on `operational_tasks`, derived by Communications
+(last activity) and Processing (`statusChangedAt + 1 day`). Communications was already excluded from
+due metrics; Processing was not. **Live: Views Overdue 9 → 1, Due Today 9 → 1, matching the KPI's
+honest 1; All Work 11 and Unassigned 10 unchanged.** Frozen as law 42.
+
+Remaining vocabulary observation (not a defect): KPI `Assigned` counts work assigned to anyone while
+View `Mine` counts work assigned to the current operator. Genuinely different metrics with
+confusable labels — help text or a label change would close it.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
