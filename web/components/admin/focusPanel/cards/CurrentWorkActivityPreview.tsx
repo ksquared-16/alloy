@@ -5,14 +5,20 @@ import { Activity, Calendar, CheckSquare2, MessageSquare, StickyNote } from "luc
 
 import ComposerFloatingPopover from "@/components/admin/focusPanel/drillIn/ComposerFloatingPopover";
 import type { LeadActivityPreviewKind } from "@/lib/layout/runtime/resolveLeadActivityPreview";
+import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
+
+export { currentWorkActivityRowKey };
 
 export type CurrentWorkActivityPreviewItem = {
+    /** Canonical namespaced identity, when the producing source has one. @see currentWorkActivityRowKey */
+    id?: string | null;
     label: string;
     detail?: string | null;
     category?: string | null;
     kind?: LeadActivityPreviewKind | null;
     occurredAt?: string | null;
 };
+
 
 type Props = {
     open: boolean;
@@ -104,7 +110,7 @@ export default function CurrentWorkActivityPreview({
                     <p className="alloy-os-currentwork__activity-preview-empty">No activity recorded yet.</p>
                 :   <ul className="alloy-os-currentwork__activity-preview-list">
                         {items.map((item, index) => (
-                            <li key={`${item.label}-${item.occurredAt ?? item.detail ?? index}`}>
+                            <li key={currentWorkActivityRowKey(item, index)}>
                                 <span className="alloy-os-currentwork__activity-preview-icon" aria-hidden>
                                     <ActivityKindIcon kind={item.kind} />
                                 </span>
