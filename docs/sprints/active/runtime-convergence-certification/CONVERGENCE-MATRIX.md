@@ -327,6 +327,47 @@ above a queue it does not describe. Recommendation — either scope the strip to
 row set the queue uses, or label it for what it counts ("Tasks" vs "Work Items"). That is a product
 vocabulary decision, not a convergence defect.
 
+## 5g. Duplicate placement candidates — classified; prevention shipped, repair gated
+
+**Classification (all three sets identical in shape).**
+
+| child | candidate A | candidate B |
+|---|---|---|
+| Wrigley | `0cad23a8` `infant` — no row | `698f850a` `infant_0_18_months` — projects, **pin 1** |
+| PassA | `ee36c3b1` `infant` — **projects** | `94984f6c` `infant_0_18_months` — no row, **pin 2** |
+| Lennon | `27de6932` `toddler` — no row | `ba8cdcf5` `toddler_2_3_years` — projects |
+
+Each pair shares `customer_member_id`, `process_instance_id`, `source` and `status: active`, and
+differs only by cohort key — a raw group label beside its normalised key.
+
+**Class: cohort-transition residue from missing uniqueness enforcement on the semantic subject.** The
+seed key `pc_v1_pi:{opp}:{member}:{cohort}` embeds the cohort, so a normalisation produced a key the
+idempotency check had never seen and the path inserted a rival. Deterministic, but not stable.
+
+This also explains the pins. Only one of a pair projects, so a duplicate is invisible until something
+attaches to it: **PassA's pin sits on the candidate that does not project**, so that pin could never
+have had an effect regardless of how the ranking was written. Wrigley's pin is on its projecting
+candidate — that one is the genuine Decision 2 case.
+
+**Shipped: prevention.** All three creation paths consult the subject, not only the seed key; a cohort
+change moves the incumbent (preserving `wait_since` and any override), and a failed move never falls
+through to the insert it exists to prevent. Guarded, positive-controlled.
+
+**Not shipped: repair of the existing rows — deliberately gated off.** The survivor rule needs to know
+which candidate the PROJECTION resolves. The ensure pass derives the raw cohort (`infant`, `toddler`)
+while the projection resolves the normalised one for Wrigley and Lennon and the raw one for PassA, so
+the two disagree. Wired into the read path, that repair **oscillated on live tenant data**: one pass
+retired PassA's projecting candidate, the next reinstated it and retired Lennon's. Both passes were
+ordering-neutral (17 rows, identical order and candidate ids throughout) and Firefly was returned to
+exact baseline — 20 active, zero markers, both pins intact — by a rollback that undoes only this
+repair's own marker.
+
+**The remaining design gap, stated precisely:** the survivor must be chosen by the same cohort
+resolution the projection uses, not the one the ensure pass derives. Until those two agree, a
+duplicate repair cannot know which row is live. That is the work Decision 1 still needs, and Decision 2
+is blocked behind it by its own sequencing ("Do NOT fix this until duplicate candidates are
+reconciled").
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
