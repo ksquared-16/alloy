@@ -499,6 +499,53 @@ Remaining vocabulary observation (not a defect): KPI `Assigned` counts work assi
 View `Mine` counts work assigned to the current operator. Genuinely different metrics with
 confusable labels — help text or a label change would close it.
 
+## 5k. Operations + Communications convergence pass
+
+### Operations — premium on entry, two loader defects fixed
+
+| interaction | result |
+|---|---|
+| open: T1 shell / T3 primary | **109 ms / 119 ms** |
+| open request profile | 7 requests, **all distinct** — incl. adjacent-week prefetch (`week_of` 08-10, 08-24) |
+| range → week / day | **0 requests** (warm) |
+| lens → rooms / assignments | 1 targeted request each |
+| tab → roster (return) | **0 requests** (warm) |
+| day forward / back | 1 targeted / **0** (warm) |
+
+The 5× `scheduling` and 2× `roster` on open are **not duplication** — seven distinct queries
+(sites, roster, assignment_roster, today, and two prefetched adjacent weeks). Checked before claiming,
+because stripping query strings is exactly how a readiness prefetch reads as a repeat.
+
+**Fixed:** the Staff tab issued `staff/directory?include_ended=true` twice and the Children tab issued
+`records/children?cohort=all&offset=0` twice — identical URLs. Both files already imported
+`dedupeAdminFetchWithTtl` and used it only for hover warmth; the main load now uses it too. Verified
+live: staff 3→2 requests, children 5→4, no repeated URL. It matters most for `records/children`, the
+slowest read on the surface (~3.3–4.5 s).
+
+**Open (measured, not fixed):** Operations **reopen is not warm** — 6 of 7 primary resources refetch
+even on a tight close/reopen; only `scheduling?view=sites` is reused.
+
+**UX inconsistency noted:** Operations' section tabs carry `data-comms-tab` attributes — a
+Communications-named control contract reused in Operations.
+
+### Communications — reference vocabularies converged
+
+Measured open: **29 requests for 12 distinct resources**; reopen **27/12** and not warm. Identical
+URLs (not distinct queries): `templates` ×3, `announcements` ×3, `templates?status=active` ×3,
+`location-program-categories` ×3, `locations?hierarchy=1` ×3, `status-options?grain=*` ×3 each — ×4 on
+reopen, i.e. beyond what a dev double-invoke can explain.
+
+Cause: these loaders DO short-circuit on a warm hit, but several consumers check warm before it lands,
+all miss, and all fetch. Routed the four reference vocabularies through the canonical dedupe owner →
+**open 29 → 24**, those resources ×3 → ×2.
+
+**Deliberately not deduped:** the announcements list and the templates list. This workspace mutates
+them, and a reload after a save must never be served from a TTL cache.
+
+**Remaining:** `templates` and `announcements` still ×3–4. Closing those needs a bust-on-mutation seam
+(the codebase already has that pattern, e.g. `bustCommunicationsBindingsFetchDedupe`) rather than a
+TTL — that is the precise remaining work, not a mystery.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
