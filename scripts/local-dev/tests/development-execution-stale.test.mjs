@@ -34,6 +34,12 @@ import { ensureResourceRequest, patchResourceRequest, readResourceRequestStore }
 import { laneRuntimeStorePath, recordDeliveredInstruction } from "../lib/vacilando/lane-runtime.mjs";
 import { resetLaneSendStateForTests } from "../lib/vacilando/lanes.mjs";
 import { stopAllOutputWatches } from "../lib/vacilando/lane-notify.mjs";
+import {
+  createAgentSession,
+  markAgentSessionActive,
+  activeAgentSessionForLane,
+  resetAgentSessionsForTests,
+} from "../lib/vacilando/agent-session.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = mkdtempSync(join(tmpdir(), "vac-stale-"));
@@ -49,6 +55,7 @@ let fail = 0;
 async function test(name, fn) {
   resetExecutionRunsForTests(ROOT);
   resetLaneSendStateForTests();
+  resetAgentSessionsForTests(ROOT);
   stopAllOutputWatches();
   try {
     await fn();
@@ -475,6 +482,54 @@ await test("idle governed resume does not block a new send forever", async () =>
   assert.equal(second.stale_run_closed, true);
   assert.equal(second.execution_run.instruction, "Next Identity instruction");
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "ABANDONED");
+});
+
+await test("idle ACTIVE session does not keep a finished turn Executing", async () => {
+  const start = Date.parse("2026-08-17T22:39:46.822Z");
+  const now = start + 24 * 3600 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const created = createAgentSession({
+    laneId: LANE,
+    runId: run.run_id,
+    root: ROOT,
+    nowMs: start,
+  });
+  assert.equal(created.ok, true, created.error);
+  markAgentSessionActive(created.session.agent_session_id, { root: ROOT });
+  const facts = collectStaleRunFacts(run, { root: ROOT, nowMs: now });
+  const cls = classifyExecutionRunStale(run, facts);
+  assert.equal(cls.class, "stale");
+  assert.equal(cls.reason, "turn_finished_session_remains");
+  assert.equal(cls.evidence.session_alive, true);
+  const out = reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE });
+  assert.equal(out.count, 1);
+  const closed = getExecutionRun(run.run_id, ROOT);
+  assert.equal(closed.state, "COMPLETE");
+  assert.notEqual(closed.state, "ABANDONED");
+  assert.equal(activeAgentSessionForLane(LANE, ROOT).state, "ACTIVE");
+});
+
+await test("STARTING session still protects an in-flight run", async () => {
+  const start = Date.parse("2026-08-17T22:39:46.822Z");
+  const now = start + 24 * 3600 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const created = createAgentSession({
+    laneId: LANE,
+    runId: run.run_id,
+    root: ROOT,
+    nowMs: start,
+  });
+  assert.equal(created.ok, true, created.error);
+  assert.equal(created.session.state, "STARTING");
+  const facts = collectStaleRunFacts(run, { root: ROOT, nowMs: now });
+  const cls = classifyExecutionRunStale(run, facts);
+  assert.equal(cls.class, "active");
+  assert.equal(cls.reason, "session_busy");
+  const swept = reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE });
+  assert.equal(swept.count, 0);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
