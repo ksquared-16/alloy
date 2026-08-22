@@ -220,6 +220,81 @@ and `0` RSC, restore exact.
 sibling cards — meaning the Children card was showing its OWN optimistic edit rather than converging
 from `dispatchOpportunityDrawerRecordPatch`. Open defect, precisely localized, not guessed at.
 
+## 5c. IDENTITY OWNERSHIP — implemented and live-certified
+
+**Root cause (corrected twice, each time by evidence).** The resolver was always person-first. It could
+never behave that way because the person was not loaded:
+
+| path | why the person was missing |
+|---|---|
+| `opportunityEntityRecord` drawer-record build | `pmap` constructed **empty** and never filled |
+| `opportunityEntityRecord` full hydrate | member-linked persons **deferred** to Pass 6; only opportunity-ROLE persons prefetched |
+| `childGrainProcessInstanceQueue` (row title) | `person_id` selected, `persons` never joined |
+| `composeDurableChildSubject` | member row read directly; member facts documented as overriding person on shared keys |
+| `/api/admin/records/children` | member row read directly |
+
+`resolveInquiryChildIdentityFields` returns the member mirror when the person is absent, so each of
+these silently *changed ownership* rather than deferring a value.
+
+**Live certification.** One rename that writes **only** `persons`, with the member still holding
+`Lennon`:
+
+| projection | before fix | after fix |
+|---|---|---|
+| Children card | `Lennon` (mirror) | **`LennonQA`** |
+| Assignment card | `Lennon` | **`LennonQA`** |
+| Records | `Lennon` | **`LennonQA`** |
+| placement projection | `LennonQA` (was always right) | `LennonQA` |
+| queue row title | `Lennon` | **`LennonQA`** |
+| Focus Panel header | `Lennon` | **`LennonQA`** |
+| queue rows outside the panel | `Lennon` | **`LennonQA`** |
+
+0 document loads · 0 RSC · restore baseline read `LennonQA` (**the person copy**, so the silent
+restore no-op is now impossible) · final state byte-equal to pre-state · mismatch detector clean.
+
+**Assignment closed** — it converged with no Assignment-specific state and no callback from Children,
+exactly as the instruction required. Its earlier staleness was never an Assignment defect; it was
+reading the same mirror as everyone else.
+
+## 5d. `customer_members` name fields — classification (step 5, nothing deleted)
+
+| field | class | still consumed by |
+|---|---|---|
+| `display_name` | **canonical for a personless child**; compatibility fallback otherwise | every child surface via the shared resolver's fallback branch; `NOT NULL` in schema |
+| `first_name` / `last_name` | same | the fallback branch; Add Child seeding; personless certification children (most of Firefly) |
+| `dob` | same | fallback branch + age display |
+
+Not deprecated and not a migration target yet: on this tenant **16 of 20** waitlist candidates are
+personless, so a projection keyed on `persons` would empty the surface — the original Records
+rationale was right about that. What changed is only that they may no longer outrank a Person that
+exists. Destructive cleanup, if ever, is a separate governed migration.
+
+## 5e. Placement pins — classified (step 7), ordering unchanged
+
+Two active pins: `698f850a` (Wrigley, `pin_ordinal 1`, row at **2/12**) and `94984f6c`
+(PassA, `pin_ordinal 2`, **no row at all**). Neither was created by this program — every probe pin
+targeted `9e230cf8` and was released and verified.
+
+- `94984f6c` is a **duplicate candidate that projects no row**, so its pin can affect nothing. The
+  census shows 20 candidates producing 17 rows: Wrigley, PassA and Lennon each have two.
+- `698f850a` is the real case. Live: pinning `9e230cf8` to ordinal 1 returned `200` with a persisted
+  active override and the row stayed at `3/12` — twice.
+
+The override→ordering machinery **exists** (`applyPlacementCandidateOverrides` splices a
+`manualPrecedence` into the sort tuple), but the child-grain waitlist projection
+(`placementWaitlistCandidateRowProjection`) carries **no `active_override_kinds` field at all**, so
+`rowHasManualPinOverride` is always false. The one thing a pin can still do — render
+`runtime_position_precedence_note` ("Ranked below manually adjusted row(s)") — is therefore also
+unreachable, and that note only renders in shadow mode regardless.
+
+**Class: the UI promises behaviour the runtime does not provide.** The operator gets neither the
+reordering the control's vocabulary implies ("Adjust position", "Apply position", "Hold position")
+nor the explanation the note was written to give. Ordering was deliberately **not** changed here: the
+system's own help text says position "is calculated from the current priority rules and filters. It is
+not a permanent stored rank", and the precedence note exists precisely to describe a pinned row that
+ranks below others — so whether a manual pin should outrank priority is a placement-policy decision,
+and shipping it would silently reorder a live tenant's waitlist. Surfaced, not decided.
+
 ## 6b. Probe hygiene — what this program left on Firefly, exactly
 
 | Probe | Live truth after restore | Residue |
