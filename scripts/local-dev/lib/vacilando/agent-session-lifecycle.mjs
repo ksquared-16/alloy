@@ -653,7 +653,7 @@ async function observeLane(laneId, opts) {
 
 function laneProviderKind(lane, rec) {
   return normalizeExecutionProvider(
-    rec?.binding?.provider || lane?.binding?.provider || rec?.provider,
+    rec?.preferred_provider || rec?.binding?.provider || lane?.binding?.provider || rec?.provider,
     "claude",
   ) || "claude";
 }
@@ -1223,7 +1223,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
   }
 
-  const provider = laneProviderKind(found, rec);
+  const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
+  let provider;
+  if (bound === "cursor") {
+    provider = "cursor";
+  } else if (laneClaudePresent(found)) {
+    provider = "claude";
+  } else {
+    provider = laneProviderKind(found, rec);
+  }
   if (provider === "cursor") {
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {

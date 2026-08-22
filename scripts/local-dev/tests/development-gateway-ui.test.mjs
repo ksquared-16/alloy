@@ -18,6 +18,10 @@ import {
   TELEMETRY_POLL_MS,
   applyFetchedLane,
   applyFetchedOutput,
+  outputIsOlder,
+  canonicalLaneWorkState,
+  sortLanesForIndex,
+  gitListState,
   outputBelongsToLane,
   outputBodyText,
   claudeRunStatus,
@@ -114,9 +118,9 @@ await test("lane list renders API lane objects", () => {
   const html = renderLaneList([identity], null);
   assert.match(html, /Access Identity V2/);
   assert.match(html, /Claude/);
-  assert.match(html, /agent\/claude\/1-access-identity-v2/);
-  assert.match(html, /Clean · ↑45 · ↓0/);
+  assert.match(html, /Ready/);
   assert.equal(html.includes("slot 1"), false);
+  assert.equal(html.includes("Clean · ↑45 · ↓0"), false);
 });
 
 await test("slot: null lane renders normally", () => {
@@ -199,16 +203,19 @@ await test("no fake chat parsing of TUI chrome", () => {
   assert.match(html, /<pre class="gw-output"/);
 });
 
-await test("composer send payload is only lane_id + instruction", () => {
+await test("composer send payload is lane_id + instruction, and may include provider", () => {
   const body = buildSendBody("hello `code`; $HOME");
   assert.deepEqual(Object.keys(body), ["instruction"]);
+  const withProvider = buildSendBody("hello", { provider: "cursor" });
+  assert.deepEqual(Object.keys(withProvider).sort(), ["instruction", "provider"]);
+  assert.equal(withProvider.provider, "cursor");
   const payload = sendPayload("alloy-identity", "hello `code`; $HOME");
   assert.deepEqual(Object.keys(payload).sort(), ["instruction", "lane_id"]);
   assert.equal(payload.lane_id, "alloy-identity");
   assert.equal("session" in payload, false);
   assert.equal("pane" in payload, false);
   assert.equal("target" in payload, false);
-  assert.match(gwSrc, /buildSendBody\(instruction\)/);
+  assert.match(gwSrc, /buildSendBody\(instruction/);
   assert.equal(gwSrc.includes("send-keys"), false);
 });
 
@@ -249,6 +256,10 @@ await test("mobile layout collapses to a single column without forcing horizonta
   const html = renderGatewayShell({ lanes: [identity], selectedId: identity.lane_id, lane: identity, outputText: "x".repeat(400) });
   assert.match(html, /gw-back/);
   assert.match(html, /gw-composer/);
+  assert.match(html, /gw-composer-provider/);
+  assert.match(html, />Claude</);
+  assert.match(html, />Cursor</);
+  assert.match(html, /data-gw-notify/);
 });
 
 await test("old Mission Director is not the default primary experience", () => {
@@ -398,7 +409,7 @@ await test("successful send records latest instruction; failed send does not", (
     lastInstruction: rec,
     listReady: true,
   });
-  assert.match(html, /Your last instruction/);
+  assert.match(html, />You</);
   assert.match(html, /data-gw-thread[\s\S]*data-gw-last/);
   assert.match(html, /Reconcile the remaining Access/);
   assert.match(html, /Delivered/);
@@ -409,7 +420,7 @@ await test("successful send records latest instruction; failed send does not", (
     status: "queued",
     queued_at: "2026-08-22T00:44:08.360Z",
   });
-  assert.match(queued, /Your last instruction/);
+  assert.match(queued, />You</);
   assert.match(queued, /resume closure/);
   assert.match(queued, /Queued/);
   assert.match(gwSrc, /result\?\.ok && \(result\.status === "delivered" \|\| result\.status === "queued"\)/);
@@ -584,7 +595,8 @@ await test("context hydrates quietly; mobile status stays compact", () => {
   assert.match(sum, /Context 41%/);
   assert.equal(sum.includes("Cache read"), false);
   const list = renderLaneList([identity], null, { telemetryByLane: { "alloy-identity": tel } });
-  assert.match(list, /Claude · Context 41%/);
+  assert.match(list, /Claude/);
+  assert.equal(list.includes("Context 41%"), false);
   const closed = renderStatus(identity, null, { open: false, telemetry: tel, summary: sum });
   assert.equal(/\sopen/.test(closed), false);
   assert.match(closed, /Context 41%/);
@@ -716,10 +728,10 @@ await test("lane list shows current execution run state without becoming a board
   const executing = { ...identity, execution_run: { state: "EXECUTING", instruction: "Finish Records/Roster" } };
   const needs = { ...identity, lane_id: "alloy-comms", label: "Communications", execution_run: { state: "NEEDS_INPUT", state_reason: "Which ingress?" } };
   const html = renderLaneList([executing, needs], null);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Needs input/);
-  assert.match(html, /gw-lane-attn is-run/);
-  assert.match(html, /gw-lane-attn is-needs/);
+  assert.match(html, /gw-lane-posture is-run/);
+  assert.match(html, /gw-lane-posture is-needs/);
   assert.equal(html.includes("Kanban"), false);
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(needs.execution_run), "Needs input");
@@ -742,7 +754,7 @@ await test("lane detail shows current work; needs input, complete, and failed ar
   });
   assert.match(html, /Current work/);
   assert.match(html, /Complete the remaining Communications ingress/);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Started 18m ago/);
   assert.equal(html.includes("%"), false);
   assert.match(html, /data-gw-aside/);
@@ -826,7 +838,7 @@ await test("lane list shows resource wait and queue position; ready-to-resume is
   assert.match(html, /Waiting for Browser certification/);
   assert.match(html, /#1 in queue/);
   assert.match(html, /Waiting for Exclusive machine timing/);
-  assert.match(html, /gw-lane-attn is-ready/);
+  assert.match(html, /gw-lane-posture is-ready/);
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(records.execution_run), "Ready to resume");
 });
@@ -1101,7 +1113,8 @@ await test("session rotation overlay and refresh control stay in Development Sta
   assert.match(readyShell, /data-gw-session-refresh/);
   assert.match(css, /gw-lane-fold/);
   assert.equal(css.includes("max-height:22vh"), false);
-  assert.ok(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"));
+  assert.ok(css.includes(".gw-claude-run{display:none;}"));
+  assert.equal(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"), false);
   const rotatingShell = renderGatewayShell({
     lanes: [rotating],
     selectedId: rotating.lane_id,
@@ -1390,7 +1403,7 @@ await test("six-lane representation keeps lane / run / admission / session disti
   ];
   const html = renderLaneList(lanes, null);
   assert.match(html, /Access &amp; Identity/);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Waiting for browser certification/);
   assert.match(html, /Validating/);
   assert.match(html, /Queued for capacity/);
@@ -1522,8 +1535,9 @@ await test("mobile detail keeps Authorize and Deny above the composer", () => {
   assert.match(css, /\.gw-decision-bar\{display:none/);
   assert.match(css, /\.gw-decision-bar\{display:block;\}/);
   assert.match(css, /\.gw-decision-bar \.btn\{width:100%;min-height:44px/);
-  assert.match(css, /\.gw-send,\.gw-send\{min-height:44px;width:100%;\}/);
-  assert.ok(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"));
+  assert.match(css, /\.gw-send\{min-height:44px;min-width:88px;width:auto/);
+  assert.ok(css.includes(".gw-claude-run{display:none;}"));
+  assert.equal(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"), false);
 });
 
 await test("Director refresh wait shows Updating Director, not idle or authorization error", () => {
@@ -1574,6 +1588,15 @@ await test("governed complete EXECUTING is not Waiting on Director", () => {
   assert.equal(html.includes("Waiting on Director"), false);
   assert.equal(html.includes("Authorize census"), false);
   assert.match(html, /Executing/);
+  const shell = renderGatewayShell({
+    lanes: [{ ...identity, execution_run: run }],
+    selectedId: identity.lane_id,
+    lane: { ...identity, execution_run: run },
+    outputText: "ok",
+    listReady: true,
+  });
+  assert.match(shell, /Working/);
+  assert.equal(shell.includes("Waiting on Director"), false);
 });
 
 await test("failed governed wait is not Waiting on Director", () => {
@@ -1677,7 +1700,7 @@ await test("recent output chrome is honest; latest response is a separate loaded
   });
   // The panel is named for what it shows, not for who produced it: one panel
   // serves both Claude and Cursor lanes.
-  assert.match(html, /Latest response/);
+  assert.match(html, /Latest assistant response/);
   assert.equal(html.includes("Latest Claude Response"), false);
   assert.match(html, /data-gw-output-recent/);
   // The agent name IS provider-aware in sentences about the agent.
@@ -1687,7 +1710,7 @@ await test("recent output chrome is honest; latest response is a separate loaded
   assert.equal(claudeRunStatus(identity).running, true);
   assert.equal(claudeRunStatus({ ...identity, claude: { presence: "absent" }, runtime: "offline" }).label, "Claude is not running");
   assert.match(renderClaudeRunStatus({ ...identity, claude: { presence: "absent" } }), /Claude is not running/);
-  assert.match(outputBodyText({ ok: true, mode: "latest_response", available: false, text: null }, ""), /not available/);
+  assert.match(outputBodyText({ ok: true, mode: "latest_response", available: false, text: null }, ""), /Output unavailable/);
   const missingLatest = renderGatewayShell({
     lanes: [identity],
     selectedId: identity.lane_id,
@@ -1696,9 +1719,9 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: "",
     listReady: true,
   });
-  assert.match(missingLatest, /not available from the session transcript/);
-  assert.match(gwSrc, /outputMode: "latest_response"/);
-  assert.match(gwSrc, /fetchOutput\(hydrateId, \{ mode: "latest_response" \}\)/);
+  assert.match(missingLatest, /Output unavailable/);
+  assert.match(gwSrc, /outputMode: "recent"/);
+  assert.match(gwSrc, /fetchOutput\(hydrateId, \{ mode: "recent" \}\)/);
   const copyFn = gwSrc.slice(gwSrc.indexOf("async function copyActiveOutput"), gwSrc.indexOf("async function registerPushSubscription"));
   assert.equal(copyFn.includes("fetchOutput"), false);
   assert.equal(copyFn.includes("/output"), false);
@@ -1732,11 +1755,12 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   const outputIdx = html.indexOf("data-gw-output");
   const claudeIdx = html.indexOf("data-gw-claude-run");
   assert.equal(stageIdx > 0 && threadIdx > stageIdx && outputIdx > threadIdx && claudeIdx > outputIdx && composerIdx > claudeIdx && asideIdx > composerIdx, true);
-  assert.match(css, /\.gw-thread\{[^}]*overflow:hidden/);
+  assert.match(css, /\.gw-thread\{[^}]*overflow:auto/);
   assert.match(css, /\.gw-output\{[^}]*overflow:auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*minmax\(0, 66fr\) minmax\(0, 33fr\)/);
   assert.match(css, /\.gw\.is-detail \.gw-composer\{[^}]*flex:0 0 auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*overflow:hidden/);
+  assert.match(css, /\.gw\.is-detail \.gw-composer\{[^}]*position:static/);
   assert.equal(css.includes("position:sticky;bottom:env(safe-area-inset-bottom"), false);
   assert.match(css, /env\(safe-area-inset-bottom/);
   assert.match(css, /--gw-vvh/);
@@ -1747,6 +1771,9 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(html, /Enter to send/);
   assert.match(gwSrc, /t\.id !== "gw-instruction"/);
   assert.match(gwSrc, /e\.key !== "Enter"/);
+  assert.match(gwSrc, /if \(listed\) G.lane = listed;/);
+  assert.match(gwSrc, /liveRun/);
+  assert.match(gwSrc, /--gw-composer-h/);
 });
 
 await test("lane execution posture is not Execution Run state", () => {
@@ -1866,6 +1893,111 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   ], { max_providers: 3 });
   assert.equal(cap.active, 1);
   assert.equal(cap.running.map((r) => r.name).join(","), "Access & Identity");
+});
+
+await test("canonical work state maps live execution to Working and stale heartbeats out of Working", () => {
+  const now = Date.parse("2026-08-22T12:00:00.000Z");
+  const working = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 5_000,
+  }, { nowMs: now });
+  assert.equal(working.label, "Working");
+  assert.equal(working.group, "active");
+  const validating = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "VALIDATING" },
+    last_activity_ms: now - 1_000,
+  }, { nowMs: now });
+  assert.equal(validating.label, "Validating");
+  const complete = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "COMPLETE" },
+  }, { nowMs: now });
+  assert.equal(complete.label, "Complete");
+  const idle = canonicalLaneWorkState({
+    lane_id: "lane_idleidleidle",
+    durable: true,
+    previous_run: { state: "COMPLETE" },
+  }, { nowMs: now });
+  assert.equal(idle.label, "Idle");
+  const stale = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 180_000,
+  }, { output: { captured_at: new Date(now - 180_000).toISOString() }, nowMs: now });
+  assert.equal(stale.label, "Stale");
+  assert.equal(stale.stale, true);
+});
+
+await test("lane index sorts operational groups and does not duplicate status", () => {
+  const lanes = [
+    { lane_id: "idle-1", label: "Idle lane", durable: true },
+    { lane_id: "work-1", label: "Active lane", claude: { presence: "present" }, execution_run: { state: "EXECUTING", updated_at: "2026-08-22T12:00:00.000Z" } },
+    { lane_id: "need-1", label: "Needs lane", execution_run: { state: "NEEDS_INPUT" } },
+    { lane_id: "done-1", label: "Done lane", execution_run: { state: "COMPLETE" } },
+  ];
+  const ordered = sortLanesForIndex(lanes).map((l) => l.lane_id);
+  assert.deepEqual(ordered, ["work-1", "need-1", "idle-1", "done-1"]);
+  const html = renderLaneList(lanes, null);
+  assert.equal((html.match(/Queued for capacity/g) || []).length <= 1, true);
+  assert.equal(html.includes("gw-lane-attn is-run"), false);
+  const workIdx = html.indexOf("Active lane");
+  const idleIdx = html.indexOf("Idle lane");
+  assert.equal(workIdx >= 0 && workIdx < idleIdx, true);
+});
+
+await test("conversation detail has user and assistant messages with icon copy, diagnostics in Details", () => {
+  const last = { instruction: "Ship the composer", status: "delivered", delivered_at: "2026-08-22T12:00:00.000Z" };
+  const html = renderGatewayShell({
+    lanes: [identity],
+    selectedId: identity.lane_id,
+    lane: { ...identity, last_instruction: last, execution_run: { state: "EXECUTING", instruction: last.instruction, started_at: "2026-08-22T11:59:00.000Z" } },
+    output: { ok: true, lane_id: identity.lane_id, text: "function ok() {}", revision: 2 },
+    outputText: "function ok() {}",
+    lastInstruction: last,
+    listReady: true,
+  });
+  assert.match(html, /gw-msg-user/);
+  assert.match(html, /Ship the composer/);
+  assert.match(html, /gw-msg-assistant/);
+  assert.match(html, /function ok\(\) \{\}/);
+  assert.match(html, /data-gw-provider-opt="claude"/);
+  assert.match(html, /data-gw-provider-opt="cursor"/);
+  assert.match(html, /data-gw-details/);
+  assert.equal(html.includes("Latest assistant response from the session transcript"), false);
+  const copyBtn = html.slice(html.indexOf("data-gw-copy") - 120, html.indexOf("data-gw-copy") + 80);
+  assert.equal(copyBtn.includes("Load more"), false);
+  assert.match(html, /data-gw-details/);
+  assert.match(css, /data-gw-provider-opt|gw-provider-opt/);
+});
+
+await test("stale cached output revisions are rejected", () => {
+  const current = { lane_id: "alloy-identity", revision: 200, text: "new" };
+  const older = { lane_id: "alloy-identity", revision: 100, text: "old" };
+  assert.equal(outputIsOlder(older, current), true);
+  const kept = applyFetchedOutput("alloy-identity", "alloy-identity", current, older);
+  assert.equal(kept.text, "new");
+  const next = applyFetchedOutput("alloy-identity", "alloy-identity", current, { lane_id: "alloy-identity", revision: 300, text: "newer" });
+  assert.equal(next.text, "newer");
+});
+
+await test("merged historical git is not shown as behind on the lane list", () => {
+  const merged = {
+    ...identity,
+    lane_id: "lane_mergedmerged",
+    label: "Historical",
+    previous_run: { state: "COMPLETE" },
+    execution_run: null,
+    claude: { presence: "absent" },
+    git: { state: "clean", ahead: 0, behind: 88, head_in_base: true, branch: "agent/old" },
+    source_control: { posture: "MERGED", behind: 88 },
+  };
+  assert.equal(gitListState(merged), null);
+  const html = renderLaneList([merged], null);
+  assert.equal(html.includes("88 behind"), false);
+  assert.equal(html.includes("Sync required"), false);
+  assert.match(gitLine(merged.git, merged.source_control), /Merged/);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

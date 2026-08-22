@@ -10,7 +10,7 @@ const G = {
   lane: null,
   output: null,
   recentOutput: null,
-  outputMode: "latest_response",
+  outputMode: "recent",
   sending: false,
   notice: null,
   drafts: {},
@@ -583,6 +583,7 @@ function preserveComposer() {
     value: ta.value,
     start: ta.selectionStart,
     end: ta.selectionEnd,
+    provider: document.getElementById("gw-composer-provider")?.value || null,
     outputScroll: document.querySelector("[data-gw-output]")?.scrollTop ?? null,
   };
 }
@@ -595,6 +596,13 @@ function restoreComposer(saved) {
   if (saved.focused) {
     ta.focus();
     try { ta.setSelectionRange(saved.start, saved.end); } catch { /* */ }
+  }
+  if (saved.provider) {
+    const sel = document.getElementById("gw-composer-provider");
+    if (sel) sel.value = saved.provider;
+    document.querySelectorAll("[data-gw-provider-opt]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-gw-provider-opt") === saved.provider ? "true" : "false");
+    });
   }
   const pre = document.querySelector("[data-gw-output]");
   if (pre && saved.outputScroll != null && saved.focused) pre.scrollTop = saved.outputScroll;
@@ -624,8 +632,12 @@ function autosizeInstruction(ta) {
   const el = ta || document.getElementById("gw-instruction");
   if (!el) return;
   el.style.height = "auto";
-  const cap = Math.min(220, Math.round((window.visualViewport?.height || window.innerHeight) * 0.28));
-  el.style.height = `${Math.max(72, Math.min(el.scrollHeight, cap))}px`;
+  const isMobile = window.innerWidth <= 860;
+  const cap = Math.min(isMobile ? 112 : 220, Math.round((window.visualViewport?.height || window.innerHeight) * (isMobile ? 0.18 : 0.28)));
+  el.style.height = `${Math.max(isMobile ? 48 : 72, Math.min(el.scrollHeight, cap))}px`;
+  const form = document.querySelector("[data-gw-composer]");
+  const stage = document.querySelector("[data-gw-stage]");
+  if (form && stage) stage.style.setProperty("--gw-composer-h", `${form.offsetHeight}px`);
 }
 
 function statusOpenNow() {
@@ -734,6 +746,17 @@ function applyContextRefreshWatch() {
   return false;
 }
 
+async function promoteCompletedOutput(laneId) {
+  if (G.finalizedOutput) return;
+  const prev = G.output;
+  await fetchOutput(laneId, { mode: "latest_response" }).catch(() => {});
+  if (!G.output?.available || !String(G.output?.text || "").trim()) {
+    G.outputMode = "recent";
+    G.output = G.recentOutput || prev;
+  }
+  G.finalizedOutput = true;
+}
+
 function startOutputPoll(laneId) {
   stopOutputPoll();
   const tick = async () => {
@@ -748,14 +771,24 @@ function startOutputPoll(laneId) {
       try {
         await fetchOutput(laneId, { mode: "recent" });
         const watching = G.watchRefresh || View.contextRefreshStatus(G.lane)?.kind === "progress";
-        if (watching) {
+        const runState = G.lane?.execution_run?.state;
+        const liveRun = ["EXECUTING", "QUEUED", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+          || (G.burstUntil && Date.now() < G.burstUntil);
+        if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
           applyContextRefreshWatch();
         }
         const paneOut = paneOutputForLane(laneId);
         const pre = document.querySelector("[data-gw-output]");
+        if (liveRun) {
+          G.outputMode = "recent";
+          G.output = G.recentOutput;
+          G.finalizedOutput = false;
+        } else if (runState === "COMPLETE" || (!runState && G.lane?.previous_run?.state === "COMPLETE")) {
+          await promoteCompletedOutput(laneId);
+        }
         if (!watching && pre && document.activeElement && document.activeElement.id === "gw-instruction") {
-          if (G.outputMode === "recent") {
+          if (G.outputMode === "recent" || liveRun) {
             const keep = pre.scrollTop;
             pre.textContent = G.output?.text || "";
             pre.scrollTop = keep;
@@ -795,7 +828,8 @@ function startListPoll() {
       if (G.selected) {
         const listed = View.knownLane(G.lanes, G.selected);
         if (listed) G.lane = listed;
-        if (applyContextRefreshWatch() || View.contextRefreshStatus(listed)?.kind === "progress") paint();
+        applyContextRefreshWatch();
+        paint();
       } else {
         paint();
       }
@@ -916,7 +950,8 @@ async function show(r) {
     if (!connecting && !View.outputBelongsToLane(G.output, nextId, outputLane(nextId))) {
       G.output = null;
       G.recentOutput = null;
-      G.outputMode = "latest_response";
+      G.outputMode = "recent";
+      G.finalizedOutput = false;
     }
     if (!connecting && G.telemetry?.lane_id !== nextId) G.telemetry = null;
   }
@@ -925,7 +960,8 @@ async function show(r) {
     G.lane = null;
     G.output = null;
     G.recentOutput = null;
-    G.outputMode = "latest_response";
+    G.outputMode = "recent";
+    G.finalizedOutput = false;
     G.telemetry = null;
   }
   if (connecting) {
@@ -998,7 +1034,7 @@ async function show(r) {
       if (gen === G.showGen && G.selected === hydrateId) paint();
     }).catch(() => {});
     await Promise.all([
-      fetchOutput(hydrateId, { mode: "latest_response" }).catch(() => { if (gen === G.showGen && G.selected === hydrateId) G.output = G.output; }),
+      fetchOutput(hydrateId, { mode: "recent" }).catch(() => { if (gen === G.showGen && G.selected === hydrateId) G.output = G.output; }),
       fetchLane(hydrateId).catch(() => { if (gen === G.showGen && G.selected === hydrateId && !G.lane) G.lane = null; }),
     ]);
     if (gen !== G.showGen) return;
@@ -1010,7 +1046,8 @@ async function show(r) {
     G.lane = null;
     G.output = null;
     G.recentOutput = null;
-    G.outputMode = "latest_response";
+    G.outputMode = "recent";
+    G.finalizedOutput = false;
     G.telemetry = null;
     stopOutputPoll();
     stopTelemetryPoll();
@@ -1075,7 +1112,9 @@ async function sendCurrent() {
     const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/instruction`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(View.buildSendBody(instruction)),
+      body: JSON.stringify(View.buildSendBody(instruction, {
+        provider: document.getElementById("gw-composer-provider")?.value,
+      })),
     });
     result = await r.json();
   } catch {
@@ -1205,6 +1244,29 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     if (copy.disabled) return;
     await copyActiveOutput();
+    return;
+  }
+  const providerOpt = e.target?.closest?.("[data-gw-provider-opt]");
+  if (providerOpt) {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = providerOpt.getAttribute("data-gw-provider-opt");
+    if (next !== "claude" && next !== "cursor") return;
+    const hidden = document.getElementById("gw-composer-provider");
+    if (hidden) hidden.value = next;
+    document.querySelectorAll("[data-gw-provider-opt]").forEach((btn) => {
+      btn.setAttribute("aria-pressed", btn.getAttribute("data-gw-provider-opt") === next ? "true" : "false");
+    });
+    if (G.lane && View.laneMatchesId(G.lane, G.selected)) {
+      G.lane = { ...G.lane, preferred_provider: next };
+    }
+    if (G.selected) {
+      gwFetch(`/api/lanes/${encodeURIComponent(G.selected)}/preferred-provider`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ provider: next }),
+      }).catch(() => {});
+    }
     return;
   }
   const startWork = e.target?.closest?.("[data-gw-start-work]");
@@ -1452,7 +1514,9 @@ document.addEventListener("click", async (e) => {
       const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/agent-session/start`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({
+          provider: document.getElementById("gw-composer-provider")?.value || undefined,
+        }),
       });
       const out = await r.json().catch(() => ({}));
       G.notice = out.ok

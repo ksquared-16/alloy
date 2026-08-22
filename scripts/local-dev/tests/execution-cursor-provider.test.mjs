@@ -52,7 +52,7 @@ writeFileSync(join(ROOT, "metadata", "wt1-vacilando-mac-mini-readiness.env"), [
 
 const { normalizeExecutionProvider } = await import("../lib/vacilando/execution-providers.mjs");
 const { createAdmissionRequest, resetAdmissionsForTests } = await import("../lib/vacilando/execution-admission.mjs");
-const { createDurableLane, ensureVacilandoSpecialistLane, resetDevelopmentLanesForTests } = await import("../lib/vacilando/development-lane.mjs");
+const { createDurableLane, ensureVacilandoSpecialistLane, resetDevelopmentLanesForTests, setLanePreferredProvider, getDurableLane } = await import("../lib/vacilando/development-lane.mjs");
 const { cmdAdoptWorktree, cmdAttachCursorSession } = await import("../lib/vacilando/commands/node-ops.mjs");
 const { resetAgentSessionsForTests, activeAgentSessionForLane } = await import("../lib/vacilando/agent-session.mjs");
 const {
@@ -182,6 +182,24 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
   assert.equal(projected.agent_session?.provider, "cursor");
   assert.equal(projected.agent_session?.state, "ACTIVE");
   assert.equal(projected.start_session, null);
+});
+
+await test("preferred provider does not rewrite a live Cursor binding", () => {
+  resetDevelopmentLanesForTests(ROOT);
+  const vac = ensureVacilandoSpecialistLane({ root: ROOT });
+  const bound = cmdAttachCursorSession({
+    laneId: vac.lane.lane_id,
+    worktree: "wt1-vacilando-mac-mini-readiness",
+    providerSessionId: "conv-cursor-pref",
+    root: ROOT,
+  });
+  assert.equal(bound.ok, true, bound.error);
+  assert.equal(bound.lane.binding.provider, "cursor");
+  const out = setLanePreferredProvider(vac.lane.lane_id, "claude", { root: ROOT });
+  assert.equal(out.ok, true, out.error);
+  const rec = getDurableLane(vac.lane.lane_id, ROOT);
+  assert.equal(rec.preferred_provider, "claude");
+  assert.equal(rec.binding.provider, "cursor");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

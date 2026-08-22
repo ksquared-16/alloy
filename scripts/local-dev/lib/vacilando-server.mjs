@@ -1072,6 +1072,20 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
         }
       }
+      const preferredMatch = path.match(/^\/api\/lanes\/([^/]+)\/preferred-provider$/);
+      if (preferredMatch) {
+        const laneId = normalizeLaneId(preferredMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        try {
+          const { setLanePreferredProvider } = await import("./vacilando/development-lane.mjs");
+          const out = setLanePreferredProvider(laneId, body.value?.provider);
+          return sendJson(res, out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 400), out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "preferred_provider_failed", detail: String(e && e.message || e) });
+        }
+      }
       const laneSendMatch = path.match(/^\/api\/lanes\/([^/]+)\/instruction$/);
       if (laneSendMatch) {
         const laneId = normalizeLaneId(laneSendMatch[1]);
@@ -1173,6 +1187,10 @@ export function createVacilandoServer() {
           if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
           const extra = unexpectedLaneControlFields(body.value || {});
           if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+          if (body.value?.provider) {
+            const { setLanePreferredProvider } = await import("./vacilando/development-lane.mjs");
+            setLanePreferredProvider(laneId, body.value.provider);
+          }
           const { startLaneAgentSession } = await import("./vacilando/agent-session-lifecycle.mjs");
           const out = await startLaneAgentSession({ laneId, origin: "operator" });
           const status = out.ok ? 200

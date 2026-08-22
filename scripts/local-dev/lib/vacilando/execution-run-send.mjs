@@ -144,6 +144,13 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   const text = String(instruction ?? "");
   const size = text.length;
 
+  if (opts.provider) {
+    try {
+      const { setLanePreferredProvider } = await import("./development-lane.mjs");
+      setLanePreferredProvider(laneId, opts.provider, { nowMs, root });
+    } catch { /* send still proceeds with the live binding */ }
+  }
+
   let staleClosed = false;
   try {
     const rec = reconcileLaneBeforeSend(laneId, { root, nowMs });

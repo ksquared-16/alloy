@@ -29,7 +29,13 @@ function run(cmd, args, opts = {}) {
       cmd,
       args,
       { timeout: opts.timeout ?? EXEC_TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, cwd: opts.cwd, env: process.env },
-      (err, stdout, stderr) => res({ ok: !err, stdout: stdout ?? "", stderr: stderr ?? "", error: err ? String(err.message || err) : null }),
+      (err, stdout, stderr) => res({
+        ok: !err,
+        code: err ? (typeof err.code === "number" ? err.code : 1) : 0,
+        stdout: stdout ?? "",
+        stderr: stderr ?? "",
+        error: err ? String(err.message || err) : null,
+      }),
     );
   });
 }
@@ -199,18 +205,19 @@ export async function gitFactsForPath(path, cfg) {
   const hit = gitFactsCache.get(path);
   if (hit && now - hit.at < GIT_FACTS_TTL_MS) return hit;
   if (!path || !existsSync(path)) {
-    const miss = { at: now, git: "missing", ahead_behind: "?/?", branch: "?" };
+    const miss = { at: now, git: "missing", ahead_behind: "?/?", branch: "?", head_in_base: null };
     gitFactsCache.set(path || "", miss);
     return miss;
   }
   const webRel = `${cfg.web_dir}/next-env.d.ts`;
-  const [dirtyR, abAhead, abBehind, branchR, headR, commitR] = await Promise.all([
+  const [dirtyR, abAhead, abBehind, branchR, headR, commitR, ancestorR] = await Promise.all([
     run("git", ["--no-optional-locks", "-C", path, "status", "--porcelain"], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-list", "--count", `${cfg.base_ref}..HEAD`], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-list", "--count", `HEAD..${cfg.base_ref}`], { timeout: 8000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-parse", "--abbrev-ref", "HEAD"], { timeout: 4000 }),
     run("git", ["--no-optional-locks", "-C", path, "rev-parse", "HEAD"], { timeout: 4000 }),
     run("git", ["--no-optional-locks", "-C", path, "log", "-1", "--format=%cI"], { timeout: 4000 }),
+    run("git", ["--no-optional-locks", "-C", path, "merge-base", "--is-ancestor", "HEAD", cfg.base_ref], { timeout: 8000 }),
   ]);
   let git = "unknown";
   let modified = 0;
@@ -243,6 +250,7 @@ export async function gitFactsForPath(path, cfg) {
     modified,
     untracked,
     conflict,
+    head_in_base: ancestorR.code === 0 ? true : (ancestorR.code === 1 ? false : null),
   };
   gitFactsCache.set(path, fact);
   return fact;
