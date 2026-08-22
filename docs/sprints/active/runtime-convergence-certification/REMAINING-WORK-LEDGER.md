@@ -135,7 +135,7 @@ Nothing below blocks this promotion; each is owned and evidenced.
 | 5 | True-cold Work Unit ~11,708 ms | separate performance class — re-profile first | runtime |
 | 6 | Queue summaries have no invalidation trigger (two 120 s polls) | convergence gap, matrix §4 | runtime |
 | 7 | BOS rail direct-path late re-park (placement/CLS) | product placement decision | BOS rail owner |
-| 8 | Brokered `vac run typecheck` OOM — pins 4096 against a package that needs 8192; `typecheck:tests` at 8192 passes | tooling | validation broker |
+| 8 | ~~Brokered `vac run typecheck` OOM~~ — **RESOLVED**: the broker's resource contract now raises the typecheck heap 4096 MB → 8192 MB on its own. Both `typecheck` and `typecheck:tests` return `rc=0 class=ok` on this candidate | closed | validation broker |
 | 9 | `/organization/access` convergence | active lane — measured, not modified | **PR #483** |
 | 10 | Vacilando abandoned execution-run checkpoints | tooling | Vacilando |
 
@@ -163,3 +163,28 @@ and I misclassified the pin effect as class A from a fallback code path (it is *
 
 The durable lesson is the guard that now ships with it: an identity migration may not mutate a
 projection field, and a repair may never run from a read path.
+
+## Gate results on the candidate
+
+| Gate | Result |
+|---|---|
+| `vac run typecheck` | **rc=0 `class=ok`** (broker raised heap 4096 → 8192 automatically) |
+| `vac run typecheck:tests` | **rc=0 `class=ok`** |
+| Focused guards (11 files) | **90/90 passing**, every one positive-controlled |
+| `tests/{runtime,admin,adminV2}` vs staging `83e9e3d93` | **0 new failures**, **1 fixed**, 224 inherited failures — an identical set on both sides |
+
+The broad suite is compared by failing-test **list**: candidate 224 failing files / 505 failing
+tests, staging baseline 225 / 506. The single difference is
+`tests/admin/opportunityInquiryChildrenQueueRefresh.test.ts`, which this branch **repairs**. The 224
+shared failures are dominated by one inherited environment condition — relative fetch URLs with no
+base (`Failed to parse URL from /api/admin/locations?hierarchy=1`, 211 occurrences).
+
+Two process notes worth keeping:
+
+- I first blamed the broad-suite failures on an x64/arm64 node mismatch. That was **wrong** — the
+  failing set is byte-identical under both architectures. The list comparison, not the count and not
+  the environment theory, is what settled it.
+- `typecheck:tests` caught a real type error in one of this branch's own guard files
+  (`"all"` passed where a `WorkItemViewKey` was required; `"all"` is a `WorkItemSourceKey`). It hit
+  the `default:` branch, so **vitest passed it green**. Vitest never typechecks — a guard is not
+  verified until `typecheck:tests` has seen it.

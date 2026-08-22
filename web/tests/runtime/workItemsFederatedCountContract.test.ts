@@ -61,9 +61,12 @@ describe("due metrics count only sources that own a due commitment", () => {
         expect(overdue[0]!.source).toBe("manual");
     });
 
-    it("excluded rows are still real work — they stay in the unfiltered queue", () => {
+    it("excluded rows are still real work — they leave the due metrics, not the queue", () => {
         const tasks = [manual(), processing(), communications()];
-        expect(filterTasksByView(tasks, "all", null)).toHaveLength(3);
+        // The exclusion is scoped to the due predicate itself...
+        expect(tasks.filter(hasAuthoritativeDueCommitment).map((t) => t.source)).toEqual(["manual"]);
+        // ...so a view that is not a due metric still carries all three rows.
+        expect(filterTasksByView(tasks, "unassigned", null)).toHaveLength(3);
     });
 
     it("Mine and Unassigned remain assignment metrics, unaffected by the due rule", () => {
