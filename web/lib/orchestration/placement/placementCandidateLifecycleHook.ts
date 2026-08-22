@@ -3,6 +3,12 @@
  * Idempotent — does not delete candidates.
  */
 
+import {
+    loadActiveCandidatesBySubject,
+    movePlacementCandidateToDerivedCohort,
+    placementCandidateSubjectKey,
+    retireDuplicateActiveCandidates,
+} from "@/lib/orchestration/placement/placementCandidateSubjectUniqueness";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { __testing as backfillTesting } from "@/lib/orchestration/placement/backfill/placementCandidateBackfill";
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
@@ -153,6 +159,26 @@ export async function ensurePlacementCandidateForWaitlistedChildBySubject(
         return { attempted: true, created: false, skipped_reason: "already_exists" };
     }
 
+    /*
+     * A MISSED SEED KEY IS NOT PROOF THE CHILD HAS NO CANDIDATE — the key contains the cohort, so a
+     * cohort change produces a key this check has never seen. Inserting on that basis is what put
+     * two active candidates on one child. Move the existing one instead: the id is preserved, so
+     * `wait_since` and any operator override travel with it.
+     */
+    const bySubject = await loadActiveCandidatesBySubject(supabase, { orgId, opportunityIds: [opportunityId] });
+    const incumbent = bySubject.get(placementCandidateSubjectKey({ opportunityId, customerMemberId }));
+    if (incumbent) {
+        const moved = await movePlacementCandidateToDerivedCohort(supabase, {
+            orgId,
+            candidateId: incumbent.id,
+            seedKey,
+            programRoomCohortKey: (derived.row.program_room_cohort_key as string | null) ?? null,
+            programRoomGroupLabel: (derived.row.program_room_group_label as string | null) ?? null,
+        });
+        // Never fall through to the insert on a failed move — that recreates the duplicate.
+        return { attempted: true, created: false, skipped_reason: moved ? "cohort_transition_reconciled" : "cohort_transition_move_failed" };
+    }
+
     const row = derived.row;
     const { error: insErr } = await supabase.from("placement_candidates").insert(row);
     if (insErr) return { attempted: true, created: false, skipped_reason: insErr.message };
@@ -195,7 +221,7 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
     const opportunityIds = [...new Set(children.map((c) => c.opportunityId))];
     const memberIds = [...new Set(children.map((c) => c.customerMemberId))];
 
-    const [oppRes, piRes, cmRes, existingRes] = await Promise.all([
+    const [oppRes, piRes, cmRes, existingRes, activeBySubject] = await Promise.all([
         supabase
             .from("opportunities")
             .select("id, customer_id, location_id")
@@ -210,6 +236,7 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             .in("subject_id", memberIds),
         supabase.from("customer_members").select("id, person_id, dob").eq("org_id", orgId).in("id", memberIds),
         supabase.from("placement_candidates").select("seed_key").eq("org_id", orgId).in("opportunity_id", opportunityIds),
+        loadActiveCandidatesBySubject(supabase, { orgId, opportunityIds }),
     ]);
 
     const oppById = new Map<string, { customer_id: string | null; location_id: string | null }>();
@@ -246,6 +273,15 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
 
     const nowIso = new Date().toISOString();
     const rows: Record<string, unknown>[] = [];
+    /** Cohort the ensure pass derives NOW per subject — the survivor rule for duplicate repair. */
+    const derivedCohortBySubject = new Map<string, string | null>();
+    /** Cohort transitions of candidates these children already have — moves, never inserts. */
+    const reconcileMoves: Array<{
+        candidateId: string;
+        seedKey: string;
+        programRoomCohortKey: string | null;
+        programRoomGroupLabel: string | null;
+    }> = [];
     let skippedExisting = 0;
     for (const child of children) {
         const opp = oppById.get(child.opportunityId);
@@ -274,11 +310,47 @@ export async function ensurePlacementCandidatesForWaitlistedChildrenBulk(
             skippedExisting += 1;
             continue;
         }
+        derivedCohortBySubject.set(
+            placementCandidateSubjectKey({
+                opportunityId: child.opportunityId,
+                customerMemberId: child.customerMemberId,
+            }),
+            (derived.row.program_room_cohort_key as string | null) ?? null,
+        );
+        // Same rule as the single path: a missed seed key may still be a cohort transition of a
+        // candidate this child already has. Move it rather than adding a rival.
+        const incumbent = activeBySubject.get(
+            placementCandidateSubjectKey({
+                opportunityId: child.opportunityId,
+                customerMemberId: child.customerMemberId,
+            }),
+        );
+        if (incumbent) {
+            reconcileMoves.push({
+                candidateId: incumbent.id,
+                seedKey: derived.seedKey,
+                programRoomCohortKey: (derived.row.program_room_cohort_key as string | null) ?? null,
+                programRoomGroupLabel: (derived.row.program_room_group_label as string | null) ?? null,
+            });
+            skippedExisting += 1;
+            continue;
+        }
         // Guard against two children in this page deriving the same key (they cannot, but an
         // insert of duplicates would fail the whole batch).
         if (rows.some((r) => r.seed_key === derived.seedKey)) continue;
         rows.push(derived.row);
     }
+
+    for (const mv of reconcileMoves) {
+        await movePlacementCandidateToDerivedCohort(supabase, { orgId, ...mv });
+    }
+
+    /*
+     * Heal what prevention cannot reach. Duplicates already on the tenant stay duplicates forever
+     * otherwise, and they are not harmless — an operator pin can be recorded against the candidate the
+     * projection never reads. Idempotent: once a subject has one active candidate this is a no-op.
+     */
+    await retireDuplicateActiveCandidates(supabase, { orgId, opportunityIds, derivedCohortBySubject });
 
     if (!rows.length) return { attempted: children.length, created: 0, skipped_existing: skippedExisting };
     const { error } = await supabase.from("placement_candidates").insert(rows);
@@ -379,6 +451,35 @@ export async function ensurePlacementCandidateForWaitlistedChild(
             opportunityCustomerMemberId: params.opportunityCustomerMemberId,
         });
         return { attempted: true, created: false, skipped_reason: "already_exists" };
+    }
+
+    // Same invariant as the other two creation paths — a missed seed key may be a cohort transition.
+    const memberIdForSubject = typeof row.customer_member_id === "string" ? row.customer_member_id : "";
+    if (memberIdForSubject) {
+        const bySubject = await loadActiveCandidatesBySubject(supabase, {
+            orgId: params.orgId,
+            opportunityIds: [params.opportunityId],
+        });
+        const incumbent = bySubject.get(
+            placementCandidateSubjectKey({
+                opportunityId: params.opportunityId,
+                customerMemberId: memberIdForSubject,
+            }),
+        );
+        if (incumbent) {
+            const moved = await movePlacementCandidateToDerivedCohort(supabase, {
+                orgId: params.orgId,
+                candidateId: incumbent.id,
+                seedKey: String(row.seed_key ?? ""),
+                programRoomCohortKey: (row.program_room_cohort_key as string | null) ?? null,
+                programRoomGroupLabel: (row.program_room_group_label as string | null) ?? null,
+            });
+            return {
+                attempted: true,
+                created: false,
+                skipped_reason: moved ? "cohort_transition_reconciled" : "cohort_transition_move_failed",
+            };
+        }
     }
 
     const { error: insErr } = await supabase.from("placement_candidates").insert(row);
