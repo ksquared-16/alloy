@@ -82,6 +82,61 @@ async function markDeliveryAcknowledged(run, out, {
 export const UNDELIVERED_PROMPT_BLOCK = "undelivered_provider_prompt_block";
 
 /**
+ * The operator answered a lane whose provider was suspended.
+ *
+ * Store the reply on the run FIRST, so a failure anywhere after this point
+ * cannot lose it, then ask the capacity governor for a seat. With a seat the
+ * provider comes back and delivery proceeds through the normal path — the reply
+ * is pasted exactly once, by the one code path that pastes. Without a seat the
+ * lane reads "Queued to resume" and the reply waits; it is not re-typed by the
+ * operator and not delivered twice.
+ *
+ * Returns a response when the caller should stop here, or null to continue into
+ * the ordinary continuation path.
+ */
+async function resumeSuspendedForReply({ laneId, run, text, nowMs, root, size }) {
+  const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const { resumeLaneProvider } = await import("./provider-suspension.mjs");
+
+  const pending = {
+    instruction: text,
+    queued_at: new Date(nowMs).toISOString(),
+    fingerprint: instructionFingerprint(text),
+  };
+  // Durable before anything else can fail.
+  patchRunFields(run.run_id, {
+    provider_suspension: { ...(run.provider_suspension || {}), pending_reply: pending },
+  }, { nowMs, root });
+
+  const resumed = await resumeLaneProvider(laneId, { origin: "operator", nowMs, root });
+  if (!resumed.ok) {
+    return decorate({
+      ok: true,
+      schema_version: "vacilando.lane.send.v1",
+      lane_id: laneId,
+      status: "queued",
+      error: null,
+      instruction_size: size,
+      delivered_at: null,
+      admission_queued: true,
+      resume_pending: true,
+      blocking_screen: "Queued to resume — your reply is saved and will be delivered when a provider is free.",
+    }, getExecutionRun(run.run_id, root) || run);
+  }
+  // The provider is back; clear the pending copy so the continuation below is
+  // the single delivery, and fall through to it.
+  patchRunFields(run.run_id, {
+    provider_suspension: {
+      ...(getExecutionRun(run.run_id, root)?.provider_suspension || {}),
+      state: "RESUMED",
+      pending_reply: null,
+      resumed_at: new Date(nowMs).toISOString(),
+    },
+  }, { nowMs, root });
+  return null;
+}
+
+/**
  * A non-terminal run whose instruction was refused at the readiness gate and
  * never reached the provider.
  *
@@ -408,6 +463,16 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     if (active && active.state !== "NEEDS_INPUT") {
       return refused(laneId, "current_run_active", nowMs, size, active);
     }
+  }
+
+  // A reply to a suspended lane must bring the provider back before it can be
+  // delivered. The reply is retained on the run either way, so it is never lost
+  // and never delivered twice: the resume path hands it to the ordinary
+  // NEEDS_INPUT continuation below, which is the only thing that pastes.
+  if (active && active.state === "NEEDS_INPUT" && active.provider_suspension?.state === "SUSPENDED") {
+    const resumed = await resumeSuspendedForReply({ laneId, run: active, text, nowMs, root, size });
+    if (resumed) return resumed;
+    active = activeRunForLane(laneId, root) || active;
   }
 
   if (isLaneSendInProgress(laneId)) {

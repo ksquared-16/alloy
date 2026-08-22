@@ -249,6 +249,25 @@ export function deliveryErrorText(error) {
   }
 }
 
+export function providerLifecycleErrorText(error, action = "suspend") {
+  switch (error) {
+    case "confirm_required":
+      return "That lane is working. Confirm to interrupt it.";
+    case "question_not_durable":
+      return "Not suspended: the question could not be stored durably first, and suspending would lose it.";
+    case "provider_stop_failed":
+      return "The agent process would not stop. Nothing was changed and no capacity was freed.";
+    case "no_agent_session":
+      return "There is no agent attached to this lane.";
+    case "provider_start_failed":
+      return "The agent could not be started. The lane and its work are unchanged.";
+    case "lane_not_found":
+      return "This Development Lane is no longer available.";
+    default:
+      return error ? `Could not ${action} the agent (${error}).` : `Could not ${action} the agent.`;
+  }
+}
+
 export function releaseErrorText(error) {
   switch (error) {
     case "unsafe_in_flight":
@@ -519,6 +538,23 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
       queue_position: null,
     };
   }
+  // A parked lane whose provider was put down. The work is entirely intact, so
+  // "Working" would be false and "Offline" would suggest it was lost. Checked
+  // before NEEDS_INPUT, which would otherwise claim it and hide the suspension.
+  if (lane?.agent_session?.state === "SUSPENDED"
+      || run?.provider_suspension?.state === "SUSPENDED") {
+    const label = runState === "WAITING_RESOURCE" ? "Waiting for resource" : "Needs input";
+    return {
+      state: "PROVIDER_SUSPENDED",
+      label: `${label} · suspended`,
+      mark: "!",
+      hint: "Provider suspended; the question and all work are kept",
+      headline: `${label} · provider suspended`,
+      tone: runState === "WAITING_RESOURCE" ? "queued" : "needs",
+      slot,
+      queue_position: null,
+    };
+  }
   if (runState === "NEEDS_INPUT") {
     return {
       state: "NEEDS_INPUT",
@@ -710,6 +746,17 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   if (cap.state === "WAITING_ON_DIRECTOR") {
     return { key: "waiting", label: "Waiting on Director", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
   }
+  if (cap.state === "PROVIDER_SUSPENDED") {
+    const parked = run?.state === "WAITING_RESOURCE";
+    return {
+      key: "needs_input", label: cap.label,
+      // Durable blocked work belongs with what wants the operator — not with
+      // running work, and not with offline lanes.
+      group: parked ? "active" : "needs_input",
+      tone: cap.tone, mark: cap.mark, hint: cap.hint, headline: cap.headline,
+      live: false, stale: false,
+    };
+  }
   if (cap.state === "NEEDS_INPUT" || run?.state === "NEEDS_INPUT") {
     return { key: "needs_input", label: "Needs input", group: "needs_input", tone: "needs", mark: "!", hint: cap.hint || "Needs input", headline: "Needs input", live: false, stale: false };
   }
@@ -805,6 +852,8 @@ export function occupiesClaudeProviderCapacity(lane, cap = null) {
   const posture = cap || deriveLaneExecutionPosture(lane);
   if (laneProviderKind(lane) === "cursor") return false;
   if (posture.state === "READY_TO_RELEASE") return false;
+  // Suspended means the process is down: durable work, no computation.
+  if (posture.state === "PROVIDER_SUSPENDED") return false;
   return ["RUNNING", "STARTING", "CONNECTED", "FINISHING", "NEEDS_INPUT", "WAITING_ON_DIRECTOR", "UPDATING_DIRECTOR"].includes(posture.state);
 }
 
@@ -842,20 +891,22 @@ export function summarizeExecutionCapacity(lanes, provision = {}) {
 
 export function renderExecutionCapacity(summary) {
   if (!summary || typeof summary !== "object") return "";
-  const running = (summary.running || []).map((r) => r.name).filter(Boolean).join(", ") || "None";
+  // ONE number, and it is the one that governs admission: live provider
+  // processes. Showing the lane-posture count beside a longer list of running
+  // agents was two counters disagreeing in the same panel.
+  const holders = (summary.provider_holders || []).map((h) => summaryText(h?.name) || summaryText(h?.path)).filter(Boolean);
+  const running = (holders.length ? holders : (summary.running || []).map((r) => r.name).filter(Boolean)).join(", ") || "None";
   const queued = (summary.queued || []).map((q) => (
     q.queue_position ? `${q.name} #${q.queue_position}` : q.name
   )).filter(Boolean).join(", ") || "None";
   return `<div class="gw-status-block" data-gw-capacity>
     <div class="gw-status-h">Execution capacity</div>
     <dl class="gw-kv">
-      <dt>Active</dt><dd>${esc(String(summary.active ?? 0))} / ${esc(String(summary.max_active ?? 3))}</dd>
+      <dt>Active</dt><dd>${esc(String(summary.active_providers ?? summary.active ?? 0))} / ${esc(String(summary.max_active ?? 3))}</dd>
       <dt>Running</dt><dd>${esc(running)}</dd>
       <dt>Queued</dt><dd>${esc(queued)}</dd>
-      <dt>Available</dt><dd>${esc(String(summary.available ?? 0))}</dd>
-      ${(summary.provider_holders || []).length
-        ? `<dt>Agents running</dt><dd>${esc((summary.provider_holders || []).map((h) => summaryText(h?.name) || summaryText(h?.path)).filter(Boolean).join(", "))}</dd>`
-        : ""}
+      <dt>Available</dt><dd>${esc(String(Math.max(0, Number(summary.max_active ?? 3) - Number(summary.active_providers ?? summary.active ?? 0))))}</dd>
+      ${summary.degraded ? `<dt>Counting</dt><dd>degraded — live process inspection unavailable</dd>` : ""}
       ${(summary.stale_claims || []).length
         ? `<dt>Stale claims</dt><dd>${esc((summary.stale_claims || []).map((s) => s.name).join(", "))}</dd>`
         : ""}
@@ -925,8 +976,10 @@ export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
   if (posture.state === "CONNECTED") {
     const who = laneProviderLabel(lane);
     const release = laneProviderKind(lane) === "cursor" ? "" : `<div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-suspend data-lane-id="${id}">Suspend provider</button>
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
-      </div>`;
+      </div>
+      <p class="gw-runtime-d">Neither deletes the lane, its branch or its worktree.</p>`;
     return `<aside class="gw-runtime" data-gw-runtime data-posture="CONNECTED">
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">${esc(who)} connected${esc(slotNote)}</p>
@@ -938,7 +991,21 @@ export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
       <div class="gw-work-h">Runtime</div>
       <p class="gw-runtime-line">${esc(posture.headline || "Running")}${esc(slotNote)}</p>
       <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-suspend data-gw-confirm="1" data-lane-id="${id}">Suspend provider</button>
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
+      </div>
+      <p class="gw-runtime-d">This lane is working — suspending interrupts it. Neither action deletes the lane, its branch or its worktree.</p>
+    </aside>`;
+  }
+  if (posture.state === "PROVIDER_SUSPENDED") {
+    const q = lane?.execution_run?.provider_suspension?.resume_state?.question || null;
+    return `<aside class="gw-runtime" data-gw-runtime data-posture="PROVIDER_SUSPENDED">
+      <div class="gw-work-h">Runtime</div>
+      <p class="gw-runtime-line">Provider suspended${esc(slotNote)}</p>
+      <p class="gw-runtime-d">This lane is waiting on you. Its agent was stopped so another lane could run — the question, conversation, run, worktree and branch are all kept. Replying resumes it automatically.</p>
+      ${q ? `<p class="gw-runtime-d gw-runtime-q">${esc(String(q).split("\n")[0].slice(0, 160))}</p>` : ""}
+      <div class="gw-runtime-actions">
+        <button type="button" class="btn sm" data-gw-provider-resume data-lane-id="${id}">Resume provider</button>
       </div>
     </aside>`;
   }

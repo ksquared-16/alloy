@@ -17,7 +17,13 @@ import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
-export const EXECUTION_RUN_MAX_LANES = 32;
+/**
+ * Storage bound on run HISTORY, not a ceiling on lanes. Durable work is not
+ * scarce (see provider-capacity.mjs), so this is generous and is about disk,
+ * not concurrency. Lanes beyond it keep working; only their oldest history is
+ * pruned.
+ */
+export const EXECUTION_RUN_MAX_LANES = 256;
 export const EXECUTION_RUN_MAX_PER_LANE = 16;
 export const EXECUTION_RUN_MAX_TRANSITIONS = 40;
 export const EXECUTION_RUN_SUMMARY_MAX = 2000;
@@ -370,6 +376,7 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     // in full — a truncation here would defeat the whole contract.
     agent_report: run.agent_report || null,
     agent_report_count: Array.isArray(run.agent_reports) ? run.agent_reports.length : 0,
+    provider_suspension: run.provider_suspension || null,
   };
   if (run.state === "ABANDONED") {
     const probe = executionRunRecoverability(run);
@@ -542,6 +549,7 @@ export function createQueuedRun({
     delivery: { acknowledged: false, provider: null, error: null, at: null },
     agent_report: null,
     agent_reports: [],
+    provider_suspension: null,
     transitions: [],
     updated_at: iso(nowMs),
   };
@@ -694,6 +702,12 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     }
     if (fields.false_completion !== undefined) {
       found.false_completion = fields.false_completion || null;
+    }
+    // Provider suspension (provider-suspension.mjs): the durable record of a
+    // parked lane whose process was put down — question, resumable session and
+    // correlation baseline, all kept so the work survives the computation.
+    if (fields.provider_suspension !== undefined) {
+      found.provider_suspension = fields.provider_suspension || null;
     }
     // Structured agent reports (execution-run-report.mjs). Stored verbatim:
     // the user-facing message must never be shortened on its way to disk.

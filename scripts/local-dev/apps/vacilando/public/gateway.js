@@ -1327,6 +1327,40 @@ async function show(r) {
   }
 }
 
+/**
+ * Suspend or resume the provider on a lane. Neither deletes durable work; the
+ * canonical lifecycle owner enforces that, this just asks.
+ */
+async function providerLifecycle(laneId, action) {
+  const id = laneId || G.selected;
+  if (!id || G.releasing) return;
+  G.releasing = true;
+  G.notice = { kind: "idle", text: action === "suspend" ? "Suspending the agent…" : "Resuming the agent…" };
+  paint();
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/provider/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(action === "suspend" ? { confirm: true } : {}),
+    });
+    const result = await r.json();
+    G.notice = result?.ok
+      ? {
+        kind: "ok",
+        text: action === "suspend"
+          ? "Agent suspended. The lane, branch, worktree and conversation are kept — replying resumes it."
+          : "Agent resuming in the same worktree and session.",
+      }
+      : { kind: "err", text: View.providerLifecycleErrorText(result?.error, action) };
+    try { await fetchLane(id); } catch { /* */ }
+    try { await fetchLanes(); } catch { /* */ }
+  } catch {
+    G.notice = { kind: "err", text: `Could not ${action} the agent.` };
+  }
+  G.releasing = false;
+  paint();
+}
+
 async function releaseRuntime() {
   const id = G.selected;
   if (!id || G.releasing) return;
@@ -1631,6 +1665,20 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     G.notice = { kind: "ok", text: "Lane stays running for follow-up work." };
     paint();
+    return;
+  }
+  const providerBtn = e.target?.closest?.("[data-gw-provider-suspend],[data-gw-provider-resume]");
+  if (providerBtn) {
+    e.preventDefault();
+    e.stopPropagation();
+    const suspend = providerBtn.hasAttribute("data-gw-provider-suspend");
+    // Interrupting live work is the operator's call to make explicitly. A
+    // parked lane needs no confirmation — nothing is interrupted.
+    if (suspend && providerBtn.getAttribute("data-gw-confirm") === "1"
+        && !window.confirm("This lane is working. Suspend its agent anyway?\n\nThe lane, branch, worktree and conversation are all kept.")) {
+      return;
+    }
+    providerLifecycle(providerBtn.getAttribute("data-lane-id"), suspend ? "suspend" : "resume");
     return;
   }
   const releaseRuntimeBtn = e.target?.closest?.("[data-gw-runtime-release]");

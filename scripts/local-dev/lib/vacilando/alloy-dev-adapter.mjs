@@ -162,6 +162,30 @@ export function sprintSlugFromLaneName(name, laneId) {
  * lane discovery already reads. A worktree counts as running an agent only when
  * a live pane sits inside it AND that pane looks like an agent.
  */
+/**
+ * How many FIXED placement slots exist. These map to the permanent ports
+ * (3011–3016) and the legacy `alloy-sprint-*` commands. A lane or worktree
+ * without a slot is entirely valid — most of them have none.
+ */
+export const FIXED_SLOT_RANGE = 6;
+
+/**
+ * A tmux session name tmux will actually accept, matching the allowlist
+ * discovery uses (`^alloy-[a-z0-9]+(-[a-z0-9]+)*$`). Anything the source name
+ * contributes that is not a lowercase alphanumeric becomes a separator, and
+ * empty results yield null rather than a session that can never be found.
+ */
+export function tmuxSessionNameFor(worktreeName) {
+  const base = String(worktreeName || "")
+    .replace(/^wt\d+-/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return base ? `alloy-${base}` : null;
+}
+
 export function agentBearingWorktreePaths(providerPanes = []) {
   const paths = new Set();
   for (const pane of providerPanes || []) {
@@ -205,7 +229,12 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
     if (String(m.lifecycle || "").toLowerCase() === "finished") return false;
     return Boolean(m.path && existsSync(m.path));
   });
-  const freeSlots = Math.max(0, 6 - occupied.length);
+  // Slots are a PLACEMENT identifier — for governed fixed ports and the legacy
+  // sprint commands — not the upper bound on durable work. Six slots never
+  // meant six workspaces, and `no_free_slot` was refusing new lanes on that
+  // reading. Free slots are still reported (a fixed-port task needs one) but
+  // running out of them no longer blocks admission: see FIXED_SLOT_RANGE.
+  const freeSlots = Math.max(0, FIXED_SLOT_RANGE - occupied.length);
   const maxProviders = Number(process.env.ALLOY_MAX_ACTIVE_PROVIDERS || 3);
 
   let activeProviders;
@@ -237,13 +266,18 @@ export function assessProvisionCapacity({ cfg = null, metadata = null, providerP
   }
 
   const blockers = [];
-  if (freeSlots <= 0) blockers.push("no_free_slot");
+  // A full slot table means no more FIXED-PORT placements are available. It
+  // does not mean the machine cannot hold another lane, another worktree, or
+  // another agent, so it is reported and no longer blocks.
   if (activeProviders >= maxProviders) blockers.push("provider_capacity");
   return {
     ok: blockers.length === 0,
     available: blockers.length === 0,
     free_slots: freeSlots,
     occupied_slots: occupied.length,
+    // Reported so a fixed-port task can see it; never a concurrency ceiling.
+    fixed_slot_range: FIXED_SLOT_RANGE,
+    fixed_slots_exhausted: freeSlots <= 0,
     active_providers: activeProviders,
     max_providers: maxProviders,
     // Who is actually holding the capacity, so a refusal can name them.
@@ -290,9 +324,15 @@ export async function provisionLaneBinding({ lane, run } = {}) {
     return { ok: false, error: out.stderr?.slice(0, 400) || out.error || "sprint_start_failed", created: null };
   }
   const slot = Number((out.stdout.match(/slot:\s+(\d+)/i) || [])[1]);
-  const worktree = (out.stdout.match(/worktree:\s+(\S+)/i) || [])[1] || null;
   const path = (out.stdout.match(/path:\s+(\S+)/i) || [])[1] || null;
   const branch = (out.stdout.match(/Branch:\s+(\S+)/i) || [])[1] || null;
+  // The PATH is authoritative for the name. Scraping a "worktree:" line off the
+  // toolkit's output produced the literal token "name:" on this host, which then
+  // became the tmux session "alloy-name:" — a name tmux cannot have, so the
+  // provider could never start in the lane that was just provisioned for it.
+  const scraped = (out.stdout.match(/worktree:\s+(\S+)/i) || [])[1] || null;
+  const worktree = (path ? basename(path) : null)
+    || (scraped && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(scraped) ? scraped : null);
   return {
     ok: true,
     created: {
@@ -308,7 +348,7 @@ export async function provisionLaneBinding({ lane, run } = {}) {
       worktree_path: path,
       worktree_name: worktree,
       branch,
-      tmux_session: worktree ? `alloy-${String(worktree).replace(/^wt\d+-/, "").slice(0, 40)}` : null,
+      tmux_session: tmuxSessionNameFor(worktree),
       slot: Number.isInteger(slot) ? slot : null,
       provider,
     },

@@ -308,13 +308,43 @@ async function hostProviderPanes() {
   }
 }
 
+/**
+ * The provider-capacity verdict, from live processes correlated to lanes.
+ *
+ * Before asking, free any seat that is only being held by a parked
+ * conversation: a lane waiting on the operator past its grace period does not
+ * need its process, and holding one is what kept a queued lane from starting.
+ */
 async function canProvisionNow(root) {
   if (capacityImpl) return capacityImpl({ root });
-  const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
-  // Count what is RUNNING, not what a metadata file last claimed. Stale
-  // lifecycle records were refusing new lanes for capacity nothing was using.
-  const providerPanes = await hostProviderPanes();
-  return assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
+  const panes = await hostProviderPanes();
+  const { listDurableLanes } = await import("./development-lane.mjs");
+  const { listCurrentAgentSessions } = await import("./agent-session.mjs");
+  const { assessProviderCapacity } = await import("./provider-capacity.mjs");
+  const { reconcileParkedProviders, suspendedLaneIds } = await import("./provider-suspension.mjs");
+
+  let lanes = [];
+  try { lanes = listDurableLanes(root) || []; } catch { lanes = []; }
+  try { await reconcileParkedProviders({ lanes, root }); } catch { /* seats stay held; admission just waits */ }
+
+  let sessions = [];
+  try { sessions = listCurrentAgentSessions(root) || []; } catch { sessions = []; }
+  const cap = assessProviderCapacity({
+    panes,
+    lanes,
+    sessions,
+    suspendedLaneIds: suspendedLaneIds(lanes.map((l) => ({
+      ...l,
+      agent_session: sessions.find((s) => s.lane_id === l.lane_id) || null,
+    }))),
+  });
+  if (cap.degraded) {
+    // Live inspection is unavailable. Fall back to metadata, conservatively.
+    const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
+    const fallback = assessProvisionCapacity({ root });
+    return { ...fallback, degraded: true, counted_from: "metadata_degraded" };
+  }
+  return cap;
 }
 
 async function provisionBinding(lane, run, rec) {
