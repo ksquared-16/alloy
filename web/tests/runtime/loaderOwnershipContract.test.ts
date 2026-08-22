@@ -53,11 +53,38 @@ describe("communications reference vocabularies have one loader owner", () => {
         expect(s).not.toMatch(/await fetch\(`\$\{STATUS_OPTIONS_API\}/);
     });
 
-    it("the MUTABLE lists are deliberately NOT deduped — a save must never read a TTL cache", () => {
-        const s = src();
-        // The announcements list is reloaded after every mutation in this workspace.
-        expect(s).toMatch(/await fetch\(ANNOUNCEMENTS_API, \{ credentials: "include" \}\)/);
-        expect(s).toContain("Deliberately NOT applied to the announcements list");
+    it("the MUTABLE lists may use dedupe ONLY because every mutation busts it first", () => {
+        /*
+         * This assertion is deliberately the inverse of its earlier form. The lists were left raw
+         * while there was no bust seam, because a plain TTL would have shown an operator their own
+         * save missing. Now the seam exists, so bounded reuse is earned rather than assumed — and the
+         * guard has to check the thing that earns it, not the absence of caching.
+         */
+        const a = src();
+        expect(a).toContain("dedupeAdminFetchWithTtl(ANNOUNCEMENTS_API");
+        // Every reload that follows a mutation busts the owner first.
+        const anBusts = (a.match(/bustCommunicationsAnnouncementsFetchDedupe\(\);\n\s+await loadList\(\);/g) ?? []).length;
+        expect(anBusts).toBeGreaterThanOrEqual(4);
+
+        const t = read("app/adminV2/communications/TemplatesWorkspace.tsx");
+        expect(t).toContain("dedupeAdminFetchWithTtl(");
+        const tplBusts = (t.match(/bustCommunicationsTemplatesFetchDedupe\(\);\n\s+await loadList\(\);/g) ?? []).length;
+        expect(tplBusts).toBeGreaterThanOrEqual(3);
+    });
+
+    it("a forced warm refresh is never served from the coalescing layer", () => {
+        // A force a cache can satisfy is not a force.
+        const s = read("lib/communications/v2/communicationsWorkspaceWarmCache.ts");
+        expect(s).toContain("opts?.force ? 0 : WARM_COALESCE_TTL_MS");
+    });
+
+    it("the warm cache fetches through the SAME owner as its consumers", () => {
+        // Two owners for one resource is what produced the residual x2.
+        const s = read("lib/communications/v2/communicationsWorkspaceWarmCache.ts");
+        expect(s).toContain("dedupeAdminFetchWithTtl(TEMPLATES_API");
+        expect(s).toContain("dedupeAdminFetchWithTtl(ANNOUNCEMENTS_API");
+        expect(s).toContain("dedupeAdminFetchWithTtl(PROGRAM_OPTIONS_API");
+        expect(s).not.toMatch(/\bfetch\(TEMPLATES_API,/);
     });
 
     it("the warm short-circuit is preserved, not replaced by the dedupe", () => {
