@@ -88,3 +88,78 @@ invalidation/read owners — never by rebuilding a page and never by introducing
 
 Every convergence fix is measured for request impact: one mutation must not become twenty
 invalidations, a workspace reload, or a Work Unit recompose. Readiness/warm caches must survive.
+
+---
+
+# Promotion (2026-08-22)
+
+## Candidate
+
+| | |
+|---|---|
+| branch | `agent/claude/5-runtime-performance-ux-completion` |
+| pre-rebase HEAD | `ad5e9f37a` (38 ahead, 56 behind) |
+| rebased onto | `origin/staging` `83e9e3d93` |
+| candidate HEAD | `88eff2534` — 38 commits, 0 behind |
+| conflicts | **none** — my 47 files vs staging's 154 had **zero overlap** |
+| rebase integrity | all 47 files byte-identical pre/post rebase |
+| migrations | **none on either side** — no version-collision risk |
+| lockfile | unchanged; only two root `package.json` script additions |
+
+## Bounded live smoke on the rebased candidate
+
+Twelve steps, managed runtime on `:3015` bound to the rebased tree.
+
+| Assertion | Result |
+|---|---|
+| no browser reload | **PASS** — every in-app interaction 0 document loads (the non-zero counts are the harness's own `goto`s) |
+| no stale mounted projection | **PASS** — 0 RSC across all twelve steps |
+| no duplicate candidate recreation | **PASS** — 18 active / 20 total, unchanged |
+| pins intact | **PASS** — Wrigley Kurzman + PassA Kid both present |
+| PassA still fail-closed | **PASS** — exactly one duplicate subject, unreconciled by design |
+| Firefly clean | **PASS** — 17 rows, `operational`; zero probe tokens |
+
+Convergence costs held: child switch 1 request, Activity 3, Work tab 2, message command 5,
+**Operations reopen 0** (warm reuse, Law 46).
+
+## Remaining debt carried past promotion
+
+Nothing below blocks this promotion; each is owned and evidenced.
+
+| # | Item | Class | Owner |
+|---|---|---|---|
+| 1 | **PassA duplicate placement candidate** — contested on pin ownership, `wait_since` seniority and cohort/section membership *simultaneously*; `reconcilePlacementDuplicates` returns `CONTESTED_DEFERRED` and refuses to guess a survivor | **CONTESTED / fail-closed — not a runtime-certification blocker** | Director decision |
+| 2 | Speculative drawer-VM prefetch 404s on `/workspace` — 4× per waitlist journey; the only HTTP ≥400 class in the smoke | bounded waste | runtime/preload owner |
+| 3 | **Inherited React duplicate-key warning** in the Current Work activity timeline: keys are `${label}-${occurredAt}` at *minute* granularity, so two identical activities in one minute collide (18× in a three-step journey). All four renderers are **byte-identical to `origin/staging`** — pre-existing, newly documented here | cosmetic correctness | Focus Panel card owner |
+| 4 | `/api/admin/records/children` ~3.3–4.5 s | performance — largest single number left | Records owner |
+| 5 | True-cold Work Unit ~11,708 ms | separate performance class — re-profile first | runtime |
+| 6 | Queue summaries have no invalidation trigger (two 120 s polls) | convergence gap, matrix §4 | runtime |
+| 7 | BOS rail direct-path late re-park (placement/CLS) | product placement decision | BOS rail owner |
+| 8 | Brokered `vac run typecheck` OOM — pins 4096 against a package that needs 8192; `typecheck:tests` at 8192 passes | tooling | validation broker |
+| 9 | `/organization/access` convergence | active lane — measured, not modified | **PR #483** |
+| 10 | Vacilando abandoned execution-run checkpoints | tooling | Vacilando |
+
+## The Firefly incident — recorded, not minimised
+
+This program **caused a data regression on Firefly and then repaired it under Director approval.**
+
+The placement-candidate identity migration was meant to move a candidate's key off the mutable
+cohort. Its move helper wrote the cohort **as well as** the key, and because the lifecycle hook ran
+on a **read** path, a single Work View load rewrote **15 candidates'** `program_room_cohort_key` to
+`unknown_program_room` — re-sectioning the waitlist from 12/1/2/1/1 to 2/14/1.
+
+What was done, in order: stopped the bleeding (the move now writes identity only, and repair was
+removed from every read path); froze **Law 39**; built a restoration sourced *only* from the
+immutable `metadata.cohort_resolution` evidence already on each row — **no DOB, age or heuristic
+inference**, with unresolvable rows to be reported rather than guessed; obtained explicit Director
+approval for exactly 15 enumerated candidates and exactly two mutable columns; executed `DRY_RUN`
+then `APPLY`, fail-closed on every precondition (the `UPDATE` re-asserts the damaged value in its
+`WHERE`). Result: **15/15 restored, zero diffs on immutable fields, both pins intact, three
+subsequent reads produced zero mutation.**
+
+Two of my own reports during the incident were wrong and are corrected in the matrix: I first said
+14 rows were damaged (it was **15** — I missed Wrigley and Lennon and wrongly counted Tomas Rivera),
+and I misclassified the pin effect as class A from a fallback code path (it is **class C**).
+
+The durable lesson is the guard that now ships with it: an identity migration may not mutate a
+projection field, and a repair may never run from a read path.
