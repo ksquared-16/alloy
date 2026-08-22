@@ -357,6 +357,8 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     worker_report_count: Number(run.worker_report_count) || 0,
     recovery_state: run.recovery_state || null,
     recovered_count: Number(run.recovered_count) || 0,
+    output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    delivery: run.delivery && typeof run.delivery === "object" ? run.delivery : null,
   };
   if (run.state === "ABANDONED") {
     const probe = executionRunRecoverability(run);
@@ -371,6 +373,17 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
 export function lastInstructionFromRun(run) {
   if (!run?.instruction) return null;
   if (!run.started_at) {
+    if (run.state === "FAILED") {
+      return {
+        instruction: run.instruction,
+        delivered_at: null,
+        status: "failed",
+        instruction_size: run.instruction.length,
+        run_id: run.run_id,
+        run_state: run.state,
+        output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+      };
+    }
     if (run.state !== "QUEUED") return null;
     return {
       instruction: run.instruction,
@@ -391,6 +404,7 @@ export function lastInstructionFromRun(run) {
     run_id: run.run_id,
     run_state: run.state,
     output_fingerprint_at_send: run.output_fingerprint_at_send || null,
+    delivery: run.delivery && typeof run.delivery === "object" ? run.delivery : null,
   };
 }
 
@@ -514,6 +528,7 @@ export function createQueuedRun({
     node_id: localNodeId(root),
     mission_id: getDurableLane(id, root)?.mission_id || null,
     output_fingerprint_at_send: null,
+    delivery: { acknowledged: false, provider: null, error: null, at: null },
     transitions: [],
     updated_at: iso(nowMs),
   };
@@ -651,6 +666,14 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
       if (!text.trim()) return { ok: false, error: "instruction_empty" };
       if (text.length > LANE_INSTRUCTION_MAX) return { ok: false, error: "instruction_too_large" };
       found.instruction = text;
+    }
+    if (fields.delivery !== undefined && fields.delivery && typeof fields.delivery === "object") {
+      found.delivery = { ...(found.delivery || {}), ...fields.delivery };
+    }
+    if (fields.output_fingerprint_at_send !== undefined) {
+      found.output_fingerprint_at_send = fields.output_fingerprint_at_send
+        ? String(fields.output_fingerprint_at_send)
+        : found.output_fingerprint_at_send;
     }
     found.updated_at = iso(nowMs);
     writeStore(putRun(store, found), root);

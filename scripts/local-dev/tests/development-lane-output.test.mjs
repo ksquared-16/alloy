@@ -25,6 +25,9 @@ import {
   normalizeOutputMode,
   parsePaneFacts,
   resolvedTmuxTarget,
+  bindOutputToRun,
+  cursorExecutableTransport,
+  CURSOR_DELIVERY_UNAVAILABLE,
 } from "../lib/vacilando/lanes.mjs";
 
 const IDENTITY_WT = "/Users/Kelly/Code/alloy-worktrees/wt1-access-identity-v2";
@@ -380,6 +383,65 @@ await test("Cursor transcript collector advances when the session file grows", (
   const second = collectLatestCursorResponse({ cwd, sessionId: sid, projectsDir: projects });
   assert.equal(second.text, "Cursor turn two — live");
   assert.equal(second.mtime_ms >= first.mtime_ms, true);
+});
+
+await test("undelivered Cursor run does not reuse prior transcript as live output", () => {
+  const prior = {
+    ok: true,
+    available: true,
+    text: "old Cursor reply",
+    fingerprint: "abc",
+    run_id: null,
+  };
+  const withheld = bindOutputToRun(prior, {
+    run_id: "erun_new",
+    state: "QUEUED",
+    delivery: { acknowledged: false },
+  });
+  assert.equal(withheld.available, false);
+  assert.equal(withheld.text, null);
+  assert.equal(withheld.awaiting, true);
+  assert.equal(withheld.withheld_prior_output, true);
+  assert.equal(withheld.error, "awaiting_provider_output");
+  const failed = bindOutputToRun(prior, {
+    run_id: "erun_new",
+    state: "FAILED",
+    state_reason: CURSOR_DELIVERY_UNAVAILABLE,
+    delivery: { acknowledged: false },
+  });
+  assert.equal(failed.available, false);
+  assert.equal(failed.text, null);
+  assert.equal(failed.error, CURSOR_DELIVERY_UNAVAILABLE);
+  const advanced = bindOutputToRun({ ...prior, fingerprint: "def", text: "new work" }, {
+    run_id: "erun_live",
+    state: "EXECUTING",
+    started_at: "2026-08-22T14:00:00.000Z",
+    delivery: { acknowledged: true },
+    output_fingerprint_at_send: "abc",
+  });
+  assert.equal(advanced.available, true);
+  assert.equal(advanced.text, "new work");
+  const staleLive = bindOutputToRun(prior, {
+    run_id: "erun_live",
+    state: "EXECUTING",
+    started_at: "2026-08-22T14:00:00.000Z",
+    delivery: { acknowledged: true },
+    output_fingerprint_at_send: "abc",
+  });
+  assert.equal(staleLive.awaiting, true);
+  assert.equal(staleLive.text, null);
+});
+
+await test("Cursor executable transport requires a live tmux pane, not a transcript session", () => {
+  const missing = cursorExecutableTransport({
+    lane_id: "lane_aaaaaaaaaaaa",
+    worktree: { managed: true, path: IDENTITY_WT },
+    tmux: { alive: false },
+    binding: { provider: "cursor" },
+  });
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error, CURSOR_DELIVERY_UNAVAILABLE);
+  assert.equal(missing.observation_only, true);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

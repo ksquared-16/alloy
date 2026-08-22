@@ -26,7 +26,7 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction } from "./lanes.mjs";
+import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } from "./lanes.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -1224,8 +1224,11 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   }
 
   const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
+  const preferred = normalizeExecutionProvider(rec?.preferred_provider, bound || "claude");
   let provider;
-  if (bound === "cursor") {
+  if (preferred === "claude") {
+    provider = "claude";
+  } else if (preferred === "cursor" || bound === "cursor") {
     provider = "cursor";
   } else if (laneClaudePresent(found)) {
     provider = "claude";
@@ -1233,6 +1236,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     provider = laneProviderKind(found, rec);
   }
   if (provider === "cursor") {
+    const transport = cursorExecutableTransport(found);
+    if (!transport.ok) {
+      return {
+        ok: false,
+        error: CURSOR_DELIVERY_UNAVAILABLE,
+        start_session_implemented: true,
+        observation_only: true,
+      };
+    }
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
       if (existing.state !== "ACTIVE") {

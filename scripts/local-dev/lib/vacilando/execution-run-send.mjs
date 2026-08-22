@@ -8,6 +8,7 @@
  *
  * One active non-terminal run per lane. NEEDS_INPUT continues the same run.
  */
+import { createHash } from "node:crypto";
 import { afterLaneInstructionDelivered } from "./lane-notify.mjs";
 import {
   activeRunForLane,
@@ -35,12 +36,39 @@ function decorate(out, run, extra = {}) {
   return out;
 }
 
+function instructionFingerprint(text) {
+  return createHash("sha256").update(String(text || ""), "utf8").digest("hex");
+}
+
+async function markDeliveryAcknowledged(run, out, {
+  nowMs,
+  root,
+  provider = null,
+  instruction = null,
+} = {}) {
+  const { patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  patchRunFields(run.run_id, {
+    delivery: {
+      acknowledged: true,
+      provider: provider || run.delivery?.provider || null,
+      at: out?.delivered_at || new Date(nowMs).toISOString(),
+      worktree_path: out?.worktree_path || run.worktree_path || null,
+      instruction_fingerprint: instruction
+        ? instructionFingerprint(instruction)
+        : (run.delivery?.instruction_fingerprint || null),
+      provider_session_id: out?.session_id || out?.provider_session_id || null,
+      error: null,
+    },
+  }, { nowMs, root });
+  return getExecutionRun(run.run_id, root) || run;
+}
+
 export function laneInstructionHttpStatus(out) {
   if (out?.ok) return 200;
   const e = out?.error;
   if (e === "invalid_lane_id" || e === "instruction_empty" || e === "instruction_too_large" || e === "unexpected_control_field" || e === "missing_lane_id") return 400;
   if (e === "send_in_progress" || e === "duplicate_send" || e === "current_run_active") return 409;
-  if (e === "pane_unavailable" || e === "target_mismatch" || e === "delivery_failed") return 503;
+  if (e === "pane_unavailable" || e === "target_mismatch" || e === "delivery_failed" || e === "cursor_delivery_unavailable") return 503;
   return 404;
 }
 
@@ -50,13 +78,16 @@ function bindingExists(rec) {
 
 async function laneHasEligibleSession(laneId) {
   try {
-    const { getDevelopmentLane, inferAgentPresence } = await import("./lanes.mjs");
+    const { getDevelopmentLane } = await import("./lanes.mjs");
     const { laneClaudePresent } = await import("./agent-session-lifecycle.mjs");
     const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
     if (!found?.ok) return false;
-    const preferred = String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase();
+    const preferred = String(
+      found.lane?.preferred_provider || found.lane?.binding?.provider || "",
+    ).toLowerCase();
     if (preferred === "cursor") {
-      return inferAgentPresence(found.lane?.tmux || {}, { provider: "cursor" }) === "present";
+      const { cursorExecutableTransport } = await import("./lanes.mjs");
+      return cursorExecutableTransport(found.lane).ok;
     }
     return Boolean(laneClaudePresent(found.lane));
   } catch {
@@ -132,6 +163,41 @@ function refused(laneId, error, nowMs, size, run = null) {
   }, run);
 }
 
+async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
+  const { transitionExecutionRun, patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
+  const { CURSOR_DELIVERY_UNAVAILABLE, CURSOR_DELIVERY_UNAVAILABLE_SUMMARY } = await import("./lanes.mjs");
+  patchRunFields(run.run_id, {
+    delivery: {
+      acknowledged: false,
+      provider: "cursor",
+      error: CURSOR_DELIVERY_UNAVAILABLE,
+      at: new Date(nowMs).toISOString(),
+      instruction_fingerprint: instructionFingerprint(run.instruction),
+    },
+  }, { nowMs, root });
+  const failed = transitionExecutionRun(run.run_id, "FAILED", {
+    reason: CURSOR_DELIVERY_UNAVAILABLE,
+    origin: "system",
+    nowMs,
+    root,
+    completion_report: { summary: CURSOR_DELIVERY_UNAVAILABLE_SUMMARY },
+  });
+  try {
+    const { setLanePreferredProvider } = await import("./development-lane.mjs");
+    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
+  } catch { /* retry with Claude must still be possible */ }
+  const next = failed.ok ? failed.run : (getExecutionRun(run.run_id, root) || run);
+  return decorate({
+    ok: false,
+    schema_version: "vacilando.lane.send.v1",
+    lane_id: rec.lane_id,
+    status: "failed",
+    error: CURSOR_DELIVERY_UNAVAILABLE,
+    instruction_size: size,
+    delivered_at: null,
+  }, next);
+}
+
 /**
  * Gateway / API entry. One active non-terminal run per lane.
  * NEEDS_INPUT: operator send continues the same run (decision reply).
@@ -202,6 +268,14 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     if (!(out.ok && out.status === "delivered")) {
       return decorate(out, active);
     }
+    try {
+      await markDeliveryAcknowledged(active, out, {
+        nowMs,
+        root,
+        provider: opts.provider || null,
+        instruction: text,
+      });
+    } catch { /* ack fields must not block EXECUTING */ }
     const continued = transitionExecutionRun(active.run_id, "EXECUTING", {
       reason: "operator_input",
       origin: "operator",
@@ -241,8 +315,27 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   let run = created.run;
   try {
     const { getDurableLane } = await import("./development-lane.mjs");
+    const { getDevelopmentLane, cursorExecutableTransport } = await import("./lanes.mjs");
+    const { normalizeExecutionProvider } = await import("./execution-providers.mjs");
     const rec = getDurableLane(laneId, root);
     if (rec) {
+      const selected = normalizeExecutionProvider(
+        opts.provider || rec.preferred_provider || rec.binding?.provider,
+        rec.binding?.provider || "claude",
+      );
+      if (selected === "cursor") {
+        const found = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
+        const transport = cursorExecutableTransport(found?.lane || {
+          lane_id: rec.lane_id,
+          worktree: { managed: Boolean(rec.binding?.worktree_path), path: rec.binding?.worktree_path },
+          tmux: { alive: false },
+          binding: rec.binding,
+          preferred_provider: rec.preferred_provider,
+        });
+        if (!transport.ok) {
+          return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+        }
+      }
       const eligible = await laneHasEligibleSession(rec.lane_id);
       if (!eligible) {
         const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
@@ -257,6 +350,14 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   });
 
   if (out.ok && out.status === "delivered") {
+    try {
+      run = await markDeliveryAcknowledged(run, out, {
+        nowMs,
+        root,
+        provider: opts.provider || null,
+        instruction: text,
+      });
+    } catch { /* ack fields must not block EXECUTING */ }
     const exec = transitionExecutionRun(run.run_id, "EXECUTING", {
       reason: "instruction_delivered",
       origin: "operator",
@@ -286,6 +387,14 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     const offlineMiss = rec && (out.error === "pane_unavailable" || out.error === "target_mismatch")
       && !(await laneHasEligibleSession(rec.lane_id));
     if (offlineMiss) {
+      const { normalizeExecutionProvider } = await import("./execution-providers.mjs");
+      const selected = normalizeExecutionProvider(
+        opts.provider || rec.preferred_provider || rec.binding?.provider,
+        rec.binding?.provider || "claude",
+      );
+      if (selected === "cursor") {
+        return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+      }
       const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
       return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
     }
@@ -312,7 +421,11 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
   const { getExecutionRun } = await import("./execution-run.mjs");
   const run = getExecutionRun(runId, root);
   if (!run) return { ok: false, error: "run_not_found" };
-  if (run.state === "EXECUTING" || run.started_at) {
+  if (run.delivery && typeof run.delivery === "object") {
+    if (run.delivery.acknowledged === true) {
+      return { ok: true, already_delivered: true, run };
+    }
+  } else if (run.state === "EXECUTING" || run.started_at) {
     return { ok: true, already_delivered: true, run };
   }
   if (run.state !== "QUEUED") return { ok: false, error: "not_queued", run };
@@ -333,6 +446,15 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     dedupeKey: `admission:${run.run_id}`,
   });
   if (out.ok && out.status === "delivered") {
+    let next = run;
+    try {
+      next = await markDeliveryAcknowledged(run, out, {
+        nowMs,
+        root,
+        provider: opts.provider || null,
+        instruction: run.instruction,
+      });
+    } catch { /* ack fields must not block EXECUTING */ }
     const exec = transitionExecutionRun(run.run_id, "EXECUTING", {
       reason: "admission_delivered",
       origin: "governor",
@@ -340,7 +462,7 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
       root,
       worktreePath: out.worktree_path || opts.worktreePath || null,
     });
-    return decorate(out, exec.ok ? exec.run : run);
+    return decorate(out, exec.ok ? exec.run : next);
   }
   return { ok: false, deferred: true, error: out.error || "delivery_failed", delivery: out, run };
 }

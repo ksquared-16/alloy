@@ -57,6 +57,7 @@ import {
   getExecutionRun,
   isCertificationInstruction,
   isTerminalRunState,
+  patchRunFields,
   publicExecutionRun,
   readExecutionRunStore,
   transitionExecutionRun,
@@ -64,7 +65,7 @@ import {
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, setLanePreferredProvider } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -94,6 +95,15 @@ export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
  * movement, and no heartbeat for this long — never on silence alone.
  */
 export const ABANDON_AFTER_HEARTBEAT_MS = 4 * 60 * 60 * 1000;
+/** QUEUED→EXECUTING requires a provider ack. Fail closed if none arrives. */
+export const DELIVERY_ACK_TIMEOUT_MS = 30 * 1000;
+
+export function runHasDeliveryAck(run) {
+  if (run?.delivery && typeof run.delivery === "object") {
+    return run.delivery.acknowledged === true;
+  }
+  return Boolean(run?.started_at);
+}
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -468,6 +478,59 @@ export function reconcileStaleExecutionRuns({
     if (out.ok && !out.noop) abandoned.push(out.run);
   }
   return { ok: true, abandoned, count: abandoned.length };
+}
+
+/**
+ * Fail runs that never received a provider delivery acknowledgement.
+ * Cursor observation (transcript readability) is not delivery. Claude QUEUED
+ * waiting for a real agent session is not failed here.
+ */
+export function reconcileUndeliveredRuns({
+  root,
+  nowMs = Date.now(),
+} = {}) {
+  const store = readExecutionRunStore(root);
+  const failed = [];
+  for (const id of Object.keys(store.lanes || {})) {
+    const pack = store.lanes[id];
+    if (!pack?.current_run_id) continue;
+    const run = (pack.runs || []).find((r) => r.run_id === pack.current_run_id);
+    if (!run || isTerminalRunState(run.state) || runHasDeliveryAck(run)) continue;
+    const rec = getDurableLane(run.lane_id, root);
+    const selected = String(
+      run.delivery?.provider || rec?.preferred_provider || rec?.binding?.provider || "",
+    ).toLowerCase();
+    const createdMs = parseMs(run.created_at) ?? parseMs(run.updated_at) ?? nowMs;
+    const timedOut = nowMs - createdMs >= DELIVERY_ACK_TIMEOUT_MS;
+    const cursorUndelivered = selected === "cursor";
+    const executingWithoutAck = run.state === "EXECUTING" && timedOut;
+    if (!cursorUndelivered && !executingWithoutAck) continue;
+    const reason = cursorUndelivered ? "cursor_delivery_unavailable" : "delivery_unacknowledged";
+    const summary = cursorUndelivered
+      ? "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached."
+      : "No provider delivery acknowledgement for this instruction.";
+    patchRunFields(run.run_id, {
+      delivery: {
+        ...(run.delivery && typeof run.delivery === "object" ? run.delivery : {}),
+        acknowledged: false,
+        provider: cursorUndelivered ? "cursor" : (run.delivery?.provider || selected || null),
+        error: reason,
+        at: new Date(nowMs).toISOString(),
+      },
+    }, { nowMs, root });
+    const out = transitionExecutionRun(run.run_id, "FAILED", {
+      reason,
+      origin: "governor",
+      nowMs,
+      root,
+      completion_report: { summary },
+    });
+    if (cursorUndelivered && rec?.lane_id) {
+      try { setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root }); } catch { /* retry with Claude */ }
+    }
+    if (out.ok) failed.push(out.run);
+  }
+  return { ok: true, failed, count: failed.length };
 }
 
 export function closeStaleExecutionRun(runId, {

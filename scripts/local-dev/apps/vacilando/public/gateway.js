@@ -772,7 +772,7 @@ function startOutputPoll(laneId) {
         await fetchOutput(laneId, { mode: "recent" });
         const watching = G.watchRefresh || View.contextRefreshStatus(G.lane)?.kind === "progress";
         const runState = G.lane?.execution_run?.state;
-        const liveRun = ["EXECUTING", "QUEUED", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+        const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
           || (G.burstUntil && Date.now() < G.burstUntil);
         if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
@@ -1252,6 +1252,7 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     const next = providerOpt.getAttribute("data-gw-provider-opt");
     if (next !== "claude" && next !== "cursor") return;
+    if (providerOpt.disabled || providerOpt.getAttribute("aria-disabled") === "true") return;
     const hidden = document.getElementById("gw-composer-provider");
     if (hidden) hidden.value = next;
     document.querySelectorAll("[data-gw-provider-opt]").forEach((btn) => {

@@ -37,6 +37,9 @@ import { collectLatestCursorResponse } from "./providers/cursor/telemetry.mjs";
 export const LANE_SCHEMA = "vacilando.lane.v1";
 export const LANE_OUTPUT_SCHEMA = "vacilando.lane.output.v1";
 export const LANE_SEND_SCHEMA = "vacilando.lane.send.v1";
+export const CURSOR_DELIVERY_UNAVAILABLE = "cursor_delivery_unavailable";
+export const CURSOR_DELIVERY_UNAVAILABLE_SUMMARY =
+  "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached.";
 export const TMUX_SESSION_RE = /^alloy-[a-z0-9]+(-[a-z0-9]+)*$/;
 export const LANE_ID_RE = /^(?:lane_[a-f0-9]{12}|alloy-[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 /** Recent: fast poll / fingerprint. Extended: operator-requested review only. */
@@ -731,16 +734,24 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const lane = found.lane;
   const durableId = lane.lane_id || id;
+  let correlatedRun = lane?.execution_run || lane?.previous_run || null;
+  if (!opts.skipRunCorrelation && !opts.listPanes) {
+    try {
+      const { inspectLaneRun } = await import("./execution-run.mjs");
+      const pack = inspectLaneRun(durableId);
+      correlatedRun = pack?.execution_run || pack?.previous_run || correlatedRun;
+    } catch { /* observation still returns */ }
+  }
 
   if (mode === "latest_response") {
-    return latestResponseForLane(lane, durableId, nowMs, opts);
+    return bindOutputToRun(await latestResponseForLane(lane, durableId, nowMs, opts), correlatedRun);
   }
 
   if (!lane?.tmux?.alive) {
     if (laneOutputProvider(lane) === "cursor") {
-      return cursorTranscriptOutput(lane, durableId, nowMs, { ...opts, mode });
+      return bindOutputToRun(cursorTranscriptOutput(lane, durableId, nowMs, { ...opts, mode }), correlatedRun);
     }
-    return unavailable(durableId, "pane_unavailable", nowMs, { provider: laneOutputProvider(lane) });
+    return bindOutputToRun(unavailable(durableId, "pane_unavailable", nowMs, { provider: laneOutputProvider(lane) }), correlatedRun);
   }
 
   const resolved = resolvedTmuxTarget(lane);
@@ -764,7 +775,7 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const bounded = boundVisibleText(cap.stdout, { maxLines, maxChars });
   const viewportOnly = facts.alternate_screen === true && Number(facts.history_size) === 0;
-  return withOutputIdentity({
+  return bindOutputToRun(withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
@@ -784,7 +795,7 @@ export async function getLaneOutput(laneId, opts = {}) {
     history_limit: facts.history_limit,
     pane_height: facts.pane_height,
     viewport_only: viewportOnly,
-  }, lane, nowMs);
+  }, lane, nowMs), correlatedRun);
 }
 
 // --------------------------------------------------------------------------
@@ -855,6 +866,85 @@ export function validateSendTarget(lane) {
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return { ok: false, error: "pane_unavailable" };
   return { ok: true, target: resolved.target, lane };
+}
+
+/**
+ * Cursor IDE transcripts are observation-only. Send requires a live tmux pane
+ * whose command/title is an executable cursor-agent (or Cursor TUI) process.
+ * An attached conversation UUID is not a delivery transport.
+ */
+export function cursorExecutableTransport(lane) {
+  if (!lane) {
+    return { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: "lane_missing" };
+  }
+  const check = validateSendTarget({
+    ...lane,
+    binding: { ...(lane.binding || {}), provider: "cursor" },
+    preferred_provider: "cursor",
+  });
+  if (!check.ok) {
+    return {
+      ok: false,
+      error: CURSOR_DELIVERY_UNAVAILABLE,
+      detail: check.error,
+      observation_only: true,
+    };
+  }
+  return { ok: true, kind: "tmux_cursor_agent", target: check.target };
+}
+
+function runAcknowledgedDelivery(run) {
+  if (!run) return false;
+  if (run.delivery && typeof run.delivery === "object") {
+    return run.delivery.acknowledged === true;
+  }
+  return Boolean(run.started_at);
+}
+
+export function bindOutputToRun(out, run) {
+  if (!out) return out;
+  if (!run?.run_id) return out;
+  const delivered = runAcknowledgedDelivery(run);
+  const live = ["QUEUED", "EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING"].includes(run.state);
+  if (run.state === "FAILED" && !delivered) {
+    return {
+      ...out,
+      ok: false,
+      available: false,
+      text: null,
+      fingerprint: null,
+      awaiting: false,
+      withheld_prior_output: true,
+      error: run.state_reason || run.delivery?.error || "delivery_failed",
+      run_id: run.run_id,
+    };
+  }
+  if (!delivered && live) {
+    return {
+      ...out,
+      ok: true,
+      available: false,
+      text: null,
+      fingerprint: null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_provider_output",
+      run_id: run.run_id,
+    };
+  }
+  const baseline = run.output_fingerprint_at_send || run.delivery?.output_baseline_fingerprint || null;
+  if (delivered && run.state === "EXECUTING" && baseline && out.fingerprint === baseline) {
+    return {
+      ...out,
+      available: false,
+      text: null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_provider_output",
+      run_id: run.run_id,
+    };
+  }
+  return { ...out, run_id: out.run_id || run.run_id };
 }
 
 function instructionHash(text) {

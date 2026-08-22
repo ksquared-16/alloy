@@ -1338,7 +1338,9 @@ await test("offline bound lane shows Start Session without failing work", () => 
   assert.match(replaced.text, /Instruction updated/);
   const composer = renderComposer({ queueUntilSession: true });
   assert.match(composer, /queue until a session starts/);
-  assert.doesNotMatch(composer, /disabled/);
+  assert.doesNotMatch(composer, /data-gw-send[^>]*disabled/);
+  assert.doesNotMatch(composer, /<textarea[^>]*disabled/);
+  assert.match(composer, /data-gw-provider-opt="cursor"[^>]*disabled/);
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1877,6 +1879,11 @@ await test("queued and connected lanes are not collapsed to Idle or Running", ()
   };
   assert.equal(deriveLaneExecutionPosture(cursorLive).state, "CONNECTED");
   assert.equal(deriveLaneExecutionPosture(cursorLive).label, "Connected");
+  assert.notEqual(canonicalLaneWorkState({
+    ...cursorLive,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }).label, "Working");
+  assert.match(railHtml([cursorLive], cursorLive.lane_id), /read-only/);
   assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
   assert.match(railHtml([cursorLive], cursorLive.lane_id), /Cursor/);
   const leftover = deriveLaneExecutionPosture({
@@ -1904,6 +1911,11 @@ await test("canonical work state maps live execution to Working and stale heartb
   }, { nowMs: now });
   assert.equal(working.label, "Working");
   assert.equal(working.group, "active");
+  const queued = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }, { nowMs: now });
+  assert.notEqual(queued.label, "Working");
   const validating = canonicalLaneWorkState({
     ...identity,
     execution_run: { state: "VALIDATING" },
@@ -1964,6 +1976,7 @@ await test("conversation detail has user and assistant messages with icon copy, 
   assert.match(html, /function ok\(\) \{\}/);
   assert.match(html, /data-gw-provider-opt="claude"/);
   assert.match(html, /data-gw-provider-opt="cursor"/);
+  assert.match(html, /data-gw-provider-opt="cursor"[^>]*disabled/);
   assert.match(html, /data-gw-details/);
   assert.equal(html.includes("Latest assistant response from the session transcript"), false);
   const copyBtn = html.slice(html.indexOf("data-gw-copy") - 120, html.indexOf("data-gw-copy") + 80);

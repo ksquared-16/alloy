@@ -207,6 +207,8 @@ export function deliveryErrorText(error) {
       return "Send was refused: extra targeting fields are not allowed.";
     case "delivery_failed":
       return "Delivery failed. The instruction was not submitted.";
+    case "cursor_delivery_unavailable":
+      return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
     default:
       return error ? `Delivery refused (${error}).` : "Delivery failed.";
   }
@@ -323,7 +325,9 @@ export function laneAgentLabel(lane) {
 
 export function laneProviderLabel(lane) {
   const kind = laneProviderKind(lane);
-  if (kind === "cursor") return "Cursor";
+  if (kind === "cursor") {
+    return Boolean(lane?.tmux?.alive) ? "Cursor" : "Cursor (read-only)";
+  }
   if (kind === "claude") return "Claude";
   if (lane?.tmux?.alive) return "Session";
   return "Offline";
@@ -497,7 +501,7 @@ export function deriveLaneExecutionPosture(lane) {
       queue_position: null,
     };
   }
-  const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(runState);
+  const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING"].includes(runState);
   if (liveAgent || liveRun) {
     const who = laneProviderLabel(lane);
     const waitLabel = run?.resource_wait?.label;
@@ -758,7 +762,7 @@ export function renderLaneRuntimeControls(lane, cap) {
   }
   if (posture.state === "CONNECTED") {
     const who = laneProviderLabel(lane);
-    const release = who === "Cursor" ? "" : `<div class="gw-runtime-actions">
+    const release = laneProviderKind(lane) === "cursor" ? "" : `<div class="gw-runtime-actions">
         <button type="button" class="btn sm" data-gw-runtime-release data-lane-id="${id}">Release execution capacity</button>
       </div>`;
     return `<aside class="gw-runtime" data-gw-runtime data-posture="CONNECTED">
@@ -1520,8 +1524,8 @@ export function renderLaneSessionCallout(lane, extras = {}) {
   const title = "No agent session";
   const detail = atProviderCap
     ? `Claude is at ${cap.active}/${cap.max_active}. Running: ${occupying.join(", ")}. Release one to start this session.`
-    : (who === "Cursor"
-      ? "Existing worktree is connected. Attach this Cursor session to continue work."
+    : (laneProviderKind(lane) === "cursor"
+      ? "Cursor transcript is read-only. Start a Claude session to send instructions."
       : "Existing worktree is connected. Start a persistent Claude session to continue queued work.");
   const btn = `<button type="button" class="btn primary" data-gw-session-start data-lane-id="${esc(lane.lane_id)}">Start Session</button>`;
   return `<aside class="gw-session-callout" data-gw-session-callout>
@@ -1849,6 +1853,7 @@ export function renderComposer({
   idleStart = false,
   queueUntilSession = false,
   provider = null,
+  cursorSendAvailable = false,
 } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
@@ -1857,7 +1862,11 @@ export function renderComposer({
     ? "Write an instruction — it will queue until a session starts…"
     : idleStart ? "Start work — write an instruction…" : "Write an instruction…";
   const sendLabel = idleStart ? "Start" : "Send";
-  const current = provider === "cursor" ? "cursor" : "claude";
+  const current = cursorSendAvailable && provider === "cursor" ? "cursor" : "claude";
+  const cursorDisabled = cursorSendAvailable ? "" : " disabled";
+  const cursorTitle = cursorSendAvailable
+    ? "Send with Cursor"
+    : "Cursor is read-only here: no executable transport is attached";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <div class="gw-composer-box">
@@ -1866,7 +1875,7 @@ export function renderComposer({
       <div class="gw-composer-row">
         <div class="gw-provider" role="radiogroup" aria-label="Agent">
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="claude" aria-pressed="${current === "claude" ? "true" : "false"}">Claude</button>
-          <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}">Cursor</button>
+          <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}"${cursorDisabled} title="${esc(cursorTitle)}">Cursor</button>
         </div>
         <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
         <span class="gw-count" data-gw-count></span>
@@ -2328,7 +2337,8 @@ export function renderGatewayShell({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
-          provider: laneProviderKind(lane) || lane?.preferred_provider || lane?.binding?.provider,
+          provider: lane?.preferred_provider || "claude",
+          cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
         })}
       </div>
       <aside class="gw-lane-chrome gw-lane-aside" data-gw-aside>

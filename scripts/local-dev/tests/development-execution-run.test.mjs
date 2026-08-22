@@ -400,7 +400,9 @@ await test("queued run last instruction is visible before pane delivery", () => 
   });
   assert.equal(last.status, "queued");
   assert.equal(last.instruction, "queued hello");
-  assert.equal(lastInstructionFromRun({ state: "FAILED", instruction: "x" }), null);
+  const failed = lastInstructionFromRun({ state: "FAILED", instruction: "x" });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.instruction, "x");
 });
 
 await test("last-instruction UX is preserved and overlays from a started run", async () => {
