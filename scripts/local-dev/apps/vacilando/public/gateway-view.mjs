@@ -1386,7 +1386,11 @@ export function renderNotificationControls(state = {}) {
 }
 
 /** Active lane output only — never last instruction, metadata, or another lane. */
-export function copyableOutputText({ selectedId, output, outputText } = {}) {
+export function copyableOutputText({ selectedId, output, outputText, lane = null } = {}) {
+  // The copy icon copies what the operator is reading. When a report owns the
+  // conversation that is the stored message, verbatim — not the pane behind it.
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) return String(report.message);
   if (output && selectedId && output.lane_id && output.lane_id !== selectedId) return null;
   if (output && output.ok === false) return null;
   const raw = output && Object.prototype.hasOwnProperty.call(output, "text")
@@ -1409,6 +1413,12 @@ export function copyableOutputText({ selectedId, output, outputText } = {}) {
  * history otherwise.
  */
 export function copySourcePlan(output, { lane = null } = {}) {
+  // A stored report IS the message. It is already complete and already local —
+  // there is nothing to fetch and nothing a pane could add.
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) {
+    return { needsFetch: false, mode: "agent_report", reason: "stored_report" };
+  }
   const mode = output?.mode || "recent";
   if (mode === "latest_response" && output?.available !== false) {
     return { needsFetch: false, mode, reason: "already_complete" };
@@ -1891,6 +1901,199 @@ export function renderLaneList(lanes, selectedId, { loading = false, attentionBy
     <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
     ${list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")}
   </div>`;
+}
+
+/**
+ * The assistant message.
+ *
+ * The conversation is driven by the run's structured agent report, never by the
+ * pane. A pane capture is a bounded window onto a terminal — it scrolls, it is
+ * truncated by construction, and it holds the PREVIOUS turn until the next one
+ * pushes it out. Showing it as the reply is what let a completion vanish on the
+ * next poll.
+ */
+export function assistantMessageSource(lane, { output = null, outputText = "" } = {}) {
+  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  if (report?.message) {
+    return {
+      kind: "report",
+      report,
+      text: report.message,
+      terminal: false,
+    };
+  }
+  const run = lane?.execution_run;
+  const working = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(run?.state);
+  if (working) {
+    // No report yet. A restrained working state is honest; raw TUI content
+    // dressed as a reply is not.
+    return { kind: "working", report: null, text: "", terminal: false };
+  }
+  return { kind: "none", report: null, text: "", terminal: false };
+}
+
+const REPORT_TONE = Object.freeze({
+  progress: { label: "Working", tone: "run" },
+  needs_input: { label: "Needs your input", tone: "needs" },
+  completion: { label: "Complete", tone: "complete" },
+  failure: { label: "Failed", tone: "failed" },
+});
+
+/**
+ * Minimal, escape-first Markdown. Every character is escaped BEFORE any markup
+ * is applied, so a report can never inject HTML into the operator's Gateway no
+ * matter what an agent puts in it.
+ */
+export function renderReportMarkdown(text) {
+  const lines = String(text || "").split("\n");
+  const out = [];
+  let inCode = false;
+  let list = null;
+  let table = null;
+
+  let para = [];
+  const closeList = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  // Consecutive non-blank lines are ONE paragraph, as in Markdown. Emitting a
+  // <p> per source line turned every hard-wrapped sentence into a separate
+  // block with a gap through the middle of it.
+  const closePara = () => {
+    if (!para.length) return;
+    out.push(`<p class="gw-md-p">${inline(para.join(" "))}</p>`);
+    para = [];
+  };
+  const closeTable = () => {
+    if (!table) return;
+    out.push("<table class=\"gw-md-table\"><thead><tr>"
+      + table.head.map((c) => `<th>${inline(c)}</th>`).join("")
+      + "</tr></thead><tbody>"
+      + table.rows.map((r) => `<tr>${r.map((c) => `<td>${inline(c)}</td>`).join("")}</tr>`).join("")
+      + "</tbody></table>");
+    table = null;
+  };
+  const inline = (raw) => esc(raw)
+    .replace(/`([^`]+)`/g, (_m, c) => `<code>${c}</code>`)
+    .replace(/\*\*([^*]+)\*\*/g, (_m, c) => `<strong>${c}</strong>`);
+
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/, "");
+    if (/^\s*```/.test(line)) {
+      closePara(); closeList(); closeTable();
+      out.push(inCode ? "</code></pre>" : "<pre class=\"gw-md-code\"><code>");
+      inCode = !inCode;
+      continue;
+    }
+    if (inCode) { out.push(`${esc(raw)}\n`); continue; }
+    if (!line.trim()) { closePara(); closeList(); closeTable(); continue; }
+
+    const cells = line.trim().match(/^\|(.+)\|$/);
+    if (cells) {
+      const parts = cells[1].split("|").map((c) => c.trim());
+      if (/^[\s|:-]+$/.test(line)) continue;
+      closePara(); closeList();
+      if (!table) table = { head: parts, rows: [] };
+      else table.rows.push(parts);
+      continue;
+    }
+    closeTable();
+
+    const h = line.match(/^(#{1,6})\s+(.*)$/);
+    if (h) {
+      closePara(); closeList();
+      const level = Math.min(6, Math.max(2, h[1].length + 1));
+      out.push(`<h${level} class="gw-md-h">${inline(h[2])}</h${level}>`);
+      continue;
+    }
+    const ul = line.match(/^\s*[-*]\s+(.*)$/);
+    if (ul) {
+      closePara();
+      if (list !== "ul") { closeList(); out.push("<ul class=\"gw-md-list\">"); list = "ul"; }
+      out.push(`<li>${inline(ul[1])}</li>`);
+      continue;
+    }
+    const ol = line.match(/^\s*\d+\.\s+(.*)$/);
+    if (ol) {
+      closePara();
+      if (list !== "ol") { closeList(); out.push("<ol class=\"gw-md-list\">"); list = "ol"; }
+      out.push(`<li>${inline(ol[1])}</li>`);
+      continue;
+    }
+    closeList();
+    para.push(line.trim());
+  }
+  if (inCode) out.push("</code></pre>");
+  closePara(); closeList(); closeTable();
+  return out.join("");
+}
+
+export function renderReportResult(result) {
+  if (!result || typeof result !== "object") return "";
+  const rows = Object.entries(result).map(([k, v]) => {
+    const value = Array.isArray(v) ? v.join(", ") : String(v);
+    return `<dt>${esc(k.replace(/_/g, " "))}</dt><dd>${esc(value)}</dd>`;
+  });
+  if (!rows.length) return "";
+  return `<dl class="gw-report-result" data-gw-report-result>${rows.join("")}</dl>`;
+}
+
+export function renderReportChoices(choices) {
+  const list = Array.isArray(choices) ? choices.filter((c) => c?.label) : [];
+  if (!list.length) return "";
+  return `<ul class="gw-report-choices" data-gw-report-choices>${
+    list.map((c) => `<li><span class="gw-report-choice-label">${esc(c.label)}</span>${
+      c.detail ? `<span class="gw-report-choice-detail">${esc(c.detail)}</span>` : ""
+    }</li>`).join("")
+  }</ul>`;
+}
+
+/**
+ * The assistant bubble body. A stored report renders as the message; with no
+ * report yet the operator gets a restrained working state, never TUI text.
+ */
+export function renderAssistantMessage(source, { pending = false } = {}) {
+  if (source?.kind === "report" && source.report) {
+    const r = source.report;
+    const meta = REPORT_TONE[r.type] || REPORT_TONE.progress;
+    return `<div class="gw-report" data-gw-report data-report-type="${esc(r.type)}" data-report-id="${esc(r.report_id || "")}" data-report-revision="${esc(String(r.revision ?? ""))}">
+      <div class="gw-report-h">
+        <span class="gw-report-kind is-${esc(meta.tone)}">${esc(meta.label)}</span>
+        ${r.phase ? `<span class="gw-report-phase">${esc(r.phase)}</span>` : ""}
+      </div>
+      ${r.reason ? `<p class="gw-report-reason">${esc(r.reason)}</p>` : ""}
+      <div class="gw-report-body" data-gw-report-body>${renderReportMarkdown(r.message)}</div>
+      ${renderReportChoices(r.choices)}
+      ${renderReportResult(r.result)}
+    </div>`;
+  }
+  if (source?.kind === "working" || pending) {
+    return `<div class="gw-report is-working" data-gw-report data-report-type="working">
+      <div class="gw-report-h"><span class="gw-report-kind is-run">Working</span></div>
+      <p class="gw-report-waiting" data-gw-report-waiting>Working… the agent has not sent an update yet.</p>
+    </div>`;
+  }
+  return `<div class="gw-report is-empty" data-gw-report data-report-type="none">
+    <p class="gw-report-waiting">No agent report on this run yet.</p>
+  </div>`;
+}
+
+/**
+ * Raw pane text, in Details, labelled for what it is.
+ *
+ * It stays because it is genuinely useful — transport receipt, readiness,
+ * liveness, debugging. It is fenced off from the conversation so it can never
+ * again be mistaken for the assistant's answer.
+ */
+export function renderTerminalDiagnostics(text, { pending = false, output = null } = {}) {
+  const body = String(text || "");
+  const bounded = output?.truncated === true
+    || output?.viewport_only === true
+    || Number(output?.history_size) > Number(output?.returned_lines || output?.line_count || 0);
+  return `<details class="gw-terminal" data-gw-terminal>
+    <summary class="gw-terminal-sum">Raw terminal output <span class="gw-terminal-tag">diagnostic</span></summary>
+    <div class="gw-terminal-body">
+      <p class="gw-terminal-note">Not the assistant's response. This is a bounded capture of the agent's terminal, kept for transport receipt, readiness and debugging.${bounded ? " It is truncated by the pane." : ""}</p>
+      ${renderOutput(body, { pending })}
+    </div>
+  </details>`;
 }
 
 export function renderOutput(text, { pending = false } = {}) {
@@ -2499,7 +2702,9 @@ export function renderGatewayShell({
     selectedId: lane?.lane_id || selectedId,
     output,
     outputText,
+    lane,
   });
+  const assistant = assistantMessageSource(lane, { output, outputText });
   const cap = deriveLaneExecutionPosture(lane);
   const bodyText = outputBodyText(output, outputText, { pending });
   const liveAttr = work.live ? ` data-gw-live="1"` : "";
@@ -2532,6 +2737,7 @@ export function renderGatewayShell({
           ${renderLaneRuntimeControls(lane, cap)}
           ${renderLaneSessionCallout(lane, { executionCapacity })}
           ${renderRecentSystemActivity(lane?.recent_system_activity)}
+          ${renderTerminalDiagnostics(bodyText, { pending, output })}
           ${statusHtml}
         </div>
       </aside>`;
@@ -2542,23 +2748,23 @@ export function renderGatewayShell({
     ${list}
     <section class="gw-main">
       <div class="gw-lane-stage" data-gw-stage>
-        <header class="gw-chat-head">
+        <header class="gw-chat-head" data-gw-chat-head>
           <a class="gw-back" data-gw-back href="#/lanes" aria-label="Back to lanes">← Lanes</a>
-          <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
+          <div class="gw-chat-id">
+            <h1 class="gw-chat-title">${esc(lane?.label || selectedId)}</h1>
+            <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}" data-gw-stage-status>${esc(statusLine)}</span>
+          </div>
           <button type="button" class="btn sm gw-aside-toggle" data-gw-aside-toggle
             aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
         </header>
-        <div class="gw-stage-status" data-gw-stage-status>
-          <span class="gw-work-state${work.tone ? ` is-${work.tone}` : ""}">${esc(statusLine)}</span>
-        </div>
         <div class="gw-thread" data-gw-thread>
           ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, { expanded: Boolean(userMessageExpanded) })}
-          <article class="gw-msg gw-msg-assistant"${liveAttr}>
+          <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
             <div class="gw-msg-tools">
               ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
               ${liveMark}
             </div>
-            ${renderOutput(bodyText, { pending })}
+            ${renderAssistantMessage(assistant, { pending })}
           </article>
         </div>
         ${renderOperatorDecisionBar(lane?.execution_run)}

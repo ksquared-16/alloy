@@ -1770,11 +1770,13 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   const composerIdx = html.indexOf("data-gw-composer");
   const outputIdx = html.indexOf("data-gw-output");
   const claudeIdx = html.indexOf("data-gw-claude-run");
-  // The stage is the conversation and nothing else: thread, then output, then
-  // the composer. Diagnostics such as the Claude-run line now live in the one
-  // details panel, which comes after the whole stage.
-  assert.equal(stageIdx > 0 && threadIdx > stageIdx && outputIdx > threadIdx && composerIdx > outputIdx, true);
-  assert.equal(asideIdx > composerIdx && claudeIdx > asideIdx, true);
+  const messageIdx = html.indexOf("data-gw-report");
+  // The stage is the conversation and nothing else: thread, then the structured
+  // assistant message, then the composer. The raw pane is no longer part of the
+  // conversation at all — it is diagnostics inside the one details panel, which
+  // comes after the whole stage.
+  assert.equal(stageIdx > 0 && threadIdx > stageIdx && messageIdx > threadIdx && composerIdx > messageIdx, true);
+  assert.equal(asideIdx > composerIdx && claudeIdx > asideIdx && outputIdx > asideIdx, true);
   assert.match(css, /\.gw-thread\{[^}]*overflow:auto/);
   assert.match(css, /\.gw-output\{[^}]*overflow:auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*minmax\(0, 66fr\) minmax\(0, 33fr\)/);

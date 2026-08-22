@@ -332,6 +332,17 @@ export function recordPushedRunOutcome(runId, state, { lane_id = null, nowMs = D
   writePushStore(store, root);
 }
 
+/** The opening line of the agent's own message, for the notification body. */
+function firstReportLine(run) {
+  const msg = run?.agent_report?.message;
+  if (!msg) return null;
+  for (const raw of String(msg).split("\n")) {
+    const line = raw.replace(/^#{1,6}\s*/, "").replace(/^[-*]\s+/, "").trim();
+    if (line) return line.slice(0, 140);
+  }
+  return null;
+}
+
 export function outcomePushPayload({ lane_id, title, state, reason } = {}) {
   const id = String(lane_id || "").trim();
   const label = String(title || id || "Development Lane").slice(0, 80);
@@ -368,6 +379,16 @@ export async function pushRunOutcome(run, {
     return { ok: true, sent: 0, skipped: "not_outcome" };
   }
   if (!run?.run_id) return { ok: false, error: "missing_run", sent: 0 };
+  // A notification is a promise that there is something to read. A run that
+  // reached COMPLETE / NEEDS_INPUT / FAILED through the structured report path
+  // carries its message; if the report is somehow not there, do not tell the
+  // operator it is. There must be no state where a Complete notification
+  // arrives and the final message is absent.
+  if (["COMPLETE", "NEEDS_INPUT", "FAILED"].includes(state)
+      && run.completion_report?.report_id
+      && !run.agent_report?.message) {
+    return { ok: true, sent: 0, skipped: "report_not_durable" };
+  }
   if (hasPushedRunOutcome(run.run_id, state, root)) {
     return { ok: true, sent: 0, skipped: "duplicate_outcome" };
   }
@@ -375,7 +396,9 @@ export async function pushRunOutcome(run, {
     lane_id: run.lane_id,
     title: label || run.lane_id,
     state,
-    reason: ["NEEDS_INPUT", "ABANDONED"].includes(state) ? run.state_reason : null,
+    reason: ["NEEDS_INPUT", "ABANDONED"].includes(state)
+      ? (firstReportLine(run) || run.state_reason)
+      : null,
   });
   const out = await sendPushToSubscriptions(payload, { root, send });
   if (out?.ok && Number(out.sent || 0) > 0) {

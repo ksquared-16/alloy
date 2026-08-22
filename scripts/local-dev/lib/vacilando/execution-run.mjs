@@ -366,6 +366,10 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     // Hiding it would leave the operator reading a green COMPLETE for work that
     // never ran.
     false_completion: run.false_completion || null,
+    // The structured report that owns the visible assistant message. Projected
+    // in full — a truncation here would defeat the whole contract.
+    agent_report: run.agent_report || null,
+    agent_report_count: Array.isArray(run.agent_reports) ? run.agent_reports.length : 0,
   };
   if (run.state === "ABANDONED") {
     const probe = executionRunRecoverability(run);
@@ -536,6 +540,8 @@ export function createQueuedRun({
     mission_id: getDurableLane(id, root)?.mission_id || null,
     output_fingerprint_at_send: null,
     delivery: { acknowledged: false, provider: null, error: null, at: null },
+    agent_report: null,
+    agent_reports: [],
     transitions: [],
     updated_at: iso(nowMs),
   };
@@ -606,8 +612,12 @@ export function transitionExecutionRun(runId, toState, {
   }
   if (completion_report) {
     found.completion_report = {
+      // A bounded one-liner for rows and lists. It is NOT the user-facing final
+      // message — that is agent_report.message, stored unbounded. The link back
+      // lets a reader see which report this summary was cut from.
       summary: bound(completion_report.summary || completion_report, EXECUTION_RUN_SUMMARY_MAX),
       at: iso(nowMs),
+      ...(completion_report.report_id ? { report_id: String(completion_report.report_id) } : {}),
     };
   }
   if (to === "WAITING_RESOURCE") {
@@ -684,6 +694,14 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     }
     if (fields.false_completion !== undefined) {
       found.false_completion = fields.false_completion || null;
+    }
+    // Structured agent reports (execution-run-report.mjs). Stored verbatim:
+    // the user-facing message must never be shortened on its way to disk.
+    if (fields.agent_report !== undefined) {
+      found.agent_report = fields.agent_report || null;
+    }
+    if (fields.agent_reports !== undefined) {
+      found.agent_reports = Array.isArray(fields.agent_reports) ? fields.agent_reports : [];
     }
     found.updated_at = iso(nowMs);
     writeStore(putRun(store, found), root);

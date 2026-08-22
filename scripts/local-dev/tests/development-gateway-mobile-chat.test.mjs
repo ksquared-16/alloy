@@ -326,7 +326,9 @@ test("keyboard-open composer and safe areas survive the new panel", () => {
   assert.match(mobile, /\.gw-composer textarea\{[^}]*font-size:16px/);
   // The slide-over must not sit under the notch or the home indicator.
   assert.match(mobile, /\.gw-lane-aside,\.gw-lane-chrome\{[\s\S]*?env\(safe-area-inset-bottom, 0px\)\)/);
-  assert.match(mobile, /\.gw-chat-head\{padding:max\(2px, env\(safe-area-inset-top, 0px\)\)/);
+  // The consolidated header is sticky and clears the Dynamic Island.
+  assert.match(mobile, /\.gw-chat-head\{[\s\S]*?position:sticky/);
+  assert.match(mobile, /\.gw-chat-head\{[\s\S]*?padding:max\(8px, env\(safe-area-inset-top, 0px\)\)/);
 
   // Measured on an iPhone 14 Pro with the keyboard up: topbar + header + status
   // + composer left 61px of thread, so the reply the operator was writing about
@@ -334,7 +336,7 @@ test("keyboard-open composer and safe areas survive the new panel", () => {
   assert.match(gwSrc, /const keyboardOpen = Boolean\(vv\) && h < window\.innerHeight \* 0\.75/);
   assert.match(gwSrc, /data-gw-keyboard/);
   assert.match(mobile, /:root\[data-gw-keyboard\] \.topbar\{display:none/);
-  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-stage-status\{display:none/);
+  assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-chat-id \.gw-work-state\{display:none/);
   assert.match(mobile, /:root\[data-gw-keyboard\] \.gw-msg-assistant\{min-height:max\(7rem/);
 });
 
