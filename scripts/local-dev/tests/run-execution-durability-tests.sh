@@ -32,6 +32,7 @@ SUITES=(
   "development-lane-push-outcome.test.mjs"
   "development-lane-notify.test.mjs"
   "development-lane-attachments.test.mjs"
+  "development-brand-assets.test.mjs"
 )
 
 PASS=0

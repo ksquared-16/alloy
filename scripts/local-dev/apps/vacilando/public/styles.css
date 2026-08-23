@@ -83,6 +83,15 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 /* ---------- rail ---------- */
 .rail{background:linear-gradient(180deg,var(--rail-0),var(--rail-1) 62%,var(--rail-2));color:var(--rail-text);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
 .brand{padding:16px 18px 12px;}
+/* The approved mark sits above the wordmark in the rail, on a deliberate cream
+   plate.
+   MEASURED, NOT ASSUMED. Dropped straight onto the juniper rail the artwork
+   disappears: pine 1.11:1, river 1.55:1, sage 1.76:1, navy 1.81:1 against
+   #365C4A. The illustration was drawn for a light ground, and the same cream
+   the app icons are composed on is what keeps every element of the journey
+   readable. */
+.brand-mark{display:block;width:100%;max-width:154px;height:auto;margin:0 0 10px;
+  background:var(--bg);border-radius:10px;padding:8px 9px;}
 .brand .word{font-family:var(--script-face);font-size:26px;color:var(--script);line-height:1;}
 .brand .word b{font-family:var(--sans);font-weight:600;font-style:normal;color:#eaf1ec;font-size:19px;margin-left:5px;}
 .brand .sub{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-text-lo);margin-top:6px;}
