@@ -40,7 +40,9 @@ describe("work item queue foundations", () => {
 
     it("keeps user-facing work item terminology labels", () => {
         expect(WORK_ITEM_FOLDER_DEFS.find((d) => d.key === "all_work")?.label).toBe("All Work");
-        expect(WORK_ITEM_VIEW_DEFS.find((d) => d.key === "mine")?.label).toBe("Mine");
+        // R14: the KEY stays `mine`; the visible copy names the scope, because the KPI band's
+        // assignment metric sits on the same screen and is a different population.
+        expect(WORK_ITEM_VIEW_DEFS.find((d) => d.key === "mine")?.label).toBe("Assigned to me");
     });
 
     it("builds deterministic breadcrumb and BOS summary", () => {

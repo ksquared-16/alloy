@@ -1,6 +1,6 @@
 # R14 — Assigned vs Mine Product Vocabulary
 
-**Status: DECISION REQUIRED.** The ambiguity is real and operator-facing: `Assigned` and `Mine`
+**Status: RESOLVED — Option A implemented.** The ambiguity is real and operator-facing: `Assigned` and `Mine`
 render together, on desktop and mobile, with nothing indicating that one is broader. But the two
 metrics differ on **three** axes, not the one R14 names — and the wording R14 prefers for the broader
 metric is explicitly disallowed by R14's own rule once the third axis is known. Choosing among the
@@ -122,3 +122,29 @@ the KPI band and view rail at desktop and mobile widths. Read-only, PE3 conventi
 non-local base or a stale `.next-prodcert`, disposes the browser through `try/finally`, console output
 only (no durable file, no subject identifiers). No certification data was mutated; no pin, task or
 assignment was created or changed.
+
+## 7. Outcome — Director chose Option A
+
+| Surface | Before | After | Count before → after |
+|---|---|---|---|
+| KPI band | `Assigned` | **`Tasks assigned`** | 1 → 1 |
+| View rail | `Mine` | **`Assigned to me`** | 0 → 0 |
+
+Vocabulary only. Internal keys (`assigned`, `mine`, `data-work-items-view`), the `assigned_to_me`
+server filter, both populations, source merging, site scope, ordering and access are untouched. The
+band remains non-interactive. Measured live: band `Tasks assigned 1 · Waiting 0 · Due Soon 0 ·
+Overdue 1` and rail `Assigned to me 0 · Unassigned 10 · Waiting 0 · Due Today 1 · Due Soon 0 ·
+Overdue 1 · Completed 0` — identical to the before-state on every number, and stable across
+navigating away and back.
+
+**Mobile fit gate passed at every width — no fallback needed.** At 1440 px, 430 px, 390 px and
+320 px the rail label renders at 95 px against a 95 px natural width: no truncation, no collision with
+the count badge, one line, and no horizontal page overflow. The authorized `To me` compact fallback
+was therefore not applied, since it was permitted only at an actually constrained breakpoint.
+
+Two existing tests asserted the old copy and were updated in place, preserving their intent (metric
+stability and terminology stability) rather than being deleted. Guards: `assignedVsMineVocabulary`
+(9) and `workItemsKpiBandVocabulary` (4), the latter driving the real `WorkItemsKpiStrip` with only
+its two data collaborators stubbed. Positive control: restoring the former labels fails 5 of the 13.
+
+The §5 adjacent findings are unchanged and remain out of scope.
