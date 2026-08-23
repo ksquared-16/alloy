@@ -49,7 +49,7 @@ test.describe("Digital Mailroom identity screenshots", () => {
         await expect(page.getByTestId("processing-overview-landing")).toBeVisible({ timeout: 15_000 });
         await snap(page, "01-overview");
 
-        await page.locator('[data-comms-tab="work"]').click();
+        await page.locator('[data-workspace-section-tab="work"]').click();
         await expect(page.locator('[data-processing-folder-tree="true"]')).toBeVisible({ timeout: 10_000 });
         await snap(page, "02-work-queue");
 

@@ -55,7 +55,7 @@ async function openOperatorInbox(page: import("@playwright/test").Page) {
     // `opacity-0 pointer-events-none` rather than unmounted. They are therefore
     // "visible" to Playwright while silently swallowing clicks, so waiting on the
     // panel proves nothing — the Inbox tab has to be selected explicitly.
-    const inboxTab = page.locator('[data-comms-tab="inbox"]');
+    const inboxTab = page.locator('[data-workspace-section-tab="inbox"]');
     await expect(inboxTab).toBeVisible({ timeout: 120_000 });
     await inboxTab.click();
 

@@ -102,7 +102,7 @@ async function openOperatorInbox(page: Page) {
     const nav = page.locator(INBOX_NAV);
     await expect(nav).toBeVisible({ timeout: 180_000 });
     await nav.first().click();
-    const tab = page.locator('[data-comms-tab="inbox"]');
+    const tab = page.locator('[data-workspace-section-tab="inbox"]');
     await expect(tab).toBeVisible({ timeout: 120_000 });
     await tab.click();
     await expect(page.locator('[data-comms-tab-panel="inbox"] [data-cc-shell]')).toBeVisible({ timeout: 120_000 });
