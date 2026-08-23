@@ -128,6 +128,25 @@ export function eventTypeForState(state) {
  * Prefer what the agent actually said over a generic template — the first line
  * of its structured report is the whole reason the operator is being paged.
  */
+/**
+ * A system notification is plain text — it renders no markdown.
+ *
+ * Observed in the wild on this very run: the delivered body read
+ * "**The attached logo never arrived.** The run record carries…", asterisks
+ * and all, because only heading and bullet markers were stripped. Inline
+ * emphasis, code ticks and link syntax have to go too.
+ */
+function plainText(raw) {
+  return String(raw ?? "")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")   // [text](url) / images -> text
+    .replace(/`{1,3}([^`]*)`{1,3}/g, "$1")        // `code`
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")          // **bold** / __bold__
+    .replace(/(^|[\s(])[*_]([^*_\s][^*_]*?)[*_](?=[\s).,;:!?]|$)/g, "$1$2") // *italic*
+    .replace(/^>\s*/, "")                         // blockquote
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function summaryForRun(run, state) {
   const message = run?.agent_report?.message;
   if (message) {
@@ -139,10 +158,10 @@ function summaryForRun(run, state) {
       const trimmed = raw.trim();
       if (!trimmed) continue;
       if (/^#{1,6}\s+/.test(trimmed)) {
-        if (!heading) heading = trimmed.replace(/^#{1,6}\s*/, "").trim();
+        if (!heading) heading = plainText(trimmed.replace(/^#{1,6}\s*/, ""));
         continue;
       }
-      const line = trimmed.replace(/^[-*]\s+/, "").trim();
+      const line = plainText(trimmed.replace(/^[-*]\s+/, ""));
       if (line) return bound(line);
     }
     if (heading) return bound(heading);

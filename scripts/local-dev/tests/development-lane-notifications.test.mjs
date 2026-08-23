@@ -119,6 +119,19 @@ test("a notification names the lane and links to it, never a raw id", () => {
   assert.equal(rec.seen, false);
 });
 
+test("a notification body is plain text, never raw markdown", () => {
+  // Observed in a real delivery from this very change: the body read
+  // "**The attached logo never arrived.** The run record carries…" — a system
+  // notification renders no markdown, so the syntax has to be stripped, not
+  // just the leading bullet and heading markers.
+  reset();
+  const out = N.recordRunNotification(run("erun_md", "COMPLETE", {
+    agent_report: { message: "**Bold** lead with `code`, *emphasis* and [a link](https://example.com)" },
+  }));
+  assert.equal(out.record.summary, "Bold lead with code, emphasis and a link");
+  assert.equal(/[*`\[\]]/.test(out.record.summary), false, "no markdown syntax survives");
+});
+
 test("the agent's own report outranks the generic state reason", () => {
   reset();
   const out = N.recordRunNotification(run("erun_p", "COMPLETE", {
