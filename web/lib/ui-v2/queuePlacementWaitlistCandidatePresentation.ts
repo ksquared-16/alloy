@@ -2,6 +2,7 @@
  * Parse `_placement_waitlist_row` for candidate-row waitlist UI (Card 4.6).
  */
 
+import { waitlistPrecedenceReasonCopy } from "@/lib/ui-v2/waitlistPrecedenceReasonCopy";
 import type { PlacementWaitlistCandidateRowProjection } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
@@ -163,6 +164,16 @@ export function parsePlacementWaitlistCandidateRowVm(
                   ]
                       .filter(Boolean)
                       .join(" "),
+                  runtimePositionPrecedenceReason:
+                      typeof o.runtime_position_precedence_reason === "string"
+                          ? o.runtime_position_precedence_reason.trim()
+                          : undefined,
+                  runtimePositionPrecedenceCopy:
+                      waitlistPrecedenceReasonCopy(
+                          typeof o.runtime_position_precedence_reason === "string"
+                              ? o.runtime_position_precedence_reason
+                              : null,
+                      ) ?? undefined,
                   runtimePositionPrecedenceNote:
                       typeof o.runtime_position_precedence_note === "string" &&
                       o.runtime_position_precedence_note.trim()
