@@ -1,11 +1,12 @@
 # R12 — Pin Precedence Explanation
 
-**Status: DECISION REQUIRED.** The unexplained precedence case reproduces, live, on a production
-build from staging `7184efedf`. But its root cause is **not** the one R12 assumes, and the two fixes
-that would actually close it are both outside R12's stated boundaries. No code change is proposed here
-beyond evidence.
+**Status: RESOLVED — law 36 closed and the pin explained.** The unexplained precedence case reproduces, live, on a production
+build from staging `7184efedf`. Its root cause was **not** the one R12 assumed — see §3 and §4. The Director then
+authorized closing law 36 first and adding a cohort-scope explanation only if the pin remained
+subordinate. Both were done; §9 records the outcome.
 
-No ordering, precedence, membership, `wait_since`, cohort, stage or R10 behaviour was modified.
+Precedence, membership, `wait_since`, cohort, stage and R10 behaviour are unmodified. Rendered ORDER
+changed — deliberately — to the canonical placement order the surface already numbered rows from.
 
 ---
 
@@ -139,3 +140,37 @@ does not apply risks telling the operator a true sentence that does not describe
 
 `tests/orchestration/placement/r12PrecedenceNoteReach.test.ts` (3/3) · `web/scripts/r12Dom.mjs`,
 `r12VisualOrder.mjs` (geometry-true order), `r12PinState.mjs` (canonical override/position state). All read-only against a local production build; none mutate certification data.
+
+## 9. Outcome after the Director decision
+
+**Law 36 closed** at two owners, both required:
+
+1. `attachChildGrainWaitlistPlacement` now returns the canonical sorted rows (a permutation of the
+   same row objects) instead of the caller's original order.
+2. `applyQueueRowVariantSortCriteria` now breaks a tie on placement rank before the opaque row `id`.
+   This was **not optional**: the published variant sorts by `waitlist.priority`, which resolves to
+   null on every row of this queue, so the comparator fell straight through to `id` and ordered the
+   queue by participation UUID — destroying a canonical input order even after (1). Fixing (1) alone
+   would not have changed a single rendered row.
+
+Verified live by element geometry: every section's ranks now ascend down the screen — Infant
+`[1…12]`, School Age `[1,2]` (was `[2,1]`).
+
+**The pin is explained.** `assignWaitlistCandidateRuntimePositions` emits a typed
+`pin_scoped_to_cohort` reason when a row has an active pin, is first within its own cohort, and is not
+first in its section. Copy resolves at the presentation owner: *"Pinned within this group. Groups are
+ordered separately."* Live: exactly **1 of 17** rows carries it — the pinned one.
+
+Every input is the row's own pin and cohort plus the cohort keys ahead of it. The row in front is
+never read, so the contested R10 candidate that sits ahead of the pinned row cannot leak; a guard
+renames and re-keys that row and asserts the copy is byte-identical.
+
+**Staleness**, found by its own guard: `writeRuntimePositionOnRow` used `Object.assign`, which only
+adds keys, so a row that no longer qualified kept an explanation written for a previous ordering. Both
+precedence fields are now cleared before each write. Live: warm revisit correct, **0** precedence
+elements after a Work View switch, correct again on return.
+
+**Residual configuration observation, deliberately not changed:** `variant-32` declares
+`waitlist.priority`; no row on this queue carries a corresponding priority fact; canonical placement
+rank now safely preserves order regardless. Changing shared certification configuration was out of
+scope for this run.

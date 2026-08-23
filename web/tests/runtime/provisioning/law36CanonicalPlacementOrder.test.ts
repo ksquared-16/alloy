@@ -190,3 +190,25 @@ describe("law 36 — the placement sorter still owns precedence", () => {
         expect(positionsOf(rows)).toEqual([1, 2]);
     });
 });
+
+describe("law 36 — the canonical sorter's own tie-breaking stays deterministic", () => {
+    const tied = (id: string) =>
+        ({
+            id,
+            _placement_waitlist_row: {
+                row_projection: "placement_candidate",
+                child_display_name: id,
+                program_room_cohort_key: "infant",
+                program_room_group_label: "Infant",
+                placement_priority_v2: { active_override_kinds: [], sort_tuple: ["infant", 1, 0] },
+            },
+            __placement_v2_sort_tuple: ["infant", 1, 0],
+        }) as Record<string, unknown>;
+
+    it("6: identical tuples fall back to a stable id order, whatever the input order", () => {
+        const forward = sortPlacementCandidateQueueRows([tied("b"), tied("a"), tied("c")], false, null);
+        const reverse = sortPlacementCandidateQueueRows([tied("c"), tied("b"), tied("a")], false, null);
+        expect(idsOf(forward)).toEqual(["a", "b", "c"]);
+        expect(idsOf(reverse)).toEqual(["a", "b", "c"]);
+    });
+});
