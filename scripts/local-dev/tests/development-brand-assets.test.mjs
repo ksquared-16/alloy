@@ -135,6 +135,17 @@ test("brand assets stay within a sane weight budget", () => {
   assert.ok(total < 1_200_000, `web brand assets are ${Math.round(total / 1024)} KB`);
 });
 
+test("no retired brand artwork is still drawn in the app shell", () => {
+  // The rail carried a second, hand-drawn palm-and-sunset desert scene in
+  // colours the palette no longer contains, so the app showed two competing
+  // desert illustrations at once — the approved one at the top of the rail and
+  // the retired one at the bottom.
+  for (const dead of ["#c8794a", "#c06a3f", "#a4512d", "#8a4527", "#f0b878", "#173f2a"]) {
+    assert.equal(html.includes(dead), false, `retired brand colour ${dead} is still in the shell`);
+  }
+  assert.equal(/class="desert"/.test(html), false);
+});
+
 test("the server knows how to serve an .ico", () => {
   // Served as application/octet-stream, some browsers decline to use it as the
   // tab icon at all.

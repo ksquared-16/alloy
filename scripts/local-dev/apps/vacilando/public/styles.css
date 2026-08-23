@@ -102,7 +102,7 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .nav a:not(.active):hover{background:var(--rail-hover);}
 .nav a .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
 .nav-sep{height:1px;background:var(--rail-line);margin:8px 18px;}
-.desert{margin-top:auto;height:104px;}
+.rail .nav-sep{margin-top:auto;}
 .ruser{display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--rail-line);background:var(--rail-2);text-decoration:none;color:inherit;cursor:pointer;}
 .ruser:hover{background:var(--rail-hover);}
 .ruser .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#c98a5e,#7a4a2e);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;}
