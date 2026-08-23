@@ -1474,6 +1474,9 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
         existingTmuxSession: rec.binding?.tmux_session || null,
         expectedBranch: rec.binding?.branch || null,
         runtimeRoot: root,
+        // The lane's attribution travels with the start, so the provider cannot
+        // come up in a repository other than the one this lane belongs to.
+        expectedRepositoryId: rec.repository_id || null,
       });
     if (!started?.ok) {
       return {

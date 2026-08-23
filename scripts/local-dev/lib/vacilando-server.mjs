@@ -17,6 +17,10 @@
  *   GET  /api/lanes/:id/output → recent pane text (lane_id only; ?mode=extended|latest_response)
  *   POST /api/lanes/:id/instruction → paste+submit instruction (lane_id + body)
  *   POST /api/lanes/:id/runtime/release → lane.release_execution_capacity (keep durable lane)
+ *   GET  /api/repositories    → registered repositories + capabilities
+ *   GET  /api/repositories/inspect?path= → read-only preflight for Connect local
+ *   POST /api/repositories/connect-local → register an existing local repository
+ *   POST /api/repositories/:id/validate|retire|reactivate|update
  *   POST /api/lanes/:id/attachments → upload one image (raw bytes, sniffed type)
  *   GET  /api/lanes/:id/attachments → pending draft attachments + limits
  *   POST /api/lanes/:id/attachments/:aid/remove → drop a draft attachment
@@ -1043,7 +1047,10 @@ export function createVacilandoServer() {
       if (path === "/api/lanes/create") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => !["name", "provider", "instruction"].includes(k));
+        const extra = Object.keys(body.value || {}).filter((k) => ![
+          "name", "provider", "instruction",
+          "repository_id", "workspace_mode", "branch", "base_ref", "worktree_path", "folder_id",
+        ].includes(k));
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         const out = await createNewLaneRequest(body.value || {});
         return sendJson(res, out.status, out.body);
@@ -1168,14 +1175,87 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "notification_seen_failed", detail: String(e && e.message || e) });
         }
       }
+      if (path === "/api/repositories/connect-local") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        // `validation_commands` is deliberately NOT accepted from a browser:
+        // lifecycle commands must come from a trusted local/profile boundary,
+        // never from untrusted text.
+        const allowed = ["path", "name", "profile", "default_branch", "worktree_parent"];
+        const extra = Object.keys(body.value || {}).filter((k) => !allowed.includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const R = await import("./vacilando/repository-registry.mjs");
+          const v = body.value || {};
+          const out = await R.registerLocalRepository({
+            path: v.path,
+            name: v.name || null,
+            profile: v.profile === "alloy" ? "alloy" : "generic",
+            defaultBranch: v.default_branch || null,
+            worktreeParent: v.worktree_parent || null,
+          });
+          const status = out.ok ? 200
+            : (out.error === "repository_already_registered" ? 409
+              : (out.error === "path_is_worktree" ? 409 : 400));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "repository_register_failed", detail: String(e && e.message || e) });
+        }
+      }
+      if (path === "/api/repositories/clone") {
+        // Honest unavailability rather than a button that does nothing.
+        return sendJson(res, 501, {
+          ok: false,
+          error: "clone_not_implemented",
+          detail: "Clone is not available in this slice. Clone the repository yourself, then use Connect local repository.",
+        });
+      }
+      {
+        const m = path.match(/^\/api\/repositories\/([^/]+)\/(validate|retire|reactivate|update)$/);
+        if (m) {
+          const repoId = decodeURIComponent(m[1]);
+          const body = await readJsonBody(req);
+          if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+          try {
+            const R = await import("./vacilando/repository-registry.mjs");
+            const { listDurableLanes } = await import("./vacilando/development-lane.mjs");
+            if (m[2] === "validate") {
+              const out = await R.validateRepository(repoId);
+              return sendJson(res, out.ok ? 200 : 404, out);
+            }
+            if (m[2] === "update") {
+              const allowed = ["name", "default_branch", "worktree_parent"];
+              const extra = Object.keys(body.value || {}).filter((k) => !allowed.includes(k));
+              if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+              const out = R.updateRepository(repoId, body.value || {});
+              return sendJson(res, out.ok ? 200 : (out.error === "repository_not_found" ? 404 : 400), out);
+            }
+            if (m[2] === "reactivate") {
+              const out = R.reactivateRepository(repoId);
+              return sendJson(res, out.ok ? 200 : 404, out);
+            }
+            // Retire: refuse while any lane of this repository still has work.
+            const { activeRunForLane } = await import("./vacilando/execution-run.mjs");
+            const active = listDurableLanes()
+              .filter((l) => l.repository_id === repoId)
+              .filter((l) => Boolean(activeRunForLane(l.lane_id)))
+              .map((l) => l.lane_id);
+            const out = R.retireRepository(repoId, { activeLaneIds: active });
+            const status = out.ok ? 200 : (out.error === "repository_has_active_work" ? 409 : 404);
+            return sendJson(res, status, out);
+          } catch (e) {
+            return sendJson(res, 500, { ok: false, error: "repository_action_failed", detail: String(e && e.message || e) });
+          }
+        }
+      }
       if (path === "/api/lane-folders/create") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => k !== "name");
+        const extra = Object.keys(body.value || {}).filter((k) => !["name", "repository_id"].includes(k));
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const { createLaneFolder } = await import("./vacilando/lane-folders.mjs");
-          const out = createLaneFolder({ name: body.value?.name });
+          const out = createLaneFolder({ name: body.value?.name, repositoryId: body.value?.repository_id || null });
           return sendJson(res, out.ok ? 200 : (out.error === "folder_limit_reached" ? 409 : 400), out);
         } catch (e) {
           return sendJson(res, 500, { ok: false, error: "folder_create_failed", detail: String(e && e.message || e) });
@@ -1818,6 +1898,11 @@ export function createVacilandoServer() {
           const { listLaneFolders } = await import("./vacilando/lane-folders.mjs");
           folders = listLaneFolders();
         } catch { /* folders are organisation, never a reason to fail discovery */ }
+        let repositories = [];
+        try {
+          const R = await import("./vacilando/repository-registry.mjs");
+          repositories = R.listRepositories({});
+        } catch { /* grouping is secondary to discovery */ }
         let unseen_count = 0;
         let unseen_by_lane = {};
         try {
@@ -1826,7 +1911,7 @@ export function createVacilandoServer() {
           unseen_by_lane = n.unseenCountByLane();
           for (const lane of lanes) lane.unseen_notifications = unseen_by_lane[lane.lane_id] || 0;
         } catch { /* indicators are secondary to discovery */ }
-        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, repositories, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
       }
@@ -1893,6 +1978,59 @@ export function createVacilandoServer() {
         });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "notifications_failed", detail: String(e && e.message || e) });
+      }
+    }
+    if (path === "/api/repositories") {
+      try {
+        const R = await import("./vacilando/repository-registry.mjs");
+        const { listDurableLanes } = await import("./vacilando/development-lane.mjs");
+        const lanes = listDurableLanes();
+        const counts = {};
+        for (const l of lanes) if (l.repository_id) counts[l.repository_id] = (counts[l.repository_id] || 0) + 1;
+        const includeRetired = url.searchParams.get("include_retired") === "1";
+        const repos = R.listRepositories({ includeRetired }).map((r) => ({ ...r, lane_count: counts[r.repository_id] || 0 }));
+        return sendJson(res, 200, {
+          ok: true,
+          repositories: repos,
+          unattributed_lanes: lanes.filter((l) => !l.repository_id).length,
+          // Clone is not implemented in this slice; the UI shows it as
+          // unavailable with this reason rather than as a dead button.
+          capabilities: { connect_local: true, clone: false, clone_reason: "not_implemented_in_this_slice" },
+          approved_roots: R.approvedRoots(),
+        });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "repository_list_failed", detail: String(e && e.message || e) });
+      }
+    }
+    {
+      const inspectMatch = path.match(/^\/api\/repositories\/inspect$/);
+      if (inspectMatch) {
+        // Read-only preflight for the Connect flow: tells the operator what a
+        // path actually is BEFORE anything is registered.
+        try {
+          const R = await import("./vacilando/repository-registry.mjs");
+          const target = url.searchParams.get("path") || "";
+          const contained = R.containPath(target);
+          if (!contained.ok) return sendJson(res, 400, { ok: false, error: contained.error, approved_roots: R.approvedRoots() });
+          const info = await R.inspectGitPath(contained.path);
+          if (!info.ok) return sendJson(res, 400, { ok: false, error: info.error, path: contained.path });
+          const existing = R.findRepositoryByCommonDir(info.git_common_dir);
+          return sendJson(res, 200, {
+            ok: true,
+            path: contained.path,
+            root: info.root,
+            git_common_dir: info.git_common_dir,
+            is_worktree: info.is_worktree,
+            parent_root: info.parent_root,
+            branch: info.branch,
+            has_remote: Boolean(info.remote),
+            remote_normalized: info.remote_normalized,
+            default_branch: await R.detectDefaultBranch(info.root),
+            already_registered: existing ? R.publicRepository(existing) : null,
+          });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "repository_inspect_failed", detail: String(e && e.message || e) });
+        }
       }
     }
     if (path === "/api/lane-folders") {

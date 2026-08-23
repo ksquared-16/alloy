@@ -162,6 +162,35 @@ export function buildSendBody(instruction, extra = {}) {
   return body;
 }
 
+/** Operator-facing text for every repository refusal the server can return. */
+export function repositoryErrorText(error, detail = {}) {
+  switch (error) {
+    case "path_outside_approved_roots":
+      return `That path is outside the folders Vacilando may use: ${(detail.approved_roots || detail.roots || []).join(", ")}.`;
+    case "path_not_found": return "There is nothing at that path.";
+    case "path_must_be_absolute": return "Enter the full path, starting with /.";
+    case "path_refused": return "That path contains characters Vacilando will not open.";
+    case "not_a_git_repository": return "That folder is not a Git repository.";
+    case "path_is_worktree":
+      return `That is a worktree of ${detail.parent_root || "another repository"}. Register that repository instead.`;
+    case "repository_already_registered":
+      return `Already registered as "${detail.repository?.name || "another entry"}".`;
+    case "worktree_parent_inside_repository":
+      return "Worktrees cannot live inside the repository itself.";
+    case "worktree_parent_outside_approved_roots":
+      return "That worktree location is outside the folders Vacilando may use.";
+    case "repository_not_found": return "That repository is no longer registered.";
+    case "repository_not_active": return "That repository is disconnected.";
+    case "repository_has_active_work":
+      return `Finish or stop the ${(detail.active_lanes || []).length} running lane(s) first.`;
+    case "cross_repository_binding_refused":
+      return "That worktree belongs to a different repository.";
+    case "clone_not_implemented":
+      return detail.detail || "Clone is not available yet. Clone it yourself, then connect it.";
+    default: return "That repository could not be registered.";
+  }
+}
+
 /** Operator-facing text for every attachment refusal the server can return. */
 export function attachmentErrorText(error, detail = {}) {
   const mb = (n) => `${Math.round((Number(n) || 0) / (1024 * 1024))} MB`;
@@ -2243,6 +2272,33 @@ function folderHeader(group) {
  * is no free-text folder here, because a typo would silently create a second
  * folder that looks like the first one.
  */
+/**
+ * Which repository this lane executes in.
+ *
+ * Read-only on purpose. Moving a lane between repositories is an execution
+ * rebind — a different worktree, a different Git object store, a different
+ * provider working directory — and it must never be reachable from the same
+ * control that reorganises folders.
+ */
+export function renderLaneRepository(lane, repositories = []) {
+  const id = lane?.repository_id || null;
+  const repo = (repositories || []).find((r) => r.repository_id === id) || null;
+  if (!id && !repo) {
+    return `<div class="gw-repo-id is-unknown"><span class="gw-repo-id-label">Repository</span>
+      <span class="gw-repo-id-value">Not attributed</span></div>`;
+  }
+  const bits = [
+    repo?.default_branch,
+    repo?.has_remote === false ? "local only" : null,
+    repo?.profile_label,
+  ].filter(Boolean).join(" · ");
+  return `<div class="gw-repo-id">
+    <span class="gw-repo-id-label">Repository</span>
+    <span class="gw-repo-id-value">${esc(repo?.name || id)}</span>
+    ${bits ? `<span class="gw-repo-id-meta">${esc(bits)}</span>` : ""}
+  </div>`;
+}
+
 export function renderLaneFolderPicker(lane, folders = [], selectedId = null) {
   const laneId = lane?.lane_id || selectedId;
   if (!laneId) return "";
@@ -2261,16 +2317,136 @@ export function renderLaneFolderPicker(lane, folders = [], selectedId = null) {
   </label>`;
 }
 
-export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, folders = [], collapsedFolders, nowMs = Date.now() } = {}) {
+export const UNKNOWN_REPOSITORY_ID = "__unattributed__";
+
+/**
+ * Group lanes by repository, then by folder inside each repository.
+ *
+ * A repository is the TOP boundary because it is the execution boundary; a
+ * folder is presentation inside it. The active-first ordering is preserved
+ * within each group, and a repository inherits the rank of its most urgent
+ * lane, so a repository holding blocked work never sinks below a quiet one.
+ */
+export function groupLanesByRepository(lanes, repositories = [], folders = [], {
+  collapsed = new Set(), outputByLane = {}, nowMs = Date.now(),
+} = {}) {
+  const ordered = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { outputByLane, nowMs });
+  const known = new Map();
+  for (const r of Array.isArray(repositories) ? repositories : []) {
+    if (r?.repository_id) known.set(String(r.repository_id), r);
+  }
+  const groups = new Map();
+  const groupFor = (id, repo) => {
+    if (!groups.has(id)) {
+      groups.set(id, {
+        repository_id: id,
+        name: repo?.name || "Unattributed",
+        profile: repo?.profile || null,
+        profile_label: repo?.profile_label || null,
+        has_remote: repo?.has_remote ?? null,
+        default_branch: repo?.default_branch || null,
+        lanes: [], rank: Number.MAX_SAFE_INTEGER,
+        needs_attention: 0, active: 0, unseen: 0,
+        unknown: !repo,
+      });
+    }
+    return groups.get(id);
+  };
+  for (const r of known.values()) groupFor(r.repository_id, r);
+
+  ordered.forEach((lane, index) => {
+    const raw = lane?.repository_id ? String(lane.repository_id) : null;
+    const id = raw && known.has(raw) ? raw : UNKNOWN_REPOSITORY_ID;
+    const g = groupFor(id, known.get(id) || null);
+    g.lanes.push(lane);
+    if (index < g.rank) g.rank = index;
+    const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
+    if (work.group === "needs_input") g.needs_attention += 1;
+    if (work.group === "active") g.active += 1;
+    g.unseen += laneUnseenCount(lane);
+  });
+
+  return [...groups.values()]
+    .filter((g) => g.lanes.length || !g.unknown)
+    .map((g) => ({
+      ...g,
+      lane_count: g.lanes.length,
+      collapsed: collapsed?.has?.(`repo:${g.repository_id}`) === true,
+      // Folders are nested INSIDE the repository, scoped to it.
+      folders: groupLanesByFolder(g.lanes, (folders || []).filter(
+        (f) => (f.repository_id || null) === (g.unknown ? null : g.repository_id),
+      ), { collapsed, outputByLane, nowMs }),
+    }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (a.unknown !== b.unknown) return a.unknown ? 1 : -1;
+      return String(a.name).localeCompare(String(b.name));
+    });
+}
+
+function repositoryHeader(group) {
+  const badges = [
+    group.unseen ? `<span class="gw-folder-badge is-unseen">${group.unseen} unread</span>` : "",
+    group.needs_attention ? `<span class="gw-folder-badge is-attention">${group.needs_attention} needs you</span>` : "",
+    group.active ? `<span class="gw-folder-badge is-active">${group.active} working</span>` : "",
+    `<span class="gw-folder-count">${group.lane_count}</span>`,
+  ].filter(Boolean).join("");
+  // Only a repository whose profile HAS the concept shows Alloy vocabulary.
+  const meta = group.unknown
+    ? "not attributed"
+    : [group.default_branch, group.has_remote === false ? "local only" : null].filter(Boolean).join(" · ");
+  return `<div class="gw-repo-h" data-gw-repo-h="${esc(group.repository_id)}">
+    <button type="button" class="gw-repo-toggle" data-gw-repo-toggle="${esc(group.repository_id)}"
+      aria-expanded="${group.collapsed ? "false" : "true"}">
+      <span class="gw-folder-caret" aria-hidden="true">${group.collapsed ? "\u25b8" : "\u25be"}</span>
+      <span class="gw-repo-name">${esc(group.name)}</span>
+      ${meta ? `<span class="gw-repo-meta">${esc(meta)}</span>` : ""}
+      ${badges}
+    </button>
+  </div>`;
+}
+
+function renderFolderGroups(groups, selectedId, attentionByLane, telemetryByLane) {
+  const list = (groups || []).filter((g) => !g.unfiled || g.lanes.length);
+  // Inside ONE repository with no folders, the lanes are just the lanes.
+  if (list.length === 1 && list[0].unfiled) {
+    return list[0].lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("");
+  }
+  return list.map((g) => `<div class="gw-folder${g.collapsed ? " is-collapsed" : ""}${g.unfiled ? " is-unfiled" : ""}" data-gw-folder="${esc(g.folder_id)}">
+    ${folderHeader(g)}
+    ${g.collapsed ? "" : (g.lanes.length
+      ? g.lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+      : `<div class="gw-folder-empty">No lanes in this folder yet.</div>`)}
+  </div>`).join("");
+}
+
+export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, folders = [], collapsedFolders, repositories = [], nowMs = Date.now() } = {}) {
   const list = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { nowMs });
   const add = `<a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a>`;
   const newFolder = `<button type="button" class="gw-add gw-add-folder" data-gw-folder-new>+ Folder</button>`;
-  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${newFolder}${add}</div>`;
+  const addRepo = `<button type="button" class="gw-add gw-add-repo" data-gw-repo-new title="Register another Git repository">+ Repo</button>`;
+  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${addRepo}${newFolder}${add}</div>`;
   if (!list.length) {
     return `<div class="gw-lanes" data-gw-lanes>
       ${head}
       <div class="gw-empty">${loading ? "Loading lanes…" : "No Development Lanes discovered."}</div>
     </div>`;
+  }
+  const repos = Array.isArray(repositories) ? repositories : [];
+  // More than one repository makes the repository the top boundary. With ONE
+  // repository the operator has nothing to disambiguate, so the list keeps the
+  // shape they already know rather than growing a header for a single group.
+  if (repos.length > 1) {
+    const repoGroups = groupLanesByRepository(list, repos, folders, {
+      collapsed: collapsedFolders || new Set(), nowMs,
+    });
+    const rendered = repoGroups.map((g) => `<div class="gw-repo${g.collapsed ? " is-collapsed" : ""}" data-gw-repo="${esc(g.repository_id)}">
+      ${repositoryHeader(g)}
+      ${g.collapsed ? "" : (g.lanes.length
+        ? renderFolderGroups(g.folders, selectedId, attentionByLane, telemetryByLane)
+        : `<div class="gw-folder-empty">No lanes in this repository yet.</div>`)}
+    </div>`).join("");
+    return `<div class="gw-lanes" data-gw-lanes>${head}${rendered}</div>`;
   }
   const groups = groupLanesByFolder(list, folders, { collapsed: collapsedFolders || new Set(), nowMs });
   // With no folders at all there is nothing to organise, so the list stays
@@ -3262,9 +3438,10 @@ export function renderGatewayShell({
   attachmentsUploading = 0,
   attachmentError = null,
   lightbox = null,
+  repositories = [],
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
-  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders });
+  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
   const kind = emptyDetail
     ? "missing"
     : detailViewKind({ selectedId, lanes, lane, loading, listReady });
@@ -3373,6 +3550,7 @@ export function renderGatewayShell({
             <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
             <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
             ${renderLaneFolderPicker(lane, folders, selectedId)}
+            ${renderLaneRepository(lane, repositories)}
           </div>
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}

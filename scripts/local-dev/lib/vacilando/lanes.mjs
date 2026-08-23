@@ -437,6 +437,7 @@ export function projectDurableObservation(rec, observations = []) {
     mission_bound_at: rec.mission_bound_at || null,
     preferred_provider: rec.preferred_provider || rec.binding?.provider || null,
     folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
   };
 }
 

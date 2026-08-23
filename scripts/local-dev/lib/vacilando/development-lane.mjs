@@ -240,6 +240,7 @@ export function createDurableLane({
   work_class = WORK_CLASS_PRODUCT,
   scarce_resource_priority = null,
   preferred_provider = null,
+  repository_id = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -292,6 +293,9 @@ export function createDurableLane({
     ) || "claude",
     binding: binding ? normalizeBinding(binding, { root }) : null,
     folder_id: null,
+    // Which repository this lane executes in. A folder is presentation; this is
+    // the execution boundary, and it is never changed by reorganising a list.
+    repository_id: repository_id ? String(repository_id) : null,
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -861,7 +865,35 @@ export function publicDurableLane(rec) {
     preferred_provider: normalizeExecutionProvider(rec.preferred_provider || rec.binding?.provider, "claude") || "claude",
     execution_capacity: rec.execution_capacity || null,
     folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
   };
+}
+
+/**
+ * Attribute a lane to a repository.
+ *
+ * Deliberately NOT reachable from folder reorganisation: moving a lane between
+ * folders is presentation, moving it between repositories changes where its
+ * provider is allowed to run. `expectCurrent` makes a rebind explicit — a
+ * caller must state what it believes the current attribution is.
+ */
+export function setLaneRepository(laneId, repositoryId, {
+  expectCurrent = undefined,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const store = readDevelopmentLaneStore(root);
+  const id = canonicalLaneStoreId(laneId, root);
+  const rec = store.lanes?.[id] || store.lanes?.[String(laneId || "")];
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const current = rec.repository_id || null;
+  if (expectCurrent !== undefined && current !== expectCurrent) {
+    return { ok: false, error: "repository_attribution_conflict", current };
+  }
+  rec.repository_id = repositoryId ? String(repositoryId) : null;
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, lane_id: rec.lane_id, repository_id: rec.repository_id, previous: current };
 }
 
 export function resetDevelopmentLanesForTests(root = runtimeRoot()) {

@@ -33,6 +33,7 @@ SUITES=(
   "development-lane-notify.test.mjs"
   "development-lane-attachments.test.mjs"
   "development-brand-assets.test.mjs"
+  "development-repository-registry.test.mjs"
 )
 
 PASS=0

@@ -1505,6 +1505,24 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);}
 .gw-lightbox img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;}
 .gw-lightbox-cap{color:#fff;font-size:12px;opacity:.85;text-align:center;}
+/* Repository groups: the top organisational boundary, and an execution one.
+   Styled a step stronger than a folder header so the hierarchy reads at a
+   glance without adding another large button. */
+.gw-repo{display:block;margin:0 0 6px;}
+.gw-repo-h{display:flex;align-items:center;padding:2px 4px;}
+.gw-repo-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;
+  background:none;border:0;cursor:pointer;font:inherit;font-size:13px;font-weight:800;color:var(--ink);text-align:left;}
+.gw-repo-name{flex:0 0 auto;}
+.gw-repo-meta{flex:1 1 auto;font-size:11px;font-weight:600;color:var(--ink-3);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;}
+.gw-repo .gw-folder{margin-left:8px;}
+.gw-repo .gw-lane{margin-left:10px;}
+.gw-add-repo{color:var(--vacilando-terracotta-ink);}
+.gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-repo-id-label{color:var(--ink-3);}
+.gw-repo-id-value{font-weight:700;color:var(--ink);}
+.gw-repo-id-meta{font-size:11px;color:var(--ink-3);}
+.gw-repo-id.is-unknown .gw-repo-id-value{color:var(--blocked);}
 .gw-lightbox-x{position:absolute;top:calc(env(safe-area-inset-top) + 8px);right:12px;width:44px;height:44px;
   border:0;border-radius:999px;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;}
 /* Unread notification indicators. Restrained on purpose: execution state stays

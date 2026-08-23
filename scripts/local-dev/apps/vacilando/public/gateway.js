@@ -52,6 +52,7 @@ const G = {
   attachmentError: null,
   lightbox: null,
   folders: [],
+  repositories: [],
   collapsedFolders: null,
   releasing: false,
   notify: {
@@ -541,6 +542,7 @@ async function fetchLanes() {
   const j = await r.json();
   G.lanes = Array.isArray(j.lanes) ? j.lanes : [];
   if (Array.isArray(j.folders)) G.folders = j.folders;
+  if (Array.isArray(j.repositories)) G.repositories = j.repositories;
   if (typeof j.unseen_count === "number") applyUnseen(j.unseen_count, j.unseen_by_lane);
   if (j.development_resources) G.developmentResources = j.development_resources;
   if (j.execution_capacity) G.executionCapacity = j.execution_capacity;
@@ -977,6 +979,7 @@ function paint() {
     connect: G.connect,
     folders: G.folders,
     collapsedFolders: collapsedFolders(),
+    repositories: G.repositories,
     attachments: G.attachments,
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
@@ -1926,6 +1929,22 @@ document.addEventListener("click", async (e) => {
     paint();
     return;
   }
+  const repoToggle = e.target?.closest?.("[data-gw-repo-toggle]");
+  if (repoToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Repository collapse shares the folder preference store, keyed apart so a
+    // folder and a repository can never collide on one id.
+    toggleFolderCollapsed(`repo:${repoToggle.getAttribute("data-gw-repo-toggle")}`);
+    return;
+  }
+  const repoNew = e.target?.closest?.("[data-gw-repo-new]");
+  if (repoNew) {
+    e.preventDefault();
+    e.stopPropagation();
+    await addRepositoryFlow();
+    return;
+  }
   const folderToggle = e.target?.closest?.("[data-gw-folder-toggle]");
   if (folderToggle) {
     e.preventDefault();
@@ -2372,3 +2391,75 @@ document.addEventListener("drop", (e) => {
   box.classList.remove("is-dropping");
   uploadAttachments(e.dataTransfer?.files);
 });
+
+// ---------------------------------------------------------------------------
+// Add repository — Connect local only in this slice.
+//
+// The flow INSPECTS before it registers, so the operator confirms what the path
+// actually is (a repository or a worktree of one, its branch, whether it has a
+// remote) rather than finding out afterwards. Clone is not implemented and says
+// so instead of offering a button that fails.
+// ---------------------------------------------------------------------------
+async function addRepositoryFlow() {
+  const path = window.prompt(
+    "Connect a local Git repository.\n\nEnter its full path (it must be inside an approved root):",
+    "",
+  );
+  if (path == null || !path.trim()) return;
+  let inspected;
+  try {
+    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(path.trim())}`);
+    inspected = await r.json();
+  } catch {
+    G.notice = { kind: "err", text: "Could not reach the Gateway." };
+    paint();
+    return;
+  }
+  if (!inspected.ok) {
+    G.notice = { kind: "err", text: View.repositoryErrorText(inspected.error, inspected) };
+    paint();
+    return;
+  }
+  if (inspected.already_registered) {
+    G.notice = { kind: "idle", text: `Already registered as "${inspected.already_registered.name}".` };
+    paint();
+    return;
+  }
+  if (inspected.is_worktree) {
+    // Registering a worktree would give two "repositories" one Git object
+    // store. Name the parent so the operator can register that instead.
+    G.notice = {
+      kind: "err",
+      text: `That is a worktree of ${inspected.parent_root}. Register that repository instead, then connect this path as a lane.`,
+    };
+    paint();
+    return;
+  }
+  const summary = [
+    `Repository: ${inspected.root}`,
+    `Default branch: ${inspected.default_branch || "unknown"}`,
+    inspected.has_remote ? "Remote: yes" : "Remote: none (local only)",
+    "",
+    "Register this repository?",
+  ].join("\n");
+  if (!window.confirm(summary)) return;
+  const name = window.prompt("Display name for this repository:", inspected.root.split("/").pop()) || null;
+  if (name == null) return;
+  try {
+    const r = await gwFetch("/api/repositories/connect-local", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: inspected.path, name }),
+    });
+    const j = await r.json();
+    if (!j.ok) G.notice = { kind: "err", text: View.repositoryErrorText(j.error, j) };
+    else {
+      G.notice = { kind: "ok", text: `Registered ${j.repository.name}.` };
+      try { await fetchLanes(); } catch { /* the poll will catch up */ }
+    }
+    paint();
+  } catch {
+    G.notice = { kind: "err", text: "Could not register that repository." };
+    paint();
+  }
+}

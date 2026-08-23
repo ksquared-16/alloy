@@ -620,10 +620,12 @@ export async function startPersistentAgentSession({
   expectedBranch = null,
   providerSessionId = null,
   runtimeRoot = null,
+  expectedRepositoryId = null,
 } = {}) {
   if (sessionStartImpl) {
     return sessionStartImpl({
       worktreePath, worktreeName, laneName, existingTmuxSession, expectedBranch, providerSessionId, runtimeRoot,
+      expectedRepositoryId,
     });
   }
   const cwd = String(worktreePath || "");
@@ -631,9 +633,29 @@ export async function startPersistentAgentSession({
     return { ok: false, error: "path_refused" };
   }
   const cfg = resolveRuntimeConfig();
-  const root = String(cfg.worktree_root || join(homedir(), "Code", "alloy-worktrees")).replace(/\/+$/, "");
-  if (!(cwd === root || cwd.startsWith(`${root}/`))) {
-    return { ok: false, error: "worktree_not_managed" };
+  // THE MULTI-REPOSITORY CHOKEPOINT.
+  //
+  // This used to compare cwd against one constant — Alloy's worktree root — so
+  // every provider in Vacilando could only ever start inside Alloy. The
+  // containment property is unchanged: a provider still cannot start in an
+  // arbitrary directory. What changed is the definition of "managed": it now
+  // means "inside a repository the operator registered", and the registry is
+  // the authority rather than a hard-coded path.
+  const { managedWorktreePath } = await import("./repository-registry.mjs");
+  const managed = managedWorktreePath(cwd);
+  if (!managed.ok) {
+    return { ok: false, error: "worktree_not_managed", path: cwd };
+  }
+  // If the caller named a repository, the path must actually belong to it. A
+  // stale lane binding must never be able to start a provider in a different
+  // repository than the one the run believes it is in.
+  if (expectedRepositoryId && managed.repository_id !== expectedRepositoryId) {
+    return {
+      ok: false,
+      error: "repository_mismatch",
+      expected: expectedRepositoryId,
+      actual: managed.repository_id,
+    };
   }
   if (!existsSync(cwd)) return { ok: false, error: "worktree_missing" };
   if (isRuntimeAdoptionBlocked({ worktree_path: cwd, worktree_name: worktreeName })) {
