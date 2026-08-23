@@ -821,16 +821,52 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   return { key: "idle", label: "Idle", group: "idle", tone: "", mark: "○", hint: cap.hint || "Idle", headline: "Idle", live: false, stale: false };
 }
 
-export function laneUpdatedMs(lane) {
+/**
+ * When did something MEANINGFUL last happen in this lane?
+ *
+ * Meaningful means the operator or the agent moved the work: a prompt was
+ * delivered, the agent produced output or progress, the Execution Run changed
+ * state, or a result worth notifying about landed.
+ *
+ * `observed_at` IS NOT ACTIVITY. It is the timestamp discovery stamps on every
+ * lane on every poll. Measured against the live Gateway: two list polls three
+ * seconds apart, with nothing happening, changed observed_at on 8 of 8 lanes —
+ * so every lane's "recency" was really "now", the ordering was decided by
+ * whatever order the poll happened to resolve in, and the list reshuffled while
+ * the operator was reading it. Health checks, hydration and presence heartbeats
+ * are all the same non-event.
+ */
+export function laneActivityMs(lane) {
   const run = lane?.execution_run || lane?.previous_run;
-  const fromRun = Date.parse(run?.updated_at || run?.completed_at || run?.started_at || run?.created_at || "");
-  const activity = Number(lane?.last_activity_ms);
+  const candidates = [
+    // A run state transition, and when the agent last reported into it.
+    Date.parse(run?.updated_at || ""),
+    Date.parse(run?.completed_at || ""),
+    Date.parse(run?.started_at || ""),
+    Date.parse(run?.created_at || ""),
+    Date.parse(run?.last_worker_report_at || ""),
+    Date.parse(run?.latest_progress?.at || ""),
+    // The operator's own last prompt into the lane.
+    Date.parse(lane?.last_instruction?.at || lane?.last_instruction?.delivered_at || ""),
+    // Agent output actually changing — not the fact that we looked.
+    Number(lane?.last_activity_ms),
+    // A notification-worthy result.
+    Date.parse(lane?.notifications?.latest_at || ""),
+  ];
+  let best = 0;
+  for (const c of candidates) if (Number.isFinite(c) && c > best) best = c;
+  return best;
+}
+
+/**
+ * Retained name for the row's "x ago" label, which legitimately wants to say
+ * when the lane was last SEEN when it has no activity of its own.
+ */
+export function laneUpdatedMs(lane) {
+  const activity = laneActivityMs(lane);
+  if (activity) return activity;
   const observed = Date.parse(lane?.observed_at || "");
-  return Math.max(
-    Number.isFinite(fromRun) ? fromRun : 0,
-    Number.isFinite(activity) ? activity : 0,
-    Number.isFinite(observed) ? observed : 0,
-  );
+  return Number.isFinite(observed) ? observed : 0;
 }
 
 export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now() } = {}) {
@@ -843,9 +879,63 @@ export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now()
   list.sort((a, b) => {
     const dg = rank(a) - rank(b);
     if (dg !== 0) return dg;
-    return laneUpdatedMs(b) - laneUpdatedMs(a);
+    const da = laneActivityMs(b) - laneActivityMs(a);
+    if (da !== 0) return da;
+    // Deterministic when timestamps tie: a stable, operator-meaningful key, so
+    // two lanes with identical activity never trade places between polls.
+    return String(a.label || a.lane_id).localeCompare(String(b.label || b.lane_id));
   });
   return list;
+}
+
+/**
+ * How many notifications this lane still owes the operator.
+ *
+ * This reads the CANONICAL server-side count. It is deliberately not derived
+ * from lane posture: a lane can be Idle and still hold an unread "complete",
+ * and a lane can be Working with nothing unread.
+ */
+export function laneUnseenCount(lane) {
+  const n = Number(lane?.unseen_notifications);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Apply the unseen count to the installed app tile.
+ *
+ * The Badging API only exists for an INSTALLED app (a PWA added to the Home
+ * Screen / dock); in an ordinary browser tab it is usually absent, and on iOS
+ * Safari it is absent even when installed. Absence is not an error and must
+ * never take the in-app indicators down with it — those are the fallback.
+ */
+export function applyAppBadge(count, nav = (typeof navigator !== "undefined" ? navigator : null)) {
+  const n = Number(count);
+  const value = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  if (!nav) return { supported: false, applied: false, value, reason: "no_navigator" };
+  const canSet = typeof nav.setAppBadge === "function";
+  const canClear = typeof nav.clearAppBadge === "function";
+  if (!canSet && !canClear) return { supported: false, applied: false, value, reason: "unsupported" };
+  try {
+    // Clearing at zero is a distinct call: setAppBadge(0) shows a dot on some
+    // platforms rather than removing the badge.
+    if (value === 0) {
+      if (canClear) nav.clearAppBadge();
+      else nav.setAppBadge(0);
+      return { supported: true, applied: true, value: 0, cleared: true };
+    }
+    nav.setAppBadge(value);
+    return { supported: true, applied: true, value };
+  } catch (err) {
+    return { supported: true, applied: false, value, reason: "threw", error: String(err?.message || err) };
+  }
+}
+
+/** A restrained dot-and-count. Execution state stays the loudest thing in a row. */
+export function renderUnseenIndicator(lane) {
+  const n = laneUnseenCount(lane);
+  if (!n) return "";
+  const label = n === 1 ? "1 unread update" : `${n} unread updates`;
+  return `<span class="gw-lane-unseen" data-gw-unseen="${n}" role="status" aria-label="${esc(label)}">${n}</span>`;
 }
 
 export const LANE_FOLDER_COLLAPSE_KEY = "vac.gw.foldersClosed";
@@ -881,7 +971,7 @@ export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(),
   }
   const groups = new Map();
   const groupFor = (id, name) => {
-    if (!groups.has(id)) groups.set(id, { folder_id: id, name, lanes: [], rank: Number.MAX_SAFE_INTEGER, needs_attention: 0, active: 0 });
+    if (!groups.has(id)) groups.set(id, { folder_id: id, name, lanes: [], rank: Number.MAX_SAFE_INTEGER, needs_attention: 0, active: 0, unseen: 0 });
     return groups.get(id);
   };
   // Empty folders still appear — you make a folder, then file lanes into it.
@@ -897,6 +987,7 @@ export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(),
     const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
     if (work.group === "needs_input") g.needs_attention += 1;
     if (work.group === "active") g.active += 1;
+    g.unseen += laneUnseenCount(lane);
   });
 
   return [...groups.values()]
@@ -2077,8 +2168,9 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const extra = summary && summary !== st.label
     ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
-  return `<a class="gw-lane${active}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
-    <span class="gw-lane-title">${esc(lane.label || id)}</span>
+  const unseen = renderUnseenIndicator(lane);
+  return `<a class="gw-lane${active}${unseen ? " has-unseen" : ""}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
+    <span class="gw-lane-title">${esc(lane.label || id)}${unseen}</span>
     <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
     ${extra}
     <span class="gw-lane-meta">${esc(metaBits)}</span>
@@ -2094,6 +2186,7 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
  */
 function folderHeader(group) {
   const badges = [
+    group.unseen ? `<span class="gw-folder-badge is-unseen">${group.unseen} unread</span>` : "",
     group.needs_attention ? `<span class="gw-folder-badge is-attention">${group.needs_attention} needs you</span>` : "",
     group.active ? `<span class="gw-folder-badge is-active">${group.active} working</span>` : "",
     `<span class="gw-folder-count">${group.lane_count}</span>`,

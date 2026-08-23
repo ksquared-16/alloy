@@ -3,9 +3,10 @@
  * VAPID private key stays in the Gateway runtime root — never the repo.
  */
 import { createRequire } from "node:module";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 
@@ -42,12 +43,57 @@ function atomicWrite(path, obj) {
   renameSync(tmp, path);
 }
 
+/**
+ * Resolve web-push from wherever this copy of the toolkit actually lives.
+ *
+ * MEASURED FAILURE. `alloy-toolkit` extracts scripts/local-dev straight out of
+ * the git object store, and node_modules is not in git — so the installed
+ * toolkit tree has package.json but no dependencies. A bare require() resolves
+ * relative to THIS file, walks up ~/.local/share/alloy/... and finds nothing,
+ * so every push from the live Gateway failed with `web_push_unavailable`:
+ * 10 of 10 dispatches after the Gateway moved onto the installed toolkit, and
+ * 30 of 93 across the whole recorded history.
+ *
+ * The installer now provisions dependencies, but an ALREADY-installed toolkit
+ * must not stay mute until someone reinstalls it, so this also looks in the
+ * sibling toolkit versions and the canonical checkout before giving up.
+ */
+function webPushCandidateRoots() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const toolkit = join(here, "..", "..");
+  return [
+    join(toolkit, "node_modules", "web-push", "package.json"),
+    join(homedir(), ".local", "share", "alloy", "toolkit", "current", "node_modules", "web-push", "package.json"),
+    join(homedir(), "Alloy", "scripts", "local-dev", "node_modules", "web-push", "package.json"),
+  ];
+}
+
+let webPushCache;
 function loadWebPush() {
+  if (webPushCache !== undefined) return webPushCache;
   try {
-    return require("web-push");
-  } catch {
-    return null;
+    webPushCache = require("web-push");
+    return webPushCache;
+  } catch { /* fall through to explicit candidates */ }
+  for (const manifest of webPushCandidateRoots()) {
+    try {
+      if (!existsSync(manifest)) continue;
+      webPushCache = require(dirname(manifest));
+      if (webPushCache) return webPushCache;
+    } catch { /* try the next candidate */ }
   }
+  webPushCache = null;
+  return webPushCache;
+}
+
+/** Tests need to re-probe after changing where modules live. */
+export function resetWebPushResolutionForTests() {
+  webPushCache = undefined;
+}
+
+/** Whether this runtime can actually deliver a push at all. */
+export function webPushRuntimeAvailable() {
+  return Boolean(loadWebPush());
 }
 
 export function normalizePageOrigin(value) {
@@ -389,8 +435,20 @@ export async function pushRunOutcome(run, {
       && !run.agent_report?.message) {
     return { ok: true, sent: 0, skipped: "report_not_durable" };
   }
-  if (hasPushedRunOutcome(run.run_id, state, root)) {
-    return { ok: true, sent: 0, skipped: "duplicate_outcome" };
+  // ONE record per prompt. The old key was `${run_id}:${state}`, which is a
+  // per-TRANSITION key: a run that reached NEEDS_INPUT and later COMPLETE
+  // notified twice for a single operator question. Measured here: 8 runs did
+  // exactly that. The notification store keys on the run alone.
+  const { recordRunNotification, recordNotificationDelivery } =
+    await import("./lane-notifications.mjs");
+  const noted = recordRunNotification(run, { laneName: label || run.lane_id, root });
+  if (!noted.created) {
+    return { ok: true, sent: 0, skipped: noted.duplicate ? "duplicate_prompt" : (noted.skipped || "not_recorded") };
+  }
+  const notificationId = noted.record.notification_id;
+  // Legacy marker, kept so an older Gateway reading this store still dedupes.
+  if (!hasPushedRunOutcome(run.run_id, state, root)) {
+    recordPushedRunOutcome(run.run_id, state, { lane_id: run.lane_id, root });
   }
   const payload = outcomePushPayload({
     lane_id: run.lane_id,
@@ -400,11 +458,21 @@ export async function pushRunOutcome(run, {
       ? (firstReportLine(run) || run.state_reason)
       : null,
   });
-  const out = await sendPushToSubscriptions(payload, { root, send });
-  if (out?.ok && Number(out.sent || 0) > 0) {
-    recordPushedRunOutcome(run.run_id, state, { lane_id: run.lane_id, root });
+  // Delivery is a projection of the record, never its precondition. Recording
+  // only on `sent > 0` is what made a failed push re-fire on the next
+  // transition AND leave the operator with no in-app trace of the event.
+  let out;
+  try {
+    out = await sendPushToSubscriptions(payload, { root, send });
+  } catch (err) {
+    out = { ok: false, error: "send_failed", sent: 0, detail: String(err?.message || err) };
   }
-  return out;
+  recordNotificationDelivery(notificationId, {
+    sent: Number(out?.sent || 0),
+    error: out?.ok === false ? (out.error || "send_failed") : (out?.errors?.[0]?.reason || null),
+    root,
+  });
+  return { ...out, notification_id: notificationId, notification_created: true };
 }
 
 export function assertSafePushPayload(payload) {

@@ -3,15 +3,54 @@
    Presentation only; all data comes from the runtime snapshot via app.js. */
 :root{
   color-scheme: light;
-  --rail-0:#15402c; --rail-1:#0e3323; --rail-2:#0b2a1c;
-  --rail-active:#1f5a3d; --rail-hover:#194832;
+
+  /* ---------------------------------------------------------------------
+     Approved Vacilando palette. These seven are the brand; everything below
+     is either derived from them or is a SEMANTIC colour that deliberately
+     stays put.
+
+     Contrast was measured, not assumed (ratios against --card unless noted):
+       navy 13.66 · juniper 7.54 · landscape 5.97 · river 4.88 · sage 4.29
+       terracotta 3.39 · sand 1.62
+     So navy carries text, juniper/landscape/river carry text-sized accents,
+     and terracotta and sand are surfaces and emphasis — never small text.
+     Where a brand colour sits on a tint rather than on white, a derived
+     *-ink variant is used so small text still clears 4.5:1.
+     --------------------------------------------------------------------- */
+  --vacilando-navy:#17313A;
+  --vacilando-terracotta:#D96C4A;
+  --vacilando-sand:#E8C78A;
+  --vacilando-river:#3F7891;
+  --vacilando-sage:#6F8055;
+  --vacilando-juniper:#365C4A;
+  --vacilando-landscape:#476B5A;
+  /* Derived for accessible text on tinted surfaces. */
+  --vacilando-river-ink:#396c83;      /* 4.93 on --run-bg */
+  --vacilando-terracotta-ink:#b85c3f; /* 4.53 on white, 4.53 as pill bg with white text */
+
+  /* Navigation structure: juniper, with derived depths. Light rail text
+     clears AA on every one of them (5.74 / 7.34 / 8.72 / 4.91 / 6.15). */
+  --rail-0:var(--vacilando-juniper); --rail-1:#2c4b3d; --rail-2:#253f32;
+  --rail-active:#3c6753; --rail-hover:#33574a;
   --rail-text:#d7e4da; --rail-text-lo:#8fae9c; --rail-line:rgba(255,255,255,.08);
   --bg:#f6f2ea; --bg-tint:#efe9dd; --card:#fff; --card-2:#fbf9f4;
   --line:#ece5d8; --line-soft:#f1ece1; --line-strong:#e0d7c6;
-  --ink:#1f2a24; --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
-  --terra:#cf6f47; --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  /* Primary text is navy. */
+  --ink:var(--vacilando-navy); --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
+  /* Warm emphasis / selected + active accents. */
+  --terra:var(--vacilando-terracotta); --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  --sand:var(--vacilando-sand); --sand-soft:#f6ecd8;
+  --sage:var(--vacilando-sage); --juniper:var(--vacilando-juniper); --landscape:var(--vacilando-landscape);
+  /* SEMANTIC COLOURS DELIBERATELY UNCHANGED. Success, warning, error and
+     paused/planned carry meaning that is not the brand's to restate, and no
+     approved colour matches both the meaning and the contrast. Recolouring
+     these would make a failure look like an accent. */
   --green:#3a8a5b; --green-soft:#e2f0e6; --green-ink:#2c7048; --script:#d9825f;
-  --run:#3a76d8; --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
+  /* Links, progress and informational state: river. On --run-bg this is a
+     better ratio than the blue it replaces (4.18 vs 3.78), and small text on
+     that tint uses --run-ink at 4.93. */
+  --run:var(--vacilando-river); --run-ink:var(--vacilando-river-ink);
+  --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
   --blocked:#cf5a3a; --blocked-bg:#f8e2da; --done:#5a6b61; --done-bg:#eef0ec;
   --plan:#5f7c9a; --plan-bg:#e9eff5; --paused:#b0894a; --paused-bg:#f3ead6; --idle:#8a938c; --idle-bg:#eef0ec;
   --radius:12px; --radius-sm:9px; --pill:999px;
@@ -1410,7 +1449,6 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-folder-count{flex:0 0 auto;opacity:.6;font-weight:600;}
 .gw-folder-badge{flex:0 0 auto;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;}
 .gw-folder-badge.is-attention{background:var(--review-bg);color:var(--review);}
-.gw-folder-badge.is-active{background:var(--run-bg);color:var(--run);}
 .gw-folder-edit{flex:0 0 auto;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--rail-0);opacity:.75;min-height:44px;padding:0 6px;}
 .gw-folder-edit:hover{opacity:1;}
 .gw-folder-empty{padding:8px 12px;font-size:12px;opacity:.65;}
@@ -1418,6 +1456,16 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-folder-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
 .gw-folder-pick select{min-height:44px;font-size:16px;padding:6px 8px;border-radius:8px;}
 .gw-folder-pick-hint{opacity:.65;}
+/* Unread notification indicators. Restrained on purpose: execution state stays
+   the loudest thing in a lane row, and this sits beside the name rather than
+   competing with the posture line. White on --vacilando-terracotta is only
+   3.39:1, so the pill uses the derived ink at 4.53:1. */
+.gw-lane-unseen{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  margin-left:8px;padding:0 5px;border-radius:999px;background:var(--vacilando-terracotta-ink);color:#fff;
+  font-size:11px;font-weight:700;line-height:1;vertical-align:middle;}
+.gw-lane.has-unseen .gw-lane-title{font-weight:700;}
+.gw-folder-badge.is-unseen{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-folder-badge.is-active{background:var(--run-bg);color:var(--run-ink);}
 .gw-add-actions .btn{min-height:44px;}
 .gw-candidate{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:0 0 10px;box-shadow:var(--shadow);}
 .gw-candidate .btn{margin-top:10px;}

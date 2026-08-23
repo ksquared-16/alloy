@@ -17,6 +17,8 @@
  *   GET  /api/lanes/:id/output → recent pane text (lane_id only; ?mode=extended|latest_response)
  *   POST /api/lanes/:id/instruction → paste+submit instruction (lane_id + body)
  *   POST /api/lanes/:id/runtime/release → lane.release_execution_capacity (keep durable lane)
+ *   GET  /api/notifications   → durable notification records + unseen counts
+ *   POST /api/notifications/seen → acknowledge by notification_id | lane_id | all
  *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
  *   POST /api/lane-folders/create|:id/rename|:id/delete → folder CRUD (delete unfiles, never deletes lanes)
  *   POST /api/lanes/:id/folder → file a lane into a folder (folder_id: null unfiles)
@@ -1075,6 +1077,25 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
         }
       }
+      if (path === "/api/notifications/seen") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["lane_id", "notification_id", "all"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const m = await import("./vacilando/lane-notifications.mjs");
+          const v = body.value || {};
+          let out;
+          if (v.notification_id) out = m.markNotificationSeen(String(v.notification_id));
+          else if (v.lane_id) out = m.markLaneNotificationsSeen(String(v.lane_id));
+          else if (v.all === true) out = m.markAllNotificationsSeen();
+          else return sendJson(res, 400, { ok: false, error: "missing_target" });
+          const status = out.ok ? 200 : (out.error === "notification_not_found" ? 404 : 400);
+          return sendJson(res, status, { ...out, unseen_count: m.unseenNotificationCount(), unseen_by_lane: m.unseenCountByLane() });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "notification_seen_failed", detail: String(e && e.message || e) });
+        }
+      }
       if (path === "/api/lane-folders/create") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -1722,9 +1743,32 @@ export function createVacilandoServer() {
           const { listLaneFolders } = await import("./vacilando/lane-folders.mjs");
           folders = listLaneFolders();
         } catch { /* folders are organisation, never a reason to fail discovery */ }
-        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+        let unseen_count = 0;
+        let unseen_by_lane = {};
+        try {
+          const n = await import("./vacilando/lane-notifications.mjs");
+          unseen_count = n.unseenNotificationCount();
+          unseen_by_lane = n.unseenCountByLane();
+          for (const lane of lanes) lane.unseen_notifications = unseen_by_lane[lane.lane_id] || 0;
+        } catch { /* indicators are secondary to discovery */ }
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
+      }
+    }
+    if (path === "/api/notifications") {
+      try {
+        const { listNotifications, unseenNotificationCount, unseenCountByLane } =
+          await import("./vacilando/lane-notifications.mjs");
+        const unseenOnly = url.searchParams.get("unseen") === "1";
+        return sendJson(res, 200, {
+          ok: true,
+          notifications: listNotifications({ unseenOnly, laneId: url.searchParams.get("lane_id") || null }),
+          unseen_count: unseenNotificationCount(),
+          unseen_by_lane: unseenCountByLane(),
+        });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "notifications_failed", detail: String(e && e.message || e) });
       }
     }
     if (path === "/api/lane-folders") {

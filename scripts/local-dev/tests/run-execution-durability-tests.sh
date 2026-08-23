@@ -28,6 +28,9 @@ SUITES=(
   "development-provider-lifecycle.test.mjs"
   "development-admission-bootstrap.test.mjs"
   "development-lane-folders.test.mjs"
+  "development-lane-notifications.test.mjs"
+  "development-lane-push-outcome.test.mjs"
+  "development-lane-notify.test.mjs"
 )
 
 PASS=0

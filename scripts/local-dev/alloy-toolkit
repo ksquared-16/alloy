@@ -82,6 +82,38 @@ cmd_install() {
       || die "extract failed for ${sha}"
   fi
 
+  # ------------------------------------------------------------------------
+  # Runtime dependencies. `git archive` gives us package.json but NOT
+  # node_modules, which is not in git — so an installed toolkit had a manifest
+  # and no modules, and `require("web-push")` failed for every notification the
+  # Gateway tried to send. Measured: 10 of 10 dispatches failed with
+  # `web_push_unavailable` after the Gateway moved onto the installed toolkit,
+  # and 30 of 93 across the whole recorded history.
+  #
+  # Never fatal: a toolkit that cannot install deps is still a working toolkit
+  # for every command that does not need them, and lane-push.mjs also resolves
+  # from sibling versions. But say so loudly, because the failure it causes is
+  # silent — notifications simply never arrive.
+  # ------------------------------------------------------------------------
+  if [[ -f "${dest}/package.json" ]]; then
+    if [[ -d "${dest}/node_modules" ]]; then
+      dim "runtime dependencies already present"
+    elif prev="$(find "$ROOT" -maxdepth 2 -type d -name node_modules -not -path "${dest}/*" 2>/dev/null | head -n1)"          && [[ -n "$prev" ]]; then
+      # Reuse a sibling version's modules: identical lockfile, no network.
+      info "reusing runtime dependencies from $(dirname "$prev")…"
+      cp -R "$prev" "${dest}/node_modules" 2>/dev/null         && ok "runtime dependencies linked"         || warn "could not copy runtime dependencies — Web Push will be unavailable"
+    elif command -v npm >/dev/null 2>&1; then
+      info "installing runtime dependencies (Web Push)…"
+      if (cd "$dest" && npm ci --omit=dev --no-audit --no-fund >/dev/null 2>&1)          || (cd "$dest" && npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1); then
+        ok "runtime dependencies installed"
+      else
+        warn "dependency install failed — Web Push notifications will NOT be delivered"
+      fi
+    else
+      warn "npm not found — Web Push notifications will NOT be delivered"
+    fi
+  fi
+
   # Executability does not always survive extraction; restore it for commands.
   find "$dest" -maxdepth 1 -type f \( -name 'alloy-*' -o -name 'vac' -o -name 'vac-run' -o -name '*.sh' \) \
     -exec chmod +x {} + 2>/dev/null || true

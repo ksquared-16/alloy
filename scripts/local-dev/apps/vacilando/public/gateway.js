@@ -36,7 +36,6 @@ const G = {
   threadNewUpdate: false,
   threadUserScrolled: false,
   userMessageExpanded: false,
-  lastNotified: {},
   telemetry: null,
   telemetryByLane: {},
   pollTel: null,
@@ -46,6 +45,8 @@ const G = {
   copyTimer: null,
   connect: { step: "chooser", candidates: [], candidate: null, name: "", instruction: "", loading: false, submitting: false, error: null },
   executionCapacity: null,
+  unseenCount: 0,
+  unseenByLane: {},
   folders: [],
   collapsedFolders: null,
   releasing: false,
@@ -160,25 +161,6 @@ function markViewed(id) {
     activity_ms: G.lane?.lane_id === id ? (G.lane.last_activity_ms || null) : null,
     viewed_at: Date.now(),
   }, storage());
-}
-
-function maybeNotify(map) {
-  if (!notifyEnabled()) return;
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  for (const lane of G.lanes || []) {
-    const st = map[lane.lane_id];
-    const ev = View.notificationEvent({
-      status: st,
-      viewingSelected: G.selected === lane.lane_id && !document.hidden,
-      lastInstruction: lastInstructionFor(lane.lane_id) || lane.last_instruction,
-      laneLabel: lane.label || lane.lane_id,
-    });
-    if (!ev) continue;
-    const key = `${lane.lane_id}:${st?.activity}:${paneOutputForLane(lane.lane_id)?.fingerprint || lane.last_activity_ms || ""}`;
-    if (G.lastNotified[lane.lane_id] === key) continue;
-    G.lastNotified[lane.lane_id] = key;
-    try { new Notification(ev.title, { body: ev.body }); } catch { /* */ }
-  }
 }
 
 function notifyEnabled() {
@@ -555,6 +537,7 @@ async function fetchLanes() {
   const j = await r.json();
   G.lanes = Array.isArray(j.lanes) ? j.lanes : [];
   if (Array.isArray(j.folders)) G.folders = j.folders;
+  if (typeof j.unseen_count === "number") applyUnseen(j.unseen_count, j.unseen_by_lane);
   if (j.development_resources) G.developmentResources = j.development_resources;
   if (j.execution_capacity) G.executionCapacity = j.execution_capacity;
   else G.executionCapacity = View.summarizeExecutionCapacity(G.lanes);
@@ -907,6 +890,39 @@ async function refreshFolders() {
   } catch { /* the list poll will carry them on the next tick */ }
 }
 
+/**
+ * The unseen count is SERVER truth, applied in one place.
+ *
+ * Every path that can change it — a poll, an acknowledgement, a reconnect —
+ * funnels through here, so the lane indicators and the app tile can never
+ * disagree with each other or drift out of sync with the store.
+ */
+function applyUnseen(count, byLane) {
+  G.unseenCount = Number(count) || 0;
+  if (byLane && typeof byLane === "object") G.unseenByLane = byLane;
+  for (const lane of G.lanes || []) lane.unseen_notifications = G.unseenByLane[lane.lane_id] || 0;
+  View.applyAppBadge(G.unseenCount);
+}
+
+/**
+ * Opening a lane IS the acknowledgement — the operator is reading the answer.
+ * Acknowledge against the canonical owner and repaint from ITS reply, never
+ * from an optimistic local guess.
+ */
+async function acknowledgeLane(laneId) {
+  if (!laneId) return;
+  if (!(G.unseenByLane?.[laneId] > 0)) return;
+  try {
+    const r = await gwFetch("/api/notifications/seen", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lane_id: laneId }),
+    });
+    const j = await r.json();
+    if (j.ok) { applyUnseen(j.unseen_count, j.unseen_by_lane); paint(); }
+  } catch { /* the next list poll reconciles */ }
+}
+
 /** Entering a lane is always chat-first. */
 function resetAsideForLaneEntry() {
   if (isMobileWidth()) G.asideOpen = false;
@@ -924,7 +940,11 @@ function paint() {
     draft: saved?.value ?? getDraft(G.selected),
   };
   const map = attentionMap();
-  maybeNotify(map);
+  // NO CLIENT-SIDE NOTIFIER. maybeNotify() used to fire browser notifications
+  // from the poll loop, deduped only by an in-memory map — so every refresh,
+  // reconnect or tab reopen re-announced work the operator had already seen,
+  // and it raced the server's own push for the same event. The Gateway's
+  // durable notification record is now the single producer.
   const outputForSelected = View.outputBelongsToLane(G.output, G.selected, outputLane(G.selected)) ? G.output : null;
   view.innerHTML = View.renderGatewayShell({
     lanes: G.lanes,
@@ -962,7 +982,10 @@ function paint() {
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
   autosizeInstruction(ta);
-  if (G.selected && G.lane?.lane_id === G.selected) markViewed(G.selected);
+  if (G.selected && G.lane?.lane_id === G.selected) {
+    markViewed(G.selected);
+    acknowledgeLane(G.selected);
+  }
 }
 
 function stopOutputPoll() {
