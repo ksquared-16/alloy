@@ -40,6 +40,96 @@ export type DrawerVmPrewarmTask = {
 let primaryRevealActive = false;
 
 /**
+ * ── THE WORK UNIT REVEAL LIFECYCLE, DECLARED RATHER THAN INFERRED ──
+ *
+ * `primaryRevealActive` answers "is the reveal window holding prewarm right now". It cannot answer
+ * "is a Work Unit about to reveal", because it only turns on once the surface runtime has mounted —
+ * measured at 4,464 ms on a cold direct boot, by which point a consumer that needs to wait has
+ * already acted. Before that instant `active === false` is indistinguishable from "this surface has
+ * no Work Unit at all", and those two require opposite behaviour.
+ *
+ * So the route host declares `pending` when the document is a Work Unit, and every existing terminal
+ * path closes it. Consumers ask {@link isWorkUnitRevealTerminal}, which is TRUE for `idle` — a
+ * surface with no Work Unit never waits for a reveal that will not happen.
+ *
+ * This is a lifecycle declaration only: no data dependency, no reveal timing, no milestone, and
+ * nothing here ever waits for a consumer.
+ */
+export type WorkUnitRevealLifecycle =
+    | "idle"
+    | "pending"
+    | "active"
+    | "settled"
+    | "empty"
+    | "unavailable"
+    | "error"
+    | "cancelled";
+
+const TERMINAL_LIFECYCLE: ReadonlySet<WorkUnitRevealLifecycle> = new Set<WorkUnitRevealLifecycle>([
+    "idle",
+    "settled",
+    "empty",
+    "unavailable",
+    "error",
+    "cancelled",
+]);
+
+let revealLifecycle: WorkUnitRevealLifecycle = "idle";
+/** Bumped per Work Unit surface declaration — a stale epoch's outcome can never release the current one. */
+let revealEpoch = 0;
+const revealListeners = new Set<() => void>();
+
+function publishRevealLifecycle(next: WorkUnitRevealLifecycle): void {
+    if (revealLifecycle === next) return;
+    revealLifecycle = next;
+    recordRevealGateEvent(`lifecycle:${next}`);
+    for (const listener of [...revealListeners]) {
+        try {
+            listener();
+        } catch {
+            /* a consumer must never break the lifecycle */
+        }
+    }
+}
+
+export function workUnitRevealLifecycle(): WorkUnitRevealLifecycle {
+    return revealLifecycle;
+}
+
+export function workUnitRevealEpoch(): number {
+    return revealEpoch;
+}
+
+/** True when no reveal is outstanding — including `idle`, where none will ever start. */
+export function isWorkUnitRevealTerminal(): boolean {
+    return TERMINAL_LIFECYCLE.has(revealLifecycle);
+}
+
+export function subscribeWorkUnitRevealLifecycle(listener: () => void): () => void {
+    revealListeners.add(listener);
+    return () => revealListeners.delete(listener);
+}
+
+/**
+ * A Work Unit document exists. Declared by the route host at mount — the earliest client moment the
+ * route identity is known — so a consumer cannot mistake "not revealed yet" for "nothing to reveal".
+ *
+ * `resolved: false` means the server could not resolve the route (invalid / not found / no access),
+ * so there is no reveal to wait for and the lifecycle goes straight to a terminal outcome.
+ */
+export function declareWorkUnitSurfaceMounted(resolved: boolean): number {
+    revealEpoch += 1;
+    publishRevealLifecycle(resolved ? "pending" : "unavailable");
+    return revealEpoch;
+}
+
+/** The declaring surface went away — supersede it. A later outcome from `epoch` is ignored. */
+export function releaseWorkUnitSurface(epoch: number): void {
+    if (epoch !== revealEpoch) return;
+    publishRevealLifecycle("cancelled");
+}
+
+/**
  * PRODUCTION-VISIBLE reveal-gate timeline (diagnostic only).
  *
  * `log()` above is gated on `perfDevDetailEnabled()` — `NODE_ENV !== "production"` — so it emits
@@ -96,6 +186,7 @@ export function beginWorkUnitPrimaryReveal(): void {
     logDrawerVmPrewarmSchedulerBoot();
     primaryRevealActive = true;
     recordRevealGateEvent("begin");
+    publishRevealLifecycle("active");
     // New Work Unit context — drop any stale backlog from a prior work unit so it cannot drain
     // against the new reveal. In-flight tasks already settle into their own deduped caches.
     epoch += 1;
@@ -107,7 +198,10 @@ export function beginWorkUnitPrimaryReveal(): void {
 /**
  * Coordinated reveal completed — release the deferred prewarm queue and drain one task at a time.
  */
-export function endWorkUnitPrimaryReveal(): void {
+export function endWorkUnitPrimaryReveal(outcome: "settled" | "empty" | "error" = "settled"): void {
+    // The lifecycle closes even on the no-op path: a reveal that had nothing to release is still
+    // over, and a consumer waiting on it must not be stranded by an early return.
+    if (revealLifecycle === "pending" || revealLifecycle === "active") publishRevealLifecycle(outcome);
     if (!primaryRevealActive && queue.length === 0) { recordRevealGateEvent("end:noop"); return; }
     primaryRevealActive = false;
     recordRevealGateEvent("end");
