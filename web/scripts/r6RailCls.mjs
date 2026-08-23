@@ -10,6 +10,7 @@
  * Env: PE3_SLOT / PE3_PORT / PE3_BASE / PE3_STORAGE / PE3_TILE / R6_W / R6_H. Local hosts only.
  */
 import { chromium } from "playwright";
+import fs from "fs";
 import { homedir } from "os"; import { join } from "path";
 
 const SLOT = process.env.PE3_SLOT ?? "5";
@@ -23,6 +24,46 @@ const H = Number(process.env.R6_H ?? 960);
 const LABEL = process.env.R6_LABEL ?? `${MODE}-${W}`;
 
 if (!/^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(BASE)) throw new Error(`non-local host refused: ${BASE}`);
+
+/**
+ * Refuse to measure a build that predates the working tree.
+ *
+ * `pe3ProdBuild.sh` can FAIL while a previous `.next-prodcert` stays on disk and keeps serving, so a
+ * run started after a failed build silently measures the old artifact. That happened once during R6
+ * and the reading had to be discarded. This makes it impossible rather than a thing to remember.
+ */
+function assertCandidateBuild() {
+    const dist = join(process.cwd(), ".next-prodcert");
+    let builtAt;
+    try {
+        builtAt = fs.statSync(join(dist, "BUILD_ID")).mtimeMs;
+    } catch {
+        throw new Error(`no production build at ${dist} — run scripts/pe3ProdBuild.sh first`);
+    }
+    let newest = 0;
+    let newestPath = "";
+    const walk = (dir) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".")) continue;
+            const p = join(dir, entry.name);
+            if (entry.isDirectory()) { walk(p); continue; }
+            if (!/\.(ts|tsx|css)$/.test(entry.name)) continue;
+            const m = fs.statSync(p).mtimeMs;
+            if (m > newest) { newest = m; newestPath = p; }
+        }
+    };
+    for (const root of ["lib", "app", "components", "contexts"]) {
+        try { walk(join(process.cwd(), root)); } catch { /* absent root */ }
+    }
+    if (newest > builtAt) {
+        throw new Error(
+            `STALE BUILD: ${newestPath.replace(process.cwd() + "/", "")} is newer than .next-prodcert — rebuild before measuring`,
+        );
+    }
+    console.log(`build: .next-prodcert BUILD_ID ${fs.readFileSync(join(dist, "BUILD_ID"), "utf8").trim()}`);
+}
+
+assertCandidateBuild();
 
 const b = await chromium.launch({ headless: true });
 try {
