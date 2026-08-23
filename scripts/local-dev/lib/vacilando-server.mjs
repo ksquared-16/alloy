@@ -17,6 +17,10 @@
  *   GET  /api/lanes/:id/output → recent pane text (lane_id only; ?mode=extended|latest_response)
  *   POST /api/lanes/:id/instruction → paste+submit instruction (lane_id + body)
  *   POST /api/lanes/:id/runtime/release → lane.release_execution_capacity (keep durable lane)
+ *   POST /api/lanes/:id/attachments → upload one image (raw bytes, sniffed type)
+ *   GET  /api/lanes/:id/attachments → pending draft attachments + limits
+ *   POST /api/lanes/:id/attachments/:aid/remove → drop a draft attachment
+ *   GET  /api/attachments/:id → the image bytes, same auth as the conversation
  *   GET  /api/notifications   → durable notification records + unseen counts
  *   POST /api/notifications/seen → acknowledge by notification_id | lane_id | all
  *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
@@ -837,6 +841,33 @@ function readJsonBody(req, limit = 64 * 1024) {
   });
 }
 
+/**
+ * Read a raw binary body, bounded.
+ *
+ * Images cannot go through readJsonBody: it caps at 64 KB and would have to
+ * base64 them into JSON, inflating every upload by a third for no benefit. This
+ * streams the bytes and refuses early once the cap is passed, so an oversized
+ * file costs one connection rather than the whole limit in memory.
+ */
+function readBinaryBody(req, limit) {
+  return new Promise((res) => {
+    const chunks = [];
+    let size = 0;
+    let tooBig = false;
+    req.on("data", (chunk) => {
+      size += chunk.length;
+      if (size > limit) { tooBig = true; req.destroy(); return; }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      if (tooBig) return res({ ok: false, error: "attachment_too_large" });
+      if (!chunks.length) return res({ ok: false, error: "empty_file" });
+      res({ ok: true, bytes: Buffer.concat(chunks) });
+    });
+    req.on("error", () => res({ ok: false, error: "read_error" }));
+  });
+}
+
 export function createVacilandoServer() {
   const clients = new Set();
   const broadcast = (snap) => {
@@ -1077,6 +1108,44 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
         }
       }
+      const attachUploadMatch = path.match(/^\/api\/lanes\/([^/]+)\/attachments$/);
+      if (attachUploadMatch) {
+        const laneId = normalizeLaneId(attachUploadMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const A = await import("./vacilando/lane-attachments.mjs");
+          const body = await readBinaryBody(req, A.ATTACHMENT_MAX_BYTES + 1024);
+          if (!body.ok) {
+            const status = body.error === "attachment_too_large" ? 413 : 400;
+            return sendJson(res, status, { ok: false, error: body.error, limit: A.ATTACHMENT_MAX_BYTES });
+          }
+          // The filename is a LABEL from a header, never a path. It is
+          // sanitized before storage and never touches the filesystem.
+          const raw = req.headers["x-attachment-filename"];
+          const out = A.createAttachment({ laneId, bytes: body.bytes, filename: raw ? String(raw).slice(0, 300) : null });
+          const status = out.ok ? 200
+            : (out.error === "unsupported_media_type" ? 415
+              : (out.error === "attachment_too_large" || out.error === "attachments_total_too_large" ? 413 : 400));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "attachment_upload_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const attachDeleteMatch = path.match(/^\/api\/lanes\/([^/]+)\/attachments\/([^/]+)\/remove$/);
+      if (attachDeleteMatch) {
+        const laneId = normalizeLaneId(attachDeleteMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const A = await import("./vacilando/lane-attachments.mjs");
+          const out = A.deleteAttachment(decodeURIComponent(attachDeleteMatch[2]), { laneId });
+          const status = out.ok ? 200
+            : (out.error === "attachment_not_found" ? 404
+              : (out.error === "attachment_lane_mismatch" ? 403 : 409));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "attachment_remove_failed", detail: String(e && e.message || e) });
+        }
+      }
       if (path === "/api/notifications/seen") {
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
@@ -1174,11 +1243,14 @@ export function createVacilandoServer() {
         if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
         const body = await readJsonBody(req);
         if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
-        const extra = Object.keys(body.value || {}).filter((k) => k !== "instruction" && k !== "provider" && k !== "lane_id");
+        const extra = Object.keys(body.value || {}).filter((k) => !["instruction", "provider", "lane_id", "attachment_ids"].includes(k));
         if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
         try {
           const instruction = body.value?.instruction;
-          const out = await deliverManagedLaneInstruction(laneId, instruction, { provider: body.value?.provider });
+          const out = await deliverManagedLaneInstruction(laneId, instruction, {
+            provider: body.value?.provider,
+            attachmentIds: body.value?.attachment_ids,
+          });
           const status = laneInstructionHttpStatus(out);
           return sendJson(res, status, out);
         } catch (e) {
@@ -1754,6 +1826,55 @@ export function createVacilandoServer() {
         return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, unseen_count, unseen_by_lane, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
+      }
+    }
+    {
+      const attachGet = path.match(/^\/api\/attachments\/([^/]+)$/);
+      if (attachGet) {
+        try {
+          const A = await import("./vacilando/lane-attachments.mjs");
+          const id = decodeURIComponent(attachGet[1]);
+          // Optional lane scoping: when the caller names a lane, the record
+          // must belong to it, so one lane cannot address another's image.
+          const scope = url.searchParams.get("lane_id");
+          const out = A.readAttachmentBytes(id, { laneId: scope || null });
+          if (!out.ok) {
+            const status = out.error === "attachment_lane_mismatch" ? 403
+              : (out.error === "attachment_not_found" ? 404 : 410);
+            return sendJson(res, status, { ok: false, error: out.error });
+          }
+          res.writeHead(200, {
+            "content-type": out.mime_type,
+            "content-length": out.bytes.length,
+            "cache-control": "private, max-age=300",
+            "content-disposition": "inline",
+            "x-content-type-options": "nosniff",
+          });
+          return res.end(out.bytes);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "attachment_read_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const attachList = path.match(/^\/api\/lanes\/([^/]+)\/attachments$/);
+      if (attachList) {
+        const laneId = normalizeLaneId(attachList[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const A = await import("./vacilando/lane-attachments.mjs");
+          return sendJson(res, 200, {
+            ok: true,
+            attachments: A.listPendingAttachments(laneId),
+            limits: {
+              max_per_prompt: A.ATTACHMENT_MAX_PER_PROMPT,
+              max_bytes: A.ATTACHMENT_MAX_BYTES,
+              max_total_bytes: A.ATTACHMENT_MAX_TOTAL_BYTES,
+              max_dimension: A.ATTACHMENT_MAX_DIMENSION,
+              mime_types: Object.keys(A.ATTACHMENT_MIME_TYPES),
+            },
+          });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "attachment_list_failed", detail: String(e && e.message || e) });
+        }
       }
     }
     if (path === "/api/notifications") {

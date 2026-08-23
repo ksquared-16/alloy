@@ -155,7 +155,42 @@ export function buildSendBody(instruction, extra = {}) {
   const body = { instruction: String(instruction ?? "") };
   const provider = String(extra?.provider || "").toLowerCase();
   if (provider === "claude" || provider === "cursor") body.provider = provider;
+  // Order is the operator's order, and it is what the provider is told, so it
+  // is sent explicitly rather than left to whatever the server iterates.
+  const ids = (Array.isArray(extra?.attachmentIds) ? extra.attachmentIds : []).map(String).filter(Boolean);
+  if (ids.length) body.attachment_ids = ids;
   return body;
+}
+
+/** Operator-facing text for every attachment refusal the server can return. */
+export function attachmentErrorText(error, detail = {}) {
+  const mb = (n) => `${Math.round((Number(n) || 0) / (1024 * 1024))} MB`;
+  switch (error) {
+    case "unsupported_media_type":
+      return `That file is not a supported image. Use PNG, JPEG, WebP or GIF.`;
+    case "attachment_too_large":
+      return `That image is larger than ${mb(detail.limit)}. Try a smaller one.`;
+    case "attachments_total_too_large":
+      return `Those images add up to more than ${mb(detail.limit)} together.`;
+    case "attachment_dimensions_too_large":
+      return `That image is larger than ${detail.limit}px on a side.`;
+    case "too_many_attachments":
+      return `You can attach up to ${detail.limit || 6} images to one prompt.`;
+    case "empty_file":
+      return "That file was empty.";
+    case "attachment_missing":
+      return "One of the images is no longer available. Remove it and attach it again.";
+    case "attachment_corrupt":
+      return "One of the images did not upload cleanly. Remove it and attach it again.";
+    case "attachment_lane_mismatch":
+      return "That image belongs to a different lane.";
+    case "attachment_not_found":
+      return "That image is no longer attached.";
+    case "attachment_not_removable":
+      return "That image has already been sent, so it stays in the conversation.";
+    default:
+      return "The image could not be attached.";
+  }
 }
 
 export function sendPayload(laneId, instruction) {
@@ -2693,7 +2728,14 @@ export function userMessageNeedsClamp(text, { lines = USER_MESSAGE_CLAMP_LINES, 
   return false;
 }
 
-export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false } = {}) {
+/** The prompt line says images were part of it, without dumping filenames. */
+export function attachmentMetaSuffix(meta, attachments = []) {
+  const n = (Array.isArray(attachments) ? attachments : []).length;
+  if (!n) return meta;
+  return `${meta} \u00b7 ${n} image${n === 1 ? "" : "s"}`;
+}
+
+export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false, attachments = [] } = {}) {
   if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
   const clampable = userMessageNeedsClamp(rec.instruction);
   const open = !clampable || expanded;
@@ -2703,8 +2745,9 @@ export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = fals
   return `<article class="gw-msg gw-msg-user${clampable && !open ? " is-clamped" : ""}" data-gw-last${clampable ? ' data-gw-clampable="1"' : ""}>
     <div class="gw-msg-label">You</div>
     <div class="gw-msg-body gw-last-text" data-gw-msg-text>${esc(rec.instruction)}</div>
+    ${renderMessageAttachments(attachments)}
     ${toggle}
-    <div class="gw-msg-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"))}</div>
+    <div class="gw-msg-meta">${esc(attachmentMetaSuffix(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"), attachments))}</div>
   </article>`;
 }
 
@@ -2717,6 +2760,81 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
+export const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+
+export function formatBytes(n) {
+  const b = Number(n) || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Draft attachment previews, above the input inside the composer box.
+ *
+ * They live INSIDE the composer rather than above it so the pinned composer
+ * grows as one unit — previews stacked outside it pushed the input and Send
+ * button below the safe area on a phone, which is the one thing this row must
+ * never do.
+ */
+export function renderAttachmentDrafts(attachments = [], { uploading = 0, error = null } = {}) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  if (!list.length && !uploading && !error) return "";
+  const items = list.map((a) => {
+    const name = summaryText(a.filename) || "image";
+    const meta = [formatBytes(a.byte_size), a.width && a.height ? `${a.width}\u00d7${a.height}` : ""].filter(Boolean).join(" \u00b7 ");
+    return `<li class="gw-att" data-gw-att="${esc(a.attachment_id)}">
+      <img class="gw-att-thumb" src="${esc(a.url)}" alt="" loading="lazy">
+      <span class="gw-att-meta"><span class="gw-att-name">${esc(name)}</span><span class="gw-att-size">${esc(meta)}</span></span>
+      <button type="button" class="gw-att-x" data-gw-att-remove="${esc(a.attachment_id)}"
+        aria-label="Remove ${esc(name)}">\u00d7</button>
+    </li>`;
+  }).join("");
+  const pending = uploading
+    ? `<li class="gw-att is-uploading" aria-live="polite"><span class="gw-att-spin" aria-hidden="true"></span><span class="gw-att-meta"><span class="gw-att-name">Uploading ${uploading} image${uploading === 1 ? "" : "s"}\u2026</span></span></li>`
+    : "";
+  const err = error ? `<div class="gw-att-err" role="alert">${esc(error)}</div>` : "";
+  return `<div class="gw-atts" data-gw-atts>
+    <ul class="gw-att-list" aria-label="Attached images">${items}${pending}</ul>
+    ${err}
+  </div>`;
+}
+
+/**
+ * Attachment thumbnails on a sent operator message.
+ *
+ * Bounded thumbnails, never the full-resolution file: a phone should not pull
+ * six multi-megabyte screenshots to render a conversation it already read.
+ */
+export function renderMessageAttachments(attachments = []) {
+  const list = (Array.isArray(attachments) ? attachments : []).filter(Boolean);
+  if (!list.length) return "";
+  const items = list.map((a, i) => {
+    const name = summaryText(a.filename) || `Image ${i + 1}`;
+    if (a.state === "FAILED" || a.error) {
+      return `<li class="gw-msg-att is-failed"><span class="gw-msg-att-bad">${esc(name)} \u2014 not delivered</span></li>`;
+    }
+    return `<li class="gw-msg-att">
+      <button type="button" class="gw-msg-att-open" data-gw-att-open="${esc(a.attachment_id)}"
+        aria-label="Open ${esc(name)}">
+        <img src="${esc(a.url)}" alt="${esc(name)}" loading="lazy">
+      </button>
+    </li>`;
+  }).join("");
+  return `<ul class="gw-msg-atts" data-gw-msg-atts>${items}</ul>`;
+}
+
+/** A bounded lightbox. Aspect ratio preserved; Escape and the backdrop close it. */
+export function renderAttachmentLightbox(attachment) {
+  if (!attachment) return "";
+  const name = summaryText(attachment.filename) || "Image";
+  return `<div class="gw-lightbox" data-gw-lightbox role="dialog" aria-modal="true" aria-label="${esc(name)}">
+    <button type="button" class="gw-lightbox-x" data-gw-lightbox-close aria-label="Close image">\u00d7</button>
+    <img src="${esc(attachment.url)}" alt="${esc(name)}">
+    <div class="gw-lightbox-cap">${esc(name)}</div>
+  </div>`;
+}
+
 export function renderComposer({
   disabled,
   notice,
@@ -2726,6 +2844,9 @@ export function renderComposer({
   queueUntilSession = false,
   provider = null,
   cursorSendAvailable = false,
+  attachments = [],
+  attachmentsUploading = 0,
+  attachmentError = null,
 } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
@@ -2744,7 +2865,13 @@ export function renderComposer({
     <div class="gw-composer-box">
       <textarea id="gw-instruction" name="instruction" rows="1" maxlength="${max}"
         placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
+      ${renderAttachmentDrafts(attachments, { uploading: attachmentsUploading, error: attachmentError })}
       <div class="gw-composer-row">
+        <label class="gw-attach" title="Attach images">
+          <input type="file" accept="${ATTACHMENT_ACCEPT}" multiple data-gw-attach-input
+            aria-label="Attach images"${disabled ? " disabled" : ""}>
+          <span aria-hidden="true">\ud83d\udcce</span>
+        </label>
         <div class="gw-provider" role="radiogroup" aria-label="Agent">
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="claude" aria-pressed="${current === "claude" ? "true" : "false"}">Claude</button>
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}"${cursorDisabled} title="${esc(cursorTitle)}">Cursor</button>
@@ -2752,7 +2879,7 @@ export function renderComposer({
         <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
         <span class="gw-count" data-gw-count></span>
         <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
-        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled ? "disabled" : ""}>${esc(sendLabel)}</button>
+        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled || attachmentsUploading ? "disabled" : ""}>${esc(sendLabel)}</button>
       </div>
     </div>
     ${n}
@@ -3131,6 +3258,10 @@ export function renderGatewayShell({
   userMessageExpanded = false,
   folders = [],
   collapsedFolders,
+  attachments = [],
+  attachmentsUploading = 0,
+  attachmentError = null,
+  lightbox = null,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders });
@@ -3275,7 +3406,12 @@ export function renderGatewayShell({
             aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
         </header>
         <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, { expanded: Boolean(userMessageExpanded) })}
+          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
+            expanded: Boolean(userMessageExpanded),
+            // The run owns its attachments, so reopening the lane restores them
+            // from the same projection that restores the prompt text.
+            attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+          })}
           <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
             <div class="gw-msg-tools">
               ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
@@ -3292,8 +3428,12 @@ export function renderGatewayShell({
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
           provider: lane?.preferred_provider || "claude",
           cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
+          attachments,
+          attachmentsUploading,
+          attachmentError,
         })}
       </div>
+      ${renderAttachmentLightbox(lightbox)}
       <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
       ${detailsPanel}
     </section>

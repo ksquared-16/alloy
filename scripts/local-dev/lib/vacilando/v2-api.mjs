@@ -246,7 +246,11 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const extra = forbidden.filter((k) => v[k] != null && v[k] !== "");
     if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
     const { deliverManagedLaneInstruction, laneInstructionHttpStatus } = await import("./execution-run-send.mjs");
-    const out = await deliverManagedLaneInstruction(id, v.instruction, { actor: actorDefault, provider: v.provider });
+    const out = await deliverManagedLaneInstruction(id, v.instruction, {
+      actor: actorDefault,
+      provider: v.provider,
+      attachmentIds: v.attachment_ids,
+    });
     return { status: laneInstructionHttpStatus(out), body: out };
   }
 

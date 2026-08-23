@@ -47,6 +47,10 @@ const G = {
   executionCapacity: null,
   unseenCount: 0,
   unseenByLane: {},
+  attachments: [],
+  attachmentsUploading: 0,
+  attachmentError: null,
+  lightbox: null,
   folders: [],
   collapsedFolders: null,
   releasing: false,
@@ -973,6 +977,10 @@ function paint() {
     connect: G.connect,
     folders: G.folders,
     collapsedFolders: collapsedFolders(),
+    attachments: G.attachments,
+    attachmentsUploading: G.attachmentsUploading,
+    attachmentError: G.attachmentError,
+    lightbox: G.lightbox,
   });
   paintRail();
   restoreComposer(saved);
@@ -1334,8 +1342,16 @@ async function show(r) {
       G.threadEntered = false;
       G.threadNewUpdate = false;
       G.asideHistory = false;
+      // Draft attachments belong to ONE lane. Carrying them across would attach
+      // a screenshot to the wrong prompt, and the server would refuse it anyway.
+      G.attachments = [];
+      G.attachmentError = null;
+      G.lightbox = null;
       resetAsideForLaneEntry();
     }
+    // A refresh mid-draft must not lose images the operator already picked:
+    // they are durable server-side, so re-read them rather than assuming none.
+    hydrateAttachments(G.selected);
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1453,6 +1469,12 @@ async function sendCurrent() {
     paint();
     return;
   }
+  // A half-uploaded image must never be silently dropped from the prompt.
+  if (G.attachmentsUploading > 0) {
+    G.notice = { kind: "err", text: "Wait for the images to finish uploading." };
+    paint();
+    return;
+  }
   G.sending = true;
   G.notice = { kind: "idle", text: "Sending…" };
   paint();
@@ -1463,6 +1485,7 @@ async function sendCurrent() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(View.buildSendBody(instruction, {
         provider: document.getElementById("gw-composer-provider")?.value,
+        attachmentIds: (G.attachments || []).map((a) => a.attachment_id),
       })),
     });
     result = await r.json();
@@ -1478,6 +1501,9 @@ async function sendCurrent() {
     setDraft(id, "");
     const box = document.getElementById("gw-instruction");
     if (box) box.value = "";
+    // The images are now the run's, not the draft's.
+    G.attachments = [];
+    G.attachmentError = null;
     const rec = result.last_instruction || {
       instruction,
       delivered_at: result.delivered_at,
@@ -2187,4 +2213,162 @@ document.addEventListener("change", async (e) => {
     }
     paint();
   } catch { /* */ }
+});
+
+// ---------------------------------------------------------------------------
+// Image attachments on the operator prompt.
+//
+// Three entry points, one upload path: the file picker, a clipboard paste, and
+// a drop onto the composer. Everything funnels through uploadAttachments so the
+// draft-preservation and error rules can only be written once.
+// ---------------------------------------------------------------------------
+const ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+
+async function uploadAttachments(files) {
+  const laneId = G.selected;
+  if (!laneId) return;
+  const list = Array.from(files || []).filter((f) => f && (ATTACHMENT_TYPES.has(f.type) || !f.type));
+  if (!list.length) {
+    if ((files || []).length) {
+      G.attachmentError = View.attachmentErrorText("unsupported_media_type");
+      paint();
+    }
+    return;
+  }
+  G.attachmentsUploading += list.length;
+  G.attachmentError = null;
+  paint();
+  for (const file of list) {
+    try {
+      const bytes = await file.arrayBuffer();
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/attachments`, {
+        method: "POST",
+        headers: {
+          "content-type": file.type || "application/octet-stream",
+          // A LABEL, not a path. The server sanitizes it and never touches the
+          // filesystem with it. Header values must be latin-1, so a non-ASCII
+          // filename is encoded rather than throwing and losing the upload.
+          "x-attachment-filename": encodeURIComponent(file.name || "image"),
+        },
+        body: bytes,
+      });
+      const j = await r.json();
+      if (j.ok && j.attachment) {
+        G.attachments = [...G.attachments, j.attachment];
+      } else {
+        // One bad file must not discard the draft or the images that worked.
+        G.attachmentError = View.attachmentErrorText(j.error, j);
+      }
+    } catch {
+      G.attachmentError = "That image could not be uploaded. Your draft is still here.";
+    } finally {
+      G.attachmentsUploading = Math.max(0, G.attachmentsUploading - 1);
+      paint();
+    }
+  }
+}
+
+async function hydrateAttachments(laneId) {
+  if (!laneId) return;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/attachments`);
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.attachments) && G.selected === laneId) {
+      G.attachments = j.attachments;
+      paint();
+    }
+  } catch { /* an empty strip is the safe default */ }
+}
+
+async function removeAttachment(attachmentId) {
+  const laneId = G.selected;
+  if (!laneId || !attachmentId) return;
+  const before = G.attachments;
+  G.attachments = G.attachments.filter((a) => a.attachment_id !== attachmentId);
+  G.attachmentError = null;
+  paint();
+  try {
+    const r = await gwFetch(
+      `/api/lanes/${encodeURIComponent(laneId)}/attachments/${encodeURIComponent(attachmentId)}/remove`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) },
+    );
+    const j = await r.json();
+    if (!j.ok) {
+      // Put it back rather than showing a prompt that no longer matches what
+      // the server will actually send.
+      G.attachments = before;
+      G.attachmentError = View.attachmentErrorText(j.error, j);
+      paint();
+    }
+  } catch {
+    G.attachments = before;
+    G.attachmentError = "Could not remove that image.";
+    paint();
+  }
+}
+
+document.addEventListener("change", (e) => {
+  const input = e.target?.closest?.("[data-gw-attach-input]");
+  if (!input) return;
+  const files = input.files;
+  // Clear the input so picking the same file twice in a row still fires.
+  uploadAttachments(files).finally(() => { try { input.value = ""; } catch { /* */ } });
+});
+
+document.addEventListener("click", (e) => {
+  const rm = e.target?.closest?.("[data-gw-att-remove]");
+  if (rm) {
+    e.preventDefault();
+    e.stopPropagation();
+    removeAttachment(rm.getAttribute("data-gw-att-remove"));
+    return;
+  }
+  const open = e.target?.closest?.("[data-gw-att-open]");
+  if (open) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = open.getAttribute("data-gw-att-open");
+    const run = G.lane?.execution_run || G.lane?.previous_run;
+    const found = (run?.attachments || []).find((a) => a.attachment_id === id);
+    if (found) { G.lightbox = found; paint(); }
+    return;
+  }
+  if (e.target?.closest?.("[data-gw-lightbox-close]") || e.target?.closest?.("[data-gw-lightbox]")) {
+    if (G.lightbox) { e.preventDefault(); G.lightbox = null; paint(); }
+  }
+}, true);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && G.lightbox) { G.lightbox = null; paint(); }
+});
+
+// Clipboard paste: a screenshot on the clipboard is the fastest way in, and it
+// must not also paste a filename into the textarea.
+document.addEventListener("paste", (e) => {
+  if (!G.selected) return;
+  const items = Array.from(e.clipboardData?.items || []);
+  const files = items.filter((i) => i.kind === "file" && ATTACHMENT_TYPES.has(i.type))
+    .map((i) => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  uploadAttachments(files);
+});
+
+// Drag and drop onto the composer.
+document.addEventListener("dragover", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (!box || !G.selected) return;
+  e.preventDefault();
+  box.classList.add("is-dropping");
+});
+document.addEventListener("dragleave", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (box) box.classList.remove("is-dropping");
+});
+document.addEventListener("drop", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (!box || !G.selected) return;
+  e.preventDefault();
+  box.classList.remove("is-dropping");
+  uploadAttachments(e.dataTransfer?.files);
 });

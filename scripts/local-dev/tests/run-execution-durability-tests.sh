@@ -31,6 +31,7 @@ SUITES=(
   "development-lane-notifications.test.mjs"
   "development-lane-push-outcome.test.mjs"
   "development-lane-notify.test.mjs"
+  "development-lane-attachments.test.mjs"
 )
 
 PASS=0

@@ -1456,6 +1456,48 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-folder-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
 .gw-folder-pick select{min-height:44px;font-size:16px;padding:6px 8px;border-radius:8px;}
 .gw-folder-pick-hint{opacity:.65;}
+/* Image attachments. The draft strip lives INSIDE the composer box so the
+   pinned composer grows as one unit — a strip stacked outside it pushed the
+   input and Send below the iPhone safe area. */
+.gw-attach{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;min-height:36px;border-radius:8px;cursor:pointer;font-size:17px;
+  color:var(--ink-2);background:transparent;border:1px solid transparent;}
+.gw-attach:hover{background:var(--bg-tint);}
+.gw-attach:focus-within{border-color:var(--run);outline:2px solid var(--run);outline-offset:1px;}
+.gw-attach input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.gw-atts{padding:6px 8px 0;}
+.gw-att-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0;}
+.gw-att{position:relative;display:flex;align-items:center;gap:8px;max-width:100%;
+  padding:4px 26px 4px 4px;border:1px solid var(--line);border-radius:10px;background:var(--card-2);}
+.gw-att-thumb{width:38px;height:38px;object-fit:cover;border-radius:6px;flex:0 0 auto;background:var(--bg-tint);}
+.gw-att-meta{display:flex;flex-direction:column;min-width:0;font-size:11px;line-height:1.25;}
+.gw-att-name{font-weight:650;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12ch;}
+.gw-att-size{color:var(--ink-3);}
+.gw-att-x{position:absolute;top:2px;right:2px;width:20px;height:20px;border:0;border-radius:999px;
+  background:var(--bg-tint);color:var(--ink-2);font-size:14px;line-height:1;cursor:pointer;padding:0;}
+.gw-att-x:hover{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-att.is-uploading{padding-right:10px;}
+.gw-att-spin{width:14px;height:14px;border-radius:999px;border:2px solid var(--line-strong);
+  border-top-color:var(--run);animation:gwspin .8s linear infinite;flex:0 0 auto;}
+@keyframes gwspin{to{transform:rotate(360deg);}}
+.gw-att-err{margin-top:6px;font-size:12px;color:var(--blocked);}
+.gw-composer.is-dropping .gw-composer-box{outline:2px dashed var(--run);outline-offset:2px;}
+
+/* Thumbnails on a sent prompt: bounded, never full resolution. */
+.gw-msg-atts{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:8px 0 0;padding:0;}
+.gw-msg-att-open{padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer;
+  line-height:0;overflow:hidden;min-height:0;}
+.gw-msg-att-open img{width:92px;height:92px;object-fit:cover;display:block;}
+.gw-msg-att.is-failed .gw-msg-att-bad{font-size:11px;color:var(--blocked);}
+
+/* Bounded preview. Aspect ratio preserved; never larger than the viewport. */
+.gw-lightbox{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;background:rgba(23,49,58,.92);
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);}
+.gw-lightbox img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;}
+.gw-lightbox-cap{color:#fff;font-size:12px;opacity:.85;text-align:center;}
+.gw-lightbox-x{position:absolute;top:calc(env(safe-area-inset-top) + 8px);right:12px;width:44px;height:44px;
+  border:0;border-radius:999px;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;}
 /* Unread notification indicators. Restrained on purpose: execution state stays
    the loudest thing in a lane row, and this sits beside the name rather than
    competing with the posture line. White on --vacilando-terracotta is only
