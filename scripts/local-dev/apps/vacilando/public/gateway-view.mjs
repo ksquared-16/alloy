@@ -3569,9 +3569,13 @@ export function renderLaneWizard(state = {}) {
     </div>`;
   } else {
     const branch = draft.workspace_mode === "new_worktree" ? previewBranch(repo, draft.name, draft.branch_suffix) : null;
+    // A planning lane has NO worktree. Reading draft.worktree_path
+    // unconditionally showed a path left over from a Connect-existing attempt
+    // the operator had already moved away from — the review would have told
+    // them a planning lane came with a worktree.
     const path = draft.workspace_mode === "new_worktree"
       ? previewWorktreePath(repo, draft.name, draft.branch_suffix)
-      : (draft.worktree_path || null);
+      : (draft.workspace_mode === "connect_existing" ? (draft.worktree_path || null) : null);
     const folderName = draft.new_folder
       || (state.folders || []).find((f) => f.folder_id === draft.folder_id)?.name
       || "No folder";

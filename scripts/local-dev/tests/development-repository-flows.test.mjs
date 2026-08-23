@@ -274,6 +274,29 @@ test("review states everything, including that nothing is pushed", () => {
   assert.ok(html.includes("data-gw-wiz-create"), "and only here is Create offered");
 });
 
+test("a planning lane never shows a worktree in review", () => {
+  // Caught in the live browser pass: a worktree_path left over from a
+  // Connect-existing attempt the operator had moved away from still appeared
+  // in the review of a Planning-only lane.
+  const html = V.renderLaneWizard({
+    step: "review", repositories: REPOS, folders: FOLDERS,
+    draft: { repository_id: "r_fix", name: "L", workspace_mode: "planning",
+      worktree_path: "/Users/x/Code/alloy-worktrees/wt5" },
+  });
+  assert.equal(html.includes("wt5"), false, "a planning lane has no worktree to show");
+  assert.equal(html.includes("<dt>Worktree</dt>"), false);
+});
+
+test("a new-worktree lane shows its PREVIEW, not a stale connect path", () => {
+  const html = V.renderLaneWizard({
+    step: "review", repositories: REPOS, folders: FOLDERS,
+    draft: { repository_id: "r_fix", name: "L", workspace_mode: "new_worktree",
+      provider: "claude", worktree_path: "/stale/path" },
+  });
+  assert.equal(html.includes("/stale/path"), false);
+  assert.ok(html.includes("/Users/x/Code/fx-worktrees/l"));
+});
+
 test("no step before review offers Create", () => {
   for (const step of ["repository", "folder", "identity", "workspace", "provider"]) {
     const html = V.renderLaneWizard({

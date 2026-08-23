@@ -2616,7 +2616,8 @@ document.addEventListener("click", async (e) => {
   if (mode) {
     e.preventDefault();
     d.workspace_mode = mode.getAttribute("data-gw-wiz-mode");
-    if (d.workspace_mode === "planning") d.provider = null;
+    if (d.workspace_mode === "planning") { d.provider = null; d.worktree_path = ""; w.connectCheck = null; }
+    if (d.workspace_mode === "new_worktree") { d.worktree_path = ""; w.connectCheck = null; }
     paint();
     return;
   }
