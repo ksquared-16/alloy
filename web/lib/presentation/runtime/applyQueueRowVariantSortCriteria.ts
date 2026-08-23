@@ -56,6 +56,23 @@ function readSortValue(row: Record<string, unknown>, key: string): unknown {
     return row[key] ?? null;
 }
 
+/** Canonical placement rank for a row, when the placement system assigned one. */
+function readPlacementRank(row: Record<string, unknown>): number | null {
+    const placement = row._placement_waitlist_row as Record<string, unknown> | null | undefined;
+    const position = placement?.runtime_position;
+    return typeof position === "number" && Number.isFinite(position) ? position : null;
+}
+
+/** Rows the placement system ranked keep that order; unranked rows never jump ahead of ranked ones. */
+function comparePlacementRank(a: Record<string, unknown>, b: Record<string, unknown>): number {
+    const ra = readPlacementRank(a);
+    const rb = readPlacementRank(b);
+    if (ra == null && rb == null) return 0;
+    if (ra == null) return 1;
+    if (rb == null) return -1;
+    return ra - rb;
+}
+
 function compareValues(a: unknown, b: unknown, nulls: "first" | "last" = "last"): number {
     const aNull = a == null || a === "";
     const bNull = b == null || b === "";
@@ -72,7 +89,16 @@ function compareValues(a: unknown, b: unknown, nulls: "first" | "last" = "last")
     return as < bs ? -1 : as > bs ? 1 : 0;
 }
 
-/** Stable sort by published variant sortCriteria; final tiebreak on id. */
+/**
+ * Stable sort by published variant sortCriteria.
+ *
+ * When no criterion decides, placement rank breaks the tie before the opaque row id. A configured
+ * criterion that resolves to nothing on every row — `waitlist.priority` on the child Waitlist, where
+ * no row carries a priority fact — otherwise fell straight through to `id`, ordering the queue by
+ * participation UUID and discarding the placement order the rows were numbered from. That is the
+ * client inventing an order, which is exactly what the Placement System is the authority against.
+ * `runtime_position` here is the placement system's own output, not a score derived at the surface.
+ */
 export function applyQueueRowVariantSortCriteria<T extends Record<string, unknown>>(
     rows: readonly T[],
     criteria: readonly QueueRowVariantSortCriterion[] | null | undefined,
@@ -85,6 +111,8 @@ export function applyQueueRowVariantSortCriteria<T extends Record<string, unknow
             const cmp = compareValues(readSortValue(ra, rule.key), readSortValue(rb, rule.key), nulls);
             if (cmp !== 0) return rule.direction === "desc" ? -cmp : cmp;
         }
+        const placementRank = comparePlacementRank(ra, rb);
+        if (placementRank !== 0) return placementRank;
         return compareValues(ra.id, rb.id);
     });
     return out;
