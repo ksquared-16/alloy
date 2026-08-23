@@ -1,6 +1,6 @@
 # R15 — Workspace Readiness Payload Efficiency
 
-**Status: DECISION REQUIRED.** Material waste is proven — roughly **1.2 MB of uncompressed
+**Status: DEFERRED — EXTERNAL VERIFICATION REQUIRED.** Material waste is proven — roughly **1.2 MB of uncompressed
 provisioning JSON for one Workspace → Work Unit journey** — but the two levers that would remove most
 of it fall outside the shapes R15 authorizes, and the larger of the two cannot be verified against
 production from this lane. No product code was changed.
@@ -135,3 +135,47 @@ Workspace → Work Unit journey.
 
 Both follow PE3 conventions, refuse a non-local base or a stale `.next-prodcert`, dispose the browser
 through `try/finally`, are read-only, and write durable evidence with subject identifiers redacted.
+
+## 9. Production compression check — attempted, and NOT verifiable from this lane
+
+The Director asked for a read-only compression check against the canonical production deployment
+before any change. It cannot be completed here, and nothing is inferred.
+
+### What was established
+
+| Target | Result |
+|---|---|
+| GitHub deployments API | Every recorded deployment for these commits is **`Preview`** — `Preview – workwithalloy` and `Preview – firefly-early-learning`. **No Production environment is recorded.** |
+| `workwithalloy.com` | 307 → `www` |
+| `www.workwithalloy.com` | 200, but `/workspace` and the readiness API both return **404 `x-matched-path: /404`** — this is the marketing site, not the operator app |
+| `workwithalloy.vercel.app` | same marketing 404 |
+| `firefly-early-learning.vercel.app` | 404, 107-byte plain text — no production alias |
+| `workwithalloy-264hz97eq-…vercel.app` (carries staging SHA `2f2420c18`) | **is** the operator app: `/workspace` → 307 `/login`; readiness API → **401 `application/json`**. A `Preview` deployment. |
+
+### Why the reachable evidence proves nothing either way
+
+- The `content-encoding: br` on `www.workwithalloy.com` is a **statically cached HTML** response
+  (`x-vercel-cache: HIT`, `age: 883727`). A cached static asset says nothing about how a dynamic
+  Route-Handler JSON response is encoded.
+- The only reachable JSON on the app deployment is the **24-byte `{"error":"Unauthorized"}`** 401
+  (`x-vercel-cache: MISS`, so a genuine origin response, and **no `content-encoding`**). At 24 bytes it
+  is far below any compression threshold, so its lack of encoding is not evidence of anything.
+
+Obtaining a representative response — a ~229 KB readiness answer, or a `?subject_id=` prewarm — requires
+authenticated access to the deployed application. This lane holds local slot-2 credentials only, and
+the governing instruction forbids asking the operator for credentials.
+
+### Consequence
+
+**No product change was made**, per the instruction's stop condition. The §3 local finding stands
+exactly as measured and no further: on a local `next start`, all 27 `application/json` responses are
+served uncompressed while JS, CSS, HTML and SVG are gzipped. Whether the deployed application behaves
+the same way is **unknown**, and it is the single fact that decides whether R15 has a material
+transfer cost at all.
+
+**What would settle it:** one authenticated request against the canonical deployment for
+`/api/admin/work-units/waitlist/provisioning-answer` with `Accept-Encoding: br, gzip`, capturing
+`content-encoding`, transferred bytes, decoded bytes and the `x-vercel-*` headers. If it returns `br`
+or `gzip`, R15's transfer premise is disproved in production and the recommendation becomes
+**DISPROVED**. If it returns identity, the delivery owner can be identified and the narrowest
+compression correction implemented under the constraints already specified.
