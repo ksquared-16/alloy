@@ -1505,6 +1505,61 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);}
 .gw-lightbox img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;}
 .gw-lightbox-cap{color:#fff;font-size:12px;opacity:.85;text-align:center;}
+/* Sheets: Add repository and the Add lane wizard.
+   Full-height and safe-area aware, because on a phone this IS the screen while
+   it is open. The footer is pinned so the primary action never scrolls away and
+   never sits under the home indicator. */
+.gw.is-sheet{display:block;height:100%;}
+.gw-sheet{display:flex;flex-direction:column;height:100%;max-height:100%;background:var(--bg);}
+.gw-sheet-head{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  border-bottom:1px solid var(--line);background:var(--card);}
+.gw-sheet-x{width:44px;height:44px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--ink);}
+.gw-sheet-title{margin:0;font-size:17px;font-weight:750;color:var(--ink);}
+.gw-sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 20px;}
+.gw-sheet-foot{flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;padding:10px 14px calc(env(safe-area-inset-bottom) + 12px);
+  border-top:1px solid var(--line);background:var(--card);}
+.gw-sheet-foot .btn{min-height:44px;flex:1 1 auto;}
+.gw-sheet-note{font-size:13px;color:var(--ink-2);line-height:1.45;margin:10px 0 0;}
+
+.gw-field{display:block;margin:0 0 14px;}
+.gw-field-label{display:block;font-size:12px;font-weight:650;color:var(--ink-2);margin-bottom:5px;}
+.gw-field input{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--card);color:var(--ink);
+  /* 16px keeps iOS from zooming the whole page when the field is focused. */
+  font-size:16px;}
+.gw-field input:focus{outline:2px solid var(--run);outline-offset:1px;border-color:var(--run);}
+.gw-field-hint{display:block;font-size:11px;color:var(--ink-3);margin-top:5px;}
+.gw-field-err{display:block;font-size:12px;color:var(--blocked);margin-top:5px;font-weight:600;}
+
+.gw-seg{display:flex;gap:6px;margin:0 0 14px;}
+.gw-seg-opt{flex:1 1 0;min-height:44px;border:1px solid var(--line-strong);border-radius:10px;
+  background:var(--card);font:inherit;font-size:13px;font-weight:650;color:var(--ink);cursor:pointer;}
+.gw-seg-opt[aria-pressed="true"]{background:var(--terra-soft);border-color:var(--terra-line);color:var(--vacilando-terracotta-ink);}
+.gw-seg-opt[disabled]{opacity:.5;cursor:not-allowed;}
+
+.gw-choices{display:flex;flex-direction:column;gap:8px;margin:0 0 6px;}
+.gw-choice{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;
+  min-height:56px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:12px;
+  background:var(--card);cursor:pointer;font:inherit;}
+.gw-choice.is-on{border-color:var(--run);background:var(--run-bg);}
+.gw-choice[disabled],.gw-choice.is-off{opacity:.55;cursor:not-allowed;}
+.gw-choice.is-add{border-style:dashed;}
+.gw-choice-t{font-size:14px;font-weight:700;color:var(--ink);}
+.gw-choice-s{font-size:11.5px;color:var(--ink-3);}
+
+.gw-steps{display:flex;gap:4px;list-style:none;margin:0;padding:8px 12px;background:var(--card);
+  border-bottom:1px solid var(--line);overflow-x:auto;}
+.gw-step{display:flex;align-items:center;gap:5px;flex:0 0 auto;font-size:11px;color:var(--ink-3);}
+.gw-step-n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:999px;background:var(--bg-tint);font-size:10px;font-weight:700;}
+.gw-step.is-current{color:var(--ink);font-weight:700;}
+.gw-step.is-current .gw-step-n{background:var(--run);color:#fff;}
+.gw-step.is-done .gw-step-n{background:var(--green-soft);color:var(--green-ink);}
+
+.gw-preview{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card-2);}
+.gw-repo-check dd,.gw-review dd{word-break:break-all;}
+.gw-notice.ok{background:var(--green-soft);color:var(--green-ink);}
+
 /* Repository groups: the top organisational boundary, and an execution one.
    Styled a step stronger than a folder header so the hierarchy reads at a
    glance without adding another large button. */

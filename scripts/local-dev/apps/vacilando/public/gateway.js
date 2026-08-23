@@ -53,6 +53,8 @@ const G = {
   lightbox: null,
   folders: [],
   repositories: [],
+  repositorySheet: null,
+  laneWizard: null,
   collapsedFolders: null,
   releasing: false,
   notify: {
@@ -980,6 +982,8 @@ function paint() {
     folders: G.folders,
     collapsedFolders: collapsedFolders(),
     repositories: G.repositories,
+    repositorySheet: G.repositorySheet,
+    laneWizard: G.laneWizard,
     attachments: G.attachments,
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
@@ -1938,6 +1942,13 @@ document.addEventListener("click", async (e) => {
     toggleFolderCollapsed(`repo:${repoToggle.getAttribute("data-gw-repo-toggle")}`);
     return;
   }
+  const addLane = e.target?.closest?.("[data-gw-add]");
+  if (addLane) {
+    e.preventDefault();
+    e.stopPropagation();
+    openLaneWizard();
+    return;
+  }
   const repoNew = e.target?.closest?.("[data-gw-repo-new]");
   if (repoNew) {
     e.preventDefault();
@@ -2400,66 +2411,230 @@ document.addEventListener("drop", (e) => {
 // remote) rather than finding out afterwards. Clone is not implemented and says
 // so instead of offering a button that fails.
 // ---------------------------------------------------------------------------
-async function addRepositoryFlow() {
-  const path = window.prompt(
-    "Connect a local Git repository.\n\nEnter its full path (it must be inside an approved root):",
-    "",
-  );
-  if (path == null || !path.trim()) return;
-  let inspected;
+function addRepositoryFlow() {
+  // Opens the sheet. Nothing is validated and nothing is registered until the
+  // operator asks for it.
+  G.repositorySheet = { method: "connect", path: "", name: null, validation: null, error: null };
+  paint();
+}
+
+async function validateRepositoryPath() {
+  const st = G.repositorySheet;
+  if (!st || st.validating) return;
+  const path = String(st.path || "").trim();
+  if (!path) return;
+  st.validating = true; st.error = null; st.validation = null;
+  paint();
   try {
-    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(path.trim())}`);
-    inspected = await r.json();
+    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(path)}`);
+    const j = await r.json();
+    if (!j.ok) { st.error = j.error; st.errorDetail = j; }
+    else {
+      // Read-only: this endpoint persists nothing.
+      st.validation = j;
+      st.name = st.name ?? View.suggestRepositoryName(j.root);
+    }
   } catch {
-    G.notice = { kind: "err", text: "Could not reach the Gateway." };
+    st.error = "network";
+    st.errorDetail = {};
+  } finally {
+    st.validating = false;
     paint();
-    return;
   }
-  if (!inspected.ok) {
-    G.notice = { kind: "err", text: View.repositoryErrorText(inspected.error, inspected) };
-    paint();
-    return;
-  }
-  if (inspected.already_registered) {
-    G.notice = { kind: "idle", text: `Already registered as "${inspected.already_registered.name}".` };
-    paint();
-    return;
-  }
-  if (inspected.is_worktree) {
-    // Registering a worktree would give two "repositories" one Git object
-    // store. Name the parent so the operator can register that instead.
-    G.notice = {
-      kind: "err",
-      text: `That is a worktree of ${inspected.parent_root}. Register that repository instead, then connect this path as a lane.`,
-    };
-    paint();
-    return;
-  }
-  const summary = [
-    `Repository: ${inspected.root}`,
-    `Default branch: ${inspected.default_branch || "unknown"}`,
-    inspected.has_remote ? "Remote: yes" : "Remote: none (local only)",
-    "",
-    "Register this repository?",
-  ].join("\n");
-  if (!window.confirm(summary)) return;
-  const name = window.prompt("Display name for this repository:", inspected.root.split("/").pop()) || null;
-  if (name == null) return;
+}
+
+async function confirmRepositoryRegistration() {
+  const st = G.repositorySheet;
+  if (!st?.validation || st.submitting) return;   // double-submit guard
+  st.submitting = true; st.error = null;
+  paint();
   try {
     const r = await gwFetch("/api/repositories/connect-local", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path: inspected.path, name }),
+      body: JSON.stringify({ path: st.validation.path, name: st.name || null }),
     });
     const j = await r.json();
-    if (!j.ok) G.notice = { kind: "err", text: View.repositoryErrorText(j.error, j) };
-    else {
-      G.notice = { kind: "ok", text: `Registered ${j.repository.name}.` };
-      try { await fetchLanes(); } catch { /* the poll will catch up */ }
-    }
+    if (!j.ok) { st.error = j.error; st.errorDetail = j; st.submitting = false; paint(); return; }
+    G.repositorySheet = null;
+    G.notice = { kind: "ok", text: `Registered ${j.repository.name}.` };
+    try { await fetchLanes(); } catch { /* the poll catches up */ }
     paint();
   } catch {
-    G.notice = { kind: "err", text: "Could not register that repository." };
+    st.error = "network"; st.errorDetail = {}; st.submitting = false; paint();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sheet + wizard interaction.
+//
+// Nothing here writes anything durable until the final confirm. Values live in
+// G.repositorySheet / G.laneWizard.draft, so Back preserves what was typed and
+// Cancel throws the whole thing away without leaving a record behind.
+// ---------------------------------------------------------------------------
+function openLaneWizard() {
+  const viewing = (G.lanes || []).find((l) => l.lane_id === G.selected);
+  G.laneWizard = {
+    step: "repository",
+    // Default to the repository the operator is already looking at.
+    draft: { repository_id: viewing?.repository_id || G.repositories?.[0]?.repository_id || null, provider: "claude" },
+    error: null,
+  };
+  paint();
+}
+
+function closeSheets() {
+  G.repositorySheet = null;
+  G.laneWizard = null;
+  paint();
+}
+
+async function wizardValidateWorktree() {
+  const w = G.laneWizard;
+  if (!w?.draft?.worktree_path) return;
+  w.connectCheck = null;
+  paint();
+  try {
+    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(w.draft.worktree_path)}`);
+    const j = await r.json();
+    const repo = (G.repositories || []).find((x) => x.repository_id === w.draft.repository_id);
+    if (!j.ok) {
+      w.connectCheck = { ok: false, text: View.repositoryErrorText(j.error, j) };
+    } else if (repo && j.git_common_dir !== repo.git_common_dir) {
+      // The cross-repository refusal, surfaced before anything is created.
+      w.connectCheck = { ok: false, text: `That worktree belongs to a different repository (${j.git_common_dir}).` };
+    } else {
+      w.connectCheck = { ok: true, branch: j.branch, git_common_dir: j.git_common_dir };
+    }
+  } catch {
+    w.connectCheck = { ok: false, text: "Could not reach the Gateway." };
+  }
+  paint();
+}
+
+async function wizardCreate() {
+  const w = G.laneWizard;
+  if (!w || w.submitting) return;            // double-submit guard
+  const d = w.draft || {};
+  w.submitting = true; w.error = null;
+  paint();
+  try {
+    // A folder named in the wizard is created first, so the lane can be filed
+    // into it in the same confirmed action.
+    let folderId = d.folder_id || null;
+    if (d.new_folder && String(d.new_folder).trim()) {
+      const fr = await gwFetch("/api/lane-folders/create", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: d.new_folder, repository_id: d.repository_id }),
+      });
+      const fj = await fr.json();
+      if (fj.ok) folderId = fj.folder.folder_id;
+    }
+    const body = {
+      name: d.name,
+      provider: d.provider || "claude",
+      repository_id: d.repository_id,
+      workspace_mode: d.workspace_mode,
+    };
+    if (d.workspace_mode === "new_worktree" && d.branch_suffix) body.branch = d.branch_suffix;
+    if (d.workspace_mode === "connect_existing") body.worktree_path = d.worktree_path;
+    const r = await gwFetch("/api/lanes/create", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      w.error = j.error;
+      w.errorText = View.repositoryErrorText(j.error, j);
+      w.submitting = false;
+      paint();
+      return;
+    }
+    if (folderId && j.lane?.lane_id) {
+      await gwFetch(`/api/lanes/${encodeURIComponent(j.lane.lane_id)}/folder`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folder_id: folderId }),
+      }).catch(() => {});
+    }
+    G.laneWizard = null;
+    try { await fetchLanes(); } catch { /* */ }
+    // Land in the new lane's chat, which is where the operator wants to be.
+    if (j.lane?.lane_id) location.hash = View.laneDetailHash(j.lane.lane_id);
+    else paint();
+  } catch {
+    w.error = "network";
+    w.errorText = "Could not reach the Gateway. Nothing was created.";
+    w.submitting = false;
     paint();
   }
 }
+
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (!t) return;
+  if (t.matches?.("[data-gw-repo-path]") && G.repositorySheet) { G.repositorySheet.path = t.value; return; }
+  if (t.matches?.("[data-gw-repo-name]") && G.repositorySheet) { G.repositorySheet.name = t.value; return; }
+  if (!G.laneWizard) return;
+  const d = G.laneWizard.draft;
+  if (t.matches?.("[data-gw-wiz-name]")) d.name = t.value;
+  else if (t.matches?.("[data-gw-wiz-newfolder]")) { d.new_folder = t.value; if (t.value) d.folder_id = null; }
+  else if (t.matches?.("[data-gw-wiz-suffix]")) d.branch_suffix = t.value;
+  else if (t.matches?.("[data-gw-wiz-worktree]")) { d.worktree_path = t.value; G.laneWizard.connectCheck = null; }
+});
+
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  const hit = (sel) => t?.closest?.(sel);
+
+  if (hit("[data-gw-sheet-cancel]")) { e.preventDefault(); closeSheets(); return; }
+  if (hit("[data-gw-repo-validate]")) { e.preventDefault(); await validateRepositoryPath(); return; }
+  if (hit("[data-gw-repo-confirm]")) { e.preventDefault(); await confirmRepositoryRegistration(); return; }
+  const method = hit("[data-gw-repo-method]");
+  if (method && G.repositorySheet) {
+    e.preventDefault();
+    G.repositorySheet.method = method.getAttribute("data-gw-repo-method");
+    paint();
+    return;
+  }
+
+  if (!G.laneWizard) return;
+  const w = G.laneWizard;
+  const d = w.draft;
+  const repo = hit("[data-gw-wiz-repo]");
+  if (repo) {
+    e.preventDefault();
+    const next = repo.getAttribute("data-gw-wiz-repo");
+    // Changing repository invalidates every choice that was scoped to the old
+    // one; keeping them would offer another repository's folder.
+    if (next !== d.repository_id) { d.repository_id = next; d.folder_id = null; d.new_folder = ""; d.worktree_path = ""; w.connectCheck = null; }
+    paint();
+    return;
+  }
+  if (hit("[data-gw-wiz-add-repo]")) { e.preventDefault(); addRepositoryFlow(); return; }
+  const folder = hit("[data-gw-wiz-folder]");
+  if (folder) { e.preventDefault(); d.folder_id = folder.getAttribute("data-gw-wiz-folder") || null; d.new_folder = ""; paint(); return; }
+  const mode = hit("[data-gw-wiz-mode]");
+  if (mode) {
+    e.preventDefault();
+    d.workspace_mode = mode.getAttribute("data-gw-wiz-mode");
+    if (d.workspace_mode === "planning") d.provider = null;
+    paint();
+    return;
+  }
+  const prov = hit("[data-gw-wiz-provider]");
+  if (prov && !prov.disabled) { e.preventDefault(); d.provider = prov.getAttribute("data-gw-wiz-provider") || null; paint(); return; }
+  if (hit("[data-gw-wiz-validate-wt]")) { e.preventDefault(); await wizardValidateWorktree(); return; }
+  if (hit("[data-gw-wiz-back]")) { e.preventDefault(); w.step = View.prevLaneStep(w.step); w.error = null; paint(); return; }
+  if (hit("[data-gw-wiz-next]")) {
+    e.preventDefault();
+    if (w.step === "identity" && !String(d.name || "").trim()) {
+      w.nameError = "Give this lane a name.";
+      paint();
+      return;
+    }
+    w.nameError = null;
+    w.step = View.nextLaneStep(w.step, d);
+    paint();
+    return;
+  }
+  if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
+});

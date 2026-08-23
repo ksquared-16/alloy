@@ -3268,6 +3268,352 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
  * lane names itself from what you wrote. Rename Lane is in Details when the
  * first line stops fitting.
  */
+/**
+ * Add Repository — a real sheet, not a chain of browser prompts.
+ *
+ * WHY THE SHAPE MATTERS. Registering a repository is a decision with
+ * consequences the operator cannot see from a path alone: whether that path is
+ * a repository or a worktree OF one, what its default branch actually is,
+ * whether it has a remote, and where its worktrees will be created. A prompt
+ * asks for the path and then acts. This validates first, SHOWS what it found,
+ * and registers only on an explicit confirmation.
+ *
+ * VALIDATION NEVER PERSISTS. The inspect endpoint is read-only; nothing durable
+ * exists until Confirm.
+ */
+export function renderRepositorySheet(state = {}) {
+  const method = state.method === "clone" ? "clone" : "connect";
+  const v = state.validation || null;
+  const busy = Boolean(state.validating || state.submitting);
+  const err = state.error
+    ? `<div class="gw-notice err" role="alert">${esc(repositoryErrorText(state.error, state.errorDetail || {}))}</div>`
+    : "";
+
+  const methodRow = `<div class="gw-seg" role="radiogroup" aria-label="How to add a repository">
+    <button type="button" class="gw-seg-opt" data-gw-repo-method="connect"
+      aria-pressed="${method === "connect" ? "true" : "false"}">Connect local</button>
+    <button type="button" class="gw-seg-opt" data-gw-repo-method="clone" disabled
+      title="Clone is not available yet">Clone</button>
+  </div>`;
+
+  if (method === "clone") {
+    return sheet("Add repository", `${methodRow}
+      <p class="gw-sheet-note">Clone is not available yet. Clone the repository yourself, then use
+      <strong>Connect local</strong> to register it.</p>`, { cancelOnly: true });
+  }
+
+  // The result panel is the whole point: it is what the operator confirms.
+  const result = v ? `<dl class="gw-kv gw-repo-check">
+      <dt>Repository root</dt><dd>${esc(v.root)}</dd>
+      <dt>Git directory</dt><dd>${esc(v.git_common_dir)}</dd>
+      <dt>Default branch</dt><dd>${esc(v.default_branch || "unknown")}</dd>
+      <dt>Remote</dt><dd>${v.has_remote ? esc(v.remote_normalized || "configured") : "Local only"}</dd>
+      <dt>Worktrees will go in</dt><dd>${esc(v.worktree_parent || defaultWorktreeParent(v.root))}</dd>
+      <dt>Profile</dt><dd>${v.profile === "alloy" ? "Alloy managed sprint" : "Generic Git"}</dd>
+    </dl>` : "";
+
+  const warning = v && v.is_worktree
+    ? `<div class="gw-notice err" role="alert">That path is a worktree of
+        <strong>${esc(v.parent_root)}</strong>. Register that repository instead — a worktree shares
+        its parent's Git history, so it is not a separate repository.</div>`
+    : v && v.already_registered
+      ? `<div class="gw-notice err" role="alert">Already registered as
+          <strong>${esc(v.already_registered.name)}</strong>.</div>`
+      : "";
+
+  const canConfirm = Boolean(v && !v.is_worktree && !v.already_registered);
+  const nameField = canConfirm ? `<label class="gw-field">
+      <span class="gw-field-label" id="gw-repo-name-l">Display name</span>
+      <input id="gw-repo-name" type="text" value="${esc(state.name ?? suggestRepositoryName(v.root))}"
+        aria-labelledby="gw-repo-name-l" maxlength="80" data-gw-repo-name enterkeyhint="done">
+    </label>` : "";
+
+  const body = `${methodRow}
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-repo-path-l">Repository path</span>
+      <input id="gw-repo-path" type="text" inputmode="url" autocapitalize="off" autocorrect="off"
+        spellcheck="false" placeholder="/Users/you/Code/my-project"
+        value="${esc(state.path || "")}" aria-labelledby="gw-repo-path-l"
+        data-gw-repo-path enterkeyhint="go">
+      <span class="gw-field-hint">Must be inside a folder Vacilando may use.</span>
+    </label>
+    ${err}
+    ${warning}
+    ${result}
+    ${nameField}`;
+
+  const actions = canConfirm
+    ? `<button type="button" class="btn primary" data-gw-repo-confirm ${busy ? "disabled" : ""}>
+        ${busy ? "Registering\u2026" : "Register repository"}</button>`
+    : `<button type="button" class="btn primary" data-gw-repo-validate ${busy || !state.path ? "disabled" : ""}>
+        ${state.validating ? "Checking\u2026" : "Validate"}</button>`;
+
+  return sheet("Add repository", body, { actions });
+}
+
+function sheet(title, body, { actions = "", cancelOnly = false } = {}) {
+  return `<section class="gw-sheet" data-gw-sheet role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <header class="gw-sheet-head">
+      <button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>
+      <h2 class="gw-sheet-title">${esc(title)}</h2>
+    </header>
+    <div class="gw-sheet-body">${body}</div>
+    <footer class="gw-sheet-foot">
+      <button type="button" class="btn" data-gw-sheet-cancel>Cancel</button>
+      ${cancelOnly ? "" : actions}
+    </footer>
+  </section>`;
+}
+
+export function suggestRepositoryName(root) {
+  return String(root || "").split("/").filter(Boolean).pop() || "Repository";
+}
+
+export function defaultWorktreeParent(root) {
+  const parts = String(root || "").split("/").filter(Boolean);
+  const name = parts.pop() || "repo";
+  return `/${parts.join("/")}/${name}-worktrees`;
+}
+
+export const LANE_STEPS = Object.freeze([
+  { id: "repository", label: "Repository" },
+  { id: "folder", label: "Folder" },
+  { id: "identity", label: "Lane" },
+  { id: "workspace", label: "Workspace" },
+  { id: "provider", label: "Agent" },
+  { id: "review", label: "Review" },
+]);
+
+/**
+ * Which step can the operator actually be on?
+ *
+ * Steps are gated by what has been chosen, not by a counter, so Back never
+ * lands somewhere that no longer makes sense and Next cannot skip a decision
+ * the next step depends on.
+ */
+export function laneStepReady(step, draft = {}) {
+  switch (step) {
+    case "repository": return true;
+    case "folder": return Boolean(draft.repository_id);
+    case "identity": return Boolean(draft.repository_id);
+    case "workspace": return Boolean(draft.repository_id && String(draft.name || "").trim());
+    case "provider": return Boolean(draft.workspace_mode);
+    case "review":
+      // Planning lanes need no provider; everything else does.
+      return Boolean(draft.workspace_mode)
+        && (draft.workspace_mode === "planning" || Boolean(draft.provider));
+    default: return false;
+  }
+}
+
+export function nextLaneStep(current, draft) {
+  const i = LANE_STEPS.findIndex((s) => s.id === current);
+  for (let k = i + 1; k < LANE_STEPS.length; k += 1) {
+    if (laneStepReady(LANE_STEPS[k].id, draft)) return LANE_STEPS[k].id;
+  }
+  return current;
+}
+
+export function prevLaneStep(current) {
+  const i = LANE_STEPS.findIndex((s) => s.id === current);
+  return i > 0 ? LANE_STEPS[i - 1].id : current;
+}
+
+/** The branch a new worktree would get, previewed before anything is created. */
+export function previewBranch(repository, laneName, suffix = null) {
+  const slug = String(suffix ?? laneName ?? "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  if (!slug) return null;
+  const prefix = repository?.branch_policy?.prefix || "";
+  return `${prefix}${slug}`;
+}
+
+export function previewWorktreePath(repository, laneName, suffix = null) {
+  const slug = previewBranch({ branch_policy: { prefix: "" } }, laneName, suffix);
+  if (!slug || !repository?.worktree_parent) return null;
+  return `${repository.worktree_parent}/${slug}`;
+}
+
+function stepRail(current, draft) {
+  return `<ol class="gw-steps" aria-label="Steps">${LANE_STEPS.map((st, i) => {
+    const state = st.id === current ? "is-current"
+      : (laneStepReady(st.id, draft) && LANE_STEPS.findIndex((x) => x.id === current) > i ? "is-done" : "");
+    return `<li class="gw-step ${state}"><span class="gw-step-n">${i + 1}</span><span class="gw-step-l">${esc(st.label)}</span></li>`;
+  }).join("")}</ol>`;
+}
+
+/**
+ * Add Lane — a stepped flow that creates nothing until Review is confirmed.
+ *
+ * Every step keeps its value when the operator goes back, and no durable record
+ * exists at any point before the final create. That is the difference between a
+ * form and the prompt chain this replaces: a prompt chain has already acted by
+ * the time you realise you picked the wrong repository.
+ */
+export function renderLaneWizard(state = {}) {
+  const draft = state.draft || {};
+  const repositories = (state.repositories || []).filter((r) => r.state !== "RETIRED");
+  const step = laneStepReady(state.step, draft) ? state.step : "repository";
+  const repo = repositories.find((r) => r.repository_id === draft.repository_id) || null;
+  const err = state.error
+    ? `<div class="gw-notice err" role="alert">${esc(state.errorText || createErrorText(state.error))}</div>`
+    : "";
+
+  let body = "";
+  if (step === "repository") {
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Repository">
+      ${repositories.map((r) => `<button type="button" class="gw-choice${draft.repository_id === r.repository_id ? " is-on" : ""}"
+        data-gw-wiz-repo="${esc(r.repository_id)}" aria-pressed="${draft.repository_id === r.repository_id ? "true" : "false"}">
+        <span class="gw-choice-t">${esc(r.name)}</span>
+        <span class="gw-choice-s">${esc([r.profile === "alloy" ? "Alloy managed sprint" : "Generic Git", r.default_branch, r.has_remote === false ? "local only" : null].filter(Boolean).join(" \u00b7 "))}</span>
+      </button>`).join("")}
+      <button type="button" class="gw-choice is-add" data-gw-wiz-add-repo>
+        <span class="gw-choice-t">+ Add repository</span>
+        <span class="gw-choice-s">Register another Git repository</span>
+      </button>
+    </div>`;
+  } else if (step === "folder") {
+    const folders = (state.folders || []).filter((f) => (f.repository_id || null) === (draft.repository_id || null));
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Folder">
+      <button type="button" class="gw-choice${!draft.folder_id ? " is-on" : ""}" data-gw-wiz-folder=""
+        aria-pressed="${!draft.folder_id ? "true" : "false"}">
+        <span class="gw-choice-t">No folder</span>
+        <span class="gw-choice-s">The lane sits directly under ${esc(repo?.name || "the repository")}</span>
+      </button>
+      ${folders.map((f) => `<button type="button" class="gw-choice${draft.folder_id === f.folder_id ? " is-on" : ""}"
+        data-gw-wiz-folder="${esc(f.folder_id)}" aria-pressed="${draft.folder_id === f.folder_id ? "true" : "false"}">
+        <span class="gw-choice-t">${esc(f.name)}</span>
+        <span class="gw-choice-s">${f.lane_count} lane${f.lane_count === 1 ? "" : "s"}</span>
+      </button>`).join("")}
+    </div>
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-wiz-nf-l">Or create a folder</span>
+      <input id="gw-wiz-newfolder" type="text" maxlength="60" placeholder="Folder name"
+        value="${esc(draft.new_folder || "")}" aria-labelledby="gw-wiz-nf-l" data-gw-wiz-newfolder>
+      <span class="gw-field-hint">It belongs to ${esc(repo?.name || "this repository")} only.</span>
+    </label>`;
+  } else if (step === "identity") {
+    body = `<label class="gw-field">
+      <span class="gw-field-label" id="gw-wiz-name-l">Lane name</span>
+      <input id="gw-wiz-name" type="text" maxlength="80" autofocus placeholder="What is this lane for?"
+        value="${esc(draft.name || "")}" aria-labelledby="gw-wiz-name-l" data-gw-wiz-name enterkeyhint="next">
+      ${state.nameError ? `<span class="gw-field-err" role="alert">${esc(state.nameError)}</span>`
+        : `<span class="gw-field-hint">You can rename it any time in Details.</span>`}
+    </label>`;
+  } else if (step === "workspace") {
+    const modes = [
+      ["new_worktree", "Create new worktree", `A fresh branch from ${esc(repo?.default_branch || "the base branch")}`],
+      ["connect_existing", "Connect existing worktree", "Bind a worktree you already have"],
+      ["planning", "Planning only", "No worktree, no agent, no capacity used"],
+    ];
+    const chosen = draft.workspace_mode;
+    let detail = "";
+    if (chosen === "new_worktree") {
+      const branch = previewBranch(repo, draft.name, draft.branch_suffix);
+      const path = previewWorktreePath(repo, draft.name, draft.branch_suffix);
+      detail = `<div class="gw-preview">
+        <dl class="gw-kv">
+          <dt>Base branch</dt><dd>${esc(repo?.default_branch || "unknown")}</dd>
+          <dt>New branch</dt><dd>${esc(branch || "\u2014")}</dd>
+          <dt>Worktree path</dt><dd>${esc(path || "\u2014")}</dd>
+        </dl>
+        <label class="gw-field">
+          <span class="gw-field-label" id="gw-wiz-suffix-l">Branch name</span>
+          <input id="gw-wiz-suffix" type="text" maxlength="60" value="${esc(draft.branch_suffix || "")}"
+            placeholder="${esc(previewBranch({ branch_policy: { prefix: "" } }, draft.name) || "")}"
+            aria-labelledby="gw-wiz-suffix-l" data-gw-wiz-suffix>
+          <span class="gw-field-hint">${repo?.branch_policy?.prefix
+            ? `This repository prefixes branches with ${esc(repo.branch_policy.prefix)}`
+            : "This repository has no branch prefix."}</span>
+        </label>
+        ${state.workspaceCheck ? `<div class="gw-notice ${state.workspaceCheck.ok ? "ok" : "err"}">${esc(state.workspaceCheck.text)}</div>` : ""}
+      </div>`;
+    } else if (chosen === "connect_existing") {
+      const c = state.connectCheck || null;
+      detail = `<div class="gw-preview">
+        <label class="gw-field">
+          <span class="gw-field-label" id="gw-wiz-wt-l">Worktree path</span>
+          <input id="gw-wiz-wt" type="text" inputmode="url" autocapitalize="off" autocorrect="off"
+            spellcheck="false" value="${esc(draft.worktree_path || "")}"
+            aria-labelledby="gw-wiz-wt-l" data-gw-wiz-worktree enterkeyhint="go">
+        </label>
+        <button type="button" class="btn sm" data-gw-wiz-validate-wt ${draft.worktree_path ? "" : "disabled"}>Validate</button>
+        ${c ? (c.ok
+          ? `<dl class="gw-kv"><dt>Branch</dt><dd>${esc(c.branch || "unknown")}</dd>
+             <dt>Git directory</dt><dd>${esc(c.git_common_dir)}</dd>
+             <dt>Belongs to</dt><dd>${esc(repo?.name || "")}</dd></dl>`
+          : `<div class="gw-notice err" role="alert">${esc(c.text)}</div>`) : ""}
+      </div>`;
+    } else if (chosen === "planning") {
+      detail = `<p class="gw-sheet-note">This lane will exist with no worktree and no agent. It uses none of
+        the three provider seats. You can provision it later from Details.</p>`;
+    }
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Workspace">
+      ${modes.map(([id, t, sub]) => `<button type="button" class="gw-choice${chosen === id ? " is-on" : ""}"
+        data-gw-wiz-mode="${id}" aria-pressed="${chosen === id ? "true" : "false"}">
+        <span class="gw-choice-t">${t}</span><span class="gw-choice-s">${sub}</span></button>`).join("")}
+    </div>${detail}`;
+  } else if (step === "provider") {
+    const p = draft.provider || (draft.workspace_mode === "planning" ? null : "claude");
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Agent">
+      <button type="button" class="gw-choice${p === "claude" ? " is-on" : ""}" data-gw-wiz-provider="claude"
+        aria-pressed="${p === "claude" ? "true" : "false"}">
+        <span class="gw-choice-t">Claude</span><span class="gw-choice-s">Runs in the lane's worktree</span></button>
+      <button type="button" class="gw-choice is-off" data-gw-wiz-provider="cursor" disabled aria-disabled="true">
+        <span class="gw-choice-t">Cursor</span>
+        <span class="gw-choice-s">Read-only here: its headless integration is not certified yet</span></button>
+      ${draft.workspace_mode === "planning" ? `<button type="button" class="gw-choice${!p ? " is-on" : ""}"
+        data-gw-wiz-provider="" aria-pressed="${!p ? "true" : "false"}">
+        <span class="gw-choice-t">Decide later</span>
+        <span class="gw-choice-s">A planning lane needs no agent yet</span></button>` : ""}
+    </div>`;
+  } else {
+    const branch = draft.workspace_mode === "new_worktree" ? previewBranch(repo, draft.name, draft.branch_suffix) : null;
+    const path = draft.workspace_mode === "new_worktree"
+      ? previewWorktreePath(repo, draft.name, draft.branch_suffix)
+      : (draft.worktree_path || null);
+    const folderName = draft.new_folder
+      || (state.folders || []).find((f) => f.folder_id === draft.folder_id)?.name
+      || "No folder";
+    body = `<dl class="gw-kv gw-review">
+      <dt>Repository</dt><dd>${esc(repo?.name || "\u2014")}</dd>
+      <dt>Folder</dt><dd>${esc(folderName)}</dd>
+      <dt>Lane</dt><dd>${esc(draft.name || "\u2014")}</dd>
+      <dt>Workspace</dt><dd>${esc({ new_worktree: "New worktree", connect_existing: "Existing worktree", planning: "Planning only" }[draft.workspace_mode] || "\u2014")}</dd>
+      ${draft.workspace_mode !== "planning" ? `<dt>Base branch</dt><dd>${esc(repo?.default_branch || "\u2014")}</dd>` : ""}
+      ${branch ? `<dt>New branch</dt><dd>${esc(branch)}</dd>` : ""}
+      ${path ? `<dt>Worktree</dt><dd>${esc(path)}</dd>` : ""}
+      <dt>Agent</dt><dd>${esc(draft.provider === "claude" ? "Claude" : "None yet")}</dd>
+    </dl>
+    <p class="gw-sheet-note">${draft.workspace_mode === "new_worktree"
+      ? "Creates a branch and a worktree on this machine."
+      : draft.workspace_mode === "connect_existing"
+        ? "Binds an existing worktree. Nothing on disk is created."
+        : "Creates a lane record only."}
+      Nothing is pushed and nothing is merged.</p>`;
+  }
+
+  const isLast = step === "review";
+  const canNext = isLast ? true : laneStepReady(nextLaneStep(step, draft), draft);
+  const actions = `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
+    <button type="button" class="btn primary" ${isLast ? "data-gw-wiz-create" : "data-gw-wiz-next"}
+      ${(!canNext || state.submitting) ? "disabled" : ""}>
+      ${state.submitting ? "Creating\u2026" : (isLast ? "Create lane" : "Next")}</button>`;
+
+  return `<section class="gw-sheet gw-wizard" data-gw-wizard role="dialog" aria-modal="true" aria-label="Add lane">
+    <header class="gw-sheet-head">
+      <button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>
+      <h2 class="gw-sheet-title">Add lane</h2>
+    </header>
+    ${stepRail(step, draft)}
+    <div class="gw-sheet-body">${err}${body}</div>
+    <footer class="gw-sheet-foot">
+      <button type="button" class="btn" data-gw-sheet-cancel>Cancel</button>
+      ${actions}
+    </footer>
+  </section>`;
+}
+
 export function renderCreateLaneFlow(create = {}) {
   const err = create.error ? `<div class="gw-notice err">${esc(createErrorText(create.error))}</div>` : "";
   const provider = create.provider === "cursor" ? "cursor" : "claude";
@@ -3439,9 +3785,19 @@ export function renderGatewayShell({
   attachmentError = null,
   lightbox = null,
   repositories = [],
+  repositorySheet = null,
+  laneWizard = null,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
+  // A sheet owns the screen while it is open: it is a decision the operator is
+  // in the middle of, and the lane list behind it must not steal the tap.
+  const openSheet = repositorySheet
+    ? renderRepositorySheet(repositorySheet)
+    : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : "");
+  if (openSheet) {
+    return `<div class="gw is-sheet" data-gw data-gw-mode="sheet">${openSheet}</div>`;
+  }
   const kind = emptyDetail
     ? "missing"
     : detailViewKind({ selectedId, lanes, lane, loading, listReady });
