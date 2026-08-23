@@ -27,6 +27,7 @@ SUITES=(
   "development-provider-capacity.test.mjs"
   "development-provider-lifecycle.test.mjs"
   "development-admission-bootstrap.test.mjs"
+  "development-lane-folders.test.mjs"
 )
 
 PASS=0

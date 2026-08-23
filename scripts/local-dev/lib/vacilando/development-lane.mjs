@@ -63,7 +63,7 @@ export function developmentLaneStorePath(root = runtimeRoot()) {
 }
 
 function emptyStore() {
-  return { schema_version: DEVELOPMENT_LANE_SCHEMA, lanes: {} };
+  return { schema_version: DEVELOPMENT_LANE_SCHEMA, lanes: {}, folders: {} };
 }
 
 export function readDevelopmentLaneStore(root = runtimeRoot()) {
@@ -73,6 +73,10 @@ export function readDevelopmentLaneStore(root = runtimeRoot()) {
     return {
       schema_version: DEVELOPMENT_LANE_SCHEMA,
       lanes: raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {},
+      // This normalisation drops every top-level key it does not name, so a
+      // store shape that is not listed here is silently erased on the next
+      // write. Folders live in the same file and must be carried forward.
+      folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
     };
   } catch {
     return emptyStore();
@@ -82,6 +86,11 @@ export function readDevelopmentLaneStore(root = runtimeRoot()) {
 function writeStore(store, root) {
   atomicWrite(developmentLaneStorePath(root), store);
   return store;
+}
+
+/** Same writer, exported so lane-folders.mjs persists through one code path. */
+export function writeDevelopmentLaneStore(store, root = runtimeRoot()) {
+  return writeStore(store, root);
 }
 
 export function newDurableLaneId() {
@@ -282,6 +291,7 @@ export function createDurableLane({
       "claude",
     ) || "claude",
     binding: binding ? normalizeBinding(binding, { root }) : null,
+    folder_id: null,
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -850,6 +860,7 @@ export function publicDurableLane(rec) {
     mission_bound_at: rec.mission_bound_at || null,
     preferred_provider: normalizeExecutionProvider(rec.preferred_provider || rec.binding?.provider, "claude") || "claude",
     execution_capacity: rec.execution_capacity || null,
+    folder_id: rec.folder_id || null,
   };
 }
 

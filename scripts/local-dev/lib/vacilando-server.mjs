@@ -17,6 +17,9 @@
  *   GET  /api/lanes/:id/output → recent pane text (lane_id only; ?mode=extended|latest_response)
  *   POST /api/lanes/:id/instruction → paste+submit instruction (lane_id + body)
  *   POST /api/lanes/:id/runtime/release → lane.release_execution_capacity (keep durable lane)
+ *   GET  /api/lane-folders    → lane folders (organisation only; never a lifecycle)
+ *   POST /api/lane-folders/create|:id/rename|:id/delete → folder CRUD (delete unfiles, never deletes lanes)
+ *   POST /api/lanes/:id/folder → file a lane into a folder (folder_id: null unfiles)
  *   GET  /api/state           → the full Command Center snapshot
  *   GET  /api/events          → SSE stream; a `snapshot` frame on connect + tick
  *   GET  /api/commands        → the registered command catalog (+ unsupported)
@@ -1072,6 +1075,64 @@ export function createVacilandoServer() {
           return sendJson(res, 500, { ok: false, error: "recover_run_failed", detail: String(e && e.message || e) });
         }
       }
+      if (path === "/api/lane-folders/create") {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "name");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { createLaneFolder } = await import("./vacilando/lane-folders.mjs");
+          const out = createLaneFolder({ name: body.value?.name });
+          return sendJson(res, out.ok ? 200 : (out.error === "folder_limit_reached" ? 409 : 400), out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "folder_create_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const folderRenameMatch = path.match(/^\/api\/lane-folders\/([^/]+)\/rename$/);
+      if (folderRenameMatch) {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "name");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { renameLaneFolder } = await import("./vacilando/lane-folders.mjs");
+          const out = renameLaneFolder(decodeURIComponent(folderRenameMatch[1]), body.value?.name);
+          return sendJson(res, out.ok ? 200 : (out.error === "folder_not_found" ? 404 : 400), out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "folder_rename_failed", detail: String(e && e.message || e) });
+        }
+      }
+      // Deleting a folder is not deleting work: every lane inside is unfiled and
+      // keeps its worktree, branch and runs. That is why this needs no confirm.
+      const folderDeleteMatch = path.match(/^\/api\/lane-folders\/([^/]+)\/delete$/);
+      if (folderDeleteMatch) {
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        try {
+          const { deleteLaneFolder } = await import("./vacilando/lane-folders.mjs");
+          const out = deleteLaneFolder(decodeURIComponent(folderDeleteMatch[1]));
+          return sendJson(res, out.ok ? 200 : (out.error === "folder_not_found" ? 404 : 400), out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "folder_delete_failed", detail: String(e && e.message || e) });
+        }
+      }
+      const laneFolderMatch = path.match(/^\/api\/lanes\/([^/]+)\/folder$/);
+      if (laneFolderMatch) {
+        const laneId = normalizeLaneId(laneFolderMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => k !== "folder_id");
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { assignLaneToFolder } = await import("./vacilando/lane-folders.mjs");
+          const out = assignLaneToFolder(laneId, body.value?.folder_id ?? null);
+          const status = out.ok ? 200 : ((out.error === "lane_not_found" || out.error === "folder_not_found") ? 404 : 400);
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "lane_folder_failed", detail: String(e && e.message || e) });
+        }
+      }
       const preferredMatch = path.match(/^\/api\/lanes\/([^/]+)\/preferred-provider$/);
       if (preferredMatch) {
         const laneId = normalizeLaneId(preferredMatch[1]);
@@ -1656,9 +1717,22 @@ export function createVacilandoServer() {
           const { summarizeHostExecutionCapacity } = await import("./vacilando/lane-execution-capacity.mjs");
           execution_capacity = await summarizeHostExecutionCapacity(lanes);
         } catch { /* capacity summary is secondary */ }
-        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
+        let folders = [];
+        try {
+          const { listLaneFolders } = await import("./vacilando/lane-folders.mjs");
+          folders = listLaneFolders();
+        } catch { /* folders are organisation, never a reason to fail discovery */ }
+        return sendJson(res, out.ok ? 200 : 503, { ...out, lanes, folders, development_resources, execution_capacity, schema_version: "vacilando.lanes.v1" });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "lane_discovery_failed", detail: String(e && e.message || e) });
+      }
+    }
+    if (path === "/api/lane-folders") {
+      try {
+        const { listLaneFolders } = await import("./vacilando/lane-folders.mjs");
+        return sendJson(res, 200, { ok: true, folders: listLaneFolders() });
+      } catch (e) {
+        return sendJson(res, 500, { ok: false, error: "folder_list_failed", detail: String(e && e.message || e) });
       }
     }
     if (path === "/api/lanes/candidates") {

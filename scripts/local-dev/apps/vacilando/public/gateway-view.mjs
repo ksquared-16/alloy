@@ -848,6 +848,73 @@ export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now()
   return list;
 }
 
+export const LANE_FOLDER_COLLAPSE_KEY = "vac.gw.foldersClosed";
+export const UNFILED_FOLDER_ID = "__unfiled__";
+
+/** Which folders the operator has collapsed. A preference, never lane state. */
+export function readCollapsedFolders(storage) {
+  try {
+    const raw = JSON.parse(storage?.getItem(LANE_FOLDER_COLLAPSE_KEY) || "[]");
+    return new Set(Array.isArray(raw) ? raw.map(String) : []);
+  } catch { return new Set(); }
+}
+
+export function writeCollapsedFolders(ids, storage) {
+  try { storage?.setItem(LANE_FOLDER_COLLAPSE_KEY, JSON.stringify([...(ids || [])].map(String))); } catch { /* */ }
+}
+
+/**
+ * Group lanes into folders WITHOUT losing the attention ordering.
+ *
+ * The lane list is ranked by what wants the operator: active work, then
+ * needs-input, then idle. Folders are organisation laid over that truth, so a
+ * folder inherits the rank of its most urgent lane — filing a blocked lane into
+ * "Later" cannot push it below a folder where nothing is happening. Unfiled
+ * lanes are not a folder; they are the plain list, and they sort by the same
+ * rule alongside the folders.
+ */
+export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(), outputByLane = {}, nowMs = Date.now() } = {}) {
+  const ordered = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { outputByLane, nowMs });
+  const known = new Map();
+  for (const f of Array.isArray(folders) ? folders : []) {
+    if (f?.folder_id) known.set(String(f.folder_id), { folder_id: String(f.folder_id), name: String(f.name || "Folder") });
+  }
+  const groups = new Map();
+  const groupFor = (id, name) => {
+    if (!groups.has(id)) groups.set(id, { folder_id: id, name, lanes: [], rank: Number.MAX_SAFE_INTEGER, needs_attention: 0, active: 0 });
+    return groups.get(id);
+  };
+  // Empty folders still appear — you make a folder, then file lanes into it.
+  for (const f of known.values()) groupFor(f.folder_id, f.name);
+
+  ordered.forEach((lane, index) => {
+    const raw = lane?.folder_id ? String(lane.folder_id) : null;
+    // A folder_id the store no longer knows must not hide the lane.
+    const id = raw && known.has(raw) ? raw : UNFILED_FOLDER_ID;
+    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "No folder" : known.get(id).name);
+    g.lanes.push(lane);
+    if (index < g.rank) g.rank = index;
+    const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
+    if (work.group === "needs_input") g.needs_attention += 1;
+    if (work.group === "active") g.active += 1;
+  });
+
+  return [...groups.values()]
+    .map((g) => ({
+      ...g,
+      unfiled: g.folder_id === UNFILED_FOLDER_ID,
+      lane_count: g.lanes.length,
+      // A collapsed folder must never be able to hide a lane that is asking for
+      // the operator, so the badge travels with the header.
+      collapsed: collapsed?.has?.(g.folder_id) === true,
+    }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (a.unfiled !== b.unfiled) return a.unfiled ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+}
+
 export function occupiesClaudeProviderCapacity(lane, cap = null) {
   const posture = cap || deriveLaneExecutionPosture(lane);
   if (laneProviderKind(lane) === "cursor") return false;
@@ -2018,18 +2085,80 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   </a>`;
 }
 
-export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, nowMs = Date.now() } = {}) {
+/**
+ * A folder header, including one for the lanes in no folder.
+ *
+ * The unfiled group MUST get a header once any folder exists. Without one its
+ * rows sat directly under the last folder's header — the header said "Later, 1"
+ * and two lanes were drawn beneath it, so an unfiled lane read as filed.
+ */
+function folderHeader(group) {
+  const badges = [
+    group.needs_attention ? `<span class="gw-folder-badge is-attention">${group.needs_attention} needs you</span>` : "",
+    group.active ? `<span class="gw-folder-badge is-active">${group.active} working</span>` : "",
+    `<span class="gw-folder-count">${group.lane_count}</span>`,
+  ].filter(Boolean).join("");
+  return `<div class="gw-folder-h" data-gw-folder-h="${esc(group.folder_id)}">
+    <button type="button" class="gw-folder-toggle" data-gw-folder-toggle="${esc(group.folder_id)}"
+      aria-expanded="${group.collapsed ? "false" : "true"}">
+      <span class="gw-folder-caret" aria-hidden="true">${group.collapsed ? "\u25b8" : "\u25be"}</span>
+      <span class="gw-folder-name">${esc(group.name)}</span>
+      ${badges}
+    </button>
+    ${group.unfiled ? "" : `<button type="button" class="gw-folder-edit" data-gw-folder-rename="${esc(group.folder_id)}" aria-label="Rename folder ${esc(group.name)}">Rename</button>
+    <button type="button" class="gw-folder-edit" data-gw-folder-delete="${esc(group.folder_id)}" aria-label="Delete folder ${esc(group.name)}">Delete</button>`}
+  </div>`;
+}
+
+/**
+ * Where this lane is filed. A folder is chosen from the ones that exist — there
+ * is no free-text folder here, because a typo would silently create a second
+ * folder that looks like the first one.
+ */
+export function renderLaneFolderPicker(lane, folders = [], selectedId = null) {
+  const laneId = lane?.lane_id || selectedId;
+  if (!laneId) return "";
+  const list = (Array.isArray(folders) ? folders : []).filter((f) => f?.folder_id);
+  const current = lane?.folder_id ? String(lane.folder_id) : "";
+  const opts = [`<option value=""${current ? "" : " selected"}>No folder</option>`]
+    .concat(list.map((f) => {
+      const id = String(f.folder_id);
+      return `<option value="${esc(id)}"${id === current ? " selected" : ""}>${esc(f.name)}</option>`;
+    }))
+    .join("");
+  return `<label class="gw-folder-pick">
+    <span class="gw-folder-pick-label">Folder</span>
+    <select data-gw-folder-select data-lane-id="${esc(laneId)}"${list.length ? "" : " disabled"}>${opts}</select>
+    ${list.length ? "" : `<span class="gw-folder-pick-hint">Create a folder from the lane list first.</span>`}
+  </label>`;
+}
+
+export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, folders = [], collapsedFolders, nowMs = Date.now() } = {}) {
   const list = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { nowMs });
   const add = `<a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a>`;
+  const newFolder = `<button type="button" class="gw-add gw-add-folder" data-gw-folder-new>+ Folder</button>`;
+  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${newFolder}${add}</div>`;
   if (!list.length) {
     return `<div class="gw-lanes" data-gw-lanes>
-      <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
+      ${head}
       <div class="gw-empty">${loading ? "Loading lanes…" : "No Development Lanes discovered."}</div>
     </div>`;
   }
+  const groups = groupLanesByFolder(list, folders, { collapsed: collapsedFolders || new Set(), nowMs });
+  // With no folders at all there is nothing to organise, so the list stays
+  // exactly as it was — folders must not add chrome to an operator who has none.
+  const flat = groups.length === 1 && groups[0].unfiled;
+  const body = flat
+    ? list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+    : groups.filter((g) => !g.unfiled || g.lanes.length).map((g) => `<div class="gw-folder${g.collapsed ? " is-collapsed" : ""}${g.unfiled ? " is-unfiled" : ""}" data-gw-folder="${esc(g.folder_id)}">
+        ${folderHeader(g)}
+        ${g.collapsed ? "" : (g.lanes.length
+          ? g.lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+          : `<div class="gw-folder-empty">No lanes in this folder yet.</div>`)}
+      </div>`).join("");
   return `<div class="gw-lanes" data-gw-lanes>
-    <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
-    ${list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")}
+    ${head}
+    ${body}
   </div>`;
 }
 
@@ -2907,9 +3036,11 @@ export function renderGatewayShell({
   newUpdate = false,
   asideOpen = false,
   userMessageExpanded = false,
+  folders = [],
+  collapsedFolders,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
-  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane });
+  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders });
   const kind = emptyDetail
     ? "missing"
     : detailViewKind({ selectedId, lanes, lane, loading, listReady });
@@ -3017,6 +3148,7 @@ export function renderGatewayShell({
             <h1>${esc(lane?.label || selectedId)}</h1>
             <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
             <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
+            ${renderLaneFolderPicker(lane, folders, selectedId)}
           </div>
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}

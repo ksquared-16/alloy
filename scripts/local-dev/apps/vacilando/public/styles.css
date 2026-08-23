@@ -1400,6 +1400,24 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-lanes-h-row .gw-lanes-h{padding:4px 8px 0;}
 .gw-add{font-size:12px;font-weight:650;color:var(--rail-0);text-decoration:none;padding:8px;min-height:44px;display:inline-flex;align-items:center;white-space:nowrap;}
 .gw-add-actions{display:flex;flex-direction:column;gap:10px;max-width:28em;margin:12px 0 8px;}
+/* Lane folders — organisation over the attention-ordered list. */
+.gw-add-folder{background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:650;color:var(--rail-0);}
+.gw-folder{display:block;margin:0 0 4px;}
+.gw-folder-h{display:flex;align-items:center;gap:4px;padding:2px 4px;}
+.gw-folder-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--fg-2,inherit);text-align:left;text-transform:uppercase;letter-spacing:.04em;}
+.gw-folder-caret{flex:0 0 auto;opacity:.7;}
+.gw-folder-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;}
+.gw-folder-count{flex:0 0 auto;opacity:.6;font-weight:600;}
+.gw-folder-badge{flex:0 0 auto;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;}
+.gw-folder-badge.is-attention{background:var(--attn-bg,#7a2d12);color:var(--attn-fg,#ffd9c7);}
+.gw-folder-badge.is-active{background:var(--run-bg,#123a5c);color:var(--run-fg,#cfe6ff);}
+.gw-folder-edit{flex:0 0 auto;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--rail-0);opacity:.75;min-height:44px;padding:0 6px;}
+.gw-folder-edit:hover{opacity:1;}
+.gw-folder-empty{padding:8px 12px;font-size:12px;opacity:.65;}
+.gw-folder .gw-lane{margin-left:10px;}
+.gw-folder-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-folder-pick select{min-height:44px;font-size:16px;padding:6px 8px;border-radius:8px;}
+.gw-folder-pick-hint{opacity:.65;}
 .gw-add-actions .btn{min-height:44px;}
 .gw-candidate{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:0 0 10px;box-shadow:var(--shadow);}
 .gw-candidate .btn{margin-top:10px;}

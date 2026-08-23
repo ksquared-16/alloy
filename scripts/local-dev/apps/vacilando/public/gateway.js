@@ -46,6 +46,8 @@ const G = {
   copyTimer: null,
   connect: { step: "chooser", candidates: [], candidate: null, name: "", instruction: "", loading: false, submitting: false, error: null },
   executionCapacity: null,
+  folders: [],
+  collapsedFolders: null,
   releasing: false,
   notify: {
     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
@@ -552,6 +554,7 @@ async function fetchLanes() {
   const r = await gwFetch("/api/lanes");
   const j = await r.json();
   G.lanes = Array.isArray(j.lanes) ? j.lanes : [];
+  if (Array.isArray(j.folders)) G.folders = j.folders;
   if (j.development_resources) G.developmentResources = j.development_resources;
   if (j.execution_capacity) G.executionCapacity = j.execution_capacity;
   else G.executionCapacity = View.summarizeExecutionCapacity(G.lanes);
@@ -883,6 +886,27 @@ function setAsideOpen(open, { restoreFocus = false, fromHistory = false } = {}) 
   }
 }
 
+function collapsedFolders() {
+  if (!G.collapsedFolders) G.collapsedFolders = View.readCollapsedFolders(storage());
+  return G.collapsedFolders;
+}
+
+function toggleFolderCollapsed(folderId) {
+  const set = collapsedFolders();
+  if (set.has(folderId)) set.delete(folderId);
+  else set.add(folderId);
+  View.writeCollapsedFolders(set, storage());
+  paint();
+}
+
+async function refreshFolders() {
+  try {
+    const r = await gwFetch("/api/lane-folders");
+    const j = await r.json();
+    if (Array.isArray(j.folders)) G.folders = j.folders;
+  } catch { /* the list poll will carry them on the next tick */ }
+}
+
 /** Entering a lane is always chat-first. */
 function resetAsideForLaneEntry() {
   if (isMobileWidth()) G.asideOpen = false;
@@ -927,6 +951,8 @@ function paint() {
     listReady: G.listReady,
     loading: G.loading,
     connect: G.connect,
+    folders: G.folders,
+    collapsedFolders: collapsedFolders(),
   });
   paintRail();
   restoreComposer(saved);
@@ -1851,6 +1877,89 @@ document.addEventListener("click", async (e) => {
     paint();
     return;
   }
+  const folderToggle = e.target?.closest?.("[data-gw-folder-toggle]");
+  if (folderToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFolderCollapsed(folderToggle.getAttribute("data-gw-folder-toggle"));
+    return;
+  }
+  const folderNew = e.target?.closest?.("[data-gw-folder-new]");
+  if (folderNew) {
+    e.preventDefault();
+    e.stopPropagation();
+    const name = window.prompt("New folder name", "");
+    if (name == null || !name.trim()) return;
+    try {
+      const r = await gwFetch("/api/lane-folders/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        G.notice = { kind: "error", text: folderErrorText(j.error) };
+      } else {
+        await refreshFolders();
+      }
+      paint();
+    } catch { /* */ }
+    return;
+  }
+  const folderRename = e.target?.closest?.("[data-gw-folder-rename]");
+  if (folderRename) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = folderRename.getAttribute("data-gw-folder-rename");
+    const current = (G.folders || []).find((f) => f.folder_id === id)?.name || "";
+    const name = window.prompt("Rename folder", current);
+    if (name == null || !name.trim()) return;
+    try {
+      const r = await gwFetch(`/api/lane-folders/${encodeURIComponent(id)}/rename`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const j = await r.json();
+      if (!j.ok) G.notice = { kind: "error", text: folderErrorText(j.error) };
+      else await refreshFolders();
+      paint();
+    } catch { /* */ }
+    return;
+  }
+  const folderDelete = e.target?.closest?.("[data-gw-folder-delete]");
+  if (folderDelete) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = folderDelete.getAttribute("data-gw-folder-delete");
+    const folder = (G.folders || []).find((f) => f.folder_id === id) || null;
+    const count = Number(folder?.lane_count) || 0;
+    // Say plainly what survives: an operator must never have to guess whether
+    // deleting a folder deletes the lanes in it.
+    const msg = count
+      ? `Delete the folder "${folder?.name || id}"? The ${count} lane${count === 1 ? "" : "s"} inside stay exactly as they are and become unfiled.`
+      : `Delete the folder "${folder?.name || id}"?`;
+    if (!window.confirm(msg)) return;
+    try {
+      const r = await gwFetch(`/api/lane-folders/${encodeURIComponent(id)}/delete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json();
+      if (!j.ok) G.notice = { kind: "error", text: folderErrorText(j.error) };
+      else {
+        const set = collapsedFolders();
+        set.delete(id);
+        View.writeCollapsedFolders(set, storage());
+        G.lanes = (G.lanes || []).map((l) => (l.folder_id === id ? { ...l, folder_id: null } : l));
+        if (G.lane?.folder_id === id) G.lane = { ...G.lane, folder_id: null };
+        await refreshFolders();
+      }
+      paint();
+    } catch { /* */ }
+    return;
+  }
   const renameBtn = e.target?.closest?.("[data-gw-rename]");
   if (renameBtn) {
     e.preventDefault();
@@ -2020,3 +2129,39 @@ fetch("/api/gateway/session", { cache: "no-store", credentials: "same-origin" })
   .then((r) => r.json())
   .then((j) => { if (j.authRequired && !j.authenticated) showLogin(); })
   .catch(() => {});
+
+/** Folder failures in operator language, not store error codes. */
+function folderErrorText(error) {
+  if (error === "folder_name_taken") return "A folder with that name already exists.";
+  if (error === "folder_name_empty") return "A folder needs a name.";
+  if (error === "folder_name_too_large") return "That folder name is too long.";
+  if (error === "folder_name_invalid") return "That folder name contains characters that cannot be shown.";
+  if (error === "folder_limit_reached") return "You have reached the folder limit.";
+  if (error === "folder_not_found") return "That folder no longer exists.";
+  if (error === "lane_not_found") return "That lane no longer exists.";
+  return "Could not update folders.";
+}
+
+document.addEventListener("change", async (e) => {
+  const pick = e.target?.closest?.("[data-gw-folder-select]");
+  if (!pick) return;
+  const laneId = pick.getAttribute("data-lane-id");
+  const folderId = pick.value || null;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/folder`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folder_id: folderId }),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      G.notice = { kind: "error", text: folderErrorText(j.error) };
+    } else {
+      // Repaint from the answer the store gave, not from what was clicked.
+      G.lanes = (G.lanes || []).map((l) => (l.lane_id === laneId ? { ...l, folder_id: j.folder_id ?? null } : l));
+      if (G.lane?.lane_id === laneId) G.lane = { ...G.lane, folder_id: j.folder_id ?? null };
+      await refreshFolders();
+    }
+    paint();
+  } catch { /* */ }
+});
