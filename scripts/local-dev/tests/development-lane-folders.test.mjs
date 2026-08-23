@@ -14,7 +14,7 @@
  *      The header carries the needs-you count even when its rows are not drawn.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -287,4 +287,24 @@ test("collapse is a stored preference and round-trips", () => {
 test("a corrupt collapse preference is read as nothing collapsed", () => {
   const storage = { getItem: () => "{not json", setItem: () => {} };
   assert.deepEqual([...readCollapsedFolders(storage)], []);
+});
+
+// ------------------------------------------------------------------ palette
+
+test("folder badges use tokens the stylesheet actually defines", () => {
+  // The regression this closes: the badges were written against --attn-bg and
+  // --run-fg, which this palette does not define, so both silently fell through
+  // to invented fallbacks. "1 working" rendered pale blue on pale blue and was
+  // unreadable on the live Gateway — a var() typo cannot fail loudly, so the
+  // only guard is asserting every token referenced is one that exists.
+  const css = readFileSync(new URL("../apps/vacilando/public/styles.css", import.meta.url), "utf8");
+  const defined = new Set([...css.matchAll(/(--[a-z0-9-]+)\s*:/gi)].map((m) => m[1]));
+  const badgeRules = [...css.matchAll(/^\.gw-folder[^\n]*$/gm)].map((m) => m[0]);
+  assert.ok(badgeRules.length, "the folder rules are present");
+  const referenced = new Set();
+  for (const rule of badgeRules) {
+    for (const m of rule.matchAll(/var\(\s*(--[a-z0-9-]+)/gi)) referenced.add(m[1]);
+  }
+  const missing = [...referenced].filter((t) => !defined.has(t));
+  assert.deepEqual(missing, [], `folder styles reference undefined tokens: ${missing.join(", ")}`);
 });
