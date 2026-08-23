@@ -179,3 +179,30 @@ transfer cost at all.
 or `gzip`, R15's transfer premise is disproved in production and the recommendation becomes
 **DISPROVED**. If it returns identity, the delivery owner can be identified and the narrowest
 compression correction implemented under the constraints already specified.
+
+## 10. Release-certification check (recorded, not runtime work)
+
+Carry this as a **release-certification** item. It opens no runtime ledger work and authorizes no
+implementation; it is the single observation that would resolve §9 either way.
+
+> **Authenticated readiness JSON on canonical production.**
+> With an authenticated session against the canonical deployment, request
+> `GET /api/admin/work-units/{slug}/provisioning-answer` (and one `?subject_id=` prewarm) with
+> `Accept-Encoding: br, gzip`, and capture:
+> `content-encoding` · transferred bytes · decoded bytes · `x-vercel-*` headers.
+
+Interpretation is fixed in advance so the result cannot be read selectively:
+
+| Observed `content-encoding` | Meaning | Consequence |
+|---|---|---|
+| `br` or `gzip` | production already compresses these responses | R15's transfer premise is **disproved in production** → mark R15 **DISPROVED**; no runtime work |
+| `identity` (on a representative, non-trivial body) | the deployed app ships this JSON uncompressed | the delivery owner becomes identifiable and the narrowest compression correction becomes implementable under the constraints in §6 |
+
+Two conditions must hold for the observation to count, both learned the hard way in §9: the body must
+be **representative in size** (a 24-byte error response is below every compression threshold and proves
+nothing), and it must be a **dynamic origin response** (`x-vercel-cache: MISS`) rather than a cached
+static asset.
+
+Separately, and larger than R15: §9 found **no Production environment** in the deployment record and no
+reachable production alias serving the operator app — only `Preview` deployments. Whether a canonical
+production deployment of the application exists at all is worth confirming independently of this item.
