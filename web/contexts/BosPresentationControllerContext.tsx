@@ -1,6 +1,11 @@
 "use client";
 
 import {
+    isWorkUnitRevealTerminal,
+    subscribeWorkUnitRevealLifecycle,
+    workUnitRevealEpoch,
+} from "@/lib/adminV2/runtime/preload/drawerVmPrewarmScheduler";
+import {
     createContext,
     useCallback,
     useContext,
@@ -49,6 +54,15 @@ type BosPresentationControllerValue = {
     canvas: AdaptiveWorkspacePresentation;
     derivation: BosPresentationDerivation;
     floatingGeometry: BosFloatingGeometry;
+    /**
+     * Whether the CURRENT floating placement may be shown to the operator.
+     *
+     * False while an automatic park is still provisional — i.e. a Work Unit reveal is outstanding
+     * and no park has committed against the settled page for this epoch. Always true when the mode
+     * is not floating, and always true when the operator positioned the window themselves, because
+     * neither of those placements is a guess about page content.
+     */
+    floatingPlacementTrustworthy: boolean;
     /** Preferred geometry (may differ from displayed when viewport temporarily clamps). */
     preferredFloatingGeometry: BosFloatingGeometry;
     setPreferred: (state: BosPresentationState) => void;
@@ -93,6 +107,21 @@ export function BosPresentationControllerProvider({
         () => defaultBosFloatingGeometry({ width: 1440, height: 900 }),
     );
     const [sessionHydrated, setSessionHydrated] = useState(false);
+    /**
+     * The reveal epoch whose collision geometry has been COMMITTED by the automatic park.
+     *
+     * Readiness alone does not make a placement trustworthy — the park has to have actually run
+     * against the settled page and committed its result. `null` means no trustworthy automatic park
+     * exists yet for the current epoch, and a consumer must not expose provisional geometry.
+     */
+    const [parkedRevealEpoch, setParkedRevealEpoch] = useState<number | null>(null);
+    /**
+     * Whether the ambient measurement has clamped the floating geometry to a real viewport at least
+     * once. The park chooses WHERE within the canvas; this settles the canvas itself. Revealing
+     * after the park but before the clamp still shows a placement that then moves — measured at 430
+     * as a 184 px vertical jump that the desktop-only gate did not prevent.
+     */
+    const [ambientMeasured, setAmbientMeasured] = useState(false);
 
     // Session preference / geometry — client-only. Reading in useState initializers made SSR HTML
     // (no launcher) diverge from the first client render (launcher when preferred=closed).
@@ -139,6 +168,7 @@ export function BosPresentationControllerProvider({
                 const next = clampBosFloatingGeometry(preferredFloatingGeometry, bounds);
                 return geometriesEqual(prev, next) ? prev : next;
             });
+            setAmbientMeasured((prev) => prev || true);
         };
 
         measure();
@@ -268,11 +298,42 @@ export function BosPresentationControllerProvider({
             setFloatingGeometryState((prev) =>
                 prev.x === geometry.x && prev.y === geometry.y ? prev : { ...prev, x: geometry.x, y: geometry.y },
             );
+
+            /*
+             * ACKNOWLEDGE THE COMMIT, BOUND TO ITS EPOCH.
+             *
+             * A park that ran while a Work Unit reveal was still outstanding measured a page whose
+             * obstacles do not exist yet — on a cold direct boot that produced a placement 495 px
+             * away from the settled one. Such a park still runs (the observer keeps the rail
+             * roughly right), it simply does not make the placement trustworthy.
+             *
+             * Binding to the epoch is what stops a superseded navigation's park from releasing the
+             * current rail.
+             */
+            if (isWorkUnitRevealTerminal()) {
+                const epoch = workUnitRevealEpoch();
+                setParkedRevealEpoch((prev) => (prev === epoch ? prev : epoch));
+            }
         };
 
         // After paint, so measurements see the rendered page.
         frame = window.requestAnimationFrame(() => window.requestAnimationFrame(park));
         window.addEventListener("resize", park);
+
+        /*
+         * OBSERVE THE LIFECYCLE; DO NOT DRIVE PARKING FROM IT.
+         *
+         * Calling `park()` here re-parked on every transition at EVERY breakpoint, which added
+         * placement activity rather than only withholding exposure — measured as constrained-canvas
+         * rail CLS doubling from 0.179 to 0.358. The existing debounced observer already re-parks
+         * when the page changes; this only needs to know whether the placement it produced can be
+         * trusted, and to drop trust when a new epoch supersedes the old one.
+         */
+        const unsubscribeReveal = subscribeWorkUnitRevealLifecycle(() => {
+            if (isWorkUnitRevealTerminal()) return;
+            const epoch = workUnitRevealEpoch();
+            setParkedRevealEpoch((prev) => (prev === null || prev === epoch ? prev : null));
+        });
 
         // Organization pages load their content asynchronously, so the first
         // measurement can happen before the page's buttons exist — parking then
@@ -290,6 +351,7 @@ export function BosPresentationControllerProvider({
             window.cancelAnimationFrame(frame);
             window.clearTimeout(debounce);
             observer.disconnect();
+            unsubscribeReveal();
             window.removeEventListener("resize", park);
         };
         // Width/height only: re-parking on every x/y change would fight itself.
@@ -316,6 +378,31 @@ export function BosPresentationControllerProvider({
             setPreferredState("pinned");
         }
     }, [preferred]);
+
+    /*
+     * Automatic parking is the only placement that can be provisional. A stored operator geometry is
+     * the operator's own decision and is trustworthy the moment it is read; a non-floating mode is
+     * laid out by the shell, not by collision measurement. Treating either as "pending" would hide
+     * the rail forever on surfaces that never park.
+     */
+    const floatingPlacementTrustworthy = useMemo(() => {
+        if (derivation.effective !== "floating") return true;
+        if (hasStoredBosFloatingGeometry()) return true;
+        /*
+         * SCOPED TO WHERE THE DEFECT IS PROVEN.
+         *
+         * Measured rail-attributed CLS on a cold direct boot: expanded (1440) 0.1743, compact (1024)
+         * 0.00885, constrained (430) ZERO. Gating a breakpoint that does not have the defect is not
+         * free — holding the constrained rail back until the park commits exposed a DIFFERENT,
+         * mobile-only geometry change (a 184 px vertical move at ~5.6 s) that the early-visible rail
+         * had already settled through. Delaying it there would have traded a defect that does not
+         * exist for one that does.
+         */
+        if (canvas === "constrained") return true;
+        // Both discrete facts, neither a timer: the canvas has been measured, and a park has
+        // committed against a settled reveal for this epoch.
+        return ambientMeasured && parkedRevealEpoch !== null;
+    }, [canvas, derivation.effective, ambientMeasured, parkedRevealEpoch]);
 
     const setFloatingGeometry = useCallback(
         (geo: BosFloatingGeometry, opts?: { persist?: boolean }) => {
@@ -359,6 +446,7 @@ export function BosPresentationControllerProvider({
             canvas,
             derivation,
             floatingGeometry,
+            floatingPlacementTrustworthy,
             preferredFloatingGeometry,
             setPreferred,
             setPinnedWidthPx,
@@ -375,6 +463,7 @@ export function BosPresentationControllerProvider({
             canvas,
             derivation,
             floatingGeometry,
+            floatingPlacementTrustworthy,
             preferredFloatingGeometry,
             setPreferred,
             setPinnedWidthPx,

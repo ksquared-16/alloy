@@ -245,13 +245,13 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
                 setColdLoading(false);
                 setError(formatLoadError(result));
                 logDrawerVmRuntime("cold_fetch_error", { opportunity_id: validSubject, reason: result.reason });
-                endWorkUnitPrimaryReveal(); // reveal failed — release prewarm (no displayVm change to trigger cleanup)
+                endWorkUnitPrimaryReveal("error"); // reveal failed — release prewarm (no displayVm change to trigger cleanup)
                 return;
             }
             if (!isOpportunityDrawerViewModelPreload(result.preload)) {
                 setColdLoading(false);
                 setError("vm_preload_missing");
-                endWorkUnitPrimaryReveal();
+                endWorkUnitPrimaryReveal("error");
                 return;
             }
             // ATOMIC COMPLETE REVEAL (Kelly): resolve the deferred stage-work BEFORE applying, so the
