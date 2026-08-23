@@ -42,10 +42,20 @@ export default function WorkUnitSlugRouteHost({
     }, [workUnitSlug, initialRouteMeta]);
 
     const resolved = Boolean(initialRouteMeta);
-    useEffect(() => {
-        const epoch = declareWorkUnitSurfaceMounted(resolved);
-        return () => releaseWorkUnitSurface(epoch);
-    }, [workUnitSlug, resolved]);
+    /*
+     * DECLARED DURING RENDER, NOT IN AN EFFECT.
+     *
+     * An effect runs after paint. Measured on a cold direct boot, the rail painted at 765 ms and the
+     * effect declared at 1,482 ms — so for that window the lifecycle read `idle`, which is terminal,
+     * and a consumer waiting for "no reveal outstanding" was told the truth for the wrong reason.
+     * Declaring in render closes that window; the paired release still belongs in an effect, because
+     * only an effect has an unmount.
+     */
+    const declaredEpoch = useMemo(
+        () => declareWorkUnitSurfaceMounted(resolved),
+        [workUnitSlug, resolved],
+    );
+    useEffect(() => () => releaseWorkUnitSurface(declaredEpoch), [declaredEpoch]);
 
     return null;
 }

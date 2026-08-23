@@ -123,6 +123,24 @@ export function declareWorkUnitSurfaceMounted(resolved: boolean): number {
     return revealEpoch;
 }
 
+/**
+ * An in-app Work Unit navigation has been intended.
+ *
+ * The operator has asked to go somewhere else, so any placement measured against the surface they
+ * are leaving is already about the wrong page. Declared at INTENT rather than at the new surface's
+ * mount, because between those two moments the old rail is still on screen and the new page's
+ * content is arriving underneath it — which is exactly when the old placement would be re-measured
+ * and visibly moved.
+ *
+ * This only supersedes the placement epoch. It starts no fetch, delays no navigation, and the Work
+ * Unit reveal that follows is unchanged.
+ */
+export function declareWorkUnitNavigationIntent(): number {
+    revealEpoch += 1;
+    publishRevealLifecycle("pending");
+    return revealEpoch;
+}
+
 /** The declaring surface went away — supersede it. A later outcome from `epoch` is ignored. */
 export function releaseWorkUnitSurface(epoch: number): void {
     if (epoch !== revealEpoch) return;

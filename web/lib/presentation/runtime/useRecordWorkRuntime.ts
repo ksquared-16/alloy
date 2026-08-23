@@ -205,6 +205,11 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             setDisplayVm(null);
             setColdLoading(false);
             setError(null);
+            // A Work Unit with no committed subject has no primary content to reveal. That is a
+            // TERMINAL outcome, not an unfinished one: without saying so the reveal lifecycle would
+            // sit at `pending` for the life of the surface, and anything waiting on it would wait
+            // forever. Nothing else changes — no fetch, no VM, no timing.
+            endWorkUnitPrimaryReveal("empty");
             return;
         }
         if (displayVm && String(displayVm.entity.id) === String(validSubject)) {
