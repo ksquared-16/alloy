@@ -135,6 +135,13 @@ test("brand assets stay within a sane weight budget", () => {
   assert.ok(total < 1_200_000, `web brand assets are ${Math.round(total / 1024)} KB`);
 });
 
+test("the server knows how to serve an .ico", () => {
+  // Served as application/octet-stream, some browsers decline to use it as the
+  // tab icon at all.
+  const server = readFileSync(join(HERE, "..", "lib", "vacilando-server.mjs"), "utf8");
+  assert.match(server, /"\.ico": "image\/x-icon"/);
+});
+
 test("no brand surface still points at a file that does not exist", () => {
   for (const ref of html.matchAll(/(?:href|src)="([^"]+\.(?:png|ico|webmanifest))"/g)) {
     assert.ok(existsSync(join(PUB, ref[1])), `${ref[1]} referenced by index.html is missing`);
