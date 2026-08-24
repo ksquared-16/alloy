@@ -1738,9 +1738,22 @@ export function renderNotificationControls(state = {}) {
 }
 
 /** Active lane output only — never last instruction, metadata, or another lane. */
-export function copyableOutputText({ selectedId, output, outputText, lane = null } = {}) {
-  // The copy icon copies what the operator is reading. When a report owns the
-  // conversation that is the stored message, verbatim — not the pane behind it.
+export function copyableOutputText({ selectedId, output, outputText, lane = null, latestResponse = null } = {}) {
+  // COPY WHAT THE OPERATOR IS READING — all of it, not just the sources this
+  // function used to know about.
+  //
+  // The conversation renders from assistantMessageSource, which falls back
+  // agent report -> session transcript -> status summary. This function only
+  // knew about the report and the pane, so on every lane whose message came
+  // from the transcript or the status summary it returned null, the control
+  // rendered `disabled`, and clicking the copy icon did nothing at all. That is
+  // the reported bug: measured across four live lanes, the button was disabled
+  // on every one.
+  //
+  // The two must not be able to disagree again, so copy asks the SAME source
+  // the message is rendered from.
+  const shown = assistantMessageSource(lane, { output, outputText, latestResponse });
+  if (shown?.text && String(shown.text).trim()) return String(shown.text);
   const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
   if (report?.message) return String(report.message);
   if (output && selectedId && output.lane_id && output.lane_id !== selectedId) return null;
@@ -3887,6 +3900,7 @@ export function renderGatewayShell({
     output,
     outputText,
     lane,
+    latestResponse,
   });
   const assistant = assistantMessageSource(lane, { output, outputText, latestResponse });
   const cap = deriveLaneExecutionPosture(lane);

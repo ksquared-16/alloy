@@ -35,6 +35,7 @@ SUITES=(
   "development-brand-assets.test.mjs"
   "development-repository-registry.test.mjs"
   "development-repository-flows.test.mjs"
+  "development-copy-control.test.mjs"
 )
 
 PASS=0

@@ -241,6 +241,7 @@ async function completeCopyText() {
     output: G.output,
     outputText: G.output?.lane_id === id ? G.output?.text : "",
     lane: G.lane,
+    latestResponse: G.latestResponse?.lane_id === id ? G.latestResponse : null,
   });
   const plan = View.copySourcePlan(G.output, { lane: G.lane });
   if (!id || !plan.needsFetch) return visible;
@@ -249,7 +250,8 @@ async function completeCopyText() {
       const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=${encodeURIComponent(mode)}`);
       const j = await r.json();
       if (!View.outputBelongsToLane(j, id, G.lane)) continue;
-      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text, lane: G.lane });
+      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text, lane: G.lane,
+        latestResponse: G.latestResponse?.lane_id === id ? G.latestResponse : null });
       if (full && (!visible || full.length >= visible.length)) return full;
     } catch { /* fall through to the visible snapshot */ }
   }
