@@ -17,6 +17,8 @@
  * No OCR, no AI, no new dependency.
  */
 
+import { classifySignatureName, type SignatureVariant } from "./signatureFieldName";
+
 export type PdfFieldType = "text" | "number" | "date" | "boolean" | "select" | "signature" | "unknown";
 
 /** A raw widget annotation, normalized from pdf.js `page.getAnnotations()`. */
@@ -41,6 +43,12 @@ export interface PdfFieldRegion {
     type: PdfFieldType;
     page: number;
     bbox: [number, number, number, number] | null;
+    /**
+     * Set on signature fields: whether this is the initial required signature or an update /
+     * re-sign line. Government forms carry both (the Oregon CIS has a front signature and a
+     * separate "update signature"), and they are not the same responsibility.
+     */
+    signature_variant?: SignatureVariant;
 }
 
 /** A text run from the page content stream (for drawing form CONTEXT behind highlights). */
@@ -84,18 +92,25 @@ export function cleanFieldName(name: string): string {
         .replace(/\b([a-z])/g, (_, c: string) => c.toUpperCase());
 }
 
-function mapFieldType(a: PdfAcroFieldRaw): PdfFieldType {
+function mapFieldType(a: PdfAcroFieldRaw): { type: PdfFieldType; signatureVariant?: SignatureVariant } {
     const ft = (a.fieldType ?? "").toLowerCase();
     const name = (a.fieldName ?? "").toLowerCase();
-    if (ft === "sig" || /\bsign(ature)?\b/.test(name)) return "signature";
-    if (ft === "btn" || a.checkBox || a.radioButton) return "boolean";
-    if (ft === "ch" || a.combo) return "select";
+
+    // A declared /Sig widget is authoritative. Otherwise the NAME is the only evidence, and it is
+    // read structurally (head noun, not substring) so `Signature2` is a signature and
+    // `signature_date` stays a date. @see ./signatureFieldName
+    if (ft === "sig") return { type: "signature", signatureVariant: classifySignatureName(name).variant ?? "initial" };
+    const sig = classifySignatureName(a.fieldName ?? "");
+    if (sig.isSignature) return { type: "signature", signatureVariant: sig.variant ?? "initial" };
+
+    if (ft === "btn" || a.checkBox || a.radioButton) return { type: "boolean" };
+    if (ft === "ch" || a.combo) return { type: "select" };
     if (ft === "tx" || ft === "") {
-        if (/(\bdate\b|dob|birth|expir)/.test(name)) return "date";
-        if (/\b(amount|total|fee|zip|age|number|qty|count)\b/.test(name)) return "number";
-        return "text";
+        if (/(\bdate\b|dob|birth|expir)/.test(name)) return { type: "date" };
+        if (/\b(amount|total|fee|zip|age|number|qty|count)\b/.test(name)) return { type: "number" };
+        return { type: "text" };
     }
-    return "unknown";
+    return { type: "unknown" };
 }
 
 function toBbox(rect?: number[] | null): [number, number, number, number] | null {
@@ -119,12 +134,14 @@ export function mapAcroFormFields(raw: PdfAcroFieldRaw[], pageCount = 0): PdfAcr
         const key = name.toLowerCase();
         if (seen.has(key)) continue;
         seen.add(key);
+        const mapped = mapFieldType(a);
         fields.push({
             label: cleanFieldName(name),
             name,
-            type: mapFieldType(a),
+            type: mapped.type,
             page: a.page > 0 ? a.page : 1,
             bbox: toBbox(a.rect),
+            ...(mapped.signatureVariant ? { signature_variant: mapped.signatureVariant } : {}),
         });
     }
     return { has_acroform: fields.length > 0, fields, page_count: pageCount };
