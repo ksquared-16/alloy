@@ -111,7 +111,15 @@ export function captureResumeState(run, session, lane, { nowMs = Date.now() } = 
  *
  * Verified by reading it back from the store, not by trusting the write.
  */
-export function needsInputIsDurable(runId, { root = null } = {}) {
+/**
+ * NOTE ON `root`. These default to `undefined`, never `null`.
+ *
+ * The helpers below declare `root = runtimeRoot()`, and a default parameter
+ * only fires for `undefined`. Defaulting to `null` here passed a literal null
+ * through as the runtime root, so every lookup missed and suspend/resume
+ * returned `lane_not_found` for a lane that plainly existed.
+ */
+export function needsInputIsDurable(runId, { root = undefined } = {}) {
   const run = getExecutionRun(runId, root);
   if (!run) return { ok: false, error: "run_not_found" };
   const snap = run.provider_suspension?.resume_state || null;
@@ -145,7 +153,7 @@ export async function suspendLaneProvider(laneId, {
   reason = "parked_awaiting_input",
   confirm = false,
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
 } = {}) {
   const rec = getDurableLane(laneId, root);
   if (!rec) return { ok: false, error: "lane_not_found", command: SUSPEND_COMMAND };
@@ -238,7 +246,7 @@ export async function suspendLaneProvider(laneId, {
 export async function resumeLaneProvider(laneId, {
   origin = "governor",
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
 } = {}) {
   const rec = getDurableLane(laneId, root);
   if (!rec) return { ok: false, error: "lane_not_found", command: RESUME_COMMAND };
@@ -318,7 +326,7 @@ export function parkedPastGrace(run, { nowMs = Date.now(), graceMs = NEEDS_INPUT
 export async function reconcileParkedProviders({
   lanes = [],
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
   graceMs = NEEDS_INPUT_GRACE_MS,
 } = {}) {
   const suspended = [];

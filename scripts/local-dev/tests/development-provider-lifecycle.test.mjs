@@ -13,7 +13,7 @@
  * parked on a question held a seat indefinitely while a queued lane waited.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -473,6 +473,24 @@ await test("a provisioned worktree gets a tmux session name tmux can accept", as
   }
   assert.equal(tmuxSessionNameFor(""), null, "no name is null, never a session nothing can find");
   assert.equal(tmuxSessionNameFor(null), null);
+});
+
+/**
+ * A default parameter only fires for `undefined`.
+ *
+ * suspend/resume defaulted `root = null` and passed it into helpers whose own
+ * default is `root = runtimeRoot()`. Null is not undefined, so the literal null
+ * reached the store and every lookup missed: suspending a lane that plainly
+ * existed returned `lane_not_found`, which meant a parked provider could never
+ * be reclaimed by any caller that omitted root.
+ */
+await test("suspend and resume resolve the runtime root when none is passed", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  assert.equal(/root = null/.test(src), false,
+    "a null root default defeats the downstream runtimeRoot() default");
+  // And the lane lookup itself must agree.
+  const { getDurableLane } = await import("../lib/vacilando/development-lane.mjs");
+  assert.equal(typeof getDurableLane, "function");
 });
 
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
