@@ -2254,12 +2254,21 @@ document.addEventListener("change", async (e) => {
 // a drop onto the composer. Everything funnels through uploadAttachments so the
 // draft-preservation and error rules can only be written once.
 // ---------------------------------------------------------------------------
-const ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const ATTACHMENT_TYPES = new Set([
+  "image/png", "image/jpeg", "image/webp", "image/gif",
+  "application/pdf", "text/html",
+]);
 
 async function uploadAttachments(files) {
   const laneId = G.selected;
   if (!laneId) return;
-  const list = Array.from(files || []).filter((f) => f && (ATTACHMENT_TYPES.has(f.type) || !f.type));
+  const list = Array.from(files || []).filter((f) => {
+    if (!f) return false;
+    if (ATTACHMENT_TYPES.has(f.type) || !f.type) return true;
+    // Browsers report .htm/.html inconsistently; the server sniffs the bytes,
+    // so an extension match is enough to let it make the real decision.
+    return /\.(html?|pdf)$/i.test(f.name || "");
+  });
   if (!list.length) {
     if ((files || []).length) {
       G.attachmentError = View.attachmentErrorText("unsupported_media_type");

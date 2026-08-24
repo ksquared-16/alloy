@@ -196,7 +196,7 @@ export function attachmentErrorText(error, detail = {}) {
   const mb = (n) => `${Math.round((Number(n) || 0) / (1024 * 1024))} MB`;
   switch (error) {
     case "unsupported_media_type":
-      return `That file is not a supported image. Use PNG, JPEG, WebP or GIF.`;
+      return "That file type is not supported. Use PNG, JPEG, WebP, GIF, PDF or HTML.";
     case "attachment_too_large":
       return `That image is larger than ${mb(detail.limit)}. Try a smaller one.`;
     case "attachments_total_too_large":
@@ -2949,7 +2949,18 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
-export const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+export const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf,text/html,.pdf,.html,.htm";
+
+/** Images get a thumbnail; documents get a labelled chip, never a broken img. */
+export function isImageAttachmentType(mime) {
+  return ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(String(mime || ""));
+}
+
+export function attachmentKindLabel(mime) {
+  if (String(mime) === "application/pdf") return "PDF";
+  if (String(mime) === "text/html") return "HTML";
+  return "Image";
+}
 
 export function formatBytes(n) {
   const b = Number(n) || 0;
@@ -2970,10 +2981,16 @@ export function renderAttachmentDrafts(attachments = [], { uploading = 0, error 
   const list = Array.isArray(attachments) ? attachments : [];
   if (!list.length && !uploading && !error) return "";
   const items = list.map((a) => {
-    const name = summaryText(a.filename) || "image";
-    const meta = [formatBytes(a.byte_size), a.width && a.height ? `${a.width}\u00d7${a.height}` : ""].filter(Boolean).join(" \u00b7 ");
+    const isImage = isImageAttachmentType(a.mime_type);
+    const name = summaryText(a.filename) || (isImage ? "image" : "file");
+    const meta = [
+      formatBytes(a.byte_size),
+      isImage && a.width && a.height ? `${a.width}\u00d7${a.height}` : (isImage ? "" : attachmentKindLabel(a.mime_type)),
+    ].filter(Boolean).join(" \u00b7 ");
     return `<li class="gw-att" data-gw-att="${esc(a.attachment_id)}">
-      <img class="gw-att-thumb" src="${esc(a.url)}" alt="" loading="lazy">
+      ${isImage
+        ? `<img class="gw-att-thumb" src="${esc(a.url)}" alt="" loading="lazy">`
+        : `<span class="gw-att-thumb gw-att-doc" aria-hidden="true">${esc(attachmentKindLabel(a.mime_type))}</span>`}
       <span class="gw-att-meta"><span class="gw-att-name">${esc(name)}</span><span class="gw-att-size">${esc(meta)}</span></span>
       <button type="button" class="gw-att-x" data-gw-att-remove="${esc(a.attachment_id)}"
         aria-label="Remove ${esc(name)}">\u00d7</button>
@@ -3002,6 +3019,16 @@ export function renderMessageAttachments(attachments = []) {
     const name = summaryText(a.filename) || `Image ${i + 1}`;
     if (a.state === "FAILED" || a.error) {
       return `<li class="gw-msg-att is-failed"><span class="gw-msg-att-bad">${esc(name)} \u2014 not delivered</span></li>`;
+    }
+    if (!isImageAttachmentType(a.mime_type)) {
+      // A PDF or an HTML file opens in the browser; there is nothing to
+      // thumbnail, and a lightbox around a document would show an empty frame.
+      return `<li class="gw-msg-att is-doc">
+        <a class="gw-msg-att-doc" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">
+          <span class="gw-msg-att-kind">${esc(attachmentKindLabel(a.mime_type))}</span>
+          <span class="gw-msg-att-name">${esc(name)}</span>
+        </a>
+      </li>`;
     }
     return `<li class="gw-msg-att">
       <button type="button" class="gw-msg-att-open" data-gw-att-open="${esc(a.attachment_id)}"

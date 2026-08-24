@@ -73,6 +73,95 @@ test("dimensions are read from the header", () => {
   assert.deepEqual(A.readImageDimensions(jpeg(), "image/jpeg"), { width: 96, height: 64 });
 });
 
+// ------------------------------------------------------- documents
+
+function pdf() { return Buffer.concat([Buffer.from("%PDF-1.7\n", "ascii"), Buffer.alloc(96, 1)]); }
+function html(body = "<!DOCTYPE html><html><body><h1>Report</h1></body></html>") {
+  return Buffer.from(body, "utf8");
+}
+
+test("a PDF is detected by its magic number", () => {
+  assert.equal(A.sniffAttachmentMime(pdf()), "application/pdf");
+});
+
+test("HTML is detected structurally, since it has no magic number", () => {
+  assert.equal(A.sniffAttachmentMime(html()), "text/html");
+  assert.equal(A.sniffAttachmentMime(html("<html><body>x</body></html>")), "text/html");
+  assert.equal(A.sniffAttachmentMime(html("<div><p>a fragment</p></div>")), "text/html");
+});
+
+test("a binary renamed .html is still refused", () => {
+  // The case a filename check would wave through: NUL bytes mean it is not text.
+  const binary = Buffer.concat([Buffer.from([0x00, 0x01, 0x02]), Buffer.from("<html>")]);
+  assert.equal(A.sniffAttachmentMime(binary), null);
+  const out = A.createAttachment({ laneId: LANE, bytes: binary, filename: "report.html" });
+  assert.equal(out.error, "unsupported_media_type");
+});
+
+test("invalid UTF-8 is not accepted as HTML", () => {
+  const bad = Buffer.concat([Buffer.from([0xff, 0xfe, 0xfd]), Buffer.from("<html>")]);
+  assert.equal(A.sniffAttachmentMime(bad), null);
+});
+
+test("plain prose is not HTML", () => {
+  assert.equal(A.sniffAttachmentMime(Buffer.from("just some notes, no markup at all here")), null);
+});
+
+test("PDF and HTML upload, store and bind like any attachment", () => {
+  reset();
+  const p = A.createAttachment({ laneId: LANE, bytes: pdf(), filename: "spec.pdf" });
+  const h = A.createAttachment({ laneId: LANE, bytes: html(), filename: "report.html" });
+  assert.equal(p.ok, true, p.error);
+  assert.equal(h.ok, true, h.error);
+  assert.equal(p.attachment.mime_type, "application/pdf");
+  assert.equal(h.attachment.mime_type, "text/html");
+  // Documents have no pixel dimensions, and that is not a failure.
+  assert.equal(p.attachment.width, null);
+  assert.equal(h.attachment.height, null);
+  const bound = A.bindAttachmentsToRun([p.attachment.attachment_id, h.attachment.attachment_id],
+    { laneId: LANE, runId: "erun_docs" });
+  assert.equal(bound.ok, true, bound.error);
+  assert.ok(bound.attachments[0].provider_path.endsWith(".pdf"));
+  assert.ok(bound.attachments[1].provider_path.endsWith(".html"));
+});
+
+test("the provider gets document paths in the same ordered block", () => {
+  const list = A.listRunAttachments("erun_docs", { includePath: true });
+  const block = A.providerAttachmentBlock(list);
+  assert.match(block, /Attached images:/);
+  assert.ok(block.includes(".pdf") && block.includes(".html"));
+  assert.equal(/base64/i.test(block), false);
+});
+
+test("documents render as a labelled chip, never a broken thumbnail", () => {
+  const draft = V.renderAttachmentDrafts([
+    { attachment_id: "a1", filename: "spec.pdf", mime_type: "application/pdf", byte_size: 4096, url: "/api/attachments/a1" },
+  ]);
+  assert.ok(draft.includes("gw-att-doc"), "a chip");
+  assert.equal(/<img[^>]*gw-att-thumb/.test(draft), false, "and no img element to break");
+  assert.ok(draft.includes("PDF"));
+
+  const sent = V.renderMessageAttachments([
+    { attachment_id: "a1", filename: "spec.pdf", mime_type: "application/pdf", url: "/api/attachments/a1" },
+  ]);
+  assert.ok(sent.includes("gw-msg-att-doc"));
+  assert.ok(sent.includes('href="/api/attachments/a1"'));
+  assert.equal(sent.includes("data-gw-att-open"), false, "a document does not open a lightbox");
+});
+
+test("images still thumbnail", () => {
+  const sent = V.renderMessageAttachments([
+    { attachment_id: "i1", filename: "shot.png", mime_type: "image/png", url: "/api/attachments/i1" },
+  ]);
+  assert.ok(sent.includes("data-gw-att-open"));
+  assert.ok(sent.includes("<img"));
+});
+
+test("the picker accepts documents as well as images", () => {
+  const html = V.renderComposer({});
+  for (const t of ["image/png", "application/pdf", "text/html"]) assert.ok(html.includes(t), t);
+});
+
 // ------------------------------------------------------------ path safety
 
 test("a traversal filename is reduced to a harmless label", () => {
@@ -308,16 +397,20 @@ test("abandoned drafts expire; sent images are kept as history", () => {
 
 // --------------------------------------------------------------------- UI
 
-test("the composer offers an attach control and accepts only images", () => {
+test("the composer offers an attach control scoped to supported types", () => {
   const html = V.renderComposer({});
   assert.ok(html.includes("data-gw-attach-input"));
-  assert.ok(html.includes('accept="image/png,image/jpeg,image/webp,image/gif"'));
+  // Images and the two document types — never a bare accept="*".
+  for (const t of ["image/png", "image/jpeg", "image/webp", "image/gif", "application/pdf", "text/html"]) {
+    assert.ok(html.includes(t), t);
+  }
+  assert.equal(html.includes('accept="*'), false);
   assert.ok(html.includes("multiple"));
 });
 
 test("a draft preview shows thumbnail, name, size and a remove control", () => {
   const html = V.renderAttachmentDrafts([
-    { attachment_id: "att_1", filename: "shot.png", byte_size: 20480, width: 800, height: 600, url: "/api/attachments/att_1" },
+    { attachment_id: "att_1", filename: "shot.png", mime_type: "image/png", byte_size: 20480, width: 800, height: 600, url: "/api/attachments/att_1" },
   ]);
   assert.ok(html.includes("gw-att-thumb"));
   assert.ok(html.includes("shot.png"));
@@ -341,7 +434,7 @@ test("an attachment error is shown without clearing the draft text", () => {
 });
 
 test("a sent prompt renders bounded thumbnails that open a preview", () => {
-  const html = V.renderMessageAttachments([{ attachment_id: "att_9", filename: "a.png", url: "/api/attachments/att_9" }]);
+  const html = V.renderMessageAttachments([{ attachment_id: "att_9", filename: "a.png", mime_type: "image/png", url: "/api/attachments/att_9" }]);
   assert.ok(html.includes('data-gw-att-open="att_9"'));
   assert.ok(html.includes('loading="lazy"'), "no eager full-resolution fetch");
 });

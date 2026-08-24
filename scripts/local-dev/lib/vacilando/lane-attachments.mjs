@@ -58,7 +58,21 @@ export const ATTACHMENT_MIME_TYPES = Object.freeze({
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  // Documents. The provider opens these by path exactly as it does an image —
+  // Claude reads PDFs directly, and HTML is text it can read. Neither is
+  // rendered by Vacilando, so neither introduces a parser here.
+  "application/pdf": "pdf",
+  "text/html": "html",
 });
+
+/** Which attachments are images, for thumbnailing and preview. */
+export const ATTACHMENT_IMAGE_TYPES = Object.freeze([
+  "image/png", "image/jpeg", "image/webp", "image/gif",
+]);
+
+export function isImageAttachment(mime) {
+  return ATTACHMENT_IMAGE_TYPES.includes(String(mime || ""));
+}
 
 export const ATTACHMENT_STATES = Object.freeze([
   "PENDING",   // record exists, bytes on disk, not yet bound to a prompt
@@ -153,7 +167,44 @@ export function sniffImageMime(buf) {
   if (b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") return "image/webp";
   const gif = b.toString("ascii", 0, 6);
   if (gif === "GIF87a" || gif === "GIF89a") return "image/gif";
+  // PDF carries a real magic number, so it is detected the same way as an image.
+  if (b.toString("ascii", 0, 5) === "%PDF-") return "application/pdf";
   return null;
+}
+
+/**
+ * HTML has no magic number, so it is sniffed structurally rather than trusted.
+ *
+ * The rule: it must decode as UTF-8 text with no NUL bytes, and it must open
+ * with something that is unambiguously HTML. That refuses a binary renamed
+ * .html — the case a filename check would wave through — without pretending a
+ * few tags constitute a parse.
+ */
+export function sniffHtml(buf) {
+  if (!buf || buf.length < 6) return null;
+  const head = buf.subarray(0, Math.min(buf.length, 4096));
+  // A NUL anywhere in the head means this is not text.
+  for (const byte of head) if (byte === 0) return null;
+  let text;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(head);
+  } catch {
+    return null;                      // not valid UTF-8, so not HTML we will accept
+  }
+  const start = text.replace(/^\uFEFF/, "").trimStart().toLowerCase();
+  if (start.startsWith("<!doctype html")) return "text/html";
+  if (start.startsWith("<html")) return "text/html";
+  // A fragment is still HTML if it opens with a tag and the document contains
+  // a recognisable structural element.
+  if (start.startsWith("<") && /<(html|head|body|div|section|article|table|p|h[1-6]|ul|ol|span)\b/.test(start)) {
+    return "text/html";
+  }
+  return null;
+}
+
+/** The one entry point: magic numbers first, then the structural HTML check. */
+export function sniffAttachmentMime(buf) {
+  return sniffImageMime(buf) || sniffHtml(buf);
 }
 
 /**
@@ -166,6 +217,8 @@ export function sniffImageMime(buf) {
  * type checks are what actually protect the provider.
  */
 export function readImageDimensions(buf, mime) {
+  // Documents have no pixel dimensions; asking for them is not a failure.
+  if (!isImageAttachment(mime)) return null;
   try {
     if (mime === "image/png" && buf.length >= 24) {
       return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
@@ -251,7 +304,7 @@ export function createAttachment({
   if (bytes.length > ATTACHMENT_MAX_BYTES) {
     return { ok: false, error: "attachment_too_large", limit: ATTACHMENT_MAX_BYTES, byte_size: bytes.length };
   }
-  const mime = sniffImageMime(bytes);
+  const mime = sniffAttachmentMime(bytes);
   if (!mime || !ATTACHMENT_MIME_TYPES[mime]) {
     // Say what was actually detected, so "my png was rejected" is answerable.
     return { ok: false, error: "unsupported_media_type", detected: mime || "unknown", supported: Object.keys(ATTACHMENT_MIME_TYPES) };
