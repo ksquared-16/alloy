@@ -29,6 +29,7 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "relationships",
     "new_fields",
     "form_responses",
+    "collections",
     "upload_requirements",
     "acknowledgements",
     "signatures",
@@ -43,6 +44,7 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     create_proposed_field: "New field",
     form_only_response: "Form response",
     relationship_binding: "Relationship",
+    structured_collection: "Repeating structure",
     upload_requirement: "Upload requirement",
     acknowledgement: "Acknowledgement",
     signature_requirement: "Signature",
@@ -63,6 +65,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "form_responses";
         case "relationship_binding":
             return "relationships";
+        case "structured_collection":
+            return "collections";
         case "upload_requirement":
             return "upload_requirements";
         case "acknowledgement":
@@ -81,6 +85,7 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
 const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     existing_fields: "Existing data",
     relationships: "Relationships",
+    collections: "Repeating structures",
     new_fields: "New fields",
     form_responses: "Form responses",
     upload_requirements: "Document requirements",
@@ -273,6 +278,16 @@ export default function ProcessingConceptReview({
                                                     <span className="rounded border border-alloy-stone/25 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                                         {DISPOSITION_LABEL[p.disposition]}
                                                     </span>
+                                                    {/* How many destinations this ONE decision covers — the whole point of
+                                                        reviewing a repeating structure once instead of N times. */}
+                                                    {concept?.repetition ? (
+                                                        <span
+                                                            className="rounded border border-alloy-stone/25 px-1.5 py-0.5 text-[9px] font-semibold tracking-wide text-alloy-midnight/50"
+                                                            title={`${concept.repetition.member_labels.length} destinations in the source document`}
+                                                        >
+                                                            ×{concept.repetition.instances}
+                                                        </span>
+                                                    ) : null}
                                                     {bandChip(p.confidence.band)}
                                                 </div>
                                                 <div className="flex items-center gap-1.5">

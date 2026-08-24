@@ -28,6 +28,7 @@ const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
     acknowledgements: "Acknowledgements found",
     signatures: "Signatures found",
     static_content: "Static / legal sections found",
+    collections: "Repeating structures found",
     output_copies: "Generated / output copies found",
     needs_review: "Items needing review",
 };
@@ -42,6 +43,7 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "signatures",
     "static_content",
     "output_copies",
+    "collections",
     "needs_review",
 ];
 
@@ -62,6 +64,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "acknowledgements";
         case "signature_requirement":
             return "signatures";
+        case "structured_collection":
+            return "collections";
         case "static_content":
             return "static_content";
         case "output_binding":

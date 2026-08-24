@@ -22,6 +22,8 @@ import {
     detectRelationshipDefinitionForTitle,
     relationshipDefinitionForRole,
 } from "@/lib/fields/relationship/relationshipDefinitions";
+import { acknowledgementClauses, documentRequestClauses } from "./proseClauses";
+import { normalizeKey } from "./semanticModel";
 import {
     DISCOVERY_CONTRACT_VERSION,
     type BusinessConceptCandidate,
@@ -141,7 +143,10 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
         }
 
         // ── acknowledgement section (legal/consent) ──
-        if (section.disposition === "acknowledgement") {
+        // The clause reader below produces one concept per commitment. It supersedes the whole-
+        // section concept whenever it finds anything: seven authorizations under one heading are
+        // seven decisions, and a single "Parent Authorizations" checkbox is not one of them.
+        if (section.disposition === "acknowledgement" && acknowledgementClauses(section.static_text).length === 0) {
             concepts.push({
                 contract_version: DISCOVERY_CONTRACT_VERSION,
                 id: conceptId(section.page, section.section_key, "acknowledgement"),
@@ -179,57 +184,58 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
             continue;
         }
 
+        // ── repeating structures: ONE decision each, not one per occurrence ──
+        // The page's geometry already told us these destinations repeat one value. Emitting a
+        // concept per occurrence is what turned 37 dose columns into 37 questions.
+        for (const g of section.repeating_groups ?? []) {
+            const c = repetitionConcept(section, ctx, g, seen);
+            if (c) concepts.push(c);
+        }
+
         // ── ordinary section: scalar / choice / boolean / conditional + upload(s) from static text ──
-        // A section's instruction text may name MORE than one document that must be provided
-        // (health-care-plan AND immunization). Emit one upload concept per distinct document type,
-        // deduped by concept_key so a repeated instruction never doubles.
-        if (section.static_text && UPLOAD_DOC_RE.test(section.static_text)) {
-            const docs: Array<{ re: RegExp; key: string; label: string; conditional: boolean }> = [
-                { re: /immuniz/i, key: "immunization", label: "Immunization records", conditional: false },
-                { re: /health\s*care\s*plan|care\s*plan.{0,24}provided/i, key: "health_care_plan", label: "Health care plan document", conditional: true },
-            ];
-            let matchedSpecific = false;
-            for (const d of docs) {
-                if (!d.re.test(section.static_text)) continue;
-                matchedSpecific = true;
-                const ckey = `requirement.upload.${d.key}`;
-                if (seen.has(ckey)) continue;
-                seen.add(ckey);
-                concepts.push({
-                    contract_version: DISCOVERY_CONTRACT_VERSION,
-                    id: conceptId(section.page, section.section_key, `upload_${d.key}`),
-                    kind: "upload_requirement",
-                    label: d.label,
-                    concept_key: ckey,
-                    subject: "child",
-                    cardinality: "single",
-                    requirement_type: "upload",
-                    source: sourceRef(section, [section.static_text.slice(0, 140)]),
-                    confidence: conf("high", ["instruction states this document must be provided"]),
-                    explanation: d.conditional
-                        ? "A conditional document-upload requirement — the health-care-plan document must be provided when applicable."
-                        : "A document-upload requirement — the records must be provided on or before the first day of care.",
-                });
-            }
-            if (!matchedSpecific && !seen.has("requirement.upload.document")) {
-                seen.add("requirement.upload.document");
-                concepts.push({
-                    contract_version: DISCOVERY_CONTRACT_VERSION,
-                    id: conceptId(section.page, section.section_key, "upload_document"),
-                    kind: "upload_requirement",
-                    label: "Supporting document",
-                    concept_key: "requirement.upload.document",
-                    subject: "child",
-                    cardinality: "single",
-                    requirement_type: "upload",
-                    source: sourceRef(section, [section.static_text.slice(0, 140)]),
-                    confidence: conf("review", ["instruction states a document must be provided"]),
-                    explanation: "A document-upload requirement — a supporting document must be provided.",
-                });
-            }
+        // A section's prose is read CLAUSE by clause. A consent page carries one commitment per
+        // sentence, and a parent cannot meaningfully accept seven of them as a single checkbox.
+        for (const clause of documentRequestClauses(section.static_text)) {
+            const ckey = `requirement.upload.${normalizeKey(clause.key).slice(0, 48)}`;
+            if (seen.has(ckey)) continue;
+            seen.add(ckey);
+            concepts.push({
+                contract_version: DISCOVERY_CONTRACT_VERSION,
+                id: conceptId(section.page, section.section_key, `upload_${normalizeKey(clause.key).slice(0, 32)}`),
+                kind: "upload_requirement",
+                label: clause.text,
+                concept_key: ckey,
+                subject: ctx.subject === "internal" ? "internal" : "child",
+                cardinality: "single",
+                requirement_type: "upload",
+                source: sourceRef(section, [clause.text]),
+                confidence: conf("review", ["a sentence in this section asks for a document to be supplied"]),
+                explanation: "A document-upload requirement, named from the sentence that asks for it — confirm the document type and responsibility in Packet Composition.",
+            });
+        }
+
+        for (const clause of acknowledgementClauses(section.static_text)) {
+            const ckey = `requirement.acknowledgement.${normalizeKey(clause.key).slice(0, 48)}`;
+            if (seen.has(ckey)) continue;
+            seen.add(ckey);
+            concepts.push({
+                contract_version: DISCOVERY_CONTRACT_VERSION,
+                id: conceptId(section.page, section.section_key, `ack_${normalizeKey(clause.key).slice(0, 32)}`),
+                kind: "acknowledgement",
+                label: clause.text,
+                concept_key: ckey,
+                subject: ctx.subject === "internal" ? "internal" : "household",
+                cardinality: "single",
+                requirement_type: "acknowledgement",
+                source: sourceRef(section, [clause.text]),
+                confidence: conf("high", ["first-person consent language in this section's prose"]),
+                explanation: "One commitment the participant makes, kept separate from the others on the page so it can be given or withheld on its own.",
+            });
         }
 
         for (const f of section.fields) {
+            // An occurrence inside a repeating structure is not its own fact.
+            if (f.repeat_group_id) continue;
             const c = scalarConcept(section, ctx, f, seen);
             if (c) concepts.push(c);
         }
@@ -262,6 +268,78 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
     }
 
     return concepts;
+}
+
+/**
+ * One repeating structure → one concept.
+ *
+ * A grouped set of checkboxes is a CHOICE, expressed in the vocabulary that already exists — the
+ * options are the member labels. A repeated value or a repeated record needs its own kind, because
+ * neither is a scalar and neither is a person relationship; what the operator decides is how the
+ * collection is stored, once, rather than how each occurrence is stored.
+ */
+function repetitionConcept(
+    section: SemanticSection,
+    ctx: SectionContext,
+    group: NonNullable<SemanticSection["repeating_groups"]>[number],
+    seen: Set<string>
+): BusinessConceptCandidate | null {
+    const subject: ConceptSubject = ctx.subject === "internal" ? "internal" : ctx.subject;
+    const slug = normalizeKey(group.label).slice(0, 40) || group.id.replace(/[^a-z0-9]+/gi, "_");
+    const concept_key = `${subject}.${slug}`;
+    if (seen.has(concept_key)) return null;
+    seen.add(concept_key);
+
+    const repetition = {
+        instances: group.instances,
+        member_labels: group.member_labels,
+        member_names: group.member_names,
+        item_types: group.item_types,
+        group_id: group.id,
+    };
+    const base = {
+        contract_version: DISCOVERY_CONTRACT_VERSION,
+        label: group.label,
+        concept_key,
+        subject,
+        repetition,
+        source: sourceRef(section, group.member_labels),
+    };
+
+    if (group.kind === "choice_group") {
+        return {
+            ...base,
+            id: conceptId(section.page, section.section_key, `choice_group_${slug}`),
+            kind: "choice_field",
+            cardinality: "single",
+            suggested_data_type: "multiselect",
+            options: group.member_labels,
+            confidence: conf(group.instances >= 3 ? "review" : "attention", group.signals),
+            explanation: `${group.instances} aligned checkboxes read as the options of ONE question — confirm the wording and whether more than one may be chosen.`,
+        };
+    }
+
+    if (group.kind === "value_series") {
+        return {
+            ...base,
+            id: conceptId(section.page, section.section_key, `series_${slug}`),
+            kind: "value_series",
+            cardinality: "multiple",
+            suggested_data_type: group.item_types[0] ?? "text",
+            confidence: conf("review", group.signals),
+            explanation: `The document writes this ${group.item_types[0] ?? "value"} ${group.instances} times across one row. That is ONE fact with ${group.instances} occurrences — a schedule — not ${group.instances} separate questions.`,
+        };
+    }
+
+    return {
+        ...base,
+        id: conceptId(section.page, section.section_key, `records_${slug}`),
+        kind: "repeating_record",
+        cardinality: "multiple",
+        suggested_data_type: "text",
+        confidence: conf("review", group.signals),
+        explanation: `A table of ${group.instances} blank rows, each collecting ${group.item_types.join(" + ")}. One repeatable collection, not ${group.member_names.length} questions.`,
+    };
 }
 
 function scalarConcept(
@@ -319,6 +397,48 @@ function scalarConcept(
             explanation: `A conditional explanation${f.depends_on ? ` for "${f.depends_on}"` : ""} — collected only when the related answer is yes.`,
         };
     }
+    // a signature destination inside a data section — a signature responsibility all the same.
+    // Before this, a signature only became a concept when the whole SECTION was a signature block,
+    // so a form that puts its attestation line at the foot of a page of fields lost it entirely.
+    if (f.role === "signature") {
+        const internal = ctx.internal === true;
+        const isUpdate = f.signature_variant === "update";
+        return {
+            contract_version: DISCOVERY_CONTRACT_VERSION,
+            id: conceptId(section.page, section.section_key, `signature_${f.id.split(":").pop()}`),
+            kind: "signature",
+            label: f.label,
+            concept_key: internal ? "signature.internal" : "signature.participant",
+            subject: internal ? "internal" : "person",
+            cardinality: "single",
+            requirement_type: "signature",
+            source: sourceRef(section, [f.label]),
+            confidence: conf("high", [isUpdate ? "a re-sign / update signature destination on this page" : "a signature destination on this page"]),
+            explanation: internal
+                ? "A director/internal signature — an operator responsibility, not participant work."
+                : isUpdate
+                  ? "A re-sign line: signed again whenever the information above it changes, not part of the initial submission."
+                  : "A participant signature responsibility.",
+        };
+    }
+
+    // an upload destination — the document asks for a file here.
+    if (f.role === "upload_instruction") {
+        return {
+            contract_version: DISCOVERY_CONTRACT_VERSION,
+            id: conceptId(section.page, section.section_key, `upload_${f.id.split(":").pop()}`),
+            kind: "upload_requirement",
+            label: f.label,
+            concept_key: `requirement.upload.${normalizeKey(f.label).slice(0, 48)}`,
+            subject: ctx.subject === "internal" ? "internal" : "child",
+            cardinality: "single",
+            requirement_type: "upload",
+            source: sourceRef(section, [f.label]),
+            confidence: conf("high", ["a file destination on this page"]),
+            explanation: "A document-upload requirement declared by the form itself.",
+        };
+    }
+
     // scalar informational field
     if (f.role === "informational_field") {
         const s = scalarSemantics(f.label, ctx);

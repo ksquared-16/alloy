@@ -57,7 +57,10 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
     it("produces the operator-facing summary categories", () => {
         expect(summaryCount(/Existing fields matched/)).toBeGreaterThanOrEqual(6);
         expect(summaryCount(/Relationships found/)).toBe(3);
-        expect(summaryCount(/Upload requirements found/)).toBe(2);
+        // Three, not two: the page asks for immunization records on or before the first day AND for
+        // updated records after every new immunization. The old fixed lexicon collapsed both into
+        // one "immunization" requirement; they are different obligations with different timing.
+        expect(summaryCount(/Upload requirements found/)).toBe(3);
         expect(summaryCount(/Acknowledgements found/)).toBe(1);
         expect(summaryCount(/Signatures found/)).toBe(2);
         expect(summaryCount(/output copies found/)).toBe(1);
@@ -109,13 +112,16 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(concepts.some((c) => c.kind === "scalar_field" && /Emergency Contact #/.test(c.label))).toBe(false);
     });
 
-    it("recognizes both document-upload requirements (immunization + conditional health-care-plan)", () => {
+    it("recognizes each document-upload requirement the page states, separately", () => {
         const uploads = proposals.filter((p) => p.disposition === "upload_requirement");
-        expect(uploads.length).toBe(2);
         expect(uploads.every((p) => p.target_requirement_type === "upload")).toBe(true);
         const labels = uploads.map((p) => concepts.find((c) => c.id === p.candidate_id)?.label ?? "");
         expect(labels.some((l) => /immuniz/i.test(l))).toBe(true);
-        expect(labels.some((l) => /health care plan/i.test(l))).toBe(true);
+        expect(labels.some((l) => /care plan/i.test(l))).toBe(true);
+        // The ongoing "bring us updated records" instruction is its own obligation, not a restatement
+        // of the first-day requirement.
+        expect(labels.some((l) => /updated records/i.test(l))).toBe(true);
+        expect(uploads.length).toBe(3);
     });
 
     it("recognizes the emergency-authorization acknowledgement", () => {

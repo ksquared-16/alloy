@@ -40,6 +40,14 @@ export interface DocumentStructureField {
     bbox?: [number, number, number, number];
     /** Choice options recognized from the document (select fields; native-layout only). */
     options?: string[];
+    /**
+     * Set when this destination is one occurrence of a repeating structure the page's geometry
+     * declares — a dose column, a table row, a checkbox option. The field remains a real
+     * destination; the group is what the operator decides about. @see ./repeatingFieldGroups
+     */
+    repeat_group_id?: string;
+    /** For signature destinations: the initial required signature, or an update / re-sign line. */
+    signature_variant?: import("./signatureFieldName").SignatureVariant;
 }
 
 export interface DocumentStructureSection {
@@ -93,6 +101,12 @@ export interface StructureDiagnostics {
 export interface DocumentStructureCandidate {
     sections: DocumentStructureSection[];
     warnings: string[];
+    /**
+     * Repeating structures recognized from field geometry (dose schedules, table rows, checkbox
+     * groups). Repeated DESTINATIONS are not repeated FACTS: this is how a document that writes one
+     * value five times is reviewed once. @see ./repeatingFieldGroups
+     */
+    repeating_groups?: import("./repeatingFieldGroups").RepeatingFieldGroup[];
     /** Detection diagnostics (always present from the detector; optional for back-compat). */
     diagnostics?: StructureDiagnostics;
 }

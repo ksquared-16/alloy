@@ -50,6 +50,14 @@ function fieldRole(label: string, dataType: string, disposition: SectionDisposit
 }
 
 export function buildSemanticModel(structure: DocumentStructureCandidate): SemanticDocumentModel {
+    // Repeating structures are detected per page; attach each to the section that owns that page.
+    const groupsByPage = new Map<number, NonNullable<DocumentStructureCandidate["repeating_groups"]>>();
+    for (const g of structure.repeating_groups ?? []) {
+        const arr = groupsByPage.get(g.page) ?? [];
+        arr.push(g);
+        groupsByPage.set(g.page, arr);
+    }
+
     const sections: SemanticSection[] = structure.sections.map((sec) => {
         const disposition: SectionDisposition = sec.disposition ?? "fields";
         const section_key = normalizeKey(sec.title || "section");
@@ -68,6 +76,8 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
                 id: `${section_key}:${normalizeKey(f.label)}`,
                 label: f.label,
                 role,
+                ...(f.repeat_group_id ? { repeat_group_id: f.repeat_group_id } : {}),
+                ...(f.signature_variant ? { signature_variant: f.signature_variant } : {}),
                 data_type: f.suggested_type,
                 ...(f.options && f.options.length ? { options: f.options } : {}),
                 ...(role === "conditional_explanation" ? { depends_on: f.label.replace(/\s*—\s*if\s+yes.*$/i, "").trim() } : {}),
@@ -83,6 +93,7 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
             output_copy,
             static_text: sec.static_text ?? null,
             fields,
+            ...(groupsByPage.get(page)?.length ? { repeating_groups: groupsByPage.get(page) } : {}),
         };
     });
 

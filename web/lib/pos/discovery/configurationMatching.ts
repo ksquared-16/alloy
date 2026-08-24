@@ -218,6 +218,21 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
         };
     }
 
+    // ── repeated destinations → ONE collection decision ──
+    if (concept.kind === "value_series" || concept.kind === "repeating_record") {
+        const n = concept.repetition?.instances ?? 0;
+        return {
+            ...base,
+            disposition: "structured_collection",
+            confidence: concept.confidence,
+            alternatives: [],
+            explanation:
+                concept.kind === "value_series"
+                    ? `The document draws ${n} destinations for this one value. Store it as a schedule of ${n} occurrences — not ${n} fields. Where that schedule lives is an operator decision.`
+                    : `A repeatable collection of ${n} rows (${concept.repetition?.item_types.join(" + ") ?? "columns"}). Where the collection lives is an operator decision.`,
+        };
+    }
+
     // ── static / output ──
     if (concept.kind === "static_content") {
         return { ...base, disposition: "static_content", confidence: conf("high", ["instructional/legal prose"]), alternatives: [], explanation: "Preserved as read-only static/instructional content." };

@@ -28,7 +28,7 @@ import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sect
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
 
-export const DISCOVERY_CONTRACT_VERSION = "fp16.0";
+export const DISCOVERY_CONTRACT_VERSION = "fp16.1";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Confidence — operator language first, numeric as supporting detail (never the message).
@@ -95,6 +95,10 @@ export type SemanticBlockRole =
 export interface SemanticField {
     /** Stable id: `${section_key}:${normalized_label}`. */
     id: string;
+    /** Set when this field is one occurrence of a repeating structure (see `SemanticSection.repeating_groups`). */
+    repeat_group_id?: string;
+    /** For signature fields: the initial required signature, or an update / re-sign line. */
+    signature_variant?: import("@/lib/pos/processingCase/structure/signatureFieldName").SignatureVariant;
     label: string;
     role: SemanticBlockRole;
     /** Draft field type (text/date/number/select/boolean/signature/file_ref). */
@@ -115,6 +119,8 @@ export interface SemanticSection {
     output_copy: boolean;
     static_text?: string | null;
     fields: SemanticField[];
+    /** Repeating structures on this section's page — one decision each, not one per occurrence. */
+    repeating_groups?: import("@/lib/pos/processingCase/structure/repeatingFieldGroups").RepeatingFieldGroup[];
 }
 
 export interface SemanticDocumentModel {
@@ -136,6 +142,8 @@ export type ConceptKind =
     | "upload_requirement" // a document must be provided (immunization records)
     | "acknowledgement" // consent / legal affirmation
     | "signature" // a signature responsibility
+    | "value_series" // ONE value the document writes N times (a dose schedule, a five-column row)
+    | "repeating_record" // a table whose ROWS are instances of one record (name + date, N times)
     | "static_content" // instructional / legal prose to preserve
     | "output_copy" // generated/output projection of earlier information
     | "unresolved"; // could not be classified — operator decides
@@ -166,6 +174,18 @@ export interface BusinessConceptCandidate {
     /** Suggested draft data type for scalar/choice concepts. */
     suggested_data_type?: string;
     options?: string[];
+    /**
+     * For value_series / repeating_record / grouped choice concepts: how many occurrences the
+     * document draws, and the destinations they occupy. The occurrences are evidence of
+     * CARDINALITY — they are never separate facts.
+     */
+    repetition?: {
+        instances: number;
+        member_labels: string[];
+        member_names: string[];
+        item_types: string[];
+        group_id: string;
+    };
     /** Whether all values populating an output copy are already collected elsewhere. */
     output_of?: string[]; // concept_keys the output copy reproduces
     source: SourceRef;
@@ -188,6 +208,7 @@ export type ProposalDisposition =
     | "acknowledgement"
     | "signature_requirement"
     | "static_content"
+    | "structured_collection" // repeated destinations reviewed as ONE collection, not N fields
     | "output_binding" // generated/output-copy projection of approved concepts
     | "derived_value"
     | "unresolved"; // manual classification required
@@ -260,6 +281,7 @@ export type DiscoveryCategory =
     | "signatures"
     | "static_content"
     | "output_copies"
+    | "collections"
     | "needs_review";
 
 export interface DiscoverySummaryCount {
