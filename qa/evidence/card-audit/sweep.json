@@ -1,0 +1,36 @@
+{
+  "/workspace/work-unit/tours": [],
+  "/workspace/work-unit/registration": [],
+  "/workspace/work-unit/all": [
+    {
+      "k": "current_work",
+      "w": 507,
+      "h": 338,
+      "tier": "work",
+      "arch": "status"
+    },
+    {
+      "k": "billing_preview",
+      "w": 507,
+      "h": 73,
+      "tier": "context",
+      "arch": "status"
+    },
+    {
+      "k": "children",
+      "w": 507,
+      "h": 2319,
+      "tier": "reference",
+      "arch": "collection"
+    },
+    {
+      "k": "household",
+      "w": 507,
+      "h": 327,
+      "tier": "reference",
+      "arch": "profile"
+    }
+  ],
+  "/workspace/work-unit/active-pipeline": [],
+  "/workspace/work-unit/new": []
+}
