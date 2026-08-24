@@ -344,5 +344,56 @@ export async function reconcileParkedProviders({
     });
     if (out.ok && !out.already) suspended.push({ lane_id: lane.lane_id, run_id: out.run_id });
   }
-  return { ok: true, suspended };
+  // The inverse, which nothing corrected before: a record that says SUSPENDED
+  // while a provider is demonstrably ALIVE in the lane.
+  //
+  // Suspension is stored in two places — the agent session and the run — and a
+  // resume that brings the process up without flipping both leaves the lane
+  // reading "Needs input · suspended" while a Claude sits at a ready prompt in
+  // its worktree. Observed on two lanes at once: live panes, ready carets, and
+  // both records still SUSPENDED, with nothing in the governor to fix it. To an
+  // operator the lane simply looks dead.
+  //
+  // The live process is the truth; the record follows it.
+  const revived = [];
+  for (const lane of lanes) {
+    if (!laneProviderIsSuspended(lane)) continue;
+    const alive = await providerIsLive(lane, { root });
+    if (!alive) continue;
+    const session = activeAgentSessionForLane(lane.lane_id, root);
+    if (session && session.state === "SUSPENDED") {
+      patchAgentSession(session.agent_session_id, {
+        state: "ACTIVE",
+        resumed_at: iso(nowMs),
+        suspension_reason: null,
+      }, { root, event: "provider_resumed", extra: { origin: "reconciler", evidence: "live_provider" } });
+    }
+    const run = session?.run_id ? getExecutionRun(session.run_id, root) : null;
+    if (run?.provider_suspension?.state === "SUSPENDED") {
+      patchRunFields(run.run_id, {
+        provider_suspension: { ...run.provider_suspension, state: "RESUMED", resumed_at: iso(nowMs) },
+      }, { nowMs, root });
+    }
+    revived.push({ lane_id: lane.lane_id, run_id: run?.run_id || null });
+  }
+  return { ok: true, suspended, revived };
+}
+
+/**
+ * Is a provider actually running for this lane right now?
+ *
+ * Asks the substrate, not the record — the record is what we are checking.
+ */
+async function providerIsLive(lane, { root = undefined } = {}) {
+  const session = lane?.binding?.tmux_session || null;
+  const path = lane?.binding?.worktree_path || null;
+  if (!session && !path) return false;
+  try {
+    const { liveClaudePanes } = await import("./alloy-dev-adapter.mjs");
+    const panes = await liveClaudePanes();
+    return (panes || []).some((p) => (session && p.session === session)
+      || (path && (p.cwd === path || String(p.cwd || "").startsWith(`${path}/`))));
+  } catch {
+    return false;
+  }
 }

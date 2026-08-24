@@ -493,5 +493,26 @@ await test("suspend and resume resolve the runtime root when none is passed", as
   assert.equal(typeof getDurableLane, "function");
 });
 
+
+/**
+ * A record that says SUSPENDED while the provider is alive.
+ *
+ * Suspension lives in two places — the agent session and the run — and a resume
+ * that starts the process without flipping both leaves the lane reading
+ * "Needs input / suspended" while a Claude sits at a ready prompt in its
+ * worktree. Observed on two lanes at once; nothing in the governor corrected
+ * it, so to the operator the lanes simply looked dead.
+ */
+await test("the reconciler revives a suspended record when the provider is live", () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("export async function reconcileParkedProviders"));
+  assert.ok(fn.includes("revived"), "reconcileParkedProviders must report what it revived");
+  assert.ok(fn.includes("providerIsLive"), "and decide from the live substrate");
+  // It must flip BOTH stores, or the lane keeps reading suspended from the other.
+  assert.ok(fn.includes("patchAgentSession"), "session record");
+  assert.ok(fn.includes("patchRunFields"), "run record");
+  assert.ok(src.includes("async function providerIsLive"), "liveness is asked of tmux, not of the record");
+});
+
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
 process.exit(fail === 0 ? 0 : 1);
