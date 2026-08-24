@@ -4,6 +4,15 @@ status: draft — specification, not approved for production integration
 last_reviewed: 2026-08-22
 supersedes: []
 ---
+> **Superseded — the card designs in this document were rejected (2026-08-24).** The visual
+> direction read as a new generic card system rather than an extension of the Alloy Focus Panel
+> family. The measured basis for the replacement pass is
+> [`operational-card-visual-audit.md`](./operational-card-visual-audit.md), and the current
+> candidates live in the Local Design Lab at `/dev/operational-card-lab`.
+>
+> What remains useful here is the repository evidence: the ownership matrix, the data-source maps,
+> and the platform gaps. The card compositions, the state-variant taxonomy, and the specimen
+> annotations do not.
 
 # Operational Card System Expansion — Specification & Local Design Lab
 

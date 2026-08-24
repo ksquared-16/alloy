@@ -1,0 +1,413 @@
+/*
+ * Candidate-card geometry for the Local Design Lab.
+ *
+ * Lab-scoped on purpose: `alloyOsRuntime.css` is production, and nothing in this pass may reach a
+ * Surface. Class names are written as they would be named in production, so promotion is a file
+ * move rather than a rewrite.
+ *
+ * Every value here is derived from the measured family (see
+ * docs/platform/operator/operational-card-visual-audit.md), not invented:
+ *   - card ink       var(--alloy-os-midnight, #273f52)
+ *   - quiet ink      var(--alloy-os-text-secondary, #4b5563)
+ *   - faint ink      var(--alloy-os-text-tertiary, #9ca3af)
+ *   - hairline       color-mix(... midnight 9%) — the rule What's Next already uses
+ *   - state green    var(--alloy-os-bend-pine, #00a283)
+ *   - attention      #b45309   risk #dc2626
+ */
+
+/* ── shared body idioms ─────────────────────────────────────────────────── */
+
+/* In-body section head. Matches What's Next's RECENT ACTIVITY label, and carries the family's
+   single hairline when it follows other content. */
+.alloy-os-cardlab__section-head {
+  margin: 5px 0 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+/* The family has exactly ONE hairline — What's Next, before RECENT ACTIVITY, where a different
+ * KIND of content follows the action row. Sections of like content separate with whitespace. */
+.alloy-os-cardlab__section-head--ruled {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-cardlab__section-head:first-child {
+  margin-top: 0;
+}
+
+.alloy-os-cardlab__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px 12px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.alloy-os-cardlab__value--missing {
+  color: #b45309;
+}
+.alloy-os-cardlab__value--positive {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* A fact that is not a person: name over detail, optional right-aligned value. */
+.alloy-os-cardlab__fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-row-value {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-cardlab__fact-row-value.alloy-os-household__row-detail--missing {
+  color: #b45309;
+  font-weight: 600;
+}
+.alloy-os-cardlab__row-main--inline {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.alloy-os-cardlab__name--severe {
+  color: #b91c1c;
+}
+
+.alloy-os-cardlab__person {
+  align-items: flex-start;
+}
+.alloy-os-cardlab__person .alloy-os-card-avatar {
+  margin-top: 1px;
+}
+
+/* The primary action inside a helpful-row is the runtime's filled `primary-action`; it only needs
+ * the row's sizing applied to it here. */
+.alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── progression band — Journey stages and the Attendance day ───────────── */
+
+.alloy-os-progression {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+  margin-top: 2px;
+}
+.alloy-os-progression__step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 6px 12px 8px 8px;
+  border-radius: 8px;
+}
+/* The current column takes the Children --focused treatment: tint, no border, no banner. */
+.alloy-os-progression__step--current {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-progression__rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-progression__glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-sizing: border-box;
+}
+.alloy-os-progression__glyph[data-glyph="done"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  color: #fff;
+}
+.alloy-os-progression__glyph[data-glyph="current"] {
+  background: var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+}
+.alloy-os-progression__glyph[data-glyph="future"] {
+  background: #fff;
+  border: 1.5px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, var(--alloy-os-border, #e5e9ef));
+}
+.alloy-os-progression__connector {
+  flex: 1 1 auto;
+  height: 1.5px;
+  border-radius: 1px;
+  min-width: 8px;
+}
+.alloy-os-progression__connector[data-connector="done"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 55%, transparent);
+}
+.alloy-os-progression__connector[data-connector="ahead"] {
+  background: var(--alloy-os-border, #e5e9ef);
+}
+.alloy-os-progression__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-progression__value {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__value {
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-progression__detail {
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1.3;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-progression__note {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__note,
+.alloy-os-progression__step[data-progression-state="future"] .alloy-os-progression__detail {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* ── attendance day track ───────────────────────────────────────────────── */
+
+.alloy-os-attendance__body {
+  gap: 6px;
+}
+.alloy-os-attendance__track {
+  position: relative;
+  height: 10px;
+  margin: 6px 8px 0;
+}
+.alloy-os-attendance__expected {
+  position: absolute;
+  inset: 4px 0 auto 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-border, #e5e9ef);
+}
+.alloy-os-attendance__actual {
+  position: absolute;
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick {
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 999px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.alloy-os-attendance__tick[data-tick="past"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick[data-tick="now"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, transparent);
+}
+.alloy-os-attendance__scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px;
+  font-size: 0.66rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-attendance__recent {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+.alloy-os-attendance__day {
+  display: grid;
+  grid-template-columns: 8px minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-attendance__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+.alloy-os-attendance__day[data-day-state="present"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__day[data-day-state="partial"] .alloy-os-attendance__day-mark {
+  background: #b45309;
+}
+.alloy-os-attendance__day[data-day-state="absent"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-border, #e5e9ef);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+}
+.alloy-os-attendance__day-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-attendance__day-hours {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── billing zones ──────────────────────────────────────────────────────── */
+
+.alloy-os-billing__zones {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 1fr);
+  gap: 10px 26px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.alloy-os-billing__zone {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-billing__lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-billing__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-billing__line-label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__line-value {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__line--emphasis {
+  margin-top: 3px;
+  padding-top: 5px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-label,
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-value {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+/* A payer reads as one line — name, share, method — so payer context never outgrows the money. */
+.alloy-os-billing__payer {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  margin: 0;
+  min-width: 0;
+}
+.alloy-os-billing__payer-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billing__payer-share {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+
+.alloy-os-billing__amount {
+  margin: 0;
+  font-size: 1.28rem;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #b45309;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__age {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b45309;
+}
+.alloy-os-billing__ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.alloy-os-billing__entry {
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+}
+.alloy-os-billing__entry-label {
+  font-size: 0.74rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billing__entry-amount {
+  font-size: 0.74rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__entry-amount--credit {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* ── narrow columns ─────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .alloy-os-billing__zones {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .alloy-os-progression,
+  .alloy-os-attendance__recent {
+    grid-auto-flow: row;
+  }
+}

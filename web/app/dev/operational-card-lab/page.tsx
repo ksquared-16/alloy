@@ -3,18 +3,19 @@ import { notFound } from "next/navigation";
 import OperationalCardLab from "./OperationalCardLab";
 
 /**
- * Local Design Lab — Operational Card System Expansion.
+ * Local Design Lab — candidate operational cards.
  *
- * A dev-only review surface for five SPECIFIED cards: Journey, Health & Safety, Staff,
- * Attendance, Billing. It renders them through the real `UniversalCard` shell and the real
- * `alloyOsRuntime.css`, driven by fixture evidence.
+ * A dev-only review surface for five candidates: Journey, Health & Safety, Staff, Attendance and
+ * Billing. They render through the real `UniversalCard` shell, the real `alloyOsRuntime.css` and
+ * the real Focus Panel grid, beside the real Household, Children, Readiness and Current Work
+ * cards, from fixture evidence.
  *
- * It is NOT production. None of these cards is registered in `FOCUS_PANEL_CARD_KEYS`,
- * `FOCUS_PANEL_CARDS`, `FOCUS_PANEL_CARD_CATALOG`, `SYSTEM5_CARD_ARCHETYPE`, or
- * `focusPanelCardProviders.ts`, so none can be added to a Surface or enter a Focus Panel
- * composition. Visual approval here is NOT production approval.
+ * It is NOT production. No candidate is registered in `FOCUS_PANEL_CARD_KEYS`,
+ * `FOCUS_PANEL_CARDS`, `FOCUS_PANEL_CARD_CATALOG`, `SYSTEM5_CARD_ARCHETYPE` or
+ * `focusPanelCardProviders`, so none can reach a Surface. Visual approval here is not production
+ * approval.
  *
- * @see docs/platform/operator/operational-card-system-expansion.md
+ * @see docs/platform/operator/operational-card-visual-audit.md
  */
 export default function OperationalCardLabPage() {
     if (process.env.NODE_ENV === "production") {

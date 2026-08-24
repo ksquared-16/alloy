@@ -1,82 +1,81 @@
 "use client";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import { LabAbsent, LabFooter, LabGroup, LabHandoff, LabRow } from "@/components/cardLab/CardLabPrimitives";
-import type { StaffCardEvidence } from "@/lib/cardLab/staffCardEvidence";
+import {
+    CardBody,
+    EmptyLine,
+    Fact,
+    FactGrid,
+    FooterAction,
+    PersonRow,
+    StatChips,
+} from "@/components/cardLab/CardLabKit";
+import type { StaffEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
- * Staff card — a relationship card in presentation, a composed projection in derivation.
+ * Staff — "Who is caring for, or operationally responsible for, this child right now?"
  *
- * There is no stored child↔staff edge and there must not be one; relevance is derived from
- * effective `schedule_assignments` (child room ∩ staff room ∩ date) and the covering employment.
- * The card reads assignments and hands off to `scheduling`; it never edits one.
+ * The closest relative of Household and Children in this set, and deliberately so: open person
+ * rows with the same avatar, the same name weight, the same role pill in the Primary / Guardian
+ * slot, and the same two-column label-over-value pair beneath. No enclosure, no dividers, no
+ * category headings — why a person is relevant is carried by the pill plus the room line.
+ *
+ * Scope is the child's current site → program → room → date. A configured non-room relationship
+ * (the enrollment owner) is one more row with its own pill, never a second section, so the card
+ * cannot drift into an organization directory.
  */
 export default function StaffCard({
     evidence,
-    expanded = false,
+    onManage,
 }: {
-    evidence: StaffCardEvidence;
-    expanded?: boolean;
+    evidence: StaffEvidence;
+    onManage?: () => void;
 }) {
-    if (evidence.resolution === "unresolved") {
-        return (
-            <UniversalCard title="Staff" insight="" tier="context" archetype="collection" iconName="users" density="compact">
-                <LabAbsent kind="unresolved">
-                    The assignment projection has not answered. The card HOLDS — printing &ldquo;No staff
-                    assigned&rdquo; here would raise an operational alarm out of a loading state.
-                </LabAbsent>
-            </UniversalCard>
-        );
-    }
+    const isEmpty = evidence.people.length === 0;
 
     return (
-        <UniversalCard
-            title="Staff"
-            insight={evidence.answerLine}
-            supportingInsight={evidence.supportingLine}
-            tier="context"
-            archetype="collection"
-            iconName="users"
-            statusChip={evidence.statusChip}
-            statusTone={evidence.statusTone}
-            density={expanded ? "expanded" : "compact"}
-            data-universal-card-key="staff"
-            footerAction={
-                <LabFooter>
-                    <LabHandoff label="View staff" to="staff (expanded)" />
-                    <LabHandoff label="Change assignment" to={evidence.assignmentHandoff ?? "scheduling"} />
-                </LabFooter>
-            }
-        >
-            {evidence.totalCount === 0 ? (
-                <p className="alloy-os-household__row-detail">
-                    Nobody covers this subject&rsquo;s room on this date.
-                </p>
-            ) : (
-                evidence.groups.map((group) => (
-                    <LabGroup key={group.key} title={group.label} count={group.people.length > 1 ? group.people.length : null}>
-                        {(expanded ? group.people : group.people.slice(0, 2)).map((p) => (
-                            <LabRow
-                                key={p.personId}
+        <div className="alloy-os-staff" data-staff-card="true">
+            <UniversalCard
+                title="Staff"
+                insight={isEmpty ? "No staff assigned" : evidence.answerLine}
+                supportingInsight={isEmpty ? null : evidence.supportingLine}
+                iconName="Users"
+                tier="reference"
+                archetype="collection"
+                density="compact"
+                gridSpan={1}
+                data-universal-card-key="staff"
+                footerAction={<FooterAction onClick={onManage}>Manage staff →</FooterAction>}
+            >
+                {isEmpty ? (
+                    <CardBody>
+                        <EmptyLine>No one is assigned to this child&apos;s room today.</EmptyLine>
+                    </CardBody>
+                ) : (
+                    <CardBody>
+                        {evidence.people.map((p) => (
+                            <PersonRow
+                                key={p.id}
                                 name={p.name}
-                                detail={[p.positionLabel, p.roomLabel].filter(Boolean).join(" · ") || null}
-                                status={expanded ? (p.assignmentTypeLabel ?? undefined) : undefined}
+                                pill={p.relationship}
+                                pillTone={p.lead ? "positive" : "neutral"}
+                                secondary={
+                                    <FactGrid>
+                                        {p.facts.map((fct) => (
+                                            <Fact key={fct.label} label={fct.label} value={fct.value} />
+                                        ))}
+                                    </FactGrid>
+                                }
                             />
                         ))}
-                        {!expanded && group.people.length > 2 ? (
-                            <span className="alloy-os-household__overflow">+{group.people.length - 2} more</span>
+                        {evidence.othersCount ? (
+                            <StatChips
+                                items={[{ count: String(evidence.othersCount), label: evidence.othersLabel }]}
+                            />
                         ) : null}
-                    </LabGroup>
-                ))
-            )}
-
-            {expanded ? (
-                <LabAbsent kind="held">
-                    Position labels come from <code>employment_positions</code> and role labels from{" "}
-                    <code>operational_assignment_types</code> — both configuration-owned tenant words, never a
-                    platform enum. Staff presence today is a handoff to Attendance, not a fact of this card.
-                </LabAbsent>
-            ) : null}
-        </UniversalCard>
+                    </CardBody>
+                )}
+            </UniversalCard>
+        </div>
     );
 }

@@ -1,145 +1,135 @@
 "use client";
 
+import clsx from "clsx";
+
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import { LabAbsent, LabFooter, LabGroup, LabHandoff, LabRow } from "@/components/cardLab/CardLabPrimitives";
-import type { BillingCardEvidence } from "@/lib/cardLab/billingCardEvidence";
+import {
+    Action,
+    ActionRow,
+    EmptyLine,
+    Fact,
+    FooterAction,
+    SectionHead,
+} from "@/components/cardLab/CardLabKit";
+import type { BillingEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
- * Billing card — configuration, readiness and charge activity, which is what Alloy can answer.
+ * Billing — "Where does this family stand financially right now?"
  *
- * The financial-state half (balance, period, autopay, method, subsidy, family responsibility) is
- * fully specified in the evidence contract and is null in every production path today, because
- * no entity in the schema owns any of it (GAP-3). The renderer omits null rows rather than
- * inventing money, and the lab shows the held shape explicitly so the Director can review the
- * target design without it being mistaken for something that ships.
+ * A financial operating snapshot, not a setup checklist. Three zones read left to right across a
+ * full grid row, separated only by the grid gap — the family has no vertical rules.
+ *
+ * Payer identity is deliberately its own evidence: the household primary contact is not
+ * necessarily a payer, and responsibility can be split across people and a funding source.
+ *
+ * Which action carries emphasis is decided by state — Pay now while anything is past due,
+ * otherwise Manage payment.
  */
 export default function BillingCard({
     evidence,
-    expanded = false,
-    showHeldShape = false,
+    onDetails,
+    onViewLedger,
 }: {
-    evidence: BillingCardEvidence;
-    expanded?: boolean;
-    showHeldShape?: boolean;
+    evidence: BillingEvidence;
+    onDetails?: () => void;
+    onViewLedger?: () => void;
 }) {
-    if (evidence.resolution === "unresolved") {
-        return (
+    const pastDue = evidence.pastDue;
+
+    return (
+        <div className="alloy-os-billing" data-billing-card="true">
             <UniversalCard
                 title="Billing"
                 insight={evidence.answerLine}
                 supportingInsight={evidence.supportingLine}
+                iconName="Receipt"
                 tier="context"
                 archetype="status"
-                iconName="credit-card"
+                statusChip={pastDue ? evidence.statusChip ?? undefined : undefined}
+                statusTone="due"
                 density="compact"
+                gridSpan="row"
                 data-universal-card-key="billing"
+                footerAction={<FooterAction onClick={onDetails}>Details →</FooterAction>}
             >
-                <LabAbsent kind="unresolved">
-                    The tuition rate is unresolved — the financial-config API has not answered. Reporting it as
-                    &ldquo;missing&rdquo; would manufacture a blocked verdict out of unwired plumbing, on every
-                    record, forever. The card states only what a source actually answered.
-                </LabAbsent>
-            </UniversalCard>
-        );
-    }
+                <div className="alloy-os-billing__zones">
+                    <section className="alloy-os-billing__zone">
+                        <SectionHead ruled={false}>Current billing</SectionHead>
+                        <p className="alloy-os-household__row-detail">{evidence.period.label}</p>
+                        <div className="alloy-os-billing__lines">
+                            {evidence.period.lines.map((l) => (
+                                <div
+                                    key={l.label}
+                                    className={clsx(
+                                        "alloy-os-billing__line",
+                                        l.emphasis && "alloy-os-billing__line--emphasis",
+                                    )}
+                                >
+                                    <span className="alloy-os-billing__line-label">{l.label}</span>
+                                    <span className="alloy-os-billing__line-value">{l.value}</span>
+                                </div>
+                            ))}
+                        </div>
+                        <Fact label={evidence.dueLabel} value={evidence.dueValue} />
+                        <SectionHead ruled={false}>Payers</SectionHead>
+                        {evidence.payers.map((p) => (
+                            <p key={p.name} className="alloy-os-billing__payer">
+                                <span className="alloy-os-billing__payer-name">{p.name}</span>
+                                <span className="alloy-os-billing__payer-share">{p.share}</span>
+                                <span className="alloy-os-household__row-detail">{p.method}</span>
+                            </p>
+                        ))}
+                    </section>
 
-    return (
-        <UniversalCard
-            title="Billing"
-            insight={evidence.answerLine}
-            supportingInsight={evidence.supportingLine}
-            tier="context"
-            archetype="status"
-            iconName="credit-card"
-            statusChip={evidence.statusChip}
-            statusTone={evidence.statusTone}
-            density={expanded ? "expanded" : "compact"}
-            data-universal-card-key="billing"
-            footerAction={
-                <LabFooter>
-                    {evidence.isConfigured ? (
-                        <LabHandoff label="View billing" to={evidence.billingHandoff ?? "billing_surface"} />
-                    ) : (
-                        <LabHandoff label="Complete billing setup" to={evidence.setupHandoff ?? "billing_setup"} />
-                    )}
-                </LabFooter>
-            }
-        >
-            {evidence.tuitionRateLabel ? (
-                <LabGroup title="Tuition">
-                    <LabRow name="Rate" detail={evidence.tuitionRateLabel} />
-                </LabGroup>
-            ) : null}
+                    <section className="alloy-os-billing__zone">
+                        <SectionHead ruled={false}>Past due</SectionHead>
+                        {pastDue ? (
+                            <>
+                                <p className="alloy-os-billing__amount">{pastDue.amount}</p>
+                                <Fact label="Oldest unpaid" value={pastDue.oldest} tone="missing" />
+                                <p className="alloy-os-household__row-detail--missing alloy-os-billing__age">
+                                    {pastDue.age}
+                                </p>
+                                {pastDue.note ? (
+                                    <p className="alloy-os-household__row-detail">{pastDue.note}</p>
+                                ) : null}
+                                <ActionRow>
+                                    <Action primary>Pay now</Action>
+                                    <Action>Manage payment</Action>
+                                </ActionRow>
+                            </>
+                        ) : (
+                            <>
+                                <EmptyLine>Nothing past due.</EmptyLine>
+                                <ActionRow>
+                                    <Action>Manage payment</Action>
+                                </ActionRow>
+                            </>
+                        )}
+                    </section>
 
-            <LabGroup title={evidence.isConfigured ? "Payment" : "Still needed"}>
-                {evidence.readinessItems
-                    .filter((i) => (evidence.isConfigured ? i.met : true))
-                    .map((i) => (
-                        <LabRow
-                            key={i.label}
-                            name={
-                                <>
+                    <section className="alloy-os-billing__zone">
+                        <SectionHead ruled={false}>Recent activity</SectionHead>
+                        <div className="alloy-os-billing__ledger">
+                            {evidence.ledger.map((e, i) => (
+                                <div key={`${e.when}-${i}`} className="alloy-os-billing__entry">
+                                    <span className="alloy-os-currentwork__recent-activity-when">{e.when}</span>
+                                    <span className="alloy-os-billing__entry-label">{e.label}</span>
                                     <span
-                                        aria-hidden
-                                        style={{
-                                            marginRight: 6,
-                                            color: !i.resolved ? "#94a3b8" : i.met ? "#16a34a" : "#dc2626",
-                                            fontWeight: 700,
-                                        }}
+                                        className={clsx(
+                                            "alloy-os-billing__entry-amount",
+                                            e.kind === "credit" && "alloy-os-billing__entry-amount--credit",
+                                        )}
                                     >
-                                        {!i.resolved ? "·" : i.met ? "✓" : "○"}
+                                        {e.amount}
                                     </span>
-                                    {i.label}
-                                </>
-                            }
-                            detail={i.detail}
-                            status={!i.resolved ? "held" : undefined}
-                            tone={!i.resolved ? "muted" : "neutral"}
-                        />
-                    ))}
-            </LabGroup>
-
-            {evidence.charges.length > 0 ? (
-                <LabGroup title="Recent">
-                    {(expanded ? evidence.charges : evidence.charges.slice(0, 3)).map((c) => (
-                        <LabRow
-                            key={c.id}
-                            name={c.label}
-                            detail={c.amountLabel}
-                            status={c.isPreview ? "preview" : c.status}
-                            tone={c.isPreview ? "muted" : "neutral"}
-                        />
-                    ))}
-                    {evidence.charges.some((c) => c.isPreview) ? (
-                        <LabAbsent kind="held">
-                            Rows marked <em>preview</em> come from <code>resolved_obligations</code> —
-                            non-authoritative and recomputable. An unmarked preview would read as money that
-                            was charged.
-                        </LabAbsent>
-                    ) : null}
-                </LabGroup>
-            ) : null}
-
-            {showHeldShape ? (
-                <>
-                    <LabGroup title="Financial state — specified, no owner">
-                        <LabRow name="Current period" detail="—" status="no entity" tone="muted" />
-                        <LabRow name="Amount due / overdue" detail="—" status="no projection" tone="muted" />
-                        <LabRow name="Family responsibility" detail="—" status="not projected" tone="muted" />
-                        <LabRow name="Subsidy / funding" detail="—" status="no entity" tone="muted" />
-                        <LabRow name="Autopay" detail="—" status="no entity" tone="muted" />
-                        <LabRow name="Payment method + health" detail="—" status="no childcare reader" tone="muted" />
-                        <LabRow name="Recent payments / refunds / failures" detail="—" status="job grain only" tone="muted" />
-                    </LabGroup>
-                    <LabAbsent kind="absent">
-                        Every row above is typed on the evidence contract and null in every production path.
-                        <code>resolved_obligations</code> writes no ledger; <code>payments</code> and{" "}
-                        <code>ledger_transactions</code> are read only at job grain;{" "}
-                        <code>customer_payment_methods</code> has no childcare reader; subsidy, autopay and
-                        billing period have no entity at all (GAP-3).
-                    </LabAbsent>
-                </>
-            ) : null}
-        </UniversalCard>
+                                </div>
+                            ))}
+                        </div>
+                        <FooterAction onClick={onViewLedger}>View ledger →</FooterAction>
+                    </section>
+                </div>
+            </UniversalCard>
+        </div>
     );
 }

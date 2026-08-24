@@ -1,17 +1,13 @@
-# Card Lab — isolated specification namespace
+# Local Design Lab — candidate operational cards
 
-Everything under `lib/cardLab`, `components/cardLab`, and `app/dev/operational-card-lab` is
-**specification and review material** for the Operational Card System Expansion.
+Fixture evidence for the five candidate cards reviewed at `/dev/operational-card-lab`.
 
-It is deliberately isolated:
+- Nothing here is imported by production code.
+- No candidate is registered in `FOCUS_PANEL_CARD_KEYS`, `FOCUS_PANEL_CARDS`,
+  `FOCUS_PANEL_CARD_CATALOG`, `SYSTEM5_CARD_ARCHETYPE` or `focusPanelCardProviders`, so no
+  candidate can be added to a Surface or enter a Focus Panel composition.
+- The subject is Avery Johnson, taken from the platform's own
+  `buildDemoFocusPanelSummaryViewModel()`, so the candidates and the real Household, Children,
+  Readiness and Current Work cards in the combined review describe one family.
 
-- No file here is imported by any production module.
-- No card key here is registered in `FOCUS_PANEL_CARD_KEYS`, `FOCUS_PANEL_CARDS`,
-  `FOCUS_PANEL_CARD_CATALOG`, `SYSTEM5_CARD_ARCHETYPE`, or `focusPanelCardProviders.ts`.
-- The review surface is dev-only (`notFound()` in production).
-
-Consequently these cards **cannot** be added to a Surface, cannot appear in the Surfaces
-builder catalog, and cannot enter a Focus Panel composition until a later mission makes those
-registry edits deliberately.
-
-Spec: `docs/platform/operator/operational-card-system-expansion.md`
+Visual reference and measurements: `docs/platform/operator/operational-card-visual-audit.md`.

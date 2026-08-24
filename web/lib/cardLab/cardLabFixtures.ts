@@ -1,435 +1,175 @@
 /**
- * Card Lab fixtures — every specimen the Director reviews.
+ * Fixture evidence for the Local Design Lab.
  *
- * ── FIXTURE HONESTY ──
+ * The subject is Avery Johnson, taken from the platform's own
+ * `buildDemoFocusPanelSummaryViewModel()` so the candidate cards and the REAL Household,
+ * Children, Readiness and Current Work cards in the combined review describe one family.
  *
- * A fixture may only carry a fact that has a CANONICAL OWNER in the ownership matrix
- * (spec §2). Where a fact has no owner, the fixture omits it and the card renders its
- * absent/held treatment. That is why these fixtures contain no waitlist "position at entry",
- * no document expiry date, no autopay state, no payment method, and no posted balance:
- * Alloy cannot produce any of them today, so a realistic-looking fixture would be a lie that
- * survives into the approved design.
+ * This is specimen data. It is never imported by production code, and the lab labels it as
+ * fixture data OUTSIDE every card.
  */
 
-import { buildJourneyCardEvidence, type JourneyFact } from "@/lib/cardLab/journeyCardEvidence";
-import { buildHealthSafetyCardEvidence, type HealthFactRow } from "@/lib/cardLab/healthSafetyCardEvidence";
-import { buildStaffCardEvidence, type StaffPersonRow } from "@/lib/cardLab/staffCardEvidence";
-import { buildAttendanceCardEvidence, type AttendanceDayRow } from "@/lib/cardLab/attendanceCardEvidence";
-import { buildBillingCardEvidence } from "@/lib/cardLab/billingCardEvidence";
+import type {
+    AttendanceEvidence,
+    BillingEvidence,
+    HealthEvidence,
+    JourneyEvidence,
+    StaffEvidence,
+} from "@/lib/cardLab/cardLabTypes";
 
-// ─────────────────────────────────────────────────────────────────────────────
-// The reference Business Process — an Enrollment stage list as a governing
-// revision would publish it. Nothing here is hardcoded into a card.
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const ENROLLMENT_STAGES = [
-    { key: "lead", label: "Lead" },
-    { key: "tour", label: "Tour" },
-    { key: "waitlist", label: "Waitlist" },
-    { key: "enrolling", label: "Enrolling" },
-    { key: "enrolled", label: "Enrolled" },
-] as const;
-
-function fact(
-    id: string,
-    typeKey: string,
-    label: string,
-    at: string | null,
-    stageKey: string | null,
-    destinationCard: string | null,
-): JourneyFact {
-    return { id, typeKey, label, at, stageKey, sourceOwner: typeKey, destinationCard, subjectId: null };
-}
-
-const ALL_FACTS: JourneyFact[] = [
-    fact("f1", "form.submitted", "Lead created", "2026-08-02T14:10:00Z", "lead", "current_work"),
-    fact("f2", "form.submitted", "Inquiry form submitted", "2026-08-02T14:12:00Z", "lead", "documents"),
-    fact("f3", "tour.booking", "Tour scheduled", "2026-08-05T16:00:00Z", "tour", "tour_summary"),
-    fact("f4", "tour.booking", "Tour completed", "2026-08-08T15:00:00Z", "tour", "tour_summary"),
-    fact("f5", "process.outcome", "Continue enrollment", "2026-08-08T15:40:00Z", "tour", "current_work"),
-    fact("f6", "placement.committed", "Joined waitlist", "2026-08-09T09:00:00Z", "waitlist", "scheduling"),
-    fact("f7", "schedule.assigned", "Schedule assigned — M–F", "2026-08-18T11:00:00Z", "enrolling", "scheduling"),
-    fact("f8", "billing.setup", "Billing contact set", "2026-08-19T10:00:00Z", "enrolling", "billing"),
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Journey specimens
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const JOURNEY_SPECIMENS = {
-    early: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "lead",
-        currentStageEnteredAt: "2026-08-02T14:10:00Z",
-        stateLabel: null,
-        closeReasonLabel: null,
-        facts: ALL_FACTS.filter((f) => f.stageKey === "lead"),
-        requirementsSatisfied: 1,
-        requirementsTotal: 3,
-        openWorkCount: 2,
-    }),
-    midProcess: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "tour",
-        currentStageEnteredAt: "2026-08-05T09:00:00Z",
-        stateLabel: null,
-        closeReasonLabel: null,
-        facts: ALL_FACTS.filter((f) => ["lead", "tour"].includes(f.stageKey ?? "")),
-        requirementsSatisfied: 2,
-        requirementsTotal: 2,
-        openWorkCount: 1,
-    }),
-    waitlist: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "waitlist",
-        currentStageEnteredAt: "2026-08-09T09:00:00Z",
-        stateLabel: "Waitlisted",
-        closeReasonLabel: null,
-        facts: ALL_FACTS.filter((f) => ["lead", "tour", "waitlist"].includes(f.stageKey ?? "")),
-        requirementsSatisfied: 0,
-        requirementsTotal: 1,
-        openWorkCount: 1,
-    }),
-    enrolling: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "enrolling",
-        currentStageEnteredAt: "2026-08-18T09:00:00Z",
-        stateLabel: "Enrolling",
-        closeReasonLabel: null,
-        facts: ALL_FACTS,
-        requirementsSatisfied: 2,
-        requirementsTotal: 4,
-        openWorkCount: 2,
-    }),
-    completed: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "enrolled",
-        currentStageEnteredAt: "2026-08-20T09:00:00Z",
-        stateLabel: "Enrolled",
-        closeReasonLabel: null,
-        facts: ALL_FACTS,
-        requirementsSatisfied: 4,
-        requirementsTotal: 4,
-        openWorkCount: 0,
-    }),
-    /** A passed stage with no anchored fact — status INFERRED, never asserted. */
-    skipped: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "enrolling",
-        currentStageEnteredAt: "2026-08-18T09:00:00Z",
-        stateLabel: "Enrolling",
-        closeReasonLabel: null,
-        // Waitlist carries no fact — the family went straight from tour to enrolling.
-        facts: ALL_FACTS.filter((f) => f.stageKey !== "waitlist"),
-        requirementsSatisfied: 2,
-        requirementsTotal: 4,
-        openWorkCount: 2,
-    }),
-    /** Observed backwards transition in `mutation_events`. */
-    reopened: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "tour",
-        currentStageEnteredAt: "2026-08-21T09:00:00Z",
-        stateLabel: null,
-        closeReasonLabel: null,
-        facts: ALL_FACTS.filter((f) => ["lead", "tour"].includes(f.stageKey ?? "")),
-        reopenedStageKeys: ["tour"],
-        requirementsSatisfied: 1,
-        requirementsTotal: 2,
-        openWorkCount: 1,
-    }),
-    closed: buildJourneyCardEvidence({
-        processStages: ENROLLMENT_STAGES,
-        currentStageKey: "waitlist",
-        currentStageEnteredAt: "2026-08-09T09:00:00Z",
-        stateLabel: "Not enrolling",
-        closeReasonLabel: "Chose another provider",
-        facts: ALL_FACTS.filter((f) => ["lead", "tour", "waitlist"].includes(f.stageKey ?? "")),
-        isClosed: true,
-        openWorkCount: 0,
-    }),
-    unresolved: buildJourneyCardEvidence({
-        processStages: null,
-        currentStageKey: null,
-        currentStageEnteredAt: null,
-        stateLabel: null,
-        closeReasonLabel: null,
-        facts: [],
-    }),
+export const LAB_SUBJECT = {
+    child: "Avery Johnson",
+    household: "Johnson Family",
+    site: "North Campus",
+    program: "Toddler",
+    room: "Sunflower Room",
+    today: "Mon, Aug 24",
 } as const;
 
-/** Multi-child family — ONE rail per child, because a journey is per process_instance. */
-export const JOURNEY_MULTI_CHILD = [
-    { childName: "Emma Johnson", evidence: JOURNEY_SPECIMENS.enrolling },
-    { childName: "Liam Johnson", evidence: JOURNEY_SPECIMENS.waitlist },
-    { childName: "Noah Johnson", evidence: JOURNEY_SPECIMENS.early },
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Health & Safety specimens
-// ─────────────────────────────────────────────────────────────────────────────
-
-/** The org's configured health field set. Labels and prominence are configuration. */
-function healthFields(values: Partial<Record<string, string>>): HealthFactRow[] {
-    return [
-        { fieldKey: "allergies", label: "Allergies", value: values.allergies ?? null, safetyCritical: true },
-        { fieldKey: "medical_notes", label: "Medical notes", value: values.medical_notes ?? null, safetyCritical: false },
-        { fieldKey: "special_instructions", label: "Special instructions", value: values.special_instructions ?? null, safetyCritical: false },
-        // An org-added field — proves the vocabulary is not platform-fixed.
-        { fieldKey: "dietary_restriction", label: "Dietary restriction", value: values.dietary_restriction ?? null, safetyCritical: false },
-    ];
-}
-
-const HEALTH_DOCS = [
-    { docTypeKey: "physical", label: "Physical exam", onFile: true, expiresAt: null },
-    { docTypeKey: "immunization", label: "Immunization record", onFile: true, expiresAt: null },
-    { docTypeKey: "medication_auth", label: "Medication authorization", onFile: false, expiresAt: null },
-];
-
-export const HEALTH_SPECIMENS = {
-    complete: buildHealthSafetyCardEvidence({
-        fields: healthFields({ medical_notes: "Mild asthma — inhaler at school" }),
-        documents: HEALTH_DOCS.map((d) => ({ ...d, onFile: true })),
-        requirements: [
-            { key: "physical", label: "Physical received", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "immunization", label: "Immunization record", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "med_auth", label: "Medication authorization", resolved: true, met: true, detail: null, ownerCard: "documents" },
-        ],
-        emergencyContactCount: 2,
-    }),
-    needsAttention: buildHealthSafetyCardEvidence({
-        fields: healthFields({ medical_notes: "Asthma", dietary_restriction: "Dairy" }),
-        documents: HEALTH_DOCS,
-        requirements: [
-            { key: "physical", label: "Physical received", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "immunization", label: "Immunization record", resolved: true, met: false, detail: "Not received", ownerCard: "documents" },
-            { key: "med_auth", label: "Medication authorization", resolved: true, met: false, detail: "Missing", ownerCard: "documents" },
-        ],
-        emergencyContactCount: 2,
-    }),
-    severeAlert: buildHealthSafetyCardEvidence({
-        fields: healthFields({
-            allergies: "Severe peanut allergy — EpiPen required",
-            medical_notes: "Asthma",
-            dietary_restriction: "Dairy",
-        }),
-        documents: HEALTH_DOCS,
-        requirements: [
-            { key: "physical", label: "Physical received", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "immunization", label: "Immunization record", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "med_auth", label: "Medication authorization", resolved: true, met: false, detail: "Missing", ownerCard: "documents" },
-        ],
-        emergencyContactCount: 3,
-    }),
-    /** New enrollment — resolved and genuinely nothing recorded. NOT "no known allergies". */
-    empty: buildHealthSafetyCardEvidence({
-        fields: healthFields({}),
-        documents: [],
-        requirements: [],
-        emergencyContactCount: 0,
-    }),
-    /** The requirement projection has not answered. Held, never counted. */
-    heldRequirements: buildHealthSafetyCardEvidence({
-        fields: healthFields({ allergies: "Peanuts" }),
-        documents: HEALTH_DOCS,
-        requirements: [
-            { key: "physical", label: "Physical received", resolved: true, met: true, detail: null, ownerCard: "documents" },
-            { key: "immunization", label: "Immunization record", resolved: false, met: false, detail: null, ownerCard: "documents" },
-            { key: "med_auth", label: "Medication authorization", resolved: false, met: false, detail: null, ownerCard: "documents" },
-        ],
-        emergencyContactCount: 1,
-    }),
-    unresolved: buildHealthSafetyCardEvidence({ fields: null }),
-} as const;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Staff specimens
-// ─────────────────────────────────────────────────────────────────────────────
-
-function person(
-    personId: string,
-    name: string,
-    positionLabel: string,
-    basis: StaffPersonRow["basis"],
-    opts: Partial<StaffPersonRow> = {},
-): StaffPersonRow {
-    return {
-        personId,
-        name,
-        imageUrl: null,
-        positionLabel,
-        assignmentTypeLabel: opts.assignmentTypeLabel ?? null,
-        roomLabel: opts.roomLabel ?? null,
-        siteLabel: opts.siteLabel ?? "Firefly Main",
-        isPrimary: opts.isPrimary ?? false,
-        basis,
-        effectiveFrom: opts.effectiveFrom ?? "2026-08-01",
-        effectiveTo: opts.effectiveTo ?? null,
-    };
-}
-
-export const STAFF_SPECIMENS = {
-    one: buildStaffCardEvidence({
-        people: [
-            person("p1", "Taylor Reed", "Lead Teacher", "room_assignment", {
-                isPrimary: true,
-                roomLabel: "Infant Room",
-                assignmentTypeLabel: "Classroom coverage",
-            }),
-        ],
-    }),
-    severalRoles: buildStaffCardEvidence({
-        people: [
-            person("p1", "Taylor Reed", "Lead Teacher", "room_assignment", {
-                isPrimary: true,
-                roomLabel: "Infant Room",
-                assignmentTypeLabel: "Classroom coverage",
-            }),
-            person("p2", "Jordan Lee", "Assistant Teacher", "room_assignment", {
-                roomLabel: "Infant Room",
-                assignmentTypeLabel: "Classroom coverage",
-            }),
-            person("p3", "Sam Ortiz", "Floater", "site_assignment", {
-                assignmentTypeLabel: "Site float",
-            }),
-            person("p4", "Maya Singh", "Center Director", "program_leadership"),
-            person("p5", "Alex Kim", "Enrollment Specialist", "process_owner"),
-        ],
-    }),
-    none: buildStaffCardEvidence({ people: [] }),
-    unresolved: buildStaffCardEvidence({ people: null }),
-} as const;
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Attendance specimens
-// ─────────────────────────────────────────────────────────────────────────────
-
-function day(
-    serviceDate: string,
-    weekdayLabel: string,
-    state: AttendanceDayRow["state"],
-    opts: Partial<AttendanceDayRow> = {},
-): AttendanceDayRow {
-    return {
-        serviceDate,
-        weekdayLabel,
-        expected: opts.expected ?? state !== "closed",
-        expectedWindowLabel: opts.expectedWindowLabel ?? "8:00 AM – 4:30 PM",
-        checkInLabel: opts.checkInLabel ?? null,
-        checkOutLabel: opts.checkOutLabel ?? null,
-        state,
-        absenceReasonLabel: opts.absenceReasonLabel ?? null,
-        absenceExcused: opts.absenceExcused ?? null,
-        missingCheckout: opts.missingCheckout ?? false,
-        corrected: opts.corrected ?? false,
-        roomLabel: opts.roomLabel ?? "Infant Room",
-    };
-}
-
-const WEEK_BASE = [
-    day("2026-08-17", "Mon", "checked_out", { checkInLabel: "8:01 AM", checkOutLabel: "4:26 PM" }),
-    day("2026-08-18", "Tue", "checked_out", { checkInLabel: "8:07 AM", checkOutLabel: "4:31 PM" }),
-];
-
-export const ATTENDANCE_SPECIMENS = {
-    present: buildAttendanceCardEvidence({
-        days: [...WEEK_BASE, day("2026-08-19", "Wed", "present", { checkInLabel: "8:04 AM" })],
-        todayServiceDate: "2026-08-19",
-    }),
-    notArrived: buildAttendanceCardEvidence({
-        days: [...WEEK_BASE, day("2026-08-19", "Wed", "not_arrived")],
-        todayServiceDate: "2026-08-19",
-        varianceCount: 1,
-    }),
-    completedDay: buildAttendanceCardEvidence({
-        days: [...WEEK_BASE, day("2026-08-19", "Wed", "checked_out", { checkInLabel: "8:04 AM", checkOutLabel: "4:22 PM" })],
-        todayServiceDate: "2026-08-19",
-    }),
-    absent: buildAttendanceCardEvidence({
-        days: [
-            ...WEEK_BASE,
-            day("2026-08-19", "Wed", "absent", { absenceReasonLabel: "Illness", absenceExcused: true }),
-        ],
-        todayServiceDate: "2026-08-19",
-        varianceCount: 1,
-    }),
-    missingCheckout: buildAttendanceCardEvidence({
-        days: [
-            ...WEEK_BASE,
-            day("2026-08-19", "Wed", "present", { checkInLabel: "8:04 AM", missingCheckout: true }),
-        ],
-        todayServiceDate: "2026-08-19",
-        varianceCount: 1,
-    }),
-    corrected: buildAttendanceCardEvidence({
-        days: [
-            day("2026-08-17", "Mon", "checked_out", { checkInLabel: "8:01 AM", checkOutLabel: "4:26 PM", corrected: true }),
-            WEEK_BASE[1]!,
-            day("2026-08-19", "Wed", "checked_out", { checkInLabel: "8:04 AM", checkOutLabel: "4:20 PM" }),
-        ],
-        todayServiceDate: "2026-08-19",
-    }),
-    closedDay: buildAttendanceCardEvidence({
-        days: [...WEEK_BASE, day("2026-08-19", "Wed", "closed", { expected: false, expectedWindowLabel: null })],
-        todayServiceDate: "2026-08-19",
-    }),
-    /** The pattern configures no default hours — the window is omitted, never substituted. */
-    noConfiguredWindow: buildAttendanceCardEvidence({
-        days: [day("2026-08-19", "Wed", "not_arrived", { expectedWindowLabel: null })],
-        todayServiceDate: "2026-08-19",
-    }),
-    unresolved: buildAttendanceCardEvidence({ days: null, todayServiceDate: null }),
-} as const;
-
-/** Staff variant — same blueprint, facts from `staff_presence_events`. */
-export const ATTENDANCE_STAFF_VARIANT = buildAttendanceCardEvidence({
-    days: [
-        day("2026-08-17", "Mon", "checked_out", { checkInLabel: "7:28 AM", checkOutLabel: "4:02 PM", roomLabel: "Infant Room" }),
-        day("2026-08-18", "Tue", "checked_out", { checkInLabel: "7:31 AM", checkOutLabel: "4:00 PM", roomLabel: "Infant Room" }),
-        day("2026-08-19", "Wed", "present", { checkInLabel: "7:26 AM", roomLabel: "Infant Room" }),
+/** Stages of the configured Enrollment Business Process — the journey spine. */
+export const JOURNEY_FIXTURE: JourneyEvidence = {
+    processLabel: "Enrollment Journey",
+    answerLine: "Enrolling · since Aug 18",
+    supportingLine: "Lead Aug 2 → Enrolling Aug 18 · 22 days in process",
+    stages: [
+        { state: "done", value: "Lead", detail: "Aug 2", note: "Inquiry submitted" },
+        { state: "done", value: "Tour", detail: "Aug 5 – 8", note: "Tour completed" },
+        { state: "done", value: "Waitlist", detail: "Aug 9 – 18", note: "Offer accepted" },
+        { state: "current", value: "Enrolling", detail: "Since Aug 18", note: "2 items remain" },
+        { state: "future", value: "Enrolled", detail: "Expected Sep 2", note: null },
     ],
-    todayServiceDate: "2026-08-19",
-    // Staff DOES have registered capabilities: staff_presence.record / staff_presence.correct.
-    mutationCapabilitiesRegistered: true,
-});
+};
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Billing specimens
-// ─────────────────────────────────────────────────────────────────────────────
+export const HEALTH_FIXTURE: HealthEvidence = {
+    answerLine: "Peanut allergy — severe · EpiPen on site",
+    supportingLine: "Asthma · no dairy · 3 emergency contacts",
+    statusChip: null,
+    allergies: [
+        { name: "Peanuts", severe: true, detail: "Anaphylaxis · EpiPen kept in Sunflower Room" },
+        { name: "Latex", detail: "Contact rash" },
+    ],
+    medical: [
+        { name: "Asthma", detail: "Exercise-induced" },
+    ],
+    medications: [
+        { name: "Albuterol inhaler", detail: "As needed · 2 puffs · kept in Sunflower Room" },
+        { name: "Epinephrine auto-injector", detail: "Emergency use · expires Mar 2027" },
+    ],
+    dietary: [{ name: "No dairy", detail: "Substitute oat milk" }],
+    requirements: [
+        { name: "Physical exam", value: "Received Jul 14" },
+        { name: "Immunization record", value: "Received Jul 14" },
+        { name: "Medication authorization", value: "Missing", missing: true },
+    ],
+    emergencyCount: 3,
+    emergencyPrimary: "Sam Rivera",
+    emergencyDetail: "First call · Aunt · (555) 444-0199",
+};
 
-export const BILLING_SPECIMENS = {
-    setupIncomplete: buildBillingCardEvidence({
-        billingContactName: null,
-        billingContactEmail: null,
-        tuitionRateLabel: null,
-        tuitionResolved: true,
-    }),
-    configured: buildBillingCardEvidence({
-        billingContactName: "Sarah Wright",
-        billingContactEmail: "sarah@example.com",
-        tuitionRateLabel: "$1,850 / month",
-        tuitionResolved: true,
-        charges: [
-            { id: "c1", label: "August tuition", amountLabel: "$1,850.00", status: "posted", serviceDate: "2026-08-01", dueDate: "2026-08-01", isPreview: false },
-            { id: "c2", label: "Registration fee", amountLabel: "$150.00", status: "posted", serviceDate: "2026-08-01", dueDate: "2026-08-01", isPreview: false },
+export const STAFF_FIXTURE: StaffEvidence = {
+    answerLine: "Taylor Reed is Avery's lead teacher",
+    supportingLine: "Sunflower Room · Toddler · North Campus · today",
+    people: [
+        {
+            id: "s-1",
+            name: "Taylor Reed",
+            relationship: "Lead Teacher",
+            lead: true,
+            facts: [
+                { label: "Room", value: "Sunflower Room" },
+                { label: "Today", value: "7:30 – 4:00" },
+            ],
+        },
+        {
+            id: "s-2",
+            name: "Jordan Lee",
+            relationship: "Assistant Teacher",
+            facts: [
+                { label: "Room", value: "Sunflower Room" },
+                { label: "Today", value: "9:00 – 5:30" },
+            ],
+        },
+        {
+            id: "s-3",
+            name: "Sam Ortiz",
+            relationship: "Floater",
+            facts: [
+                { label: "Room", value: "Sunflower Room" },
+                { label: "Today", value: "11:00 – 2:00" },
+            ],
+        },
+        {
+            id: "s-4",
+            name: "Priya Raman",
+            relationship: "Enrollment Specialist",
+            facts: [
+                { label: "Owns", value: "This enrollment" },
+                { label: "Since", value: "Aug 2" },
+            ],
+        },
+    ],
+    othersCount: 2,
+    othersLabel: "Others at North Campus",
+};
+
+const MIN = (h: number, m: number) => h * 60 + m;
+
+export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
+    answerLine: "In Nap Room since 12:05 PM",
+    supportingLine: "Expected 8:00 AM – 4:30 PM · 4h 1m so far",
+    statusChip: "Present",
+    statusTone: "ready",
+    expected: { fromLabel: "8:00 AM", toLabel: "4:30 PM", fromMin: MIN(8, 0), toMin: MIN(16, 30) },
+    actual: { fromMin: MIN(8, 4), toMin: MIN(12, 5) },
+    tickMinutes: [MIN(8, 4), MIN(10, 15), MIN(11, 5), MIN(12, 5), MIN(16, 30)],
+    events: [
+        { state: "done", label: "Checked in", value: "8:04 AM", note: "Sunflower Room" },
+        { state: "done", label: "Moved", value: "10:15 AM", note: "Playground" },
+        { state: "done", label: "Moved", value: "11:05 AM", note: "Sunflower Room" },
+        { state: "current", label: "Moved", value: "12:05 PM", note: "Nap Room" },
+        { state: "future", label: "Check-out", value: "—", note: "Expected 4:30 PM" },
+    ],
+    correctionNote: "Check-in corrected from 8:40 AM by Taylor Reed · 8:11 AM",
+    recentDays: [
+        { day: "Tue 18", state: "present", hours: "8:11 – 4:30" },
+        { day: "Wed 19", state: "present", hours: "8:02 – 4:22" },
+        { day: "Thu 20", state: "partial", hours: "8:05 – 12:30" },
+        { day: "Fri 21", state: "absent", hours: "Illness" },
+        { day: "Mon 24", state: "present", hours: "8:04 – now" },
+    ],
+};
+
+export const BILLING_FIXTURE: BillingEvidence = {
+    answerLine: "$1,065 family share · due Sep 1",
+    supportingLine: "Aug 1 – Aug 31 · autopay on",
+    statusChip: "$275 past due",
+    period: {
+        label: "Aug 1 – Aug 31",
+        lines: [
+            { label: "Tuition", value: "$1,850" },
+            { label: "Sibling discount", value: "−$185" },
+            { label: "State subsidy", value: "−$600" },
+            { label: "Family share", value: "$1,065", emphasis: true },
         ],
-    }),
-    balanceDue: buildBillingCardEvidence({
-        billingContactName: "Sarah Wright",
-        billingContactEmail: "sarah@example.com",
-        tuitionRateLabel: "$1,850 / month",
-        tuitionResolved: true,
-        feeBalanceCents: 125000,
-        charges: [
-            { id: "c3", label: "September tuition", amountLabel: "$1,850.00", status: "draft", serviceDate: "2026-09-01", dueDate: "2026-09-01", isPreview: false },
-            { id: "c4", label: "Late-pickup obligation", amountLabel: "$25.00", status: "draft", serviceDate: "2026-08-18", dueDate: null, isPreview: true },
-        ],
-    }),
-    /** The financial-config API has not answered — HOLD, do not print "1 item missing". */
-    unresolved: buildBillingCardEvidence({
-        billingContactName: "Sarah Wright",
-        billingContactEmail: "sarah@example.com",
-        tuitionRateLabel: null,
-        tuitionResolved: false,
-    }),
-} as const;
+    },
+    dueLabel: "Next due",
+    dueValue: "Sep 1",
+    pastDue: {
+        amount: "$275",
+        oldest: "Aug 15",
+        age: "9 days past due",
+        note: "Card declined Aug 16 · Visa •••• 4242",
+    },
+    ledger: [
+        { when: "Aug 20", label: "Payment received", amount: "+$925", kind: "credit" },
+        { when: "Aug 15", label: "Tuition — August", amount: "$1,850", kind: "charge" },
+        { when: "Aug 15", label: "State subsidy", amount: "−$600", kind: "credit" },
+        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
+        { when: "Aug 10", label: "Late fee", amount: "$25", kind: "charge" },
+    ],
+    payers: [
+        { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
+        { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
+        { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance" },
+    ],
+};

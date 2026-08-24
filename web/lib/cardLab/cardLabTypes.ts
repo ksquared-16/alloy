@@ -1,48 +1,118 @@
 /**
- * Card Lab — shared presentation vocabulary for the five specified cards.
+ * Candidate-card evidence shapes for the Local Design Lab.
  *
- * These mirror the platform's existing card vocabulary (`FocusPanelCardTier`,
- * `FocusPanelCardArchetype`, `UniversalCardProps["statusTone"]`) without importing the
- * production card-key union, so nothing here can leak into a registered surface.
- *
- * @see docs/platform/operator/operational-card-system-expansion.md
+ * These mirror what a real `build<X>CardEvidence(context)` would return: already-resolved,
+ * already-formatted operational answers. No card in the lab reads a record, and no shape here
+ * carries review metadata — provenance and open questions live in the lab's review panel, never
+ * in the card.
  */
 
-/** The five specified cards. NOT `FocusPanelCardKey` — deliberately a separate union. */
-export const CARD_LAB_KEYS = [
-    "process_journey",
-    "health_safety",
-    "staff",
-    "attendance",
-    "billing",
-] as const;
+export type StepState = "done" | "current" | "future";
 
-export type CardLabKey = (typeof CARD_LAB_KEYS)[number];
-
-/** Handoff target — a production card key, expressed as a plain string on purpose. */
-export type CardLabHandoff = string | null;
-
-export type CardLabStatusTone = "ready" | "blocked" | "at-risk" | "due" | "done" | "neutral";
-
-/**
- * The three answer postures every specified card must be able to hold.
- *
- * `unresolved` is the one the platform keeps re-learning: no authoritative source has spoken.
- * It is NOT `empty` (a source spoke and there is nothing) and it must never produce a verdict.
- * @see buildBillingPreviewCardEvidence — "unresolved must never fabricate business truth"
- */
-export type CardLabResolution = "settled" | "unresolved" | "empty";
-
-export type CardLabEvidenceBase = {
-    answerLine: string;
-    supportingLine: string | null;
-    statusChip: string | null;
-    statusTone: CardLabStatusTone;
-    resolution: CardLabResolution;
+/** One column of a progression band — shared by Journey (stages) and Attendance (day events). */
+export type ProgressionStep = {
+    state: StepState;
+    /** Uppercase micro-label above the value. Journey leaves this null; Attendance uses it. */
+    label?: string | null;
+    value: string;
+    detail?: string | null;
+    /** Second, quieter line — Journey's outcome, Attendance's room. */
+    note?: string | null;
 };
 
-export function trimOrNull(value: unknown): string | null {
-    if (value == null) return null;
-    const text = String(value).trim();
-    return text.length > 0 ? text : null;
-}
+export type JourneyEvidence = {
+    processLabel: string;
+    answerLine: string;
+    supportingLine: string;
+    stages: ProgressionStep[];
+};
+
+export type HealthFact = {
+    name: string;
+    /** Rendered in the family's risk red — reserved for genuinely severe facts. */
+    severe?: boolean;
+    detail?: string | null;
+};
+
+export type HealthRequirement = {
+    name: string;
+    value: string;
+    missing?: boolean;
+};
+
+export type HealthEvidence = {
+    answerLine: string;
+    supportingLine: string;
+    statusChip?: string | null;
+    allergies: HealthFact[];
+    medical: HealthFact[];
+    medications: HealthFact[];
+    dietary: HealthFact[];
+    requirements: HealthRequirement[];
+    emergencyCount: number;
+    emergencyPrimary: string | null;
+    emergencyDetail: string | null;
+};
+
+export type StaffPerson = {
+    id: string;
+    name: string;
+    /** The relationship pill — why this person is on this child's card. */
+    relationship: string;
+    /** True for the operational owner of the child right now. */
+    lead?: boolean;
+    /** Two label-over-value facts, in the Children row idiom. Labels are per-person truth —
+     *  a room teacher is placed by room and shift; an enrollment owner is not. */
+    facts: { label: string; value: string }[];
+};
+
+export type StaffEvidence = {
+    answerLine: string;
+    supportingLine: string;
+    people: StaffPerson[];
+    othersCount: number;
+    othersLabel: string;
+};
+
+export type AttendanceEvidence = {
+    answerLine: string;
+    supportingLine: string;
+    statusChip: string;
+    statusTone: "ready" | "due" | "neutral";
+    /** Expected window, as minutes from midnight, for the day track. */
+    expected: { fromLabel: string; toLabel: string; fromMin: number; toMin: number };
+    /** Actual span so far, as minutes from midnight. */
+    actual: { fromMin: number; toMin: number };
+    events: ProgressionStep[];
+    /** Ticks positioned on the track, as minutes from midnight. */
+    tickMinutes: number[];
+    correctionNote: string | null;
+    recentDays: { day: string; state: "present" | "absent" | "partial"; hours: string }[];
+};
+
+export type LedgerEntry = {
+    when: string;
+    label: string;
+    /** Already signed and formatted by the evidence builder — the card never does arithmetic. */
+    amount: string;
+    /** credit = money toward the balance (payments, subsidy, discounts). Drives colour only. */
+    kind: "charge" | "credit";
+};
+
+export type BillingPayer = {
+    name: string;
+    share: string;
+    method: string;
+};
+
+export type BillingEvidence = {
+    answerLine: string;
+    supportingLine: string;
+    statusChip: string | null;
+    period: { label: string; lines: { label: string; value: string; emphasis?: boolean }[] };
+    dueLabel: string;
+    dueValue: string;
+    pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
+    ledger: LedgerEntry[];
+    payers: BillingPayer[];
+};
