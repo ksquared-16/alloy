@@ -99,6 +99,28 @@ export function isHostedRuntime(runtime: PublicRuntimeClass): boolean {
     return runtime === "production" || runtime === "hosted_preview";
 }
 
+/**
+ * Is this runtime writing into a DEPLOYED database rather than a disposable local stack?
+ *
+ * This matters more than it looks. Dispatch is a separate worker polling
+ * `communication_messages` for `status in (queued, deferred)`; it has no idea which
+ * runtime inserted a row. So a managed agent slot pointed at the shared deployed project
+ * can enqueue a row that a hosted dispatcher then really sends, to a real family. For the
+ * purpose of "can this link reach someone", the DATABASE decides, not the process.
+ *
+ * A census of the deployed project found eight delivered/sent bodies carrying loopback
+ * links, minted on ports 3014 and 3015 — slots, not hosted runtimes.
+ */
+export function isDeployedDatabaseTarget(env: Env = process.env as Env): boolean {
+    const raw = trimEnv(env.NEXT_PUBLIC_SUPABASE_URL) || trimEnv(env.SUPABASE_URL);
+    if (!raw) return false;
+    try {
+        return !isLoopbackHost(new URL(raw).hostname);
+    } catch {
+        return false;
+    }
+}
+
 function configuredOriginRaw(env: Env): string {
     const fromEnv =
         trimEnv(env.NEXT_PUBLIC_APP_URL) ||
@@ -124,10 +146,25 @@ function configuredOriginRaw(env: Env): string {
  * The failure is a VALUE, not an empty string. An empty string is what let callers build
  * `/a/CODE` with no origin and hand it to an SMS provider.
  */
-export function resolvePublicAppOrigin(env: Env = process.env as Env): PublicOriginDecision {
+export type ResolvePublicAppOriginOptions = {
+    /**
+     * Hold the origin to the DELIVERABLE standard (no loopback, https) even when the
+     * process itself is local.
+     *
+     * Defaults to whether this runtime is hosted. The outbound seam overrides it, because
+     * a local slot writing into the deployed database produces links a real recipient will
+     * receive — and `http://localhost:3013` is not an answer for them.
+     */
+    deliveryIsHosted?: boolean;
+};
+
+export function resolvePublicAppOrigin(
+    env: Env = process.env as Env,
+    options: ResolvePublicAppOriginOptions = {},
+): PublicOriginDecision {
     const runtime = classifyPublicRuntime(env);
     const configured = configuredOriginRaw(env);
-    const hosted = isHostedRuntime(runtime);
+    const hosted = options.deliveryIsHosted ?? isHostedRuntime(runtime);
 
     if (!configured) {
         return {
@@ -178,7 +215,7 @@ export function resolvePublicAppOrigin(env: Env = process.env as Env): PublicOri
             code: "loopback_in_hosted_runtime",
             runtime,
             configured,
-            message: `A hosted runtime cannot deliver loopback links. The configured public application origin is ${configured}.`,
+            message: `A deliverable link cannot use a loopback origin. The configured public application origin is ${configured}.`,
         };
     }
     if (hosted && parsed.protocol !== "https:") {
@@ -187,7 +224,7 @@ export function resolvePublicAppOrigin(env: Env = process.env as Env): PublicOri
             code: "insecure_hosted_origin",
             runtime,
             configured,
-            message: `A hosted runtime must publish https links. The configured public application origin is ${configured}.`,
+            message: `A deliverable link must use https. The configured public application origin is ${configured}.`,
         };
     }
 

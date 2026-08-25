@@ -17,14 +17,16 @@
  *
  * WHAT IT DOES
  *
- * In a hosted runtime: re-anchor every loopback URL onto the runtime's own canonical
- * origin, then REFUSE the send if any loopback link survived. Refusing is the point — a
+ * Where a send can actually reach someone: re-anchor every loopback URL onto the
+ * canonical public origin, then REFUSE the send if any loopback link survived. Refusing is the point — a
  * link a recipient cannot open is not a degraded send, it is a failed one, and it should
  * fail where an operator can see it rather than in an inbox.
  *
- * In a local or certification runtime: change nothing. `http://localhost:3013/a/AbCdEf12`
- * is the CORRECT link there, and rewriting it would break local development to fix a
- * hosted defect.
+ * Against a local disposable stack: change nothing. `http://localhost:3013/a/AbCdEf12` is
+ * the CORRECT link there, and rewriting it would break local development to fix a hosted
+ * defect. But a local runtime writing into the DEPLOYED database is held to the hosted
+ * standard, because a hosted dispatcher will pick that row up and send it for real — and
+ * a slot has no deliverable origin to offer, so it is refused rather than repaired.
  *
  * The rewrite touches `body`, `subject` AND `rendered_snapshot`, because the email that
  * actually leaves the building is built from `rendered_snapshot.html` / `.text` — fixing
@@ -33,6 +35,7 @@
 
 import {
     findLoopbackUrls,
+    isDeployedDatabaseTarget,
     isHostedRuntime,
     PUBLIC_ORIGIN_OPERATOR_MESSAGE,
     classifyPublicRuntime,
@@ -106,25 +109,47 @@ export function enforceOutboundPublicLinkOrigin(
     const subject = input.subject;
     const snapshot = input.renderedSnapshot;
 
-    // Local and certification runtimes OWN their loopback origin. Nothing to enforce.
-    if (!isHostedRuntime(runtime)) {
+    // WHICH RUNTIMES ARE HELD TO THE DELIVERABLE STANDARD
+    //
+    // Not just the hosted ones. Dispatch is a separate worker polling this table; it has
+    // no idea which process inserted a row. So a managed agent slot pointed at the shared
+    // DEPLOYED project can enqueue a row that a hosted dispatcher really sends, to a real
+    // family — and the census found exactly that: eight sent/delivered bodies carrying
+    // loopback links minted on ports 3014 and 3015, none of them from a hosted runtime.
+    //
+    // The database decides, not the process. A truly local stack is disposable and keeps
+    // its loopback links, which is the whole point of local development.
+    const deliveryIsHosted = isHostedRuntime(runtime) || isDeployedDatabaseTarget(env);
+    if (!deliveryIsHosted) {
         return { ok: true, body, subject, renderedSnapshot: snapshot, rehostedCount: 0, origin: null };
     }
 
     const surfaces = [body, String(subject ?? ""), ...collectSnapshotStrings(snapshot)];
     const offending = surfaces.flatMap((s) => findLoopbackUrls(s));
 
-    const decision = resolvePublicAppOrigin(env);
+    const decision = resolvePublicAppOrigin(env, { deliveryIsHosted: true });
+
     if (!decision.ok) {
-        // A hosted runtime with no usable origin must not send at all. This refuses even a
-        // message that happens to contain no links today: the configuration is broken, and
-        // discovering that on the first message that DOES carry one is too late.
-        return {
-            ok: false,
-            code: decision.code,
-            message: PUBLIC_ORIGIN_OPERATOR_MESSAGE[decision.code],
-            detail: decision.message,
-        };
+        // Two different situations share one failed resolution, and they deserve different
+        // answers.
+        //
+        // A HOSTED runtime with no usable origin is broken, full stop. It refuses even a
+        // message carrying no links today, because discovering the misconfiguration on the
+        // first message that DOES carry one is too late.
+        //
+        // A LOCAL runtime pointed at the deployed database is not misconfigured — a slot is
+        // supposed to have a loopback origin. It simply has no deliverable origin to offer,
+        // so it is refused only for the concrete harm: a body that actually carries a
+        // loopback link. Anything else still sends. Block the defect, not the developer.
+        if (isHostedRuntime(runtime) || offending.length > 0) {
+            return {
+                ok: false,
+                code: decision.code,
+                message: PUBLIC_ORIGIN_OPERATOR_MESSAGE[decision.code],
+                detail: decision.message,
+            };
+        }
+        return { ok: true, body, subject, renderedSnapshot: snapshot, rehostedCount: 0, origin: null };
     }
 
     if (offending.length === 0) {

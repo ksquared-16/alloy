@@ -24,8 +24,18 @@ import {
 } from "@/lib/publicAppUrl";
 import { enforceOutboundPublicLinkOrigin } from "@/lib/communications/outboundPublicLinkOrigin";
 
-const LOCAL_SLOT = { ALLOY_AGENT_ENV: "1", NEXT_PUBLIC_APP_URL: "http://localhost:3013" };
-const CERTIFICATION = { NEXT_PUBLIC_APP_URL: "http://localhost:3911" };
+const LOCAL_SLOT = {
+    ALLOY_AGENT_ENV: "1",
+    NEXT_PUBLIC_APP_URL: "http://localhost:3013",
+    NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54421",
+};
+/** A slot pointed at the SHARED DEPLOYED project — the topology that caused the defect. */
+const SLOT_ON_DEPLOYED_DB = {
+    ALLOY_AGENT_ENV: "1",
+    NEXT_PUBLIC_APP_URL: "http://localhost:3014",
+    NEXT_PUBLIC_SUPABASE_URL: "https://ikaxilmwmrmbagoidedu.supabase.co",
+};
+const CERTIFICATION = { NEXT_PUBLIC_APP_URL: "http://localhost:3911", NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54421" };
 const STAGING = { VERCEL_ENV: "preview", NEXT_PUBLIC_APP_URL: "https://staging.workwithalloy.com" };
 const PRODUCTION = { VERCEL_ENV: "production", NEXT_PUBLIC_APP_URL: "https://workwithalloy.com" };
 
@@ -250,6 +260,30 @@ describe("the outbound seam gets the final word", () => {
         if (!twice.ok) return;
         expect(twice.body).toBe(once.body);
         expect(twice.rehostedCount).toBe(0);
+    });
+
+    it("refuses a slot writing into the DEPLOYED database — the row a hosted dispatcher sends", () => {
+        // Dispatch polls this table and cannot tell which process inserted a row. The
+        // census found eight sent/delivered bodies carrying links minted on ports 3014 and
+        // 3015 — a slot's dev server enqueued them and the hosted worker really sent them.
+        // The slot has no deliverable origin to offer, so the send is refused, not repaired.
+        const r = enforceOutboundPublicLinkOrigin({
+            body: SLOT_AUTHORED_BODY,
+            renderedSnapshot: SLOT_AUTHORED_SNAPSHOT,
+            env: SLOT_ON_DEPLOYED_DB,
+        });
+        expect(r.ok).toBe(false);
+        expect(!r.ok && r.code).toBe("loopback_in_hosted_runtime");
+    });
+
+    it("still lets a slot on the deployed database send a message with no links", () => {
+        // Proportionate: block the defect, not the developer. A slot pointed at the shared
+        // project can still send; it just cannot send an unusable link.
+        const r = enforceOutboundPublicLinkOrigin({
+            body: "Thanks — we have your paperwork.",
+            env: SLOT_ON_DEPLOYED_DB,
+        });
+        expect(r.ok).toBe(true);
     });
 
     it("takes no request, so a spoofed Host header has nothing to influence", () => {
