@@ -574,3 +574,97 @@ is declared for that grain" — is exactly the kind of invariant that survives a
 
 67 tests green across the six affected suites; `typecheck:tests` rc=0; person surface re-certified
 after the change (avatar tile, initials fallback, 0 page errors).
+
+---
+
+## 15. Slice 2 COMPLETE — the production Business Process card (2026-08-25)
+
+`business_process` renders its own presentation. The transitional Current Work rendering is gone
+from that key. **Current Work remains a canonical data owner** — the evidence builder consumes it —
+so this is presentation convergence, not domain deletion.
+
+### The composition
+
+`buildBusinessProcessCardEvidence(context)` — a pure function over the already-composed
+`OperationalContext`, matching the convention of every other card evidence builder. The card fetches
+nothing and adds no waterfall.
+
+| Fact | Owner |
+|---|---|
+| Configured stages + order | department lifecycle → `workspace.lifecycle_rail` → `context.businessProcess.stages` |
+| Case stage | `context.businessProcess.stageKey` (rail wins over `stage_context`) |
+| Participants + their stages | participation rows → `buildChildrenCardEvidence` |
+| Current Work | `buildCurrentWorkCardEvidence` |
+| Activity | `buildCurrentWorkActivityPreviewItemsFromContext` |
+
+### Three dropped identities, found by building on them
+
+Each is the same shape: a second place that states an identity, missed when the identity grew.
+
+1. **`OperationalContext` never published the stage set.** The rail existed on the VM and stopped
+   there. Now carried beside the current stage key, so there is one answer to "what are this
+   process's stages".
+2. **Both mission overlays rebuilt `businessProcess` field by field**, blanking the newly added
+   stages and making the rail vanish in the live panel. They now preserve what they do not change.
+   *This one was mine* — introduced by a bulk patch and caught only by looking at the rendered card.
+3. **`mapRawInquiryChildrenToDrawerRows` carried `outcome_status_key` but dropped `stage_key`.** So
+   every consumer resolved a child's stage from the disposition or from the family it rides — which
+   cannot express a child standing at a different stage than their household. Divergence is exactly
+   what the rail exists to show.
+
+### Participant placement — by key, never by label
+
+`resolveChildProcessStageKey` sits beside the label resolver in the same owner module and shares its
+chain, so a child known only through their disposition is placeable rather than labelled-but-lost.
+`ChildrenEvidenceChild.stageKey` publishes it beside `status`.
+
+An unplaceable participant is recorded in `unresolvedParticipants` with a reason — never dropped, so
+a gap reads as a gap instead of a smaller family. A child with no stage of their own rides the
+family's: the resolver's documented third source, canonical truth rather than a display fallback.
+
+### Tests — 71 passing across 8 suites
+
+| Suite | Proves |
+|---|---|
+| `participantStageKeyIdentity` (6) | key ≠ label; same chain as the label; unknown → null, never invented |
+| `businessProcessParticipantRail` (6) | **the invariant**: case at Tour, Avery at Waitlist, Riley at Tour, all true at once, Waitlist still `future` · aligned quiets · unplaceable recorded |
+| `businessProcessProvider` (5) | Enrollment / Assignment / Billing through one resolver from configuration; two-slot cap; no rail when unstaged |
+| `processStageAuthority` (4) | Tour vs All → one `stageKey`; rail beats `stage_context`; label cannot reach the key |
+| + supersession, identity, visibility, person panel | unchanged and green |
+
+**Baseline verified:** `tests/operator` + `tests/admin/drawer` fail **15 tests / 13 files** both with
+and without this run's changes — every one pre-existing, **zero introduced**.
+
+### Browser certification — Firefly's real Enrollment
+
+| Scenario | Result |
+|---|---|
+| **A** ordinary case | ✅ rail renders the real configured stages: Lead · Tour · Decision · **Waitlist (current)** · Enrolling · Enrolled |
+| **B** same case from All vs Waitlist | ✅ identical stage `waitlist`, identical rail, identical Current Work, identical activity count, **no lens chip** |
+| **G** activity | ✅ trigger "Recent activity 24", menu opens 25 items incl. `View all activity →`, **0 React duplicate-key warnings** |
+| page errors | ✅ 0 |
+
+### Performance — no Process waterfall
+
+| Measure | Dev build |
+|---|---|
+| Process card first paint | **404 ms** |
+| Rail ready | **427 ms** |
+| Row-to-row Process update | **2 187 ms** |
+| Activity menu open | **132 ms** |
+
+The card composes from the already-composed context, so it adds no per-section client call. The prior
+~6.5 s figure is whole-panel readiness from a cold click and is not comparable to these; it was not
+made worse.
+
+### Outstanding, precisely
+
+| Item | Why |
+|---|---|
+| **Scoped participant (C/D)** | **No canonical carrier reaches a card.** Scope exists at the navigation layer (`operatorFocusSelection.operational_member_id`) but nothing places it on the panel VM or operational context. The provider already accepts the id; passing a fabricated one would emphasise a participant the runtime never selected. **Architecture gap, not a rendering gap.** |
+| **Divergent children (C) in the browser** | Firefly's cases have children aligned with their case, so the rail correctly quiets. Proven by unit test instead; a browser case needs an additive fixture with a genuinely divergent child |
+| **5+ participants (F) in the browser** | Same — proven by the bounded-projection unit path |
+| **Action execution (H)** | Not run: no safe resettable case action on the certification data |
+| **Readiness projection** | `stillNeeded` is composed but empty — the Readiness owner's still-needed list is not yet mapped |
+| **Person photo image case** | Deferred by Director decision; initials fallback certified |
+| **Ended employment** | Deferred to `employment.end` |
