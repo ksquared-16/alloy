@@ -2152,6 +2152,35 @@ export function renderOperatorDecisionActions(run) {
   return "";
 }
 
+/**
+ * Which run should the operator's decision bar read?
+ *
+ * The bar used to be handed `lane.execution_run` alone. `attachLaneRuns` reports
+ * only a NON-TERMINAL run as active, so the moment a lane's turn finished its
+ * `execution_run` became null — and a governed request still sitting at
+ * `awaiting_operator` had nowhere to render. Communications filed a merge
+ * request for PR #510, completed its turn while waiting, and the Director was
+ * left with a decision to make and no card to make it on.
+ *
+ * An approval is the LANE's, not the turn's. It is answered after the work that
+ * asked for it has stopped — that is the normal case, not the exception.
+ *
+ * Deliberately narrow: the fallback applies ONLY when an approval is actually
+ * waiting. With nothing pending this returns exactly what it returned before,
+ * so the stale-run branch below cannot start firing on finished runs.
+ */
+export function operatorDecisionRun(lane) {
+  const active = lane?.execution_run || null;
+  if (active?.governed_action?.status === "awaiting_operator") return active;
+  const pending = lane?.governed_action?.status === "awaiting_operator"
+    ? lane.governed_action
+    : (lane?.previous_run?.governed_action?.status === "awaiting_operator"
+      ? lane.previous_run.governed_action
+      : null);
+  if (!pending) return active;
+  return { ...(active || lane?.previous_run || {}), governed_action: pending };
+}
+
 export function renderOperatorDecisionBar(run) {
   const inner = renderOperatorDecisionActions(run);
   if (!inner) return "";
@@ -4511,7 +4540,7 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderOperatorDecisionBar(lane?.execution_run)}
+        ${renderOperatorDecisionBar(operatorDecisionRun(lane))}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}
         ${renderComposer({

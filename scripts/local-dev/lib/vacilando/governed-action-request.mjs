@@ -1930,20 +1930,29 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
       || pendingGovernedActionForRun(lane?.execution_run?.run_id, root);
     if (!pending) return lane;
     const pub = publicGovernedAction(pending);
-    const run = lane.execution_run
+    const withAction = (r) => (r
       ? {
-        ...lane.execution_run,
+        ...r,
         governed_action: pub,
         resource_wait: {
-          ...(lane.execution_run.resource_wait || {}),
+          ...(r.resource_wait || {}),
           ...waitProjection(pending),
         },
       }
-      : null;
+      : null);
+    // AN APPROVAL OUTLIVES THE TURN THAT ASKED FOR IT.
+    //
+    // A lane whose run has finished has `execution_run: null` — attachLaneRuns
+    // only reports a non-terminal run as active. Attaching the pending request
+    // to the active run alone left an `awaiting_operator` approval reachable
+    // nowhere: Communications filed a merge request for PR #510, closed its
+    // turn, and the Director had a decision to make with no card to make it on.
+    // The request is the LANE's, so it is attached wherever the lane's run is.
     return {
       ...lane,
       governed_action: pub,
-      execution_run: run,
+      execution_run: withAction(lane.execution_run),
+      previous_run: lane.execution_run ? lane.previous_run : withAction(lane.previous_run),
     };
   });
 }

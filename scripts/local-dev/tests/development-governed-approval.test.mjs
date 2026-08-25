@@ -69,12 +69,14 @@ const {
   transitionExecutionRun,
   getExecutionRun,
   resetExecutionRunsForTests,
+  attachLaneRuns,
 } = await import("../lib/vacilando/execution-run.mjs");
 const { DIRECTOR_GOVERNED_RESOURCE_KEY, orchestrateDirectorGovernedWait, processGovernedAction } =
   await import("../lib/vacilando/governed-action-request.mjs");
 const { repositoryStorePath } = await import("../lib/vacilando/repository-registry.mjs");
-const { renderGovernedProposal, renderOperatorDecisionActions } =
+const { renderGovernedProposal, renderOperatorDecisionActions, renderOperatorDecisionBar, operatorDecisionRun } =
   await import("../apps/vacilando/public/gateway-view.mjs");
+const { attachLaneGovernedActions } = await import("../lib/vacilando/governed-action-request.mjs");
 
 const HEAD = "4cffed0abe32fbeaef89992a8083c2ec7ada8914";
 const OTHER_HEAD = "1111111111111111111111111111111111111111";
@@ -577,6 +579,71 @@ await test("a denied proposal does not resume the run", async () => {
   denyGovernedAction(made.request.request_id, { actor: "kelly", reason: "not now", root: ROOT });
   await new Promise((r) => setImmediate(r));
   assert.equal(resumed.length, 0);
+});
+
+// ------------------------------------- an approval outlives its own turn
+
+await test("an approval stays reachable after its run completes", async () => {
+  // THE COMMUNICATIONS FAILURE. The lane filed a merge request for PR #510 and
+  // then closed its turn while the Director had not yet answered. attachLaneRuns
+  // reports only a NON-terminal run as active, so execution_run went null — and
+  // the decision bar, which read execution_run alone, rendered nothing. The
+  // approval existed, was correct, and could not be answered.
+  const { laneId, runId } = blockedRunIn("repo_alloy");
+  const made = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  processGovernedAction(made.request.request_id, { root: ROOT });
+  // The real path Communications took: it reported the wait, then closed the
+  // turn while the Director had not answered.
+  const toNeeds = transitionExecutionRun(runId, "NEEDS_INPUT", {
+    origin: "agent", root: ROOT, reason: `Governed merge ${made.request.request_id} awaiting operator`,
+  });
+  assert.equal(toNeeds.ok, true, toNeeds.error);
+  const toDone = transitionExecutionRun(runId, "COMPLETE", {
+    origin: "agent", root: ROOT, reason: "turn_finished",
+    completion_report: { summary: "AWAITING_OPERATOR on the governed merge." },
+  });
+  assert.equal(toDone.ok, true, toDone.error);
+  assert.equal(getExecutionRun(runId, ROOT).state, "COMPLETE");
+
+  const [lane] = attachLaneGovernedActions(
+    attachLaneRuns([{ lane_id: laneId }], ROOT),
+    ROOT,
+  );
+  assert.equal(lane.execution_run, null, "a finished run is not active — this is the precondition");
+  assert.equal(lane.governed_action.status, "awaiting_operator");
+
+  // POSITIVE CONTROL: the former call reads execution_run and renders nothing.
+  assert.equal(renderOperatorDecisionBar(lane.execution_run), "");
+
+  // The fix: the lane's pending approval is found wherever its run is.
+  const decision = operatorDecisionRun(lane);
+  assert.ok(decision, "the decision bar must have a run to read");
+  assert.equal(decision.governed_action.request_id, made.request.request_id);
+  const html = renderOperatorDecisionBar(decision);
+  assert.match(html, /data-gw-governed-approve/);
+  assert.match(html, /data-request-id="gar_/);
+  assert.match(html, /Needs approval/);
+  // And it is attached to previous_run in the payload, not only at lane level.
+  assert.equal(lane.previous_run.governed_action.request_id, made.request.request_id);
+});
+
+await test("nothing is widened when no approval is waiting", () => {
+  // POSITIVE CONTROL for the test above. With no pending decision the resolver
+  // must return exactly what it returned before, or the stale-run branch would
+  // start firing on finished runs that never asked for anything.
+  assert.equal(operatorDecisionRun({ execution_run: null, previous_run: { run_id: "erun_x" } }), null);
+  const active = { run_id: "erun_a", state: "EXECUTING" };
+  assert.equal(operatorDecisionRun({ execution_run: active }), active);
+  // A resolved approval is not a waiting one.
+  assert.equal(
+    operatorDecisionRun({ execution_run: null, governed_action: { status: "complete" }, previous_run: { run_id: "p" } }),
+    null,
+  );
+});
+
+await test("an active run with an approval is unchanged", () => {
+  const active = { run_id: "erun_a", state: "WAITING_RESOURCE", governed_action: { status: "awaiting_operator", request_id: "gar_1" } };
+  assert.equal(operatorDecisionRun({ execution_run: active, previous_run: null }), active);
 });
 
 function readMergeSource() {
