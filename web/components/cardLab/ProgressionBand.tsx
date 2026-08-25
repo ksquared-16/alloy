@@ -109,7 +109,7 @@ export default function ProgressionBand({
                     </div>
                     {participantsByStep?.[step.value]?.length ? (
                         <div className="alloy-os-progression__participants" data-stage={step.value}>
-                            {participantsByStep[step.value]!.slice(0, MAX_MARKERS).map((p) => (
+                            {visibleParticipants(participantsByStep[step.value]!).map((p) => (
                                 <span
                                     key={p.name}
                                     className="alloy-os-progression__marker"
@@ -122,11 +122,12 @@ export default function ProgressionBand({
                                         size={18}
                                         role="child"
                                     />
+                                    <span className="alloy-os-progression__marker-name">{p.shortName}</span>
                                 </span>
                             ))}
-                            {participantsByStep[step.value]!.length > MAX_MARKERS ? (
+                            {hiddenCount(participantsByStep[step.value]!) ? (
                                 <span className="alloy-os-progression__marker-more">
-                                    +{participantsByStep[step.value]!.length - MAX_MARKERS}
+                                    +{hiddenCount(participantsByStep[step.value]!)}
                                 </span>
                             ) : null}
                         </div>
@@ -137,5 +138,22 @@ export default function ProgressionBand({
     );
 }
 
-/** Individual markers up to this many per stage; beyond it, a count. */
-const MAX_MARKERS = 3;
+/**
+ * Bounded projection. Identities up to {@link MAX_MARKERS} per stage, then a count — so a family
+ * of eight cannot destroy the rail.
+ *
+ * A SCOPED participant is always individually visible, even at a stage that would otherwise
+ * collapse: the operator asked about that child, so hiding them behind a `+N` would defeat the
+ * scope entirely.
+ */
+const MAX_MARKERS = 2;
+
+function visibleParticipants(all: RailParticipant[]): RailParticipant[] {
+    const scoped = all.filter((p) => p.scoped);
+    const rest = all.filter((p) => !p.scoped);
+    return [...scoped, ...rest].slice(0, Math.max(MAX_MARKERS, scoped.length));
+}
+
+function hiddenCount(all: RailParticipant[]): number {
+    return all.length - visibleParticipants(all).length;
+}

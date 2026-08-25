@@ -365,16 +365,29 @@ export type AddChargeSpecimen = {
 };
 
 /** A configured Business Process, as the combined Process card consumes it. */
+/**
+ * A stage node. The PLATFORM owns the anatomy — node shape, state treatment, connector, marker
+ * placement, typography, truncation, density, and the hard cap of TWO supporting lines.
+ * CONFIGURATION owns only which canonical facts populate those two slots.
+ *
+ * This is deliberately not a mini-layout builder: there is no per-stage composition, no arbitrary
+ * schema, and no business truth stored in presentation config. A slot holds a projection of an
+ * authoritative fact, resolved at read time.
+ */
 export type ProcessStage = {
     label: string;
     state: "done" | "current" | "future";
-    when: string | null;
-    outcome: string | null;
+    /** Configured slot 1 — date/time, rank, amount. */
+    primarySupport: string | null;
+    /** Configured slot 2 — location, program, outcome, count. Never a third line. */
+    secondarySupport: string | null;
 };
 
 /** A participant projected onto the stage they are actually at. */
 export type RailParticipant = {
     name: string;
+    /** First name only on the rail — the full name lives in expanded detail. */
+    shortName: string;
     imageUrl?: string | null;
     scoped?: boolean;
 };
@@ -404,6 +417,20 @@ export type ProcessChildState = {
     imageUrl?: string | null;
 };
 
+/** A stage's history, rendered ONLY where authoritative. P1 gates every field here. */
+export type ProcessStageHistory = {
+    label: string;
+    enteredAt: string | null;
+    exitedAt: string | null;
+    outcome: string | null;
+    transition: string | null;
+    /** Never inferred. Absent unless the canonical history model asserts it. */
+    note: string | null;
+    work: string[];
+    requirements: { label: string; satisfied: boolean }[];
+    participants: { name: string; state: string }[];
+};
+
 export type ProcessEvidence = {
     caseLabel: string;
     /** The Focus Panel subject. Always the case today — see the grain doctrine. */
@@ -420,6 +447,11 @@ export type ProcessEvidence = {
     /** Actions whose SUBJECT is the case. */
     actions: ProcessAction[];
     stillNeeded: string[];
+    /** Expanded detail. Empty until P1 exists — the card must not fabricate history. */
+    history: ProcessStageHistory[];
+    /** True when a canonical stage-history projection backs `history`. */
+    historyAuthoritative: boolean;
+    startedAt: string | null;
     /**
      * Present only when the process has participant grain at all. Assignment and Billing omit it,
      * and the card renders no children region — there is no Enrollment-specific section here.

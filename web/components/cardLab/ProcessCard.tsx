@@ -6,7 +6,7 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProgressionBand from "@/components/cardLab/ProgressionBand";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
-import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
+import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabTypes";
 
 /**
  * Business Process — Journey and What's Next, composed into ONE card.
@@ -85,7 +85,7 @@ export default function ProcessCard({
         evidence.childStates.length > 0 &&
         evidence.childStates.every((c) => c.stageKey === evidence.currentStageLabel);
     // Project each participant onto the stage they are ACTUALLY at. The case marker never moves.
-    const participantsByStep: Record<string, { name: string; imageUrl?: string | null; scoped?: boolean }[]> = {};
+    const participantsByStep: Record<string, RailParticipant[]> = {};
     if (evidence.participantsLabel && !aligned) {
         for (const c of evidence.childStates) {
             // stageKey is explicit. "Waitlisted" and "Waitlist" are different vocabularies, and
@@ -93,6 +93,7 @@ export default function ProcessCard({
             if (!evidence.stages.some((st) => st.label === c.stageKey)) continue;
             (participantsByStep[c.stageKey] ??= []).push({
                 name: c.name,
+                shortName: c.name.split(" ")[0]!,
                 imageUrl: c.imageUrl,
                 scoped: c.scoped,
             });
@@ -118,8 +119,9 @@ export default function ProcessCard({
                     steps={evidence.stages.map((s) => ({
                         state: s.state,
                         value: s.label,
-                        detail: s.when,
-                        note: s.outcome,
+                        // Two configured slots. The platform caps it here — never a third line.
+                        detail: s.primarySupport,
+                        note: s.secondarySupport,
                     }))}
                     dataName="process"
                     compact
@@ -182,7 +184,10 @@ export default function ProcessCard({
                 {aligned && evidence.participantsLabel ? (
                     <p className="alloy-os-process__aligned">
                         <span className="alloy-os-process__needed-label">
-                            {evidence.childStates.length} {evidence.participantsLabel.toLowerCase()}
+                            {evidence.childStates.length}{" "}
+                            {evidence.childStates.length === 1
+                                ? evidence.participantsLabel.toLowerCase().replace(/ren$/, "").replace(/s$/, "")
+                                : evidence.participantsLabel.toLowerCase()}
                         </span>
                         all at {evidence.currentStageLabel}
                     </p>

@@ -596,17 +596,20 @@ export const SAFETY_SIGNALS: SafetySignal[] = [
 /** Three configured Business Processes, through ONE process card. */
 export const PROCESS_ENROLLMENT: ProcessEvidence = {
     participantsLabel: null,
+    history: [],
+    historyAuthoritative: false,
+    startedAt: null,
     caseLabel: "Enrollment · Johnson",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
     childStates: [],
     processLabel: "Enrollment",
     stages: [
-        { label: "Lead", state: "done", when: "Aug 2", outcome: null },
-        { label: "Tour", state: "done", when: "Aug 5 – 8", outcome: "Completed" },
-        { label: "Waitlist", state: "done", when: "Aug 9 – 18", outcome: "Offer accepted" },
-        { label: "Enrolling", state: "current", when: "Since Aug 18", outcome: null },
-        { label: "Enrolled", state: "future", when: "Expected Sep 2", outcome: null },
+        { label: "Lead", state: "done", primarySupport: "Aug 2", secondarySupport: null },
+        { label: "Tour", state: "done", primarySupport: "Aug 5 – 8", secondarySupport: "Completed" },
+        { label: "Waitlist", state: "done", primarySupport: "Aug 9 – 18", secondarySupport: "Offer accepted" },
+        { label: "Enrolling", state: "current", primarySupport: "Since Aug 18", secondarySupport: null },
+        { label: "Enrolled", state: "future", primarySupport: "Expected Sep 2", secondarySupport: null },
     ],
     currentStageLabel: "Enrolling",
     workLine: "2 items remain",
@@ -621,17 +624,20 @@ export const PROCESS_ENROLLMENT: ProcessEvidence = {
 
 export const PROCESS_ASSIGNMENT: ProcessEvidence = {
     participantsLabel: null,
+    history: [],
+    historyAuthoritative: false,
+    startedAt: null,
     caseLabel: "Assignment",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
     childStates: [],
     processLabel: "Assignment",
     stages: [
-        { label: "Requested", state: "done", when: "Aug 9", outcome: null },
-        { label: "Offered", state: "done", when: "Aug 12", outcome: "Sunflower Room" },
-        { label: "Confirmed", state: "done", when: "Aug 18", outcome: null },
-        { label: "Active", state: "current", when: "Since Aug 19", outcome: null },
-        { label: "Ended", state: "future", when: null, outcome: null },
+        { label: "Requested", state: "done", primarySupport: "Aug 9", secondarySupport: null },
+        { label: "Offered", state: "done", primarySupport: "Aug 12", secondarySupport: "Sunflower Room" },
+        { label: "Confirmed", state: "done", primarySupport: "Aug 18", secondarySupport: null },
+        { label: "Active", state: "current", primarySupport: "Sunflower Room", secondarySupport: "Mon – Fri" },
+        { label: "Ended", state: "future", primarySupport: null, secondarySupport: null },
     ],
     currentStageLabel: "Active",
     workLine: "Sunflower Room · Mon – Fri",
@@ -642,17 +648,20 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
 
 export const PROCESS_BILLING: ProcessEvidence = {
     participantsLabel: null,
+    history: [],
+    historyAuthoritative: false,
+    startedAt: null,
     caseLabel: "Billing",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
     childStates: [],
     processLabel: "Billing",
     stages: [
-        { label: "Setup", state: "done", when: "Aug 1", outcome: null },
-        { label: "Active", state: "done", when: "Aug 1 – 15", outcome: null },
-        { label: "Past due", state: "current", when: "Since Aug 15", outcome: null },
-        { label: "Recovery", state: "future", when: null, outcome: null },
-        { label: "Current", state: "future", when: null, outcome: null },
+        { label: "Setup", state: "done", primarySupport: "Aug 1", secondarySupport: null },
+        { label: "Active", state: "done", primarySupport: "Aug 1 – 15", secondarySupport: null },
+        { label: "Past due", state: "current", primarySupport: "$255 · 10 days", secondarySupport: "Visa declined Aug 16" },
+        { label: "Recovery", state: "future", primarySupport: null, secondarySupport: null },
+        { label: "Current", state: "future", primarySupport: null, secondarySupport: null },
     ],
     currentStageLabel: "Past due",
     workLine: "$255 outstanding · 10 days",
@@ -674,12 +683,16 @@ export const PROCESS_BILLING: ProcessEvidence = {
  * Per `operational-grain-doctrine.md` §2.4 the Focus Panel stays case-grain; a child selection is
  * a scope hint that emphasises a participant, never a change of subject.
  */
+/**
+ * Configured supporting information — two slots per stage, chosen per Business Process.
+ * Enrollment fills them with tour time + campus, waitlist rank + program, start date + readiness.
+ */
 const WRIGHT_STAGES: ProcessEvidence["stages"] = [
-    { label: "Lead", state: "done", when: "Aug 11", outcome: null },
-    { label: "Tour", state: "current", when: "Since Aug 16", outcome: null },
-    { label: "Waitlist", state: "future", when: null, outcome: null },
-    { label: "Enrolling", state: "future", when: null, outcome: null },
-    { label: "Enrolled", state: "future", when: null, outcome: null },
+    { label: "Lead", state: "done", primarySupport: "Aug 11", secondarySupport: null },
+    { label: "Tour", state: "current", primarySupport: "Aug 27 · 10:00 AM", secondarySupport: "North Campus" },
+    { label: "Waitlist", state: "future", primarySupport: "#4 · Toddler", secondarySupport: "Joined Aug 19" },
+    { label: "Enrolling", state: "future", primarySupport: "Start Sep 2", secondarySupport: null },
+    { label: "Enrolled", state: "future", primarySupport: null, secondarySupport: null },
 ];
 
 const AVERY = (scoped: boolean): ProcessChildState => ({
@@ -704,6 +717,9 @@ const RILEY = (scoped: boolean): ProcessChildState => ({
 function wright(caseLabel: string, scoped: "Avery" | "Riley" | null): ProcessEvidence {
     return {
         participantsLabel: "Children",
+        history: [],
+        historyAuthoritative: false,
+        startedAt: "Aug 11, 2026",
         caseLabel,
         subjectLabel: "Wright Family",
         sourceWorkView: null,
@@ -727,11 +743,11 @@ export const PROCESS_WRIGHT_RILEY = wright("D · scoped to Riley", "Riley");
 export const PROCESS_WRIGHT_DIVERGENT: ProcessEvidence = {
     ...wright("E · divergent children", null),
     stages: [
-        { label: "Lead", state: "done", when: "Aug 11", outcome: null },
-        { label: "Tour", state: "done", when: "Aug 16 – 27", outcome: "Completed" },
-        { label: "Waitlist", state: "done", when: "Aug 27 – 30", outcome: null },
-        { label: "Enrolling", state: "current", when: "Since Aug 30", outcome: null },
-        { label: "Enrolled", state: "future", when: null, outcome: null },
+        { label: "Lead", state: "done", primarySupport: "Aug 11", secondarySupport: null },
+        { label: "Tour", state: "done", primarySupport: "Aug 16 – 27", secondarySupport: "Completed" },
+        { label: "Waitlist", state: "done", primarySupport: "Aug 27 – 30", secondarySupport: null },
+        { label: "Enrolling", state: "current", primarySupport: "Since Aug 30", secondarySupport: null },
+        { label: "Enrolled", state: "future", primarySupport: null, secondarySupport: null },
     ],
     currentStageLabel: "Enrolling",
     workLine: "1 of 2 children enrolling",
@@ -752,6 +768,21 @@ export const PROCESS_WRIGHT_ALIGNED: ProcessEvidence = {
         { name: "Riley Wright", stage: "Tour", stageKey: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
     ],
 };
+
+function kid(first: string, stage: string, stageKey: string, scoped = false): ProcessChildState {
+    return { name: `${first} Wright`, stage, stageKey, since: null, actions: [], imageUrl: null, scoped };
+}
+
+/** Bounded-projection pressure: 1, 2, 3, 5 and 8 children. */
+export const PROCESS_COUNT_SPECIMENS: ProcessEvidence[] = [1, 2, 3, 5, 8].map((n) => {
+    const names = ["Riley", "Avery", "Sam", "Noa", "Jules", "Kit", "Ari", "Wren"];
+    const stages = ["Tour", "Waitlist", "Tour", "Tour", "Lead", "Tour", "Waitlist", "Tour"];
+    const labels = ["Tour", "Waitlisted", "Tour", "Tour", "Lead", "Tour", "Waitlisted", "Tour"];
+    return {
+        ...wright(`${n} ${n === 1 ? "child" : "children"}`, null),
+        childStates: names.slice(0, n).map((nm, i) => kid(nm, labels[i]!, stages[i]!)),
+    };
+});
 
 /** F — five children across three stages. Proves the bounded marker rule. */
 export const PROCESS_WRIGHT_MANY: ProcessEvidence = {

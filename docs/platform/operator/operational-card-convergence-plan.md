@@ -632,3 +632,128 @@ Work View behaviour is unchanged and the lens chip stays removed.
 **Design and specification are complete.** The next mission is production implementation:
 registration, read models, actions and migrations against this plan — not further specimen
 iteration.
+
+---
+
+## 9. Design phase closed (2026-08-25)
+
+### 9.1 Participant identity and the bounded rail
+
+Markers are **avatar + first name** via the existing `CardAvatar` primitive — the rail identifies
+the participant rather than abstracting them to initials. No second avatar system.
+
+| Condition | Treatment |
+|---|---|
+| ≤ 2 identities at a stage | avatar + first name each |
+| > 2 | two identities, then `+N` |
+| **Scoped participant** | **always individually visible**, even where the stage would collapse |
+| Scoped emphasis | the existing focused treatment — mint fill, bend-pine name |
+| All participants at the case stage | projection suppressed; one muted line |
+| Full participant history | `View process →` |
+
+**Measured: 222px at 1, 2, 3, 5 and 8 children.** The rail does not grow, and the case marker
+never moves.
+
+### 9.2 Stage annotation — a constrained contract, not a layout builder
+
+```
+stage presentation
+  primary_support      slot 1
+  secondary_support    slot 2      ← hard cap. There is no third line.
+```
+
+| Platform owns | Configuration owns |
+|---|---|
+| node anatomy · done/current/future treatment · case marker · participant marker placement · avatar and name treatment · selected emphasis · connectors · **max two supporting lines** · typography · truncation · responsive · density | **which canonical facts populate the two slots** |
+
+No per-stage composition, no arbitrary schema, and **no business truth stored in presentation
+config** — a slot holds a projection of an authoritative fact, resolved at read time. Rendered
+proof, same component, no domain branching:
+
+| Process | Stage | Slot 1 | Slot 2 |
+|---|---|---|---|
+| Enrollment | Tour | `Aug 27 · 10:00 AM` | `North Campus` |
+| Enrollment | Waitlist | `#4 · Toddler` | `Joined Aug 19` |
+| Enrollment | Enrolling | `Start Sep 2` | — |
+| Assignment | Active | `Sunflower Room` | `Mon – Fri` |
+| Billing | Past due | `$255 · 10 days` | `Visa declined Aug 16` |
+
+### 9.3 `View process →` and P1
+
+The **same card at `density="expanded"`** — the centered Focus Card pattern already in use. Not a
+standalone Process page. Sections: process identity · full journey with participant projection ·
+stage history · participants at their own grain · current work and what remains. Activity and
+provenance reuse the canonical activity mode.
+
+> **P1 gates every historical fact.** Entered / exited / outcome / transition render **only** when
+> `historyAuthoritative` is true. Skipped and reopened are never inferred. With no projection the
+> surface **says so** rather than drawing an empty timeline that reads like "nothing happened" —
+> an operator cannot tell a guess from a record. P1 must not be solved in card state.
+
+### 9.4 Configuration contract
+
+| Capability | Platform owns | Configuration owns | Canonical truth owner |
+|---|---|---|---|
+| **Process card** | Anatomy, layers, action placement, density | Which process, card placement/span | Business Process + Current Work + Readiness |
+| **Stage annotations** | Node anatomy, two-slot cap, typography | Which facts fill slot 1 / slot 2 | The referenced canonical fact |
+| **Participant rail** | Marker placement, avatar treatment, bounded rule, emphasis | Whether the process HAS participant projection | Participant process state |
+| **Financials density/span** | Compact / summary / expanded policies | Placement + `colSpan` per surface | `buildFamilyFinancialsReadModel` |
+| **Health & Safety** | Card anatomy, critical treatment, section order | Which health facts, requirement set | `person_health_facts` · `field_values` · `documents` |
+| **Safety Signals** | Marker treatment, minimum-fact rule | Which fact **types** project, to which surfaces | Health, projected |
+| **Attendance** | Day track, band, action row | Expected-hours source, room vocabulary | `ChildAttendanceReadModel` |
+| **Staff** | Card anatomy, section order | Which employment facts show | `employments` · `staff_presence_events` · `schedule_assignments` |
+| **Care Team** | Person row idiom, scope rule | Which relationships appear | `person_child_relationship` |
+
+### 9.5 Final design verdict
+
+| Card | Verdict |
+|---|---|
+| Business Process | **LOCKED** |
+| Financials (compact · summary 8/12 · expanded) | **LOCKED** |
+| Health & Safety (summary + detail) | **LOCKED** |
+| Safety Signals | **LOCKED** — must not ship before S2 |
+| Attendance | **LOCKED** |
+| Staff | **LOCKED** |
+| Care Team / Assigned Staff | **LOCKED** |
+| Focus Panel shell (spacing + subject avatar) | **LOCKED** |
+
+### 9.6 Production readiness
+
+| Card | UI | Read truth | Actions | Config | Register now? | Blocking work |
+|---|---|---|---|---|---|---|
+| **Attendance** | ✅ | ✅ `ChildAttendanceReadModel` | ❌ no child-attendance capability | ✅ | **Yes, read-only** | Capability for correct/movement/check-out |
+| **Care Team** | ✅ | ⚠ needs a resolver joining presence + scheduling | ❌ none needed | ⚠ relationship config | Yes, read-only | The join resolver |
+| **Staff** | ✅ | ✅ employments + presence + assignments | ❌ none needed | ✅ | **Yes, read-only** | — |
+| **Business Process** | ✅ | ⚠ participant state resolver | ⚠ registered actions exist; subject scoping needed | ✅ | Yes, summary only | Participant resolver · **P1** before expanded |
+| **Financials** | ✅ | ❌ **F0** read model | ❌ **F5** | ⚠ V5 grid placement | **No** | F0 → F7 → F5 |
+| **Health & Safety** | ✅ | ❌ **B1** health facts | ❌ **H4** | ❌ **A1** grain | **No** | M1 → H1–H4 |
+| **Safety Signals** | ✅ | ❌ depends on B1 | — | ❌ **S1** | **No** | **S2 first, always** |
+
+### 9.7 Blockers, by the gate each one holds
+
+| # | Blocker | Gate |
+|---|---|---|
+| **F0** billing-period resolver + read model | **required before summary** |
+| **F7** charge subject attribution | **required before expanded detail** (the Subject filter) |
+| **F5** `charge.add` action | **required before actions** |
+| **F3 / F6** responsibility split + payer attribution | **can follow after initial release** — the payer filter degrades |
+| **M1** health grain → `customer_member` | **required before production registration** of Health, and before H2 |
+| **H1–H4** health foundation | **required before summary** (Health) |
+| **S2** health visibility permission | **required before production registration** of Safety Signals |
+| **P1** stage-history projection | **required before expanded detail** (Process) |
+| **G1** 360px expanded-body cap | **required before expanded detail** (all details) — Director decision |
+
+### 9.8 Recommended first implementation slice
+
+**Slice 1 — Attendance and Staff, read-only, registered.**
+
+Both have complete canonical read truth today (`ChildAttendanceReadModel`; `employments` +
+`staff_presence_events` + `schedule_assignments`), no blocking gaps, and no mutation dependency.
+They prove the whole registration path — provider, catalog, archetype, Surfaces placement — against
+cards whose truth already exists, before any card that needs new backend work.
+
+Then: **Slice 2** F0 → F7 → F5 → Financials · **Slice 3** participant resolver → Process summary ·
+**Slice 4** M1 → H1–H4 → Health · **Slice 5** P1 + G1 → expanded details · **Slice 6** S2 → S1 →
+Safety Signals.
+
+**Design and specification are complete.** The next mission is production implementation.

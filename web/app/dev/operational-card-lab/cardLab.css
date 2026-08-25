@@ -1168,20 +1168,36 @@
 .alloy-os-progression__participants {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 3px;
   margin-top: 4px;
   padding-left: 1px;
   min-height: 20px;
 }
+/* Avatar + first name — the rail identifies the participant, it does not abstract them. */
 .alloy-os-progression__marker {
   display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px 1px 1px;
   border-radius: 999px;
-  box-shadow: 0 0 0 1.5px #fff;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, #fff);
+  min-width: 0;
 }
+.alloy-os-progression__marker-name {
+  font-size: 10.5px;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+}
+/* The existing selected/focused treatment — the same mint the Children card uses. */
 .alloy-os-progression__marker[data-scoped="true"] {
-  box-shadow:
-    0 0 0 1.5px #fff,
-    0 0 0 3px var(--alloy-os-bend-pine, #00a283);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+}
+.alloy-os-progression__marker[data-scoped="true"] .alloy-os-progression__marker-name {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 700;
 }
 .alloy-os-progression__marker-more {
   font-size: 9.5px;
@@ -1577,4 +1593,90 @@
 .lab-surface__meta {
   font-size: 11px;
   color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* ── expanded process detail ───────────────────────────────────────────────── */
+.alloy-os-processdetail__history {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-processdetail__stage {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+}
+.alloy-os-processdetail__stage-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-processdetail__stage-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 18px;
+}
+.alloy-os-processdetail__fact,
+.alloy-os-processdetail__line {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.alloy-os-processdetail__lbl {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-processdetail__req {
+  font-size: 10px;
+  font-weight: 650;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-processdetail__req--missing {
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-processdetail__pp {
+  font-size: 11px;
+}
+/* An honest absence, not an empty timeline that reads like "nothing happened". */
+.alloy-os-processdetail__nohistory {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  line-height: 1.5;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  max-width: 74ch;
+}
+.alloy-os-processdetail__participants {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.alloy-os-processdetail__participant {
+  display: grid;
+  grid-template-columns: 24px minmax(140px, 220px) 108px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 8px;
+}
+.alloy-os-processdetail__participant[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-processdetail__pname {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
 }

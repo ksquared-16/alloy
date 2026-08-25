@@ -19,6 +19,7 @@ import FinancialsCard from "@/components/cardLab/FinancialsCard";
 import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
 import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
 import ProcessCard from "@/components/cardLab/ProcessCard";
+import ProcessDetailCard from "@/components/cardLab/ProcessDetailCard";
 import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
@@ -34,6 +35,8 @@ import {
     FINANCIALS_LEDGER_PERIODS,
     FINANCIALS_SPECIMENS,
     PROCESS_ENROLLMENT,
+    PROCESS_WRIGHT_AVERY,
+    PROCESS_COUNT_SPECIMENS,
     PROCESS_GRAIN_SPECIMENS,
     PROCESS_SPECIMENS,
     SAFETY_SIGNALS,
@@ -65,7 +68,10 @@ type TabKey =
     | "signals"
     | "grain"
     | "density"
-    | "spans";
+    | "spans"
+    | "counts"
+    | "procdetail"
+    | "final";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -80,6 +86,9 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "grain", label: "G · Mixed grain (6 scenarios)" },
     { key: "density", label: "W · Financials densities" },
     { key: "spans", label: "X · Intermediate span (12-track)" },
+    { key: "counts", label: "N · Participant counts 1–8" },
+    { key: "procdetail", label: "V · View process (expanded)" },
+    { key: "final", label: "Z · Final Focus Panel" },
     { key: "addcharge", label: "F · Add charge" },
     { key: "signals", label: "S · Safety Signals" },
     { key: "healthdetail", label: "D1 · Health detail" },
@@ -125,6 +134,35 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
         ],
+    },
+    counts: {
+        question: "Do participant identities survive a large family without destroying the rail?",
+        decisions: [
+            "Avatar + FIRST NAME, using the existing CardAvatar primitive — the rail identifies the participant rather than abstracting them to initials.",
+            "Bounded: two identities per stage, then +N. A family of eight cannot widen the rail.",
+            "A SCOPED participant is ALWAYS individually visible, even at a stage that would otherwise collapse — the operator asked about that child, so hiding them behind +N would defeat the scope.",
+            "All aligned → the projection is suppressed entirely and one muted line replaces it.",
+        ],
+        open: [],
+    },
+    procdetail: {
+        question: "What does View process open, and what may it claim?",
+        decisions: [
+            "The SAME card at density=expanded — the centered Focus Card pattern Household, Children and Financials already use. Not a standalone Process page.",
+            "Sections: process identity · full journey with participant projection · stage history · participants at their own grain · current work and what remains.",
+            "Activity and provenance reuse the canonical activity mode; no second activity system.",
+        ],
+        open: [
+            "P1 GATES EVERY HISTORICAL FACT. Entered/exited/outcome render only when historyAuthoritative is true; skipped and reopened are never inferred. With no projection the surface SAYS SO rather than drawing an empty timeline that reads like nothing happened — an operator cannot tell a guess from a record.",
+        ],
+    },
+    final: {
+        question: "Do these behave like one configurable card system?",
+        decisions: [
+            "One realistic composition at real Focus Panel constraints, mixing candidates with real runtime cards.",
+            "Process at full row, Financials at 8/12 with a real 4/12 companion, and the rest at their natural spans — chosen by the business question, not made uniform.",
+        ],
+        open: [],
     },
     spans: {
         question: "Does Financials want less than a full row — and does the platform already allow it?",
@@ -412,7 +450,31 @@ export default function OperationalCardLab() {
                 ))}
             </nav>
 
-            {tab === "spans" ? (
+            {tab === "final" ? (
+                <>
+                    <section className="lab__section">
+                        <h2 className="lab__h2">{REVIEW.final.question}</h2>
+                        <p className="lab__note">
+                            Real runtime cards marked <span className="lab__chip lab__chip--real">runtime</span>,
+                            candidates <span className="lab__chip lab__chip--cand">candidate</span>. Spans chosen
+                            by the business question, not made uniform.
+                        </p>
+                    </section>
+                    <Frame12 label="Focus Panel · Summary · 12-track V5 grid">
+                        <Area span={12} kind="cand" name="Business Process">
+                            <ProcessCard evidence={PROCESS_WRIGHT_AVERY} />
+                        </Area>
+                        <Area span={8} kind="cand" name="Financials">{financials}</Area>
+                        <Area span={4} kind="real" name="Readiness">{realCard("readiness_kpi")}</Area>
+                        <Area span={4} kind="real" name="Household">{realCard("household")}</Area>
+                        <Area span={4} kind="cand" name="Health & Safety">{health}</Area>
+                        <Area span={4} kind="cand" name="Care Team">{careTeam}</Area>
+                        <Area span={12} kind="cand" name="Attendance">{attendance}</Area>
+                        <Area span={6} kind="real" name="Children">{realCard("children")}</Area>
+                        <Area span={6} kind="cand" name="Staff">{staff}</Area>
+                    </Frame12>
+                </>
+            ) : tab === "spans" ? (
                 <>
                     <section className="lab__section">
                         <h2 className="lab__h2">{REVIEW.spans.question}</h2>
@@ -500,6 +562,8 @@ export default function OperationalCardLab() {
                                 tab === "billingdetail" ||
                                 tab === "process" ||
                                 tab === "grain" ||
+                                tab === "counts" ||
+                                tab === "procdetail" ||
                                 tab === "density" ||
                                 tab === "healthdetail" ||
                                 tab === "wide"
@@ -551,6 +615,22 @@ export default function OperationalCardLab() {
                                             {financials}
                                         </Cell>
                                     </>
+                                ) : null}
+                                {tab === "counts" ? (
+                                    <>
+                                        {PROCESS_COUNT_SPECIMENS.map((sp) => (
+                                            <Cell key={sp.caseLabel} span={2} kind="cand" name={sp.caseLabel}>
+                                                <ProcessCard evidence={sp} />
+                                            </Cell>
+                                        ))}
+                                    </>
+                                ) : null}
+                                {tab === "procdetail" ? (
+                                    <Cell span={2} kind="cand" name="View process · expanded">
+                                        <div className="lab-detail-unclipped">
+                                            <ProcessDetailCard evidence={PROCESS_GRAIN_SPECIMENS[0]!} />
+                                        </div>
+                                    </Cell>
                                 ) : null}
                                 {tab === "grain" ? (
                                     <>
