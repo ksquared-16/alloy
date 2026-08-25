@@ -246,3 +246,67 @@ describe("G9 — source validation survives, or is reported as lost", () => {
         }
     });
 });
+
+describe("Slice 4 — ownership, and what approval means", () => {
+    it("a care provider binds to a relationship, never to a person field", () => {
+        const proposals = Object.values(packet.source_analysis).flatMap((a) => a.proposals);
+        const providers = proposals.filter((p) => p.target_relationship_role === "physician" || p.target_relationship_role === "dentist");
+        expect(providers).toHaveLength(4);
+        expect(providers.every((p) => !p.target_field_source)).toBe(true);
+        // And nothing about a provider reached the household's own contact fields.
+        const concepts = Object.values(packet.source_analysis).flatMap((a) => a.concepts);
+        for (const p of proposals.filter((x) => x.target_field_source)) {
+            const c = concepts.find((x) => x.id === p.candidate_id)!;
+            expect(c.party ?? "unknown").not.toMatch(/physician|dentist/);
+        }
+    });
+
+    it("relationship cardinality is preserved — N contacts, not numbered fields", () => {
+        const emergency = Object.values(packet.source_analysis)
+            .flatMap((a) => a.concepts)
+            .find((c) => c.concept_key === "relationship.emergency_contact")!;
+        expect(emergency.cardinality).toBe("multiple");
+        expect(emergency.source.labels.length).toBeGreaterThan(3);
+        // No `emergency_contact_1_name` anywhere.
+        const proposed = Object.values(packet.source_analysis)
+            .flatMap((a) => a.proposals)
+            .map((p) => p.proposed_field?.suggested_field_key ?? "")
+            .filter(Boolean);
+        expect(proposed.some((k) => /_\d+_(name|phone|address)$/.test(k))).toBe(false);
+    });
+
+    it("collections remain collections and obligations remain obligations", () => {
+        const concepts = Object.values(packet.source_analysis).flatMap((a) => a.concepts);
+        expect(concepts.filter((c) => !!c.repetition)).toHaveLength(13);
+        // A repeating VALUE stays a collection. A checkbox GROUP is different: its canonical form is
+        // one choice field carrying the options, which preserves the group rather than flattening it —
+        // so the test is that the options survive, not that the disposition avoids a field.
+        const proposals = Object.values(packet.source_analysis).flatMap((a) => a.proposals);
+        for (const c of concepts.filter((x) => !!x.repetition)) {
+            const p = proposals.find((x) => x.candidate_id === c.id)!;
+            if (c.kind === "choice_field") {
+                expect(p.proposed_field?.option_set?.length, `${c.id} lost its options`).toBe(c.repetition!.instances);
+            } else {
+                expect(p.disposition, `${c.id} was flattened`).toBe("structured_collection");
+            }
+        }
+        // Obligations never became text fields.
+        const obligations = concepts.filter((c) => ["acknowledgement", "signature", "upload_requirement"].includes(c.kind));
+        for (const o of obligations) {
+            const p = proposals.find((x) => x.candidate_id === o.id)!;
+            expect(["acknowledgement", "signature_requirement", "upload_requirement"]).toContain(p.disposition);
+        }
+    });
+
+    it("APPROVAL is a mapping decision and nothing more", () => {
+        const read = (rel: string) => fs.readFileSync(path.join(WEB, rel), "utf8");
+        // The narrowest meaning: an operator accepts a proposed mapping into the draft. The decision
+        // store is the only thing approval writes to, and it writes no canonical participant data,
+        // no form, no field definition and no requirement.
+        const db = read("lib/pos/packetIntake/packetIntakeDb.ts");
+        expect(db).not.toMatch(/customer_members|persons|person_child_relationships|field_definitions|form_definitions|business_process/);
+        // Accepting a relationship binding records the ROLE, not a write to the relationship table.
+        const decisionShape = read("lib/pos/packetIntake/packetIntakeDb.ts");
+        expect(decisionShape).toMatch(/decision: "accepted" \| "rejected" \| "rebound" \| "form_only" \| "renamed" \| "confirmed"/);
+    });
+});

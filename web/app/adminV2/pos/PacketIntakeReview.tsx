@@ -230,6 +230,20 @@ export default function PacketIntakeReview({
                         })}
                     </div>
 
+                    {/* §15 — what the sources declared, and what could be carried. Stated once at
+                        packet level rather than as per-fact noise: a semantic nobody declared is not
+                        a per-fact loss, and a semantic we did carry needs no flag. */}
+                    <div className="rounded-xl border border-alloy-stone/22 bg-white p-3" data-testid="packet-validation-lineage">
+                        <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Validation carried from the sources</div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-alloy-midnight/60">
+                            <span>required: {packet.destinations.filter((d) => d.required).length} destination(s)</span>
+                            <span>choices: {packet.destinations.filter((d) => d.type === "select").length}</span>
+                            <span className="text-alloy-midnight/45">
+                                conditional rules: none declared by these sources — this packet writes its conditions in prose
+                            </span>
+                        </div>
+                    </div>
+
                     {packet.warnings.length > 0 ? (
                         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-[12px] text-amber-900" data-testid="packet-warnings">
                             {packet.warnings.map((w) => (

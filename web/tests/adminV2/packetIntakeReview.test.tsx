@@ -81,6 +81,13 @@ describe("the operator reviews the packet, not three importer runs", () => {
         expect(recon).toContain("97 source → 95 normalized");
     });
 
+    it("states what validation the sources declared and what was carried", () => {
+        mount();
+        const lineage = container.querySelector('[data-testid="packet-validation-lineage"]')!.textContent ?? "";
+        expect(lineage).toContain("required: 79");
+        expect(lineage).toContain("conditional rules: none declared");
+    });
+
     it("shows every logical artifact, and marks the ones needing a name", () => {
         mount();
         for (const a of packet.artifacts) {
