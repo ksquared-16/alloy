@@ -425,6 +425,13 @@ export type ProcessChildState = {
  * recorded, not a reconstruction of when a stage was entered.
  */
 export type ProcessActivityRow = {
+    /**
+     * The canonical event id. Rows are keyed on THIS, never on `label`+`when` — `when` is a
+     * FORMATTED, minute-granular string, and two canonical events with the same title in the same
+     * minute collide on it. That was observed live 18 times in one journey, and
+     * `currentWorkActivityRowKey` exists to own the rule.
+     */
+    id?: string | null;
     label: string;
     when: string;
 };

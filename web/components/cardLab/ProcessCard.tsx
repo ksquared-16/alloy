@@ -12,6 +12,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
 import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -246,9 +247,12 @@ export default function ProcessCard({
                                         data-process-activity-menu="true"
                                         className="alloy-os-currentwork__tour-menu alloy-os-process__activity-menu"
                                     >
-                                        {evidence.activity.map((a) => (
+                                        {evidence.activity.map((a, i) => (
                                             <DropdownMenuItem
-                                                key={`${a.label}-${a.when}`}
+                                                // THE canonical owner of an activity row's render
+                                                // identity. Keying on `${a.label}-${a.when}` is the
+                                                // exact defect it was created to eliminate.
+                                                key={currentWorkActivityRowKey(a, i)}
                                                 className="alloy-os-currentwork__tour-menu-item alloy-os-process__activity-item"
                                             >
                                                 <span className="alloy-os-currentwork__recent-activity-label">

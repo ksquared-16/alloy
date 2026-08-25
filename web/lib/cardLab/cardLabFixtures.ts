@@ -624,9 +624,9 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
     participantsLabel: null,
     // No participants at all, and activity still lands — the foot row is not Enrollment-specific.
     activity: [
-        { label: "Moved to Sunflower Room", when: "Aug 18" },
-        { label: "Assignment confirmed", when: "Aug 18" },
-        { label: "Offer sent", when: "Aug 12" },
+        { id: "evt_room_move", label: "Moved to Sunflower Room", when: "Aug 18" },
+        { id: "evt_assignment_confirmed", label: "Assignment confirmed", when: "Aug 18" },
+        { id: "evt_offer_sent", label: "Offer sent", when: "Aug 12" },
     ],
     caseLabel: "Assignment",
     subjectLabel: "Johnson Family",
@@ -719,11 +719,11 @@ function wright(caseLabel: string, scoped: "Avery" | "Riley" | null): ProcessEvi
         // More than three, deliberately: the menu shows the whole record, so the fixture must
         // exceed what the old bounded region could have printed.
         activity: [
-            { label: "Tour invitation sent", when: "Today · 9:47 AM" },
-            { label: "Avery joined waitlist", when: "Aug 19" },
-            { label: "Immunization record uploaded", when: "Aug 18" },
-            { label: "Called — left voicemail", when: "Aug 15" },
-            { label: "Enrollment inquiry received", when: "Aug 11" },
+            { id: "evt_tour_invite", label: "Tour invitation sent", when: "Today · 9:47 AM" },
+            { id: "evt_avery_waitlist", label: "Avery joined waitlist", when: "Aug 19" },
+            { id: "evt_immunization_doc", label: "Immunization record uploaded", when: "Aug 18" },
+            { id: "evt_call_voicemail", label: "Called — left voicemail", when: "Aug 15" },
+            { id: "evt_inquiry_received", label: "Enrollment inquiry received", when: "Aug 11" },
         ],
         caseLabel,
         subjectLabel: "Wright Family",
