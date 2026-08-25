@@ -1945,6 +1945,14 @@ export function createVacilandoServer() {
           const { listLaneFolders } = await import("./vacilando/lane-folders.mjs");
           folders = listLaneFolders();
         } catch { /* folders are organisation, never a reason to fail discovery */ }
+        // What each agent is ACTUALLY doing, read from its pane. Lane status was
+        // derived from the Execution Run alone, so a lane with no run read as
+        // idle while its provider was mid-turn.
+        try {
+          const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
+          const withActivity = await attachLaneProviderActivity(lanes);
+          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withActivity[i];
+        } catch { /* status still renders from the run alone */ }
         let repositories = [];
         try {
           const R = await import("./vacilando/repository-registry.mjs");

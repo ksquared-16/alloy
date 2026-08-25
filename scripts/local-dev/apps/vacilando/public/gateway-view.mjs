@@ -828,6 +828,34 @@ export function workOutputIsStale(lane, output, nowMs = Date.now()) {
   return nowMs - activity > STALE_WORK_MS;
 }
 
+/**
+ * A working agent that has not said anything for a long time.
+ *
+ * "Working" alone does not answer "should I be worried?". Trust Runtime was
+ * genuinely mid-turn — its pane changed within seconds — and its last worker
+ * report was 76 minutes old, which is exactly the state the operator described
+ * as "I can't tell if it's working". Both facts are true and the second one is
+ * the one they were missing.
+ */
+export const QUIET_WORKER_MS = 20 * 60 * 1000;
+
+export function workerSilenceMs(lane, nowMs = Date.now()) {
+  const run = lane?.execution_run;
+  if (!run) return null;
+  const last = Date.parse(
+    run.last_worker_report_at || run.latest_progress?.at || run.started_at || "",
+  );
+  if (!Number.isFinite(last)) return null;
+  const age = nowMs - last;
+  return age > 0 ? age : 0;
+}
+
+export function quietWorkerNote(lane, nowMs = Date.now()) {
+  const age = workerSilenceMs(lane, nowMs);
+  if (age == null || age < QUIET_WORKER_MS) return null;
+  return `no update for ${ago(nowMs - age, nowMs)}`;
+}
+
 export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now() } = {}) {
   const cap = deriveLaneExecutionPosture(lane, { nowMs });
   const run = lane?.execution_run;
@@ -903,7 +931,45 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
     return { key: "working", label: cap.label || "Starting", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
   }
   if (cap.state === "RUNNING" || run?.state === "EXECUTING") {
-    return { key: "working", label: "Working", group: "active", tone: "run", mark: "●", hint: who, headline: `Working · ${who}`, live: true, stale: false };
+    // An EXECUTING run says an instruction is open, not that anything has been
+    // heard lately. Trust Runtime was genuinely mid-turn with a 76-minute-old
+    // last report — "Working" alone does not answer "should I be worried?".
+    const quiet = quietWorkerNote(lane, nowMs);
+    return {
+      key: "working", label: "Working", group: "active", tone: "run", mark: "●",
+      hint: quiet ? `${who} · ${quiet}` : who,
+      headline: quiet ? `Working · ${who} · ${quiet}` : `Working · ${who}`,
+      quiet_for: quiet,
+      live: true, stale: false,
+    };
+  }
+  // WHAT THE AGENT IS ACTUALLY DOING BEATS A FINISHED OR ABSENT RUN.
+  //
+  // Everything below this point describes a lane by its Execution Run, so a
+  // lane whose run had closed — or never opened — read as "Ready" or "Idle"
+  // while a provider was mid-turn in its worktree. Measured live: three of four
+  // lanes showed no run at all while every one of their panes read
+  // "esc to interrupt". The operator could not tell which lanes were running,
+  // because the thing on screen was never the thing they were asking about.
+  //
+  // Deliberately placed AFTER the run states that describe a real wait
+  // (needs-input, blocked, suspended, waiting on Director): those are true even
+  // while a provider draws a spinner. It overrides only the idle-looking
+  // outcomes, which are the ones that were lying.
+  const observed = lane?.provider_activity?.activity || null;
+  if (observed === "working") {
+    const quiet = quietWorkerNote(lane, nowMs);
+    return {
+      key: "working", label: "Working", group: "active", tone: "run", mark: "●",
+      // Working AND silent is the state the operator could not read: alive, but
+      // it has not reported in a long time.
+      hint: quiet ? `${who} working · ${quiet}` : `${who} working`,
+      headline: quiet ? `Working · ${who} · ${quiet}` : `Working · ${who}`,
+      quiet_for: quiet,
+      live: true, stale: false,
+      // Say where this came from, so "Working" with no run is explainable.
+      source: run ? "run_and_agent" : "agent_observed",
+    };
   }
   if (run?.state === "COMPLETE") {
     return { key: "complete", label: "Complete", group: "completed", tone: "complete", mark: "✓", hint: "Complete", headline: "Complete", live: false, stale: false };

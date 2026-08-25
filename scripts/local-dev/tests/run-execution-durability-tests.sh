@@ -38,6 +38,7 @@ SUITES=(
   "development-copy-control.test.mjs"
   "development-run-cancel.test.mjs"
   "development-screen-answer.test.mjs"
+  "development-lane-activity.test.mjs"
 )
 
 PASS=0
