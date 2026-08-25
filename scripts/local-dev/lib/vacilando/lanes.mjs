@@ -862,6 +862,21 @@ export function submitEnterArgv(target) {
   return ["send-keys", "-t", target, "Enter"];
 }
 
+/**
+ * Tell the provider to abandon the turn it is working on.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how two earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function interruptPane(target) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target" };
+  // Escape twice: the first dismisses any transient overlay, the second
+  // cancels the turn underneath it.
+  return runTmux(["send-keys", "-t", t, "Escape", "Escape"]);
+}
+
 export function deleteBufferArgv(bufferName) {
   return ["delete-buffer", "-b", bufferName];
 }

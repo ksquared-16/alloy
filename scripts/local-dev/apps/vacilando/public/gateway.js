@@ -55,6 +55,7 @@ const G = {
   repositories: [],
   repositorySheet: null,
   laneWizard: null,
+  cancelPending: false,
   collapsedFolders: null,
   releasing: false,
   providers: null,
@@ -1002,6 +1003,7 @@ function paint() {
     repositories: G.repositories,
     repositorySheet: G.repositorySheet,
     laneWizard: G.laneWizard,
+    cancelPending: G.cancelPending,
     attachments: G.attachments,
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
@@ -1969,6 +1971,39 @@ document.addEventListener("click", async (e) => {
     document.querySelector("[data-gw-work]")?.scrollIntoView?.({ block: "nearest" });
     G.notice = { kind: "idle", text: "Review the current run before sending new work." };
     paint();
+    return;
+  }
+  const cancelRun = e.target?.closest?.("[data-gw-cancel-run]");
+  if (cancelRun) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (cancelRun.disabled || G.cancelPending) return;
+    const run = G.lane?.execution_run;
+    // Interrupting real work needs an explicit yes; taking back something the
+    // agent never received does not.
+    const delivered = cancelRun.getAttribute("data-gw-cancel-delivered") === "1";
+    if (delivered && !window.confirm(View.cancelConfirmCopy(run))) return;
+    G.cancelPending = true;
+    paint();
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(G.selected)}/run/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_id: run?.run_id || null, confirm: true }),
+      });
+      const j = await r.json();
+      G.notice = j.ok
+        ? { kind: "ok", text: j.interrupted
+            ? "Prompt stopped. Your lane, branch, worktree and conversation are kept."
+            : "Prompt cancelled. The agent was not interrupted — check the pane if it is still working." }
+        : { kind: "err", text: View.cancelErrorText(j.error) };
+      if (j.ok) { try { await fetchLane(G.selected); } catch { /* poll catches up */ } }
+    } catch {
+      G.notice = { kind: "err", text: "Could not reach the Gateway. The prompt was not cancelled." };
+    } finally {
+      G.cancelPending = false;
+      paint();
+    }
     return;
   }
   const repoToggle = e.target?.closest?.("[data-gw-repo-toggle]");

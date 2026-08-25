@@ -1567,6 +1567,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-repo-check dd,.gw-review dd{word-break:break-all;}
 .gw-notice.ok{background:var(--green-soft);color:var(--green-ink);}
 
+/* Take back a sent prompt. A restrained text control, not another big button. */
+.gw-cancel-run{align-self:flex-start;margin-top:8px;min-height:44px;padding:6px 10px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--card);color:var(--blocked);font:inherit;font-size:12px;font-weight:650;cursor:pointer;}
+.gw-cancel-run:hover{background:var(--blocked-bg);}
+.gw-cancel-run[disabled]{opacity:.6;cursor:progress;}
 /* Repository groups: the top organisational boundary, and an execution one.
    Styled a step stronger than a folder header so the hierarchy reads at a
    glance without adding another large button. */

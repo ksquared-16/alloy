@@ -163,6 +163,18 @@ export function buildSendBody(instruction, extra = {}) {
   return body;
 }
 
+/** Operator-facing text for cancel refusals. */
+export function cancelErrorText(error) {
+  switch (error) {
+    case "no_active_run": return "There is no prompt to cancel — this lane is idle.";
+    case "run_already_terminal": return "That prompt already finished.";
+    case "confirm_required": return "That prompt is being worked on; confirm to interrupt it.";
+    case "run_lane_mismatch": return "That prompt belongs to a different lane.";
+    case "lane_not_found": return "That lane no longer exists.";
+    default: return "The prompt could not be cancelled.";
+  }
+}
+
 /** Operator-facing text for every repository refusal the server can return. */
 export function repositoryErrorText(error, detail = {}) {
   switch (error) {
@@ -1938,7 +1950,38 @@ export function renderOperatorDecisionBar(run) {
   </div>`;
 }
 
-export function renderCurrentWork(run, nowMs = Date.now()) {
+/**
+ * Take back a prompt already sent.
+ *
+ * Shown only while a run is live, because there is nothing to take back
+ * otherwise. Deliberately a small text control, not another large button: it is
+ * a recovery affordance, not a primary action.
+ */
+export function renderCancelControl(run, { pending = false } = {}) {
+  const state = run?.state;
+  if (!state || ["COMPLETE", "FAILED", "ABANDONED"].includes(state)) return "";
+  const delivered = run?.delivery?.acknowledged === true || Boolean(run?.started_at);
+  const label = delivered ? "Stop this prompt" : "Cancel this prompt";
+  return `<button type="button" class="gw-cancel-run" data-gw-cancel-run
+    data-gw-cancel-delivered="${delivered ? "1" : "0"}" ${pending ? "disabled" : ""}>
+    ${pending ? "Stopping\u2026" : esc(label)}</button>`;
+}
+
+/** What the operator is told before a cancel that interrupts real work. */
+export function cancelConfirmCopy(run) {
+  const delivered = run?.delivery?.acknowledged === true || Boolean(run?.started_at);
+  if (!delivered) {
+    return "Cancel this prompt?\n\nThe agent never received it, so nothing is interrupted.";
+  }
+  return [
+    "Stop this prompt?",
+    "",
+    "The agent is working on it and will be interrupted.",
+    "Your lane, branch, worktree, conversation and every report already sent are all kept.",
+  ].join("\n");
+}
+
+export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = false } = {}) {
   if (!run?.state) {
     return `<aside class="gw-work is-idle" data-gw-work data-run-state="none">
     <span class="gw-work-h">Current work</span>
@@ -2022,6 +2065,7 @@ export function renderCurrentWork(run, nowMs = Date.now()) {
     ${meta ? `<span class="gw-work-meta">${esc(meta)}</span>` : ""}
     ${reason && reason !== summary && !waiting && !resumeEvent ? `<span class="gw-work-reason">${esc(reason)}</span>` : ""}
     ${summary && summary !== resumeEvent ? `<span class="gw-work-summary">${esc(summary)}</span>` : ""}
+    ${renderCancelControl(run, { pending: cancelPending })}
   </aside>`;
 }
 
@@ -3891,6 +3935,7 @@ export function renderGatewayShell({
   repositories = [],
   repositorySheet = null,
   laneWizard = null,
+  cancelPending = false,
   providers = null,
   settings = false,
 } = {}) {
@@ -4025,7 +4070,7 @@ export function renderGatewayShell({
           </div>
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}
-          ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
+          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending })}${renderPreviousWork(lane?.previous_run)}
           ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}
