@@ -114,19 +114,37 @@ footer{border-top:1px solid var(--line);padding-top:20px;font-size:12.5px;color:
 
 <section>
   <div class="open" style="border-radius:0 14px 14px 0">
-    <p class="eyebrow">Correction to the brief</p>
-    <p>The brief states physician/dentist relationships have already been registered. Fetched
-    <code>origin/staging</code> (tip <code>9aad66349</code>, Aug 23): <code>RELATIONSHIP_DEFINITIONS</code>
-    contains exactly three roles — <code>guardian</code>, <code>emergency_contact</code>,
-    <code>authorized_pickup</code>. <strong>Physician and dentist are not registered in code.</strong></p>
-    <p><strong>This is not a blocker.</strong> <code>person_child_relationship</code> is child-grain
-    (<code>customer_member_id</code> + <code>person_id</code>) with an <em>open</em> role vocabulary —
-    <code>OperationalRoleKey = PersonChildOperationalRoleKey | (string &amp; {})</code>, documented as
-    &ldquo;a relationship definition can declare a role the platform has never heard of (physician, attorney,
-    case worker)&rdquo;, and the resolver is explicitly &ldquo;generic for ANY configured role &hellip; no
-    per-role code&rdquo;. Physician and dentist are <strong>configuration, not code</strong>. If Enrollment
-    created them as org config that is correct and complete; if it expected code, none exists and none is
-    needed.</p>
+    <p class="eyebrow">Correcting myself &mdash; physician and dentist ARE registered</p>
+    <p>My contract reported that <code>RELATIONSHIP_DEFINITIONS</code> held only
+    <code>guardian</code>, <code>emergency_contact</code> and <code>authorized_pickup</code>. That was
+    <strong>true of <code>origin/staging</code></strong> — the branch I verified against, and I scoped the
+    claim to it — but it was <strong>already stale when I wrote it</strong>.</p>
+    <p><code>ca3be9737</code> &ldquo;give a child's doctor a canonical home&rdquo;, committed
+    <strong>2026-08-25 09:18</strong> on <code>agent/claude/4-enrollment-phase2-participant-anchor</code>
+    (unmerged), registers <code>physician</code> &rarr; <code>person.contact_role.physicians</code> and
+    <code>dentist</code> &rarr; <code>person.contact_role.dentists</code>, and derives the action registry,
+    capability registry and role mapping from them — the one-row property the doctrine promised.
+    <strong>The Enrollment lane did exactly the right thing.</strong> The ownership conclusion is unchanged
+    and now has an implementation; both stay READY NOW.</p>
+    <p><strong>Method note.</strong> A branch-scoped survey is a snapshot. <code>origin/staging</code> was the
+    wrong denominator for a question about work in flight on a sibling lane;
+    <code>git branch -a --contains</code> is what caught it.</p>
+  </div>
+</section>
+
+<section>
+  <div class="open" style="border-radius:0 14px 14px 0;border-left-color:#b45309">
+    <p class="eyebrow">Slice 5 cannot be executed from this lane</p>
+    <p>The Real Enrollment Certification program lives on
+    <code>agent/claude/4-enrollment-phase2-participant-anchor</code> — <strong>slot 4</strong>, whose dev
+    server is running on port 3014. Its 14 commits (packet baseline, semantic inventory, proposal engine,
+    the physician/dentist registration, the Slice 4 closeout) are <strong>not in <code>origin/staging</code>
+    and not in this branch</strong>, which is 47 commits behind staging and was cut for the surfaces/card
+    program.</p>
+    <p>M1 rehearsal, the READY NOW bindings, the child-profile manifest refactor, the TIME type and the
+    182-destination re-run all operate on code that is not here. Implementing them from this lane would fork
+    the program, and sprint doctrine forbids editing a sibling worktree. <strong>Slice 5 belongs to slot
+    4.</strong></p>
   </div>
 </section>
 
@@ -257,6 +275,40 @@ footer{border-top:1px solid var(--line);padding-top:20px;font-size:12.5px;color:
       <tr><td class="num">8</td><td><strong>S2 → S1</strong> health visibility permission, then signal config</td><td>Platform</td><td>Safety Signals</td></tr>
     </tbody>
   </table>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Publication readiness &mdash; the two real blockers</p>
+  <div class="prose">
+    <p>The question is not &ldquo;does every primitive exist&rdquo; but <strong>&ldquo;can the packet run
+    without inventing canonical truth&rdquo;</strong>. A concept blocks certification only when running the
+    packet would require Alloy to assert something it has no owner for.</p>
+    <p><strong>Collecting an answer is not asserting canonical truth; giving it a competing home is.</strong>
+    That distinction decides most of this table.</p>
+  </div>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Concept</th><th>Classification</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Dietary · physician · dentist · emergency contacts · documents · profile facts</td><td><span class="who who--c">process-scoped</span></td><td>Owners exist today</td></tr>
+      <tr><td>Allergy · condition · medication · immunization</td><td><span class="who who--c">process-scoped</span></td><td>⚠ <strong>Only as artifact-scoped responses.</strong> The packet may collect and retain them and the importer may propose them — provided operator acceptance creates <strong>no destination</strong></td></tr>
+      <tr><td>Physical required · medication authorization required</td><td><span class="who who--c">process-scoped</span></td><td>The requirement cannot be authored (R1), but the document can still be collected. Certification proves collection, not enforcement — state that limit</td></tr>
+      <tr><td><strong>Immunization exemption</strong></td><td><span class="who who--r">blocks — conditional</span></td><td>Neither a dose nor a field, and requirement exceptions are not modelled. Blocks <em>only if</em> the real corpus contains an exemption path</td></tr>
+      <tr><td><strong>Emergency medical authorization</strong></td><td><span class="who who--r">blocks</span></td><td>A consent whose withdrawal cannot be modelled must not be recorded as satisfied</td></tr>
+      <tr><td><strong>Safeguarding · custody · pickup restriction</strong></td><td><span class="who who--r">must be excluded</span></td><td>Highest sensitivity, no owner, and the failure mode is silent — flattening it puts a legal restriction somewhere nothing enforces it</td></tr>
+      <tr><td><code>medication_flag</code></td><td><span class="who who--r">must be excluded</span></td><td>Deprecated direction (M3); binding it now makes it the new truth</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="prose">
+    <p><strong>Minimum honest configuration:</strong> M1 landed · READY NOW bindings only for durable truth ·
+    health-foundation concepts collected but undestined · three concepts held in explicit unresolved states ·
+    safeguarding excluded and the exclusion recorded · and the certification record stating what it did
+    <em>not</em> prove — requirement enforcement for health documents, and durable health truth.</p>
+    <p><strong>The blockers to a first real publish are exactly two, one conditional:</strong> emergency
+    medical authorization, and immunization exemption if the corpus contains one. Everything else is a scope
+    statement, not a blocker.</p>
   </div>
 </section>
 
