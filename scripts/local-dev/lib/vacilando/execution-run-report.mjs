@@ -169,12 +169,16 @@ export function currentAgentReport(run) {
   return publicAgentReport(run?.agent_report || null);
 }
 
-function ownershipError(run, { laneId, cwd, root }) {
+function ownershipError(run, { laneId, cwd, root, origin }) {
   if (laneId) {
     const want = canonicalLaneStoreId(laneId, root);
     const have = canonicalLaneStoreId(run.lane_id, root);
     if (run.lane_id !== laneId && want !== have) return "lane_mismatch";
   }
+  // Vacilando itself may file the last output when a worker forgot
+  // `vac run-status complete --summary`. That is Gateway authority, not a
+  // stolen worktree write.
+  if (origin === "governor" || origin === "operator") return null;
   // Knowing a run id is not authority. The reporting process must be running
   // inside the worktree the run is bound to.
   if (!cwdOwnsRun(run, cwd)) return "worktree_mismatch";
@@ -213,7 +217,7 @@ export function submitAgentReport(runId, {
   const kind = normalizeReportType(type);
   if (!kind) return { ok: false, error: "invalid_report_type" };
 
-  const owned = ownershipError(run, { laneId, cwd: cwd ? resolve(cwd) : null, root: storeRoot });
+  const owned = ownershipError(run, { laneId, cwd: cwd ? resolve(cwd) : null, root: storeRoot, origin });
   if (owned) return { ok: false, error: owned };
 
   const body = String(message ?? "");

@@ -176,13 +176,54 @@ const PROMPT_AFFORDANCES = Object.freeze([
   /ctrl\s*\+\s*c to (quit|exit)/i,
 ]);
 
-/** The agent is mid-turn. Not a modal, but not an actionable prompt either. */
-const BUSY_SIGNATURES = Object.freeze([
-  /esc to interrupt/i,
-  /\(esc to (stop|cancel)\)/i,
-  /\btokens?\s*·\s*esc\b/i,
-  /generating[.…]{1,3}\s*$/i,
-]);
+/**
+ * Claude Code's STATUS FOOTER now includes "esc to interrupt" whenever a
+ * background shell is running — even with an empty composer waiting for a
+ * prompt. Matching that string anywhere in the pane made every live lane look
+ * mid-turn: Runtime Performance showed Ready (no Execution Run) while Send
+ * refused with "the agent is mid-turn (esc to interrupt)".
+ *
+ * The footer is not a turn. A turn is a spinner line (Thinking… / Tinkering…)
+ * or "esc to interrupt" on a line that is not the mode footer.
+ */
+const FOOTER_LINE = /\? for shortcuts|auto mode|\bshift\s*\+\s*tab to cycle\b|\bfor agents\b|\bto manage\b/i;
+const TURN_SPINNER_LINE = /(?:Thinking|Tinkering|Doodling|Forging|Booping|Working)\s*[….…]{1,3}/i;
+const TURN_GLYPH_SPINNER = /[✶✽✢●⏺✱✧⚒⚙]\s+\S+[….…]{1,3}\s*\(\s*\d/;
+const TURN_ESC_LINE = /esc to interrupt|\(esc to (stop|cancel)\)|\btokens?\s*·\s*esc\b/i;
+const GENERATING_LINE = /generating[.…]{1,3}\s*$/i;
+const NARRATION_LINE = /^[ \t]*⏺/;
+
+/**
+ * Claude Code stamps the finished turn with `Cooked for …` (or Sautéed / Baked).
+ * Leftover from the previous turn can still sit in a 48-line capture while a
+ * new turn is already writing `⏺` below it — that is a live turn, not Ready.
+ */
+export const TURN_FINISHED_RE = /(?:Cooked|Sautéed|Sauted|Baked)\s+for\s+/i;
+
+export function liveNarrationIsCurrentTurn(text) {
+  const lines = String(text ?? "").split("\n");
+  let lastNarr = -1;
+  let lastCooked = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (NARRATION_LINE.test(lines[i])) lastNarr = i;
+    if (TURN_FINISHED_RE.test(lines[i])) lastCooked = i;
+  }
+  return lastNarr >= 0 && lastNarr > lastCooked;
+}
+
+function lastLiveNarrationSignal(text) {
+  const lines = String(text ?? "").split("\n");
+  let lastCooked = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (TURN_FINISHED_RE.test(lines[i])) lastCooked = i;
+  }
+  let last = "";
+  for (let i = lastCooked + 1; i < lines.length; i += 1) {
+    const m = lines[i].match(/^[ \t]*⏺[ \t]+(\S.*)$/);
+    if (m) last = m[1].replace(/\s+$/, "").slice(0, 80);
+  }
+  return last || "live narration";
+}
 
 /** Only the tail is "now". Scrollback would resurrect a screen already cleared. */
 const READINESS_TAIL_CHARS = 4000;
@@ -246,12 +287,26 @@ export function detectPromptAffordance(text) {
 }
 
 export function detectProviderBusy(text) {
-  const tail = tailOf(text);
-  if (!tail.trim()) return null;
-  for (const re of BUSY_SIGNATURES) {
-    const m = tail.match(re);
-    if (m) return String(m[0]).replace(/\s+/g, " ").trim().slice(0, 80);
+  const raw = String(text ?? "");
+  if (!raw.trim()) return null;
+  const tail = tailOf(raw);
+  if (tail.trim()) {
+    for (const line of tail.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (FOOTER_LINE.test(trimmed)) continue;
+      if (TURN_SPINNER_LINE.test(trimmed) || TURN_GLYPH_SPINNER.test(trimmed) || GENERATING_LINE.test(trimmed)) {
+        return trimmed.replace(/\s+/g, " ").slice(0, 80);
+      }
+      if (TURN_ESC_LINE.test(trimmed)) {
+        const m = trimmed.match(TURN_ESC_LINE);
+        return String(m?.[0] || trimmed).replace(/\s+/g, " ").trim().slice(0, 80);
+      }
+    }
   }
+  // ⏺ after the last Cooked marker is this turn, even when the spinner has
+  // scrolled off the 48-line capture and the leftover prompt still looks idle.
+  if (liveNarrationIsCurrentTurn(raw)) return lastLiveNarrationSignal(raw);
   return null;
 }
 

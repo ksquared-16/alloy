@@ -1259,15 +1259,35 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
     }
 
     const tmux = opts.tmux || runTmux;
+    const provider = String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null;
 
     // Readiness is decided BEFORE the paste, from a live read of the pane. A
     // successful paste-buffer is not evidence an agent read anything.
-    const observed = await prePasteObservation(targetCheck.target, {
+    let observed = await prePasteObservation(targetCheck.target, {
       tmux,
       capturePane: opts.capturePane,
-      provider: String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null,
+      provider,
       nowMs,
     });
+    // Operator Send is a new turn. If the pane is mid-turn (a spinner, not a
+    // modal), interrupt once and re-read. Queued admission retries do not pass
+    // interruptIfBusy — they wait for the pane to become ready on its own.
+    if (opts.interruptIfBusy === true && observed.readiness?.state === "busy") {
+      try {
+        await tmux(["send-keys", "-t", targetCheck.target, "Escape", "Escape"]);
+      } catch { /* recapture below still decides */ }
+      const settle = Number.isFinite(opts.interruptSettleMs) ? opts.interruptSettleMs : 800;
+      if (settle > 0) {
+        const sleep = typeof opts.sleep === "function" ? opts.sleep : (ms) => new Promise((r) => setTimeout(r, ms));
+        await sleep(settle);
+      }
+      observed = await prePasteObservation(targetCheck.target, {
+        tmux,
+        capturePane: opts.capturePane,
+        provider,
+        nowMs,
+      });
+    }
     const gate = promptReadinessAllowsSend(observed.readiness, {
       strictCapture: opts.strictPromptCapture === true,
     });

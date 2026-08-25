@@ -179,8 +179,9 @@ await test("an actionable prompt is READY; a mid-turn pane and an unknown screen
 
 await test("the real Claude Code footer and caret are recognised, idle and mid-turn", () => {
   // Captured verbatim from a live Claude Code pane (%13). The composer caret is
-  // U+276F, and the busy marker shares one footer line with the mode hint — so
-  // "shift+tab to cycle" alone must never be read as an actionable prompt.
+  // U+276F. Current Claude Code puts "esc to interrupt" on the STATUS FOOTER
+  // whenever a background shell is running — that is not a turn. A turn is a
+  // spinner (Thinking… / Tinkering…) above the composer.
   const footer = "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents";
   const composer = [
     "  ⎿  Tip: Use /btw to ask a quick side question",
@@ -190,8 +191,15 @@ await test("the real Claude Code footer and caret are recognised, idle and mid-t
     "────────────────────────────────────────────────────────────────────────────",
   ].join("\n");
 
-  const busy = assessPanePromptReadiness(`${composer}\n${footer}`, { provider: "claude" });
-  assert.equal(busy.state, "busy", "a live turn is not an actionable prompt");
+  const idleDespiteFooterEsc = assessPanePromptReadiness(`${composer}\n${footer}`, { provider: "claude" });
+  assert.equal(idleDespiteFooterEsc.state, "ready", "footer esc-to-interrupt is not a turn");
+  assert.equal(promptReadinessAllowsSend(idleDespiteFooterEsc).allow, true);
+
+  const spinning = assessPanePromptReadiness(
+    `✶ Tinkering… (10m 44s · ↓ 30.8k tokens)\n${composer}\n${footer}`,
+    { provider: "claude" },
+  );
+  assert.equal(spinning.state, "busy", "a spinner above the composer is a live turn");
 
   const idle = assessPanePromptReadiness(
     `${composer}\n  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents`,
@@ -203,6 +211,20 @@ await test("the real Claude Code footer and caret are recognised, idle and mid-t
   // A passive "Restart to update" notice is not an update MODAL. Treating it as
   // one would block delivery on every pane that has ever seen an update.
   assert.equal(detectPromptBlocker(composer, { provider: "claude" }), null);
+});
+
+await test("operator Send interrupts a busy pane, then delivers once it is a prompt", async () => {
+  let reads = 0;
+  const h = harness(BUSY_PANE);
+  h.opts.interruptSettleMs = 0;
+  h.opts.capturePane = async () => {
+    reads += 1;
+    return { ok: true, stdout: reads === 1 ? BUSY_PANE : READY_PANE };
+  };
+  const out = await deliverManagedLaneInstruction(LANE, "VACILANDO_READY_PANE_REPAIR_20260822 after interrupt", h.opts);
+  assert.equal(out.ok, true, out.error || out.status);
+  assert.equal(pasted(h.calls), true);
+  assert.ok(h.calls.some((c) => c.argv.includes("Escape")), "Escape was sent to stop the turn");
 });
 
 await test("a composer holding typed text is READY — the footer varies", () => {
@@ -248,9 +270,29 @@ await test("a composer holding typed text is READY — the footer varies", () =>
   // evaluated first, and a caret-marked choice list is still a modal.
   assert.equal(assessPanePromptReadiness("Teach auto mode about your environment?\n ❯ 1. Yes\n   2. No", { provider: "claude" }).state, "blocked");
   assert.equal(assessPanePromptReadiness("Do you want to allow Claude to run this command?\n ❯ 1. Yes\n   2. No", { provider: "claude" }).state, "blocked");
-  // And a mid-turn pane is still busy, caret or no caret.
-  assert.equal(assessPanePromptReadiness("❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "busy");
+  // Footer "esc to interrupt" with an empty caret is still a prompt — that is
+  // the live Runtime Performance false positive. A Thinking… line is a turn.
+  assert.equal(assessPanePromptReadiness("❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "ready");
+  assert.equal(assessPanePromptReadiness("Thinking… (12s · esc to interrupt)\n❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "busy");
 });
+
+await test("live narration after leftover Cooked is busy, so Send does not paste into the turn", () => {
+  const pane = [
+    "Slice 6 is closed on the engineering side. The typecheck boundary held.",
+    "",
+    "✻ Cooked for 1h 38m 25s",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "❯",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+    "",
+    "⏺ Investigation complete. No canonical owner exists — writing the finding.",
+  ].join("\n");
+  const a = assessPanePromptReadiness(pane, { provider: "claude" });
+  assert.equal(a.state, "busy");
+  assert.equal(promptReadinessAllowsSend(a).allow, false);
+});
+
 
 await test("a refused send tells the operator what the pane was doing", () => {
   // What they actually saw was "Delivery refused (provider_prompt_not_ready)".

@@ -62,6 +62,7 @@ import {
   readExecutionRunStore,
   runCompletionAdmissible,
   transitionExecutionRun,
+  noteInstructionReceipt,
 } from "./execution-run.mjs";
 import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
@@ -76,6 +77,12 @@ const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
 const SESSION_BUSY = new Set(["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]);
 /** Paste/submit still landing. After this, a new operator instruction is a new turn. */
 export const OPERATOR_SUPERSEDE_GRACE_MS = 20 * 1000;
+/**
+ * Auto-complete from leftover Cooked must not close a turn that just started.
+ * Operator Send can supersede after 20s; inferring completion needs longer so
+ * a new prompt is not closed on the previous viewport.
+ */
+export const IDLE_TURN_COMPLETE_GRACE_MS = 90 * 1000;
 const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE", "NEEDS_INPUT"]);
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
@@ -421,6 +428,135 @@ function completeIdleRun(run, { root, nowMs, origin, reason, summary, attributio
     root,
     completion_report: { summary: summary || "This turn finished. The agent session remains." },
   });
+}
+
+async function defaultCollectLatestOutput(lane) {
+  const cwd = lane?.execution_run?.worktree_path || lane?.worktree?.path || lane?.binding?.worktree_path;
+  if (!cwd) return { available: false, text: null };
+  const sessionId = lane?.agent_session?.session_id || lane?.claude?.session_id || null;
+  const provider = lane?.preferred_provider || lane?.binding?.provider || "claude";
+  if (provider === "cursor") {
+    const { collectLatestCursorResponse } = await import("./providers/cursor/telemetry.mjs");
+    return collectLatestCursorResponse({ cwd, sessionId: lane?.agent_session?.session_id });
+  }
+  const { collectLatestClaudeResponse } = await import("./providers/claude/telemetry.mjs");
+  return collectLatestClaudeResponse({ cwd, sessionId });
+}
+
+/**
+ * The pane still showing the previous turn must not close a new send. The
+ * transcript has to be the same writeup as the Cooked viewport.
+ */
+export function paneResultAgreesWithTranscript(paneSummary, transcript) {
+  const pane = String(paneSummary || "").replace(/\s+/g, " ").trim();
+  const tr = String(transcript || "").replace(/\s+/g, " ").trim();
+  if (pane.length < 40 || tr.length < 40) return false;
+  const offset = pane.length > 160 ? 24 : 0;
+  const needle = pane.slice(offset, offset + 64).trim();
+  if (needle.length >= 40 && tr.includes(needle)) return true;
+  const head = pane.slice(0, 48).trim();
+  return head.length >= 40 && tr.includes(head);
+}
+
+/**
+ * When a worker finishes a turn but forgets `vac run-status complete --summary`,
+ * Vacilando still has to provide that last output at completion. The pane
+ * saying Cooked plus an idle prompt is the finished-turn signal; the session
+ * transcript is the last output. Filed as a completion report so the
+ * conversation and the run record both carry it.
+ */
+export async function maybeCompleteIdleTurnFromLastOutput(lane, {
+  root,
+  nowMs = Date.now(),
+  collectLatest = null,
+} = {}) {
+  const run = lane?.execution_run;
+  if (!run?.run_id || run.state !== "EXECUTING") {
+    return { ok: true, completed: false, skipped: "not_executing" };
+  }
+  if (lane?.provider_activity?.activity !== "ready") {
+    return { ok: true, completed: false, skipped: "not_idle" };
+  }
+  if (lane?.provider_activity?.live_progress?.idle_result !== true) {
+    return { ok: true, completed: false, skipped: "turn_not_finished" };
+  }
+  const started = parseMs(run.started_at);
+  if (started != null && (nowMs - started) < IDLE_TURN_COMPLETE_GRACE_MS) {
+    return { ok: true, completed: false, skipped: "grace" };
+  }
+  const admissible = runCompletionAdmissible(run);
+  if (!admissible.ok) {
+    return { ok: true, completed: false, skipped: admissible.error };
+  }
+
+  let latest = null;
+  try {
+    latest = collectLatest ? await collectLatest(lane) : await defaultCollectLatestOutput(lane);
+  } catch {
+    latest = null;
+  }
+  const text = String(latest?.text || "").trim();
+  if (text.length < 40) {
+    return { ok: true, completed: false, skipped: "no_last_output" };
+  }
+  const captured = parseMs(latest?.captured_at || latest?.timestamp);
+  if (started != null && captured != null && captured < started) {
+    return { ok: true, completed: false, skipped: "last_output_predates_run" };
+  }
+  if (started != null && captured == null) {
+    return { ok: true, completed: false, skipped: "last_output_unattributed" };
+  }
+  const paneSummary = lane?.provider_activity?.live_progress?.summary || "";
+  if (!paneResultAgreesWithTranscript(paneSummary, text)) {
+    return { ok: true, completed: false, skipped: "last_output_mismatch" };
+  }
+
+  if (runReceiptToken(run) && !runReceiptConfirmed(run)) {
+    noteInstructionReceipt(run.run_id, { text, nowMs, root });
+  }
+  // The receipt token lives in the delivery envelope, not in the last output.
+  // Requiring it in the completion writeup is how a delivered, cooked turn
+  // never got its last-output summary. Delivery ack is the proof the
+  // instruction reached the provider; the Cooked pane is the finished turn.
+  const confirmed = runReceiptConfirmed(getExecutionRun(run.run_id, root) || run);
+  if (runReceiptToken(run) && !confirmed && !runHasDeliveryAck(run)) {
+    return { ok: true, completed: false, skipped: "receipt_unconfirmed" };
+  }
+
+  const { submitAgentReport } = await import("./execution-run-report.mjs");
+  const out = submitAgentReport(run.run_id, {
+    type: "completion",
+    message: text,
+    origin: "governor",
+    reason: "last_output_at_idle_prompt",
+    laneId: run.lane_id,
+    cwd: run.worktree_path,
+    nowMs,
+    root,
+  });
+  if (!out.ok) return { ok: false, completed: false, error: out.error };
+  return {
+    ok: true,
+    completed: out.run?.state === "COMPLETE" || out.transition === "COMPLETE",
+    run: out.run,
+    report: out.report,
+  };
+}
+
+export async function applyIdleTurnCompletions(lanes, { root, nowMs = Date.now(), collectLatest = null } = {}) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!list.length) return list;
+  const { attachLaneRuns } = await import("./execution-run.mjs");
+  for (let i = 0; i < list.length; i += 1) {
+    try {
+      const out = await maybeCompleteIdleTurnFromLastOutput(list[i], { root, nowMs, collectLatest });
+      if (!out?.completed) continue;
+      const activity = list[i].provider_activity;
+      list[i] = attachLaneRuns([list[i]], root, { includeInstruction: true })[0];
+      if (activity) list[i].provider_activity = activity;
+    } catch { /* a missed completion must not fail discovery */ }
+  }
+  return list;
 }
 
 /**

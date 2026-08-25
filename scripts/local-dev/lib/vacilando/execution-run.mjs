@@ -1183,6 +1183,7 @@ export function executionEnvelope(runId, instruction, { laneId = null } = {}) {
     "Complete the approved instruction below.",
     "Report bounded execution-state changes with the Gateway-owned CLI (absolute path; do not rely on PATH `vac`):",
     `  ${vac} run-status ${runId} executing|validating|waiting-resource|needs-input|complete|failed [--reason \"...\"] [--summary \"...\"] [--resource <key>]${laneFlag}`,
+    `When the turn is finished, you MUST file the last output: ${vac} run-status ${runId} complete --summary \"<last output>\"${laneFlag}. A turn is not complete without that summary.`,
     "When a coherent implementation checkpoint is reached, also report:",
     `  ${vac} run-status ${runId} executing --checkpoint-ready --summary \"feat(area): bounded commit subject\"${laneFlag}`,
     "When you need a Director-owned capability this lane cannot execute (for example a read-only database census), report:",

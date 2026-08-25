@@ -582,6 +582,7 @@ async function fetchLane(id) {
     try { history.replaceState(null, "", View.laneDetailHash(next.lane_id)); } catch { /* */ }
   }
   G.lane = View.applyFetchedLane(G.selected, next?.lane_id || id, G.lane, next);
+  if (G.lane) G.lanes = View.upsertLaneInList(G.lanes, G.lane);
   return G.lane;
 }
 
@@ -1092,7 +1093,10 @@ function startOutputPoll(laneId) {
   const tick = async () => {
     G.pollOut = null;
     if (!View.shouldPollOutput({ hidden: document.hidden, routeName: routeName(), laneId: G.selected })) {
-      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+        burstUntil: G.burstUntil,
+        liveWork: View.laneAgentIsWorking(G.lane),
+      }));
       return;
     }
     if (G.selected !== laneId) return;
@@ -1102,7 +1106,14 @@ function startOutputPoll(laneId) {
         await fetchOutput(laneId, { mode: "recent" });
         const watching = G.watchRefresh || View.contextRefreshStatus(G.lane)?.kind === "progress";
         const runState = G.lane?.execution_run?.state;
-        const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+        const liveWork = View.laneAgentIsWorking(G.lane);
+        const observed = G.lane?.provider_activity?.activity;
+        // An EXECUTING run with an idle pane is not live work. Trust Runtime
+        // sat on a 19-hour run after Claude had already cooked; bursting that
+        // as "still working" is what froze the thread on vac run-status.
+        const liveRun = liveWork
+          || ["VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+          || (runState === "EXECUTING" && observed !== "ready")
           || (G.burstUntil && Date.now() < G.burstUntil);
         if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
@@ -1122,7 +1133,7 @@ function startOutputPoll(laneId) {
           G.outputMode = "recent";
           G.output = G.recentOutput;
           G.finalizedOutput = false;
-        } else if (runState === "COMPLETE" || (!runState && G.lane?.previous_run?.state === "COMPLETE")) {
+        } else if (runState === "COMPLETE" || observed === "ready" || (!runState && G.lane?.previous_run?.state === "COMPLETE")) {
           await promoteCompletedOutput(laneId);
         }
         if (!watching && pre && document.activeElement && document.activeElement.id === "gw-instruction") {
@@ -1148,10 +1159,16 @@ function startOutputPoll(laneId) {
       finally { G.outInflight = false; }
     }
     if (G.selected === laneId) {
-      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+        burstUntil: G.burstUntil,
+        liveWork: View.laneAgentIsWorking(G.lane),
+      }));
     }
   };
-  G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+  G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+    burstUntil: G.burstUntil,
+    liveWork: View.laneAgentIsWorking(G.lane),
+  }));
 }
 
 function startListPoll() {
@@ -1165,7 +1182,8 @@ function startListPoll() {
       paintRail();
       if (G.selected) {
         const listed = View.knownLane(G.lanes, G.selected);
-        if (listed) G.lane = listed;
+        if (listed) G.lane = View.mergeListedLane(G.lane, listed);
+        if (G.lane) G.lanes = View.upsertLaneInList(G.lanes, G.lane);
         applyContextRefreshWatch();
         paint();
       } else {

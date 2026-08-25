@@ -16,10 +16,17 @@
  * The pane is the only place the second fact exists, so it is read from there —
  * bounded, read-only, and only for lanes that actually have a live pane.
  */
-import { detectProviderBusy, detectPromptAffordance, detectPromptBlocker } from "./provider-prompt-readiness.mjs";
+import {
+  detectProviderBusy,
+  detectPromptAffordance,
+  detectPromptBlocker,
+  TURN_FINISHED_RE,
+} from "./provider-prompt-readiness.mjs";
 
-/** How much pane tail is enough to see a footer and a caret. */
-export const ACTIVITY_CAPTURE_LINES = 24;
+export { TURN_FINISHED_RE };
+
+/** How much pane tail is enough to see a footer, a caret, and recent narration. */
+export const ACTIVITY_CAPTURE_LINES = 48;
 
 export const PROVIDER_ACTIVITY = Object.freeze({
   WORKING: "working",     // mid-turn: it will produce output without being asked
@@ -36,18 +43,116 @@ export const PROVIDER_ACTIVITY = Object.freeze({
  * and a working pane usually still draws its caret — so the most specific
  * condition wins, and "ready" is only claimed when nothing else is true.
  */
+/**
+ * The agent's own words from a live turn, without TUI chrome.
+ *
+ * Claude Code writes the turn as `⏺` narration plus short tool rollups
+ * (`Ran 19 shell commands`, `Brokered typecheck`). The conversation used to
+ * ignore all of that and keep showing the last finished message — so Trust
+ * Runtime sat on a completed summary for 90 minutes while the pane was still
+ * Forging. Those ⏺ lines are the updates the operator is watching for.
+ *
+ * Deliberately not a TUI dump: composer carets, footers, and command traces
+ * (`⎿  $ …`) stay out.
+ */
+export function extractLiveTurnProgress(text) {
+  const raw = String(text ?? "");
+  if (!raw.trim()) return null;
+  const lines = raw.split("\n");
+  let lastCooked = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (TURN_FINISHED_RE.test(lines[i])) lastCooked = i;
+  }
+  const narr = [];
+  for (let i = lastCooked + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    const spoken = line.match(/^[ \t]*⏺[ \t]+(\S.*)$/);
+    if (spoken) {
+      narr.push(spoken[1].replace(/\s+$/, ""));
+      continue;
+    }
+    const tool = line.match(/^[ \t]+(Ran \d+ shell commands)\s*$/i)
+      || line.match(/^[ \t]+(Brokered \S[^\n]{0,80})$/);
+    if (tool && narr.length) narr.push(tool[1].replace(/\s+$/, ""));
+  }
+  const recent = narr.slice(-8);
+  const spinner = detectProviderBusy(raw);
+  if (!recent.length && !spinner) return null;
+  const parts = [];
+  if (recent.length) parts.push(recent.join("\n"));
+  if (spinner) parts.push(spinner);
+  return {
+    summary: parts.join("\n\n"),
+    spinner: spinner || null,
+    lines: recent,
+  };
+}
+
+export function paneShowsFinishedTurn(text) {
+  return TURN_FINISHED_RE.test(String(text ?? ""));
+}
+
+/**
+ * Prose still on screen after the agent cooked and returned to a prompt.
+ *
+ * Only claimed when the pane itself says the turn finished (`Cooked for …`).
+ * A quiet prompt between tool calls is not a completion — treating it as one
+ * is how a live run gets closed on the previous viewport.
+ *
+ * The pane is a truncated viewport, so this is a fallback when the session
+ * transcript has not been fetched yet — never a TUI dump.
+ */
+export function extractIdleTurnResult(text) {
+  const raw = String(text ?? "");
+  if (detectProviderBusy(raw)) return null;
+  if (!paneShowsFinishedTurn(raw)) return null;
+  const keep = [];
+  for (const line of raw.split("\n")) {
+    if (/^[ \t]*[─━]{8,}\s*$/.test(line) || /^[ \t]*❯/.test(line)) break;
+    if (/auto mode|\? for shortcuts|\bfor agents\b|shift\+tab to cycle/i.test(line)) continue;
+    if (TURN_FINISHED_RE.test(line)) continue;
+    if (/✔\s+Update installed/i.test(line)) continue;
+    if (/^\s*⎿/.test(line)) continue;
+    keep.push(line);
+  }
+  const body = keep.join("\n").trim();
+  if (body.length < 40) return null;
+  if (/esc to interrupt/i.test(body)) return null;
+  return {
+    summary: body.length > 4000 ? body.slice(-4000) : body,
+    spinner: null,
+    lines: [],
+    idle_result: true,
+    finished_turn: true,
+  };
+}
+
 export function classifyProviderActivity(text, { provider = null } = {}) {
   const raw = String(text ?? "");
-  if (!raw.trim()) return { activity: PROVIDER_ACTIVITY.UNKNOWN, signal: null };
+  if (!raw.trim()) return { activity: PROVIDER_ACTIVITY.UNKNOWN, signal: null, live_progress: null };
+  const progress = extractLiveTurnProgress(raw);
   const blocker = detectPromptBlocker(raw, { provider });
   if (blocker) {
-    return { activity: PROVIDER_ACTIVITY.BLOCKED, signal: blocker.signal, blocker_kind: blocker.kind };
+    return {
+      activity: PROVIDER_ACTIVITY.BLOCKED,
+      signal: blocker.signal,
+      blocker_kind: blocker.kind,
+      live_progress: progress,
+    };
   }
   const busy = detectProviderBusy(raw);
-  if (busy) return { activity: PROVIDER_ACTIVITY.WORKING, signal: busy };
+  if (busy) {
+    return { activity: PROVIDER_ACTIVITY.WORKING, signal: busy, live_progress: progress };
+  }
   const affordance = detectPromptAffordance(raw);
-  if (affordance) return { activity: PROVIDER_ACTIVITY.READY, signal: affordance };
-  return { activity: PROVIDER_ACTIVITY.UNKNOWN, signal: null };
+  if (affordance) {
+    return {
+      activity: PROVIDER_ACTIVITY.READY,
+      signal: affordance,
+      live_progress: extractIdleTurnResult(raw),
+    };
+  }
+  return { activity: PROVIDER_ACTIVITY.UNKNOWN, signal: null, live_progress: progress };
 }
 
 /**

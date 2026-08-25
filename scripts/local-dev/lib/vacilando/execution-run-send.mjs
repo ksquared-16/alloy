@@ -683,6 +683,10 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     ...opts,
     nowMs,
     dedupeKey: promptKey,
+    // Operator Send means start this instruction now. A pane that is mid-turn
+    // (not on a modal) is interrupted once, then re-read. Admission retries
+    // do not set this, so a queued prompt still waits for a natural prompt.
+    interruptIfBusy: opts.interruptIfBusy !== false,
   });
 
   if (out.ok && out.status === "delivered") {
@@ -806,6 +810,7 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     ...opts,
     nowMs,
     dedupeKey: `admission:${run.run_id}`,
+    interruptIfBusy: false,
   });
   if (out.ok && out.status === "delivered") {
     if (queuedAttachments) queuedAttachments.markAttachmentsDelivered(run.run_id, { nowMs, root });

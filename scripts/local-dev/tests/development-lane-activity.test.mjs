@@ -24,8 +24,12 @@ const pane = (footer, composer = "") => [
   "  some output", RULE, `❯${NBSP}${composer}`, RULE, footer,
 ].join("\n");
 
-const WORKING = pane("  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents");
-const READY = pane("  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents");
+const WORKING = [
+  "✶ Tinkering… (10m 44s · ↓ 30.8k tokens)",
+  RULE, `❯${NBSP}`, RULE,
+  "  ⏵⏵ auto mode on · 7 shells · esc to interrupt · ← for agents · ↓ to manage",
+].join("\n");
+const READY = pane("  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents");
 const BLOCKED = [
   RULE, "  Teach auto mode about your environment?", "  ❯ 1. Yes", "    2. Not now",
   "  Enter to confirm · Esc to cancel", RULE,
@@ -36,10 +40,12 @@ const BLOCKED = [
 test("a mid-turn agent is working", () => {
   const r = A.classifyProviderActivity(WORKING, { provider: "claude" });
   assert.equal(r.activity, "working");
-  assert.equal(r.signal, "esc to interrupt");
+  assert.match(r.signal, /Tinkering/);
 });
 
-test("an agent at a prompt is ready, not working", () => {
+test("footer esc-to-interrupt without a spinner is ready, not working", () => {
+  // Live Claude Code puts that phrase on the status footer whenever a
+  // background shell is running. That is not a turn.
   assert.equal(A.classifyProviderActivity(READY, { provider: "claude" }).activity, "ready");
 });
 
@@ -166,4 +172,210 @@ test("a run and an agent that disagree are reported, not silently reconciled", (
   assert.equal(A.activityContradictsRun(lane({ state: "EXECUTING" }, "ready")).kind, "idle_while_executing");
   assert.equal(A.activityContradictsRun(lane({ state: "EXECUTING" }, "absent")).kind, "executing_without_provider");
   assert.equal(A.activityContradictsRun(lane({ state: "EXECUTING" }, "working")), null, "agreement is not a finding");
+});
+
+const TRUST_PANE = [
+  "⏺ Now the review UI and a test with negative controls.",
+  "",
+  "  Ran 19 shell commands",
+  "",
+  "⏺ Now update the two certification tests to the new denominator.",
+  "",
+  "  Brokered typecheck · 58s",
+  "  ⎿  $ vac run typecheck:tests 2>&1 | tail -3",
+  "",
+  "· Forging… (1h 26m 54s · ↓ 111.6k tokens)",
+  "────────────────────────────────────────────────────────────────────────────────",
+  `❯${NBSP}`,
+  "────────────────────────────────────────────────────────────────────────────────",
+  "  ⏵⏵ auto mode on (shift+tab to cycle) · esc to interrupt · ← for agents",
+].join("\n");
+
+test("live turn narration is extracted without TUI chrome", () => {
+  const p = A.extractLiveTurnProgress(TRUST_PANE);
+  assert.match(p.summary, /Now the review UI/);
+  assert.match(p.summary, /Ran 19 shell commands/);
+  assert.match(p.summary, /Now update the two certification tests/);
+  assert.match(p.summary, /Brokered typecheck/);
+  assert.match(p.summary, /Forging/);
+  assert.equal(p.summary.includes("vac run typecheck"), false, "command traces stay out");
+  assert.equal(p.summary.includes("❯"), false);
+  assert.equal(p.summary.includes("auto mode"), false);
+});
+
+test("a working lane with no run shows live narration, not the previous answer", () => {
+  const seen = A.classifyProviderActivity(TRUST_PANE, { provider: "claude" });
+  const trust = {
+    lane_id: "l",
+    label: "Trust Runtime",
+    tmux: { alive: true },
+    previous_run: { state: "COMPLETE", agent_report: { message: "Shipped yesterday's packet." } },
+    execution_run: null,
+    provider_activity: seen,
+  };
+  const src = V.assistantMessageSource(trust, { latestResponse: { ok: true, available: true, mode: "latest_response", source: "claude_code_session_transcript", text: "Shipped yesterday's packet." } });
+  assert.equal(src.kind, "live");
+  assert.match(src.text, /Now update the two certification tests/);
+  assert.equal(src.text.includes("Shipped yesterday"), false);
+  const html = V.renderAssistantMessage(src);
+  assert.match(html, /Live from this turn/);
+  assert.equal(html.includes("Shipped yesterday"), false);
+});
+
+test("an idle agent with an EXECUTING run is Ready, not Working", () => {
+  // Trust Runtime sat EXECUTING for 19 hours after Claude had cooked. The
+  // leftover run is not work.
+  const st = V.canonicalLaneWorkState(lane({ state: "EXECUTING" }, "ready"));
+  assert.equal(st.label, "Ready");
+  assert.equal(st.group, "idle");
+  assert.equal(st.source, "agent_idle_run_open");
+  assert.notEqual(V.canonicalLaneWorkState(lane({ state: "EXECUTING" }, "working")).label, "Ready");
+});
+
+const COOKED_PANE = [
+  "Slice 6 is closed on the engineering side. The typecheck boundary held.",
+  "",
+  "Safeguarding ownership is a Director decision and is not claimed here.",
+  "",
+  "✻ Cooked for 1h 38m 25s",
+  RULE,
+  `❯${NBSP}Slice 6: resolve safeguarding ownership as a Director decision`,
+  RULE,
+  "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+].join("\n");
+
+test("a cooked pane yields the completion, not the composer leftover", () => {
+  const p = A.extractIdleTurnResult(COOKED_PANE);
+  assert.match(p.summary, /Slice 6 is closed/);
+  assert.match(p.summary, /Director decision/);
+  assert.equal(p.idle_result, true);
+  assert.equal(p.summary.includes("❯"), false);
+  assert.equal(p.summary.includes("Cooked for"), false);
+  assert.equal(p.summary.includes("auto mode"), false);
+  assert.equal(A.classifyProviderActivity(COOKED_PANE, { provider: "claude" }).activity, "ready");
+});
+
+test("a quiet prompt without Cooked is not a finished-turn result", () => {
+  // Between tool calls the pane can look ready. That is not a completion.
+  const quiet = [
+    "A reasonably long leftover paragraph from the previous tool narration sits here on screen.",
+    RULE,
+    `❯${NBSP}`,
+    RULE,
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+  assert.equal(A.extractIdleTurnResult(quiet), null);
+  assert.equal(A.classifyProviderActivity(quiet, { provider: "claude" }).live_progress, null);
+});
+
+test("an EXECUTING run with an idle pane does not freeze on vac run-status", () => {
+  const seen = A.classifyProviderActivity(COOKED_PANE, { provider: "claude" });
+  const trust = {
+    lane_id: "l",
+    label: "Trust Runtime",
+    tmux: { alive: true },
+    claude: { presence: "present" },
+    preferred_provider: "claude",
+    slot: 4,
+    execution_run: {
+      state: "EXECUTING",
+      state_reason: "operator_input",
+      latest_progress: { summary: "Slice 4: 37-row ownership ledger. Slice 5: cross-sprint ownership convergence." },
+      started_at: "2026-08-24T16:00:00.000Z",
+    },
+    provider_activity: seen,
+  };
+  const src = V.assistantMessageSource(trust, {});
+  assert.notEqual(src.kind, "status");
+  assert.equal(src.text.includes("37-row ownership ledger"), false);
+  assert.match(src.text, /Slice 6 is closed/);
+  assert.equal(src.text.includes("❯"), false);
+  const html = V.renderAssistantMessage(src);
+  assert.equal(html.includes("vac run-status"), false);
+  assert.equal(html.includes("Working"), false);
+  const withTranscript = V.assistantMessageSource(trust, {
+    latestResponse: {
+      ok: true, available: true, mode: "latest_response",
+      source: "claude_code_session_transcript",
+      text: "Full Slice 6 writeup from the session transcript.",
+    },
+  });
+  assert.equal(withTranscript.kind, "transcript");
+  assert.equal(withTranscript.report.type, "completion");
+  assert.match(withTranscript.text, /Full Slice 6 writeup/);
+  assert.match(V.renderAssistantMessage(withTranscript), /Complete/);
+  assert.equal(V.renderAssistantMessage(withTranscript).includes("Working"), false);
+  const work = V.renderCurrentWork(trust.execution_run, Date.parse("2026-08-25T11:00:00.000Z"), { activity: "ready" });
+  assert.match(work, /At a prompt/);
+  assert.doesNotMatch(work, />Executing</);
+  const posture = V.deriveLaneExecutionPosture(trust);
+  assert.equal(posture.state, "CONNECTED");
+  const runtime = V.renderLaneRuntimeControls(trust, posture);
+  assert.match(runtime, /Claude connected/);
+  assert.equal(runtime.includes("This lane is working"), false);
+  assert.equal(runtime.includes("Executing"), false);
+});
+
+test("live ⏺ after leftover Cooked is working, not Ready", () => {
+  const pane = [
+    "Slice 6 is closed on the engineering side. The typecheck boundary held.",
+    "",
+    "✻ Cooked for 1h 38m 25s",
+    RULE,
+    `❯${NBSP}`,
+    RULE,
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+    "",
+    "⏺ Investigation complete. No canonical owner exists — writing the finding, then the model.",
+  ].join("\n");
+  const seen = A.classifyProviderActivity(pane, { provider: "claude" });
+  assert.equal(seen.activity, "working");
+  assert.match(seen.signal, /Investigation complete/);
+  const live = A.extractLiveTurnProgress(pane);
+  assert.match(live.summary, /Investigation complete/);
+  assert.equal(live.summary.includes("Slice 6 is closed"), false);
+  const trust = {
+    lane_id: "l",
+    label: "Trust Runtime",
+    tmux: { alive: true },
+    claude: { presence: "present" },
+    preferred_provider: "claude",
+    slot: 4,
+    execution_run: { state: "EXECUTING", started_at: "2026-08-25T19:45:00.000Z" },
+    provider_activity: seen,
+  };
+  const st = V.canonicalLaneWorkState(trust);
+  assert.equal(st.label, "Working");
+  assert.equal(V.deriveLaneExecutionPosture(trust).state, "RUNNING");
+  const src = V.assistantMessageSource(trust, {});
+  assert.equal(src.kind, "live");
+  assert.match(src.text, /Investigation complete/);
+});
+
+test("list and detail activity merge prefer working over leftover Ready", () => {
+  const t0 = "2026-08-25T19:48:00.000Z";
+  const t1 = "2026-08-25T19:48:03.000Z";
+  const working = { activity: "working", observed_at: t0, signal: "live narration" };
+  const ready = { activity: "ready", observed_at: t1, signal: "prompt" };
+  assert.equal(V.preferProviderActivity(working, ready).activity, "working");
+  const detail = {
+    lane_id: "lane_trust",
+    label: "Trust Runtime",
+    last_instruction: { instruction: "keep going" },
+    execution_run: { state: "EXECUTING", instruction: "keep going", agent_report: { message: "mid" } },
+    provider_activity: working,
+  };
+  const listed = {
+    lane_id: "lane_trust",
+    label: "Trust Runtime",
+    execution_run: { state: "EXECUTING" },
+    provider_activity: ready,
+  };
+  const merged = V.mergeListedLane(detail, listed);
+  assert.equal(merged.provider_activity.activity, "working");
+  assert.equal(merged.last_instruction.instruction, "keep going");
+  assert.equal(merged.execution_run.instruction, "keep going");
+  const rows = V.upsertLaneInList([listed], merged);
+  assert.equal(rows[0].provider_activity.activity, "working");
+  assert.equal(V.canonicalLaneWorkState(merged).label, V.canonicalLaneWorkState(rows[0]).label);
 });

@@ -775,6 +775,21 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
         queue_position: null,
       };
     }
+    // Leftover EXECUTING with an idle prompt is not runtime "Executing".
+    // Trust Runtime showed Ready in the header and Executing in Details
+    // because posture ignored provider_activity.
+    if (runState === "EXECUTING" && lane?.provider_activity?.activity === "ready") {
+      return {
+        state: "CONNECTED",
+        label: "Connected",
+        mark: "●",
+        hint: `${who} connected · run still open`,
+        headline: `${who} connected`,
+        tone: "run",
+        slot,
+        queue_position: null,
+      };
+    }
     return {
       state: "RUNNING",
       label: runLabels[runState] || "Running",
@@ -930,10 +945,20 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   if (cap.state === "STARTING") {
     return { key: "working", label: cap.label || "Starting", group: "active", tone: "run", mark: cap.mark, hint: cap.hint, headline: cap.headline, live: true, stale: false };
   }
+  const observed = lane?.provider_activity?.activity || null;
   if (cap.state === "RUNNING" || run?.state === "EXECUTING") {
-    // An EXECUTING run says an instruction is open, not that anything has been
-    // heard lately. Trust Runtime was genuinely mid-turn with a 76-minute-old
-    // last report — "Working" alone does not answer "should I be worried?".
+    // The run can outlive the turn. Trust Runtime sat EXECUTING for 19 hours
+    // after Claude had already cooked and returned to a prompt — "Working" plus
+    // a frozen vac run-status is what the operator read as stuck.
+    if (observed === "ready") {
+      return {
+        key: "ready", label: "Ready", group: "idle", tone: "", mark: "●",
+        hint: `${who} ready · run still open`,
+        headline: `Ready · ${who}`,
+        live: false, stale: false,
+        source: "agent_idle_run_open",
+      };
+    }
     const quiet = quietWorkerNote(lane, nowMs);
     return {
       key: "working", label: "Working", group: "active", tone: "run", mark: "●",
@@ -956,7 +981,6 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   // (needs-input, blocked, suspended, waiting on Director): those are true even
   // while a provider draws a spinner. It overrides only the idle-looking
   // outcomes, which are the ones that were lying.
-  const observed = lane?.provider_activity?.activity || null;
   if (observed === "working") {
     const quiet = quietWorkerNote(lane, nowMs);
     return {
@@ -1380,7 +1404,8 @@ export function shouldPollList({ hidden, routeName }) {
   return !hidden && routeName === "lanes";
 }
 
-export function outputPollIntervalMs({ burstUntil, nowMs = Date.now() } = {}) {
+export function outputPollIntervalMs({ burstUntil, nowMs = Date.now(), liveWork = false } = {}) {
+  if (liveWork) return OUTPUT_BURST_POLL_MS;
   if (burstUntil && nowMs < burstUntil) return OUTPUT_BURST_POLL_MS;
   return OUTPUT_POLL_MS;
 }
@@ -1406,7 +1431,81 @@ export function knownLane(lanes, selectedId) {
 
 export function applyFetchedLane(selectedId, requestedId, current, next) {
   if (selectedId !== requestedId) return current;
-  return next;
+  if (!next) return current;
+  if (!current) return next;
+  const activity = preferProviderActivity(current.provider_activity, next.provider_activity);
+  if (!activity || activity === next.provider_activity) return next;
+  return { ...next, provider_activity: activity };
+}
+
+const ACTIVITY_RANK = Object.freeze({
+  working: 3,
+  blocked: 2,
+  ready: 1,
+  unknown: 0,
+  absent: 0,
+});
+
+/** List and detail each capture the pane. Within this window, live beats leftover Ready. */
+export const ACTIVITY_PREFER_MS = 8000;
+
+export function preferProviderActivity(a, b) {
+  if (!a) return b || null;
+  if (!b) return a;
+  const aMs = Date.parse(a.observed_at || "") || 0;
+  const bMs = Date.parse(b.observed_at || "") || 0;
+  const ar = ACTIVITY_RANK[a.activity] || 0;
+  const br = ACTIVITY_RANK[b.activity] || 0;
+  if (Math.abs(aMs - bMs) <= ACTIVITY_PREFER_MS && ar !== br) {
+    return ar > br ? a : b;
+  }
+  return bMs >= aMs ? b : a;
+}
+
+function mergeRunSnapshot(current, next) {
+  if (!next) return current || null;
+  if (!current) return next;
+  return {
+    ...current,
+    ...next,
+    instruction: next.instruction || current.instruction,
+    agent_report: next.agent_report || current.agent_report,
+  };
+}
+
+/**
+ * Join a list poll into the selected lane (or a GET into the list row)
+ * without letting a thinner payload wipe instruction, reports, or a
+ * stronger live activity claim from the other poll.
+ */
+export function mergeListedLane(current, listed) {
+  if (!listed) return current || null;
+  if (!current) return listed;
+  if (!laneMatchesId(current, listed.lane_id) && !laneMatchesId(listed, current.lane_id)) {
+    return current;
+  }
+  return {
+    ...current,
+    ...listed,
+    last_instruction: listed.last_instruction || current.last_instruction,
+    execution_run: mergeRunSnapshot(current.execution_run, listed.execution_run),
+    previous_run: mergeRunSnapshot(current.previous_run, listed.previous_run),
+    provider_activity: preferProviderActivity(current.provider_activity, listed.provider_activity)
+      || listed.provider_activity
+      || current.provider_activity,
+  };
+}
+
+export function upsertLaneInList(lanes, lane) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!lane) return list;
+  let found = false;
+  const next = list.map((row) => {
+    if (!laneMatchesId(row, lane.lane_id) && !laneMatchesId(lane, row.lane_id)) return row;
+    found = true;
+    return mergeListedLane(row, lane);
+  });
+  return found ? next : list;
 }
 
 /** Keep a payload when the selected id remaps (UUID ↔ durable) mid-fetch. */
@@ -2100,12 +2199,24 @@ export function cancelConfirmCopy(run) {
   ].join("\n");
 }
 
-export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = false } = {}) {
+export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = false, activity = null } = {}) {
   if (!run?.state) {
     return `<aside class="gw-work is-idle" data-gw-work data-run-state="none">
     <span class="gw-work-h">Current work</span>
     <span class="gw-work-state">No active work</span>
     <span class="gw-work-meta">Ready for instruction</span>
+  </aside>`;
+  }
+  if (activity === "ready" && run.state === "EXECUTING") {
+    const startedMs = run.started_at ? Date.parse(run.started_at) : NaN;
+    const started = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
+    const instruction = run.instruction ? String(run.instruction) : "";
+    return `<aside class="gw-work" data-gw-work data-run-state="EXECUTING" data-agent-idle="1">
+    <span class="gw-work-h">Current work</span>
+    <span class="gw-work-state">At a prompt</span>
+    ${instruction ? `<span class="gw-work-text">${esc(instruction)}</span>` : ""}
+    <span class="gw-work-meta">The agent finished this turn. The run is still open${started ? ` · started ${esc(started)} ago` : ""}.</span>
+    ${renderCancelControl(run, { pending: cancelPending })}
   </aside>`;
   }
   const lifecycle = run.run_lifecycle?.class;
@@ -2720,8 +2831,49 @@ export function transcriptResponse(latestResponse) {
   return text.trim() ? { text, truncated: r.truncated === true, at: r.captured_at || null } : null;
 }
 
+export function laneAgentIsWorking(lane) {
+  return lane?.provider_activity?.activity === "working";
+}
+
 export function assistantMessageSource(lane, { output = null, outputText = "", latestResponse = null } = {}) {
-  const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
+  const paneWorking = laneAgentIsWorking(lane);
+  const live = lane?.provider_activity?.live_progress;
+  const activity = lane?.provider_activity?.activity || null;
+  const runOpen = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(lane?.execution_run?.state);
+  const idleAtOpenRun = runOpen && activity === "ready";
+
+  // A live spinner owns the bubble.
+  if (paneWorking && live?.summary) {
+    return {
+      kind: "live",
+      report: {
+        type: "progress",
+        message: live.summary,
+        revision: null,
+        phase: live.spinner || null,
+        reason: null,
+        choices: null,
+        result: null,
+        live: true,
+      },
+      text: live.summary,
+      terminal: false,
+    };
+  }
+  if (paneWorking) {
+    const current = lane?.execution_run?.agent_report;
+    if (current?.message) {
+      return { kind: "report", report: current, text: current.message, terminal: false };
+    }
+    return { kind: "working", report: null, text: "", terminal: false };
+  }
+
+  const run = lane?.execution_run || lane?.previous_run || null;
+  const state = run?.state || null;
+  const current = lane?.execution_run?.agent_report || null;
+  const previous = lane?.previous_run?.agent_report || null;
+  const staleProgress = idleAtOpenRun && current?.type === "progress";
+  const report = staleProgress ? previous : (current || previous);
   if (report?.message) {
     return {
       kind: "report",
@@ -2730,18 +2882,14 @@ export function assistantMessageSource(lane, { output = null, outputText = "", l
       terminal: false,
     };
   }
-  const run = lane?.execution_run || lane?.previous_run || null;
-  const state = run?.state || null;
-  // No structured report, but the provider did write an answer. Prefer the
-  // transcript message over the bounded status one-liner: the operator asked
-  // for the summary, and the summary is here.
-  const transcript = transcriptResponse(latestResponse)
+
+    const transcript = transcriptResponse(latestResponse)
     || transcriptResponse(output);
   if (transcript) {
     return {
       kind: "transcript",
       report: {
-        type: statusReportType(state),
+        type: idleAtOpenRun ? "completion" : statusReportType(state),
         message: transcript.text,
         revision: null,
         phase: null,
@@ -2755,30 +2903,49 @@ export function assistantMessageSource(lane, { output = null, outputText = "", l
       terminal: false,
     };
   }
-  // A lane still on the status-only CLI: show what it actually reported, said
-  // plainly to be a status summary rather than a full agent message.
-  const status = statusSummaryMessage(run);
-  if (status) {
+
+  // Pane is idle. Prefer the turn still on screen over a leftover EXECUTING
+  // vac run-status — that freeze is what Trust Runtime showed for 19 hours.
+  if (live?.summary) {
     return {
-      kind: "status",
+      kind: "live",
       report: {
-        type: statusReportType(state),
-        message: status,
+        type: "completion",
+        message: live.summary,
         revision: null,
         phase: null,
         reason: null,
         choices: null,
         result: null,
-        status_only: true,
+        live: true,
+        idle_result: live.idle_result === true,
       },
-      text: status,
+      text: live.summary,
       terminal: false,
     };
   }
-  const working = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING", "QUEUED"].includes(state);
-  if (working) {
-    // No report yet. A restrained working state is honest; raw TUI content
-    // dressed as a reply is not.
+
+  if (!idleAtOpenRun) {
+    const status = statusSummaryMessage(run);
+    if (status) {
+      return {
+        kind: "status",
+        report: {
+          type: statusReportType(state),
+          message: status,
+          revision: null,
+          phase: null,
+          reason: null,
+          choices: null,
+          result: null,
+          status_only: true,
+        },
+        text: status,
+        terminal: false,
+      };
+    }
+  }
+  if (runOpen && activity !== "ready") {
     return { kind: "working", report: null, text: "", terminal: false };
   }
   return { kind: "none", report: null, text: "", terminal: false };
@@ -2902,6 +3069,28 @@ export function renderReportChoices(choices) {
  * report yet the operator gets a restrained working state, never TUI text.
  */
 export function renderAssistantMessage(source, { pending = false } = {}) {
+  if (source?.kind === "live" && source.report?.idle_result) {
+    const r = source.report;
+    return `<div class="gw-report" data-gw-report data-report-type="completion" data-report-source="live">
+      <div class="gw-report-h">
+        <span class="gw-report-kind is-ok">Done</span>
+        <span class="gw-report-phase">last turn on the pane</span>
+      </div>
+      <div class="gw-report-body" data-gw-report-body>${renderReportMarkdown(r.message)}</div>
+      <p class="gw-report-note" data-gw-report-note>The agent is back at a prompt. This is the last turn still visible in its terminal.</p>
+    </div>`;
+  }
+  if (source?.kind === "live" && source.report) {
+    const r = source.report;
+    return `<div class="gw-report is-live" data-gw-report data-report-type="progress" data-report-source="live">
+      <div class="gw-report-h">
+        <span class="gw-report-kind is-run">Working</span>
+        ${r.phase ? `<span class="gw-report-phase">${esc(r.phase)}</span>` : ""}
+      </div>
+      <div class="gw-report-body" data-gw-report-body>${renderReportMarkdown(r.message)}</div>
+      <p class="gw-report-note" data-gw-report-note>Live from this turn. Updates as the agent works.</p>
+    </div>`;
+  }
   if (["report", "status", "transcript"].includes(source?.kind) && source.report) {
     const r = source.report;
     const meta = REPORT_TONE[r.type] || REPORT_TONE.progress;
@@ -4191,7 +4380,7 @@ export function renderGatewayShell({
           </div>
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}
-          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending })}${renderPreviousWork(lane?.previous_run)}
+          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
           ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}

@@ -1951,7 +1951,9 @@ export function createVacilandoServer() {
         try {
           const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
           const withActivity = await attachLaneProviderActivity(lanes);
-          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withActivity[i];
+          const { applyIdleTurnCompletions } = await import("./vacilando/execution-stale.mjs");
+          const withComplete = await applyIdleTurnCompletions(withActivity);
+          for (let i = 0; i < lanes.length; i += 1) lanes[i] = withComplete[i];
         } catch { /* status still renders from the run alone */ }
         let repositories = [];
         try {
@@ -2208,6 +2210,13 @@ export function createVacilandoServer() {
           if (out.lane) {
             try { await maybeAdvanceSessionRotation(out.lane); } catch { /* planned rotation advance must not fail inspect */ }
             out.lane = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true }))))))))[0];
+            try {
+              const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
+              const [withActivity] = await attachLaneProviderActivity([out.lane]);
+              const { applyIdleTurnCompletions } = await import("./vacilando/execution-stale.mjs");
+              const [withComplete] = await applyIdleTurnCompletions([withActivity]);
+              out.lane = withComplete;
+            } catch { /* status still renders from the run alone */ }
           }
           return sendJson(res, out.ok ? 200 : 404, out);
         } catch (e) {
