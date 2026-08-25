@@ -1925,6 +1925,18 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-work-stale-copy{margin:0;font-size:13px;color:var(--ink-2);}
 .gw-work-stale-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
 .gw-work-stale-actions .btn{min-height:44px;}
+/* Checkpoint readiness — a report, never a button that commits. */
+.gw-ck-verdict{margin:0 0 8px;font-size:13px;font-weight:600;}
+.gw-ck-verdict.is-ready{color:var(--ok, #2f855a);}
+.gw-ck-verdict.is-blocked{color:var(--review, #b7791f);}
+.gw-ck-sha{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;}
+.gw-ck-group{margin-top:8px;border-top:1px solid var(--line);padding-top:6px;}
+.gw-ck-group>summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--ink-2);min-height:32px;display:flex;align-items:center;}
+.gw-ck-group.is-foreign>summary{color:var(--review, #b7791f);}
+.gw-ck-paths{margin:4px 0 0;padding-left:18px;max-height:220px;overflow:auto;}
+.gw-ck-paths li{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--ink-2);overflow-wrap:anywhere;margin:1px 0;}
+.gw-ck-paths li.gw-ck-more{font-family:inherit;font-style:italic;}
+.gw-ck-note{margin:8px 0 0;font-size:12px;color:var(--ink-3);}
 /* Governed proposal card — the facts a Director weighs before authorizing.
    Two columns where there is room, stacked where there is not, so the same
    markup is legible on a phone without a second layout to keep in step. */
@@ -2119,6 +2131,9 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-claude-run{display:none;}
   .gw-decision-bar{display:block;}
   .gw-decision-bar .gw-work-stale-actions{flex-direction:column;}
+  /* A phone shows fewer paths and a bigger tap target on the disclosure. */
+  .gw-ck-paths{max-height:160px;}
+  .gw-ck-group>summary{min-height:44px;}
   /* Stack the fact rows on a phone: a fixed label column would squeeze the
      values to a few characters each. */
   .gw-gp-facts{grid-template-columns:1fr;gap:0;}

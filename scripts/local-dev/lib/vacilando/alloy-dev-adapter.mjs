@@ -371,27 +371,51 @@ export async function inspectWorktreeGit(worktreePath) {
   };
 }
 
-export async function commitWorktreeCheckpoint({ path, message } = {}) {
+/**
+ * Commit an EXPLICIT list of paths. Never a broad add.
+ *
+ * THIS FUNCTION CAUSED THE 67-FILE INCIDENT. It ran `git add -A` in the lane
+ * worktree and committed whatever that produced, with a status summary as the
+ * message. `git add -A` cannot express "the files this run touched" — it means
+ * every dirty file in the repository, always — so a checkpoint triggered by a
+ * status report took unrelated work with it.
+ *
+ * A manifest is now REQUIRED and there is no path back to the old behaviour: no
+ * flag re-enables it, and an empty manifest is refused rather than treated as
+ * "everything". Callers that cannot name their paths cannot commit.
+ */
+export async function commitWorktreeCheckpoint({ path, message, paths = null } = {}) {
   const cwd = String(path || "");
   if (!cwd || cwd.includes("..") || /[;|&]/.test(cwd)) return { ok: false, error: "path_refused" };
-  const add = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "add", "-A"], { timeout: 15000 }, (err, stdout, stderr) => {
+
+  const manifest = Array.isArray(paths) ? paths.map(String).filter(Boolean) : [];
+  if (!manifest.length) {
+    // Fail closed. The absence of a manifest is the absence of authorization,
+    // never an instruction to commit the whole worktree.
+    return { ok: false, error: "checkpoint_requires_manifest" };
+  }
+  for (const rel of manifest) {
+    if (rel.startsWith("/") || rel.includes("..") || /[;|&]/.test(rel)) {
+      return { ok: false, error: "manifest_path_refused", path: rel.slice(0, 120) };
+    }
+  }
+
+  const run = (args, timeout) => new Promise((resolve) => {
+    execFile("git", ["-C", cwd, ...args], { timeout }, (err, stdout, stderr) => {
       resolve({ ok: !err, stdout, stderr, error: err ? String(err.message || err) : null });
     });
   });
+
+  // Stage exactly the manifest. `--` keeps a path that looks like an option
+  // from being read as one.
+  const add = await run(["add", "--", ...manifest], 15000);
   if (!add.ok) return { ok: false, error: add.error || "git_add_failed" };
-  const commit = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "commit", "-m", String(message)], { timeout: 20000 }, (err, stdout, stderr) => {
-      resolve({ ok: !err, stdout, stderr, error: err ? String(err.message || err) : null });
-    });
-  });
+
+  const commit = await run(["commit", "-m", String(message), "--", ...manifest], 20000);
   if (!commit.ok) return { ok: false, error: commit.stderr?.slice(0, 240) || commit.error || "commit_failed" };
-  const sha = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "rev-parse", "HEAD"], { timeout: 8000 }, (err, stdout) => {
-      resolve(err ? null : String(stdout || "").trim());
-    });
-  });
-  return { ok: true, sha, pushed: false };
+
+  const sha = await run(["rev-parse", "HEAD"], 8000);
+  return { ok: true, sha: sha.ok ? String(sha.stdout || "").trim() : null, pushed: false, paths: manifest };
 }
 
 export async function syncWorktreeFromBase({ worktreeName } = {}) {

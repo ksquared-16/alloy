@@ -41,6 +41,7 @@ SUITES=(
   "development-lane-activity.test.mjs"
   "development-governed-approval.test.mjs"
   "development-run-summary-output.test.mjs"
+  "development-checkpoint-safety.test.mjs"
 )
 
 PASS=0

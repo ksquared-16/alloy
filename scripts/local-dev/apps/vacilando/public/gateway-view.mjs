@@ -3734,6 +3734,7 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
       ${machine ? `<dt>Machine</dt><dd>${esc(machine)}</dd>` : ""}
     </dl>
     ${renderSourceControl(lane)}
+    ${renderCheckpointReadiness(lane.execution_run || lane.previous_run)}
     ${renderAgentTelemetry(telemetry, Date.now(), { lane })}
     ${renderDevelopmentResources(developmentResources, lanes || [lane])}
   </details>`;
@@ -4145,6 +4146,59 @@ export function createErrorText(error) {
     default:
       return error ? String(error) : "Could not start the lane.";
   }
+}
+
+/**
+ * Checkpoint readiness, as a report rather than a promise of action.
+ *
+ * The Director needs four facts to act: whether a checkpoint is possible, what
+ * this run actually owns, how much dirt is NOT this run's, and why it is
+ * blocked. The last line states that reporting created no commit — the previous
+ * behaviour silently did, so the absence of a mutation is worth saying out loud.
+ *
+ * Path lists are bounded and the foreign list collapses behind a disclosure: an
+ * incident-shaped worktree has dozens of them and a phone must stay usable.
+ */
+export function renderCheckpointReadiness(run) {
+  const r = run?.checkpoint_readiness;
+  if (!r) return "";
+  const ready = r.checkpoint_ready === true;
+  const why = {
+    foreign_dirty_files: "Files are dirty that this run did not create.",
+    no_run_baseline: "This run has no recorded starting state, so nothing can be attributed to it.",
+    baseline_truncated: "The recorded starting state was too large to record in full, so attribution is not exact.",
+    head_moved_since_baseline: "The branch moved since this run started.",
+    worktree_conflict: "The worktree has a merge conflict.",
+    nothing_to_checkpoint: "This run has not changed any files.",
+    git_unreadable: "Git could not be read.",
+    ready: "This run's files can be checkpointed.",
+  }[r.reason] || "Checkpoint is not available.";
+
+  const list = (label, group, cls) => {
+    if (!group?.count) return "";
+    const shown = (group.paths || []).slice(0, 12).map((p) => `<li>${esc(p)}</li>`).join("");
+    const more = group.count > 12 ? `<li class="gw-ck-more">… ${group.count - 12} more</li>` : "";
+    return `<details class="gw-ck-group ${cls}"${cls === "is-owned" ? " open" : ""}>
+      <summary>${esc(label)} · ${group.count}</summary>
+      <ul class="gw-ck-paths">${shown}${more}</ul>
+    </details>`;
+  };
+
+  return `<div class="gw-status-block gw-ck" data-gw-checkpoint-readiness>
+    <div class="gw-status-h">Checkpoint</div>
+    <p class="gw-ck-verdict ${ready ? "is-ready" : "is-blocked"}">
+      ${ready ? "Ready" : "Not ready"} — ${esc(why)}
+    </p>
+    <dl class="gw-kv">
+      <dt>HEAD</dt><dd class="gw-ck-sha">${esc((r.head || "—").slice(0, 12))}</dd>
+      <dt>Changed by this run</dt><dd>${r.owned?.count ?? 0}</dd>
+      <dt>Already dirty</dt><dd>${r.foreign?.count ?? 0}</dd>
+      <dt>Staged / unstaged / untracked</dt><dd>${r.staged_count ?? 0} / ${r.unstaged_count ?? 0} / ${r.untracked_count ?? 0}</dd>
+    </dl>
+    ${list("Candidate paths for a checkpoint", r.owned, "is-owned")}
+    ${list("Not from this run — will not be committed", r.foreign, "is-foreign")}
+    <p class="gw-ck-note">Status was recorded. No commit was created, nothing was staged, and the working tree was not touched.</p>
+  </div>`;
 }
 
 export function renderSourceControl(lane) {
