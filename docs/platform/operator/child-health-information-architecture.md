@@ -4,6 +4,12 @@ status: draft
 last_reviewed: 2026-08-25
 supersedes: []
 ---
+> **Cross-sprint reconciliation:**
+> [`health-ownership-cross-sprint-contract.md`](./health-ownership-cross-sprint-contract.md) is the
+> single ownership contract both the Real Enrollment Certification lane and the Health & Safety lane
+> reference. Where the two disagree, that contract wins — it is repository-verified against
+> `origin/staging` and it carries the READY NOW / HEALTH FOUNDATION REQUIRED / NOT HEALTH TRUTH /
+> CROSS-SPRINT DECISION classification. This document remains the design rationale behind it.
 
 # Child health information — verified inventory, ownership, and the smallest gaps
 
