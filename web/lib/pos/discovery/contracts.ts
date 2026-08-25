@@ -27,6 +27,7 @@ import type { FormFieldSource } from "@/lib/forms/schema";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+import type { OwnershipHold } from "./canonicalOwnershipHolds";
 
 export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
@@ -245,6 +246,7 @@ export type ProposalDisposition =
     | "structured_collection" // repeated destinations reviewed as ONE collection, not N fields
     | "output_binding" // generated/output-copy projection of approved concepts
     | "derived_value"
+    | "held_for_canonical_owner" // a settled owner outside Enrollment — collected, never created here
     | "unresolved"; // manual classification required
 
 /** A proposed NEW configurable field — never persisted until the operator explicitly approves. */
@@ -301,6 +303,11 @@ export interface ConfigurationProposal {
      * can never be mistaken for "the matcher found nothing".
      */
     refused_binding?: { target: FormFieldSource; reason: string };
+    /**
+     * Why this concept cannot become a durable field HERE, and who owns it instead.
+     * Present only on `held_for_canonical_owner`, and mutually exclusive with `proposed_field`.
+     */
+    ownership_hold?: OwnershipHold;
     /** Validation problems that would block application (e.g. new field needs a key). */
     validation_issues: string[];
     explanation: string;
@@ -314,6 +321,7 @@ export interface ConfigurationProposal {
 export type DiscoveryCategory =
     | "existing_fields"
     | "new_fields"
+    | "held_for_owner"
     | "form_responses"
     | "relationships"
     | "upload_requirements"

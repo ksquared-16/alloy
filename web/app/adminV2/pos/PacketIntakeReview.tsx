@@ -54,6 +54,10 @@ function ownership(p: ConfigurationProposal): { label: string; tone: string } {
             return { label: "A repeating set", tone: "border-sky-300 bg-sky-50 text-sky-800" };
         case "create_proposed_field":
             return { label: "Needs a new field", tone: "border-amber-300 bg-amber-50 text-amber-800" };
+        case "held_for_canonical_owner":
+            // Not a warning and not an error — the answer is known, the destination is being built
+            // elsewhere. Amber would tell the operator to go fix something they cannot fix.
+            return { label: "Another part of Alloy owns this", tone: "border-slate-300 bg-slate-50 text-slate-700" };
         case "form_only_response":
             return { label: "This form only", tone: "" };
         case "acknowledgement":

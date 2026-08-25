@@ -287,7 +287,14 @@ describe("Slice 4 — ownership, and what approval means", () => {
             if (c.kind === "choice_field") {
                 expect(p.proposed_field?.option_set?.length, `${c.id} lost its options`).toBe(c.repetition!.instances);
             } else {
-                expect(p.disposition, `${c.id} was flattened`).toBe("structured_collection");
+                // Slice 5 added a second non-flattened outcome. An immunization dose schedule is a
+                // collection AND belongs to the Health foundation, so it is held rather than offered
+                // as a destination the operator picks. Either way it is never N fields.
+                expect(["structured_collection", "held_for_canonical_owner"], `${c.id} was flattened`).toContain(p.disposition);
+                if (p.disposition === "held_for_canonical_owner") {
+                    // Held is not unrecognised: the shape is still stated to the operator.
+                    expect(p.explanation, `${c.id} lost its collection shape`).toMatch(/\bnot \d+ fields\b/);
+                }
             }
         }
         // Obligations never became text fields.

@@ -51,6 +51,7 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     static_content: "Static content",
     output_binding: "Output copy",
     derived_value: "Derived value",
+    held_for_canonical_owner: "Held for another owner",
     unresolved: "Needs classification",
 };
 
@@ -61,6 +62,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "existing_fields";
         case "create_proposed_field":
             return "new_fields";
+        case "held_for_canonical_owner":
+            return "held_for_owner";
         case "form_only_response":
             return "form_responses";
         case "relationship_binding":
@@ -87,6 +90,7 @@ const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     relationships: "Relationships",
     collections: "Repeating structures",
     new_fields: "New fields",
+    held_for_owner: "Owned elsewhere in Alloy",
     form_responses: "Form responses",
     upload_requirements: "Document requirements",
     acknowledgements: "Acknowledgements",

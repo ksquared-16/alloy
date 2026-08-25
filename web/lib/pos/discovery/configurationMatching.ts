@@ -21,6 +21,7 @@
 
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
+import { ownershipHoldFor } from "./canonicalOwnershipHolds";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { FormFieldSource } from "@/lib/forms/schema";
 import {
@@ -153,6 +154,16 @@ function reuseFieldProposal(
     bindingConfidence: "high" | "medium" | "low",
     note?: string
 ): ConfigurationProposal {
+    // A LOW-confidence match on a concept whose owner is settled elsewhere is the quiet failure this
+    // whole gate exists for: an immunization record binds to the generic "Medical notes" field, the
+    // review shows a green "Existing field" chip, and the operator is given nothing to decide. The
+    // record is then a sentence in a notes blob that the Health foundation must later parse back out.
+    // A confident match — an allergy note to the child-grain allergies field — is a real destination
+    // and is never held.
+    if (bindingConfidence === "low") {
+        const held = heldProposal(base, concept);
+        if (held) return held;
+    }
     const band: Confidence["band"] = bindingConfidence === "high" ? "high" : bindingConfidence === "medium" ? "review" : "attention";
     return {
         ...base,
@@ -282,6 +293,17 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
     // ── repeated destinations → ONE collection decision ──
     if (concept.kind === "value_series" || concept.kind === "repeating_record") {
         const n = concept.repetition?.instances ?? 0;
+        // "Where that schedule lives is an operator decision" is the invitation this gate closes.
+        // A vaccine dose schedule IS an immunization record; if the operator answers that question
+        // here, Enrollment owns immunization history and the Health foundation inherits a rival.
+        // The collection SHAPE is preserved in the explanation — held is not unrecognised.
+        const heldCollection = heldProposal(base, concept);
+        if (heldCollection) {
+            return {
+                ...heldCollection,
+                explanation: `The document draws ${n} destinations for this one value — one ${concept.label} schedule, not ${n} fields. Where that schedule lives is not an open question: ${heldCollection.ownership_hold?.explanation ?? ""}`,
+            };
+        }
         return {
             ...base,
             disposition: "structured_collection",
@@ -356,6 +378,10 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
     const binding = guarded2.field_source ? { ...rawBinding2, field_source: guarded2.field_source, note: guarded2.note ?? rawBinding2?.note } : null;
 
     if (binding?.field_source) {
+        if (binding.confidence === "low") {
+            const held = heldProposal(base, concept);
+            if (held) return held;
+        }
         const bandFromBinding: Confidence["band"] = binding.confidence === "high" ? "high" : binding.confidence === "medium" ? "review" : "attention";
         return {
             ...base,
@@ -379,12 +405,41 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
  * refused on party grounds — the refusal travels with the proposal so the operator can see that a
  * binding was found and declined, rather than assuming nothing matched.
  */
+/**
+ * A proposal that collects the answer and creates nothing.
+ *
+ * No `proposed_field` is attached, so the refusal survives a caller that ignores the disposition —
+ * there is simply nothing creatable in the object.
+ */
+function heldProposal(
+    base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
+    concept: BusinessConceptCandidate,
+): ConfigurationProposal | null {
+    const hold = ownershipHoldFor(concept);
+    if (!hold) return null;
+    return {
+        ...base,
+        disposition: "held_for_canonical_owner",
+        ownership_hold: hold,
+        confidence: conf("review", [
+            hold.owner ? `owned by ${hold.owner}` : "no canonical owner exists yet",
+            `Director decision ${hold.decision}`,
+        ]),
+        alternatives: [],
+        explanation: `"${concept.label}" is collected on this form, and it does not become a durable Alloy field here. ${hold.explanation}`,
+        validation_issues: [],
+    };
+}
+
 function proposeNewField(
     base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
     concept: BusinessConceptCandidate,
     wantsType: string,
     refused?: { target: FormFieldSource; reason: string }
 ): ConfigurationProposal {
+    const held = heldProposal(base, concept);
+    if (held) return held;
+
     const proposed: ProposedFieldDefinition = {
         operator_label: concept.label.replace(/\s*—\s*if\s+yes.*$/i, "").trim(),
         suggested_field_key: fieldKeyFrom(concept.concept_key, concept.label),

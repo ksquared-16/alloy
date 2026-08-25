@@ -175,6 +175,19 @@ export function applyDiscovery(input: ApplyInput): ApplyOutput {
                 break;
             }
 
+            case "held_for_canonical_owner": {
+                // Belt and braces. The proposal carries no prepared field, so this cannot create
+                // anything — but an operator who accepted it deserves to be told why nothing happened.
+                const owner = p.ownership_hold?.owner;
+                record(
+                    "skipped",
+                    owner
+                        ? `"${label}" is collected on the form. ${owner} owns the durable record, so no field is created here.`
+                        : `"${label}" is collected on the form. No canonical owner exists for it yet, so no field is created here.`,
+                );
+                break;
+            }
+
             case "create_proposed_field": {
                 if (!input.confirmedNewFields?.has(p.id)) {
                     record("requires_confirmation", `New field "${label}" must be explicitly confirmed before the Field System creates it.`);

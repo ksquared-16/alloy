@@ -301,7 +301,7 @@ describe("the compression scorecard, guarded", () => {
         expect(uniqueObligations().size).toBe(32);
     });
 
-    it("12 of the 86 facts carry a SAFE proposal, and the one remaining unsafe binding is refused", () => {
+    it("11 of the 86 facts carry a SAFE proposal, and the one remaining unsafe binding is refused", () => {
         const bound = new Set<string>();
         const merge = new Map<string, string>();
         for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
@@ -316,7 +316,13 @@ describe("the compression scorecard, guarded", () => {
                 }
             }
         }
-        expect(bound.size).toBe(8);
+        // Slice 5 took one fact OUT of this set on purpose. "Regular medications?" used to bind at
+        // LOW confidence to the generic child `medical_notes` field — a green "Existing field" chip
+        // over a medication record dissolving into a notes blob. It is now HELD for the Health
+        // foundation (D-H5), which is a worse-looking number and a better answer.
+        expect(bound.size).toBe(7);
+        expect([...bound].some((k) => /medication/i.test(k)), "no medication binding may survive").toBe(false);
+        expect([...bound].some((k) => /allergies/i.test(k)), "a confident allergy binding must survive").toBe(true);
 
         // Slice 4 added the care-provider relationships, so the physician's and dentist's name and
         // phone are no longer refusals — they bind to a relationship, which is where they belong.
@@ -359,6 +365,44 @@ describe("the compression scorecard, guarded", () => {
             collections.reduce((n, c) => n + c.repetition!.member_names.length, 0) +
             relationships.reduce((n, c) => n + c.source.labels.length, 0);
         expect(covered).toBe(80);
+    });
+});
+
+describe("Slice 5 — a settled owner elsewhere is a state, not a blank", () => {
+    it("holds every immunization destination on the CIS instead of offering to store it here", () => {
+        const held = inputs.flatMap((i) =>
+            i.discovery.proposals
+                .filter((p) => p.disposition === "held_for_canonical_owner")
+                .map((p) => ({ doc: i.artifact.document_id, hold: p.ownership_hold!, proposal: p })),
+        );
+        const cis = held.filter((h) => h.doc === "doc-cis");
+        expect(cis).toHaveLength(9);
+        expect(cis.every((h) => h.hold.state === "AWAITING_HEALTH_FOUNDATION")).toBe(true);
+        // Eight dose schedules plus the free "other vaccines" table. None of their labels contains a
+        // word a general rule could match — `Hib`, `Tdap`, `Hep A`. The dose STRUCTURE is the signal.
+        expect(cis.every((h) => h.proposal.proposed_field === undefined)).toBe(true);
+    });
+
+    it("holds the two safeguarding questions with NO owner, not as health data", () => {
+        const safeguarding = inputs.flatMap((i) =>
+            i.discovery.proposals.filter((p) => p.ownership_hold?.state === "NEEDS_CANONICAL_SAFEGUARDING_OWNER"),
+        );
+        expect(safeguarding).toHaveLength(2);
+        expect(safeguarding.every((p) => p.ownership_hold!.owner === null)).toBe(true);
+    });
+
+    it("holds twelve facts in total, and creates a field for none of them", () => {
+        const held = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "held_for_canonical_owner"));
+        expect(held).toHaveLength(12);
+        expect(held.every((p) => p.proposed_field === undefined), "a held fact must carry nothing creatable").toBe(true);
+        expect(held.every((p) => p.explanation.length > 0), "the operator must be told why").toBe(true);
+    });
+
+    it("still counts every held destination — holding is not dropping", () => {
+        // The reconciliation checker is the guard: it fails if any source destination disappears or
+        // is counted twice, and it runs over the same packet these holds came from.
+        const destinations = packet.destinations.length;
+        expect(destinations).toBe(NORMALIZED_DESTINATIONS);
     });
 });
 
