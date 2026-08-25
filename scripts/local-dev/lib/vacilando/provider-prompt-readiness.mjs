@@ -270,6 +270,39 @@ export function detectProviderBusy(text) {
  * cannot recognise is a screen we do not understand, and we do not type into
  * screens we do not understand.
  */
+/**
+ * Text already sitting on the composer line, unsent.
+ *
+ * WHY THIS IS NOT "READY". Delivery pastes into the composer and then presses
+ * Enter. If the line already holds something the operator (or a previous
+ * half-finished send) left there, the paste CONCATENATES onto it and Enter
+ * submits the join. Observed on the Surfaces pane: the composer read
+ * `❯ alloy-dev-stop wt6-surfaces-faacca` while readiness reported ready:true,
+ * so the next instruction would have been submitted as that command with the
+ * instruction glued to its end.
+ *
+ * A caret with residual text is a pane that needs clearing, not a pane that is
+ * ready. Reported as its own condition so the operator is told what is in the
+ * way rather than being handed a corrupted send.
+ */
+export function residualPromptText(text) {
+  const lines = String(text ?? "").split("\n");
+  // Walk backwards to the last composer line; that is the live one.
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const m = lines[i].match(/^[ \t\u00a0]*[│|]?[ \t\u00a0]*[>❯][ \t\u00a0]+(.*)$/);
+    if (!m) continue;
+    const rest = String(m[1] || "")
+      // The TUI draws a right-hand border on the composer row; it is chrome.
+      .replace(/[│|]\s*$/, "")
+      .trim();
+    if (!rest) return null;
+    // A cursor block or placeholder is not operator text.
+    if (/^[▏▎▍▌▋▊▉█▁_\s]+$/.test(rest)) return null;
+    return rest.slice(0, 200);
+  }
+  return null;
+}
+
 export function assessPanePromptReadiness(text, { provider = null, captured = undefined } = {}) {
   const raw = String(text ?? "");
   const didCapture = captured === undefined ? Boolean(raw.trim()) : Boolean(captured);
@@ -292,6 +325,24 @@ export function assessPanePromptReadiness(text, { provider = null, captured = un
       blocker,
       evidence: null,
       summary: `${blocker.title}: "${blocker.signal}"`,
+    };
+  }
+  const residual = residualPromptText(raw);
+  if (residual) {
+    return {
+      ready: false,
+      state: "prompt_not_empty",
+      provider: provider || null,
+      blocker: {
+        kind: "dirty_prompt",
+        title: "The composer already has unsent text",
+        signal: residual,
+        provider: provider || null,
+        needs_terminal_operator: true,
+      },
+      evidence: null,
+      residual,
+      summary: `The composer already has unsent text: "${residual.slice(0, 80)}". Sending now would append to it.`,
     };
   }
   const busy = detectProviderBusy(raw);

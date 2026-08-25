@@ -368,6 +368,30 @@ function refused(laneId, error, nowMs, size, run = null) {
   }, run);
 }
 
+async function ensureCursorDeliveryTransport({ rec, nowMs, root }) {
+  try {
+    const { getDevelopmentLane, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } = await import("./lanes.mjs");
+    const found = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
+    if (cursorExecutableTransport(found?.lane).ok) return { ok: true };
+    try {
+      const { setLanePreferredProvider } = await import("./development-lane.mjs");
+      setLanePreferredProvider(rec.lane_id, "cursor", { nowMs, root });
+    } catch { /* send still owns the Cursor attempt */ }
+    const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+    const start = await startLaneAgentSession({ laneId: rec.lane_id, nowMs, root, origin: "operator" });
+    if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
+      return { ok: false, queue: true };
+    }
+    if (!start?.ok) {
+      return { ok: false, error: start?.error || CURSOR_DELIVERY_UNAVAILABLE };
+    }
+    const again = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
+    if (cursorExecutableTransport(again?.lane).ok) return { ok: true, started: true };
+    return { ok: false, queue: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || "cursor_delivery_unavailable" };
+  }
+}
 async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
   const { transitionExecutionRun, patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
   const { CURSOR_DELIVERY_UNAVAILABLE, CURSOR_DELIVERY_UNAVAILABLE_SUMMARY } = await import("./lanes.mjs");
@@ -496,7 +520,7 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     } catch { /* fall through to current_run_active */ }
     return refused(laneId, "current_run_active", nowMs, size, active);
   }
-  if (active && active.state !== "NEEDS_INPUT") {
+  if (active) {
     try {
       const facts = collectStaleRunFacts(active, { root, nowMs });
       if (canOperatorSupersedeRun(active, facts)) {
@@ -605,7 +629,6 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   }
   try {
     const { getDurableLane } = await import("./development-lane.mjs");
-    const { getDevelopmentLane, cursorExecutableTransport } = await import("./lanes.mjs");
     const { normalizeExecutionProvider } = await import("./execution-providers.mjs");
     const rec = getDurableLane(laneId, root);
     if (rec) {
@@ -614,15 +637,13 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
         rec.binding?.provider || "claude",
       );
       if (selected === "cursor") {
-        const found = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
-        const transport = cursorExecutableTransport(found?.lane || {
-          lane_id: rec.lane_id,
-          worktree: { managed: Boolean(rec.binding?.worktree_path), path: rec.binding?.worktree_path },
-          tmux: { alive: false },
-          binding: rec.binding,
-          preferred_provider: rec.preferred_provider,
-        });
-        if (!transport.ok) {
+        const ensured = await ensureCursorDeliveryTransport({ rec, nowMs, root });
+        if (ensured.queue) {
+          return queueWithoutImmediateDelivery({
+            rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+          });
+        }
+        if (!ensured.ok) {
           return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
         }
       }
@@ -691,7 +712,15 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
         rec.binding?.provider || "claude",
       );
       if (selected === "cursor") {
-        return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+        const ensured = await ensureCursorDeliveryTransport({ rec, nowMs, root });
+        if (ensured.queue) {
+          return queueWithoutImmediateDelivery({
+            rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+          });
+        }
+        if (!ensured.ok) {
+          return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+        }
       }
       const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
       return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });

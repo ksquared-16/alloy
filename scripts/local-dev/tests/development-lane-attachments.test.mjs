@@ -128,8 +128,10 @@ test("PDF and HTML upload, store and bind like any attachment", () => {
 test("the provider gets document paths in the same ordered block", () => {
   const list = A.listRunAttachments("erun_docs", { includePath: true });
   const block = A.providerAttachmentBlock(list);
-  assert.match(block, /Attached images:/);
+  assert.match(block, /Attached files:/);
   assert.ok(block.includes(".pdf") && block.includes(".html"));
+  assert.match(block, /PDF 1/);
+  assert.match(block, /HTML 2/);
   assert.equal(/base64/i.test(block), false);
 });
 
@@ -348,7 +350,7 @@ test("the provider gets ordered absolute paths, never base64", () => {
   const two = add(LANE, png(20, 20), "two.png").attachment;
   const bound = A.bindAttachmentsToRun([one.attachment_id, two.attachment_id], { laneId: LANE, runId: "erun_5" });
   const block = A.providerAttachmentBlock(bound.attachments);
-  assert.match(block, /Attached images:/);
+  assert.match(block, /Attached files:/);
   assert.match(block, /Image 1 — .*one\.png|Image 1 — .*\.png/);
   assert.ok(block.indexOf("Image 1") < block.indexOf("Image 2"), "order is preserved");
   for (const a of bound.attachments) assert.ok(block.includes(a.provider_path));

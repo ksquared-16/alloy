@@ -1072,6 +1072,29 @@ export function createVacilandoServer() {
         const out = renameLaneRequest(laneId, body.value || {});
         return sendJson(res, out.status, out.body);
       }
+      const cancelMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/cancel$/);
+      if (cancelMatch) {
+        const laneId = normalizeLaneId(cancelMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        const extra = Object.keys(body.value || {}).filter((k) => !["run_id", "confirm", "reason"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { cancelActiveRun } = await import("./vacilando/execution-cancel.mjs");
+          const out = await cancelActiveRun(laneId, {
+            runId: body.value?.run_id || null,
+            confirm: body.value?.confirm === true,
+            reason: body.value?.reason || null,
+          });
+          const status = out.ok ? 200
+            : (out.error === "no_active_run" || out.error === "lane_not_found" ? 404
+              : (out.error === "confirm_required" || out.error === "run_already_terminal" ? 409 : 400));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "cancel_failed", detail: String(e && e.message || e) });
+        }
+      }
       const closeStaleMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/close-stale$/);
       if (closeStaleMatch) {
         const laneId = normalizeLaneId(closeStaleMatch[1]);
@@ -1931,11 +1954,16 @@ export function createVacilandoServer() {
               : (out.error === "attachment_not_found" ? 404 : 410);
             return sendJson(res, status, { ok: false, error: out.error });
           }
+          const mime = out.mime_type;
+          const html = mime === "text/html";
+          // HTML is a file for Claude to read, never a page Vacilando executes.
+          // Serving it inline as text/html would run operator-uploaded markup
+          // in the gateway origin.
           res.writeHead(200, {
-            "content-type": out.mime_type,
+            "content-type": html ? "text/plain; charset=utf-8" : mime,
             "content-length": out.bytes.length,
             "cache-control": "private, max-age=300",
-            "content-disposition": "inline",
+            "content-disposition": html ? "attachment" : "inline",
             "x-content-type-options": "nosniff",
           });
           return res.end(out.bytes);

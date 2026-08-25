@@ -26,7 +26,7 @@ import { join } from "node:path";
 import { resolveSlotIdentity, invalidateIdentity } from "../identity.mjs";
 import { routeInstruction, recordAsk } from "./director.mjs";
 import { PROVIDERS } from "../providers.mjs";
-import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, ADAPTERS } from "../provider-runtime.mjs";
+import { sendViaProvider, verifyProvider, reconnectInfo, providerDiagnostics, openProviderLogin, ADAPTERS } from "../provider-runtime.mjs";
 import { recordReview } from "./review.mjs";
 import { preserveOutputs, discardGenerated } from "../closeout.mjs";
 import { resolveRuntimeConfig, worktreePathForName } from "../workspace-facts.mjs";
@@ -607,6 +607,22 @@ const COMMANDS = {
     eligibility: (t, snap, v) => (ADAPTERS[v.provider] ? { eligible: true } : { eligible: false, reason: `unknown provider: ${v.provider}` }),
     preview: (v) => ({ summary: `Show how to reconnect ${v.provider}.`, authoritative_target: `reconnect instructions for ${v.provider}`, effects: ["Vacilando cannot perform interactive OAuth sign-in from a headless command.", "Returns the exact one-time operator command; the whole Provider Runtime then uses it."] }),
     run: async (v) => reconnectInfo(v.provider),
+    refresh: [],
+  },
+  "provider.connect": {
+    key: "provider.connect", title: "Connect provider", risk: "read-only", execution: "internal", confirmation: "none",
+    input: { provider: { type: "name", required: true } },
+    resolveTarget: (v) => target("provider", `connect ${v.provider}`, { provider: v.provider }),
+    eligibility: (t, snap, v) => (ADAPTERS[v.provider] ? { eligible: true } : { eligible: false, reason: `unknown provider: ${v.provider}` }),
+    preview: (v) => ({
+      summary: `Open a Terminal window so you can sign in to ${v.provider}.`,
+      authoritative_target: `connect ${v.provider}`,
+      effects: [
+        "Opens Terminal.app with the allowlisted login command (claude or cursor-agent login).",
+        "Vacilando cannot complete OAuth itself — finish sign-in in that window, then click Verify.",
+      ],
+    }),
+    run: async (v) => await openProviderLogin(v.provider),
     refresh: [],
   },
   "provider.diagnostics": {

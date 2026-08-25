@@ -2175,6 +2175,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-aside-toggle,.gw-aside-close,.gw-aside-scrim{display:none;}
   .gw-claude-run .gw-session-refresh{display:none;}
 }
+.gw-settings{padding:8px 4px 28px;max-width:52rem;}
+.gw-settings h1{margin:0 0 8px;font-size:22px;}
+.gw-settings .gw-lead{margin:0 0 16px;}
+.gw-settings .section-title{margin:18px 0 10px;}
+.gw-settings .pm-cards{margin-top:4px;}
 .gw-login{position:fixed;inset:0;z-index:400;background:rgba(14,51,35,.55);display:grid;place-items:center;padding:24px;pointer-events:auto;}
 .gw-login[hidden]{display:none !important;}
 .gw-login-card{width:min(28rem,100%);background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 20px 20px;pointer-events:auto;}

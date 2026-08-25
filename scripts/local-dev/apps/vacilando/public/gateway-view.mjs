@@ -65,12 +65,13 @@ export function detailViewKind({ selectedId, lanes, lane, loading, listReady } =
 }
 
 export function isGatewayRoute(name) {
-  return name === "lanes";
+  return name === "lanes" || name === "settings";
 }
 
 export function isPrimaryGatewayHash(hash) {
   const h = String(hash || "");
-  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/");
+  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/")
+    || h === "#/settings" || h.startsWith("#/settings");
 }
 
 export function defaultGatewayHash() {
@@ -198,27 +199,27 @@ export function attachmentErrorText(error, detail = {}) {
     case "unsupported_media_type":
       return "That file type is not supported. Use PNG, JPEG, WebP, GIF, PDF or HTML.";
     case "attachment_too_large":
-      return `That image is larger than ${mb(detail.limit)}. Try a smaller one.`;
+      return `That file is larger than ${mb(detail.limit)}. Try a smaller one.`;
     case "attachments_total_too_large":
-      return `Those images add up to more than ${mb(detail.limit)} together.`;
+      return `Those files add up to more than ${mb(detail.limit)} together.`;
     case "attachment_dimensions_too_large":
       return `That image is larger than ${detail.limit}px on a side.`;
     case "too_many_attachments":
-      return `You can attach up to ${detail.limit || 6} images to one prompt.`;
+      return `You can attach up to ${detail.limit || 6} files to one prompt.`;
     case "empty_file":
       return "That file was empty.";
     case "attachment_missing":
-      return "One of the images is no longer available. Remove it and attach it again.";
+      return "One of the files is no longer available. Remove it and attach it again.";
     case "attachment_corrupt":
-      return "One of the images did not upload cleanly. Remove it and attach it again.";
+      return "One of the files did not upload cleanly. Remove it and attach it again.";
     case "attachment_lane_mismatch":
-      return "That image belongs to a different lane.";
+      return "That file belongs to a different lane.";
     case "attachment_not_found":
-      return "That image is no longer attached.";
+      return "That file is no longer attached.";
     case "attachment_not_removable":
-      return "That image has already been sent, so it stays in the conversation.";
+      return "That file has already been sent, so it stays in the conversation.";
     default:
-      return "The image could not be attached.";
+      return "The file could not be attached.";
   }
 }
 
@@ -303,7 +304,7 @@ export function deliveryErrorText(error) {
     case "delivery_failed":
       return "Delivery failed. The instruction was not submitted.";
     case "cursor_delivery_unavailable":
-      return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
+      return "Cursor could not start. Connect Cursor in Settings, then send again — or use Claude.";
     case "provider_prompt_not_ready":
       return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
     case "undelivered_provider_prompt_block":
@@ -785,6 +786,13 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
 export function workOutputIsStale(lane, output, nowMs = Date.now()) {
   const run = lane?.execution_run;
   if (!["EXECUTING", "VALIDATING", "RECOVERING"].includes(run?.state)) return false;
+  // A live provider that has not printed is thinking, not stale. Claude
+  // routinely thinks for many minutes without changing the pane. Calling that
+  // "Stale" is what made live lanes look dead and blocked Send.
+  const live = lane?.tmux?.alive === true
+    || lane?.claude?.presence === "present"
+    || lane?.agent_session?.state === "ACTIVE";
+  if (live) return false;
   const captured = output?.captured_at ? Date.parse(output.captured_at) : NaN;
   if (Number.isFinite(captured)) return nowMs - captured > STALE_WORK_MS;
   if (!output) return false;
@@ -2917,11 +2925,14 @@ export function userMessageNeedsClamp(text, { lines = USER_MESSAGE_CLAMP_LINES, 
   return false;
 }
 
-/** The prompt line says images were part of it, without dumping filenames. */
+/** The prompt line says files were part of it, without dumping filenames. */
 export function attachmentMetaSuffix(meta, attachments = []) {
-  const n = (Array.isArray(attachments) ? attachments : []).length;
+  const list = Array.isArray(attachments) ? attachments : [];
+  const n = list.length;
   if (!n) return meta;
-  return `${meta} \u00b7 ${n} image${n === 1 ? "" : "s"}`;
+  const allImages = list.every((a) => !a?.mime_type || isImageAttachmentType(a.mime_type));
+  const noun = allImages ? (n === 1 ? "image" : "images") : (n === 1 ? "file" : "files");
+  return `${meta} \u00b7 ${n} ${noun}`;
 }
 
 export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false, attachments = [] } = {}) {
@@ -2997,11 +3008,11 @@ export function renderAttachmentDrafts(attachments = [], { uploading = 0, error 
     </li>`;
   }).join("");
   const pending = uploading
-    ? `<li class="gw-att is-uploading" aria-live="polite"><span class="gw-att-spin" aria-hidden="true"></span><span class="gw-att-meta"><span class="gw-att-name">Uploading ${uploading} image${uploading === 1 ? "" : "s"}\u2026</span></span></li>`
+    ? `<li class="gw-att is-uploading" aria-live="polite"><span class="gw-att-spin" aria-hidden="true"></span><span class="gw-att-meta"><span class="gw-att-name">Uploading ${uploading} file${uploading === 1 ? "" : "s"}\u2026</span></span></li>`
     : "";
   const err = error ? `<div class="gw-att-err" role="alert">${esc(error)}</div>` : "";
   return `<div class="gw-atts" data-gw-atts>
-    <ul class="gw-att-list" aria-label="Attached images">${items}${pending}</ul>
+    <ul class="gw-att-list" aria-label="Attached files">${items}${pending}</ul>
     ${err}
   </div>`;
 }
@@ -3051,6 +3062,55 @@ export function renderAttachmentLightbox(attachment) {
   </div>`;
 }
 
+export function cursorComposerAvailable({ lane, providers } = {}) {
+  if (Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor") return true;
+  const list = Array.isArray(providers)
+    ? providers
+    : (providers?.providers || []);
+  const cursor = list.find((p) => p?.id === "cursor");
+  if (!cursor) return false;
+  const state = cursor.auth?.state;
+  if (state === "authenticated") return true;
+  if (state === "needs_auth" || state === "unavailable" || state === "not_configured") return false;
+  return Boolean(cursor.executable);
+}
+
+export function renderProviderRuntimeSection(runtime = {}) {
+  const pending = Boolean(runtime?.pending);
+  const facts = runtime?.runtime;
+  const list = (runtime?.providers || []).filter((p) => p.id === "claude" || p.id === "cursor");
+  const cards = pending || !list.length
+    ? `<div class="muted" style="padding:14px">${pending ? "Checking Claude and Cursor…" : "Loading providers…"}</div>`
+    : list.map((p) => {
+      const authClass = p.auth?.state === "authenticated" ? "healthy" : p.auth?.state === "needs_auth" ? "attention" : "finished";
+      const authed = p.auth?.state === "authenticated";
+      const kv = (a, b) => `<div class="pm-row"><span class="pm-k">${a}</span><span class="pm-v">${b}</span></div>`;
+      const connectLabel = authed ? "Reconnect" : "Connect";
+      return `<section class="card pm-card" data-gw-provider-card="${esc(p.id)}">
+        <div class="pm-h"><div class="pm-title">${esc(p.label)} <span class="pm-ver mono">${p.version ? "v" + esc(p.version) : "—"}</span></div>
+          <span class="hpill ${authClass}">${esc(p.auth?.label || p.auth?.state || "unknown")}</span></div>
+        <div class="pm-grid">
+          ${kv("Authentication", `${esc(p.auth?.label || "—")}${p.auth?.identity ? ` · <span class="mono">${esc(p.auth.identity)}</span>` : ""}`)}
+          ${kv("Detail", `<span class="muted">${esc(p.auth?.detail || "—")}</span>`)}
+          ${kv("Executable", `<span class="mono">${esc(p.executable || "—")}</span>`)}
+        </div>
+        <div class="pm-btns">
+          <button class="btn sm ${authed ? "" : "warn"}" type="button" data-prov-connect="${esc(p.id)}">${esc(connectLabel)}</button>
+          <button class="btn sm" type="button" data-prov-verify="${esc(p.id)}">Verify</button>
+          <button class="btn sm" type="button" data-prov-diag="${esc(p.id)}">Diagnostics</button>
+        </div>
+      </section>`;
+    }).join("");
+  return `<div class="gw-settings" data-gw-settings>
+    <h1>Settings</h1>
+    <p class="gw-lead">Connect Claude and Cursor here. Each send lets you choose which agent runs the task. Sign-in opens Terminal — Vacilando cannot complete OAuth in this window.</p>
+    ${facts ? `<div class="pm-runtime"><span class="pm-k">Runtime</span>
+      <span class="mono">node ${esc(facts.node)}</span> · ${facts.inside_claude_host ? '<span class="attn">inside a Claude Code host session</span>' : "standalone shell"}</div>` : ""}
+    <div class="section-title">Agents</div>
+    <div class="pm-cards">${cards}</div>
+  </div>`;
+}
+
 export function renderComposer({
   disabled,
   notice,
@@ -3074,8 +3134,8 @@ export function renderComposer({
   const current = cursorSendAvailable && provider === "cursor" ? "cursor" : "claude";
   const cursorDisabled = cursorSendAvailable ? "" : " disabled";
   const cursorTitle = cursorSendAvailable
-    ? "Send with Cursor"
-    : "Cursor is read-only here: no executable transport is attached";
+    ? "Send this instruction with Cursor"
+    : "Connect Cursor in Settings to send with Cursor";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <div class="gw-composer-box">
@@ -3083,9 +3143,9 @@ export function renderComposer({
         placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
       ${renderAttachmentDrafts(attachments, { uploading: attachmentsUploading, error: attachmentError })}
       <div class="gw-composer-row">
-        <label class="gw-attach" title="Attach images">
+        <label class="gw-attach" title="Attach files">
           <input type="file" accept="${ATTACHMENT_ACCEPT}" multiple data-gw-attach-input
-            aria-label="Attach images"${disabled ? " disabled" : ""}>
+            aria-label="Attach files"${disabled ? " disabled" : ""}>
           <span aria-hidden="true">\ud83d\udcce</span>
         </label>
         <div class="gw-provider" role="radiogroup" aria-label="Agent">
@@ -3831,6 +3891,8 @@ export function renderGatewayShell({
   repositories = [],
   repositorySheet = null,
   laneWizard = null,
+  providers = null,
+  settings = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
@@ -3841,6 +3903,14 @@ export function renderGatewayShell({
     : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : "");
   if (openSheet) {
     return `<div class="gw is-sheet" data-gw data-gw-mode="sheet">${openSheet}</div>`;
+  }
+  if (settings) {
+    return `<div class="gw is-detail" data-gw data-gw-mode="settings">${list}
+      <section class="gw-main">
+        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderProviderRuntimeSection(providers || {})}
+      </section>
+    </div>`;
   }
   const kind = emptyDetail
     ? "missing"
@@ -4006,7 +4076,7 @@ export function renderGatewayShell({
           idleStart: cap.state === "IDLE",
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
           provider: lane?.preferred_provider || "claude",
-          cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
+          cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
           attachments,
           attachmentsUploading,
           attachmentError,

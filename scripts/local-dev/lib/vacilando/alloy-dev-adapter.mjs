@@ -14,6 +14,7 @@ import { isRuntimeAdoptionBlocked, listDurableLanes } from "./development-lane.m
 import { localNodeId } from "./execution-node.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import {
+  inferAgentPresence,
   inferClaudePresence,
   isAllowlistedSession,
   listTmuxPanesRaw,
@@ -421,6 +422,36 @@ function resolveClaudeBin() {
   return "claude";
 }
 
+function resolveCursorBin() {
+  const home = process.env.HOME || homedir();
+  for (const p of [join(home, ".local/bin/cursor-agent"), "/usr/local/bin/cursor-agent", "/opt/homebrew/bin/cursor-agent"]) {
+    if (existsSync(p)) return p;
+  }
+  return "cursor-agent";
+}
+
+/**
+ * Interactive TUI argv only — never `-p` / print mode. Cursor does not take
+ * Claude's `--session-id` on a fresh start.
+ */
+export function providerSpawnArgv(provider, providerSessionId = null) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
+  if (wanted === "cursor") return [resolveCursorBin()];
+  const argv = [resolveClaudeBin()];
+  if (providerSessionId) argv.push("--session-id", String(providerSessionId));
+  return argv;
+}
+
+function paneHasWantedProvider(pane, provider) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
+  const cmd = String(pane?.command || "");
+  const title = String(pane?.title || "");
+  if (wanted === "cursor") {
+    return /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title);
+  }
+  return inferClaudePresence(pane) === "present";
+}
+
 let tmuxRunImpl = null;
 let listPanesImpl = null;
 let sessionStartImpl = null;
@@ -492,18 +523,39 @@ function sleep(ms) {
 
 /** Wait until the interactive Claude TUI can accept a pasted instruction. */
 export async function waitForClaudePrompt(session, { timeoutMs = 20000, intervalMs = 400 } = {}) {
+  return waitForProviderPrompt(session, { provider: "claude", timeoutMs, intervalMs });
+}
+
+async function waitForProviderPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const pane = sessionPane(session);
     const cap = runTmuxSync(["capture-pane", "-p", "-t", pane?.pane_id || `${session}:0.0`]);
     const text = String(cap.stdout || "");
-    const present = inferClaudePresence({ command: pane?.command, title: "" }) === "present";
-    if (present && /[❯›]/.test(text)) {
+    const present = paneHasWantedProvider({ command: pane?.command, title: "" }, wanted)
+      || inferAgentPresence({ command: pane?.command, title: "" }, { provider: wanted }) === "present";
+    if (wanted === "cursor") {
+      if (present) return { ok: true, waited_ms: Date.now() - started };
+    } else if (present && /[❯›]/.test(text)) {
       return { ok: true, waited_ms: Date.now() - started };
     }
     await sleep(intervalMs);
   }
-  return { ok: false, error: "claude_prompt_timeout", waited_ms: Date.now() - started };
+  return {
+    ok: false,
+    error: wanted === "cursor" ? "cursor_prompt_timeout" : "claude_prompt_timeout",
+    waited_ms: Date.now() - started,
+  };
+}
+
+function paneLooksLikeLiveAgent(p) {
+  if (!isAllowlistedSession(p.session)) return false;
+  const cmd = String(p.command || "");
+  const title = String(p.title || "");
+  if (inferClaudePresence(p) === "present") return true;
+  if (/cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) return true;
+  return false;
 }
 
 async function liveClaudePanes() {
@@ -511,6 +563,16 @@ async function liveClaudePanes() {
   const raw = await listTmuxPanesRaw();
   const panes = parseTmuxPaneLines(raw?.stdout || "");
   return panes.filter((p) => isAllowlistedSession(p.session) && inferClaudePresence(p) === "present");
+}
+
+async function liveAgentPanes() {
+  if (listPanesImpl) {
+    const injected = await listPanesImpl();
+    return Array.isArray(injected) ? injected.filter(paneLooksLikeLiveAgent) : [];
+  }
+  const raw = await listTmuxPanesRaw();
+  const panes = parseTmuxPaneLines(raw?.stdout || "");
+  return panes.filter(paneLooksLikeLiveAgent);
 }
 
 function laneForClaudePane(pane, lanes) {
@@ -610,7 +672,7 @@ export async function assessSessionStartCapacity({ maxProviders = null, root = n
 /**
  * Create the missing persistent tmux runtime for an already-bound worktree.
  * Does not create a worktree, branch, or slot. Does not mutate Git.
- * Starts one interactive Claude in the pane (never `claude -p`).
+ * Starts one interactive provider in the pane (never `claude -p` / `cursor-agent -p`).
  */
 export async function startPersistentAgentSession({
   worktreePath,
@@ -621,11 +683,14 @@ export async function startPersistentAgentSession({
   providerSessionId = null,
   runtimeRoot = null,
   expectedRepositoryId = null,
+  provider = "claude",
 } = {}) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   if (sessionStartImpl) {
     return sessionStartImpl({
       worktreePath, worktreeName, laneName, existingTmuxSession, expectedBranch, providerSessionId, runtimeRoot,
       expectedRepositoryId,
+      provider: wanted,
     });
   }
   const cwd = String(worktreePath || "");
@@ -677,7 +742,7 @@ export async function startPersistentAgentSession({
     if (!session) return { ok: false, error: "invalid_tmux_name" };
   }
 
-  const live = await liveClaudePanes();
+  const live = await liveAgentPanes();
   const other = live.find((p) => p.cwd === cwd || p.cwd?.startsWith(`${cwd}/`));
   if (other && other.session !== session) {
     return { ok: false, error: "provider_already_running", tmux_session: other.session };
@@ -728,12 +793,10 @@ export async function startPersistentAgentSession({
     return { ok: false, error: "tmux_cwd_mismatch", cwd: pane.cwd };
   }
 
-  const claudePresent = inferClaudePresence({ command: pane.command, title: "" }) === "present";
+  const alreadyWanted = paneHasWantedProvider(pane, wanted);
   let startedProvider = false;
-  if (!claudePresent) {
-    const claude = resolveClaudeBin();
-    const argv = [claude];
-    if (providerSessionId) argv.push("--session-id", String(providerSessionId));
+  if (!alreadyWanted) {
+    const argv = providerSpawnArgv(wanted, wanted === "claude" ? providerSessionId : null);
     const spawn = runTmuxSync([
       "respawn-pane", "-k", "-c", cwd, "-t", pane.pane_id, "--",
       ...argv,
@@ -746,13 +809,14 @@ export async function startPersistentAgentSession({
         detail: spawn.stderr || spawn.error,
         rolled_back: createdTmux,
         created: { tmux: createdTmux, provider: false },
+        provider: wanted,
       };
     }
     startedProvider = true;
   }
 
   if (startedProvider) {
-    await waitForClaudePrompt(session);
+    await waitForProviderPrompt(session, { provider: wanted });
   }
 
   const after = sessionPane(session);
@@ -761,6 +825,7 @@ export async function startPersistentAgentSession({
     tmux_session: session,
     pane_id: after?.pane_id || pane.pane_id,
     cwd,
+    provider: wanted,
     created: { tmux: createdTmux, provider: startedProvider },
     adopted: !createdTmux && !startedProvider,
     pre_existing: createdTmux ? [] : ["tmux"],

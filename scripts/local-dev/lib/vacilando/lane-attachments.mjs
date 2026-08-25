@@ -536,10 +536,13 @@ export function providerAttachmentBlock(attachments = []) {
   const list = (attachments || []).filter((a) => a?.provider_path);
   if (!list.length) return "";
   const lines = list.map((a, i) => {
+    const kind = a.mime_type === "application/pdf" ? "PDF"
+      : a.mime_type === "text/html" ? "HTML"
+      : "Image";
     const dims = a.width && a.height ? ` (${a.width}x${a.height})` : "";
-    return `Image ${i + 1} — ${a.provider_path}${dims}`;
+    return `${kind} ${i + 1} — ${a.provider_path}${dims}`;
   });
-  return `\n\nAttached images:\n${lines.join("\n")}`;
+  return `\n\nAttached files:\n${lines.join("\n")}`;
 }
 
 /**

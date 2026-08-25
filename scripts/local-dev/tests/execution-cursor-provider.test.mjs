@@ -61,7 +61,7 @@ const {
   setAgentSessionLifecycleImplForTests,
   resetAgentSessionLifecycleForTests,
 } = await import("../lib/vacilando/agent-session-lifecycle.mjs");
-const { resetAlloyAdapterImplForTests, setAlloyAdapterImplForTests } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
+const { providerSpawnArgv, resetAlloyAdapterImplForTests, setAlloyAdapterImplForTests } = await import("../lib/vacilando/alloy-dev-adapter.mjs");
 
 let pass = 0;
 let fail = 0;
@@ -81,6 +81,17 @@ await test("cursor is a supported execution provider; openai is not", () => {
   assert.equal(normalizeExecutionProvider("cursor-agent"), "cursor");
   assert.equal(normalizeExecutionProvider("claude"), "claude");
   assert.equal(normalizeExecutionProvider("openai"), null);
+});
+
+await test("cursor spawn argv is interactive cursor-agent, never print mode", () => {
+  const argv = providerSpawnArgv("cursor");
+  assert.equal(argv.length, 1);
+  assert.match(argv[0], /cursor-agent$/);
+  assert.equal(argv.includes("-p"), false);
+  assert.equal(argv.includes("--print"), false);
+  const claude = providerSpawnArgv("claude", "sess-1");
+  assert.equal(claude.includes("-p"), false);
+  assert.equal(claude.includes("--session-id"), true);
 });
 
 await test("admission accepts cursor and refuses unknown providers", () => {
@@ -145,9 +156,7 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
   resetAgentSessionLifecycleForTests();
   resetAlloyAdapterImplForTests();
   setAlloyAdapterImplForTests({
-    listPanes: () => {
-      throw new Error("Cursor start must not inspect Claude tmux panes");
-    },
+    listPanes: async () => [],
   });
   const vac = ensureVacilandoSpecialistLane({ root: ROOT });
   const bound = cmdAttachCursorSession({
@@ -157,6 +166,63 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
     root: ROOT,
   });
   assert.equal(bound.ok, true, bound.error);
+  setLanePreferredProvider(vac.lane.lane_id, "cursor", { root: ROOT });
+  let startedArgs = null;
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: vac.lane.lane_id,
+      durable: true,
+      worktree: { path: WT1, managed: true, name: "wt1-vacilando-mac-mini-readiness" },
+      tmux: { alive: false, session: null, pane_id: null },
+      binding: bound.lane.binding,
+      preferred_provider: "cursor",
+      claude: { presence: "absent" },
+    }),
+    startRuntime: async (args) => {
+      startedArgs = args;
+      return {
+        ok: true,
+        tmux_session: "alloy-vacilando-mac-mini",
+        pane_id: "%42",
+        cwd: WT1,
+        provider: "cursor",
+        created: { tmux: true, provider: true },
+      };
+    },
+    spawnClaude: () => {
+      throw new Error("Cursor start must not spawn Claude");
+    },
+  });
+  const start = await startLaneAgentSession({ laneId: vac.lane.lane_id, root: ROOT });
+  assert.equal(start.ok, true, start.error);
+  assert.equal(start.provider, "cursor");
+  assert.equal(startedArgs?.provider, "cursor");
+  const rec = getDurableLane(vac.lane.lane_id, ROOT);
+  assert.equal(rec.binding.provider, "cursor");
+  assert.equal(rec.binding.tmux_session, "alloy-vacilando-mac-mini");
+  const live = activeAgentSessionForLane(vac.lane.lane_id, ROOT);
+  assert.equal(live.provider, "cursor");
+  assert.equal(live.state, "ACTIVE");
+});
+
+await test("Cursor start without executable transport fails closed when runtime start fails", async () => {
+  resetDevelopmentLanesForTests(ROOT);
+  resetAgentSessionsForTests(ROOT);
+  resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  const vac = ensureVacilandoSpecialistLane({ root: ROOT });
+  const bound = cmdAttachCursorSession({
+    laneId: vac.lane.lane_id,
+    worktree: "wt1-vacilando-mac-mini-readiness",
+    providerSessionId: "conv-cursor-fail",
+    root: ROOT,
+  });
+  assert.equal(bound.ok, true, bound.error);
+  resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  setAlloyAdapterImplForTests({
+    listPanes: async () => [],
+  });
   setLanePreferredProvider(vac.lane.lane_id, "cursor", { root: ROOT });
   setAgentSessionLifecycleImplForTests({
     observeLane: async () => ({
@@ -168,17 +234,28 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
       preferred_provider: "cursor",
       claude: { presence: "absent" },
     }),
-    startRuntime: async () => {
-      throw new Error("Cursor start must not spawn tmux Claude");
-    },
+    startRuntime: async () => ({ ok: false, error: "provider_start_failed" }),
     spawnClaude: () => {
       throw new Error("Cursor start must not spawn Claude");
     },
   });
   const start = await startLaneAgentSession({ laneId: vac.lane.lane_id, root: ROOT });
   assert.equal(start.ok, false, start.error);
-  assert.equal(start.error, "cursor_delivery_unavailable");
+  assert.equal(start.error, "provider_start_failed");
   assert.equal(start.observation_only, true);
+});
+
+await test("observation-only Cursor attachment still projects without executable tmux", async () => {
+  resetDevelopmentLanesForTests(ROOT);
+  resetAgentSessionsForTests(ROOT);
+  const vac = ensureVacilandoSpecialistLane({ root: ROOT });
+  const bound = cmdAttachCursorSession({
+    laneId: vac.lane.lane_id,
+    worktree: "wt1-vacilando-mac-mini-readiness",
+    providerSessionId: "conv-cursor-1",
+    root: ROOT,
+  });
+  assert.equal(bound.ok, true, bound.error);
   const [projected] = attachLaneAgentSessions([{
     lane_id: vac.lane.lane_id,
     durable: true,
@@ -191,6 +268,24 @@ await test("Start Session on a Cursor-bound lane attaches without Claude capacit
   assert.equal(projected.agent_session?.provider, "cursor");
   assert.equal(projected.agent_session?.state, "ACTIVE");
   assert.equal(projected.start_session, null);
+});
+
+await test("provider.connect opens the allowlisted login command", async () => {
+  const { openProviderLogin, setProviderLoginOpenImplForTests } = await import("../lib/vacilando/provider-runtime.mjs");
+  const { COMMANDS } = await import("../lib/vacilando/commands/registry.mjs");
+  let seen = null;
+  setProviderLoginOpenImplForTests((args) => {
+    seen = args;
+    return { ok: true, opened: true, id: args.id, label: args.label, command: args.command };
+  });
+  const out = await openProviderLogin("cursor");
+  assert.equal(out.ok, true);
+  assert.equal(out.opened, true);
+  assert.equal(seen.command, "cursor-agent login");
+  assert.equal(COMMANDS["provider.connect"].key, "provider.connect");
+  const openai = await openProviderLogin("openai");
+  assert.equal(openai.ok, false);
+  setProviderLoginOpenImplForTests(null);
 });
 
 await test("preferred provider does not rewrite a live Cursor binding", () => {

@@ -425,7 +425,10 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
   const liveActive = Number.isFinite(provision.active_providers)
     ? provision.active_providers
     : holders.length;
-  const active = Math.max(liveActive, holders.length, ui.active || 0);
+  // Live processes only. Taking max(ui.active) re-introduced ghost occupancy:
+  // leftover RUNNING claims and status-only NEEDS_INPUT lanes inflated the
+  // count, Vacilando reported 0 seats, and Trust/Surfaces could not start.
+  const active = Math.max(liveActive, holders.length);
   const available = Math.max(0, provision.max_providers - active);
   return {
     ...ui,

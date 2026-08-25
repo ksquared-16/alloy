@@ -57,6 +57,8 @@ const G = {
   laneWizard: null,
   collapsedFolders: null,
   releasing: false,
+  providers: null,
+  providersInflight: false,
   notify: {
     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
     enabled: false,
@@ -82,6 +84,20 @@ function routeName() {
 function routeLaneId() {
   const r = View.parseGatewayHash(location.hash);
   return r.name === "lanes" ? r.sub : null;
+}
+
+async function fetchProviders(force = false) {
+  if (G.providersInflight && !force) return G.providers;
+  G.providersInflight = true;
+  try {
+    const r = await gwFetch("/api/providers");
+    G.providers = await r.json();
+    if (G.providers?.pending) {
+      setTimeout(() => { fetchProviders(true).then(() => paint()).catch(() => {}); }, 2500);
+    }
+  } catch { /* keep last probe */ }
+  G.providersInflight = false;
+  return G.providers;
 }
 
 function draftKey(id) { return `vac.gw.draft.${id}`; }
@@ -990,6 +1006,8 @@ function paint() {
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
     lightbox: G.lightbox,
+    providers: G.providers,
+    settings: View.parseGatewayHash(location.hash).name === "settings",
   });
   paintRail();
   restoreComposer(saved);
@@ -1262,6 +1280,24 @@ async function show(r) {
   const route = parsed.name ? parsed : (r && typeof r === "object"
     ? { name: r.name || "lanes", sub: View.decodeLaneId(r.sub) }
     : parsed);
+  if (route.name === "settings") {
+    G.selected = null;
+    G.lane = null;
+    G.loading = false;
+    paint();
+    stopOutputPoll();
+    stopTelemetryPoll();
+    startListPoll();
+    fetchProviders().then(() => { if (gen === G.showGen) paint(); }).catch(() => {});
+    if (!G.listReady) {
+      try { await fetchLanes(); } catch { G.lanes = G.lanes || []; }
+      if (gen !== G.showGen) return;
+      G.listReady = true;
+      paint();
+    }
+    return;
+  }
+  if (!G.providers && !G.providersInflight) fetchProviders().then(() => paint()).catch(() => {});
   const nextId = route.name === "lanes" ? (route.sub || null) : null;
   const connecting = nextId === "connect" || nextId === "create";
   if (G.selected !== nextId) {
@@ -2301,7 +2337,7 @@ async function uploadAttachments(files) {
         G.attachmentError = View.attachmentErrorText(j.error, j);
       }
     } catch {
-      G.attachmentError = "That image could not be uploaded. Your draft is still here.";
+      G.attachmentError = "That file could not be uploaded. Your draft is still here.";
     } finally {
       G.attachmentsUploading = Math.max(0, G.attachmentsUploading - 1);
       paint();
@@ -2343,7 +2379,7 @@ async function removeAttachment(attachmentId) {
     }
   } catch {
     G.attachments = before;
-    G.attachmentError = "Could not remove that image.";
+    G.attachmentError = "Could not remove that file.";
     paint();
   }
 }

@@ -150,6 +150,56 @@ await test("1. operator follow-up is a new turn even with a leftover heartbeat",
   assert.equal(activeRunForLane(LANE, ROOT).instruction, "another job");
 });
 
+await test("1a. status-only NEEDS_INPUT is a leftover turn, not a composer question", async () => {
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    reason: "Director review of the Local Design Lab",
+    origin: "agent",
+    nowMs: now - 50_000,
+    root: ROOT,
+    completion_report: { summary: "Director review of the Local Design Lab" },
+  });
+  seedSend(PRODUCT, now - 60_000, now - 50_000);
+  const second = await deliverManagedLaneInstruction(LANE, "keep going", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(activeRunForLane(LANE, ROOT).instruction, "keep going");
+});
+
+await test("1a. status-only NEEDS_INPUT is a leftover turn, not a composer question", async () => {
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    reason: "Director review of the Local Design Lab",
+    origin: "agent",
+    nowMs: now - 50_000,
+    root: ROOT,
+    completion_report: { summary: "Director review of the Local Design Lab" },
+  });
+  seedSend(PRODUCT, now - 60_000, now - 50_000);
+  const second = await deliverManagedLaneInstruction(LANE, "keep going", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(activeRunForLane(LANE, ROOT).instruction, "keep going");
+});
+
 await test("1b. a rotating session still blocks a new send", async () => {
   const now = Date.now();
   const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });

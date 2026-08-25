@@ -428,11 +428,19 @@ function completeIdleRun(run, { root, nowMs, origin, reason, summary, attributio
  * session must not 409 forever because of a leftover heartbeat or ACTIVE pane.
  */
 export function canOperatorSupersedeRun(run, facts = {}) {
-  if (!run || run.state !== "EXECUTING") return false;
+  if (!run) return false;
   if (facts.open_resource || facts.in_flight_continuation) return false;
   if (SESSION_BUSY.has(facts.session_state)) return false;
-  const delivered = facts.delivered_ms;
   const nowMs = facts.now_ms || Date.now();
+  if (run.state === "NEEDS_INPUT") {
+    const report = run.agent_report;
+    // A structured blocking question is a real operator decision. Status-only
+    // NEEDS_INPUT is a parked status string — Send is a new turn, not an answer.
+    if (report?.type === "needs_input" && report.blocking !== false) return false;
+    return true;
+  }
+  if (run.state !== "EXECUTING") return false;
+  const delivered = facts.delivered_ms;
   if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
   return true;
 }

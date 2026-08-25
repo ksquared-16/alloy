@@ -58,7 +58,7 @@ const LEGAL = Object.freeze({
   // COMPLETE is reachable from RECOVERING: work that finished must never be
   // impossible to close merely because Vacilando abandoned the run mid-sprint.
   RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"],
-  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "FAILED"],
+  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED"],
   COMPLETE: [],
   FAILED: [],
   // ABANDONED is recoverable, not dead. RECOVERING is its ONLY exit, and it is
