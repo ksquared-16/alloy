@@ -263,6 +263,88 @@ describe("the handbook contributes understanding, not fields", () => {
     });
 });
 
+describe("the compression scorecard, guarded", () => {
+    const OBLIGATION = new Set(["acknowledgement", "upload_requirement", "signature"]);
+
+    /** Facts, merged across artifacts wherever a correlation proposes it. */
+    const uniqueFacts = () => {
+        const merge = new Map<string, string>();
+        for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
+        const keys = new Set<string>();
+        for (const i of inputs) {
+            if (i.artifact.fill_intent === "reference") continue;
+            for (const c of i.discovery.concepts) {
+                if (OBLIGATION.has(c.kind)) continue;
+                keys.add(merge.get(`${i.artifact.document_id}:${c.id}`) ?? `${i.artifact.document_id}|${c.concept_key ?? c.id}`);
+            }
+        }
+        return keys;
+    };
+
+    /** Obligations, merged wherever the packet proved the same clause is printed twice. */
+    const uniqueObligations = () => {
+        const merge = new Map<string, string>();
+        for (const o of packet.obligations) if (o.relation === "same_obligation") for (const m of o.members) merge.set(`${m.document_id}:${m.concept_id}`, o.id);
+        const keys = new Set<string>();
+        for (const i of inputs) {
+            for (const c of i.discovery.concepts) {
+                if (!OBLIGATION.has(c.kind)) continue;
+                keys.add(merge.get(`${i.artifact.document_id}:${c.id}`) ?? `${i.artifact.document_id}|${c.id}`);
+            }
+        }
+        return keys;
+    };
+
+    it("182 raw destinations resolve to 86 semantic facts and 32 obligations", () => {
+        expect(packet.reconciliation.total_raw).toBe(182);
+        expect(uniqueFacts().size).toBe(86);
+        expect(uniqueObligations().size).toBe(32);
+    });
+
+    it("11 of the 86 facts already carry a canonical binding proposal", () => {
+        const bound = new Set<string>();
+        const merge = new Map<string, string>();
+        for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
+        for (const i of inputs) {
+            if (i.artifact.fill_intent === "reference") continue;
+            const byCandidate = new Map(i.discovery.proposals.map((pr) => [pr.candidate_id, pr]));
+            for (const c of i.discovery.concepts) {
+                if (OBLIGATION.has(c.kind)) continue;
+                const d = byCandidate.get(c.id)?.disposition;
+                if (d === "reuse_canonical_field" || d === "reuse_existing_field") {
+                    bound.add(merge.get(`${i.artifact.document_id}:${c.id}`) ?? `${i.artifact.document_id}|${c.concept_key ?? c.id}`);
+                }
+            }
+        }
+        expect(bound.size).toBe(11);
+        // The rest is Slice 3's classification input, and it is 75.
+        expect(uniqueFacts().size - bound.size).toBe(75);
+    });
+
+    it("every destination in the packet is claimed by a fact or by an obligation — none is orphaned", () => {
+        for (const i of inputs) {
+            if (i.artifact.fill_intent === "reference") continue;
+            const claimed = new Set<string>();
+            for (const c of i.discovery.concepts) {
+                for (const l of c.repetition ? c.repetition.member_labels : c.source.labels) claimed.add(l);
+            }
+            const own = packet.destinations.filter((d) => d.document_id === i.artifact.document_id);
+            const orphans = own.filter((d) => !claimed.has(d.label));
+            expect(orphans.map((o) => o.label), `${i.artifact.document_id} has semantically orphaned destinations`).toEqual([]);
+        }
+    });
+
+    it("13 recognized collections and 1 relationship stand for 80 of the packet's destinations", () => {
+        const collections = inputs.flatMap((i) => i.discovery.concepts.filter((c) => !!c.repetition));
+        expect(collections).toHaveLength(13);
+        const relationships = inputs.flatMap((i) => i.discovery.concepts.filter((c) => c.kind === "relationship_group"));
+        const covered =
+            collections.reduce((n, c) => n + c.repetition!.member_names.length, 0) +
+            relationships.reduce((n, c) => n + c.source.labels.length, 0);
+        expect(covered).toBe(80);
+    });
+});
+
 describe("nothing is published", () => {
     it("every proposal in every source is still proposed", () => {
         for (const i of inputs) expect(i.discovery.proposals.every((p) => p.decision_state === "proposed")).toBe(true);

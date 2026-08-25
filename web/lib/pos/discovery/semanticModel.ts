@@ -64,8 +64,16 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
         const page = sec.page ?? 1;
         // A repeated person GROUP only when it's a data-collection section — a signature/consent
         // section that merely mentions "guardian" (e.g. "Parent/Guardian Signatures") is NOT a group.
+        //
+        // Nor is an EXECUTION BLOCK. "Parent Handbook Acknowledgement" contains the word parent and
+        // three fields — parent name, student name, date — but they exist to execute an agreement,
+        // not to describe a person. Treating them as a guardian roster made those three destinations
+        // claimed twice: once as the facts they are, once as members of a relationship that isn't
+        // there. A section holding a signature is an execution, whatever its heading says.
+        const holdsSignature = sec.fields.some((f) => f.suggested_type === "signature");
         const repeated_person =
             disposition === "fields" &&
+            !holdsSignature &&
             PERSON_GROUP_RE.test(sec.title || "") &&
             !/^contact\s+information/i.test(sec.title || "");
         const output_copy = sec.duplicate === true;

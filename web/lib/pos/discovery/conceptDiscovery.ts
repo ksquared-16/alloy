@@ -21,6 +21,7 @@ import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/pe
 import {
     detectRelationshipDefinitionForTitle,
     relationshipDefinitionForRole,
+    relationshipDetectionPattern,
 } from "@/lib/fields/relationship/relationshipDefinitions";
 import { acknowledgementClauses, documentRequestClauses } from "./proseClauses";
 import { normalizeKey } from "./semanticModel";
@@ -158,6 +159,22 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
     return { subject: ctx.subject === "internal" ? "internal" : ctx.subject, concept_key: `${ctx.subject}.${core}`, band: "review", signals: sig("no canonical alias — scoped by section subject") };
 }
 
+/**
+ * Does this field describe the PERSON a relationship section repeats — their name, how they relate
+ * to the child, how to reach them — or is it another question that merely shares the heading?
+ */
+function describesAPerson(f: SemanticField): boolean {
+    if (f.role === "signature") return false;
+    const l = f.label.toLowerCase();
+    // A question is never an attribute: "Are there…", "Is there anyone who…", "Do you…".
+    if (/^\s*\(?\s*(are|is|do|does|did|have|has|would|will|can|should|if)\b/.test(l)) return false;
+    if (/\?\s*$/.test(l)) return false;
+    if (/\brelationship\s+to\b/.test(l)) return true;
+    // Either it asks for one of the attributes a person has, or it names the party itself —
+    // "LOCAL Emergency Contact #1, authorized adult allowed to collect my student" is a person.
+    return labelAttribute(l) !== null || relationshipDetectionPattern().test(l);
+}
+
 function conf(band: Confidence["band"], signals: string[]): Confidence {
     const percent = band === "high" ? 90 : band === "review" ? 65 : band === "attention" ? 40 : 20;
     return { band, percent, signals };
@@ -211,11 +228,28 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
         }
 
         // ── repeated person section → bucket by role (collapse later) ──
+        // A section about repeated people still asks questions that are not ABOUT those people.
+        // "Are there any custody arrangements we need to be aware of?" sits under the emergency-
+        // contact heading and is a household safeguarding fact, not a member of the relationship.
+        // Absorbing it into the group lost it entirely — 17 destinations claimed, two of them
+        // questions the group cannot answer. Only fields that describe a person join the group.
         if (section.repeated_person && ctx.role) {
-            const arr = relBuckets.get(ctx.role) ?? [];
-            arr.push(section);
-            relBuckets.set(ctx.role, arr);
-            continue;
+            const personFields = section.fields.filter((f) => describesAPerson(f));
+            const others = section.fields.filter((f) => !describesAPerson(f));
+            if (personFields.length > 0) {
+                const arr = relBuckets.get(ctx.role) ?? [];
+                arr.push({ ...section, fields: personFields });
+                relBuckets.set(ctx.role, arr);
+                for (const f of others) {
+                    if (f.repeat_group_id) continue;
+                    const c = scalarConcept(section, { ...ctx, subject: "household" }, f, seen, byKey);
+                    if (c) {
+                        concepts.push(c);
+                        if (c.concept_key) byKey.set(c.concept_key, c);
+                    }
+                }
+                continue;
+            }
         }
 
         // ── acknowledgement section (legal/consent) ──
