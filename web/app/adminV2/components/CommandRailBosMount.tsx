@@ -82,7 +82,41 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
             return { visibility: "hidden", position: "fixed", pointerEvents: "none" };
         }
         if (effective === "floating" && bos) {
+            /*
+             * DO NOT EXPOSE A PLACEMENT THAT IS STILL A GUESS.
+             *
+             * Automatic parking measures the page's obstacles. On a cold direct boot it runs before
+             * the Work Unit has revealed, so it measures a page whose content does not exist yet and
+             * lands 495 px from where it settles — measured as 0.174 CLS, 97% of the page's total,
+             * a horizontal jump seconds after load. The prepared path makes the same move; a click
+             * merely lets the browser attribute it to recent input and drop it from scoring.
+             *
+             * `visibility: hidden` rather than opacity, deliberately: it removes the subtree from
+             * the accessibility tree and from the tab order, and with `pointerEvents: none` nothing
+             * invisible can intercept a click. Geometry is still applied, so when the placement
+             * becomes trustworthy the rail appears where it belongs instead of travelling there.
+             */
             const g = bos.floatingGeometry;
+            if (!bos.floatingPlacementTrustworthy) {
+                return {
+                    position: "fixed",
+                    left: g.x,
+                    top: g.y,
+                    width: g.width,
+                    maxWidth: g.width,
+                    height: g.height,
+                    maxHeight: g.height,
+                    display: "flex",
+                    flexDirection: "column",
+                    minHeight: 0,
+                    visibility: "hidden",
+                    pointerEvents: "none",
+                    right: "auto",
+                    bottom: "auto",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                };
+            }
             return {
                 position: "fixed",
                 left: g.x,

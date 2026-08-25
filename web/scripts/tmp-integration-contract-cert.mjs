@@ -109,7 +109,7 @@ try {
   // Wait for shared bootstrap
   await page.locator('[data-ws-core-ready="true"]').waitFor({ timeout: 20000 }).catch(() => {});
   const coreReadyAt = Date.now();
-  await page.locator('[data-comms-tab="roster"]').click();
+  await page.locator('[data-workspace-section-tab="roster"]').click();
   await page.waitForTimeout(400);
   const rosterAvatarImgs = await page.locator("[data-assignment-roster] img, [data-scheduling-roster] img, img[src*='token']").count();
   L(`ROSTER_AVATAR_IMGS=${rosterAvatarImgs}`);
@@ -121,10 +121,10 @@ try {
     const t0 = Date.now();
     const sel =
       tab === "studio"
-        ? '[data-comms-tab="studio"], [data-scheduling-tab="studio"]'
+        ? '[data-workspace-section-tab="studio"], [data-scheduling-tab="studio"]'
         : tab === "patterns"
-          ? '[data-comms-tab="patterns"], button:has-text("Patterns")'
-          : '[data-comms-tab="overview"], [data-scheduling-tab="overview"]';
+          ? '[data-workspace-section-tab="patterns"], button:has-text("Patterns")'
+          : '[data-workspace-section-tab="overview"], [data-scheduling-tab="overview"]';
     await page.locator(sel).first().click({ force: true }).catch(() => {});
     // Categories may live under Studio
     if (tab === "studio") {
@@ -147,7 +147,7 @@ try {
       fetchCount += 1;
     }
   });
-  await page.locator('[data-comms-tab="roster"]').first().click({ force: true }).catch(() => {});
+  await page.locator('[data-workspace-section-tab="roster"]').first().click({ force: true }).catch(() => {});
   await page.waitForTimeout(200);
   await page.getByRole("button", { name: /Categor/i }).first().click({ force: true }).catch(() => {});
   await page.waitForTimeout(200);
@@ -208,7 +208,7 @@ try {
   await page.locator("[data-adminv2-scheduling-modal=true]").waitFor({ timeout: 30000 });
   await page.waitForTimeout(2000);
   if (await site.count()) await site.selectOption({ label: "North Campus" }).catch(() => {});
-  await page.locator('[data-comms-tab="roster"]').click().catch(() => {});
+  await page.locator('[data-workspace-section-tab="roster"]').click().catch(() => {});
   await page.waitForTimeout(1500);
   const proposed = await page.getByText(/^Proposed$/i).count();
   await page.locator('[data-assignment-roster-view="rooms"]').click().catch(() => {});

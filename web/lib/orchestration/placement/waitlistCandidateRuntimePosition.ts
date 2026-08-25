@@ -16,6 +16,16 @@ export const WAITLIST_RUNTIME_POSITION_HELP =
 
 export type WaitlistRuntimePositionMode = "preview" | "live";
 
+/**
+ * Typed precedence outcomes. Copy lives at the presentation owner, never in the ordering engine.
+ *
+ * `pin_scoped_to_cohort` — the row's pin IS in force: it is first within its own cohort. The section
+ * it is displayed in simply lists an earlier cohort first, so the section-scoped position is not 1.
+ * Derived only from this row's own pin and cohort plus the cohort keys ahead of it; it never depends
+ * on the identity, accessibility or contested state of whichever row is actually ahead.
+ */
+export type WaitlistRuntimePrecedenceReason = "pin_scoped_to_cohort";
+
 export type WaitlistRuntimePositionFields = {
     runtime_position: number;
     runtime_position_total: number;
@@ -25,6 +35,8 @@ export type WaitlistRuntimePositionFields = {
     runtime_position_section_key?: string;
     /** Preview-only hint when manual pin(s) rank above this row in the section. */
     runtime_position_precedence_note?: string;
+    /** Operator-safe typed precedence outcome — NOT shadow-gated. */
+    runtime_position_precedence_reason?: WaitlistRuntimePrecedenceReason;
 };
 
 export function formatWaitlistRuntimePositionLabel(
@@ -102,6 +114,15 @@ function readRowActiveOverrideKinds(row: Record<string, unknown>): string[] {
     return kinds.filter((k): k is string => typeof k === "string" && k.trim().length > 0);
 }
 
+/** Normalized cohort key for a row — the same normalization the canonical sorter groups by. */
+function readWaitlistRowCohortKey(row: Record<string, unknown>): string | null {
+    const wr = row._placement_waitlist_row;
+    if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return null;
+    const o = wr as { program_room_cohort_key?: string; program_room_group_label?: string };
+    const { cohortKey } = normalizePlacementWaitlistCohort(o.program_room_cohort_key, o.program_room_group_label);
+    return cohortKey?.trim() ? cohortKey.trim() : null;
+}
+
 function rowHasManualPinOverride(row: Record<string, unknown>): boolean {
     return readRowActiveOverrideKinds(row).includes("pin");
 }
@@ -161,7 +182,16 @@ function writeRuntimePositionOnRow(
 ): void {
     const wr = row._placement_waitlist_row;
     if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return;
-    Object.assign(wr as Record<string, unknown>, fields);
+    const target = wr as Record<string, unknown>;
+    /*
+     * Clear the precedence outcomes before writing. `Object.assign` only ADDS keys, so a row that no
+     * longer qualifies would silently keep the explanation written for a previous ordering — the
+     * operator would read a stale reason after a Work View switch, a site change, or an unpin.
+     * Position is recomputed on every assignment; its explanation must be too.
+     */
+    delete target.runtime_position_precedence_note;
+    delete target.runtime_position_precedence_reason;
+    Object.assign(target, fields);
 }
 
 /**
@@ -204,6 +234,26 @@ export function assignWaitlistCandidateRuntimePositions(
                 shadowMode &&
                 position > 1 &&
                 rankIndices.slice(0, rank).some((higherIdx) => rowHasManualPinOverride(rows[higherIdx]!));
+            /*
+             * A pin is an ordinal WITHIN ITS COHORT, but the position shown is scoped to the whole
+             * program section, and a section may contain several cohorts. So an operator can pin to 1,
+             * have the pin fully in force, and still read "2/12" — which is indistinguishable from a
+             * pin that failed. This says the pin worked and names only the generic rule.
+             *
+             * Every input is this row's own: its pin, its cohort, and the set of cohort keys ordered
+             * ahead of it. Nothing about the row actually in front is consulted, so a contested or
+             * inaccessible neighbour cannot leak through this reason.
+             */
+            const ownCohort = readWaitlistRowCohortKey(rows[rowIdx]!);
+            const firstWithinOwnCohort =
+                ownCohort != null &&
+                !rankIndices
+                    .slice(0, rank)
+                    .some((higherIdx) => readWaitlistRowCohortKey(rows[higherIdx]!) === ownCohort);
+            const pinScopedToCohort =
+                position > 1 &&
+                rowHasManualPinOverride(rows[rowIdx]!) &&
+                firstWithinOwnCohort;
             writeRuntimePositionOnRow(rows[rowIdx]!, {
                 runtime_position: position,
                 runtime_position_total: total,
@@ -215,6 +265,9 @@ export function assignWaitlistCandidateRuntimePositions(
                         runtime_position_precedence_note:
                             "Ranked below manually adjusted row(s) in this program section.",
                     }
+                :   {}),
+                ...(pinScopedToCohort ?
+                    { runtime_position_precedence_reason: "pin_scoped_to_cohort" as const }
                 :   {}),
             });
         });

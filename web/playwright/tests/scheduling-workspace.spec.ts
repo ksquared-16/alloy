@@ -52,7 +52,7 @@ test("scheduling workspace adopts the shared shell and is fully navigable", asyn
     console.log("WS_SITE_SUBTITLE=" + JSON.stringify(siteSubtitle));
     const hasWorkMode = await page.locator('[data-alloy-mode="work"]').count();
     const hasStudioMode = await page.locator('[data-alloy-mode="studio"]').count();
-    const workTabs = await page.locator('[data-workspace-mode-sections="scheduling"] [data-comms-tab]').count();
+    const workTabs = await page.locator('[data-workspace-mode-sections="scheduling"] [data-workspace-section-tab]').count();
     const url = page.url();
     fs.mkdirSync(SHOT_DIR, { recursive: true });
     await page.screenshot({ path: path.join(SHOT_DIR, "01-overview.png"), fullPage: true });
@@ -98,7 +98,7 @@ test("scheduling workspace adopts the shared shell and is fully navigable", asyn
     // Studio mode → Operational Calculations (read-only) catalogue.
     await page.locator('[data-alloy-mode="studio"]').click();
     await page.waitForTimeout(400);
-    await page.locator('[data-comms-tab="calculations"]').click();
+    await page.locator('[data-workspace-section-tab="calculations"]').click();
     await page.locator("[data-scheduling-calculation]").first().waitFor({ timeout: 20000 });
     const calcCount = await page.locator("[data-scheduling-calculation]").count();
     const hasRoomFit = await page.locator('[data-scheduling-calculation="placement.room_fit"]').count();
@@ -110,7 +110,7 @@ test("scheduling workspace adopts the shared shell and is fully navigable", asyn
     await page.screenshot({ path: path.join(SHOT_DIR, "03-studio-calculations.png"), fullPage: true });
 
     // Studio → Schedule Patterns (real schedule_patterns) with an administration surface.
-    await page.locator('[data-comms-tab="patterns"]').click();
+    await page.locator('[data-workspace-section-tab="patterns"]').click();
     await page.locator("[data-scheduling-pattern]").first().waitFor({ timeout: 15000 }).catch(() => {});
     const patternCount = await page.locator("[data-scheduling-pattern]").count();
     const newPatternBtn = await page.locator('[data-pattern-new="true"]').count();
@@ -130,7 +130,7 @@ test("scheduling workspace adopts the shared shell and is fully navigable", asyn
     await page.screenshot({ path: path.join(SHOT_DIR, "05-pattern-editor.png"), fullPage: true });
 
     // Studio → Planning is a coherent landing (not a redirect back to Work).
-    await page.locator('[data-comms-tab="planning"]').click();
+    await page.locator('[data-workspace-section-tab="planning"]').click();
     await page.locator("[data-scheduling-planning-capability]").first().waitFor({ timeout: 8000 }).catch(() => {});
     const planningCards = await page.locator("[data-scheduling-planning-capability]").count();
     const stillStudio = await page.locator('[data-alloy-mode="studio"][aria-selected="true"]').count();

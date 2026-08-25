@@ -41,7 +41,7 @@ try {
     await page.waitForTimeout(2500);
   }
 
-  await page.locator('[data-comms-tab="roster"]').click();
+  await page.locator('[data-workspace-section-tab="roster"]').click();
   await page.waitForTimeout(800);
   await page.locator('[data-assignment-roster-view="rooms"]').click();
   await page.waitForTimeout(2500);

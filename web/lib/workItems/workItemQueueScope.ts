@@ -64,7 +64,12 @@ export const WORK_ITEM_FOLDER_DEFS: { key: WorkItemFolderKey; label: string }[] 
 ];
 
 export const WORK_ITEM_VIEW_DEFS: { key: WorkItemViewKey; label: string }[] = [
-    { key: "mine", label: "Mine" },
+    /*
+     * Visible copy is deliberately explicit. "Mine" read as ownership, and sat on the same screen as
+     * the KPI band's assignment metric with nothing to say which was broader. The KEY stays `mine`:
+     * it is the stable contract for the scope, the server filter and `data-work-items-view`.
+     */
+    { key: "mine", label: "Assigned to me" },
     { key: "unassigned", label: "Unassigned" },
     { key: "waiting", label: "Waiting" },
     { key: "due_today", label: "Due Today" },

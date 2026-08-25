@@ -7,6 +7,7 @@
 
 import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
 import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+import { currentWorkActivityRowKey } from "@/lib/adminV2/runtime/focusPanel/currentWork/currentWorkActivityRowKey";
 import type { CurrentWorkSurfaceVM } from "./currentWorkSurfaceTypes";
 import { buildWhatsNextProgressPresentation } from "./buildWhatsNextProgressPresentation";
 import type {
@@ -18,6 +19,8 @@ import type {
 import { formatTourStartLabel } from "@/lib/adminV2/runtime/focusPanel/tour/tourPresentation";
 
 export type WhatsNextActivityPreviewLike = {
+    /** Canonical namespaced Activity identity when the producing source has one. */
+    id?: string | null;
     label: string;
     occurredAt?: string | null;
     kind?: string | null;
@@ -283,7 +286,10 @@ export function buildWhatsNextCardPresentation(args: {
     const recentActivity: WhatsNextActivityItem[] = (args.activityItems ?? [])
         .slice(0, 3)
         .map((item, index) => ({
-            key: `${item.label}-${item.occurredAt ?? index}`,
+            // The SAME identity owner the three list renderers use. This builder computes its key
+            // into a DTO rather than in JSX, which is exactly how it kept the old display-derived
+            // key after the others were corrected.
+            key: currentWorkActivityRowKey(item, index),
             label: item.label,
             occurredAt: item.occurredAt ?? null,
             kind: item.kind ?? null,

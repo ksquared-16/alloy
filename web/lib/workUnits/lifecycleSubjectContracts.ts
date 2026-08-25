@@ -260,6 +260,11 @@ export type QueueRowContext = {
         placement_candidate_id?: string | null;
         /** True when published Waitlist variant exposes placement adjustment and a candidate is attached. */
         can_adjust_placement?: boolean | null;
+        /**
+         * Typed precedence outcome from the placement position owner. Operator-safe and never
+         * shadow-gated; copy is resolved at the presentation layer, not stored here.
+         */
+        precedence_reason?: "pin_scoped_to_cohort" | null;
     } | null;
 
     /**
