@@ -75,7 +75,20 @@ export interface SafeguardingRestriction {
     supersedes_id: string | null;
 }
 
-/** The capability keys that gate this data. Registered in `permission_definitions`. */
+/**
+ * The capability keys that gate this data.
+ *
+ * DECLARED here, and deliberately NOT seeded into `permission_definitions`: another program has
+ * frozen that catalog at a measured width, and its own tests say a worker may not append to it —
+ * adding these two rows is a Director-owned step in Access & Identity. `.view` also has no
+ * enforcement site yet, and registering a key nothing checks is the matrix row with nothing behind
+ * it that `IA-R6` forbids.
+ *
+ * Until then the boundary is carried by three things that are real today: the RLS policies (narrower
+ * than the comparable relationship table — `manager` is not on the read list), the propose-only
+ * command's type, and the database CHECK that forbids activating an unreviewed row. Naming a key the
+ * catalog cannot yet satisfy fails CLOSED, which is the safe direction for a safety control.
+ */
 export const SAFEGUARDING_PERMISSIONS = {
     view: "crm.customers.safeguarding.view",
     manage: "crm.customers.safeguarding.manage",

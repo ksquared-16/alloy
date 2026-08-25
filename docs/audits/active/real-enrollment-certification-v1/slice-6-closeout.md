@@ -71,16 +71,34 @@ which is why the seam ships with a negative control rather than a redesign.
 
 ## 4. Access and sensitivity boundary
 
-- **Two capability keys**, registered in `permission_definitions`:
-  `crm.customers.safeguarding.view` and `crm.customers.safeguarding.manage`.
+- **Two capability keys are declared** in `lib/safeguarding/safeguardingRestriction.ts`:
+  `crm.customers.safeguarding.view` and `crm.customers.safeguarding.manage`. They are deliberately
+  **not seeded** into `permission_definitions` — see the owed Director step below.
 - **RLS is narrower than the comparable relationship table.** `person_child_relationships` admits
   `owner/admin/ops/manager`; safeguarding reads admit `owner/admin/ops` — **`manager` is not on the
   list**, because a child's protective order is not ordinary profile content. Writes are narrower
   still (`owner/admin`).
 - **This never becomes child-profile content.** No manifest row, no `field_definitions` seed, no
   layout catalog entry. It is not reachable through the child-profile surfaces at all.
-- **No Safeguarding UI was built**, per the boundary. Following `IA-R6`, no capability area was
-  invented for a surface that does not exist; the keys map into the existing `crm` group.
+- **No Safeguarding UI was built**, per the boundary.
+
+### One owed Director step, and why I did not take it
+
+I first seeded the two keys into `permission_definitions`. The Access & Identity ratchet caught it:
+`w11-catalog-reconciliation.json` is another program's frozen exit artifact, pinning the catalog at
+**57 keys measured against the shared database**, and its own tests say a worker may not append to
+it. Two rows would have silently made another program's artifact wrong.
+
+I removed the seed. `.view` also has **no enforcement site yet**, so registering it would have been
+the matrix row with nothing behind it that `IA-R6` forbids.
+
+The boundary that ships is carried by three things that are real today: the RLS policies, the
+propose-only command's type, and the database CHECK. Naming a key the catalog cannot yet satisfy
+**fails closed**, which is the safe direction for a safety control.
+
+> **Owed to you:** adding `crm.customers.safeguarding.view` / `.manage` to the permission catalog,
+> with the W-11 artifact updated in the same change. That is an Access & Identity decision, not an
+> Enrollment one.
 
 ## 5. Processing / Trust handoff
 

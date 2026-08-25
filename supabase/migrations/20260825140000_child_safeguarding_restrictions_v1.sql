@@ -133,16 +133,13 @@ CREATE POLICY child_safeguarding_write_org ON public.child_safeguarding_restrict
 COMMENT ON TABLE public.child_safeguarding_restrictions IS
     'Canonical owner of active restrictions on a child. NOT a negative relationship: an authorized_pickup relationship and an active may_not_pick_up restriction may coexist, and the restriction constrains the action.';
 
--- The access boundary, registered in the canonical permission catalog.
-INSERT INTO public.permission_definitions (key, group_key, label, description, is_active, updated_at)
-VALUES
-    ('crm.customers.safeguarding.view', 'crm', 'View safeguarding restrictions',
-     'See custody, protective-order and pickup restrictions recorded on a child.', true, now()),
-    ('crm.customers.safeguarding.manage', 'crm', 'Manage safeguarding restrictions',
-     'Approve, activate, supersede or revoke a safeguarding restriction on a child.', true, now())
-ON CONFLICT (key) DO UPDATE SET
-    group_key = EXCLUDED.group_key,
-    label = EXCLUDED.label,
-    description = EXCLUDED.description,
-    is_active = true,
-    updated_at = now();
+-- The access boundary is carried by the RLS policies above, by the propose-only command's type
+-- (which has no vocabulary for activation), and by the CHECK constraint that forbids activating an
+-- unreviewed row. It is NOT carried by new `permission_definitions` rows, deliberately:
+--
+-- `crm.customers.safeguarding.view` / `.manage` are the right key names and they are declared in
+-- `lib/safeguarding/safeguardingRestriction.ts`. Seeding them here would widen a catalog that
+-- another program has frozen — `w11-catalog-reconciliation.json` pins the width at 57 keys measured
+-- against the shared database, and its own tests say a worker may not append to it. Adding those two
+-- rows is a Director-owned step in Access & Identity, and `.view` has no enforcement site yet in any
+-- case, so registering it would be the matrix row with nothing behind it that `IA-R6` forbids.
