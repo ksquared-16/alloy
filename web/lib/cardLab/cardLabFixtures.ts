@@ -15,6 +15,7 @@ import type {
     ChargeTemplateOption,
     FinancialsEvidence,
     FinancialsLedgerPeriod,
+    ProcessChildState,
     ProcessEvidence,
     SafetySignal,
     HealthDetailEvidence,
@@ -338,11 +339,11 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
     },
     pastDue: null,
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
-        { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
-        { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
+        { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
+        { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
@@ -380,13 +381,13 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         note: "Visa •••• 4242 declined Aug 16",
     },
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Operator · ACH 8813" },
-        { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" },
-        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
-        { when: "Aug 01", type: "fee", label: "Field trip", amount: "+$40", kind: "charge", status: "Unpaid", source: "Manual · operator" },
-        { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Operator · ACH 8813" , glCode: "1010 · Cash" },
+        { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
+        { when: "Aug 01", type: "fee", label: "Field trip", amount: "+$40", kind: "charge", status: "Unpaid", source: "Manual · operator" , glCode: "4100 · Fee revenue" },
+        { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" , glCode: "4100 · Fee revenue" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242", methodIssue: "Declined Aug 16" },
@@ -422,11 +423,11 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     },
     pastDue: null,
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
-        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
-        { when: "Aug 08", type: "credit", label: "Vacation credit", amount: "−$100", kind: "credit", status: "Posted", source: "Operator" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
+        { when: "Aug 08", type: "credit", label: "Vacation credit", amount: "−$100", kind: "credit", status: "Posted", source: "Operator" , glCode: "4900 · Discounts" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "45%", method: "Visa •••• 4242" },
@@ -534,9 +535,9 @@ export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
         summary: "Closed · $0",
         open: false,
         entries: [
-            { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
-            { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
-            { when: "Jul 01", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+            { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
+            { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
+            { when: "Jul 01", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
         ],
     },
     { label: "June 2026", summary: "Closed · $0", open: false, entries: [] },
@@ -548,22 +549,34 @@ export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
  * `responsibility` decides who is billed. The card hardcodes none of it.
  */
 export const CHARGE_TEMPLATES: ChargeTemplateOption[] = [
-    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: true, requiresNote: true },
-    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", billableOn: "Immediately", responsibility: "Household", requiresSubject: true, requiresNote: false },
-    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: true, requiresNote: false },
-    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: false, requiresNote: true },
+    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: true, requiresNote: true },
+    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", occursOn: "When configured (now)", billableOn: "Immediately", responsibility: "Household", allowsDateOverride: false, payerTargeting: "default_split", requiresSubject: true, requiresNote: false },
+    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", occursOn: "Event date", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: false, payerTargeting: "operator_selectable", requiresSubject: true, requiresNote: false },
+    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, occursOn: "When configured (now)", billableOn: "Next billing cycle", responsibility: "Household", allowsDateOverride: true, payerTargeting: "default_split", requiresSubject: false, requiresNote: true },
+    { key: "agency_placement", label: "Agency placement fee", amountStrategy: "fixed", amount: "$250.00", occursOn: "Service period start", billableOn: "Next billing cycle", responsibility: "Agency", allowsDateOverride: false, payerTargeting: "third_party", requiresSubject: true, requiresNote: false },
 ];
 
+/**
+ * Add charge specimen — a FUTURE-DATED charge, to prove the dating semantics.
+ * Service date Sep 18 (the trip), billing period September (billable_on = next cycle),
+ * due Sep 30 per the configured policy. No date is invented: each maps to one column on `charges`.
+ */
 export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
     template: CHARGE_TEMPLATES[0]!,
     subject: "Avery Johnson",
     amount: "$40.00",
-    period: "August 2026",
-    due: "Sep 1, 2026",
+    serviceDate: "Sep 18, 2026",
+    period: "September 2026",
+    due: "Sep 30, 2026",
+    overridden: "Service date set by operator",
+    chargeTo: "All responsible payers (default split)",
+    allocation: [
+        { payer: "Jordan Johnson", share: "70%", amount: "+$28.00" },
+        { payer: "Taylor Johnson", share: "30%", amount: "+$12.00" },
+    ],
     note: "Zoo field trip",
     previewBefore: "$255",
     previewAfter: "$295",
-    blockers: [],
 };
 
 /** Safety Signals — configured projections of canonical health facts. */
@@ -575,6 +588,10 @@ export const SAFETY_SIGNALS: SafetySignal[] = [
 
 /** Three configured Business Processes, through ONE process card. */
 export const PROCESS_ENROLLMENT: ProcessEvidence = {
+    caseLabel: "Enrollment · Johnson",
+    subjectLabel: "Johnson Family",
+    sourceWorkView: null,
+    childStates: [],
     processLabel: "Enrollment",
     stages: [
         { label: "Lead", state: "done", when: "Aug 2", outcome: null },
@@ -595,6 +612,10 @@ export const PROCESS_ENROLLMENT: ProcessEvidence = {
 };
 
 export const PROCESS_ASSIGNMENT: ProcessEvidence = {
+    caseLabel: "Assignment",
+    subjectLabel: "Johnson Family",
+    sourceWorkView: null,
+    childStates: [],
     processLabel: "Assignment",
     stages: [
         { label: "Requested", state: "done", when: "Aug 9", outcome: null },
@@ -611,6 +632,10 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
 };
 
 export const PROCESS_BILLING: ProcessEvidence = {
+    caseLabel: "Billing",
+    subjectLabel: "Johnson Family",
+    sourceWorkView: null,
+    childStates: [],
     processLabel: "Billing",
     stages: [
         { label: "Setup", state: "done", when: "Aug 1", outcome: null },
@@ -625,5 +650,62 @@ export const PROCESS_BILLING: ProcessEvidence = {
     actions: [{ label: "Pay now", primary: true }, { label: "Contact payer" }],
     stillNeeded: ["Payment method update"],
 };
+
+/**
+ * ── MIXED-GRAIN PRESSURE TEST — the Wright family ──
+ *
+ * The case is at Tour. Avery is waitlisted; Riley is not. Four renders, ONE component:
+ *
+ *   A  case opened from the Tour Work View
+ *   B  the SAME case opened from All — identical stage, only the lens chip differs
+ *   C  the same case with Avery as the scope hint
+ *   D  the same case with Riley as the scope hint
+ *
+ * C and D are NOT child-grain panels. Per `operational-grain-doctrine.md` §2.4 the Focus Panel
+ * always opens on an Opportunity, and a child selection is a scope HINT that pre-focuses a card —
+ * it does not change the panel's grain. The stage stays the case's; the child's own participation
+ * is projected as supporting context and is emphasised when scoped.
+ */
+const WRIGHT_STAGES: ProcessEvidence["stages"] = [
+    { label: "Lead", state: "done", when: "Aug 11", outcome: null },
+    { label: "Tour", state: "current", when: "Since Aug 16", outcome: null },
+    { label: "Waitlist", state: "future", when: null, outcome: null },
+    { label: "Enrolling", state: "future", when: null, outcome: null },
+    { label: "Enrolled", state: "future", when: null, outcome: null },
+];
+
+function wright(sourceWorkView: string, scoped: string | null): ProcessEvidence {
+    return {
+        caseLabel: scoped ? `Case · scoped to ${scoped}` : `Case · from ${sourceWorkView}`,
+        subjectLabel: "Wright Family",
+        sourceWorkView,
+        childStates: [
+            { name: "Avery Wright", stage: "Waitlisted", scoped: scoped === "Avery" },
+            { name: "Riley Wright", stage: "Tour", scoped: scoped === "Riley" },
+        ],
+        processLabel: "Enrollment",
+        stages: WRIGHT_STAGES,
+        currentStageLabel: "Tour",
+        workLine: scoped === "Avery" ? "Avery is waitlisted · case is at Tour" : "2 children · tour scheduled Aug 27",
+        dueLine: scoped ? null : "Tour Thu Aug 27 · 10:00 AM",
+        actions:
+            scoped === "Avery"
+                ? [{ label: "Review waitlist position", primary: true }, { label: "Contact family" }]
+                : [{ label: "Complete tour", primary: true }, { label: "Contact family" }],
+        stillNeeded: [],
+    };
+}
+
+export const PROCESS_WRIGHT_TOUR = wright("Tour", null);
+export const PROCESS_WRIGHT_ALL = wright("All", null);
+export const PROCESS_WRIGHT_AVERY = wright("Tour", "Avery");
+export const PROCESS_WRIGHT_RILEY = wright("Tour", "Riley");
+
+export const PROCESS_GRAIN_SPECIMENS = [
+    PROCESS_WRIGHT_TOUR,
+    PROCESS_WRIGHT_ALL,
+    PROCESS_WRIGHT_AVERY,
+    PROCESS_WRIGHT_RILEY,
+] as const;
 
 export const PROCESS_SPECIMENS = [PROCESS_ENROLLMENT, PROCESS_ASSIGNMENT, PROCESS_BILLING] as const;

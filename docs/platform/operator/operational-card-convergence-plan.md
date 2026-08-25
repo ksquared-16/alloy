@@ -220,3 +220,163 @@ history, requirement completion, transitions and event provenance — all of it 
 
 Registration onto real Surfaces happens per card as its read model lands — never as a batch, and
 never ahead of the truth it projects.
+
+---
+
+## 6. Final pressure-test decisions (2026-08-25)
+
+### 6.1 Financials — two columns, not three peers
+
+Current Period is the primary financial explanation and takes **60%**; Past Due and Payment answer
+one related question — *what needs collecting, and how* — and stack in the remaining **40%**. The
+arithmetic block is capped at a 380px measure so a label and its amount stay adjacent; at full
+column width the stack stopped reading as a sum.
+
+**Action placement follows intent, not convenience:**
+
+| Action | Home | Why |
+|---|---|---|
+| **Pay now** | inside Past Due | Contextual and primary whenever money is owed |
+| **Add charge →** | under Current Period | *"Add something that should be billed"* is a Current Period intent. Quiet, so it never competes with Pay now |
+| **Details →** | under Current Period | The card identity supplies the context — not "Financials details" |
+| **Manage payment →** | inside Payment | It owns payers, split, methods, autopay and recovery, so it sits under the payment facts, not in a footer |
+
+There is **no separate Manage payers product**. Backend semantics do not require one:
+payers, split and methods are all facets of the same configuration.
+
+### 6.2 Add charge — four dates, four columns, no invention
+
+| Operator sees | Canonical column | Decided by |
+|---|---|---|
+| Service date | `charges.service_date` | template `occurs_on`; overridable only when the template allows |
+| Billing period | derived | template `billable_on` |
+| Due | `charges.due_date` | configured policy |
+| Posting | `charges.posted_at` | the mutation, never the operator |
+
+A future-dated charge is therefore ordinary — a September service date created in August, billable
+next cycle. Charge type is the **platform select**, sourced from `financial_charge_templates`,
+showing configured labels and never keys. Payer targeting offers only what the template permits
+(`default_split` · `operator_selectable` · `single_payer` · `third_party`) and resolves against the
+canonical responsibility model; the command builds **no** allocation of its own, and the preview
+renders allocation math **only when that split is authoritative**.
+
+### 6.3 Ledger — GL code is canonical, and labels come from the catalog
+
+> **GL code: INCLUDE IT.** `lib/financials/gl/` (`glCodeOptions`, `glConfigService`,
+> `glConfigTypes`, `accountTypes`), `accounting/resolveGlMapping.ts`, and tables `gl_accounts`
+> (with `code`), `gl_account_mappings`, `gl_journal_entries`, `gl_journal_lines`.
+> `resolveGlMapping` answers *"which charge category, which mapping key it posts through, and which
+> GL account that mapping resolves to (or that it is unmapped)"* — exactly the ledger column. An
+> unmapped category renders **"— unmapped"**, which is an honest state, not a blank.
+
+Type labels come from `chargeCategoryLabel()` in `lib/financials/chargeCategories.ts`. The card
+renders no raw key and builds no display map — the catalog already owns the vocabulary.
+
+Detail ledger columns: **Date · Type · Description · GL code · Amount · Status · Source**, grouped
+by billing period with prior periods collapsed. Still **no running balance** — `ledger_transactions`
+provides none authoritatively.
+
+### 6.4 Work View vs durable stage — proven, not asserted
+
+> `buildOperationalContext` resolves `businessProcess.stageKey` from
+> `subjectVm.workspace.lifecycle_rail.current_stage_key ?? stage_context.stage_key` and contains
+> **no reference to a work unit or work view**. A lens is structurally incapable of reaching the
+> stage.
+
+The one seam a lens can touch is the stage **label** fallback (`stage_label ?? statusLabel`) —
+never the key. That asymmetry deserves a guard test.
+
+Rendered proof: the Wright case from **Tour** and from **All** produce an identical stage band,
+work line and action set; only the lens chip differs.
+
+### 6.5 Grain — a real gap, by doctrine rather than omission
+
+> `OperationalGrain` declares `"child"` as *"Not yet used in the Focus Panel; reserved for
+> child-grain queue row contexts"*, a shipped conformance test asserts *"grain is always 'case' for
+> Focus Panel contexts"*, and `operational-grain-doctrine.md` §2.4 states the panel *"always opens
+> on an Opportunity"* and that a child selection is a scope hint which *"does not change the Focus
+> Panel's grain. The panel is still case-grain."*
+
+**So there is no child-grain Focus Panel today.** Rendering Avery *as the subject* is a platform
+change, not a card change.
+
+What the Process card does instead, and what the specimens prove: the case's stage stays
+authoritative; each child's own participation projects as supporting context beneath the band; the
+scoped child is **emphasised, not substituted**. A waitlisted Avery never rewrites a case at Tour.
+
+> **Gap P2 — child-grain Focus Panel subject.** Requires: `OperationalGrain` to admit `child` for
+> the panel, `buildOperationalContext` to accept a child subject, and per-card grain resolution.
+> **Recommendation: do not build it for this.** The scope-hint model answers the operational
+> question, and the doctrine is deliberate.
+
+### 6.6 Process history — P1, with the grain stated
+
+```
+process_stage_history
+  org_id · process_instance_id
+  subject_type · subject_id          ← the grain, explicitly
+  stage_key · stage_label_snapshot
+  entered_at · exited_at
+  outcome_key
+  transition_source                  event | operator | system
+  transition_event_id                → workflow_events
+```
+
+Derived from the event stream and persisted as a **projection**, not a second authority. Until it
+exists the card renders only what events support and **never fabricates an entry date**. It must
+not be solved in card state.
+
+### 6.7 Focus Panel shell
+
+**Subject avatar — generic, one model.** `FocusPanelSubjectIdentityBlock` takes
+`personSubjectName` / `personSubjectImageUrl` / `personSubjectRecordId`. When a person subject is
+present it renders `CardAvatar` — the same primitive the cards use, image with initials fallback;
+otherwise it keeps the household tile, which is correct for a family subject. The shell knows the
+subject's name and possibly an image; it does **not** know or care whether the person is a child, a
+contact or an employee, so a child, a staff member and a contact all work with no per-type code.
+
+**Vertical density — measured, at the shell owner.**
+
+| | Header bottom → first card top | Card width | Side gutter |
+|---|---|---|---|
+| Before | **37px** | 507px | 16px |
+| After | **23px** | 507px | 16px |
+
+Two owners, both shared: the Work-mode scroll container's top padding
+(`py-3` → `pt-1 pb-3`, −8px) in `InlineOpportunityFocusPanel`, and
+`padding-top: var(--alloy-os-fp-pad-top, 10px)` on
+`.alloy-os-focus-panel-grid:not(--work)`, the shared non-Work grid rule (−6px). **Top only** — side
+and bottom gutters keep `--alloy-os-fp-pad`, so column widths do not move and no card's internal
+spacing is touched. No route-specific override.
+
+> A first attempt put the rule on `.alloy-os-focus-panel-grid--composed` (0,1,0) and silently did
+> nothing: `.alloy-os-focus-panel-grid:not(.alloy-os-focus-panel-grid--work)` is (0,2,0) and wins
+> regardless of order. Caught by measuring the rendered value, not by reading the file.
+
+### 6.8 Density — combined Process card vs the pair it replaces
+
+| Grain | Old: Journey + What's Next | New: Process card | Saved |
+|---|---|---|---|
+| Case from Tour | 119 + 348 = **467**, two cards | **221**, one card | −53% |
+| Case from All | 467 | 221 | −53% |
+| Scoped to Avery | 467 | 221 | −53% |
+| Scoped to Riley | 467 | 221 | −53% |
+
+No information lost: stage, status, current work, still-needed, due and actions each appear once.
+Recent Activity is deliberately dropped — activity has its own canonical mode. Child divergence is
+**added**, and the old pair could not express it at all.
+
+### 6.9 Updated gap register
+
+| # | Gap | Note |
+|---|---|---|
+| **F0** | No billing-period concept | Derivable from `charges.service_date` + org cadence |
+| **F5** | No registered Add Charge action | Thin wrapper over existing services |
+| **F1 / F2 / F3** | Autopay unowned · method household-scoped · no split field | Payment zone degrades gracefully |
+| **F4** | No authoritative running balance | **Do not build** |
+| ~~GL~~ | ~~GL code~~ | **Resolved — canonical, include it** |
+| **P1** | No durable stage history | §6.6 |
+| **P2** | No child-grain Focus Panel subject | §6.5 — recommend not building |
+| **G1** | Expanded body capped at 360px | Still a Director decision |
+| **A1 / D1 / B1** | Health grain · document requirements · health facts | See the health contracts |
+| **S1 / S2** | Signal config · health visibility permission | Signals must not ship before S2 |

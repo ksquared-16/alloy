@@ -32,6 +32,22 @@ import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
  * Stages, labels, work and actions all arrive as configuration. There is no Enrollment special
  * case in this component, which is what makes the Assignment and Billing specimens render through
  * the same code.
+ *
+ * ── WORK VIEW NEVER DECIDES THE STAGE ──
+ *
+ * `sourceWorkView` renders as a lens chip and nothing else. It is structurally impossible for it
+ * to reach the stage: `buildOperationalContext` resolves `businessProcess.stageKey` from
+ * `subjectVm.workspace.lifecycle_rail.current_stage_key ?? stage_context.stage_key` and contains
+ * NO reference to a work unit or work view. The only seam a lens can touch is the stage *label*
+ * fallback (`stage_label ?? statusLabel`) — never the key.
+ *
+ * ── CHILD DIVERGENCE IS CONTEXT, NOT THE STAGE ──
+ *
+ * `operational-grain-doctrine.md` §2.4: the Focus Panel always opens on an Opportunity, and a
+ * child selection is a scope HINT that pre-focuses a card — "it does not change the Focus Panel's
+ * grain. The panel is still case-grain." So a child's own participation projects as supporting
+ * context beneath the band, emphasised when scoped, and a waitlisted child NEVER rewrites the
+ * case's Tour stage.
  */
 export default function ProcessCard({
     evidence,
@@ -70,6 +86,11 @@ export default function ProcessCard({
                     <div className="alloy-os-process__work-main">
                         <p className="alloy-os-process__work-label">
                             Current · {evidence.currentStageLabel}
+                            {evidence.sourceWorkView ? (
+                                <span className="alloy-os-process__lens">
+                                    from {evidence.sourceWorkView}
+                                </span>
+                            ) : null}
                         </p>
                         <p className="alloy-os-process__work-line">
                             {evidence.workLine}
@@ -77,6 +98,23 @@ export default function ProcessCard({
                                 <span className="alloy-os-process__due"> · {evidence.dueLine}</span>
                             ) : null}
                         </p>
+                        {evidence.childStates.length ? (
+                            <p className="alloy-os-process__children">
+                                <span className="alloy-os-process__children-count">
+                                    {evidence.childStates.length} children
+                                </span>
+                                {evidence.childStates.map((c) => (
+                                    <span
+                                        key={c.name}
+                                        className="alloy-os-process__child"
+                                        data-scoped={c.scoped ? "true" : undefined}
+                                    >
+                                        {c.name.split(" ")[0]}
+                                        <span className="alloy-os-process__child-stage">{c.stage}</span>
+                                    </span>
+                                ))}
+                            </p>
+                        ) : null}
                         {evidence.stillNeeded.length ? (
                             <p className="alloy-os-process__needed">
                                 <span className="alloy-os-process__needed-label">Still needed</span>

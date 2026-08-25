@@ -602,7 +602,10 @@ export function InlineOpportunityFocusPanel() {
                     className={
                         isActivityMode
                             ? `${activityBodyFillClass} bg-white px-2 py-2 [scrollbar-gutter:stable]`
-                            : "min-h-0 flex-1 overflow-y-auto bg-white px-4 py-3 [scrollbar-gutter:stable]"
+                            : // Work mode: the cards should begin close to the Work / Activity
+                              // control. Top padding is trimmed; the bottom keeps its breathing
+                              // room so the last card never touches the panel edge.
+                              "min-h-0 flex-1 overflow-y-auto bg-white px-4 pt-1 pb-3 [scrollbar-gutter:stable]"
                     }
                 >
                     {/* Keyed `swap` wrapper — remounts + settles the body on a record switch. */}

@@ -63,17 +63,9 @@ export default function FinancialsCard({
                 density="compact"
                 gridSpan="row"
                 data-universal-card-key="financials"
-                footerAction={
-                    <div className="alloy-os-billing__footer">
-                        {/* Action hierarchy: Pay now is contextual and primary inside Past Due;
-                            Add charge is the operator capability; then management, then navigation. */}
-                        <FooterAction onClick={onAddCharge}>Add charge</FooterAction>
-                        <FooterAction>Manage payment</FooterAction>
-                        <FooterAction onClick={onDetails}>Details →</FooterAction>
-                    </div>
-                }
+                footerAction={null}
             >
-                <div className="alloy-os-billing__zones">
+                <div className="alloy-os-billing__zones alloy-os-billing__zones--two">
                     <section className="alloy-os-billing__zone">
                         <p className="alloy-os-billing__zone-head">Current period</p>
                         <p className="alloy-os-billing__period">{period.label}</p>
@@ -95,8 +87,15 @@ export default function FinancialsCard({
                             <Line label="Current balance" value={period.currentBalance} emphasis />
                         </div>
                         <p className="alloy-os-billing__due">{period.dueLabel}</p>
+                        {/* "Add something that should be billed" is a Current Period intent, not a
+                            payment one — and it stays quiet so it never competes with Pay now. */}
+                        <div className="alloy-os-billing__zone-actions">
+                            <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
+                            <FooterAction onClick={onDetails}>Details →</FooterAction>
+                        </div>
                     </section>
 
+                    <div className="alloy-os-billing__collect">
                     <section className="alloy-os-billing__zone">
                         <p className="alloy-os-billing__zone-head">Past due</p>
                         {pastDue ? (
@@ -122,7 +121,7 @@ export default function FinancialsCard({
                         )}
                     </section>
 
-                    <section className="alloy-os-billing__zone">
+                    <section className="alloy-os-billing__zone alloy-os-billing__zone--payment">
                         <p className="alloy-os-billing__zone-head">Payment</p>
                         <p
                             className="alloy-os-billing__autopay"
@@ -153,7 +152,11 @@ export default function FinancialsCard({
                                 </div>
                             ))}
                         </div>
+                        {/* Manage payment owns payers, split, methods, autopay and recovery — so it
+                            sits under the payment facts, not in a generic footer. */}
+                        <FooterAction>Manage payment →</FooterAction>
                     </section>
+                    </div>
                 </div>
 
                 {pastDue ? <p className="alloy-os-billing__history">{evidence.historyLine}</p> : null}

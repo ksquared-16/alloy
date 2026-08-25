@@ -501,6 +501,32 @@
   min-width: 0;
   margin-top: 2px;
 }
+/* Current Period is the primary financial explanation and needs width for the arithmetic.
+ * Past Due and Payment answer one related question — what needs collecting, and how — so they
+ * stack in a narrower right column instead of holding equal authority. */
+.alloy-os-billing__zones--two {
+  grid-template-columns: minmax(0, 60fr) minmax(0, 40fr);
+  gap: 10px 36px;
+}
+.alloy-os-billing__collect {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-billing__zone--payment {
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-billing__zone-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
+  margin-top: 6px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
 .alloy-os-billing__zone {
   display: flex;
   flex-direction: column;
@@ -528,6 +554,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Cap the arithmetic's measure. At full column width the label and its amount drift apart and
+   * the stack stops reading as a sum. */
+  max-width: 380px;
 }
 .alloy-os-billing__line {
   display: flex;
@@ -570,6 +599,7 @@
 }
 .alloy-os-billing__due {
   margin: 3px 0 0;
+  max-width: 380px;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
@@ -837,8 +867,8 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  grid-template-columns: 62px 110px minmax(0, 1fr) 96px 110px 180px;
-  gap: 12px;
+  grid-template-columns: 60px 108px minmax(0, 1fr) 132px 92px 104px 168px;
+  gap: 11px;
   align-items: baseline;
   min-height: 21px;
   padding: 1px 0;
@@ -846,8 +876,16 @@
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
-.alloy-os-billingdetail__row > :nth-child(4) {
+.alloy-os-billingdetail__row > :nth-child(5) {
   text-align: right;
+}
+.alloy-os-billingdetail__gl {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .alloy-os-billingdetail__row--head {
   border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
@@ -1107,6 +1145,53 @@
   font-weight: 500;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+/* The lens the panel was opened from — context only. It never touches the stage. */
+.alloy-os-process__lens {
+  margin-left: 8px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* Child participations project as supporting context beneath the case's stage. */
+.alloy-os-process__children {
+  margin: 3px 0 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 11px;
+}
+.alloy-os-process__children-count {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-process__child {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-process__child[data-scoped="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+}
+.alloy-os-process__child-stage {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
 .alloy-os-process__needed {
   margin: 2px 0 0;
   font-size: 11px;
@@ -1265,14 +1350,41 @@
   padding: 14px 16px 15px;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  max-width: 460px;
+  gap: 4px;
+  max-width: 480px;
 }
 .alloy-os-addcharge__title {
   margin: 0 0 3px;
   font-size: 0.92rem;
   font-weight: 700;
   color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 190px;
+  padding: 3px 9px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 7px;
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__optioncount {
+  margin-left: 8px;
+  font-size: 0.64rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__share {
+  font-size: 0.64rem;
+  font-weight: 700;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field-value [data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
 }
 .alloy-os-addcharge__types {
   display: flex;
@@ -1300,7 +1412,7 @@
 .alloy-os-addcharge__field {
   margin: 0;
   display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
+  grid-template-columns: 116px minmax(0, 1fr);
   gap: 8px;
   align-items: baseline;
   padding: 2px 0;

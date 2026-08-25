@@ -6,21 +6,36 @@ import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/card
 /**
  * Add charge — the command surface, driven by `financial_charge_templates`.
  *
- * The template is the configuration, and it decides the form:
- *   `amount_strategy`  fixed → the amount is locked · manual → the operator sets it
- *                      rate_derived → the rate resolves it
- *   `billable_on`      immediate | offset_days | next_billing_cycle → the default due date
- *   `responsibility`   household | employer | third_party | agency → who is billed
+ * ── THE TEMPLATE DECIDES THE FORM ──
  *
- * Nothing about a charge type is hardcoded here, and no fee definition is duplicated into the
- * card. The mutation path is:
+ *   amount_strategy   fixed → amount locked · manual → operator sets it · rate_derived → resolved
+ *   occurs_on         now | event_date | service_period_start   → the SERVICE date
+ *   billable_on       immediate | offset_days | next_billing_cycle → the BILLING PERIOD
+ *   responsibility    household | employer | third_party | agency → who is billed
  *
- *   configured template → registered financial capability → eligibility / required input
- *   → preview → confirmation → canonical mutation (`createChildcareDraftCharge` +
- *   `postChildcareCharge`) → event → projection refresh
+ * Nothing about a charge type is hardcoded, and no fee definition is duplicated into the card.
  *
- * **The registered capability does not exist yet** — that is the gap this specimen names. The
- * services and the template catalog both exist; there is no action definition wrapping them.
+ * ── FOUR DATES, FOUR COLUMNS, NO INVENTION ──
+ *
+ *   service date    `charges.service_date`  when the thing happened
+ *   billing period  derived from `billable_on`; the period the charge lands in
+ *   due date        `charges.due_date`
+ *   posting date    `charges.posted_at`, set by the mutation, never by the operator
+ *
+ * A future-dated charge is therefore ordinary: a September service date on a charge created in
+ * August, billable next cycle. Whether the operator may override any of them is
+ * `allowsDateOverride` on the template — configuration, not a card rule.
+ *
+ * ── PAYER TARGETING RESOLVES AGAINST THE CANONICAL MODEL ──
+ *
+ * The command never builds its own allocation. It offers the targeting the template permits and
+ * lets `payment_allocations` / the responsibility model decide the split. Allocation math renders
+ * ONLY when that split is authoritative — otherwise the preview shows the charge and the balance
+ * and says nothing it cannot support.
+ *
+ * **The registered capability does not exist yet.** `financial_charge_templates`,
+ * `createChildcareDraftCharge` and `postChildcareCharge` all exist; nothing in
+ * `lib/adminV2/actions/definitions` wraps them. That is gap F5.
  */
 export default function AddChargeCommand({
     specimen,
@@ -36,20 +51,22 @@ export default function AddChargeCommand({
         <div className="alloy-os-addcharge">
             <p className="alloy-os-addcharge__title">Add charge</p>
 
-            <SectionHead ruled={false}>Charge type</SectionHead>
-            <div className="alloy-os-addcharge__types">
-                {templates.map((opt) => (
-                    <span
-                        key={opt.key}
-                        className="alloy-os-addcharge__type"
-                        data-on={opt.key === t.key ? "true" : undefined}
-                    >
-                        {opt.label}
-                    </span>
-                ))}
-            </div>
+            {/* The platform select, not a permanent row of chips — the catalog is configured and
+                can be long, and the operator sees labels, never keys. */}
+            <Field label="Charge type" required>
+                <span className="alloy-os-addcharge__select">
+                    {t.label}
+                    <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                        <path d="M2.5 4.5 6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                </span>
+                <span className="alloy-os-addcharge__optioncount">
+                    {templates.length} configured types
+                </span>
+            </Field>
             <p className="alloy-os-addcharge__config">
-                {t.responsibility} · billable {t.billableOn.toLowerCase()} ·{" "}
+                {t.responsibility} · occurs {t.occursOn.toLowerCase()} · billable{" "}
+                {t.billableOn.toLowerCase()} ·{" "}
                 {t.amountStrategy === "fixed"
                     ? "fixed amount"
                     : t.amountStrategy === "rate_derived"
@@ -57,16 +74,47 @@ export default function AddChargeCommand({
                       : "operator sets the amount"}
             </p>
 
-            <SectionHead ruled={false}>Inputs</SectionHead>
-            <Field label="Applies to" value={specimen.subject} required={t.requiresSubject} />
-            <Field
-                label="Amount"
-                value={amountLocked ? (t.amount ?? "—") : specimen.amount}
-                locked={amountLocked}
-            />
-            <Field label="Billing period" value={specimen.period} />
-            <Field label="Due" value={specimen.due} derived />
-            <Field label="Note" value={specimen.note} required={t.requiresNote} />
+            <SectionHead ruled={false}>Charge</SectionHead>
+            <Field label="Applies to" required={t.requiresSubject}>
+                <Value>{specimen.subject}</Value>
+            </Field>
+            <Field label="Amount" required={!amountLocked}>
+                <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
+                {amountLocked ? <Hint>from template</Hint> : null}
+            </Field>
+            <Field label="Note" required={t.requiresNote}>
+                <Value>{specimen.note}</Value>
+            </Field>
+
+            <SectionHead ruled={false}>Dates</SectionHead>
+            <Field label="Service date">
+                <Value>{specimen.serviceDate}</Value>
+                {t.allowsDateOverride ? <Hint>override allowed</Hint> : <Hint>fixed by template</Hint>}
+            </Field>
+            <Field label="Billing period">
+                <Value>{specimen.period}</Value>
+                <Hint>from billable_on</Hint>
+            </Field>
+            <Field label="Due">
+                <Value>{specimen.due}</Value>
+                <Hint>configured policy</Hint>
+            </Field>
+            <Field label="Posting">
+                <Value locked>On confirmation</Value>
+                <Hint>set by the mutation</Hint>
+            </Field>
+
+            <SectionHead ruled={false}>Charge to</SectionHead>
+            <Field label="Responsibility">
+                <Value>{specimen.chargeTo}</Value>
+                <Hint>
+                    {t.payerTargeting === "operator_selectable"
+                        ? "operator may target a payer"
+                        : t.payerTargeting === "third_party"
+                          ? "third party / agency"
+                          : "template default"}
+                </Hint>
+            </Field>
 
             <SectionHead ruled={false}>Preview</SectionHead>
             <div className="alloy-os-addcharge__preview">
@@ -74,6 +122,20 @@ export default function AddChargeCommand({
                     <span className="alloy-os-billing__line-label">{t.label}</span>
                     <span className="alloy-os-billing__line-value">+{specimen.amount}</span>
                 </p>
+                {/* Allocation math renders ONLY when the split is authoritative. */}
+                {specimen.allocation ? (
+                    <>
+                        <p className="alloy-os-billingdetail__group">Responsibility</p>
+                        {specimen.allocation.map((a) => (
+                            <p key={a.payer} className="alloy-os-billing__line">
+                                <span className="alloy-os-billing__line-label">
+                                    {a.payer} <span className="alloy-os-addcharge__share">{a.share}</span>
+                                </span>
+                                <span className="alloy-os-billing__line-value">{a.amount}</span>
+                            </p>
+                        ))}
+                    </>
+                ) : null}
                 <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
                     <span className="alloy-os-billing__line-label">Current balance</span>
                     <span className="alloy-os-billing__line-value">
@@ -92,16 +154,12 @@ export default function AddChargeCommand({
 
 function Field({
     label,
-    value,
     required,
-    locked,
-    derived,
+    children,
 }: {
     label: string;
-    value: string;
     required?: boolean;
-    locked?: boolean;
-    derived?: boolean;
+    children: React.ReactNode;
 }) {
     return (
         <p className="alloy-os-addcharge__field">
@@ -109,11 +167,15 @@ function Field({
                 {label}
                 {required ? <span className="alloy-os-addcharge__req">required</span> : null}
             </span>
-            <span className="alloy-os-addcharge__field-value" data-locked={locked ? "true" : undefined}>
-                {value}
-                {locked ? <span className="alloy-os-addcharge__hint">set by template</span> : null}
-                {derived ? <span className="alloy-os-addcharge__hint">from billable_on</span> : null}
-            </span>
+            <span className="alloy-os-addcharge__field-value">{children}</span>
         </p>
     );
+}
+
+function Value({ children, locked }: { children: React.ReactNode; locked?: boolean }) {
+    return <span data-locked={locked ? "true" : undefined}>{children}</span>;
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+    return <span className="alloy-os-addcharge__hint">{children}</span>;
 }

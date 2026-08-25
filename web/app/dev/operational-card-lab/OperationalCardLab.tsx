@@ -34,6 +34,7 @@ import {
     FINANCIALS_LEDGER_PERIODS,
     FINANCIALS_SPECIMENS,
     PROCESS_ENROLLMENT,
+    PROCESS_GRAIN_SPECIMENS,
     PROCESS_SPECIMENS,
     SAFETY_SIGNALS,
     CARE_TEAM_FIXTURE,
@@ -61,7 +62,8 @@ type TabKey =
     | "healthdetail"
     | "process"
     | "addcharge"
-    | "signals";
+    | "signals"
+    | "grain";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -73,6 +75,7 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "billing", label: "5 · Financials" },
     { key: "healthspec", label: "A · Health specimens" },
     { key: "process", label: "P · Process card (3 processes)" },
+    { key: "grain", label: "G · Mixed grain (Wright family)" },
     { key: "addcharge", label: "F · Add charge" },
     { key: "signals", label: "S · Safety Signals" },
     { key: "healthdetail", label: "D1 · Health detail" },
@@ -117,6 +120,19 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         ],
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    grain: {
+        question: "Do Work View, process stage, family grain and child grain stay distinct?",
+        decisions: [
+            "Four renders, ONE component: the case from Tour, the SAME case from All, and the same case scoped to Avery then Riley.",
+            "Stage is identical from Tour and from All — only the lens chip changes. buildOperationalContext resolves stageKey from subjectVm.workspace.lifecycle_rail / stage_context and contains NO reference to a work unit, so a lens structurally cannot reach the stage.",
+            "Avery is waitlisted and Riley is not, while the CASE is at Tour. Child participations project as supporting context beneath the band and never overwrite the case's stage.",
+            "The scoped child is emphasised, not substituted — per operational-grain-doctrine.md §2.4 a child selection is a scope HINT; the Focus Panel stays case-grain.",
+        ],
+        open: [
+            "GRAIN GAP: there is no child-grain Focus Panel today, by doctrine rather than omission. OperationalGrain declares \"child\" as \"Not yet used in the Focus Panel; reserved for child-grain queue row contexts\", and a shipped conformance test asserts grain is always 'case' for Focus Panel contexts. Rendering Avery AS the subject would be a platform change, not a card change.",
+            "The only seam a lens can touch is the stage LABEL fallback (stage_label ?? statusLabel) — never the key. Worth a guard test.",
         ],
     },
     process: {
@@ -414,6 +430,7 @@ export default function OperationalCardLab() {
                                 tab === "billingspec" ||
                                 tab === "billingdetail" ||
                                 tab === "process" ||
+                                tab === "grain" ||
                                 tab === "healthdetail" ||
                                 tab === "wide"
                                     ? " · full row"
@@ -450,6 +467,15 @@ export default function OperationalCardLab() {
                                         {FINANCIALS_SPECIMENS.map((sp) => (
                                             <Cell key={sp.caseLabel} span={2} kind="cand" name={sp.caseLabel}>
                                                 <FinancialsCard evidence={sp} />
+                                            </Cell>
+                                        ))}
+                                    </>
+                                ) : null}
+                                {tab === "grain" ? (
+                                    <>
+                                        {PROCESS_GRAIN_SPECIMENS.map((sp) => (
+                                            <Cell key={sp.caseLabel} span={2} kind="cand" name={`${sp.subjectLabel} · ${sp.caseLabel}`}>
+                                                <ProcessCard evidence={sp} />
                                             </Cell>
                                         ))}
                                     </>

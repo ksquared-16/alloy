@@ -1218,6 +1218,19 @@ html[data-alloy-os-runtime-split="true"] [data-alloy-os-focus-panel="true"] {
   min-width: 0;
 }
 
+/* A PERSON subject shows its identity avatar instead of the household tile. The avatar carries
+ * its own round shape and tone, so the tile drops its frame and becomes a plain slot — one avatar
+ * model, no second identity presentation. */
+.alloy-os-fp-header-compact__subject-tile--avatar {
+  width: 34px;
+  height: 34px;
+  margin-top: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  border-radius: 999px;
+}
+
 .alloy-os-fp-header-compact__subject-tile {
   display: inline-flex;
   align-items: center;
@@ -4920,6 +4933,11 @@ html[data-alloy-os-runtime-split="true"]
   column-gap: var(--alloy-os-fp-gap-x);
   row-gap: var(--alloy-os-fp-gap-y);
   padding: var(--alloy-os-fp-pad);
+  /* Leading space only. The panel's first card should begin close to the Work / Activity control;
+   * the side and bottom gutters keep --alloy-os-fp-pad, so column widths and the bottom breathing
+   * room are unchanged, and no card's own spacing is touched. This is the shared non-Work grid
+   * owner — the same rule every mode that uses it inherits, not a route-specific override. */
+  padding-top: var(--alloy-os-fp-pad-top, 10px);
   background: var(--alloy-os-surface, #fff);
   align-items: start;
 }

@@ -3,7 +3,8 @@
 import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
-import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
+import { Action, ActionRow, FooterAction, SectionHead } from "@/components/cardLab/CardLabKit";
+import { chargeCategoryLabel } from "@/lib/financials/chargeCategories";
 import type { FinancialsEvidence, FinancialsLedgerPeriod } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -76,13 +77,15 @@ export default function FinancialsDetailCard({
                             ) : null}
                         </span>
                     ))}
+                    <FooterAction>Manage payment →</FooterAction>
                 </div>
 
+                {/* Mutations sit together; Manage payment is management/navigation and lives with
+                    the payer facts above, not as a peer command. */}
                 <ActionRow>
                     <Action primary>Pay now</Action>
                     <Action>Add charge</Action>
                     <Action>Record payment</Action>
-                    <Action>Manage payment</Action>
                 </ActionRow>
 
                 {/* The ledger owns the detail. */}
@@ -132,6 +135,7 @@ export default function FinancialsDetailCard({
                                         <span>Date</span>
                                         <span>Type</span>
                                         <span>Description</span>
+                                        <span>GL code</span>
                                         <span>Amount</span>
                                         <span>Status</span>
                                         <span>Source</span>
@@ -139,8 +143,12 @@ export default function FinancialsDetailCard({
                                     {per.entries.map((e, i) => (
                                         <div key={`${e.when}-${i}`} className="alloy-os-billingdetail__row">
                                             <span className="alloy-os-billingdetail__when">{e.when}</span>
-                                            <span className="alloy-os-billingdetail__type">{e.type}</span>
+                                            {/* The catalog owns the label — the card never renders a raw key. */}
+                                            <span className="alloy-os-billingdetail__type">
+                                                {chargeCategoryLabel(e.type)}
+                                            </span>
                                             <span className="alloy-os-billingdetail__desc">{e.label}</span>
+                                            <span className="alloy-os-billingdetail__gl">{e.glCode ?? "— unmapped"}</span>
                                             <span
                                                 className={clsx(
                                                     "alloy-os-billingdetail__amount",

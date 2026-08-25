@@ -197,8 +197,14 @@ export type AttendanceEvidence = {
 
 export type LedgerEntry = {
     when: string;
-    /** Canonical `charges.charge_type` / payment kind, for the detail ledger's Type column. */
+    /**
+     * Canonical charge category key. The card NEVER renders this — it renders
+     * `chargeCategoryLabel(type)` from `lib/financials/chargeCategories.ts`, which the
+     * configuration catalog already owns. No ad-hoc display map lives in the card.
+     */
     type: string;
+    /** Resolved via `resolveGlMapping` from the charge category. Null = genuinely unmapped. */
+    glCode: string | null;
     label: string;
     /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;
@@ -307,10 +313,16 @@ export type ChargeTemplateOption = {
     /** `amount_strategy` — fixed locks the amount, manual lets the operator set it. */
     amountStrategy: "fixed" | "manual" | "rate_derived";
     amount: string | null;
-    /** `billable_on` — decides the default due date. */
+    /** `occurs_on` — now | event_date | service_period_start. Decides the SERVICE date. */
+    occursOn: string;
+    /** `billable_on` — immediate | offset_days | next_billing_cycle. Decides the BILLING period. */
     billableOn: string;
     /** `responsibility` — household | employer | third_party | agency. */
     responsibility: string;
+    /** Whether the operator may override the template's dating. */
+    allowsDateOverride: boolean;
+    /** Whether the operator may target a specific payer, or the split applies. */
+    payerTargeting: "default_split" | "operator_selectable" | "single_payer" | "third_party";
     requiresSubject: boolean;
     requiresNote: boolean;
 };
@@ -319,12 +331,20 @@ export type AddChargeSpecimen = {
     template: ChargeTemplateOption;
     subject: string;
     amount: string;
+    /** `charges.service_date` — when the thing happened. */
+    serviceDate: string;
+    /** The billing period the charge lands in, derived from billable_on unless overridden. */
     period: string;
+    /** `charges.due_date`. */
     due: string;
+    /** Which date the operator changed, if any. */
+    overridden: string | null;
+    chargeTo: string;
+    /** Only rendered when allocation is authoritative. */
+    allocation: { payer: string; share: string; amount: string }[] | null;
     note: string;
     previewBefore: string;
     previewAfter: string;
-    blockers: string[];
 };
 
 /** A configured Business Process, as the combined Process card consumes it. */
@@ -337,7 +357,22 @@ export type ProcessStage = {
 
 export type ProcessAction = { label: string; primary?: boolean };
 
+/** A child's own participation, projected as supporting context at family grain. */
+export type ProcessChildState = {
+    name: string;
+    stage: string;
+    /** True when the panel was opened with this child as the scope hint. */
+    scoped?: boolean;
+};
+
 export type ProcessEvidence = {
+    caseLabel: string;
+    /** The Focus Panel subject. Always the case today — see the grain doctrine. */
+    subjectLabel: string;
+    /** The lens the panel was opened from. Context only; it NEVER decides the stage. */
+    sourceWorkView: string | null;
+    /** Child participations, when the subject is a case with more than one child. */
+    childStates: ProcessChildState[];
     processLabel: string;
     stages: ProcessStage[];
     currentStageLabel: string;
