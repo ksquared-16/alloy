@@ -357,10 +357,23 @@ export async function reconcileParkedProviders({
   // The live process is the truth; the record follows it.
   const revived = [];
   for (const lane of lanes) {
-    if (!laneProviderIsSuspended(lane)) continue;
+    // Resolve suspension from the STORES, not from projection fields.
+    //
+    // laneProviderIsSuspended reads lane.agent_session / lane.execution_run,
+    // which exist only on a PROJECTED lane. The governor calls this with durable
+    // lane RECORDS, which carry neither — so the predicate was always false here
+    // and this loop never ran once in production. Runtime Performance sat with a
+    // live Claude (pid 97004, ready caret) and a SUSPENDED session record,
+    // holding a seat while its own run stayed QUEUED: it starved itself, and
+    // capacity read 4/3 because a fourth provider was alive.
+    const session = activeAgentSessionForLane(lane.lane_id, root);
+    const linkedRun = session?.run_id ? getExecutionRun(session.run_id, root) : null;
+    const suspended = session?.state === "SUSPENDED"
+      || linkedRun?.provider_suspension?.state === "SUSPENDED"
+      || laneProviderIsSuspended(lane);
+    if (!suspended) continue;
     const alive = await providerIsLive(lane, { root });
     if (!alive) continue;
-    const session = activeAgentSessionForLane(lane.lane_id, root);
     if (session && session.state === "SUSPENDED") {
       patchAgentSession(session.agent_session_id, {
         state: "ACTIVE",
@@ -368,7 +381,7 @@ export async function reconcileParkedProviders({
         suspension_reason: null,
       }, { root, event: "provider_resumed", extra: { origin: "reconciler", evidence: "live_provider" } });
     }
-    const run = session?.run_id ? getExecutionRun(session.run_id, root) : null;
+    const run = linkedRun;
     if (run?.provider_suspension?.state === "SUSPENDED") {
       patchRunFields(run.run_id, {
         provider_suspension: { ...run.provider_suspension, state: "RESUMED", resumed_at: iso(nowMs) },

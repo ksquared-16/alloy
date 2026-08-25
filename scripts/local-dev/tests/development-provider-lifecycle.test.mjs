@@ -514,5 +514,35 @@ await test("the reconciler revives a suspended record when the provider is live"
   assert.ok(src.includes("async function providerIsLive"), "liveness is asked of tmux, not of the record");
 });
 
+
+/**
+ * The revive pass must read the STORES, not projection fields.
+ *
+ * laneProviderIsSuspended reads lane.agent_session / lane.execution_run, which
+ * exist only on a PROJECTED lane. The governor calls the reconciler with
+ * durable lane RECORDS, which carry neither — so gating the revive loop on that
+ * predicate meant it never ran once in production. Runtime Performance sat with
+ * a live provider and a SUSPENDED session record, holding a seat while its own
+ * run stayed QUEUED, and capacity read 4 against a ceiling of 3.
+ */
+await test("revive decides from the session store, not projection fields", () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("export async function reconcileParkedProviders"));
+  const revive = fn.slice(fn.indexOf("const revived = []"));
+  assert.ok(revive.includes("activeAgentSessionForLane"),
+    "the revive pass must resolve the session from the store");
+  assert.equal(/if \(!laneProviderIsSuspended\(lane\)\) continue;/.test(revive), false,
+    "gating on a projection-only predicate makes this loop dead for record callers");
+});
+
+await test("a durable lane record carries no projection fields", async () => {
+  // The reason the predicate could never be true for the governor's callers.
+  const { listDurableLanes } = await import("../lib/vacilando/development-lane.mjs");
+  const sample = listDurableLanes()[0];
+  if (!sample) return;
+  assert.equal("agent_session" in sample, false);
+  assert.equal("execution_run" in sample, false);
+});
+
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
 process.exit(fail === 0 ? 0 : 1);
