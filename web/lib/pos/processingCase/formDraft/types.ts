@@ -131,6 +131,34 @@ export interface DraftCollectionGroup {
     decision_state?: string;
 }
 
+/**
+ * A document a CLAUSE asked for, approved by the operator.
+ *
+ * A section's `disposition` says what the whole section is. It cannot say "this is a consent page
+ * that also, in its fourth sentence, asks you to bring an immunization record" — and that sentence is
+ * exactly what the real packet is made of. Typing the whole section `upload` to carry one clause
+ * would turn a consent page into an upload page and lose every other thing it does.
+ *
+ * So the clause rides beside the section instead of redefining it. It survives regardless of the
+ * section's disposition, because a static/acknowledgement section drops field prompts and this is
+ * not a prompt the source drew — it is an obligation the source stated.
+ */
+export interface DraftClauseUpload {
+    /** Stable field id in the published form — the participant-facing control. */
+    id: string;
+    /** The approved obligation this came from (proposal identity), for lineage. */
+    obligation_id: string;
+    /** The discovery concept id — the clause's own identity in the source. */
+    concept_id: string;
+    /** Short participant-facing label. */
+    label: string;
+    /** The clause's own wording, kept verbatim so the document's meaning is never paraphrased away. */
+    description: string;
+    required: boolean;
+    /** The canonical document classification, when discovery recognised one. Never invented. */
+    document_type?: string;
+}
+
 export interface DraftFormSection {
     id: string;
     title: string;
@@ -142,6 +170,11 @@ export interface DraftFormSection {
      * `recommendSectionDisposition`; the operator confirms/overrides before publish. Omitted === "fields".
      */
     disposition?: import("./sectionDisposition").SectionDisposition;
+    /**
+     * Approved clause-level document obligations anchored to this section. Populated by
+     * `applyDiscovery` from APPROVED upload proposals; never inferred from prose here.
+     */
+    clause_uploads?: DraftClauseUpload[];
     /**
      * Preserved instructional / consent / signature prose that field-extraction alone would discard.
      * Carried into the published form as a `text_block` so the document's meaning is never lost.

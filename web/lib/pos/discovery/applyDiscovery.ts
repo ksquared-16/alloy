@@ -12,8 +12,13 @@
  *     requires_confirmation (the field is prepared, not silently created).
  *   • relationship_binding → project through the canonical collection provider (M5B) → applied
  *     (recorded on the section; person create/link happens at participant submission, not config time).
- *   • upload/acknowledgement/signature/static/output → confirm the section disposition that already
+ *   • acknowledgement/signature/static/output → confirm the section disposition that already
  *     drives draftFormToFormSchemaV1's requirement/static/signature constructs → applied.
+ *   • upload_requirement → attach a CLAUSE-LEVEL upload to its section → applied. This one is not a
+ *     section disposition: the real packet asks for documents in the middle of prose ("Completed
+ *     immunization records must be provided on or before the first day of care"), so the enclosing
+ *     section is a consent page, not an upload page. Confirming a section disposition that was never
+ *     `upload` applied nothing, and four discovered obligations published as zero participant asks.
  *   • form_only_response → no configuration to apply → skipped (it is a form question, not a record field).
  *
  * This module owns the pure decision + draft mutation. Live Field System field creation and the
@@ -21,7 +26,9 @@
  * records what must happen and never fabricates a durable write.
  */
 
-import type { StoredFormDraftPreview, DraftFormField } from "@/lib/pos/processingCase/formDraft/types";
+import type { StoredFormDraftPreview, DraftFormField, DraftClauseUpload } from "@/lib/pos/processingCase/formDraft/types";
+import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
+import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
 import { canonicalCollectionProviderForRole } from "@/lib/fields/collection/canonicalCollectionProviderRegistry";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import { projectRelationshipCollection, applyProjectionToDraft } from "./projectRelationshipCollections";
@@ -114,6 +121,81 @@ export interface ApplyOutput {
  * proposal-identity ledger. Field bindings are written onto the draft; new fields and relationship
  * writes are recorded for the caller's canonical-service execution.
  */
+/**
+ * Attach an approved clause-level document obligation to its section.
+ *
+ * Deliberately does NOT touch `section.disposition`. A consent page that happens to ask for a
+ * record is still a consent page, and retyping it would drop every acknowledgement it carries.
+ */
+function attachClauseUpload(
+    draft: StoredFormDraftPreview,
+    proposal: ConfigurationProposal,
+    concept: ConfigurationDiscoveryResult["concepts"][number] | undefined,
+    identity: string,
+):
+    | { ok: true; duplicate: boolean; upload: DraftClauseUpload; sectionTitle: string }
+    | { ok: false; reason: string } {
+    if (!concept) return { ok: false, reason: "No concept for this proposal." };
+
+    const section =
+        draft.sections.find((s) => s.id === concept.source.section_key) ??
+        draft.sections.find((s) => s.title === concept.source.section_title);
+    if (!section) return { ok: false, reason: `No draft section matches "${concept.source.section_title}".` };
+
+    const existing = section.clause_uploads ?? [];
+    const already = existing.find((u) => u.obligation_id === identity || u.concept_id === concept.id);
+    if (already) return { ok: true, duplicate: true, upload: already, sectionTitle: section.title };
+
+    const documentType = proposal.target_document_classification;
+    const clause = concept.label.trim();
+    // Two clauses can classify to the SAME document type and still be different obligations — the
+    // CIS asks for proof of immunization and, separately, for a physician's exemption letter, and
+    // both are `immunization_record` because the vocabulary has no name for the second. Labelling
+    // both "Immunization record" shows a family two identical asks for two different documents, so
+    // the later one keeps its own wording. This disambiguates; it does not classify.
+    const takenLabels = new Set(draft.sections.flatMap((sec) => (sec.clause_uploads ?? []).map((u) => u.label)));
+    const upload: DraftClauseUpload = {
+        // Derived from the CONCEPT id, so the same clause always produces the same control and a
+        // re-apply cannot create a second participant ask.
+        id: `upload_${concept.id.replace(/[^a-zA-Z0-9]+/g, "_")}`.slice(0, 72),
+        obligation_id: identity,
+        concept_id: concept.id,
+        label: uniqueLabel(participantLabel(clause, documentType), clause, takenLabels),
+        // The clause verbatim. A participant label is a summary; the sentence is the obligation.
+        description: clause,
+        // An obligation that is not required is not an obligation. The operator can relax it in
+        // Packet Composition, which is where responsibility already lives.
+        required: true,
+        ...(documentType ? { document_type: documentType } : {}),
+    };
+
+    section.clause_uploads = [...existing, upload];
+    return { ok: true, duplicate: false, upload, sectionTitle: section.title };
+}
+
+/**
+ * What the family sees above the file picker.
+ *
+ * A whole sentence is the obligation, not a label — "Oregon law requires proof of immunization or
+ * exemption signed prior to a child's attendance at school…" is not something to put above a button.
+ * When discovery recognised the document type, its canonical name IS the label; otherwise the clause
+ * is trimmed and the full sentence stays in the description. No new classification happens here.
+ */
+function uniqueLabel(preferred: string, clause: string, taken: ReadonlySet<string>): string {
+    if (!taken.has(preferred)) return preferred;
+    const fromClause = participantLabel(clause, undefined);
+    return taken.has(fromClause) ? `${preferred} (${fromClause})`.slice(0, 96) : fromClause;
+}
+
+function participantLabel(clause: string, documentType: string | undefined): string {
+    if (documentType && documentType in CLASSIFICATION_KEY_LABELS) {
+        return CLASSIFICATION_KEY_LABELS[documentType as ProcessingClassificationKey];
+    }
+    const firstSentence = clause.split(/(?<=[.:?])\s/)[0] ?? clause;
+    const trimmed = firstSentence.trim().replace(/\s+/g, " ");
+    return trimmed.length <= 72 ? trimmed : `${trimmed.slice(0, 69).trimEnd()}…`;
+}
+
 export function applyDiscovery(input: ApplyInput): ApplyOutput {
     const draft: StoredFormDraftPreview = JSON.parse(JSON.stringify(input.draft));
     const fieldById = new Map(draft.fields.map((f) => [f.id, f]));
@@ -242,7 +324,25 @@ export function applyDiscovery(input: ApplyInput): ApplyOutput {
                 break;
             }
 
-            case "upload_requirement":
+            case "upload_requirement": {
+                const attached = attachClauseUpload(draft, p, concept, identity);
+                if (!attached.ok) {
+                    record("failed", attached.reason);
+                    break;
+                }
+                if (attached.duplicate) {
+                    // Two artifacts correlated to one obligation must produce ONE participant ask.
+                    ledger.add(identity);
+                    record("already_applied", `"${label}" is already an upload requirement on this form.`);
+                    break;
+                }
+                ledger.add(identity);
+                record("applied", `Added an upload requirement for "${attached.upload.label}" to ${attached.sectionTitle}.`, {
+                    bound_field_ids: [attached.upload.id],
+                });
+                break;
+            }
+
             case "acknowledgement":
             case "signature_requirement":
             case "static_content":

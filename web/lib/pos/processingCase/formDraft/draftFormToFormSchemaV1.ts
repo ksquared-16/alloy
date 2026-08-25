@@ -174,12 +174,33 @@ export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSche
             for (const fid of s.field_ids) usedIds.add(fid);
         }
 
+        // 2b. Approved CLAUSE-LEVEL document obligations.
+        //
+        // Emitted for every disposition, deliberately. A static or acknowledgement section drops the
+        // field prompts the source drew — but this is not a prompt the source drew, it is an
+        // obligation the source stated in a sentence, and dropping it published four discovered
+        // document requirements as zero participant asks.
+        //
+        // Placed after the section's own content so the family reads the clause before the control
+        // that satisfies it.
+        for (const upload of s.clause_uploads ?? []) {
+            outFields.push({
+                id: upload.id,
+                type: "file_ref",
+                label: upload.label,
+                required: upload.required,
+                description: upload.description,
+                ...(upload.document_type ? { document_type: upload.document_type } : {}),
+            });
+            ids.push(upload.id);
+        }
+
         // 3. Emit the disposition's required control when the section doesn't already contain one.
         if (disposition === "acknowledgement") {
             const id = synthId("ack");
             outFields.push({ id, type: "boolean", label: "I acknowledge the above", required: true });
             ids.push(id);
-        } else if (disposition === "upload" && !sectionHasType(detectedInSection, "file_ref")) {
+        } else if (disposition === "upload" && !sectionHasType(detectedInSection, "file_ref") && !(s.clause_uploads ?? []).length) {
             const id = synthId("upload");
             outFields.push({ id, type: "file_ref", label: s.title || "Upload document", required: true });
             ids.push(id);

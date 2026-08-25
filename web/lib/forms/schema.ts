@@ -141,7 +141,17 @@ export type FormField =
           option_set_key?: string;
           static_options?: ReadonlyArray<{ value: string; label: string }>;
       })
-    | (FormFieldBase & { type: "file_ref" })
+    | (FormFieldBase & {
+          type: "file_ref";
+          /**
+           * The canonical document classification this upload satisfies, when one is known.
+           *
+           * Without it every upload requirement is "a file", and a family who uploads a physical
+           * cannot be told they still owe an immunization record. Optional on purpose: an unknown
+           * type stays absent rather than being guessed into the nearest key.
+           */
+          document_type?: string;
+      })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
     | (FormFieldBase & {
           type: "group";
@@ -223,6 +233,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
         fieldCoreSchema
             .extend({
                 type: z.literal("file_ref"),
+                document_type: z.string().min(1).optional(),
             })
             .strict(),
         fieldCoreSchema
