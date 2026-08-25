@@ -67,9 +67,71 @@ interface ScalarSemantics {
     signals: string[];
 }
 
+/**
+ * WHOSE fact is this?
+ *
+ * A section tells you what it is mostly about; a label tells you who its question is about, and the
+ * label wins. Without that, every prompt containing "name" inside a child-subject section becomes
+ * the child's name — and at packet scale that produced a correlation claiming the child's name, the
+ * guardian's name and the physician's name were one fact. Two questions that read alike must stay
+ * distinct when their subjects differ.
+ *
+ * The parties are generic enrollment vocabulary, and the MATCHED token scopes the key, so a
+ * physician and a dentist do not collapse into one "provider" either.
+ */
+const LABEL_PARTIES: ReadonlyArray<{ re: RegExp; party: string; subject: ConceptSubject }> = [
+    // Plurals matter: a state form writes "Parents' or Guardians' names", and a rule anchored to the
+    // singular silently misses it — which is how the guardian's name ends up filed as the child's.
+    { re: /\b(child|children|childs|student|students|son|daughter)\b/, party: "child", subject: "child" },
+    { re: /\b(parent|parents|guardian|guardians|mother|father)\b/, party: "guardian", subject: "person" },
+    { re: /\bemergency\s+contacts?\b|\bauthorized\s+adults?\b|\bpick\s*up\b/, party: "emergency_contact", subject: "person" },
+    { re: /\bphysicians?\b|\bdoctors?\b|\bpediatricians?\b/, party: "physician", subject: "person" },
+    { re: /\bdentists?\b|\bdental\b/, party: "dentist", subject: "person" },
+    { re: /\baccount\s+holders?\b/, party: "account_holder", subject: "person" },
+    { re: /\bsiblings?\b|\bbrothers?\b|\bsisters?\b/, party: "sibling", subject: "person" },
+    { re: /\bemployers?\b/, party: "employer", subject: "household" },
+    { re: /\b(programs?|daycares?|day\s*cares?|schools?|camps?)\b/, party: "prior_program", subject: "enrollment" },
+    { re: /\bfinancial\s+institutions?\b|\bbanks?\b/, party: "financial_institution", subject: "household" },
+];
+
+/** The attribute a prompt asks for, when it is one of the few every form asks for. */
+const LABEL_ATTRIBUTES: ReadonlyArray<{ re: RegExp; attribute: string }> = [
+    { re: /\b(dates? of birth|birth\s*dates?|birthdates?|d\.?o\.?b)\b/, attribute: "date_of_birth" },
+    { re: /\bemails?\b/, attribute: "email" },
+    { re: /\b(phones?|telephones?|mobile|cell|contact numbers?)\b/, attribute: "phone" },
+    { re: /\b(address(es)?|street|city|state|zip|postal)\b/, attribute: "address" },
+    { re: /\bnames?\b/, attribute: "name" },
+];
+
+export function labelParty(label: string): { party: string; subject: ConceptSubject } | null {
+    const l = (label ?? "").toLowerCase();
+    for (const p of LABEL_PARTIES) if (p.re.test(l)) return { party: p.party, subject: p.subject };
+    return null;
+}
+
+function labelAttribute(label: string): string | null {
+    const l = (label ?? "").toLowerCase();
+    for (const a of LABEL_ATTRIBUTES) if (a.re.test(l)) return a.attribute;
+    return null;
+}
+
 function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
     const l = label.toLowerCase();
     const sig = (s: string) => [s, `section: ${ctx.subject}`];
+
+    // The label names a party and asks for one of the attributes every form asks for. That pairing
+    // is the identity — not the section it happens to sit in.
+    const party = labelParty(label);
+    const attribute = labelAttribute(label);
+    if (party && attribute) {
+        const key = party.party === "child" ? `child.${attribute}` : `${party.party}.${attribute}`;
+        return {
+            subject: party.subject,
+            concept_key: key,
+            band: "high",
+            signals: [`label names the ${party.party.replace(/_/g, " ")} and asks for their ${attribute.replace(/_/g, " ")}`],
+        };
+    }
     if (/\b(date of birth|birth\s*date|birthdate|d\.?o\.?b)\b/.test(l)) return { subject: "child", concept_key: "child.date_of_birth", band: "high", signals: sig("label matches date-of-birth") };
     if (/\bemail\b/.test(l)) return { subject: "person", concept_key: "person.email", band: "high", signals: sig("label matches email") };
     if (/\b(phone|telephone|mobile|cell|contact number)\b/.test(l)) return { subject: "person", concept_key: "person.phone", band: "high", signals: sig("label matches phone") };
@@ -81,8 +143,18 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
     }
     if (/\bnickname\b/.test(l)) return { subject: "child", concept_key: "child.nickname", band: "review", signals: sig("label matches nickname") };
     if (ctx.subject === "person" && /\bname\b/.test(l)) return { subject: "person", concept_key: "person.name", band: "high", signals: sig("person name in a relationship section") };
-    // default: keep the concept scoped to the section subject with a normalized label key
+    // default: keep the concept scoped to whoever the LABEL named, falling back to the section
+    // subject. A prompt that names the guardian is never filed under the child just because the
+    // section it sits in is mostly about the child.
     const core = l.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+    if (party) {
+        return {
+            subject: party.subject,
+            concept_key: `${party.party}.${core}`,
+            band: "review",
+            signals: [`no canonical alias — scoped to the ${party.party.replace(/_/g, " ")} the label names`],
+        };
+    }
     return { subject: ctx.subject === "internal" ? "internal" : ctx.subject, concept_key: `${ctx.subject}.${core}`, band: "review", signals: sig("no canonical alias — scoped by section subject") };
 }
 
@@ -106,6 +178,10 @@ const UPLOAD_DOC_RE = /\b(records?|plan|documentation|proof|copy|certificate)\b[
 export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptCandidate[] {
     const concepts: BusinessConceptCandidate[] = [];
     const seen = new Set<string>(); // concept_key dedup for active (non-output) scalars
+    // The concept a deduped key already produced. A second occurrence is not a second fact, but it
+    // IS a second destination — so it joins the concept's evidence instead of vanishing. Without
+    // this, a fact written ten times reports coverage of one and the compression is understated.
+    const byKey = new Map<string, BusinessConceptCandidate>();
 
     // group repeated-person sections by role so #1/#2 collapse into one relationship concept
     const relBuckets = new Map<OperationalRoleKey, SemanticSection[]>();
@@ -236,8 +312,11 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
         for (const f of section.fields) {
             // An occurrence inside a repeating structure is not its own fact.
             if (f.repeat_group_id) continue;
-            const c = scalarConcept(section, ctx, f, seen);
-            if (c) concepts.push(c);
+            const c = scalarConcept(section, ctx, f, seen, byKey);
+            if (c) {
+                concepts.push(c);
+                if (c.concept_key) byKey.set(c.concept_key, c);
+            }
         }
     }
 
@@ -346,7 +425,8 @@ function scalarConcept(
     section: SemanticSection,
     ctx: SectionContext,
     f: SemanticField,
-    seen: Set<string>
+    seen: Set<string>,
+    byKey: Map<string, BusinessConceptCandidate>
 ): BusinessConceptCandidate | null {
     // choice
     if (f.role === "choice_field") {
@@ -443,7 +523,12 @@ function scalarConcept(
     if (f.role === "informational_field") {
         const s = scalarSemantics(f.label, ctx);
         // dedup active scalars by concept_key (Child's Name appears once even if repeated)
-        if (seen.has(s.concept_key)) return null;
+        if (seen.has(s.concept_key)) {
+            // Same fact, another destination. Record the destination on the concept that owns it.
+            const owner = byKey.get(s.concept_key);
+            if (owner && !owner.source.labels.includes(f.label)) owner.source.labels.push(f.label);
+            return null;
+        }
         seen.add(s.concept_key);
         return {
             contract_version: DISCOVERY_CONTRACT_VERSION,
