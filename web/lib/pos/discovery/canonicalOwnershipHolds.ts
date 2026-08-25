@@ -79,7 +79,7 @@ const HOLDS: readonly HoldRule[] = [
         state: "AWAITING_HEALTH_FOUNDATION",
         owner: "Health & Safety",
         decision: "D-H5",
-        test: /\b(allerg\w*|immuniz\w*|immunis\w*|vaccin\w*|medication\w*|medicine|prescription|diagnos\w*|(?:chronic|medical|health|existing) conditions?)\b/i,
+        test: /\b(allerg\w*|immuniz\w*|immunis\w*|vaccin\w*|medication\w*|medicine|prescription|diagnos\w*|(?:chronic|medical|health|existing) conditions?|serious illness|illnesses|hospitali\w*|general health|complications at birth|birth complications|stung by|bee sting|insect sting)\b/i,
         // A dietary restriction, a doctor's identity, and a physical/assessment DOCUMENT are not
         // health-lifecycle records — they have their own destinations and must keep them.
         except: /\b(diet|dietary|physician|doctor|dentist|clinic|provider name|insurance)\b/i,

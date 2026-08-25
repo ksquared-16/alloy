@@ -30,6 +30,7 @@ import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/pe
 import type { OwnershipHold } from "./canonicalOwnershipHolds";
 import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
 import type { SafeguardingRestrictionKind } from "@/lib/safeguarding/safeguardingRestriction";
+import type { OwnershipRouting } from "./ownershipRouting";
 
 export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
@@ -250,6 +251,9 @@ export type ProposalDisposition =
     | "output_binding" // generated/output-copy projection of approved concepts
     | "derived_value"
     | "held_for_canonical_owner" // a settled owner outside Enrollment — collected, never created here
+    | "financial_payment" // a payment credential, setup detail, or billing amount — never a field
+    | "derived_value_system" // computable from canonical truth or from the execution itself
+    | "held_unknown_owner" // ownership not established — reviewable, never silently a field
     | "unresolved"; // manual classification required
 
 /** A proposed NEW configurable field — never persisted until the operator explicitly approves. */
@@ -324,6 +328,14 @@ export interface ConfigurationProposal {
      * Present only on `held_for_canonical_owner`, and mutually exclusive with `proposed_field`.
      */
     ownership_hold?: OwnershipHold;
+    /**
+     * The ownership conclusion reached before this proposal was shaped.
+     *
+     * Present on every proposal the router touched. `create_proposed_field` may appear ONLY where
+     * this says `CANONICAL_FIELD`, which is what makes a new field an affirmative conclusion rather
+     * than the residue of failed matching.
+     */
+    ownership_routing?: OwnershipRouting;
     /** Validation problems that would block application (e.g. new field needs a key). */
     validation_issues: string[];
     explanation: string;
@@ -339,6 +351,9 @@ export type DiscoveryCategory =
     | "new_fields"
     | "held_for_owner"
     | "safeguarding"
+    | "financial"
+    | "derived"
+    | "needs_ownership_review"
     | "form_responses"
     | "relationships"
     | "upload_requirements"

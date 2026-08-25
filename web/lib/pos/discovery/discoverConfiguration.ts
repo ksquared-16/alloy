@@ -24,6 +24,9 @@ const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
     new_fields: "New fields proposed",
     held_for_owner: "Held for another owner",
     safeguarding: "Safeguarding restrictions found",
+    financial: "Financial / payment — held",
+    derived: "Derived by Alloy — no field needed",
+    needs_ownership_review: "Needs ownership review",
     form_responses: "Form responses (no field)",
     relationships: "Relationships found",
     upload_requirements: "Upload requirements found",
@@ -40,6 +43,8 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "new_fields",
     "held_for_owner",
     "safeguarding",
+    "financial",
+    "derived",
     "form_responses",
     "relationships",
     "upload_requirements",
@@ -48,6 +53,7 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "static_content",
     "output_copies",
     "collections",
+    "needs_ownership_review",
     "needs_review",
 ];
 
@@ -66,6 +72,12 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "relationships";
         case "safeguarding_binding":
             return "safeguarding";
+        case "financial_payment":
+            return "financial";
+        case "derived_value_system":
+            return "derived";
+        case "held_unknown_owner":
+            return "needs_ownership_review";
         case "upload_requirement":
             return "upload_requirements";
         case "acknowledgement":

@@ -58,6 +58,17 @@ export type CustomerMemberConfigFieldManifestRow = {
      * governed by one. Absent means `standard`.
      */
     sensitivity?: "standard" | "health";
+    /**
+     * The field's own vocabulary — the words a real form uses for this fact.
+     *
+     * Declared BY the person who settled the field, beside the field, so an importer can route a
+     * question to a destination that already exists. It is not inference from any one school's
+     * phrasing: `Favourite foods` and `favorite foods` are the same fact in every language variant,
+     * and "toilet habits" and "toileting routine" are the same routine.
+     *
+     * Absent means the label alone is the vocabulary.
+     */
+    match_terms?: readonly string[];
     config?: Record<string, unknown>;
 };
 
@@ -69,6 +80,7 @@ export const CUSTOMER_MEMBER_CONFIG_LAYOUT_REF_KEYS = CUSTOMER_MEMBER_CONFIG_FIE
 export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldManifestRow[] = [
     {
         field_key: "preferred_name",
+        match_terms: ["preferred name", "nickname", "goes by", "known as"],
         field_type: "text",
         label: "Preferred name",
         section_key: "child_profile",
@@ -76,6 +88,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "gender",
+        match_terms: ["gender"],
         field_type: "select",
         label: "Gender",
         section_key: "child_profile",
@@ -84,6 +97,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "allergies",
+        match_terms: ["allerg"],
         field_type: "text",
         label: "Allergies",
         section_key: "medical",
@@ -92,6 +106,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "medical_notes",
+        match_terms: ["medical notes"],
         field_type: "text",
         label: "Medical notes",
         section_key: "medical",
@@ -100,6 +115,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "special_instructions",
+        match_terms: ["special instructions"],
         field_type: "text",
         label: "Special instructions",
         section_key: "medical",
@@ -107,6 +123,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "special_diet",
+        match_terms: ["special diet", "dietary restriction", "diet restriction"],
         field_type: "text",
         label: "Special diet",
         section_key: "medical",
@@ -117,6 +134,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "eating_habits",
+        match_terms: ["eating habits", "eating habit", "how .{0,20}eats"],
         field_type: "text",
         label: "Eating habits",
         section_key: "child_profile",
@@ -124,6 +142,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "favorite_foods",
+        match_terms: ["favorite foods", "favourite foods", "foods .{0,10}(likes|enjoys)"],
         field_type: "text",
         label: "Favourite foods",
         section_key: "child_profile",
@@ -131,6 +150,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "foods_refused",
+        match_terms: ["foods refused", "foods .{0,10}(refuses|will not eat|won.t eat)", "food refusal"],
         field_type: "text",
         label: "Foods refused",
         section_key: "child_profile",
@@ -138,6 +158,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "toileting_routine",
+        match_terms: ["toilet habits", "toileting", "potty", "bathroom needs", "bathroom routine"],
         field_type: "text",
         label: "Toileting routine",
         section_key: "child_profile",
@@ -147,6 +168,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "nap_routine",
+        match_terms: ["nap", "naptime", "nap time", "sleeps during the day"],
         field_type: "text",
         label: "Nap routine",
         section_key: "child_profile",
@@ -155,6 +177,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
     },
     {
         field_key: "temperament",
+        match_terms: ["temperament", "personality", "disposition"],
         field_type: "text",
         label: "Temperament",
         section_key: "child_profile",

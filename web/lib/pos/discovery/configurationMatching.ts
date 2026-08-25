@@ -23,6 +23,7 @@ import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
 import { ownershipHoldFor } from "./canonicalOwnershipHolds";
 import { safeguardingConceptKind, SAFEGUARDING_KIND_LABELS } from "./safeguardingConcepts";
+import { routeOwnership, type OwnershipRouting } from "./ownershipRouting";
 import { classifyNonFormSource } from "@/lib/pos/processingCase/classification/classifyNonFormSource";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
@@ -464,14 +465,150 @@ function heldProposal(
     };
 }
 
+/**
+ * Shape a proposal from an ownership conclusion that is NOT "a new canonical field".
+ *
+ * Each branch returns a proposal that carries nothing creatable — no `proposed_field` — so the
+ * refusal survives a caller that ignores the disposition. Where an existing canonical destination
+ * was positively resolved, it binds to it instead of holding.
+ */
+function routedProposal(
+    base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
+    concept: BusinessConceptCandidate,
+    routing: OwnershipRouting,
+): ConfigurationProposal | null {
+    const common = {
+        ...base,
+        ownership_routing: routing,
+        alternatives: [] as ProposalAlternative[],
+        validation_issues: [] as string[],
+    };
+
+    switch (routing.owner) {
+        case "FINANCIAL_PAYMENT":
+            return {
+                ...common,
+                disposition: "financial_payment",
+                confidence: conf("review", ["owned by Financials / the payment provider", "never a Field System value"]),
+                explanation: `"${concept.label}" is collected on this form and does not become an Alloy field. ${routing.basis}`,
+            };
+
+        case "DERIVED_SYSTEM":
+            return {
+                ...common,
+                disposition: "derived_value_system",
+                confidence: conf("high", [`Alloy derives this from ${routing.derivedFrom ?? "canonical truth"}`]),
+                explanation: `"${concept.label}" does not need a field — Alloy already knows it from ${routing.derivedFrom ?? "canonical truth"}. ${routing.basis}`,
+            };
+
+        case "PROCESS_PARTICIPANT":
+            if (!routing.destination) return null;
+            return {
+                ...common,
+                disposition: "reuse_canonical_field",
+                target_field_source: routing.destination,
+                confidence: conf("review", [`matched to ${routing.destination.entity_type}.${routing.destination.field_key}`, "enrolment truth, not child-profile truth"]),
+                explanation: `"${concept.label}" binds to the existing ${routing.destination.entity_type} field ${routing.destination.field_key}. ${routing.basis}`,
+            };
+
+        case "SAFEGUARDING":
+        case "HEALTH":
+        case "CONSENT":
+        case "REQUIREMENT_EXCEPTION":
+            // These already have their own dispositions upstream; if one reaches here the upstream
+            // gate missed it, so hold rather than fall through to a field.
+            return {
+                ...common,
+                disposition: "held_for_canonical_owner",
+                confidence: conf("review", [`owned by ${routing.owner.toLowerCase()}`]),
+                explanation: `"${concept.label}" is collected on this form and does not become a durable Alloy field here. ${routing.basis}`,
+            };
+
+        case "RELATIONSHIP":
+            return {
+                ...common,
+                disposition: "held_unknown_owner",
+                confidence: conf("review", ["a person reached through a relationship, not a field"]),
+                explanation: `"${concept.label}" names a person. ${routing.basis}`,
+            };
+
+        case "STRUCTURED_COLLECTION":
+        case "DOCUMENT_EVIDENCE":
+        case "BUSINESS_PROCESS":
+        case "ARTIFACT_RESPONSE":
+            return {
+                ...common,
+                disposition: "held_unknown_owner",
+                confidence: conf("review", [`owned by ${routing.owner.toLowerCase().replace(/_/g, " ")}`]),
+                explanation: `"${concept.label}" is collected on this form and kept with the process. ${routing.basis}`,
+            };
+
+        case "HELD_UNKNOWN_OWNER":
+            return {
+                ...common,
+                disposition: "held_unknown_owner",
+                confidence: conf("attention", ["ownership not established", "needs an owner before it can be durable"]),
+                explanation: `"${concept.label}" is collected on this form and kept with the process. ${routing.basis}`,
+            };
+
+        default:
+            return null;
+    }
+}
+
 function proposeNewField(
     base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
     concept: BusinessConceptCandidate,
     wantsType: string,
     refused?: { target: FormFieldSource; reason: string }
 ): ConfigurationProposal {
-    const held = heldProposal(base, concept);
-    if (held) return held;
+    // ── THE GATE ──
+    // Everything below this point used to be reachable by exhaustion: no canonical field matched, no
+    // relationship matched, so propose a field. Ownership is now decided BEFORE a field is shaped,
+    // and only one conclusion continues past here.
+    const routing = routeOwnership({
+        label: concept.label,
+        concept_key: concept.concept_key,
+        suggestedDataType: concept.suggested_data_type,
+        ...(concept.repetition ? { repetition: concept.repetition } : {}),
+    });
+
+    if (routing.owner !== "CANONICAL_FIELD") {
+        const routed = routedProposal(base, concept, routing);
+        // The invariant, made structural: a routing that is not CANONICAL_FIELD can never continue
+        // to field creation. A missing branch below used to fall through and propose a field — the
+        // exact "nothing matched, so make a field" behaviour this gate exists to end — so an
+        // unhandled owner holds instead of falling through.
+        return (
+            routed ?? {
+                ...base,
+                disposition: "held_unknown_owner",
+                ownership_routing: routing,
+                confidence: conf("attention", [`owner ${routing.owner} has no proposal shape yet`]),
+                alternatives: [],
+                explanation: `"${concept.label}" is collected on this form and kept with the process. ${routing.basis}`,
+                validation_issues: [],
+            }
+        );
+    }
+    if (routing.destination) {
+        // The affirmative conclusion resolved to a destination that ALREADY EXISTS. Creating a
+        // second field beside it is the duplication this gate is for — Slice 5 settled these facts,
+        // seeded them for every org, and the importer simply could not reach them.
+        return {
+            ...base,
+            disposition: "reuse_canonical_field",
+            ownership_routing: routing,
+            target_field_source: routing.destination,
+            confidence: conf("review", [
+                `matched to ${routing.destination.entity_type}.${routing.destination.field_key}`,
+                "a settled durable fact with an existing home",
+            ]),
+            alternatives: [],
+            explanation: `"${concept.label}" binds to the existing ${routing.destination.entity_type} field ${routing.destination.field_key} — reuse it rather than create a duplicate. ${routing.basis}`,
+            validation_issues: [],
+        };
+    }
 
     const proposed: ProposedFieldDefinition = {
         operator_label: concept.label.replace(/\s*—\s*if\s+yes.*$/i, "").trim(),
@@ -488,6 +625,7 @@ function proposeNewField(
     return {
         ...base,
         disposition: "create_proposed_field",
+        ownership_routing: routing,
         proposed_field: proposed,
         confidence: conf(band, [
             refused ? `a canonical field matched the label and was REFUSED: ${refused.reason}` : "no canonical field matched this label",
