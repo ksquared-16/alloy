@@ -1,9 +1,27 @@
 /**
- * Build the Real Enrollment Certification V1 packet from the corpus fixtures.
+ * Build the Real Enrollment Certification V1 packet from the corpus FIXTURES.
  *
  * Shared by the certification test and the reporting scripts so both measure the same thing. Reads
  * files; performs no network access. The Formsite source is a stored CAPTURE, exactly as the
  * pipeline would read it from a document row.
+ *
+ * ─────────────────────────────────────────────────────────────────────────────
+ * THIS IS NOT TENANT STATE, AND ITS OUTPUT IS NEVER A PUBLISH PACKAGE.
+ *
+ * What it produces is a true, reproducible measurement of what the pipeline WOULD produce from
+ * these three bytes. It is the certified expectation. It is not a measurement of any database:
+ * no organisation, no processing case, no document row, and above all **no operator decision**
+ * exists because this function ran.
+ *
+ * That distinction cost a publish authorization. Numbers produced here were assembled into a
+ * document titled `FIRST-PUBLISH-PACKAGE.md`, and the publish was approved against them — while the
+ * target tenant held one of the three artifacts, in single-source cases, with no decisions recorded
+ * and no form ever generated. The pre-write diff caught it; the title is what let it get that far.
+ *
+ * So: output of this loader may be compared against tenant state, and may never stand in for it.
+ * A publish package names an org, a case, document ids and persisted decision identities. If it
+ * cannot, it is an expectation document — say so in its title.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 import crypto from "node:crypto";

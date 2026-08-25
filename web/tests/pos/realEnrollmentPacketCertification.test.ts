@@ -370,6 +370,28 @@ describe("the compression scorecard, guarded", () => {
     });
 });
 
+describe("this corpus is a fixture, not a tenant", () => {
+    it("reads from the fixture tree and touches no tenant", async () => {
+        // The one control behind the docstring on `loadCertificationPacket`. What this suite
+        // measures is what the pipeline WOULD produce from three files — never what a database
+        // holds. A publish package names an org, a case and persisted decisions; this cannot, and
+        // an expectation document that calls itself a package is how a publish gets authorized
+        // against numbers no tenant holds.
+        const source = await import("node:fs").then((fs) =>
+            fs.readFileSync(path.join(process.cwd(), "lib/pos/packetIntake/loadCertificationPacket.ts"), "utf8"),
+        );
+        expect(FIXTURE_DIR).toContain("tests/fixtures/");
+        expect(source, "the loader must not reach a database").not.toMatch(/supabase|createClient|from\(["']/i);
+        expect(source).toMatch(/NOT TENANT STATE/);
+    });
+
+    it("carries no operator decision — every proposal is still merely proposed", () => {
+        // `accepted` here would mean a test helper said so. Only a persisted operator decision in a
+        // tenant makes an approval real.
+        for (const i of inputs) expect(i.discovery.proposals.every((p) => p.decision_state === "proposed")).toBe(true);
+    });
+});
+
 describe("Slice 5 — a settled owner elsewhere is a state, not a blank", () => {
     it("holds every immunization destination on the CIS instead of offering to store it here", () => {
         const held = inputs.flatMap((i) =>

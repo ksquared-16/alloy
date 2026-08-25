@@ -63,7 +63,7 @@ projects what the operator approved.
 
 ## §4 — 4 → 4 → 4
 
-Full table in [`FIRST-PUBLISH-PACKAGE.md`](FIRST-PUBLISH-PACKAGE.md) §6. Discovered 4, approved 4,
+Full table in [`FIXTURE-CERTIFIED-EXPECTATIONS.md`](FIXTURE-CERTIFIED-EXPECTATIONS.md) §6. Discovered 4, approved 4,
 published 4. No clause disappeared, none duplicated, no unrelated prose became an upload.
 
 **One thing the real corpus taught.** Two CIS clauses both classify as `immunization_record` — proof
@@ -119,9 +119,12 @@ Neither causes false participant behaviour, so neither is fixed here.
 brief, all passing. Zero new test failures against the 110-failure clean baseline; brokered
 `typecheck:tests` rc=0; route-capability gate green.
 
-## §9 — Publication readiness: **YES**
+## §9 — Publication readiness: fixture-certified only
 
-The package is in [`FIRST-PUBLISH-PACKAGE.md`](FIRST-PUBLISH-PACKAGE.md): sources and hashes, the 21
+> ⚠ Superseded. This closeout called the expectations document a "publish package". It is not one:
+> it was measured from fixtures, not from a tenant. See [`PUBLISH-STOPPED-DELTA.md`](PUBLISH-STOPPED-DELTA.md).
+
+The expectations are in [`FIXTURE-CERTIFIED-EXPECTATIONS.md`](FIXTURE-CERTIFIED-EXPECTATIONS.md): sources and hashes, the 21
 bindings, 5 relationships, 3 safeguarding proposals, 4 upload requirements, 18 acknowledgements,
 6 signatures, every held concept, every tenant mutation, version numbers, rollback path, and the
 reconciliation counts.

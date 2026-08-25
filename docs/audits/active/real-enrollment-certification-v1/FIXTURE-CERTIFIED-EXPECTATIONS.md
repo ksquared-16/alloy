@@ -1,8 +1,18 @@
-# First Real Certification Publish — package for approval
+# Fixture-certified expectations — **NOT a publish package**
 
-**Every gate passes. Nothing has been published. This is the package, awaiting your approval.**
+> ⚠ **Renamed.** This document was called `FIRST-PUBLISH-PACKAGE.md` and a publish was authorized
+> against it. Every number below was produced by `loadCertificationPacket()` reading three fixture
+> files and running the pipeline **in-process**. It is a true and reproducible measurement of what
+> the pipeline *would* produce. **It is not a measurement of any tenant**, it references no
+> organisation, no processing case, no document rows and **no persisted operator decision**.
+>
+> A real publish package names an org id, a case id, document ids and persisted decision
+> identities. Until one does, this is the certified expectation to compare tenant state against —
+> nothing more. See [`PUBLISH-STOPPED-DELTA.md`](PUBLISH-STOPPED-DELTA.md).
 
-> This publish creates no unapproved canonical field and drops no approved participant obligation.
+**Every code-side gate passes. Nothing has been published.**
+
+> This configuration creates no unapproved canonical field and drops no approved participant obligation.
 
 ---
 
