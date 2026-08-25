@@ -1641,12 +1641,28 @@ export async function buildOpportunityDrawerVisiblePayload(
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
   const documentActor = options?.documentActor ?? null;
+  /**
+   * Bounded per-leg timing for the shell batch. `visible_entity_ms` measured 1,091 ms of an 1,880 ms
+   * compose while only ~584 ms of it was attributable, and a dominant leg must never be inferred
+   * from the aggregate. `phaseMs` is the same object `vis._drawer_primary_phase_ms` already points
+   * at, so these writes surface in the response's `phases_ms` like the earlier legs.
+   */
+  const tShell0 = Date.now();
+  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      return await work;
+    } finally {
+      phaseMs[key] = Date.now() - t0;
+    }
+  };
   await Promise.all([
-    attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor),
-    attachOpportunityPersonsShell(supabase, orgId, vis, documentActor),
-    attachOpportunityActivitySignalShell(supabase, orgId, vis),
-    attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis),
+    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
+    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
   ]);
+  phaseMs.shell_parallel_ms = Date.now() - tShell0;
   vis._relationship_displays = {};
   const householdIdV =
     typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
@@ -1695,6 +1711,7 @@ export async function buildOpportunityDrawerVisiblePayload(
   // The cost is one indexed query over the case's contacts, and for the overwhelming majority of
   // families it returns zero rows and no composition runs at all.
   try {
+    const tEmployment0 = Date.now();
     vis._case_employment = await buildCaseEmploymentProjection(supabase, orgId, {
       // The HOUSEHOLD is the authoritative contact set. A household case can legitimately carry an
       // empty `_opportunity_persons` and a null `primary_person_id` — the seeded Smith case does
@@ -1704,6 +1721,7 @@ export async function buildOpportunityDrawerVisiblePayload(
       primaryPersonId: trimOrNull(opp.primary_person_id ?? null),
       knownContacts: collectLinkedContactsFromOpportunityRecord(vis),
     });
+    phaseMs.case_employment_ms = Date.now() - tEmployment0;
   } catch {
     // A projection failure must not fail the record. Absent reads as not-composed, which keeps
     // the card silent rather than asserting "nobody here is staff".
