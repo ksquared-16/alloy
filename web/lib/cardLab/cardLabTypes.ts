@@ -63,6 +63,88 @@ export type HealthRequirement = {
     missing?: boolean;
 };
 
+/** Where a health fact came from — reused provenance, not a new audit system. */
+export type HealthProvenance = {
+    /** "Parent reported", "Document extraction", "Operator confirmed". */
+    source: string;
+    detail: string | null;
+    confirmed: boolean;
+};
+
+export type HealthAllergyDetail = {
+    allergen: string;
+    severity: string;
+    reaction: string;
+    careInstruction: string;
+    treatment: string | null;
+    emergencyMedication: string | null;
+    effective: string;
+    provenance: HealthProvenance;
+};
+
+export type HealthConditionDetail = {
+    condition: string;
+    symptoms: string | null;
+    careInstruction: string;
+    restrictions: string | null;
+    relatedMedications: string[];
+    effective: string;
+    provenance: HealthProvenance;
+};
+
+export type HealthMedicationDetail = {
+    medication: string;
+    dosage: string;
+    frequency: string;
+    administration: string;
+    storage: string;
+    expires: string | null;
+    /** Authorization is a REQUIREMENT, kept distinct from the medication fact itself. */
+    authorization: { label: string; satisfied: boolean };
+    relatedTo: string | null;
+    provenance: HealthProvenance;
+};
+
+export type HealthDocumentRow = {
+    docType: string;
+    received: string;
+    expires: string | null;
+    status: string;
+    version: string;
+    source: string;
+};
+
+export type HealthRequirementRow = {
+    requirement: string;
+    state: "satisfied" | "missing" | "expiring";
+    stateLabel: string;
+    evidence: string | null;
+    due: string | null;
+    appliesBecause: string;
+};
+
+export type HealthEmergencyContact = {
+    name: string;
+    relationship: string;
+    phone: string;
+    order: string;
+};
+
+export type HealthProfileFact = { label: string; value: string };
+
+export type HealthDetailEvidence = {
+    childLabel: string;
+    critical: HealthCritical[];
+    allergies: HealthAllergyDetail[];
+    conditions: HealthConditionDetail[];
+    medications: HealthMedicationDetail[];
+    profile: HealthProfileFact[];
+    documents: HealthDocumentRow[];
+    requirements: HealthRequirementRow[];
+    emergencyContacts: HealthEmergencyContact[];
+    lastUpdated: string;
+};
+
 export type HealthEvidence = {
     /** Specimen label for the lab only — never rendered inside the card. */
     caseLabel: string;
@@ -115,16 +197,14 @@ export type AttendanceEvidence = {
 
 export type LedgerEntry = {
     when: string;
+    /** Canonical `charges.charge_type` / payment kind, for the detail ledger's Type column. */
+    type: string;
     label: string;
-    /**
-     * Already signed and formatted by the evidence builder — the card never does arithmetic.
-     * Direction is account balance: a charge INCREASES what is owed (`+`), a payment, credit,
-     * discount or subsidy REDUCES it (`−`). The sign is in the text, so the meaning survives
-     * without colour.
-     */
+    /** Signed and formatted upstream. Account-balance direction: charge +, payment/credit −. */
     amount: string;
-    /** Reinforces the sign; never the only carrier of it. */
     kind: "charge" | "credit";
+    status?: string | null;
+    source?: string | null;
 };
 
 export type BillingPayer = {
@@ -133,26 +213,52 @@ export type BillingPayer = {
     method: string;
     /** A funding source is not an ordinary parent payer and must not be drawn as one. */
     funding?: boolean;
-    /** Set when this payer's method has a problem the operator can act on. */
     methodIssue?: string | null;
+};
+
+/**
+ * Current-period reconciliation, in the platform's own financial grammar.
+ *
+ * `CHARGE_CATEGORIES` splits into two groups, and the split is the whole point:
+ *
+ *   gross charges   tuition · deposit · consumable_fee · late_pickup · one_time · fee
+ *   reductions      discount · credit · adjustment · subsidy_offset
+ *
+ * `subsidy_offset` is a CHARGE CATEGORY, not a payment — so subsidy reduces FAMILY
+ * RESPONSIBILITY. Payments are a separate object (`payments` + `payment_allocations`) and reduce
+ * BALANCE. Collapsing the two into one total is the error this shape exists to prevent.
+ *
+ *   grossCharges − discountsCredits − funding = familyResponsibility
+ *   familyResponsibility − paymentsReceived   = currentBalance
+ *   pastDue ⊆ currentBalance                  (the portion whose due_date has passed)
+ */
+export type BillingPeriod = {
+    label: string;
+    charges: { label: string; value: string }[];
+    reductions: { label: string; value: string }[];
+    funding: { label: string; value: string }[];
+    familyResponsibility: string;
+    paymentsReceived: string;
+    currentBalance: string;
+    dueLabel: string;
 };
 
 export type BillingEvidence = {
     /** Specimen label for the lab only — never rendered inside the card. */
     caseLabel: string;
-    period: { label: string; lines: { label: string; value: string; emphasis?: boolean }[] };
-    dueLabel: string;
-    dueValue: string;
+    period: BillingPeriod;
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
     payers: BillingPayer[];
-    /** Expected-payment context — the B composition's third zone. */
     payment: {
         autopayLabel: string | null;
+        autopayHealthy: boolean;
         nextChargeLabel: string | null;
     };
-    /** Compact history line used when the ledger steps down out of a primary zone. */
+    /** Quiet context line on the summary card — never a ledger reproduction. */
     historyLine: string;
+    /** Detail-only: forward-looking facts, and only where authoritative. */
+    upcoming: { label: string; value: string; unowned?: boolean }[];
 };
 
 /**

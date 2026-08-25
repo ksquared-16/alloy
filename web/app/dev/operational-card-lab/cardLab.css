@@ -774,3 +774,300 @@
     grid-auto-flow: row;
   }
 }
+
+/* ── detail experiences (expanded density, centered Focus Card) ───────────── */
+
+.alloy-os-billingdetail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+  margin-top: 2px;
+}
+.alloy-os-billingdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__group {
+  margin: 6px 0 0;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 2px 0 4px;
+}
+.alloy-os-billingdetail__filter {
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  background: #fff;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-billingdetail__filter--on {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billingdetail__ledger {
+  display: flex;
+  flex-direction: column;
+}
+/* The ledger takes the full card width beneath the three columns — a real table needs room. */
+.alloy-os-billingdetail__ledgerband {
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.alloy-os-billingdetail__row {
+  display: grid;
+  grid-template-columns: 62px 110px minmax(0, 1fr) 96px 110px 180px;
+  gap: 12px;
+  align-items: baseline;
+  min-height: 21px;
+  padding: 1px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
+}
+.alloy-os-billingdetail__row > :nth-child(4) {
+  text-align: right;
+}
+.alloy-os-billingdetail__row--head {
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 14%, transparent);
+}
+.alloy-os-billingdetail__row--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__when,
+.alloy-os-billingdetail__amount {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__amount {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-billingdetail__type,
+.alloy-os-billingdetail__status,
+.alloy-os-billingdetail__source {
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-billingdetail__note {
+  margin: 5px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.45;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billingdetail__unowned {
+  margin-left: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-billing__funding-tag {
+  margin-left: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+.alloy-os-healthdetail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 30px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.alloy-os-healthdetail__record {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px 0 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 6%, transparent);
+  min-width: 0;
+}
+.alloy-os-healthdetail__record-name {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-healthdetail__link {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  font-size: 11px;
+  line-height: 1.45;
+}
+.alloy-os-healthdetail__fact-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__fact-value {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__prov {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__prov--confirmed {
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
+}
+.alloy-os-healthdetail__auth {
+  margin: 3px 0 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__auth--missing {
+  color: #b45309;
+}
+.alloy-os-healthdetail__auth-note {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__state {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.alloy-os-healthdetail__state--satisfied {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 12%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-healthdetail__state--missing {
+  background: color-mix(in srgb, #b45309 10%, #fff);
+  color: #b45309;
+}
+.alloy-os-healthdetail__state--expiring {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__why {
+  margin: 3px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__table {
+  display: flex;
+  flex-direction: column;
+}
+.alloy-os-healthdetail__docrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) 74px 74px 78px;
+  gap: 8px;
+  align-items: baseline;
+  min-height: 21px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+  font-size: 0.7rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-healthdetail__docrow--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-healthdetail__docname {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-healthdetail__ver {
+  margin-left: 5px;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+@media (max-width: 1000px) {
+  .alloy-os-billingdetail,
+  .alloy-os-healthdetail__cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The platform caps an expanded card body at min(360px, 45vh) and scrolls it. That is the real
+ * runtime behaviour and the lab keeps it by default. This class lifts the cap for REVIEW only, so
+ * a whole detail design can be read on one page — it is a lab affordance, not a proposed change. */
+.lab-detail-unclipped .alloy-os-ucard--expanded .alloy-os-ucard__body {
+  max-height: none;
+  overflow-y: visible;
+}

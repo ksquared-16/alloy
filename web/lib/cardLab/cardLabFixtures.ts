@@ -12,6 +12,7 @@
 import type {
     AttendanceEvidence,
     BillingEvidence,
+    HealthDetailEvidence,
     HealthEvidence,
     JourneyEvidence,
     CareTeamEvidence,
@@ -141,6 +142,101 @@ export const HEALTH_COMPLEX: HealthEvidence = {
     emergencyPrimary: "Sam Rivera",
 };
 
+/** Health detail fixture — the higher-care child, at full record depth. */
+export const HEALTH_DETAIL_FIXTURE: HealthDetailEvidence = {
+    childLabel: "Avery Johnson",
+    critical: HEALTH_HIGHER_CARE.critical,
+    allergies: [
+        {
+            allergen: "Peanuts",
+            severity: "Severe",
+            reaction: "Anaphylaxis · hives, airway swelling",
+            careInstruction: "No peanut products in the room. Wash hands before and after meals.",
+            treatment: "Administer EpiPen, then call 911 and the primary contact.",
+            emergencyMedication: "Epinephrine auto-injector · Sunflower Room cabinet",
+            effective: "Since Jul 14, 2026 · active",
+            provenance: {
+                source: "Document extraction",
+                detail: "Physical exam · Jul 14 · operator confirmed Jul 16",
+                confirmed: true,
+            },
+        },
+        {
+            allergen: "Latex",
+            severity: "Mild",
+            reaction: "Contact rash",
+            careInstruction: "Use nitrile gloves for first aid.",
+            treatment: null,
+            emergencyMedication: null,
+            effective: "Since Jul 14, 2026 · active",
+            provenance: { source: "Parent reported", detail: "Enrollment packet · Jul 12", confirmed: true },
+        },
+    ],
+    conditions: [
+        {
+            condition: "Asthma",
+            symptoms: "Exercise-induced wheezing",
+            careInstruction: "Rest and inhaler after sustained activity. Notify parent if used twice in a day.",
+            restrictions: "No sustained outdoor activity above 85°F",
+            relatedMedications: ["Albuterol inhaler"],
+            effective: "Since Jul 14, 2026 · active",
+            provenance: { source: "Parent reported", detail: "Enrollment packet · Jul 12", confirmed: true },
+        },
+    ],
+    medications: [
+        {
+            medication: "Albuterol inhaler",
+            dosage: "2 puffs",
+            frequency: "As needed (PRN)",
+            administration: "Spacer required. Staff-administered.",
+            storage: "Sunflower Room · locked cabinet",
+            expires: "Mar 2027",
+            authorization: { label: "Medication authorization missing", satisfied: false },
+            relatedTo: "Asthma",
+            provenance: { source: "Parent reported", detail: "Enrollment packet · Jul 12", confirmed: false },
+        },
+        {
+            medication: "Epinephrine auto-injector",
+            dosage: "0.15 mg",
+            frequency: "Emergency only",
+            administration: "Outer thigh. Call 911 immediately after.",
+            storage: "Sunflower Room · locked cabinet",
+            expires: "Mar 2027",
+            authorization: { label: "Medication authorization missing", satisfied: false },
+            relatedTo: "Peanut allergy",
+            provenance: {
+                source: "Document extraction",
+                detail: "Physical exam · Jul 14 · operator confirmed Jul 16",
+                confirmed: true,
+            },
+        },
+    ],
+    profile: [
+        { label: "Dietary", value: "Dairy restriction · substitute oat milk" },
+        { label: "Accommodations", value: "Weighted blanket at nap" },
+        { label: "Physician", value: "Dr. Amara Osei · (541) 555-0117" },
+        { label: "Health notes", value: "Tires quickly in heat; offer water breaks." },
+    ],
+    documents: [
+        { docType: "Physical exam", received: "Jul 14, 2026", expires: "Jul 14, 2027", status: "Accepted", version: "v2", source: "Parent upload · extracted" },
+        { docType: "Immunization record", received: "Jul 14, 2026", expires: null, status: "Accepted", version: "v1", source: "Parent upload · extracted" },
+        { docType: "Medication authorization", received: "—", expires: null, status: "Not received", version: "—", source: "—" },
+        { docType: "Health care plan", received: "Jul 20, 2026", expires: "Jul 20, 2027", status: "Accepted", version: "v1", source: "Operator upload" },
+    ],
+    requirements: [
+        { requirement: "Physical exam", state: "satisfied", stateLabel: "Satisfied", evidence: "Physical exam · v2", due: null, appliesBecause: "Enrolling · each child · blocking" },
+        { requirement: "Immunization record", state: "satisfied", stateLabel: "Satisfied", evidence: "Immunization record · v1", due: null, appliesBecause: "Enrolling · each child · blocking" },
+        { requirement: "Medication authorization", state: "missing", stateLabel: "Missing", evidence: null, due: "Before Enrolled", appliesBecause: "Child has a medication on file" },
+        { requirement: "Physical exam renewal", state: "expiring", stateLabel: "Expires Jul 14, 2027", evidence: "Physical exam · v2", due: "Jul 14, 2027", appliesBecause: "Annual · each child" },
+    ],
+    emergencyContacts: [
+        { name: "Sam Rivera", relationship: "Aunt", phone: "(555) 444-0199", order: "1st" },
+        { name: "Jordan Johnson", relationship: "Parent · primary contact", phone: "(555) 012-3456", order: "2nd" },
+        { name: "Taylor Johnson", relationship: "Parent", phone: "(555) 987-6543", order: "3rd" },
+    ],
+    lastUpdated: "Updated Jul 20, 2026 · 4 sources",
+};
+
 export const HEALTH_FIXTURE = HEALTH_HIGHER_CARE;
 export const HEALTH_SPECIMENS = [HEALTH_TYPICAL, HEALTH_HIGHER_CARE, HEALTH_COMPLEX] as const;
 
@@ -218,106 +314,125 @@ export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
 };
 
 /**
- * Billing specimens — three real financial situations, not a state matrix.
- *
- *   A  current       nothing overdue, multiple payers
- *   B  past due      an overdue amount and a failed payment
- *   C  mixed funding subsidy, discount, split family payers
+ * Billing specimens. Every one reconciles:
+ *   gross − reductions − funding = family responsibility
+ *   family responsibility − payments = current balance
+ *   past due ⊆ current balance
  */
 export const BILLING_CURRENT: BillingEvidence = {
     caseLabel: "A · Current, nothing overdue",
     period: {
         label: "Aug 1 – Aug 31",
-        lines: [
-            { label: "Tuition", value: "$1,850" },
-            { label: "Sibling discount", value: "−$185" },
-            { label: "Family responsibility", value: "$1,665", emphasis: true },
-        ],
+        charges: [{ label: "Tuition", value: "$1,850" }],
+        reductions: [{ label: "Sibling discount", value: "−$185" }],
+        funding: [],
+        familyResponsibility: "$1,665",
+        paymentsReceived: "−$1,665",
+        currentBalance: "$0",
+        dueLabel: "Next charge Sep 1",
     },
-    dueLabel: "Due",
-    dueValue: "Sep 1",
     pastDue: null,
     ledger: [
-        { when: "Aug 20", label: "Payment received", amount: "−$1,665", kind: "credit" },
-        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
-        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
-        { when: "Jul 20", label: "Payment received", amount: "−$1,665", kind: "credit" },
-        { when: "Jul 15", label: "Tuition — July", amount: "+$1,850", kind: "charge" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
+        { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
+        { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
     ],
-    payment: { autopayLabel: "Autopay on", nextChargeLabel: "Sep 1 · $1,665" },
+    payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $1,665" },
     historyLine: "Last payment $1,665 · Aug 20 · 5 transactions this period",
+    upcoming: [
+        { label: "Next period", value: "Sep 1 – Sep 30" },
+        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
+        { label: "Scheduled payment", value: "Autopay · Sep 1", unowned: true },
+    ],
 };
 
 export const BILLING_PAST_DUE: BillingEvidence = {
     caseLabel: "B · Past due, failed payment",
     period: {
         label: "Aug 1 – Aug 31",
-        lines: [
+        charges: [
             { label: "Tuition", value: "$1,850" },
-            { label: "Registration fee", value: "+$75" },
-            { label: "Family responsibility", value: "$1,925", emphasis: true },
+            { label: "Registration fee", value: "$75" },
         ],
+        reductions: [{ label: "Sibling discount", value: "−$185" }],
+        funding: [{ label: "State subsidy", value: "−$600" }],
+        familyResponsibility: "$1,140",
+        paymentsReceived: "−$925",
+        currentBalance: "$215",
+        dueLabel: "Was due Aug 15",
     },
-    dueLabel: "Due",
-    dueValue: "Sep 1",
     pastDue: {
-        amount: "$275",
+        amount: "$215",
         oldest: "Aug 15",
-        age: "9 days past due",
-        note: "Card declined Aug 16 · Visa •••• 4242",
+        age: "10 days past due",
+        note: "Visa •••• 4242 declined Aug 16",
     },
     ledger: [
-        { when: "Aug 20", label: "Payment received", amount: "−$925", kind: "credit" },
-        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
-        { when: "Aug 12", label: "Registration fee", amount: "+$75", kind: "charge" },
-        { when: "Aug 10", label: "Late fee", amount: "+$25", kind: "charge" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Operator · ACH 8813" },
+        { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+        { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" },
     ],
     payers: [
-        {
-            name: "Jordan Johnson",
-            share: "70%",
-            method: "Visa •••• 4242",
-            methodIssue: "Declined Aug 16",
-        },
+        { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242", methodIssue: "Declined Aug 16" },
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
     ],
-    payment: { autopayLabel: "Autopay paused", nextChargeLabel: "Retry after payment method update" },
-    historyLine: "Last payment $925 · Aug 20 · 4 transactions this period",
+    payment: {
+        autopayLabel: "Autopay paused",
+        autopayHealthy: false,
+        nextChargeLabel: "Retry after payment method update",
+    },
+    historyLine: "Last payment $925 · Aug 20 · 6 transactions this period",
+    upcoming: [
+        { label: "Next period", value: "Sep 1 – Sep 30" },
+        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
+        { label: "Subsidy expires", value: "Dec 31", unowned: true },
+    ],
 };
 
 export const BILLING_MIXED_FUNDING: BillingEvidence = {
     caseLabel: "C · Mixed funding",
     period: {
         label: "Aug 1 – Aug 31",
-        lines: [
-            { label: "Tuition", value: "$1,850" },
+        charges: [{ label: "Tuition", value: "$1,850" }],
+        reductions: [
             { label: "Sibling discount", value: "−$185" },
-            { label: "State subsidy", value: "−$600" },
             { label: "Vacation credit", value: "−$100" },
-            { label: "Family responsibility", value: "$965", emphasis: true },
         ],
+        funding: [{ label: "State subsidy", value: "−$600" }],
+        familyResponsibility: "$965",
+        paymentsReceived: "−$925",
+        currentBalance: "$40",
+        dueLabel: "Due Sep 1",
     },
-    dueLabel: "Due",
-    dueValue: "Sep 1",
     pastDue: null,
     ledger: [
-        { when: "Aug 20", label: "Payment received", amount: "−$925", kind: "credit" },
-        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
-        { when: "Aug 15", label: "State subsidy", amount: "−$600", kind: "credit" },
-        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
-        { when: "Aug 08", label: "Vacation credit", amount: "−$100", kind: "credit" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+        { when: "Aug 08", type: "credit", label: "Vacation credit", amount: "−$100", kind: "credit", status: "Posted", source: "Operator" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "45%", method: "Visa •••• 4242" },
         { name: "Taylor Johnson", share: "25%", method: "ACH •••• 8813" },
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance", funding: true },
     ],
-    payment: { autopayLabel: "Autopay on", nextChargeLabel: "Sep 1 · $965" },
+    payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $965" },
     historyLine: "Last payment $925 · Aug 20 · 5 transactions this period",
+    upcoming: [
+        { label: "Next period", value: "Sep 1 – Sep 30" },
+        { label: "Scheduled charge", value: "$1,850 · Sep 1" },
+        { label: "Subsidy renewal", value: "Jan 1", unowned: true },
+    ],
 };
 
 export const BILLING_FIXTURE = BILLING_PAST_DUE;

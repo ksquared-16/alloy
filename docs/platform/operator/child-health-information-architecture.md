@@ -290,3 +290,143 @@ designed until A1 has settled the grain.
 4. **Whether an "active condition" distinction should exist**, which would justify a stronger
    alarm treatment than the restrained one now on the card. Absent that distinction, the card
    deliberately treats all critical facts as durable safety information.
+
+---
+
+## 7. Implementation-ready owner table
+
+| Concept | Owner | Existing / New | Why |
+|---|---|---|---|
+| Dietary restriction, accommodation note, physician, health note | `field_definitions` + `field_values` at `entity_type: "customer_member"` | **Existing** | Scalar, no lifecycle, no evidence pointer. The substrate is built; only the binding is wrong (A1). |
+| Allergy · Condition · Medication | `person_health_facts` — ONE entity, `fact_kind` discriminator | **New** | Each instance needs identity (so a medication can reference an allergy), effective dates (so a resolved condition stops projecting), and an evidence pointer. `field_values` has neither ordinal nor per-item identity. |
+| Immunization, physical, medication authorization, health care plan | `documents` + `document_versions` at `entity_type: "customer_member"` | **Existing** | Polymorphic, versioned, checksummed, already extraction-aware. |
+| Per-document-type fields (issue date, expiry, vaccine list) | `document_field_definitions` / `document_field_values` | **Existing** | Org-configurable per `doc_type`, with `is_ai_extractable` + `extraction_hint`. Expiry belongs here, not on `documents`. |
+| "Immunization required before Enrolled" | `stageRequirementsV1` on the published revision | **Existing** | Requirement, not a health fact. Five axes already express applicability, timing and enforcement. |
+| Emergency contacts | `person.contact_role.emergency_contacts` | **Existing** | Relationship truth. Health projects, never owns. |
+| Health-fact collection binding for Forms | A `CanonicalCollectionProviderDefinition` + one new `CanonicalCollectionProviderKind` | **New (small)** | The registry is typed and extensible; `health_fact` is a fifth kind alongside `household_membership`, `relationship_role`, `document`, `communication`, `work`. |
+
+### One entity or three?
+
+**One**, with a `fact_kind` discriminator (`allergy` | `condition` | `medication`) and a typed
+per-kind payload.
+
+- The card, the requirement evaluator and the packet planner all want **one list** for a child.
+- Three tables triple the resolver, the collection provider, the proposal adapter and the RLS
+  surface, for three shapes that share `subject`, `effective_from/to`, `status`, `source_*` and
+  `supersedes_id` — everything except the payload.
+- Cross-references stay in one place: a medication points at the allergy or condition it treats
+  via a self-reference, which across three tables would need a polymorphic join.
+
+### How this avoids a childcare-only subsystem
+
+The entity is **"a structured health fact about a person"**:
+
+```
+person_health_facts
+  org_id · subject_entity_type · subject_entity_id     ← polymorphic, exactly like `documents`
+  fact_kind · payload(jsonb, validated per kind)
+  effective_from · effective_to · status
+  source_kind · source_ref · confirmed_by · confirmed_at
+  supersedes_id
+```
+
+Nothing names a program, an age group, a jurisdiction or an industry. A home-care agency, a school
+district, a summer camp and a clinic all need the same three kinds against the same subject shape.
+The **payload schema per kind is org-configurable**, exactly as `document_field_definitions` is
+per `doc_type` — so what an allergy record captures is configuration, not code.
+
+### Versioning and effective dates
+
+- **Correction** — supersede: write a new row with `supersedes_id`, set the old row's
+  `effective_to`. The lineage is readable and the card projects only `status = 'active'`.
+- **Resolution** — set `effective_to`; the fact stops projecting but stays in history.
+- **No hard delete.** Safety information that silently disappears is the failure mode this avoids.
+
+This mirrors the correction semantics attendance already uses
+(`entry_type: original | correction | reversal`), so the platform has one mental model for
+"a durable fact changed", not two.
+
+---
+
+## 8. Mutation model
+
+Nothing on the Health detail surface is a live input. The flow is
+**understand → choose Add/Edit → focused command → validate → save**.
+
+| Operation | Path | Registered today? |
+|---|---|---|
+| Add / Edit allergy, condition, medication | New capability against `person_health_facts` | ❌ — needs B1 first |
+| Update a health profile fact | Existing `field_values` write for `customer_member` | ✅ substrate; ❌ binding (A1) |
+| Upload a health document | Existing `documents` upload + extraction | ✅ |
+| Satisfy a requirement | **Never written.** Derived from the artifacts above | ✅ by construction |
+| End / resolve a fact | Same capability, sets `effective_to` | ❌ — with B1 |
+
+**There are no card-specific writes.** A card assembles truth; it never owns it (Alloy Law #4).
+
+---
+
+## 9. Enrollment / Trust handoff contract
+
+The parallel Enrollment / Trust program owns collection and interpretation. This domain owns
+durable truth. The boundary, stated once:
+
+```
+Source                     parent response · uploaded document · operator entry
+   ↓
+TRUST / PROCESSING owns    interpretation · evidence lineage · ambiguity and conflict
+                           · approval policy
+   ↓  RelatedRecordProposal { origin, status, diagnostics, source_lineage }
+   ↓
+Operator approval          only for proposals; a validated direct field mapping needs none
+   ↓
+HEALTH owns                canonical durable health truth
+                           field_values · person_health_facts · documents
+   ↓
+BUSINESS PROCESS owns      requirement applicability and readiness, over the pinned revision
+   ↓
+CARD owns                  presentation only
+```
+
+**Four rules that keep the boundary real:**
+
+1. **Trust never writes health truth directly.** It emits a proposal; the health capability
+   performs the write. A proposal carrying `status: "unsupported"` — which is exactly what a
+   health collection produces today, via `unknown_provider` / `unsupported_item_entity` — must
+   fail loudly rather than partially apply.
+2. **Health never re-interprets.** If a document says "peanut allergy, severe", the severity
+   arrived decided. Health stores `source_kind` + `source_ref` and does not second-guess.
+3. **Requirements are never stored as satisfied.** Satisfaction is evaluated at read time from
+   documents and facts against the pinned revision. Storing it would create a second truth that
+   drifts.
+4. **The card computes nothing.** It projects what exists and what applies.
+
+---
+
+## 10. Remaining gaps, consolidated
+
+| # | Gap | Blocks | Size |
+|---|---|---|---|
+| **A1** | Health fields bind to `enrollment`, not `customer_member` | Durable child health profile | Small |
+| **D1** | `requirement kind: "document"` not authorable | Configurable health document requirements, and the whole jurisdiction story | Medium — evaluator + `doc_type` catalog; the store exists |
+| **B1** | No `person_health_facts` entity, provider or capability | Allergy / condition / medication records, and every Add/Edit on the detail surface | Large |
+| **F1** | Autopay and scheduled payment have no owner | Billing's Payment zone renders them as fixture | Small–medium |
+| **F2** | `customer_payment_methods` is household-scoped, not payer-scoped | Per-payer method on the Payment zone | Small |
+| **F3** | No responsibility-split field (`billing_responsibility` has `defaultFieldKeys: []`) | The `70% / 30%` split | Small |
+| **F4** | No `ledger_transactions` running balance | A running-balance column in Billing detail — deliberately not rendered | Not recommended |
+| **G1** | Expanded card body is capped at `min(360px, 45vh)` and scrolls | Both detail surfaces are 400–950px of content in a 360px scroll window | **Director decision** |
+
+---
+
+## 11. Decisions that require Director approval
+
+1. **Billing composition** — Current Period / Past Due / Payment is now built. Confirm.
+2. **A1 migrates live tenant data** between entity grains. Reversible, but real.
+3. **B1 adds a canonical entity and a new `CanonicalCollectionProviderKind`** — platform
+   vocabulary, not a feature.
+4. **Medication authorization is a requirement, with the document as its evidence** — recommended,
+   and the detail surface is built that way.
+5. **G1 — the 360px expanded-body cap.** Either the detail surfaces accept a scrolling panel, or
+   expanded density needs a taller host. This is a platform decision, not a card decision, and it
+   affects Household and Children equally.
+6. **Whether an "active condition" distinction should exist**, which would justify a stronger
+   alarm treatment than the restrained one now on the card.

@@ -15,6 +15,8 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
 
 import AttendanceCard from "@/components/cardLab/AttendanceCard";
 import BillingCard from "@/components/cardLab/BillingCard";
+import BillingDetailCard from "@/components/cardLab/BillingDetailCard";
+import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
 import JourneyCard from "@/components/cardLab/JourneyCard";
@@ -26,6 +28,7 @@ import {
     BILLING_FIXTURE,
     BILLING_SPECIMENS,
     CARE_TEAM_FIXTURE,
+    HEALTH_DETAIL_FIXTURE,
     HEALTH_FIXTURE,
     HEALTH_SPECIMENS,
     JOURNEY_FIXTURE,
@@ -45,7 +48,8 @@ type TabKey =
     | "healthspec"
     | "billingspec"
     | "wide"
-    | "billingab";
+    | "billingdetail"
+    | "healthdetail";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -56,7 +60,8 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "overflow", label: "4b · Movement overflow" },
     { key: "billing", label: "5 · Billing" },
     { key: "healthspec", label: "A · Health specimens" },
-    { key: "billingab", label: "B1 · Billing A/B" },
+    { key: "healthdetail", label: "D1 · Health detail" },
+    { key: "billingdetail", label: "D2 · Billing detail" },
     { key: "billingspec", label: "B · Billing specimens" },
     { key: "wide", label: "C · Wide cards together" },
     { key: "combined", label: "6 · Combined Focus Panel" },
@@ -99,18 +104,35 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
         ],
     },
-    billingab: {
-        question: "Should the third zone be Recent Ledger, or Payment?",
+    healthdetail: {
+        question: "What does View health details open?",
         decisions: [
-            "Rendered both ways from the same evidence rather than assuming — A keeps the mini ledger, B answers how the bill is expected to be paid and steps the ledger down to one line.",
-            "In B the payers live in the Payment zone where they belong, and the payer strip disappears.",
-            "A funding source is drawn as a funding source, not as an ordinary parent payer.",
-            "Recommendation is in the review doc: A ships now, because every field it renders has a canonical owner today and half of B's does not.",
+            "The SAME card at density expanded — the centered Focus Card with a depth scrim that Household and Children already use. Not a separate health product.",
+            "Nothing is a live input. Read, then choose Add or Edit, which opens a focused command against the canonical mutation path.",
+            "Medication authorization is a REQUIREMENT, not a medication field: it appears on the record as a pointer, and its truth resolves against a document in Requirements.",
+            "Document existence is never a health boolean — Documents shows the document, its version and status; Requirements resolves against it.",
+            "Emergency contacts are projected from person.contact_role.emergency_contacts. Health never owns a contact.",
+            "Provenance reuses lineage the platform already records — parent reported, document extraction, operator confirmed.",
         ],
         open: [
-            "Autopay state and next scheduled charge have NO owner in Alloy — no table, no column. B renders them as fixture only.",
-            "customer_payment_methods is scoped to the household, not to a payer, so \"Jordan · Visa 4242\" cannot be built today.",
-            "Responsibility split has no field: billing_responsibility is a composition group with defaultFieldKeys: [].",
+            "Allergy, condition and medication records have no canonical entity yet (gap B1) — the whole left and middle columns are the shape a model would need to fill.",
+            "Document expiry has no column on `documents`; it would be a document_field_values row against a document_field_definitions field.",
+            "The platform caps an expanded card body at min(360px, 45vh) and scrolls it. A full health record needs more than that — either the detail accepts a scrolling panel, or expanded density needs a taller host. Director decision.",
+        ],
+    },
+    billingdetail: {
+        question: "What does Billing details open?",
+        decisions: [
+            "The SAME card at density expanded, exactly as the real BillingPreviewCard already expands.",
+            "The ledger lives HERE, with Date / Type / Description / Amount / Status / Source and the filters the brief asked for.",
+            "NO running balance column: ledger_transactions provides no authoritative running balance, and computing one in the card would invent an ordering the backend does not guarantee.",
+            "Current period repeats the reconciliation with its groups made explicit — Charges, Discounts & credits, Funding, then Payments.",
+            "Upcoming facts with no owner are marked, not invented.",
+        ],
+        open: [
+            "Autopay and scheduled payment remain unowned; they are labelled in the Upcoming section rather than rendered as truth.",
+            "Refund and Apply credit have no registered capability yet — charge categories credit/adjustment exist, the actions do not.",
+            "Same 360px expanded-body cap as Health detail — the ledger is the section that would scroll.",
         ],
     },
     wide: {
@@ -334,7 +356,8 @@ export default function OperationalCardLab() {
                                 tab === "billing" ||
                                 tab === "overflow" ||
                                 tab === "billingspec" ||
-                                tab === "billingab" ||
+                                tab === "billingdetail" ||
+                                tab === "healthdetail" ||
                                 tab === "wide"
                                     ? " · full row"
                                     : " · one column"}
@@ -374,13 +397,27 @@ export default function OperationalCardLab() {
                                         ))}
                                     </>
                                 ) : null}
-                                {tab === "billingab" ? (
+                                {tab === "healthdetail" ? (
                                     <>
-                                        <Cell span={2} kind="cand" name="A · Current | Past due | Recent ledger">
-                                            <BillingCard evidence={BILLING_FIXTURE} variant="ledger" />
+                                        <Cell span={2} kind="cand" name="Health detail · runtime height (body scrolls at 360px)">
+                                            <HealthDetailCard evidence={HEALTH_DETAIL_FIXTURE} />
                                         </Cell>
-                                        <Cell span={2} kind="cand" name="B · Current | Past due | Payment">
-                                            <BillingCard evidence={BILLING_FIXTURE} variant="payment" />
+                                        <Cell span={2} kind="cand" name="Health detail · unclipped for review">
+                                            <div className="lab-detail-unclipped">
+                                                <HealthDetailCard evidence={HEALTH_DETAIL_FIXTURE} />
+                                            </div>
+                                        </Cell>
+                                    </>
+                                ) : null}
+                                {tab === "billingdetail" ? (
+                                    <>
+                                        <Cell span={2} kind="cand" name="Billing detail · runtime height (body scrolls at 360px)">
+                                            <BillingDetailCard evidence={BILLING_FIXTURE} />
+                                        </Cell>
+                                        <Cell span={2} kind="cand" name="Billing detail · unclipped for review">
+                                            <div className="lab-detail-unclipped">
+                                                <BillingDetailCard evidence={BILLING_FIXTURE} />
+                                            </div>
                                         </Cell>
                                     </>
                                 ) : null}
