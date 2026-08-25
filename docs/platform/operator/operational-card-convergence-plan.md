@@ -906,26 +906,47 @@ the content that does not exist is not a detail surface; it is a magnifying glas
 The Process card is now **summary-only, at every placement**. There is no second representation of a
 process anywhere in the card family.
 
-### 11.2 Recent activity — a bounded window on canonical truth
+### 11.2 Recent activity — one shared row, revealed on demand
+
+**Superseded 2026-08-25 (§11.2a).** The bounded three-row region below is retained for the record;
+the shipping contract is §11.2a.
 
 The card's fourth layer is a bounded slice of the **existing** activity projection — the same truth
 the Focus Panel's activity mode reads. It introduces no store, no state, and no new projection.
 
+### 11.2a Activity costs the card no height of its own
+
+Activity and participants now share **one foot row**: participants in the left half, the activity
+affordance right-aligned in the right half. **No activity row is printed onto the card face.** The
+record is revealed by clicking `Recent activity <n> ▾`, which opens the shared Alloy `DropdownMenu`
+— the same primitive and chrome as the Current Work `Tour ▾` menu, not a one-off skin.
+
 | Rule | Contract |
 |---|---|
-| **Row cap** | **3.** `MAX_ACTIVITY = 3`, enforced in render, not by the caller |
+| **On the card face** | **Zero rows.** One trigger, right-aligned, sharing the participant row |
 | **Truth** | Canonical activity only. The card renders what it is handed and derives nothing |
-| **Empty** | The region is **omitted entirely** — heading included. An empty "Recent activity" heading reads as "nothing has happened", which is a claim the card has no standing to make |
-| **Inclusion** | Configuration decides whether a placement carries the region at all. It cannot change the cap, the source, or the empty rule |
-| **Affordance** | `View all activity →` → `coordination.openFocusPanelMode("activity")` — the **existing** mode. It is not a Process surface and opens nothing new |
-| **Never** | A stage-history row. An activity row is *something that happened and was recorded*, never a reconstruction of when a stage was entered |
+| **Count** | The trigger carries the count, so the closed state is informative — an operator can tell whether opening it is worth the click |
+| **Empty** | Trigger omitted entirely. A control that opens an empty menu is a broken promise |
+| **Bound** | On the **menu's height** (`max-height: 17rem`, scrolls), never on the truth. The menu never silently truncates the record |
+| **Canonical route** | The menu's last item is `View all activity →` → `coordination.openFocusPanelMode("activity")`. The menu is a convenience over the same truth, never a replacement for it |
+| **Never** | A stage-history row |
 
-**Geometry.** The region costs **63px** for two rows (184px → 247px measured at 1055px full-row). The
-affordance shares the section-head line rather than taking a band of its own — the head geometry the
-Household card already uses for its collection groups (`.alloy-os-household__group-header`: uppercase
-title left, affordance right). Row measure is capped at 420px so each timestamp pairs with its label
-instead of stranding at the card edge. Activity does not dominate the card: three lines, quiet weight,
-below the action row.
+**The left half is populated only by what the rail cannot say** — a scoped child with its own action,
+or the fact that every participant is together at one stage. When the rail has already said it, the
+left half is empty and the row carries the trigger alone. That is not waste: the row exists either
+way, and it is cheaper than the two separate bands it replaced.
+
+**Measured saving** (1055px full row):
+
+| Specimen | Before | After | Δ |
+|---|---|---|---|
+| Divergent participants, 5 activity rows | 247px | **219px** | −28 |
+| Scoped child + activity | 284px | **229px** | −55 |
+| Final Focus Panel Process card | 284px | **229px** | −55 |
+| No activity, no scoped child | 184px | **184px** | unchanged |
+
+The foot row costs 27px (empty or aligned left half) or 38px (scoped child). Portability holds: the
+Assignment process has **no participants at all** and still carries the row.
 
 ### 11.3 Final Process implementation contract
 
@@ -934,7 +955,7 @@ below the action row.
 | 1 · Identity | Process name, icon | Business Process definition |
 | 2 · Journey rail | Stages, current stage, ≤2 annotation slots per node, participant markers | Business Process + participant process state |
 | 3 · Current work | Scope label, primary answer, action row | Current Work |
-| 4 · Recent activity | ≤3 canonical rows + `View all activity →` | The canonical activity projection |
+| 4 · Foot row | Participants left; `Recent activity <n> ▾` right. Zero rows on the card face | The canonical activity projection |
 
 - **Grain stays case.** The Focus Panel is case-grain (shipped conformance test); participant divergence
   projects **onto the rail**, which is why no children section survives below it.

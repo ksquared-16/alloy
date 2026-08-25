@@ -418,7 +418,7 @@ export type ProcessChildState = {
 };
 
 /**
- * A bounded slice of CANONICAL activity — the same projection the Activity mode reads.
+ * One row of CANONICAL activity — the same projection the Focus Panel activity mode reads.
  *
  * The card persists nothing and infers nothing. It never renders a historical STAGE event, because
  * no durable stage-history projection exists: an activity row is something that happened and was
@@ -446,10 +446,15 @@ export type ProcessEvidence = {
     actions: ProcessAction[];
     stillNeeded: string[];
     /**
-     * At most {@link 3} rows, from canonical Activity. Omitted entirely when empty — an empty
-     * Activity heading is worse than none. Whether a placement includes it is configuration.
+     * Canonical activity, revealed ON DEMAND. **No row is printed onto the card face** — the whole
+     * list lives behind the `Recent activity` trigger in the foot row, so activity costs the card
+     * no height beyond the row it shares with the participants. Omitted entirely when empty: a
+     * control that opens an empty menu is a broken promise.
+     *
+     * Whether a placement carries activity at all is configuration. The bound is on the MENU's
+     * height, never on the truth — the menu scrolls rather than silently truncating the record.
      */
-    recentActivity: ProcessActivityRow[];
+    activity: ProcessActivityRow[];
     /**
      * Present only when the process has participant grain at all. Assignment and Billing omit it,
      * and the card renders no children region — there is no Enrollment-specific section here.

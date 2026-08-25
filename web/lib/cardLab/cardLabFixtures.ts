@@ -596,7 +596,7 @@ export const SAFETY_SIGNALS: SafetySignal[] = [
 /** Three configured Business Processes, through ONE process card. */
 export const PROCESS_ENROLLMENT: ProcessEvidence = {
     participantsLabel: null,
-    recentActivity: [],
+    activity: [],
     caseLabel: "Enrollment · Johnson",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -622,7 +622,12 @@ export const PROCESS_ENROLLMENT: ProcessEvidence = {
 
 export const PROCESS_ASSIGNMENT: ProcessEvidence = {
     participantsLabel: null,
-    recentActivity: [],
+    // No participants at all, and activity still lands — the foot row is not Enrollment-specific.
+    activity: [
+        { label: "Moved to Sunflower Room", when: "Aug 18" },
+        { label: "Assignment confirmed", when: "Aug 18" },
+        { label: "Offer sent", when: "Aug 12" },
+    ],
     caseLabel: "Assignment",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -644,7 +649,7 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
 
 export const PROCESS_BILLING: ProcessEvidence = {
     participantsLabel: null,
-    recentActivity: [],
+    activity: [],
     caseLabel: "Billing",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -711,9 +716,14 @@ const RILEY = (scoped: boolean): ProcessChildState => ({
 function wright(caseLabel: string, scoped: "Avery" | "Riley" | null): ProcessEvidence {
     return {
         participantsLabel: "Children",
-        recentActivity: [
+        // More than three, deliberately: the menu shows the whole record, so the fixture must
+        // exceed what the old bounded region could have printed.
+        activity: [
             { label: "Tour invitation sent", when: "Today · 9:47 AM" },
             { label: "Avery joined waitlist", when: "Aug 19" },
+            { label: "Immunization record uploaded", when: "Aug 18" },
+            { label: "Called — left voicemail", when: "Aug 15" },
+            { label: "Enrollment inquiry received", when: "Aug 11" },
         ],
         caseLabel,
         subjectLabel: "Wright Family",
@@ -796,7 +806,7 @@ export const PROCESS_WRIGHT_MANY: ProcessEvidence = {
 /** The same case with the activity region omitted — proving the modest delta. */
 export const PROCESS_WRIGHT_NO_ACTIVITY: ProcessEvidence = {
     ...wright("A0 · no recent activity", null),
-    recentActivity: [],
+    activity: [],
 };
 
 export const PROCESS_GRAIN_SPECIMENS = [

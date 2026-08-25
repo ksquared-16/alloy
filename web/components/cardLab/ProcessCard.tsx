@@ -6,6 +6,12 @@ import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProgressionBand from "@/components/cardLab/ProgressionBand";
 import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -170,57 +176,101 @@ export default function ProcessCard({
                     </div>
                 </div>
 
-                {/* 3 · SELECTED PARTICIPANT — only when a scoped child carries its own action.
-                    The rail already communicates who is where, so a generic children list beneath
-                    it would repeat the name, the stage and the date for no added meaning. */}
-                {scopedChild ? (
-                    <div className="alloy-os-process__scoped">
-                        <CardAvatar
-                            name={scopedChild.name}
-                            imageUrl={scopedChild.imageUrl ?? null}
-                            size={22}
-                            role="child"
-                        />
-                        <span className="alloy-os-process__scoped-name">{scopedChild.name}</span>
-                        <span className="alloy-os-process__participant-stage">{scopedChild.stage}</span>
-                        {scopedChild.since ? (
-                            <span className="alloy-os-process__participant-since">{scopedChild.since}</span>
-                        ) : null}
-                        {/* Subject is stated, never inferred from proximity. */}
-                        <span className="alloy-os-process__participant-actions">
-                            {scopedChild.actions.map((a) => (
-                                <FooterAction key={a.label}>{a.label} →</FooterAction>
-                            ))}
-                        </span>
-                    </div>
-                ) : null}
-
-                {aligned && evidence.participantsLabel ? (
-                    <p className="alloy-os-process__aligned">
-                        <span className="alloy-os-process__needed-label">
-                            {evidence.childStates.length}{" "}
-                            {evidence.childStates.length === 1
-                                ? evidence.participantsLabel.toLowerCase().replace(/ren$/, "").replace(/s$/, "")
-                                : evidence.participantsLabel.toLowerCase()}
-                        </span>
-                        all at {evidence.currentStageLabel}
-                    </p>
-                ) : null}
-                {/* 4 · BOUNDED RECENT ACTIVITY — canonical Activity, at most three rows.
-                    Omitted entirely when empty: an Activity heading with nothing under it is worse
-                    than no region. Never a stage-history reconstruction. */}
-                {evidence.recentActivity.length ? (
-                    <div className="alloy-os-currentwork__recent-activity alloy-os-process__activity">
-                        <div className="alloy-os-process__activity-head">
-                            <p className="alloy-os-cardlab__section-head">Recent activity</p>
-                            <FooterAction onClick={onViewAllActivity}>View all activity →</FooterAction>
+                {/* 3 · ONE FOOT ROW — participants left, activity right.
+                    Two bands became one. The rail already says who is where, so the left half
+                    carries only what the rail cannot: a scoped child with its own action, or the
+                    fact that everyone is together. The right half spends NO height on activity —
+                    the list is revealed on demand, never printed onto the card face. */}
+                {scopedChild || (aligned && evidence.participantsLabel) || evidence.activity.length ? (
+                    <div className="alloy-os-process__foot">
+                        <div className="alloy-os-process__foot-left">
+                            {scopedChild ? (
+                                <div className="alloy-os-process__scoped">
+                                    <CardAvatar
+                                        name={scopedChild.name}
+                                        imageUrl={scopedChild.imageUrl ?? null}
+                                        size={22}
+                                        role="child"
+                                    />
+                                    <span className="alloy-os-process__scoped-name">{scopedChild.name}</span>
+                                    <span className="alloy-os-process__participant-stage">{scopedChild.stage}</span>
+                                    {scopedChild.since ? (
+                                        <span className="alloy-os-process__participant-since">
+                                            {scopedChild.since}
+                                        </span>
+                                    ) : null}
+                                    {/* Subject is stated, never inferred from proximity. */}
+                                    <span className="alloy-os-process__participant-actions">
+                                        {scopedChild.actions.map((a) => (
+                                            <FooterAction key={a.label}>{a.label} →</FooterAction>
+                                        ))}
+                                    </span>
+                                </div>
+                            ) : aligned && evidence.participantsLabel ? (
+                                <p className="alloy-os-process__aligned">
+                                    <span className="alloy-os-process__needed-label">
+                                        {evidence.childStates.length}{" "}
+                                        {evidence.childStates.length === 1
+                                            ? evidence.participantsLabel
+                                                  .toLowerCase()
+                                                  .replace(/ren$/, "")
+                                                  .replace(/s$/, "")
+                                            : evidence.participantsLabel.toLowerCase()}
+                                    </span>
+                                    all at {evidence.currentStageLabel}
+                                </p>
+                            ) : null}
                         </div>
-                        {evidence.recentActivity.slice(0, MAX_ACTIVITY).map((a) => (
-                            <p key={`${a.label}-${a.when}`} className="alloy-os-process__activity-row">
-                                <span className="alloy-os-currentwork__recent-activity-label">{a.label}</span>
-                                <span className="alloy-os-currentwork__recent-activity-when">{a.when}</span>
-                            </p>
-                        ))}
+
+                        {/* 4 · ACTIVITY ON DEMAND — zero rows on the card face. Omitted entirely when
+                            there is none: a trigger that opens an empty menu is a broken promise. */}
+                        <div className="alloy-os-process__foot-right">
+                            {evidence.activity.length ? (
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button
+                                            type="button"
+                                            className="alloy-os-process__activity-trigger"
+                                            data-process-activity-trigger="true"
+                                        >
+                                            Recent activity
+                                            <span className="alloy-os-process__activity-count">
+                                                {evidence.activity.length}
+                                            </span>
+                                            <span aria-hidden="true">▾</span>
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent
+                                        align="end"
+                                        sideOffset={4}
+                                        data-process-activity-menu="true"
+                                        className="alloy-os-currentwork__tour-menu alloy-os-process__activity-menu"
+                                    >
+                                        {evidence.activity.map((a) => (
+                                            <DropdownMenuItem
+                                                key={`${a.label}-${a.when}`}
+                                                className="alloy-os-currentwork__tour-menu-item alloy-os-process__activity-item"
+                                            >
+                                                <span className="alloy-os-currentwork__recent-activity-label">
+                                                    {a.label}
+                                                </span>
+                                                <span className="alloy-os-currentwork__recent-activity-when">
+                                                    {a.when}
+                                                </span>
+                                            </DropdownMenuItem>
+                                        ))}
+                                        {/* The canonical Activity mode stays reachable — the menu is a
+                                            convenience over the same truth, never a replacement for it. */}
+                                        <DropdownMenuItem
+                                            className="alloy-os-currentwork__tour-menu-item alloy-os-process__activity-all"
+                                            onSelect={() => onViewAllActivity?.()}
+                                        >
+                                            View all activity →
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            ) : null}
+                        </div>
                     </div>
                 ) : null}
 
@@ -231,4 +281,3 @@ export default function ProcessCard({
 }
 
 /** The card is orientation plus current work; activity supports, never dominates. */
-const MAX_ACTIVITY = 3;

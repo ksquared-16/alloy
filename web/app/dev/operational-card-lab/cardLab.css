@@ -1209,46 +1209,81 @@
 }
 
 /* Bounded activity — a supporting region, never the card's body. */
-.alloy-os-process__activity {
-  margin-top: 6px;
+/* ── THE FOOT ROW ────────────────────────────────────────────────────────────────────────────
+ * Participants left, activity right, on ONE line. Two bands became one: the participant band and
+ * the activity band each used to claim its own height plus its own top rule. Halves, because the
+ * right side is an affordance and not a column of facts — it needs room to sit at the edge, not
+ * room to hold content. */
+.alloy-os-process__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 24px;
+  margin-top: 7px;
   padding-top: 7px;
-  gap: 1px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
 }
-/* Cap the measure so the timestamp pairs with its label instead of stranding at the card edge —
- * at 1021px wide, space-between put ~700px of nothing between the two halves of one fact. */
-.alloy-os-process__activity-row {
-  margin: 0;
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
+.alloy-os-process__foot-left {
   min-width: 0;
-  max-width: 420px;
-  line-height: 1.35;
 }
-.alloy-os-process__activity .alloy-os-cardlab__section-head {
-  margin-top: 0;
-}
-/* Title left, affordance right on ONE line — the same head geometry the Household card uses for its
- * collection groups (`.alloy-os-household__group-header`). The link costs no vertical band of its own. */
-.alloy-os-process__activity-head {
+.alloy-os-process__foot-right {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  max-width: 420px;
+  justify-content: flex-end;
+  min-width: 0;
 }
-.alloy-os-process__activity-head .alloy-os-ucard__action {
-  padding: 0;
+/* The trigger is the ONLY thing activity costs the card face. */
+.alloy-os-process__activity-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 4px;
+  margin-right: -4px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
   font-size: 11px;
-}
-.alloy-os-process__activity-row .alloy-os-currentwork__recent-activity-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 650;
+  line-height: 1.4;
+  color: var(--alloy-os-bend-pine, #00a283);
+  cursor: pointer;
   white-space: nowrap;
 }
-.alloy-os-process__activity-row .alloy-os-currentwork__recent-activity-when {
+.alloy-os-process__activity-trigger:hover,
+.alloy-os-process__activity-trigger[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+}
+/* The count is what makes the closed state informative — an operator can tell whether opening it
+ * is worth the click without opening it. */
+.alloy-os-process__activity-count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* The menu bounds its own HEIGHT; it never truncates the record. */
+.alloy-os-process__activity-menu {
+  min-width: 19rem;
+  max-height: 17rem;
+  overflow-y: auto;
+}
+.alloy-os-process__activity-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+.alloy-os-process__activity-item .alloy-os-currentwork__recent-activity-when {
   flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-process__activity-all {
+  margin-top: 2px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  border-radius: 0 0 6px 6px;
+  color: var(--alloy-os-bend-pine, #00a283);
+  font-weight: 650;
 }
 
 /* The one row that survives the rail: a scoped child with its own action. */
@@ -1256,7 +1291,6 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 7px;
   padding: 4px 8px 4px 5px;
   border-radius: 8px;
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
@@ -1334,10 +1368,9 @@
   justify-self: end;
 }
 /* Every child matches the case — one line instead of a per-child list. */
+/* The rule and the spacing now belong to the foot row that contains this line. */
 .alloy-os-process__aligned {
-  margin: 7px 0 0;
-  padding-top: 8px;
-  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  margin: 0;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
