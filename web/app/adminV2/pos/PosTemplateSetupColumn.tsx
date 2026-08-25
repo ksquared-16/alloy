@@ -66,6 +66,7 @@ import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
 import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import { isBulkAcceptSafe } from "@/lib/pos/discovery/bulkAcceptSafety";
 
 function formatWhen(iso: string | null | undefined): string {
     // Canonical presentation datetime (doctrine: typography-and-presentation-doctrine.md).
@@ -591,7 +592,9 @@ export default function PosTemplateSetupColumn({
         setConceptDecisions((prev) => {
             const next = { ...prev };
             for (const p of discovery.proposals) {
-                if (p.confidence.band === "high" && (next[p.id] ?? p.decision_state) === "proposed") next[p.id] = "accepted";
+                // Confidence alone is not a licence. `isBulkAcceptSafe` also requires an ownership
+                // conclusion that does not need a person — so a 99%-confident routing number stays.
+                if (isBulkAcceptSafe(p) && (next[p.id] ?? p.decision_state) === "proposed") next[p.id] = "accepted";
             }
             return next;
         });

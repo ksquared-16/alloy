@@ -69,12 +69,23 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(summaryCount(/output copies found/)).toBe(1);
     });
 
-    it("AUDIT: proposes only genuinely durable new fields — screening data is form-only, not new fields", () => {
+    it("AUDIT: proposes NO new fields from inference — screening data is form-only", () => {
         const newFields = proposals.filter((p) => p.disposition === "create_proposed_field");
         const formOnly = proposals.filter((p) => p.disposition === "form_only_response");
-        // The 5 audited durable new fields — no more (25→5 correction). Optimize ownership, not count.
+        // This assertion has moved twice, in the same direction. It was 25 durable new fields, then
+        // 3 after the Slice 4 audit, and it is 0 now: a new field is an affirmative ownership
+        // conclusion, and none of the three survives one.
+        //
+        //   "Date of Enrollment" — an execution date, resolved from the execution.
+        //   "Nickname"          — binds to the settled `preferred_name` field.
+        //   "Preferred Hospital"— unmatched, which is the absence of a conclusion, not one.
         const newLabels = newFields.map((p) => concepts.find((c) => c.id === p.candidate_id)!.label).sort();
-        expect(newLabels).toEqual(["Date of Enrollment", "Nickname", "Preferred Hospital"]);
+        expect(newLabels).toEqual([]);
+        const dispositionOf = (re: RegExp) =>
+            proposals.find((p) => re.test(concepts.find((c) => c.id === p.candidate_id)!.label))?.disposition;
+        expect(dispositionOf(/Date of Enrollment/)).toBe("derived_value_system");
+        expect(dispositionOf(/Nickname/)).toBe("reuse_canonical_field");
+        expect(dispositionOf(/Preferred Hospital/)).toBe("held_unknown_owner");
         // The health-history screening grid is FORM-ONLY, never durable customer_member fields.
         for (const screening of ["Ear Infections", "Diabetes", "Asthma", "Nosebleeds", "Convulsions/Seizures", "Heart Disease/Defect"]) {
             expect(formOnly.some((p) => concepts.find((c) => c.id === p.candidate_id)!.label === screening)).toBe(true);
@@ -151,12 +162,28 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(concepts.find((c) => c.id === out?.candidate_id)?.kind).toBe("output_copy");
     });
 
-    it("proposes a durable new field for a genuine unmatched attribute (choice with options)", () => {
+    it("HOLDS a genuine unmatched attribute rather than concluding it is durable truth", () => {
+        // Slice 7 overturns what this test used to assert. "Preferred Hospital" is unmatched, and
+        // unmatched is not an ownership conclusion — it is the absence of one. Alloy no longer
+        // reasons "nothing matched, so make a field"; that is exactly how a routing number became a
+        // customer field.
         const hospital = proposalFor(/Preferred Hospital/);
-        expect(hospital?.disposition).toBe("create_proposed_field");
-        expect(hospital?.proposed_field?.data_type).toBe("select");
-        expect((hospital?.proposed_field?.option_set ?? []).length).toBe(6);
-        // new fields are proposals only — never auto-created
+        expect(hospital?.disposition).toBe("held_unknown_owner");
+        expect(hospital?.proposed_field, "a held concept must carry nothing creatable").toBeUndefined();
+        expect(hospital?.ownership_routing?.owner).toBe("HELD_UNKNOWN_OWNER");
+    });
+
+    it("leaves the operator an explicit, single-row way to make it durable", () => {
+        // Held is not a straitjacket. An operator who knows their programme may decide this IS
+        // durable — but it must be one person on one row, never an inference and never a bulk sweep.
+        const hospital = proposalFor(/Preferred Hospital/)!;
+        const create = hospital.alternatives.find((a) => a.disposition === "create_proposed_field");
+        expect(create, "the operator needs a way to resolve a held row").toBeDefined();
+        expect(create!.confidence.signals.join(" ")).toMatch(/Alloy did not conclude this/i);
+        expect(hospital.ownership_routing?.bulkAcceptSafe).toBe(false);
+    });
+
+    it("still auto-creates nothing", () => {
         expect(proposals.filter((p) => p.disposition === "create_proposed_field").every((p) => p.decision_state === "proposed")).toBe(true);
     });
 

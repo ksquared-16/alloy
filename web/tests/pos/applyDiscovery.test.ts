@@ -81,11 +81,19 @@ describe("M5C — apply approved configuration", () => {
         const { result } = applyDiscovery({ draft, discovery, decisions });
         const newFieldResults = result.results.filter((r) => r.disposition === "create_proposed_field");
         expect(newFieldResults.every((r) => r.outcome === "requires_confirmation")).toBe(true);
-        // when confirmed, the field is PREPARED for the Field System (never silently created here)
-        const hospital = discovery.proposals.find((p) => /Preferred Hospital/.test(discovery.concepts.find((c) => c.id === p.candidate_id)!.label))!;
-        const confirmed = applyDiscovery({ draft, discovery, decisions, confirmedNewFields: new Set([hospital.id]) });
-        const prepared = confirmed.result.results.find((r) => r.proposal_id === hospital.id);
-        expect(prepared?.prepared_field?.data_type).toBe("select");
+    });
+
+    it("creates nothing from a held row, however it was decided", () => {
+        // Slice 7: the importer no longer concludes "unmatched, therefore a field". "Preferred
+        // Hospital" is held, so apply has nothing creatable to prepare even if the row was accepted.
+        const hospital = discovery.proposals.find(
+            (p) => /Preferred Hospital/.test(discovery.concepts.find((c) => c.id === p.candidate_id)!.label),
+        )!;
+        expect(hospital.disposition).toBe("held_unknown_owner");
+        expect(hospital.proposed_field).toBeUndefined();
+        const applied = applyDiscovery({ draft, discovery, decisions, confirmedNewFields: new Set([hospital.id]) });
+        const outcome = applied.result.results.find((r) => r.proposal_id === hospital.id);
+        expect(outcome?.prepared_field, "a confirmed held row must still prepare nothing").toBeUndefined();
     });
 
     it("applies requirement/acknowledgement/signature/static/output dispositions", () => {

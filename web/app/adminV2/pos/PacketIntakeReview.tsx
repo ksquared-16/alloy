@@ -58,6 +58,14 @@ function ownership(p: ConfigurationProposal): { label: string; tone: string } {
             return { label: "A repeating set", tone: "border-sky-300 bg-sky-50 text-sky-800" };
         case "create_proposed_field":
             return { label: "Needs a new field", tone: "border-amber-300 bg-amber-50 text-amber-800" };
+        case "financial_payment":
+            // The row where a wrong answer stores a credential. Distinct from every other tone.
+            return { label: "Financials owns this", tone: "border-violet-300 bg-violet-50 text-violet-800" };
+        case "derived_value_system":
+            // Not a warning at all — a question that needs no answer stored anywhere.
+            return { label: "Alloy already knows this", tone: "border-emerald-300 bg-emerald-50 text-emerald-800" };
+        case "held_unknown_owner":
+            return { label: "Needs an owner", tone: "border-amber-300 bg-amber-50 text-amber-800" };
         case "held_for_canonical_owner":
             // Not a warning and not an error — the answer is known, the destination is being built
             // elsewhere. Amber would tell the operator to go fix something they cannot fix.

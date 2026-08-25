@@ -476,10 +476,16 @@ function routedProposal(
     base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
     concept: BusinessConceptCandidate,
     routing: OwnershipRouting,
+    refused?: { target: FormFieldSource; reason: string },
 ): ConfigurationProposal | null {
     const common = {
         ...base,
         ownership_routing: routing,
+        // A canonical binding that WAS matched and then refused must travel with the proposal
+        // whatever the routing concludes. Without it the operator sees a held row that looks like
+        // "the matcher found nothing", when in fact it found something and declined it — and those
+        // are different facts about the same question.
+        ...(refused ? { refused_binding: refused } : {}),
         alternatives: [] as ProposalAlternative[],
         validation_issues: [] as string[],
     };
@@ -514,15 +520,26 @@ function routedProposal(
         case "SAFEGUARDING":
         case "HEALTH":
         case "CONSENT":
-        case "REQUIREMENT_EXCEPTION":
+        case "REQUIREMENT_EXCEPTION": {
             // These already have their own dispositions upstream; if one reaches here the upstream
             // gate missed it, so hold rather than fall through to a field.
+            //
+            // The hold itself is carried, not just the routing: downstream readers key on
+            // `ownership_hold.state`, and a held proposal without one classified as OWNERLESS —
+            // held for a named owner, and reported as owned by nobody.
+            const hold = ownershipHoldFor({
+                label: concept.label,
+                concept_key: concept.concept_key,
+                ...(concept.repetition ? { repetition: concept.repetition } : {}),
+            });
             return {
                 ...common,
                 disposition: "held_for_canonical_owner",
+                ...(hold ? { ownership_hold: hold } : {}),
                 confidence: conf("review", [`owned by ${routing.owner.toLowerCase()}`]),
                 explanation: `"${concept.label}" is collected on this form and does not become a durable Alloy field here. ${routing.basis}`,
             };
+        }
 
         case "RELATIONSHIP":
             return {
@@ -548,6 +565,18 @@ function routedProposal(
                 ...common,
                 disposition: "held_unknown_owner",
                 confidence: conf("attention", ["ownership not established", "needs an owner before it can be durable"]),
+                // The escape hatch, and the shape of it matters. Alloy will not CONCLUDE that this is
+                // durable truth, but an operator who knows their programme may decide it is. That has
+                // to be one person, on one row, saying so — which is why it is an alternative here
+                // and why `bulkAcceptSafe` stays false: a held row can never be swept into a bulk
+                // accept, so "unknown → new field" cannot happen without a deliberate human act.
+                alternatives: [
+                    {
+                        disposition: "create_proposed_field",
+                        label: `Make this a durable ${concept.subject} field`,
+                        confidence: conf("attention", ["operator decision — Alloy did not conclude this"]),
+                    },
+                ],
                 explanation: `"${concept.label}" is collected on this form and kept with the process. ${routing.basis}`,
             };
 
@@ -574,7 +603,7 @@ function proposeNewField(
     });
 
     if (routing.owner !== "CANONICAL_FIELD") {
-        const routed = routedProposal(base, concept, routing);
+        const routed = routedProposal(base, concept, routing, refused);
         // The invariant, made structural: a routing that is not CANONICAL_FIELD can never continue
         // to field creation. A missing branch below used to fall through and propose a field — the
         // exact "nothing matched, so make a field" behaviour this gate exists to end — so an
@@ -584,6 +613,7 @@ function proposeNewField(
                 ...base,
                 disposition: "held_unknown_owner",
                 ownership_routing: routing,
+                ...(refused ? { refused_binding: refused } : {}),
                 confidence: conf("attention", [`owner ${routing.owner} has no proposal shape yet`]),
                 alternatives: [],
                 explanation: `"${concept.label}" is collected on this form and kept with the process. ${routing.basis}`,

@@ -13,6 +13,7 @@
 import { useMemo } from "react";
 import { Check, ChevronRight, Layers } from "lucide-react";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { isBulkAcceptSafe } from "@/lib/pos/discovery/bulkAcceptSafety";
 import {
     confidenceLabel,
     type BusinessConceptCandidate,
@@ -24,13 +25,28 @@ import {
     type ProposalDisposition,
 } from "@/lib/pos/discovery/contracts";
 
+/**
+ * Ordered by what the operator must DECIDE, not by what the importer found most of.
+ *
+ * The old order opened with "Existing data" and buried the exceptions, while the headline offered to
+ * accept fifty guesses. Three groups did not appear at all — held, safeguarding and, once added,
+ * financial — so the rows that most needed a person were the ones with no home on the page.
+ *
+ * Exceptions first: the things nobody else can decide. Then the settled outcomes. Then the
+ * bookkeeping. Same strip, no new chrome.
+ */
 const CATEGORY_ORDER: DiscoveryCategory[] = [
+    "needs_ownership_review",
+    "safeguarding",
+    "financial",
+    "held_for_owner",
+    "new_fields",
     "existing_fields",
     "relationships",
-    "new_fields",
-    "form_responses",
     "collections",
+    "derived",
     "upload_requirements",
+    "form_responses",
     "acknowledgements",
     "signatures",
     "static_content",
@@ -53,6 +69,9 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     derived_value: "Derived value",
     held_for_canonical_owner: "Held for another owner",
     safeguarding_binding: "Safeguarding restriction",
+    financial_payment: "Financials / payments",
+    derived_value_system: "Alloy already knows this",
+    held_unknown_owner: "Needs an owner",
     unresolved: "Needs classification",
 };
 
@@ -95,6 +114,9 @@ const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     new_fields: "New fields",
     held_for_owner: "Owned elsewhere in Alloy",
     safeguarding: "Safeguarding",
+    financial: "Financials & payments",
+    derived: "Alloy already knows these",
+    needs_ownership_review: "Needs an owner",
     form_responses: "Form responses",
     upload_requirements: "Document requirements",
     acknowledgements: "Acknowledgements",
@@ -159,8 +181,10 @@ export default function ProcessingConceptReview({
         return CATEGORY_ORDER.filter((c) => (map.get(c)?.length ?? 0) > 0).map((c) => ({ category: c, proposals: map.get(c)! }));
     }, [discovery.proposals]);
 
-    const highConfidencePending = discovery.proposals.filter(
-        (p) => p.confidence.band === "high" && (decisions[p.id] ?? p.decision_state) === "proposed"
+    // The count and the action must use ONE predicate. A button that offers to accept 28 and then
+    // accepts 19 is worse than either number.
+    const bulkSafePending = discovery.proposals.filter(
+        (p) => isBulkAcceptSafe(p) && (decisions[p.id] ?? p.decision_state) === "proposed"
     ).length;
 
     // Review progress, shown in the pinned bar so the operator always knows what is left.
@@ -181,12 +205,13 @@ export default function ProcessingConceptReview({
                         </div>
                         <p className="mt-1 text-[12px] text-alloy-midnight/55">
                             {discovery.concepts.length} concepts, reviewed as your operating model — not {countRawFields(discovery)} individual questions.
+                            Each one shows who owns the answer; a new field appears only where Alloy concluded it owns durable truth.
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
-                        {highConfidencePending > 0 ? (
+                        {bulkSafePending > 0 ? (
                             <button type="button" onClick={onBulkAcceptHighConfidence} className={WS_ACTION_SECONDARY} data-testid="concept-bulk-accept">
-                                <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden /> Accept {highConfidencePending} high-confidence
+                                <Check className="mr-1 inline h-3.5 w-3.5" aria-hidden /> Accept {bulkSafePending} safe to accept
                             </button>
                         ) : null}
                         <button type="button" onClick={onOpenDetailed} className={WS_ACTION_SECONDARY} data-testid="concept-open-detailed">

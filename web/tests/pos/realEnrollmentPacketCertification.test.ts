@@ -301,7 +301,7 @@ describe("the compression scorecard, guarded", () => {
         expect(uniqueObligations().size).toBe(32);
     });
 
-    it("11 of the 86 facts carry a SAFE proposal, and the one remaining unsafe binding is refused", () => {
+    it("19 of the 86 facts bind to an existing canonical field, and the one unsafe binding is refused", () => {
         const bound = new Set<string>();
         const merge = new Map<string, string>();
         for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
@@ -320,7 +320,9 @@ describe("the compression scorecard, guarded", () => {
         // LOW confidence to the generic child `medical_notes` field — a green "Existing field" chip
         // over a medication record dissolving into a notes blob. It is now HELD for the Health
         // foundation (D-H5), which is a worse-looking number and a better answer.
-        expect(bound.size).toBe(7);
+        // 7 → 19. The twelve settled child-profile facts from Slice 5 now bind to the destinations
+        // that already existed rather than proposing duplicates beside them.
+        expect(bound.size).toBe(19);
         expect([...bound].some((k) => /medication/i.test(k)), "no medication binding may survive").toBe(false);
         expect([...bound].some((k) => /allergies/i.test(k)), "a confident allergy binding must survive").toBe(true);
 
@@ -394,10 +396,13 @@ describe("Slice 5 — a settled owner elsewhere is a state, not a blank", () => 
         expect(bound).toHaveLength(3);
     });
 
-    it("holds ten facts in total, and creates a field for none of them", () => {
+    it("holds fourteen facts in total, and creates a field for none of them", () => {
         // Twelve in Slice 5, minus the two safeguarding questions that now bind.
         const held = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "held_for_canonical_owner"));
-        expect(held).toHaveLength(10);
+        // 10 → 14: Slice 7 widened Health to clinical facts, so general health, complications at
+        // birth, serious illness/hospitalisations and a bee-sting reaction stopped being generic
+        // child text and joined the Health hold.
+        expect(held).toHaveLength(14);
         expect(held.every((p) => p.ownership_hold!.state === "AWAITING_HEALTH_FOUNDATION")).toBe(true);
         expect(held.every((p) => p.proposed_field === undefined), "a held fact must carry nothing creatable").toBe(true);
         expect(held.every((p) => p.explanation.length > 0), "the operator must be told why").toBe(true);

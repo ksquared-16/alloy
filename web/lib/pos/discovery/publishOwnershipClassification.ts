@@ -26,6 +26,9 @@ export type PublishOwnership =
     | "HELD_PENDING_CONSENT"
     | "HELD_PENDING_REQUIREMENT_EXCEPTION"
     | "ARTIFACT_SPECIFIC"
+    | "FINANCIAL_PAYMENT_HELD"
+    | "DERIVED_SYSTEM"
+    | "HELD_UNKNOWN_OWNER"
     | "OWNERLESS";
 
 export interface ClassifiedConcept {
@@ -103,6 +106,26 @@ export function classifyForPublish(
         case "derived_value":
             return { ownership: "ARTIFACT_SPECIFIC", basis: "content of the artifact, not a collected fact" };
 
+        case "financial_payment":
+            return {
+                ownership: "FINANCIAL_PAYMENT_HELD",
+                basis: "a payment credential, setup detail or billing amount — Financials owns it and Alloy stores no field for it",
+            };
+
+        case "derived_value_system":
+            return {
+                ownership: "DERIVED_SYSTEM",
+                basis: "Alloy computes this from canonical truth or from the execution; storing it would create a second answer",
+            };
+
+        case "held_unknown_owner":
+            // NOT ownerless. Ownerless means nothing accounts for it; this is accounted for
+            // explicitly as "no owner has been decided", which is a state a person can act on.
+            return {
+                ownership: "HELD_UNKNOWN_OWNER",
+                basis: "collected on the form and kept with the process while ownership is undecided — never asserted as durable truth",
+            };
+
         case "form_only_response":
             return { ownership: "PROCESS_SCOPED_FOR_CERTIFICATION", basis: "collected on the form; no durable record claims it" };
 
@@ -116,6 +139,11 @@ export function classifyForPublish(
             // Honest at publish time: the Field System owns it only AFTER an operator approves
             // creation. Counting an unapproved proposal as canonical is how a publish comes to imply
             // durable behaviour it does not have.
+            //
+            // After Slice 7 this branch should be unreachable for the real packet — a new field is
+            // now an affirmative ownership conclusion, and every durable fact this packet asks for
+            // already had a destination. The branch stays because reachability is a property of the
+            // corpus, not of the code.
             return {
                 ownership: "PROCESS_SCOPED_FOR_CERTIFICATION",
                 basis: "a new field is proposed but not approved, so nothing durable holds it yet",

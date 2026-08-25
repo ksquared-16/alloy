@@ -238,12 +238,10 @@ describe("the unsafe binding is refused", () => {
     it("proposes no canonical binding whose field belongs to another party", () => {
         const proposals = Object.values(packet.source_analysis).flatMap((a) => a.proposals);
         const bound = proposals.filter((p) => p.disposition === "reuse_canonical_field");
-        // 9 proposals, 7 distinct facts: the child's name and date of birth are each proposed in
-        // both artifacts that ask for them, and correlation is what makes them one.
-        //
-        // Was 10/8 before Slice 5. The tenth was a medication question binding at LOW confidence to
-        // the generic `medical_notes` field; it is now held for the Health foundation (D-H5).
-        expect(bound.length).toBe(9);
+        // 21 proposals now bind, up from 9. Slice 5 settled twelve durable child-profile facts and
+        // seeded them for every org; the importer could not REACH them, so it proposed new fields
+        // beside destinations that already existed. Slice 7 routes to them.
+        expect(bound.length).toBe(21);
         const merged = new Set<string>();
         for (const [docId, a] of Object.entries(packet.source_analysis)) {
             for (const p of a.proposals) {
@@ -253,7 +251,7 @@ describe("the unsafe binding is refused", () => {
                 merged.add(corr?.concept_key ?? `${docId}|${c.concept_key}`);
             }
         }
-        expect(merged.size).toBe(7);
+        expect(merged.size).toBe(19);
         expect(bound.every((p) => !p.refused_binding)).toBe(true);
     });
 });

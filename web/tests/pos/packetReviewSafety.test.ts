@@ -285,7 +285,12 @@ describe("Slice 4 — ownership, and what approval means", () => {
         for (const c of concepts.filter((x) => !!x.repetition)) {
             const p = proposals.find((x) => x.candidate_id === c.id)!;
             if (c.kind === "choice_field") {
-                expect(p.proposed_field?.option_set?.length, `${c.id} lost its options`).toBe(c.repetition!.instances);
+                // Slice 7 changed where the options live, not whether they survive. A choice whose
+                // ownership is undecided no longer carries a `proposed_field` at all, so the options
+                // are asserted on the CONCEPT — which is where they were always authoritative. What
+                // must never happen is the closed choice collapsing into free text.
+                expect(c.options?.length, `${c.id} lost its options`).toBe(c.repetition!.instances);
+                expect(p.proposed_field?.data_type, `${c.id} collapsed to text`).not.toBe("text");
             } else {
                 // Slice 5 added a second non-flattened outcome. An immunization dose schedule is a
                 // collection AND belongs to the Health foundation, so it is held rather than offered

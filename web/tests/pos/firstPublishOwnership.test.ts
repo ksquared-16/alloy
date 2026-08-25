@@ -101,6 +101,51 @@ describe("the ten health concepts stay held, exactly as Slice 5 determined", () 
     });
 });
 
+describe("Slice 7 — no concept is durable truth merely because nothing better matched", () => {
+    it("proposes ZERO new canonical fields for the real packet", () => {
+        // The governing rule, measured. Every durable fact this packet asks for already had a
+        // destination; everything else is derived, owned elsewhere, or genuinely undecided.
+        const newFields = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "create_proposed_field"));
+        expect(newFields.map((p) => p.proposed_field?.suggested_field_key), "false durable truth").toEqual([]);
+    });
+
+    it("routes every proposal through an ownership conclusion", () => {
+        // A proposal with no routing is one that reached its disposition by a path the gate does
+        // not cover — which is how the fallback behaviour would come back.
+        const unrouted = inputs.flatMap((i) =>
+            i.discovery.proposals.filter(
+                (p) => p.disposition === "create_proposed_field" && !p.ownership_routing,
+            ),
+        );
+        expect(unrouted).toHaveLength(0);
+    });
+
+    it("never lets a bank credential reach a field, at any confidence", () => {
+        const financial = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "financial_payment"));
+        expect(financial.length).toBeGreaterThanOrEqual(5);
+        expect(financial.every((p) => p.proposed_field === undefined)).toBe(true);
+        expect(financial.every((p) => p.target_field_source === undefined)).toBe(true);
+    });
+
+    it("derives rather than stores the computable values", () => {
+        const derived = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "derived_value_system"));
+        expect(derived.length).toBeGreaterThanOrEqual(6);
+        expect(derived.every((p) => p.proposed_field === undefined)).toBe(true);
+    });
+
+    it("binds the settled child-profile facts instead of duplicating them", () => {
+        // Slice 5 created these destinations; the importer could not reach them until now.
+        const bound = inputs.flatMap((i) =>
+            i.discovery.proposals
+                .filter((p) => p.disposition === "reuse_canonical_field")
+                .map((p) => p.target_field_source?.field_key),
+        );
+        for (const key of ["eating_habits", "special_diet", "favorite_foods", "toileting_routine", "nap_routine", "temperament"]) {
+            expect(bound, key).toContain(key);
+        }
+    });
+});
+
 describe("the packet is not smaller than it was", () => {
     it("still accounts for every destination", () => {
         expect(packet.destinations).toHaveLength(180);
