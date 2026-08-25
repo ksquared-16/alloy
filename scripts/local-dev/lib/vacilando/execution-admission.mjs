@@ -13,11 +13,11 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeF
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { canonicalLaneStoreId, getDurableLane, scarceResourcePriorityForLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, listDurableLanes, scarceResourcePriorityForLane } from "./development-lane.mjs";
 import { localNodeId } from "./execution-node.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { getExecutionRun, isTerminalRunState } from "./execution-run.mjs";
+import { activeRunForLane, getExecutionRun, isTerminalRunState } from "./execution-run.mjs";
 
 export const ADMISSION_SCHEMA = "vacilando.execution_admission.v1";
 export const ADMISSION_STATES = Object.freeze([
@@ -355,6 +355,67 @@ export async function reconcilePendingDelivery({ root = runtimeRoot(), nowMs = D
   return { ok: true, delivered };
 }
 
+/**
+ * A QUEUED run that no admission record points at.
+ *
+ * reconcilePendingDelivery only walks admission REQUESTS, so a run that was
+ * created QUEUED while its request was never made — or whose request was closed
+ * out from under it — is invisible to every delivery path and waits forever.
+ * Observed on Runtime Performance: run QUEUED on `waiting_for_agent_session`,
+ * an ACTIVE and oriented session sitting at a ready caret in its own worktree,
+ * and no admission row anywhere. It could not start and nothing would ever
+ * start it.
+ *
+ * A lane that already owns an eligible provider needs NO new seat, so it is
+ * delivered directly rather than queued behind provider capacity — queueing it
+ * there is what made a full host block a lane that was not asking for a seat.
+ */
+export async function reconcileOrphanedQueuedRuns({ root = runtimeRoot(), nowMs = Date.now() } = {}) {
+  const store = readAdmissionStore(root);
+  const claimed = new Set(
+    (store.requests || [])
+      .filter((r) => ["QUEUED", "ACTIVE", "ADMITTED"].includes(r.state) && r.run_id)
+      .map((r) => r.run_id),
+  );
+  const delivered = [];
+  const queued = [];
+  let lanes = [];
+  try { lanes = listDurableLanes(root) || []; } catch { lanes = []; }
+  for (const lane of lanes) {
+    let run = null;
+    try { run = activeRunForLane(lane.lane_id, root); } catch { run = null; }
+    if (!run || run.state !== "QUEUED") continue;
+    if (claimed.has(run.run_id)) continue;
+    if (run.delivery?.acknowledged === true || run.started_at) continue;
+
+    let session = null;
+    try { session = activeAgentSessionForLane(lane.lane_id, root); } catch { session = null; }
+    const ownsProvider = Boolean(session && session.state === "ACTIVE" && session.oriented_at);
+    if (ownsProvider) {
+      try {
+        const out = await deliverRun({ run_id: run.run_id, lane_id: lane.lane_id }, { lane, root, nowMs });
+        if (out?.ok) {
+          delivered.push({ lane_id: lane.lane_id, run_id: run.run_id });
+          continue;
+        }
+      } catch { /* fall through to queueing it truthfully */ }
+    }
+    // No provider of its own: give it a real admission row so it waits in the
+    // queue with a position instead of waiting nowhere.
+    try {
+      const req = createAdmissionRequest({
+        laneId: lane.lane_id,
+        runId: run.run_id,
+        provider: lane.preferred_provider || lane.binding?.provider || "claude",
+        nowMs,
+        root,
+      });
+      if (req?.ok) queued.push({ lane_id: lane.lane_id, run_id: run.run_id });
+    } catch { /* the next tick tries again */ }
+  }
+  return { ok: true, delivered, queued };
+}
+
 export function prioritizeAdmission(admissionId, {
   origin = "operator",
   nowMs = Date.now(),
@@ -511,6 +572,7 @@ export async function evaluateAdmissionQueue({
   try { reconcileAdmittedWithoutProvider({ root, nowMs }); } catch { /* the sweep is best-effort */ }
   // And re-attempt any instruction whose delivery was deferred on readiness.
   try { await reconcilePendingDelivery({ root, nowMs }); } catch { /* next tick */ }
+  try { await reconcileOrphanedQueuedRuns({ root, nowMs }); } catch { /* next tick */ }
   const store = readAdmissionStore(root);
   const head = queuedAdmissions(store)[0];
   if (!head) return { ok: true, admitted: 0, skipped: "empty" };

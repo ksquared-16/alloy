@@ -411,16 +411,39 @@ export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot
     max_active: provision.max_providers,
     max_providers: provision.max_providers,
   });
+  // ONE authoritative number, and it is the LIVE one.
+  //
+  // `ui.active` counts lane posture: lanes whose run is in an occupying state.
+  // A lane can hold a live provider with NO active run — Runtime Performance
+  // did exactly that: pid 24584 alive in its worktree, run `none`, so posture
+  // counted 2 while three real Claude processes held all three seats. Admission
+  // gates on this number, so Vacilando believed a seat was free and would have
+  // started a fourth provider over the ceiling.
+  //
+  // Provider capacity is about PROCESSES, so the process count decides.
+  const holders = provision.provider_holders || [];
+  const liveActive = Number.isFinite(provision.active_providers)
+    ? provision.active_providers
+    : holders.length;
+  // Live processes only. Taking max(ui.active) re-introduced ghost occupancy:
+  // leftover RUNNING claims and status-only NEEDS_INPUT lanes inflated the
+  // count, Vacilando reported 0 seats, and Trust/Surfaces could not start.
+  const active = Math.max(liveActive, holders.length);
+  const available = Math.max(0, provision.max_providers - active);
   return {
     ...ui,
+    active,
     max_active: provision.max_providers,
     occupied_slots: provision.occupied_slots,
     free_slots: provision.free_slots,
     active_providers: provision.active_providers,
-    provider_holders: provision.provider_holders || [],
+    provider_holders: holders,
     counted_from: provision.counted_from || null,
-    available: ui.available,
-    blockers: ui.available > 0
+    // Lanes whose posture occupies a seat, kept for display — never for the
+    // arithmetic that gates admission.
+    posture_active: ui.active || 0,
+    available,
+    blockers: available > 0
       ? (provision.blockers || []).filter((b) => b !== "provider_capacity")
       : Array.from(new Set(["provider_capacity", ...(provision.blockers || [])])),
   };

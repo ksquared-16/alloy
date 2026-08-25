@@ -15,6 +15,7 @@ import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
 import { cleanupRunResources, onExecutionRunTransition, resetResourceRequestsForTests } from "./execution-resource.mjs";
 import { TOOLKIT_DIR } from "./workspace-facts.mjs";
 import { localNodeId, vacilandoGatewayRoot } from "./execution-node.mjs";
+import * as attachmentsModule from "./lane-attachments.mjs";
 
 export const EXECUTION_RUN_SCHEMA = "vacilando.execution_run.v1";
 /**
@@ -57,7 +58,7 @@ const LEGAL = Object.freeze({
   // COMPLETE is reachable from RECOVERING: work that finished must never be
   // impossible to close merely because Vacilando abandoned the run mid-sprint.
   RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"],
-  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "FAILED"],
+  NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED"],
   COMPLETE: [],
   FAILED: [],
   // ABANDONED is recoverable, not dead. RECOVERING is its ONLY exit, and it is
@@ -340,10 +341,29 @@ function emitOutcomeEvent(run, root, { recordEvent = true } = {}) {
   return Promise.resolve(null);
 }
 
+/**
+ * Attachment metadata for a run, resolved synchronously.
+ *
+ * publicExecutionRun is called from synchronous code all over the projection
+ * layer, so this cannot be a dynamic import. The module is small and has no
+ * cycle back into execution-run.
+ */
+function attachmentsForRunSync(runId) {
+  if (!runId || !attachmentsModule) return [];
+  return attachmentsModule.listRunAttachments(runId);
+}
+
 export function publicExecutionRun(run, { includeInstruction = false, includeTransitions = false } = {}) {
   if (!run) return null;
+  // Attachments belong to the prompt, so they travel with the run projection —
+  // metadata and an authenticated URL only, never bytes and never a real path.
+  let attachments = [];
+  try {
+    attachments = attachmentsForRunSync(run.run_id);
+  } catch { /* the conversation still renders without them */ }
   const out = {
     run_id: run.run_id,
+    attachments,
     lane_id: run.lane_id,
     state: run.state,
     state_reason: run.state_reason || null,

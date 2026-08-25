@@ -65,12 +65,13 @@ export function detailViewKind({ selectedId, lanes, lane, loading, listReady } =
 }
 
 export function isGatewayRoute(name) {
-  return name === "lanes";
+  return name === "lanes" || name === "settings";
 }
 
 export function isPrimaryGatewayHash(hash) {
   const h = String(hash || "");
-  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/");
+  return !h || h === "#" || h === "#/" || h === "#/lanes" || h.startsWith("#/lanes/")
+    || h === "#/settings" || h.startsWith("#/settings");
 }
 
 export function defaultGatewayHash() {
@@ -155,7 +156,83 @@ export function buildSendBody(instruction, extra = {}) {
   const body = { instruction: String(instruction ?? "") };
   const provider = String(extra?.provider || "").toLowerCase();
   if (provider === "claude" || provider === "cursor") body.provider = provider;
+  // Order is the operator's order, and it is what the provider is told, so it
+  // is sent explicitly rather than left to whatever the server iterates.
+  const ids = (Array.isArray(extra?.attachmentIds) ? extra.attachmentIds : []).map(String).filter(Boolean);
+  if (ids.length) body.attachment_ids = ids;
   return body;
+}
+
+/** Operator-facing text for cancel refusals. */
+export function cancelErrorText(error) {
+  switch (error) {
+    case "no_active_run": return "There is no prompt to cancel — this lane is idle.";
+    case "run_already_terminal": return "That prompt already finished.";
+    case "confirm_required": return "That prompt is being worked on; confirm to interrupt it.";
+    case "run_lane_mismatch": return "That prompt belongs to a different lane.";
+    case "lane_not_found": return "That lane no longer exists.";
+    default: return "The prompt could not be cancelled.";
+  }
+}
+
+/** Operator-facing text for every repository refusal the server can return. */
+export function repositoryErrorText(error, detail = {}) {
+  switch (error) {
+    case "path_outside_approved_roots":
+      return `That path is outside the folders Vacilando may use: ${(detail.approved_roots || detail.roots || []).join(", ")}.`;
+    case "path_not_found": return "There is nothing at that path.";
+    case "path_must_be_absolute": return "Enter the full path, starting with /.";
+    case "path_refused": return "That path contains characters Vacilando will not open.";
+    case "not_a_git_repository": return "That folder is not a Git repository.";
+    case "path_is_worktree":
+      return `That is a worktree of ${detail.parent_root || "another repository"}. Register that repository instead.`;
+    case "repository_already_registered":
+      return `Already registered as "${detail.repository?.name || "another entry"}".`;
+    case "worktree_parent_inside_repository":
+      return "Worktrees cannot live inside the repository itself.";
+    case "worktree_parent_outside_approved_roots":
+      return "That worktree location is outside the folders Vacilando may use.";
+    case "repository_not_found": return "That repository is no longer registered.";
+    case "repository_not_active": return "That repository is disconnected.";
+    case "repository_has_active_work":
+      return `Finish or stop the ${(detail.active_lanes || []).length} running lane(s) first.`;
+    case "cross_repository_binding_refused":
+      return "That worktree belongs to a different repository.";
+    case "clone_not_implemented":
+      return detail.detail || "Clone is not available yet. Clone it yourself, then connect it.";
+    default: return "That repository could not be registered.";
+  }
+}
+
+/** Operator-facing text for every attachment refusal the server can return. */
+export function attachmentErrorText(error, detail = {}) {
+  const mb = (n) => `${Math.round((Number(n) || 0) / (1024 * 1024))} MB`;
+  switch (error) {
+    case "unsupported_media_type":
+      return "That file type is not supported. Use PNG, JPEG, WebP, GIF, PDF or HTML.";
+    case "attachment_too_large":
+      return `That file is larger than ${mb(detail.limit)}. Try a smaller one.`;
+    case "attachments_total_too_large":
+      return `Those files add up to more than ${mb(detail.limit)} together.`;
+    case "attachment_dimensions_too_large":
+      return `That image is larger than ${detail.limit}px on a side.`;
+    case "too_many_attachments":
+      return `You can attach up to ${detail.limit || 6} files to one prompt.`;
+    case "empty_file":
+      return "That file was empty.";
+    case "attachment_missing":
+      return "One of the files is no longer available. Remove it and attach it again.";
+    case "attachment_corrupt":
+      return "One of the files did not upload cleanly. Remove it and attach it again.";
+    case "attachment_lane_mismatch":
+      return "That file belongs to a different lane.";
+    case "attachment_not_found":
+      return "That file is no longer attached.";
+    case "attachment_not_removable":
+      return "That file has already been sent, so it stays in the conversation.";
+    default:
+      return "The file could not be attached.";
+  }
 }
 
 export function sendPayload(laneId, instruction) {
@@ -239,7 +316,7 @@ export function deliveryErrorText(error) {
     case "delivery_failed":
       return "Delivery failed. The instruction was not submitted.";
     case "cursor_delivery_unavailable":
-      return "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached. Retry with Claude.";
+      return "Cursor could not start. Connect Cursor in Settings, then send again — or use Claude.";
     case "provider_prompt_not_ready":
       return "The agent is not at a prompt right now, so nothing was sent. It may be mid-turn or waiting on a dialog — open Details to see the terminal.";
     case "undelivered_provider_prompt_block":
@@ -721,6 +798,13 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
 export function workOutputIsStale(lane, output, nowMs = Date.now()) {
   const run = lane?.execution_run;
   if (!["EXECUTING", "VALIDATING", "RECOVERING"].includes(run?.state)) return false;
+  // A live provider that has not printed is thinking, not stale. Claude
+  // routinely thinks for many minutes without changing the pane. Calling that
+  // "Stale" is what made live lanes look dead and blocked Send.
+  const live = lane?.tmux?.alive === true
+    || lane?.claude?.presence === "present"
+    || lane?.agent_session?.state === "ACTIVE";
+  if (live) return false;
   const captured = output?.captured_at ? Date.parse(output.captured_at) : NaN;
   if (Number.isFinite(captured)) return nowMs - captured > STALE_WORK_MS;
   if (!output) return false;
@@ -821,16 +905,52 @@ export function canonicalLaneWorkState(lane, { output = null, nowMs = Date.now()
   return { key: "idle", label: "Idle", group: "idle", tone: "", mark: "○", hint: cap.hint || "Idle", headline: "Idle", live: false, stale: false };
 }
 
-export function laneUpdatedMs(lane) {
+/**
+ * When did something MEANINGFUL last happen in this lane?
+ *
+ * Meaningful means the operator or the agent moved the work: a prompt was
+ * delivered, the agent produced output or progress, the Execution Run changed
+ * state, or a result worth notifying about landed.
+ *
+ * `observed_at` IS NOT ACTIVITY. It is the timestamp discovery stamps on every
+ * lane on every poll. Measured against the live Gateway: two list polls three
+ * seconds apart, with nothing happening, changed observed_at on 8 of 8 lanes —
+ * so every lane's "recency" was really "now", the ordering was decided by
+ * whatever order the poll happened to resolve in, and the list reshuffled while
+ * the operator was reading it. Health checks, hydration and presence heartbeats
+ * are all the same non-event.
+ */
+export function laneActivityMs(lane) {
   const run = lane?.execution_run || lane?.previous_run;
-  const fromRun = Date.parse(run?.updated_at || run?.completed_at || run?.started_at || run?.created_at || "");
-  const activity = Number(lane?.last_activity_ms);
+  const candidates = [
+    // A run state transition, and when the agent last reported into it.
+    Date.parse(run?.updated_at || ""),
+    Date.parse(run?.completed_at || ""),
+    Date.parse(run?.started_at || ""),
+    Date.parse(run?.created_at || ""),
+    Date.parse(run?.last_worker_report_at || ""),
+    Date.parse(run?.latest_progress?.at || ""),
+    // The operator's own last prompt into the lane.
+    Date.parse(lane?.last_instruction?.at || lane?.last_instruction?.delivered_at || ""),
+    // Agent output actually changing — not the fact that we looked.
+    Number(lane?.last_activity_ms),
+    // A notification-worthy result.
+    Date.parse(lane?.notifications?.latest_at || ""),
+  ];
+  let best = 0;
+  for (const c of candidates) if (Number.isFinite(c) && c > best) best = c;
+  return best;
+}
+
+/**
+ * Retained name for the row's "x ago" label, which legitimately wants to say
+ * when the lane was last SEEN when it has no activity of its own.
+ */
+export function laneUpdatedMs(lane) {
+  const activity = laneActivityMs(lane);
+  if (activity) return activity;
   const observed = Date.parse(lane?.observed_at || "");
-  return Math.max(
-    Number.isFinite(fromRun) ? fromRun : 0,
-    Number.isFinite(activity) ? activity : 0,
-    Number.isFinite(observed) ? observed : 0,
-  );
+  return Number.isFinite(observed) ? observed : 0;
 }
 
 export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now() } = {}) {
@@ -843,9 +963,131 @@ export function sortLanesForIndex(lanes, { outputByLane = {}, nowMs = Date.now()
   list.sort((a, b) => {
     const dg = rank(a) - rank(b);
     if (dg !== 0) return dg;
-    return laneUpdatedMs(b) - laneUpdatedMs(a);
+    const da = laneActivityMs(b) - laneActivityMs(a);
+    if (da !== 0) return da;
+    // Deterministic when timestamps tie: a stable, operator-meaningful key, so
+    // two lanes with identical activity never trade places between polls.
+    return String(a.label || a.lane_id).localeCompare(String(b.label || b.lane_id));
   });
   return list;
+}
+
+/**
+ * How many notifications this lane still owes the operator.
+ *
+ * This reads the CANONICAL server-side count. It is deliberately not derived
+ * from lane posture: a lane can be Idle and still hold an unread "complete",
+ * and a lane can be Working with nothing unread.
+ */
+export function laneUnseenCount(lane) {
+  const n = Number(lane?.unseen_notifications);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+
+/**
+ * Apply the unseen count to the installed app tile.
+ *
+ * The Badging API only exists for an INSTALLED app (a PWA added to the Home
+ * Screen / dock); in an ordinary browser tab it is usually absent, and on iOS
+ * Safari it is absent even when installed. Absence is not an error and must
+ * never take the in-app indicators down with it — those are the fallback.
+ */
+export function applyAppBadge(count, nav = (typeof navigator !== "undefined" ? navigator : null)) {
+  const n = Number(count);
+  const value = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  if (!nav) return { supported: false, applied: false, value, reason: "no_navigator" };
+  const canSet = typeof nav.setAppBadge === "function";
+  const canClear = typeof nav.clearAppBadge === "function";
+  if (!canSet && !canClear) return { supported: false, applied: false, value, reason: "unsupported" };
+  try {
+    // Clearing at zero is a distinct call: setAppBadge(0) shows a dot on some
+    // platforms rather than removing the badge.
+    if (value === 0) {
+      if (canClear) nav.clearAppBadge();
+      else nav.setAppBadge(0);
+      return { supported: true, applied: true, value: 0, cleared: true };
+    }
+    nav.setAppBadge(value);
+    return { supported: true, applied: true, value };
+  } catch (err) {
+    return { supported: true, applied: false, value, reason: "threw", error: String(err?.message || err) };
+  }
+}
+
+/** A restrained dot-and-count. Execution state stays the loudest thing in a row. */
+export function renderUnseenIndicator(lane) {
+  const n = laneUnseenCount(lane);
+  if (!n) return "";
+  const label = n === 1 ? "1 unread update" : `${n} unread updates`;
+  return `<span class="gw-lane-unseen" data-gw-unseen="${n}" role="status" aria-label="${esc(label)}">${n}</span>`;
+}
+
+export const LANE_FOLDER_COLLAPSE_KEY = "vac.gw.foldersClosed";
+export const UNFILED_FOLDER_ID = "__unfiled__";
+
+/** Which folders the operator has collapsed. A preference, never lane state. */
+export function readCollapsedFolders(storage) {
+  try {
+    const raw = JSON.parse(storage?.getItem(LANE_FOLDER_COLLAPSE_KEY) || "[]");
+    return new Set(Array.isArray(raw) ? raw.map(String) : []);
+  } catch { return new Set(); }
+}
+
+export function writeCollapsedFolders(ids, storage) {
+  try { storage?.setItem(LANE_FOLDER_COLLAPSE_KEY, JSON.stringify([...(ids || [])].map(String))); } catch { /* */ }
+}
+
+/**
+ * Group lanes into folders WITHOUT losing the attention ordering.
+ *
+ * The lane list is ranked by what wants the operator: active work, then
+ * needs-input, then idle. Folders are organisation laid over that truth, so a
+ * folder inherits the rank of its most urgent lane — filing a blocked lane into
+ * "Later" cannot push it below a folder where nothing is happening. Unfiled
+ * lanes are not a folder; they are the plain list, and they sort by the same
+ * rule alongside the folders.
+ */
+export function groupLanesByFolder(lanes, folders = [], { collapsed = new Set(), outputByLane = {}, nowMs = Date.now() } = {}) {
+  const ordered = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { outputByLane, nowMs });
+  const known = new Map();
+  for (const f of Array.isArray(folders) ? folders : []) {
+    if (f?.folder_id) known.set(String(f.folder_id), { folder_id: String(f.folder_id), name: String(f.name || "Folder") });
+  }
+  const groups = new Map();
+  const groupFor = (id, name) => {
+    if (!groups.has(id)) groups.set(id, { folder_id: id, name, lanes: [], rank: Number.MAX_SAFE_INTEGER, needs_attention: 0, active: 0, unseen: 0 });
+    return groups.get(id);
+  };
+  // Empty folders still appear — you make a folder, then file lanes into it.
+  for (const f of known.values()) groupFor(f.folder_id, f.name);
+
+  ordered.forEach((lane, index) => {
+    const raw = lane?.folder_id ? String(lane.folder_id) : null;
+    // A folder_id the store no longer knows must not hide the lane.
+    const id = raw && known.has(raw) ? raw : UNFILED_FOLDER_ID;
+    const g = groupFor(id, id === UNFILED_FOLDER_ID ? "No folder" : known.get(id).name);
+    g.lanes.push(lane);
+    if (index < g.rank) g.rank = index;
+    const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
+    if (work.group === "needs_input") g.needs_attention += 1;
+    if (work.group === "active") g.active += 1;
+    g.unseen += laneUnseenCount(lane);
+  });
+
+  return [...groups.values()]
+    .map((g) => ({
+      ...g,
+      unfiled: g.folder_id === UNFILED_FOLDER_ID,
+      lane_count: g.lanes.length,
+      // A collapsed folder must never be able to hide a lane that is asking for
+      // the operator, so the badge travels with the header.
+      collapsed: collapsed?.has?.(g.folder_id) === true,
+    }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (a.unfiled !== b.unfiled) return a.unfiled ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
 }
 
 export function occupiesClaudeProviderCapacity(lane, cap = null) {
@@ -1516,9 +1758,22 @@ export function renderNotificationControls(state = {}) {
 }
 
 /** Active lane output only — never last instruction, metadata, or another lane. */
-export function copyableOutputText({ selectedId, output, outputText, lane = null } = {}) {
-  // The copy icon copies what the operator is reading. When a report owns the
-  // conversation that is the stored message, verbatim — not the pane behind it.
+export function copyableOutputText({ selectedId, output, outputText, lane = null, latestResponse = null } = {}) {
+  // COPY WHAT THE OPERATOR IS READING — all of it, not just the sources this
+  // function used to know about.
+  //
+  // The conversation renders from assistantMessageSource, which falls back
+  // agent report -> session transcript -> status summary. This function only
+  // knew about the report and the pane, so on every lane whose message came
+  // from the transcript or the status summary it returned null, the control
+  // rendered `disabled`, and clicking the copy icon did nothing at all. That is
+  // the reported bug: measured across four live lanes, the button was disabled
+  // on every one.
+  //
+  // The two must not be able to disagree again, so copy asks the SAME source
+  // the message is rendered from.
+  const shown = assistantMessageSource(lane, { output, outputText, latestResponse });
+  if (shown?.text && String(shown.text).trim()) return String(shown.text);
   const report = lane?.execution_run?.agent_report || lane?.previous_run?.agent_report || null;
   if (report?.message) return String(report.message);
   if (output && selectedId && output.lane_id && output.lane_id !== selectedId) return null;
@@ -1695,7 +1950,38 @@ export function renderOperatorDecisionBar(run) {
   </div>`;
 }
 
-export function renderCurrentWork(run, nowMs = Date.now()) {
+/**
+ * Take back a prompt already sent.
+ *
+ * Shown only while a run is live, because there is nothing to take back
+ * otherwise. Deliberately a small text control, not another large button: it is
+ * a recovery affordance, not a primary action.
+ */
+export function renderCancelControl(run, { pending = false } = {}) {
+  const state = run?.state;
+  if (!state || ["COMPLETE", "FAILED", "ABANDONED"].includes(state)) return "";
+  const delivered = run?.delivery?.acknowledged === true || Boolean(run?.started_at);
+  const label = delivered ? "Stop this prompt" : "Cancel this prompt";
+  return `<button type="button" class="gw-cancel-run" data-gw-cancel-run
+    data-gw-cancel-delivered="${delivered ? "1" : "0"}" ${pending ? "disabled" : ""}>
+    ${pending ? "Stopping\u2026" : esc(label)}</button>`;
+}
+
+/** What the operator is told before a cancel that interrupts real work. */
+export function cancelConfirmCopy(run) {
+  const delivered = run?.delivery?.acknowledged === true || Boolean(run?.started_at);
+  if (!delivered) {
+    return "Cancel this prompt?\n\nThe agent never received it, so nothing is interrupted.";
+  }
+  return [
+    "Stop this prompt?",
+    "",
+    "The agent is working on it and will be interrupted.",
+    "Your lane, branch, worktree, conversation and every report already sent are all kept.",
+  ].join("\n");
+}
+
+export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = false } = {}) {
   if (!run?.state) {
     return `<aside class="gw-work is-idle" data-gw-work data-run-state="none">
     <span class="gw-work-h">Current work</span>
@@ -1779,6 +2065,7 @@ export function renderCurrentWork(run, nowMs = Date.now()) {
     ${meta ? `<span class="gw-work-meta">${esc(meta)}</span>` : ""}
     ${reason && reason !== summary && !waiting && !resumeEvent ? `<span class="gw-work-reason">${esc(reason)}</span>` : ""}
     ${summary && summary !== resumeEvent ? `<span class="gw-work-summary">${esc(summary)}</span>` : ""}
+    ${renderCancelControl(run, { pending: cancelPending })}
   </aside>`;
 }
 
@@ -2010,26 +2297,237 @@ function laneRow(lane, selectedId, attentionByLane, telemetryByLane) {
   const extra = summary && summary !== st.label
     ? `<span class="gw-lane-summary">${esc(summary)}</span>`
     : "";
-  return `<a class="gw-lane${active}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
-    <span class="gw-lane-title">${esc(lane.label || id)}</span>
+  const unseen = renderUnseenIndicator(lane);
+  return `<a class="gw-lane${active}${unseen ? " has-unseen" : ""}${work.group === "active" || work.group === "needs_input" ? " is-live" : ""}" data-gw-lane="${esc(id)}" data-gw-group="${esc(work.group)}" href="${esc(laneDetailHash(id))}">
+    <span class="gw-lane-title">${esc(lane.label || id)}${unseen}</span>
     <span class="gw-lane-posture${st.tone ? ` is-${st.tone}` : ""}">${esc(st.label)}</span>
     ${extra}
     <span class="gw-lane-meta">${esc(metaBits)}</span>
   </a>`;
 }
 
-export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, nowMs = Date.now() } = {}) {
+/**
+ * A folder header, including one for the lanes in no folder.
+ *
+ * The unfiled group MUST get a header once any folder exists. Without one its
+ * rows sat directly under the last folder's header — the header said "Later, 1"
+ * and two lanes were drawn beneath it, so an unfiled lane read as filed.
+ */
+function folderHeader(group) {
+  const badges = [
+    group.unseen ? `<span class="gw-folder-badge is-unseen">${group.unseen} unread</span>` : "",
+    group.needs_attention ? `<span class="gw-folder-badge is-attention">${group.needs_attention} needs you</span>` : "",
+    group.active ? `<span class="gw-folder-badge is-active">${group.active} working</span>` : "",
+    `<span class="gw-folder-count">${group.lane_count}</span>`,
+  ].filter(Boolean).join("");
+  return `<div class="gw-folder-h" data-gw-folder-h="${esc(group.folder_id)}">
+    <button type="button" class="gw-folder-toggle" data-gw-folder-toggle="${esc(group.folder_id)}"
+      aria-expanded="${group.collapsed ? "false" : "true"}">
+      <span class="gw-folder-caret" aria-hidden="true">${group.collapsed ? "\u25b8" : "\u25be"}</span>
+      <span class="gw-folder-name">${esc(group.name)}</span>
+      ${badges}
+    </button>
+    ${group.unfiled ? "" : `<button type="button" class="gw-folder-edit" data-gw-folder-rename="${esc(group.folder_id)}" aria-label="Rename folder ${esc(group.name)}">Rename</button>
+    <button type="button" class="gw-folder-edit" data-gw-folder-delete="${esc(group.folder_id)}" aria-label="Delete folder ${esc(group.name)}">Delete</button>`}
+  </div>`;
+}
+
+/**
+ * Where this lane is filed. A folder is chosen from the ones that exist — there
+ * is no free-text folder here, because a typo would silently create a second
+ * folder that looks like the first one.
+ */
+/**
+ * Which repository this lane executes in.
+ *
+ * Read-only on purpose. Moving a lane between repositories is an execution
+ * rebind — a different worktree, a different Git object store, a different
+ * provider working directory — and it must never be reachable from the same
+ * control that reorganises folders.
+ */
+export function renderLaneRepository(lane, repositories = []) {
+  const id = lane?.repository_id || null;
+  const repo = (repositories || []).find((r) => r.repository_id === id) || null;
+  if (!id && !repo) {
+    return `<div class="gw-repo-id is-unknown"><span class="gw-repo-id-label">Repository</span>
+      <span class="gw-repo-id-value">Not attributed</span></div>`;
+  }
+  const bits = [
+    repo?.default_branch,
+    repo?.has_remote === false ? "local only" : null,
+    repo?.profile_label,
+  ].filter(Boolean).join(" · ");
+  return `<div class="gw-repo-id">
+    <span class="gw-repo-id-label">Repository</span>
+    <span class="gw-repo-id-value">${esc(repo?.name || id)}</span>
+    ${bits ? `<span class="gw-repo-id-meta">${esc(bits)}</span>` : ""}
+  </div>`;
+}
+
+export function renderLaneFolderPicker(lane, folders = [], selectedId = null) {
+  const laneId = lane?.lane_id || selectedId;
+  if (!laneId) return "";
+  const list = (Array.isArray(folders) ? folders : []).filter((f) => f?.folder_id);
+  const current = lane?.folder_id ? String(lane.folder_id) : "";
+  const opts = [`<option value=""${current ? "" : " selected"}>No folder</option>`]
+    .concat(list.map((f) => {
+      const id = String(f.folder_id);
+      return `<option value="${esc(id)}"${id === current ? " selected" : ""}>${esc(f.name)}</option>`;
+    }))
+    .join("");
+  return `<label class="gw-folder-pick">
+    <span class="gw-folder-pick-label">Folder</span>
+    <select data-gw-folder-select data-lane-id="${esc(laneId)}"${list.length ? "" : " disabled"}>${opts}</select>
+    ${list.length ? "" : `<span class="gw-folder-pick-hint">Create a folder from the lane list first.</span>`}
+  </label>`;
+}
+
+export const UNKNOWN_REPOSITORY_ID = "__unattributed__";
+
+/**
+ * Group lanes by repository, then by folder inside each repository.
+ *
+ * A repository is the TOP boundary because it is the execution boundary; a
+ * folder is presentation inside it. The active-first ordering is preserved
+ * within each group, and a repository inherits the rank of its most urgent
+ * lane, so a repository holding blocked work never sinks below a quiet one.
+ */
+export function groupLanesByRepository(lanes, repositories = [], folders = [], {
+  collapsed = new Set(), outputByLane = {}, nowMs = Date.now(),
+} = {}) {
+  const ordered = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { outputByLane, nowMs });
+  const known = new Map();
+  for (const r of Array.isArray(repositories) ? repositories : []) {
+    if (r?.repository_id) known.set(String(r.repository_id), r);
+  }
+  const groups = new Map();
+  const groupFor = (id, repo) => {
+    if (!groups.has(id)) {
+      groups.set(id, {
+        repository_id: id,
+        name: repo?.name || "Unattributed",
+        profile: repo?.profile || null,
+        profile_label: repo?.profile_label || null,
+        has_remote: repo?.has_remote ?? null,
+        default_branch: repo?.default_branch || null,
+        lanes: [], rank: Number.MAX_SAFE_INTEGER,
+        needs_attention: 0, active: 0, unseen: 0,
+        unknown: !repo,
+      });
+    }
+    return groups.get(id);
+  };
+  for (const r of known.values()) groupFor(r.repository_id, r);
+
+  ordered.forEach((lane, index) => {
+    const raw = lane?.repository_id ? String(lane.repository_id) : null;
+    const id = raw && known.has(raw) ? raw : UNKNOWN_REPOSITORY_ID;
+    const g = groupFor(id, known.get(id) || null);
+    g.lanes.push(lane);
+    if (index < g.rank) g.rank = index;
+    const work = canonicalLaneWorkState(lane, { output: outputByLane[lane?.lane_id], nowMs });
+    if (work.group === "needs_input") g.needs_attention += 1;
+    if (work.group === "active") g.active += 1;
+    g.unseen += laneUnseenCount(lane);
+  });
+
+  return [...groups.values()]
+    .filter((g) => g.lanes.length || !g.unknown)
+    .map((g) => ({
+      ...g,
+      lane_count: g.lanes.length,
+      collapsed: collapsed?.has?.(`repo:${g.repository_id}`) === true,
+      // Folders are nested INSIDE the repository, scoped to it.
+      folders: groupLanesByFolder(g.lanes, (folders || []).filter(
+        (f) => (f.repository_id || null) === (g.unknown ? null : g.repository_id),
+      ), { collapsed, outputByLane, nowMs }),
+    }))
+    .sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
+      if (a.unknown !== b.unknown) return a.unknown ? 1 : -1;
+      return String(a.name).localeCompare(String(b.name));
+    });
+}
+
+function repositoryHeader(group) {
+  const badges = [
+    group.unseen ? `<span class="gw-folder-badge is-unseen">${group.unseen} unread</span>` : "",
+    group.needs_attention ? `<span class="gw-folder-badge is-attention">${group.needs_attention} needs you</span>` : "",
+    group.active ? `<span class="gw-folder-badge is-active">${group.active} working</span>` : "",
+    `<span class="gw-folder-count">${group.lane_count}</span>`,
+  ].filter(Boolean).join("");
+  // Only a repository whose profile HAS the concept shows Alloy vocabulary.
+  const meta = group.unknown
+    ? "not attributed"
+    : [group.default_branch, group.has_remote === false ? "local only" : null].filter(Boolean).join(" · ");
+  return `<div class="gw-repo-h" data-gw-repo-h="${esc(group.repository_id)}">
+    <button type="button" class="gw-repo-toggle" data-gw-repo-toggle="${esc(group.repository_id)}"
+      aria-expanded="${group.collapsed ? "false" : "true"}">
+      <span class="gw-folder-caret" aria-hidden="true">${group.collapsed ? "\u25b8" : "\u25be"}</span>
+      <span class="gw-repo-name">${esc(group.name)}</span>
+      ${meta ? `<span class="gw-repo-meta">${esc(meta)}</span>` : ""}
+      ${badges}
+    </button>
+  </div>`;
+}
+
+function renderFolderGroups(groups, selectedId, attentionByLane, telemetryByLane) {
+  const list = (groups || []).filter((g) => !g.unfiled || g.lanes.length);
+  // Inside ONE repository with no folders, the lanes are just the lanes.
+  if (list.length === 1 && list[0].unfiled) {
+    return list[0].lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("");
+  }
+  return list.map((g) => `<div class="gw-folder${g.collapsed ? " is-collapsed" : ""}${g.unfiled ? " is-unfiled" : ""}" data-gw-folder="${esc(g.folder_id)}">
+    ${folderHeader(g)}
+    ${g.collapsed ? "" : (g.lanes.length
+      ? g.lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+      : `<div class="gw-folder-empty">No lanes in this folder yet.</div>`)}
+  </div>`).join("");
+}
+
+export function renderLaneList(lanes, selectedId, { loading = false, attentionByLane, telemetryByLane, folders = [], collapsedFolders, repositories = [], nowMs = Date.now() } = {}) {
   const list = sortLanesForIndex(Array.isArray(lanes) ? lanes : [], { nowMs });
   const add = `<a class="gw-add" data-gw-add href="#/lanes/connect">+ Add Lane</a>`;
+  const newFolder = `<button type="button" class="gw-add gw-add-folder" data-gw-folder-new>+ Folder</button>`;
+  const addRepo = `<button type="button" class="gw-add gw-add-repo" data-gw-repo-new title="Register another Git repository">+ Repo</button>`;
+  const head = `<div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${addRepo}${newFolder}${add}</div>`;
   if (!list.length) {
     return `<div class="gw-lanes" data-gw-lanes>
-      <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
+      ${head}
       <div class="gw-empty">${loading ? "Loading lanes…" : "No Development Lanes discovered."}</div>
     </div>`;
   }
+  const repos = Array.isArray(repositories) ? repositories : [];
+  // More than one repository makes the repository the top boundary. With ONE
+  // repository the operator has nothing to disambiguate, so the list keeps the
+  // shape they already know rather than growing a header for a single group.
+  if (repos.length > 1) {
+    const repoGroups = groupLanesByRepository(list, repos, folders, {
+      collapsed: collapsedFolders || new Set(), nowMs,
+    });
+    const rendered = repoGroups.map((g) => `<div class="gw-repo${g.collapsed ? " is-collapsed" : ""}" data-gw-repo="${esc(g.repository_id)}">
+      ${repositoryHeader(g)}
+      ${g.collapsed ? "" : (g.lanes.length
+        ? renderFolderGroups(g.folders, selectedId, attentionByLane, telemetryByLane)
+        : `<div class="gw-folder-empty">No lanes in this repository yet.</div>`)}
+    </div>`).join("");
+    return `<div class="gw-lanes" data-gw-lanes>${head}${rendered}</div>`;
+  }
+  const groups = groupLanesByFolder(list, folders, { collapsed: collapsedFolders || new Set(), nowMs });
+  // With no folders at all there is nothing to organise, so the list stays
+  // exactly as it was — folders must not add chrome to an operator who has none.
+  const flat = groups.length === 1 && groups[0].unfiled;
+  const body = flat
+    ? list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+    : groups.filter((g) => !g.unfiled || g.lanes.length).map((g) => `<div class="gw-folder${g.collapsed ? " is-collapsed" : ""}${g.unfiled ? " is-unfiled" : ""}" data-gw-folder="${esc(g.folder_id)}">
+        ${folderHeader(g)}
+        ${g.collapsed ? "" : (g.lanes.length
+          ? g.lanes.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")
+          : `<div class="gw-folder-empty">No lanes in this folder yet.</div>`)}
+      </div>`).join("");
   return `<div class="gw-lanes" data-gw-lanes>
-    <div class="gw-lanes-h-row"><div class="gw-lanes-h">Development Lanes</div>${add}</div>
-    ${list.map((l) => laneRow(l, selectedId, attentionByLane, telemetryByLane)).join("")}
+    ${head}
+    ${body}
   </div>`;
 }
 
@@ -2471,7 +2969,17 @@ export function userMessageNeedsClamp(text, { lines = USER_MESSAGE_CLAMP_LINES, 
   return false;
 }
 
-export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false } = {}) {
+/** The prompt line says files were part of it, without dumping filenames. */
+export function attachmentMetaSuffix(meta, attachments = []) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  const n = list.length;
+  if (!n) return meta;
+  const allImages = list.every((a) => !a?.mime_type || isImageAttachmentType(a.mime_type));
+  const noun = allImages ? (n === 1 ? "image" : "images") : (n === 1 ? "file" : "files");
+  return `${meta} \u00b7 ${n} ${noun}`;
+}
+
+export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = false, attachments = [] } = {}) {
   if (!rec?.instruction || (rec.status !== "delivered" && rec.status !== "queued")) return "";
   const clampable = userMessageNeedsClamp(rec.instruction);
   const open = !clampable || expanded;
@@ -2481,8 +2989,9 @@ export function renderLastInstruction(rec, nowMs = Date.now(), { expanded = fals
   return `<article class="gw-msg gw-msg-user${clampable && !open ? " is-clamped" : ""}" data-gw-last${clampable ? ' data-gw-clampable="1"' : ""}>
     <div class="gw-msg-label">You</div>
     <div class="gw-msg-body gw-last-text" data-gw-msg-text>${esc(rec.instruction)}</div>
+    ${renderMessageAttachments(attachments)}
     ${toggle}
-    <div class="gw-msg-meta">${esc(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"))}</div>
+    <div class="gw-msg-meta">${esc(attachmentMetaSuffix(lastInstructionMeta(rec, nowMs) || (rec.status === "queued" ? "Queued" : "Sent"), attachments))}</div>
   </article>`;
 }
 
@@ -2495,6 +3004,157 @@ export function renderRecentSystemActivity(items) {
   </aside>`;
 }
 
+export const ATTACHMENT_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf,text/html,.pdf,.html,.htm";
+
+/** Images get a thumbnail; documents get a labelled chip, never a broken img. */
+export function isImageAttachmentType(mime) {
+  return ["image/png", "image/jpeg", "image/webp", "image/gif"].includes(String(mime || ""));
+}
+
+export function attachmentKindLabel(mime) {
+  if (String(mime) === "application/pdf") return "PDF";
+  if (String(mime) === "text/html") return "HTML";
+  return "Image";
+}
+
+export function formatBytes(n) {
+  const b = Number(n) || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
+  return `${(b / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Draft attachment previews, above the input inside the composer box.
+ *
+ * They live INSIDE the composer rather than above it so the pinned composer
+ * grows as one unit — previews stacked outside it pushed the input and Send
+ * button below the safe area on a phone, which is the one thing this row must
+ * never do.
+ */
+export function renderAttachmentDrafts(attachments = [], { uploading = 0, error = null } = {}) {
+  const list = Array.isArray(attachments) ? attachments : [];
+  if (!list.length && !uploading && !error) return "";
+  const items = list.map((a) => {
+    const isImage = isImageAttachmentType(a.mime_type);
+    const name = summaryText(a.filename) || (isImage ? "image" : "file");
+    const meta = [
+      formatBytes(a.byte_size),
+      isImage && a.width && a.height ? `${a.width}\u00d7${a.height}` : (isImage ? "" : attachmentKindLabel(a.mime_type)),
+    ].filter(Boolean).join(" \u00b7 ");
+    return `<li class="gw-att" data-gw-att="${esc(a.attachment_id)}">
+      ${isImage
+        ? `<img class="gw-att-thumb" src="${esc(a.url)}" alt="" loading="lazy">`
+        : `<span class="gw-att-thumb gw-att-doc" aria-hidden="true">${esc(attachmentKindLabel(a.mime_type))}</span>`}
+      <span class="gw-att-meta"><span class="gw-att-name">${esc(name)}</span><span class="gw-att-size">${esc(meta)}</span></span>
+      <button type="button" class="gw-att-x" data-gw-att-remove="${esc(a.attachment_id)}"
+        aria-label="Remove ${esc(name)}">\u00d7</button>
+    </li>`;
+  }).join("");
+  const pending = uploading
+    ? `<li class="gw-att is-uploading" aria-live="polite"><span class="gw-att-spin" aria-hidden="true"></span><span class="gw-att-meta"><span class="gw-att-name">Uploading ${uploading} file${uploading === 1 ? "" : "s"}\u2026</span></span></li>`
+    : "";
+  const err = error ? `<div class="gw-att-err" role="alert">${esc(error)}</div>` : "";
+  return `<div class="gw-atts" data-gw-atts>
+    <ul class="gw-att-list" aria-label="Attached files">${items}${pending}</ul>
+    ${err}
+  </div>`;
+}
+
+/**
+ * Attachment thumbnails on a sent operator message.
+ *
+ * Bounded thumbnails, never the full-resolution file: a phone should not pull
+ * six multi-megabyte screenshots to render a conversation it already read.
+ */
+export function renderMessageAttachments(attachments = []) {
+  const list = (Array.isArray(attachments) ? attachments : []).filter(Boolean);
+  if (!list.length) return "";
+  const items = list.map((a, i) => {
+    const name = summaryText(a.filename) || `Image ${i + 1}`;
+    if (a.state === "FAILED" || a.error) {
+      return `<li class="gw-msg-att is-failed"><span class="gw-msg-att-bad">${esc(name)} \u2014 not delivered</span></li>`;
+    }
+    if (!isImageAttachmentType(a.mime_type)) {
+      // A PDF or an HTML file opens in the browser; there is nothing to
+      // thumbnail, and a lightbox around a document would show an empty frame.
+      return `<li class="gw-msg-att is-doc">
+        <a class="gw-msg-att-doc" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">
+          <span class="gw-msg-att-kind">${esc(attachmentKindLabel(a.mime_type))}</span>
+          <span class="gw-msg-att-name">${esc(name)}</span>
+        </a>
+      </li>`;
+    }
+    return `<li class="gw-msg-att">
+      <button type="button" class="gw-msg-att-open" data-gw-att-open="${esc(a.attachment_id)}"
+        aria-label="Open ${esc(name)}">
+        <img src="${esc(a.url)}" alt="${esc(name)}" loading="lazy">
+      </button>
+    </li>`;
+  }).join("");
+  return `<ul class="gw-msg-atts" data-gw-msg-atts>${items}</ul>`;
+}
+
+/** A bounded lightbox. Aspect ratio preserved; Escape and the backdrop close it. */
+export function renderAttachmentLightbox(attachment) {
+  if (!attachment) return "";
+  const name = summaryText(attachment.filename) || "Image";
+  return `<div class="gw-lightbox" data-gw-lightbox role="dialog" aria-modal="true" aria-label="${esc(name)}">
+    <button type="button" class="gw-lightbox-x" data-gw-lightbox-close aria-label="Close image">\u00d7</button>
+    <img src="${esc(attachment.url)}" alt="${esc(name)}">
+    <div class="gw-lightbox-cap">${esc(name)}</div>
+  </div>`;
+}
+
+export function cursorComposerAvailable({ lane, providers } = {}) {
+  if (Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor") return true;
+  const list = Array.isArray(providers)
+    ? providers
+    : (providers?.providers || []);
+  const cursor = list.find((p) => p?.id === "cursor");
+  if (!cursor) return false;
+  const state = cursor.auth?.state;
+  if (state === "authenticated") return true;
+  if (state === "needs_auth" || state === "unavailable" || state === "not_configured") return false;
+  return Boolean(cursor.executable);
+}
+
+export function renderProviderRuntimeSection(runtime = {}) {
+  const pending = Boolean(runtime?.pending);
+  const facts = runtime?.runtime;
+  const list = (runtime?.providers || []).filter((p) => p.id === "claude" || p.id === "cursor");
+  const cards = pending || !list.length
+    ? `<div class="muted" style="padding:14px">${pending ? "Checking Claude and Cursor…" : "Loading providers…"}</div>`
+    : list.map((p) => {
+      const authClass = p.auth?.state === "authenticated" ? "healthy" : p.auth?.state === "needs_auth" ? "attention" : "finished";
+      const authed = p.auth?.state === "authenticated";
+      const kv = (a, b) => `<div class="pm-row"><span class="pm-k">${a}</span><span class="pm-v">${b}</span></div>`;
+      const connectLabel = authed ? "Reconnect" : "Connect";
+      return `<section class="card pm-card" data-gw-provider-card="${esc(p.id)}">
+        <div class="pm-h"><div class="pm-title">${esc(p.label)} <span class="pm-ver mono">${p.version ? "v" + esc(p.version) : "—"}</span></div>
+          <span class="hpill ${authClass}">${esc(p.auth?.label || p.auth?.state || "unknown")}</span></div>
+        <div class="pm-grid">
+          ${kv("Authentication", `${esc(p.auth?.label || "—")}${p.auth?.identity ? ` · <span class="mono">${esc(p.auth.identity)}</span>` : ""}`)}
+          ${kv("Detail", `<span class="muted">${esc(p.auth?.detail || "—")}</span>`)}
+          ${kv("Executable", `<span class="mono">${esc(p.executable || "—")}</span>`)}
+        </div>
+        <div class="pm-btns">
+          <button class="btn sm ${authed ? "" : "warn"}" type="button" data-prov-connect="${esc(p.id)}">${esc(connectLabel)}</button>
+          <button class="btn sm" type="button" data-prov-verify="${esc(p.id)}">Verify</button>
+          <button class="btn sm" type="button" data-prov-diag="${esc(p.id)}">Diagnostics</button>
+        </div>
+      </section>`;
+    }).join("");
+  return `<div class="gw-settings" data-gw-settings>
+    <h1>Settings</h1>
+    <p class="gw-lead">Connect Claude and Cursor here. Each send lets you choose which agent runs the task. Sign-in opens Terminal — Vacilando cannot complete OAuth in this window.</p>
+    ${facts ? `<div class="pm-runtime"><span class="pm-k">Runtime</span>
+      <span class="mono">node ${esc(facts.node)}</span> · ${facts.inside_claude_host ? '<span class="attn">inside a Claude Code host session</span>' : "standalone shell"}</div>` : ""}
+    <div class="section-title">Agents</div>
+    <div class="pm-cards">${cards}</div>
+  </div>`;
+}
+
 export function renderComposer({
   disabled,
   notice,
@@ -2504,6 +3164,9 @@ export function renderComposer({
   queueUntilSession = false,
   provider = null,
   cursorSendAvailable = false,
+  attachments = [],
+  attachmentsUploading = 0,
+  attachmentError = null,
 } = {}) {
   const n = notice?.text
     ? `<div class="gw-notice ${esc(notice.kind || "")}" data-gw-notice>${esc(notice.text)}</div>`
@@ -2515,14 +3178,20 @@ export function renderComposer({
   const current = cursorSendAvailable && provider === "cursor" ? "cursor" : "claude";
   const cursorDisabled = cursorSendAvailable ? "" : " disabled";
   const cursorTitle = cursorSendAvailable
-    ? "Send with Cursor"
-    : "Cursor is read-only here: no executable transport is attached";
+    ? "Send this instruction with Cursor"
+    : "Connect Cursor in Settings to send with Cursor";
   return `<form class="gw-composer" data-gw-composer>
     <label class="gw-composer-h" for="gw-instruction">Instruction</label>
     <div class="gw-composer-box">
       <textarea id="gw-instruction" name="instruction" rows="1" maxlength="${max}"
         placeholder="${esc(placeholder)}" ${disabled ? "disabled" : ""}>${esc(draft || "")}</textarea>
+      ${renderAttachmentDrafts(attachments, { uploading: attachmentsUploading, error: attachmentError })}
       <div class="gw-composer-row">
+        <label class="gw-attach" title="Attach files">
+          <input type="file" accept="${ATTACHMENT_ACCEPT}" multiple data-gw-attach-input
+            aria-label="Attach files"${disabled ? " disabled" : ""}>
+          <span aria-hidden="true">\ud83d\udcce</span>
+        </label>
         <div class="gw-provider" role="radiogroup" aria-label="Agent">
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="claude" aria-pressed="${current === "claude" ? "true" : "false"}">Claude</button>
           <button type="button" class="gw-provider-opt" data-gw-provider-opt="cursor" aria-pressed="${current === "cursor" ? "true" : "false"}"${cursorDisabled} title="${esc(cursorTitle)}">Cursor</button>
@@ -2530,7 +3199,7 @@ export function renderComposer({
         <input type="hidden" id="gw-composer-provider" name="provider" value="${esc(current)}" data-gw-provider>
         <span class="gw-count" data-gw-count></span>
         <span class="gw-enter-hint">Enter to send · Shift+Enter for a new line</span>
-        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled ? "disabled" : ""}>${esc(sendLabel)}</button>
+        <button class="btn primary gw-send" type="submit" data-gw-send aria-label="${esc(sendLabel)}" ${disabled || attachmentsUploading ? "disabled" : ""}>${esc(sendLabel)}</button>
       </div>
     </div>
     ${n}
@@ -2743,6 +3412,356 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
  * lane names itself from what you wrote. Rename Lane is in Details when the
  * first line stops fitting.
  */
+/**
+ * Add Repository — a real sheet, not a chain of browser prompts.
+ *
+ * WHY THE SHAPE MATTERS. Registering a repository is a decision with
+ * consequences the operator cannot see from a path alone: whether that path is
+ * a repository or a worktree OF one, what its default branch actually is,
+ * whether it has a remote, and where its worktrees will be created. A prompt
+ * asks for the path and then acts. This validates first, SHOWS what it found,
+ * and registers only on an explicit confirmation.
+ *
+ * VALIDATION NEVER PERSISTS. The inspect endpoint is read-only; nothing durable
+ * exists until Confirm.
+ */
+export function renderRepositorySheet(state = {}) {
+  const method = state.method === "clone" ? "clone" : "connect";
+  const v = state.validation || null;
+  const busy = Boolean(state.validating || state.submitting);
+  const err = state.error
+    ? `<div class="gw-notice err" role="alert">${esc(repositoryErrorText(state.error, state.errorDetail || {}))}</div>`
+    : "";
+
+  const methodRow = `<div class="gw-seg" role="radiogroup" aria-label="How to add a repository">
+    <button type="button" class="gw-seg-opt" data-gw-repo-method="connect"
+      aria-pressed="${method === "connect" ? "true" : "false"}">Connect local</button>
+    <button type="button" class="gw-seg-opt" data-gw-repo-method="clone" disabled
+      title="Clone is not available yet">Clone</button>
+  </div>`;
+
+  if (method === "clone") {
+    return sheet("Add repository", `${methodRow}
+      <p class="gw-sheet-note">Clone is not available yet. Clone the repository yourself, then use
+      <strong>Connect local</strong> to register it.</p>`, { cancelOnly: true });
+  }
+
+  // The result panel is the whole point: it is what the operator confirms.
+  const result = v ? `<dl class="gw-kv gw-repo-check">
+      <dt>Repository root</dt><dd>${esc(v.root)}</dd>
+      <dt>Git directory</dt><dd>${esc(v.git_common_dir)}</dd>
+      <dt>Default branch</dt><dd>${esc(v.default_branch || "unknown")}</dd>
+      <dt>Remote</dt><dd>${v.has_remote ? esc(v.remote_normalized || "configured") : "Local only"}</dd>
+      <dt>Worktrees will go in</dt><dd>${esc(v.worktree_parent || defaultWorktreeParent(v.root))}</dd>
+      <dt>Profile</dt><dd>${v.profile === "alloy" ? "Alloy managed sprint" : "Generic Git"}</dd>
+    </dl>` : "";
+
+  const warning = v && v.is_worktree
+    ? `<div class="gw-notice err" role="alert">That path is a worktree of
+        <strong>${esc(v.parent_root)}</strong>. Register that repository instead — a worktree shares
+        its parent's Git history, so it is not a separate repository.</div>`
+    : v && v.already_registered
+      ? `<div class="gw-notice err" role="alert">Already registered as
+          <strong>${esc(v.already_registered.name)}</strong>.</div>`
+      : "";
+
+  const canConfirm = Boolean(v && !v.is_worktree && !v.already_registered);
+  const nameField = canConfirm ? `<label class="gw-field">
+      <span class="gw-field-label" id="gw-repo-name-l">Display name</span>
+      <input id="gw-repo-name" type="text" value="${esc(state.name ?? suggestRepositoryName(v.root))}"
+        aria-labelledby="gw-repo-name-l" maxlength="80" data-gw-repo-name enterkeyhint="done">
+    </label>` : "";
+
+  const body = `${methodRow}
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-repo-path-l">Repository path</span>
+      <input id="gw-repo-path" type="text" inputmode="url" autocapitalize="off" autocorrect="off"
+        spellcheck="false" placeholder="/Users/you/Code/my-project"
+        value="${esc(state.path || "")}" aria-labelledby="gw-repo-path-l"
+        data-gw-repo-path enterkeyhint="go">
+      <span class="gw-field-hint">Must be inside a folder Vacilando may use.</span>
+    </label>
+    ${err}
+    ${warning}
+    ${result}
+    ${nameField}`;
+
+  const actions = canConfirm
+    ? `<button type="button" class="btn primary" data-gw-repo-confirm ${busy ? "disabled" : ""}>
+        ${busy ? "Registering\u2026" : "Register repository"}</button>`
+    : `<button type="button" class="btn primary" data-gw-repo-validate ${busy || !state.path ? "disabled" : ""}>
+        ${state.validating ? "Checking\u2026" : "Validate"}</button>`;
+
+  return sheet("Add repository", body, { actions });
+}
+
+function sheet(title, body, { actions = "", cancelOnly = false } = {}) {
+  return `<section class="gw-sheet" data-gw-sheet role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <header class="gw-sheet-head">
+      <button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>
+      <h2 class="gw-sheet-title">${esc(title)}</h2>
+    </header>
+    <div class="gw-sheet-body">${body}</div>
+    <footer class="gw-sheet-foot">
+      <button type="button" class="btn" data-gw-sheet-cancel>Cancel</button>
+      ${cancelOnly ? "" : actions}
+    </footer>
+  </section>`;
+}
+
+export function suggestRepositoryName(root) {
+  return String(root || "").split("/").filter(Boolean).pop() || "Repository";
+}
+
+export function defaultWorktreeParent(root) {
+  const parts = String(root || "").split("/").filter(Boolean);
+  const name = parts.pop() || "repo";
+  return `/${parts.join("/")}/${name}-worktrees`;
+}
+
+export const LANE_STEPS = Object.freeze([
+  { id: "repository", label: "Repository" },
+  { id: "folder", label: "Folder" },
+  { id: "identity", label: "Lane" },
+  { id: "workspace", label: "Workspace" },
+  { id: "provider", label: "Agent" },
+  { id: "review", label: "Review" },
+]);
+
+/**
+ * Which step can the operator actually be on?
+ *
+ * Steps are gated by what has been chosen, not by a counter, so Back never
+ * lands somewhere that no longer makes sense and Next cannot skip a decision
+ * the next step depends on.
+ */
+export function laneStepReady(step, draft = {}) {
+  switch (step) {
+    case "repository": return true;
+    case "folder": return Boolean(draft.repository_id);
+    case "identity": return Boolean(draft.repository_id);
+    case "workspace": return Boolean(draft.repository_id && String(draft.name || "").trim());
+    case "provider": return Boolean(draft.workspace_mode);
+    case "review":
+      // Planning lanes need no provider; everything else does.
+      return Boolean(draft.workspace_mode)
+        && (draft.workspace_mode === "planning" || Boolean(draft.provider));
+    default: return false;
+  }
+}
+
+export function nextLaneStep(current, draft) {
+  const i = LANE_STEPS.findIndex((s) => s.id === current);
+  for (let k = i + 1; k < LANE_STEPS.length; k += 1) {
+    if (laneStepReady(LANE_STEPS[k].id, draft)) return LANE_STEPS[k].id;
+  }
+  return current;
+}
+
+export function prevLaneStep(current) {
+  const i = LANE_STEPS.findIndex((s) => s.id === current);
+  return i > 0 ? LANE_STEPS[i - 1].id : current;
+}
+
+/** The branch a new worktree would get, previewed before anything is created. */
+export function previewBranch(repository, laneName, suffix = null) {
+  const slug = String(suffix ?? laneName ?? "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
+  if (!slug) return null;
+  const prefix = repository?.branch_policy?.prefix || "";
+  return `${prefix}${slug}`;
+}
+
+export function previewWorktreePath(repository, laneName, suffix = null) {
+  const slug = previewBranch({ branch_policy: { prefix: "" } }, laneName, suffix);
+  if (!slug || !repository?.worktree_parent) return null;
+  return `${repository.worktree_parent}/${slug}`;
+}
+
+function stepRail(current, draft) {
+  return `<ol class="gw-steps" aria-label="Steps">${LANE_STEPS.map((st, i) => {
+    const state = st.id === current ? "is-current"
+      : (laneStepReady(st.id, draft) && LANE_STEPS.findIndex((x) => x.id === current) > i ? "is-done" : "");
+    return `<li class="gw-step ${state}"><span class="gw-step-n">${i + 1}</span><span class="gw-step-l">${esc(st.label)}</span></li>`;
+  }).join("")}</ol>`;
+}
+
+/**
+ * Add Lane — a stepped flow that creates nothing until Review is confirmed.
+ *
+ * Every step keeps its value when the operator goes back, and no durable record
+ * exists at any point before the final create. That is the difference between a
+ * form and the prompt chain this replaces: a prompt chain has already acted by
+ * the time you realise you picked the wrong repository.
+ */
+export function renderLaneWizard(state = {}) {
+  const draft = state.draft || {};
+  const repositories = (state.repositories || []).filter((r) => r.state !== "RETIRED");
+  const step = laneStepReady(state.step, draft) ? state.step : "repository";
+  const repo = repositories.find((r) => r.repository_id === draft.repository_id) || null;
+  const err = state.error
+    ? `<div class="gw-notice err" role="alert">${esc(state.errorText || createErrorText(state.error))}</div>`
+    : "";
+
+  let body = "";
+  if (step === "repository") {
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Repository">
+      ${repositories.map((r) => `<button type="button" class="gw-choice${draft.repository_id === r.repository_id ? " is-on" : ""}"
+        data-gw-wiz-repo="${esc(r.repository_id)}" aria-pressed="${draft.repository_id === r.repository_id ? "true" : "false"}">
+        <span class="gw-choice-t">${esc(r.name)}</span>
+        <span class="gw-choice-s">${esc([r.profile === "alloy" ? "Alloy managed sprint" : "Generic Git", r.default_branch, r.has_remote === false ? "local only" : null].filter(Boolean).join(" \u00b7 "))}</span>
+      </button>`).join("")}
+      <button type="button" class="gw-choice is-add" data-gw-wiz-add-repo>
+        <span class="gw-choice-t">+ Add repository</span>
+        <span class="gw-choice-s">Register another Git repository</span>
+      </button>
+    </div>`;
+  } else if (step === "folder") {
+    const folders = (state.folders || []).filter((f) => (f.repository_id || null) === (draft.repository_id || null));
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Folder">
+      <button type="button" class="gw-choice${!draft.folder_id ? " is-on" : ""}" data-gw-wiz-folder=""
+        aria-pressed="${!draft.folder_id ? "true" : "false"}">
+        <span class="gw-choice-t">No folder</span>
+        <span class="gw-choice-s">The lane sits directly under ${esc(repo?.name || "the repository")}</span>
+      </button>
+      ${folders.map((f) => `<button type="button" class="gw-choice${draft.folder_id === f.folder_id ? " is-on" : ""}"
+        data-gw-wiz-folder="${esc(f.folder_id)}" aria-pressed="${draft.folder_id === f.folder_id ? "true" : "false"}">
+        <span class="gw-choice-t">${esc(f.name)}</span>
+        <span class="gw-choice-s">${f.lane_count} lane${f.lane_count === 1 ? "" : "s"}</span>
+      </button>`).join("")}
+    </div>
+    <label class="gw-field">
+      <span class="gw-field-label" id="gw-wiz-nf-l">Or create a folder</span>
+      <input id="gw-wiz-newfolder" type="text" maxlength="60" placeholder="Folder name"
+        value="${esc(draft.new_folder || "")}" aria-labelledby="gw-wiz-nf-l" data-gw-wiz-newfolder>
+      <span class="gw-field-hint">It belongs to ${esc(repo?.name || "this repository")} only.</span>
+    </label>`;
+  } else if (step === "identity") {
+    body = `<label class="gw-field">
+      <span class="gw-field-label" id="gw-wiz-name-l">Lane name</span>
+      <input id="gw-wiz-name" type="text" maxlength="80" autofocus placeholder="What is this lane for?"
+        value="${esc(draft.name || "")}" aria-labelledby="gw-wiz-name-l" data-gw-wiz-name enterkeyhint="next">
+      ${state.nameError ? `<span class="gw-field-err" role="alert">${esc(state.nameError)}</span>`
+        : `<span class="gw-field-hint">You can rename it any time in Details.</span>`}
+    </label>`;
+  } else if (step === "workspace") {
+    const modes = [
+      ["new_worktree", "Create new worktree", `A fresh branch from ${esc(repo?.default_branch || "the base branch")}`],
+      ["connect_existing", "Connect existing worktree", "Bind a worktree you already have"],
+      ["planning", "Planning only", "No worktree, no agent, no capacity used"],
+    ];
+    const chosen = draft.workspace_mode;
+    let detail = "";
+    if (chosen === "new_worktree") {
+      const branch = previewBranch(repo, draft.name, draft.branch_suffix);
+      const path = previewWorktreePath(repo, draft.name, draft.branch_suffix);
+      detail = `<div class="gw-preview">
+        <dl class="gw-kv">
+          <dt>Base branch</dt><dd>${esc(repo?.default_branch || "unknown")}</dd>
+          <dt>New branch</dt><dd>${esc(branch || "\u2014")}</dd>
+          <dt>Worktree path</dt><dd>${esc(path || "\u2014")}</dd>
+        </dl>
+        <label class="gw-field">
+          <span class="gw-field-label" id="gw-wiz-suffix-l">Branch name</span>
+          <input id="gw-wiz-suffix" type="text" maxlength="60" value="${esc(draft.branch_suffix || "")}"
+            placeholder="${esc(previewBranch({ branch_policy: { prefix: "" } }, draft.name) || "")}"
+            aria-labelledby="gw-wiz-suffix-l" data-gw-wiz-suffix>
+          <span class="gw-field-hint">${repo?.branch_policy?.prefix
+            ? `This repository prefixes branches with ${esc(repo.branch_policy.prefix)}`
+            : "This repository has no branch prefix."}</span>
+        </label>
+        ${state.workspaceCheck ? `<div class="gw-notice ${state.workspaceCheck.ok ? "ok" : "err"}">${esc(state.workspaceCheck.text)}</div>` : ""}
+      </div>`;
+    } else if (chosen === "connect_existing") {
+      const c = state.connectCheck || null;
+      detail = `<div class="gw-preview">
+        <label class="gw-field">
+          <span class="gw-field-label" id="gw-wiz-wt-l">Worktree path</span>
+          <input id="gw-wiz-wt" type="text" inputmode="url" autocapitalize="off" autocorrect="off"
+            spellcheck="false" value="${esc(draft.worktree_path || "")}"
+            aria-labelledby="gw-wiz-wt-l" data-gw-wiz-worktree enterkeyhint="go">
+        </label>
+        <button type="button" class="btn sm" data-gw-wiz-validate-wt ${draft.worktree_path ? "" : "disabled"}>Validate</button>
+        ${c ? (c.ok
+          ? `<dl class="gw-kv"><dt>Branch</dt><dd>${esc(c.branch || "unknown")}</dd>
+             <dt>Git directory</dt><dd>${esc(c.git_common_dir)}</dd>
+             <dt>Belongs to</dt><dd>${esc(repo?.name || "")}</dd></dl>`
+          : `<div class="gw-notice err" role="alert">${esc(c.text)}</div>`) : ""}
+      </div>`;
+    } else if (chosen === "planning") {
+      detail = `<p class="gw-sheet-note">This lane will exist with no worktree and no agent. It uses none of
+        the three provider seats. You can provision it later from Details.</p>`;
+    }
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Workspace">
+      ${modes.map(([id, t, sub]) => `<button type="button" class="gw-choice${chosen === id ? " is-on" : ""}"
+        data-gw-wiz-mode="${id}" aria-pressed="${chosen === id ? "true" : "false"}">
+        <span class="gw-choice-t">${t}</span><span class="gw-choice-s">${sub}</span></button>`).join("")}
+    </div>${detail}`;
+  } else if (step === "provider") {
+    const p = draft.provider || (draft.workspace_mode === "planning" ? null : "claude");
+    body = `<div class="gw-choices" role="radiogroup" aria-label="Agent">
+      <button type="button" class="gw-choice${p === "claude" ? " is-on" : ""}" data-gw-wiz-provider="claude"
+        aria-pressed="${p === "claude" ? "true" : "false"}">
+        <span class="gw-choice-t">Claude</span><span class="gw-choice-s">Runs in the lane's worktree</span></button>
+      <button type="button" class="gw-choice is-off" data-gw-wiz-provider="cursor" disabled aria-disabled="true">
+        <span class="gw-choice-t">Cursor</span>
+        <span class="gw-choice-s">Read-only here: its headless integration is not certified yet</span></button>
+      ${draft.workspace_mode === "planning" ? `<button type="button" class="gw-choice${!p ? " is-on" : ""}"
+        data-gw-wiz-provider="" aria-pressed="${!p ? "true" : "false"}">
+        <span class="gw-choice-t">Decide later</span>
+        <span class="gw-choice-s">A planning lane needs no agent yet</span></button>` : ""}
+    </div>`;
+  } else {
+    const branch = draft.workspace_mode === "new_worktree" ? previewBranch(repo, draft.name, draft.branch_suffix) : null;
+    // A planning lane has NO worktree. Reading draft.worktree_path
+    // unconditionally showed a path left over from a Connect-existing attempt
+    // the operator had already moved away from — the review would have told
+    // them a planning lane came with a worktree.
+    const path = draft.workspace_mode === "new_worktree"
+      ? previewWorktreePath(repo, draft.name, draft.branch_suffix)
+      : (draft.workspace_mode === "connect_existing" ? (draft.worktree_path || null) : null);
+    const folderName = draft.new_folder
+      || (state.folders || []).find((f) => f.folder_id === draft.folder_id)?.name
+      || "No folder";
+    body = `<dl class="gw-kv gw-review">
+      <dt>Repository</dt><dd>${esc(repo?.name || "\u2014")}</dd>
+      <dt>Folder</dt><dd>${esc(folderName)}</dd>
+      <dt>Lane</dt><dd>${esc(draft.name || "\u2014")}</dd>
+      <dt>Workspace</dt><dd>${esc({ new_worktree: "New worktree", connect_existing: "Existing worktree", planning: "Planning only" }[draft.workspace_mode] || "\u2014")}</dd>
+      ${draft.workspace_mode !== "planning" ? `<dt>Base branch</dt><dd>${esc(repo?.default_branch || "\u2014")}</dd>` : ""}
+      ${branch ? `<dt>New branch</dt><dd>${esc(branch)}</dd>` : ""}
+      ${path ? `<dt>Worktree</dt><dd>${esc(path)}</dd>` : ""}
+      <dt>Agent</dt><dd>${esc(draft.provider === "claude" ? "Claude" : "None yet")}</dd>
+    </dl>
+    <p class="gw-sheet-note">${draft.workspace_mode === "new_worktree"
+      ? "Creates a branch and a worktree on this machine."
+      : draft.workspace_mode === "connect_existing"
+        ? "Binds an existing worktree. Nothing on disk is created."
+        : "Creates a lane record only."}
+      Nothing is pushed and nothing is merged.</p>`;
+  }
+
+  const isLast = step === "review";
+  const canNext = isLast ? true : laneStepReady(nextLaneStep(step, draft), draft);
+  const actions = `${step === "repository" ? "" : `<button type="button" class="btn" data-gw-wiz-back>Back</button>`}
+    <button type="button" class="btn primary" ${isLast ? "data-gw-wiz-create" : "data-gw-wiz-next"}
+      ${(!canNext || state.submitting) ? "disabled" : ""}>
+      ${state.submitting ? "Creating\u2026" : (isLast ? "Create lane" : "Next")}</button>`;
+
+  return `<section class="gw-sheet gw-wizard" data-gw-wizard role="dialog" aria-modal="true" aria-label="Add lane">
+    <header class="gw-sheet-head">
+      <button type="button" class="gw-sheet-x" data-gw-sheet-cancel aria-label="Cancel">\u2190</button>
+      <h2 class="gw-sheet-title">Add lane</h2>
+    </header>
+    ${stepRail(step, draft)}
+    <div class="gw-sheet-body">${err}${body}</div>
+    <footer class="gw-sheet-foot">
+      <button type="button" class="btn" data-gw-sheet-cancel>Cancel</button>
+      ${actions}
+    </footer>
+  </section>`;
+}
+
 export function renderCreateLaneFlow(create = {}) {
   const err = create.error ? `<div class="gw-notice err">${esc(createErrorText(create.error))}</div>` : "";
   const provider = create.provider === "cursor" ? "cursor" : "claude";
@@ -2907,9 +3926,37 @@ export function renderGatewayShell({
   newUpdate = false,
   asideOpen = false,
   userMessageExpanded = false,
+  folders = [],
+  collapsedFolders,
+  attachments = [],
+  attachmentsUploading = 0,
+  attachmentError = null,
+  lightbox = null,
+  repositories = [],
+  repositorySheet = null,
+  laneWizard = null,
+  cancelPending = false,
+  providers = null,
+  settings = false,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
-  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane });
+  const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
+  // A sheet owns the screen while it is open: it is a decision the operator is
+  // in the middle of, and the lane list behind it must not steal the tap.
+  const openSheet = repositorySheet
+    ? renderRepositorySheet(repositorySheet)
+    : (laneWizard ? renderLaneWizard({ ...laneWizard, repositories, folders }) : "");
+  if (openSheet) {
+    return `<div class="gw is-sheet" data-gw data-gw-mode="sheet">${openSheet}</div>`;
+  }
+  if (settings) {
+    return `<div class="gw is-detail" data-gw data-gw-mode="settings">${list}
+      <section class="gw-main">
+        <a class="gw-back" data-gw-back href="#/lanes">← Lanes</a>
+        ${renderProviderRuntimeSection(providers || {})}
+      </section>
+    </div>`;
+  }
   const kind = emptyDetail
     ? "missing"
     : detailViewKind({ selectedId, lanes, lane, loading, listReady });
@@ -2995,6 +4042,7 @@ export function renderGatewayShell({
     output,
     outputText,
     lane,
+    latestResponse,
   });
   const assistant = assistantMessageSource(lane, { output, outputText, latestResponse });
   const cap = deriveLaneExecutionPosture(lane);
@@ -3017,10 +4065,12 @@ export function renderGatewayShell({
             <h1>${esc(lane?.label || selectedId)}</h1>
             <p class="gw-presence" data-gw-presence>${esc(work.headline || cap.headline)}</p>
             <button type="button" class="btn sm gw-rename" data-gw-rename data-lane-id="${esc(lane?.lane_id || selectedId)}">Rename Lane</button>
+            ${renderLaneFolderPicker(lane, folders, selectedId)}
+            ${renderLaneRepository(lane, repositories)}
           </div>
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}
-          ${renderCurrentWork(lane?.execution_run, nowMs)}${renderPreviousWork(lane?.previous_run)}
+          ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending })}${renderPreviousWork(lane?.previous_run)}
           ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}
@@ -3050,7 +4100,12 @@ export function renderGatewayShell({
             aria-expanded="${asideOpen ? "true" : "false"}" aria-controls="gw-details-panel">Details</button>
         </header>
         <div class="gw-thread" data-gw-thread>
-          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, { expanded: Boolean(userMessageExpanded) })}
+          ${renderLastInstruction(lastInstruction || lane?.last_instruction, nowMs, {
+            expanded: Boolean(userMessageExpanded),
+            // The run owns its attachments, so reopening the lane restores them
+            // from the same projection that restores the prompt text.
+            attachments: (lane?.execution_run || lane?.previous_run)?.attachments || [],
+          })}
           <article class="gw-msg gw-msg-assistant"${liveAttr} data-gw-message-source="${esc(assistant.kind)}">
             <div class="gw-msg-tools">
               ${renderCopyControl({ text: copyText, feedback: copyFeedback })}
@@ -3066,9 +4121,13 @@ export function renderGatewayShell({
           idleStart: cap.state === "IDLE",
           queueUntilSession: cap.state === "QUEUED_FOR_CAPACITY" || lane?.execution_run?.state_reason === "waiting_for_agent_session",
           provider: lane?.preferred_provider || "claude",
-          cursorSendAvailable: Boolean(lane?.tmux?.alive) && laneProviderKind(lane) === "cursor",
+          cursorSendAvailable: cursorComposerAvailable({ lane, providers }),
+          attachments,
+          attachmentsUploading,
+          attachmentError,
         })}
       </div>
+      ${renderAttachmentLightbox(lightbox)}
       <div class="gw-aside-scrim" data-gw-aside-close aria-hidden="true"></div>
       ${detailsPanel}
     </section>

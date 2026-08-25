@@ -75,6 +75,11 @@ async function test(name, fn) {
 await test("Cursor send without tmux transport fails and never EXECUTING", async () => {
   resetDevelopmentLanesForTests(ROOT);
   resetAgentSessionsForTests(ROOT);
+  resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  setAlloyAdapterImplForTests({
+    listPanes: async () => [],
+  });
   const vac = ensureVacilandoSpecialistLane({ root: ROOT });
   const bound = cmdAttachCursorSession({
     laneId: vac.lane.lane_id,
@@ -83,6 +88,18 @@ await test("Cursor send without tmux transport fails and never EXECUTING", async
     root: ROOT,
   });
   assert.equal(bound.ok, true, bound.error);
+  setAgentSessionLifecycleImplForTests({
+    observeLane: async () => ({
+      lane_id: vac.lane.lane_id,
+      durable: true,
+      worktree: { path: WT, managed: true, name: "wt5-vacilando-gateway-v2" },
+      tmux: { alive: false, session: null, pane_id: null },
+      binding: bound.lane.binding,
+      preferred_provider: "cursor",
+      claude: { presence: "absent" },
+    }),
+    startRuntime: async () => ({ ok: false, error: "provider_start_failed" }),
+  });
   let sent = 0;
   const out = await deliverManagedLaneInstruction(vac.lane.lane_id, "Do not treat this as delivered.", {
     root: ROOT,
@@ -107,6 +124,7 @@ await test("Cursor send without tmux transport fails and never EXECUTING", async
   const rec = getDurableLane(vac.lane.lane_id, ROOT);
   assert.equal(rec.preferred_provider, "claude");
   assert.equal(rec.binding.provider, "cursor");
+  resetAgentSessionLifecycleForTests();
 });
 
 await test("governor fails undelivered Cursor runs immediately and ignores Claude queue", async () => {

@@ -205,6 +205,33 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const status = out.ok ? 200 : (out.error === "not_queued" || out.error === "lane_mismatch" ? 409 : 400);
     return { status, body: out };
   }
+  if (path === "/api/v2/lane-folders/create") {
+    const { createLaneFolder } = await import("./lane-folders.mjs");
+    const out = createLaneFolder({ name: v.name });
+    return { status: out.ok ? 200 : (out.error === "folder_limit_reached" ? 409 : 400), body: out };
+  }
+  if (path === "/api/v2/lane-folders/rename") {
+    const id = v.folder_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_folder_id" } };
+    const { renameLaneFolder } = await import("./lane-folders.mjs");
+    const out = renameLaneFolder(id, v.name);
+    return { status: out.ok ? 200 : (out.error === "folder_not_found" ? 404 : 400), body: out };
+  }
+  if (path === "/api/v2/lane-folders/delete") {
+    const id = v.folder_id || v.id;
+    if (!id) return { status: 400, body: { ok: false, error: "missing_folder_id" } };
+    const { deleteLaneFolder } = await import("./lane-folders.mjs");
+    const out = deleteLaneFolder(id);
+    return { status: out.ok ? 200 : (out.error === "folder_not_found" ? 404 : 400), body: out };
+  }
+  if (path === "/api/v2/lane/folder" || path === "/api/v2/lanes/folder") {
+    const laneId = v.lane_id || v.id;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const { assignLaneToFolder } = await import("./lane-folders.mjs");
+    const out = assignLaneToFolder(laneId, v.folder_id ?? null);
+    const status = out.ok ? 200 : ((out.error === "lane_not_found" || out.error === "folder_not_found") ? 404 : 400);
+    return { status, body: out };
+  }
   if (path === "/api/v2/lane/preferred-provider" || path === "/api/v2/lanes/preferred-provider") {
     const laneId = v.lane_id || v.id;
     if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
@@ -219,7 +246,11 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     const extra = forbidden.filter((k) => v[k] != null && v[k] !== "");
     if (extra.length) return { status: 400, body: { ok: false, error: "unexpected_control_field", fields: extra } };
     const { deliverManagedLaneInstruction, laneInstructionHttpStatus } = await import("./execution-run-send.mjs");
-    const out = await deliverManagedLaneInstruction(id, v.instruction, { actor: actorDefault, provider: v.provider });
+    const out = await deliverManagedLaneInstruction(id, v.instruction, {
+      actor: actorDefault,
+      provider: v.provider,
+      attachmentIds: v.attachment_ids,
+    });
     return { status: laneInstructionHttpStatus(out), body: out };
   }
 
@@ -1442,7 +1473,16 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
     } catch { /* */ }
     const out = await listDevelopmentLanes();
     const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
-    return { status: out.ok ? 200 : 503, body: { ...out, lanes, development_resources: developmentResourceSnapshot() } };
+    let folders = [];
+    try {
+      const { listLaneFolders } = await import("./lane-folders.mjs");
+      folders = listLaneFolders();
+    } catch { /* organisation must never fail discovery */ }
+    return { status: out.ok ? 200 : 503, body: { ...out, lanes, folders, development_resources: developmentResourceSnapshot() } };
+  }
+  if (path === "/api/v2/lane-folders") {
+    const { listLaneFolders } = await import("./lane-folders.mjs");
+    return { status: 200, body: { ok: true, folders: listLaneFolders() } };
   }
   if (path === "/api/v2/lanes/candidates" || path === "/api/v2/lane/candidates") {
     const { listAdoptionCandidates } = await import("./lane-identity-api.mjs");

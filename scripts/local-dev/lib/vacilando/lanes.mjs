@@ -436,6 +436,8 @@ export function projectDurableObservation(rec, observations = []) {
     mission_id: rec.mission_id || null,
     mission_bound_at: rec.mission_bound_at || null,
     preferred_provider: rec.preferred_provider || rec.binding?.provider || null,
+    folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
   };
 }
 
@@ -858,6 +860,21 @@ export function pasteBufferArgv(bufferName, target) {
 
 export function submitEnterArgv(target) {
   return ["send-keys", "-t", target, "Enter"];
+}
+
+/**
+ * Tell the provider to abandon the turn it is working on.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how two earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function interruptPane(target) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target" };
+  // Escape twice: the first dismisses any transient overlay, the second
+  // cancels the turn underneath it.
+  return runTmux(["send-keys", "-t", t, "Escape", "Escape"]);
 }
 
 export function deleteBufferArgv(bufferName) {

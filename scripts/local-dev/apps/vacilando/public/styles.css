@@ -3,15 +3,54 @@
    Presentation only; all data comes from the runtime snapshot via app.js. */
 :root{
   color-scheme: light;
-  --rail-0:#15402c; --rail-1:#0e3323; --rail-2:#0b2a1c;
-  --rail-active:#1f5a3d; --rail-hover:#194832;
+
+  /* ---------------------------------------------------------------------
+     Approved Vacilando palette. These seven are the brand; everything below
+     is either derived from them or is a SEMANTIC colour that deliberately
+     stays put.
+
+     Contrast was measured, not assumed (ratios against --card unless noted):
+       navy 13.66 · juniper 7.54 · landscape 5.97 · river 4.88 · sage 4.29
+       terracotta 3.39 · sand 1.62
+     So navy carries text, juniper/landscape/river carry text-sized accents,
+     and terracotta and sand are surfaces and emphasis — never small text.
+     Where a brand colour sits on a tint rather than on white, a derived
+     *-ink variant is used so small text still clears 4.5:1.
+     --------------------------------------------------------------------- */
+  --vacilando-navy:#17313A;
+  --vacilando-terracotta:#D96C4A;
+  --vacilando-sand:#E8C78A;
+  --vacilando-river:#3F7891;
+  --vacilando-sage:#6F8055;
+  --vacilando-juniper:#365C4A;
+  --vacilando-landscape:#476B5A;
+  /* Derived for accessible text on tinted surfaces. */
+  --vacilando-river-ink:#396c83;      /* 4.93 on --run-bg */
+  --vacilando-terracotta-ink:#b85c3f; /* 4.53 on white, 4.53 as pill bg with white text */
+
+  /* Navigation structure: juniper, with derived depths. Light rail text
+     clears AA on every one of them (5.74 / 7.34 / 8.72 / 4.91 / 6.15). */
+  --rail-0:var(--vacilando-juniper); --rail-1:#2c4b3d; --rail-2:#253f32;
+  --rail-active:#3c6753; --rail-hover:#33574a;
   --rail-text:#d7e4da; --rail-text-lo:#8fae9c; --rail-line:rgba(255,255,255,.08);
   --bg:#f6f2ea; --bg-tint:#efe9dd; --card:#fff; --card-2:#fbf9f4;
   --line:#ece5d8; --line-soft:#f1ece1; --line-strong:#e0d7c6;
-  --ink:#1f2a24; --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
-  --terra:#cf6f47; --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  /* Primary text is navy. */
+  --ink:var(--vacilando-navy); --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
+  /* Warm emphasis / selected + active accents. */
+  --terra:var(--vacilando-terracotta); --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  --sand:var(--vacilando-sand); --sand-soft:#f6ecd8;
+  --sage:var(--vacilando-sage); --juniper:var(--vacilando-juniper); --landscape:var(--vacilando-landscape);
+  /* SEMANTIC COLOURS DELIBERATELY UNCHANGED. Success, warning, error and
+     paused/planned carry meaning that is not the brand's to restate, and no
+     approved colour matches both the meaning and the contrast. Recolouring
+     these would make a failure look like an accent. */
   --green:#3a8a5b; --green-soft:#e2f0e6; --green-ink:#2c7048; --script:#d9825f;
-  --run:#3a76d8; --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
+  /* Links, progress and informational state: river. On --run-bg this is a
+     better ratio than the blue it replaces (4.18 vs 3.78), and small text on
+     that tint uses --run-ink at 4.93. */
+  --run:var(--vacilando-river); --run-ink:var(--vacilando-river-ink);
+  --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
   --blocked:#cf5a3a; --blocked-bg:#f8e2da; --done:#5a6b61; --done-bg:#eef0ec;
   --plan:#5f7c9a; --plan-bg:#e9eff5; --paused:#b0894a; --paused-bg:#f3ead6; --idle:#8a938c; --idle-bg:#eef0ec;
   --radius:12px; --radius-sm:9px; --pill:999px;
@@ -44,6 +83,15 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 /* ---------- rail ---------- */
 .rail{background:linear-gradient(180deg,var(--rail-0),var(--rail-1) 62%,var(--rail-2));color:var(--rail-text);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
 .brand{padding:16px 18px 12px;}
+/* The approved mark sits above the wordmark in the rail, on a deliberate cream
+   plate.
+   MEASURED, NOT ASSUMED. Dropped straight onto the juniper rail the artwork
+   disappears: pine 1.11:1, river 1.55:1, sage 1.76:1, navy 1.81:1 against
+   #365C4A. The illustration was drawn for a light ground, and the same cream
+   the app icons are composed on is what keeps every element of the journey
+   readable. */
+.brand-mark{display:block;width:100%;max-width:154px;height:auto;margin:0 0 10px;
+  background:var(--bg);border-radius:10px;padding:8px 9px;}
 .brand .word{font-family:var(--script-face);font-size:26px;color:var(--script);line-height:1;}
 .brand .word b{font-family:var(--sans);font-weight:600;font-style:normal;color:#eaf1ec;font-size:19px;margin-left:5px;}
 .brand .sub{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-text-lo);margin-top:6px;}
@@ -54,7 +102,7 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .nav a:not(.active):hover{background:var(--rail-hover);}
 .nav a .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
 .nav-sep{height:1px;background:var(--rail-line);margin:8px 18px;}
-.desert{margin-top:auto;height:104px;}
+.rail .nav-sep{margin-top:auto;}
 .ruser{display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--rail-line);background:var(--rail-2);text-decoration:none;color:inherit;cursor:pointer;}
 .ruser:hover{background:var(--rail-hover);}
 .ruser .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#c98a5e,#7a4a2e);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;}
@@ -1400,6 +1448,160 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-lanes-h-row .gw-lanes-h{padding:4px 8px 0;}
 .gw-add{font-size:12px;font-weight:650;color:var(--rail-0);text-decoration:none;padding:8px;min-height:44px;display:inline-flex;align-items:center;white-space:nowrap;}
 .gw-add-actions{display:flex;flex-direction:column;gap:10px;max-width:28em;margin:12px 0 8px;}
+/* Lane folders — organisation over the attention-ordered list. */
+.gw-add-folder{background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:650;color:var(--rail-0);}
+.gw-folder{display:block;margin:0 0 4px;}
+.gw-folder-h{display:flex;align-items:center;gap:4px;padding:2px 4px;}
+.gw-folder-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--ink);text-align:left;text-transform:uppercase;letter-spacing:.04em;}
+.gw-folder-caret{flex:0 0 auto;opacity:.7;}
+.gw-folder-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;}
+.gw-folder-count{flex:0 0 auto;opacity:.6;font-weight:600;}
+.gw-folder-badge{flex:0 0 auto;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;}
+.gw-folder-badge.is-attention{background:var(--review-bg);color:var(--review);}
+.gw-folder-edit{flex:0 0 auto;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--rail-0);opacity:.75;min-height:44px;padding:0 6px;}
+.gw-folder-edit:hover{opacity:1;}
+.gw-folder-empty{padding:8px 12px;font-size:12px;opacity:.65;}
+.gw-folder .gw-lane{margin-left:10px;}
+.gw-folder-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-folder-pick select{min-height:44px;font-size:16px;padding:6px 8px;border-radius:8px;}
+.gw-folder-pick-hint{opacity:.65;}
+/* Image attachments. The draft strip lives INSIDE the composer box so the
+   pinned composer grows as one unit — a strip stacked outside it pushed the
+   input and Send below the iPhone safe area. */
+.gw-attach{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;min-height:36px;border-radius:8px;cursor:pointer;font-size:17px;
+  color:var(--ink-2);background:transparent;border:1px solid transparent;}
+.gw-attach:hover{background:var(--bg-tint);}
+.gw-attach:focus-within{border-color:var(--run);outline:2px solid var(--run);outline-offset:1px;}
+.gw-attach input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.gw-atts{padding:6px 8px 0;}
+.gw-att-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0;}
+.gw-att{position:relative;display:flex;align-items:center;gap:8px;max-width:100%;
+  padding:4px 26px 4px 4px;border:1px solid var(--line);border-radius:10px;background:var(--card-2);}
+.gw-att-thumb{width:38px;height:38px;object-fit:cover;border-radius:6px;flex:0 0 auto;background:var(--bg-tint);}
+.gw-att-doc{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;
+  letter-spacing:.04em;color:var(--vacilando-terracotta-ink);background:var(--terra-soft);}
+.gw-msg-att-doc{display:inline-flex;align-items:center;gap:8px;max-width:220px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card-2);text-decoration:none;min-height:44px;}
+.gw-msg-att-kind{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border-radius:5px;
+  background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-msg-att-name{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gw-att-meta{display:flex;flex-direction:column;min-width:0;font-size:11px;line-height:1.25;}
+.gw-att-name{font-weight:650;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12ch;}
+.gw-att-size{color:var(--ink-3);}
+.gw-att-x{position:absolute;top:2px;right:2px;width:20px;height:20px;border:0;border-radius:999px;
+  background:var(--bg-tint);color:var(--ink-2);font-size:14px;line-height:1;cursor:pointer;padding:0;}
+.gw-att-x:hover{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-att.is-uploading{padding-right:10px;}
+.gw-att-spin{width:14px;height:14px;border-radius:999px;border:2px solid var(--line-strong);
+  border-top-color:var(--run);animation:gwspin .8s linear infinite;flex:0 0 auto;}
+@keyframes gwspin{to{transform:rotate(360deg);}}
+.gw-att-err{margin-top:6px;font-size:12px;color:var(--blocked);}
+.gw-composer.is-dropping .gw-composer-box{outline:2px dashed var(--run);outline-offset:2px;}
+
+/* Thumbnails on a sent prompt: bounded, never full resolution. */
+.gw-msg-atts{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:8px 0 0;padding:0;}
+.gw-msg-att-open{padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer;
+  line-height:0;overflow:hidden;min-height:0;}
+.gw-msg-att-open img{width:92px;height:92px;object-fit:cover;display:block;}
+.gw-msg-att.is-failed .gw-msg-att-bad{font-size:11px;color:var(--blocked);}
+
+/* Bounded preview. Aspect ratio preserved; never larger than the viewport. */
+.gw-lightbox{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;background:rgba(23,49,58,.92);
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);}
+.gw-lightbox img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;}
+.gw-lightbox-cap{color:#fff;font-size:12px;opacity:.85;text-align:center;}
+/* Sheets: Add repository and the Add lane wizard.
+   Full-height and safe-area aware, because on a phone this IS the screen while
+   it is open. The footer is pinned so the primary action never scrolls away and
+   never sits under the home indicator. */
+.gw.is-sheet{display:block;height:100%;}
+.gw-sheet{display:flex;flex-direction:column;height:100%;max-height:100%;background:var(--bg);}
+.gw-sheet-head{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  border-bottom:1px solid var(--line);background:var(--card);}
+.gw-sheet-x{width:44px;height:44px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--ink);}
+.gw-sheet-title{margin:0;font-size:17px;font-weight:750;color:var(--ink);}
+.gw-sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 20px;}
+.gw-sheet-foot{flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;padding:10px 14px calc(env(safe-area-inset-bottom) + 12px);
+  border-top:1px solid var(--line);background:var(--card);}
+.gw-sheet-foot .btn{min-height:44px;flex:1 1 auto;}
+.gw-sheet-note{font-size:13px;color:var(--ink-2);line-height:1.45;margin:10px 0 0;}
+
+.gw-field{display:block;margin:0 0 14px;}
+.gw-field-label{display:block;font-size:12px;font-weight:650;color:var(--ink-2);margin-bottom:5px;}
+.gw-field input{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--card);color:var(--ink);
+  /* 16px keeps iOS from zooming the whole page when the field is focused. */
+  font-size:16px;}
+.gw-field input:focus{outline:2px solid var(--run);outline-offset:1px;border-color:var(--run);}
+.gw-field-hint{display:block;font-size:11px;color:var(--ink-3);margin-top:5px;}
+.gw-field-err{display:block;font-size:12px;color:var(--blocked);margin-top:5px;font-weight:600;}
+
+.gw-seg{display:flex;gap:6px;margin:0 0 14px;}
+.gw-seg-opt{flex:1 1 0;min-height:44px;border:1px solid var(--line-strong);border-radius:10px;
+  background:var(--card);font:inherit;font-size:13px;font-weight:650;color:var(--ink);cursor:pointer;}
+.gw-seg-opt[aria-pressed="true"]{background:var(--terra-soft);border-color:var(--terra-line);color:var(--vacilando-terracotta-ink);}
+.gw-seg-opt[disabled]{opacity:.5;cursor:not-allowed;}
+
+.gw-choices{display:flex;flex-direction:column;gap:8px;margin:0 0 6px;}
+.gw-choice{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;
+  min-height:56px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:12px;
+  background:var(--card);cursor:pointer;font:inherit;}
+.gw-choice.is-on{border-color:var(--run);background:var(--run-bg);}
+.gw-choice[disabled],.gw-choice.is-off{opacity:.55;cursor:not-allowed;}
+.gw-choice.is-add{border-style:dashed;}
+.gw-choice-t{font-size:14px;font-weight:700;color:var(--ink);}
+.gw-choice-s{font-size:11.5px;color:var(--ink-3);}
+
+.gw-steps{display:flex;gap:4px;list-style:none;margin:0;padding:8px 12px;background:var(--card);
+  border-bottom:1px solid var(--line);overflow-x:auto;}
+.gw-step{display:flex;align-items:center;gap:5px;flex:0 0 auto;font-size:11px;color:var(--ink-3);}
+.gw-step-n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:999px;background:var(--bg-tint);font-size:10px;font-weight:700;}
+.gw-step.is-current{color:var(--ink);font-weight:700;}
+.gw-step.is-current .gw-step-n{background:var(--run);color:#fff;}
+.gw-step.is-done .gw-step-n{background:var(--green-soft);color:var(--green-ink);}
+
+.gw-preview{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card-2);}
+.gw-repo-check dd,.gw-review dd{word-break:break-all;}
+.gw-notice.ok{background:var(--green-soft);color:var(--green-ink);}
+
+/* Take back a sent prompt. A restrained text control, not another big button. */
+.gw-cancel-run{align-self:flex-start;margin-top:8px;min-height:44px;padding:6px 10px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--card);color:var(--blocked);font:inherit;font-size:12px;font-weight:650;cursor:pointer;}
+.gw-cancel-run:hover{background:var(--blocked-bg);}
+.gw-cancel-run[disabled]{opacity:.6;cursor:progress;}
+/* Repository groups: the top organisational boundary, and an execution one.
+   Styled a step stronger than a folder header so the hierarchy reads at a
+   glance without adding another large button. */
+.gw-repo{display:block;margin:0 0 6px;}
+.gw-repo-h{display:flex;align-items:center;padding:2px 4px;}
+.gw-repo-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;
+  background:none;border:0;cursor:pointer;font:inherit;font-size:13px;font-weight:800;color:var(--ink);text-align:left;}
+.gw-repo-name{flex:0 0 auto;}
+.gw-repo-meta{flex:1 1 auto;font-size:11px;font-weight:600;color:var(--ink-3);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;}
+.gw-repo .gw-folder{margin-left:8px;}
+.gw-repo .gw-lane{margin-left:10px;}
+.gw-add-repo{color:var(--vacilando-terracotta-ink);}
+.gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-repo-id-label{color:var(--ink-3);}
+.gw-repo-id-value{font-weight:700;color:var(--ink);}
+.gw-repo-id-meta{font-size:11px;color:var(--ink-3);}
+.gw-repo-id.is-unknown .gw-repo-id-value{color:var(--blocked);}
+.gw-lightbox-x{position:absolute;top:calc(env(safe-area-inset-top) + 8px);right:12px;width:44px;height:44px;
+  border:0;border-radius:999px;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;}
+/* Unread notification indicators. Restrained on purpose: execution state stays
+   the loudest thing in a lane row, and this sits beside the name rather than
+   competing with the posture line. White on --vacilando-terracotta is only
+   3.39:1, so the pill uses the derived ink at 4.53:1. */
+.gw-lane-unseen{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  margin-left:8px;padding:0 5px;border-radius:999px;background:var(--vacilando-terracotta-ink);color:#fff;
+  font-size:11px;font-weight:700;line-height:1;vertical-align:middle;}
+.gw-lane.has-unseen .gw-lane-title{font-weight:700;}
+.gw-folder-badge.is-unseen{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-folder-badge.is-active{background:var(--run-bg);color:var(--run-ink);}
 .gw-add-actions .btn{min-height:44px;}
 .gw-candidate{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:0 0 10px;box-shadow:var(--shadow);}
 .gw-candidate .btn{margin-top:10px;}
@@ -1978,6 +2180,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-aside-toggle,.gw-aside-close,.gw-aside-scrim{display:none;}
   .gw-claude-run .gw-session-refresh{display:none;}
 }
+.gw-settings{padding:8px 4px 28px;max-width:52rem;}
+.gw-settings h1{margin:0 0 8px;font-size:22px;}
+.gw-settings .gw-lead{margin:0 0 16px;}
+.gw-settings .section-title{margin:18px 0 10px;}
+.gw-settings .pm-cards{margin-top:4px;}
 .gw-login{position:fixed;inset:0;z-index:400;background:rgba(14,51,35,.55);display:grid;place-items:center;padding:24px;pointer-events:auto;}
 .gw-login[hidden]{display:none !important;}
 .gw-login-card{width:min(28rem,100%);background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 20px 20px;pointer-events:auto;}

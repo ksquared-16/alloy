@@ -27,6 +27,16 @@ SUITES=(
   "development-provider-capacity.test.mjs"
   "development-provider-lifecycle.test.mjs"
   "development-admission-bootstrap.test.mjs"
+  "development-lane-folders.test.mjs"
+  "development-lane-notifications.test.mjs"
+  "development-lane-push-outcome.test.mjs"
+  "development-lane-notify.test.mjs"
+  "development-lane-attachments.test.mjs"
+  "development-brand-assets.test.mjs"
+  "development-repository-registry.test.mjs"
+  "development-repository-flows.test.mjs"
+  "development-copy-control.test.mjs"
+  "development-run-cancel.test.mjs"
 )
 
 PASS=0

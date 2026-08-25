@@ -24,6 +24,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   activeAgentSessionForLane,
+  listAgentSessionsForLane,
   patchAgentSession,
 } from "./agent-session.mjs";
 import { getExecutionRun, patchRunFields } from "./execution-run.mjs";
@@ -111,7 +112,15 @@ export function captureResumeState(run, session, lane, { nowMs = Date.now() } = 
  *
  * Verified by reading it back from the store, not by trusting the write.
  */
-export function needsInputIsDurable(runId, { root = null } = {}) {
+/**
+ * NOTE ON `root`. These default to `undefined`, never `null`.
+ *
+ * The helpers below declare `root = runtimeRoot()`, and a default parameter
+ * only fires for `undefined`. Defaulting to `null` here passed a literal null
+ * through as the runtime root, so every lookup missed and suspend/resume
+ * returned `lane_not_found` for a lane that plainly existed.
+ */
+export function needsInputIsDurable(runId, { root = undefined } = {}) {
   const run = getExecutionRun(runId, root);
   if (!run) return { ok: false, error: "run_not_found" };
   const snap = run.provider_suspension?.resume_state || null;
@@ -145,7 +154,7 @@ export async function suspendLaneProvider(laneId, {
   reason = "parked_awaiting_input",
   confirm = false,
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
 } = {}) {
   const rec = getDurableLane(laneId, root);
   if (!rec) return { ok: false, error: "lane_not_found", command: SUSPEND_COMMAND };
@@ -238,7 +247,7 @@ export async function suspendLaneProvider(laneId, {
 export async function resumeLaneProvider(laneId, {
   origin = "governor",
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
 } = {}) {
   const rec = getDurableLane(laneId, root);
   if (!rec) return { ok: false, error: "lane_not_found", command: RESUME_COMMAND };
@@ -318,7 +327,7 @@ export function parkedPastGrace(run, { nowMs = Date.now(), graceMs = NEEDS_INPUT
 export async function reconcileParkedProviders({
   lanes = [],
   nowMs = Date.now(),
-  root = null,
+  root = undefined,
   graceMs = NEEDS_INPUT_GRACE_MS,
 } = {}) {
   const suspended = [];
@@ -336,5 +345,80 @@ export async function reconcileParkedProviders({
     });
     if (out.ok && !out.already) suspended.push({ lane_id: lane.lane_id, run_id: out.run_id });
   }
-  return { ok: true, suspended };
+  // The inverse, which nothing corrected before: a record that says SUSPENDED
+  // while a provider is demonstrably ALIVE in the lane.
+  //
+  // Suspension is stored in two places — the agent session and the run — and a
+  // resume that brings the process up without flipping both leaves the lane
+  // reading "Needs input · suspended" while a Claude sits at a ready prompt in
+  // its worktree. Observed on two lanes at once: live panes, ready carets, and
+  // both records still SUSPENDED, with nothing in the governor to fix it. To an
+  // operator the lane simply looks dead.
+  //
+  // The live process is the truth; the record follows it.
+  const revived = [];
+  for (const lane of lanes) {
+    // Resolve suspension from the STORES, not from projection fields.
+    //
+    // laneProviderIsSuspended reads lane.agent_session / lane.execution_run,
+    // which exist only on a PROJECTED lane. The governor calls this with durable
+    // lane RECORDS, which carry neither — so the predicate was always false here
+    // and this loop never ran once in production. Runtime Performance sat with a
+    // live Claude (pid 97004, ready caret) and a SUSPENDED session record,
+    // holding a seat while its own run stayed QUEUED: it starved itself, and
+    // capacity read 4/3 because a fourth provider was alive.
+    // activeAgentSessionForLane filters to ACTIVE-ish states, so it never
+    // returns a SUSPENDED session — the exact record this pass exists to heal.
+    // Look at the lane's sessions directly.
+    const all = listAgentSessionsForLane(lane.lane_id, root) || [];
+    const session = all.find((x) => x?.state === "SUSPENDED")
+      || activeAgentSessionForLane(lane.lane_id, root);
+    const linkedRun = session?.run_id ? getExecutionRun(session.run_id, root) : null;
+    const suspended = session?.state === "SUSPENDED"
+      || linkedRun?.provider_suspension?.state === "SUSPENDED"
+      || laneProviderIsSuspended(lane);
+    if (!suspended) continue;
+    const alive = await providerIsLive(lane, { root });
+    if (!alive) continue;
+    if (session && session.state === "SUSPENDED") {
+      patchAgentSession(session.agent_session_id, {
+        state: "ACTIVE",
+        resumed_at: iso(nowMs),
+        suspension_reason: null,
+      }, { root, event: "provider_resumed", extra: { origin: "reconciler", evidence: "live_provider" } });
+    }
+    const run = linkedRun;
+    if (run?.provider_suspension?.state === "SUSPENDED") {
+      patchRunFields(run.run_id, {
+        provider_suspension: { ...run.provider_suspension, state: "RESUMED", resumed_at: iso(nowMs) },
+      }, { nowMs, root });
+    }
+    revived.push({ lane_id: lane.lane_id, run_id: run?.run_id || null });
+  }
+  return { ok: true, suspended, revived };
+}
+
+/**
+ * Is a provider actually running for this lane right now?
+ *
+ * Asks the substrate, not the record — the record is what we are checking.
+ */
+async function providerIsLive(lane, { root = undefined } = {}) {
+  const session = lane?.binding?.tmux_session || null;
+  const path = lane?.binding?.worktree_path || null;
+  if (!session && !path) return false;
+  try {
+    // liveClaudePanes is NOT exported from alloy-dev-adapter — importing it
+    // threw straight into the catch below, so this helper answered "not live"
+    // for every lane and the revive pass could never fire. Use the exported
+    // pane listing instead.
+    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+    const raw = await listTmuxPanesRaw();
+    if (!raw?.ok) return false;
+    const panes = parseTmuxPaneLines(raw.stdout) || [];
+    return panes.some((p) => (session && p.session === session)
+      || (path && (p.cwd === path || String(p.cwd || "").startsWith(`${path}/`))));
+  } catch {
+    return false;
+  }
 }

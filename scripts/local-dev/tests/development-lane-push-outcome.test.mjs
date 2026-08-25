@@ -84,36 +84,47 @@ await test("COMPLETE / NEEDS_INPUT / FAILED each emit one safe push", async () =
     { run_id: id, lane_id: "alloy-identity", state: "NEEDS_INPUT", state_reason: "Which ingress?" },
     { label: "Communications", root: r, send },
   );
-  assert.equal(needAgain.skipped, "duplicate_outcome");
+  assert.equal(needAgain.skipped, "duplicate_prompt");
   assert.equal(sent.length, 1);
 
+  // ONE PROMPT, ONE NOTIFICATION. This assertion used to require sent === 1
+  // here — it encoded the defect. NEEDS_INPUT and the later COMPLETE are two
+  // states of the SAME operator question, and the operator was paged twice for
+  // it. Measured on this host: 8 runs did exactly that.
   transitionExecutionRun(id, "EXECUTING", { root: r, origin: "operator" });
   const complete = await pushRunOutcome(
     { run_id: id, lane_id: "alloy-identity", state: "COMPLETE" },
     { label: "Communications", root: r, send },
   );
-  assert.equal(complete.sent, 1);
-  assert.equal(sent[1].body, "Work complete and ready for review.");
-  assert.equal(sent[1].title, "Communications");
+  assert.equal(complete.skipped, "duplicate_prompt");
+  assert.equal(complete.sent, 0);
+  assert.equal(sent.length, 1, "the same prompt never notifies twice");
 
+  // A DIFFERENT prompt in the same lane still gets its own notification.
   const failed = await pushRunOutcome(
     { run_id: `${id}-other`, lane_id: "alloy-identity", state: "FAILED" },
     { label: "Communications", root: r, send },
   );
   assert.equal(failed.sent, 1);
-  assert.equal(sent[2].body, "could not continue.");
-  assert.equal(hasPushedRunOutcome(id, "COMPLETE", r), true);
+  assert.equal(sent[1].body, "could not continue.");
+  assert.equal(hasPushedRunOutcome(id, "NEEDS_INPUT", r), true);
 });
 
-await test("ABANDONED and resource events do not push", async () => {
+await test("ABANDONED notifies once; in-flight states never do", async () => {
+  // PRE-EXISTING STALE TEST, repaired. Its name asserted that ABANDONED does
+  // not push, which is the opposite of what the module deliberately does and
+  // documents: a run Vacilando closed on the operator's behalf is the outcome
+  // they least expect. It already failed on the unmodified base commit.
   const r = root();
   sub(r);
   const sent = [];
   const send = async (_sub, payload) => { sent.push(payload); };
   await pushRunOutcome({ run_id: "erun_x", lane_id: "alloy-identity", state: "ABANDONED" }, { root: r, send });
+  assert.equal(sent.length, 1, "an abandoned run tells the operator");
+  assert.equal(sent[0].state, "ABANDONED");
   await pushRunOutcome({ run_id: "erun_x", lane_id: "alloy-identity", state: "QUEUED" }, { root: r, send });
   await pushRunOutcome({ run_id: "erun_x", lane_id: "alloy-identity", state: "RECOVERING" }, { root: r, send });
-  assert.equal(sent.length, 0);
+  assert.equal(sent.length, 1, "Vacilando working is not news");
   const payload = outcomePushPayload({ lane_id: "lane_336af3bdc474", title: "Communications", state: "COMPLETE" });
   assert.equal(payload.path, "/#/lanes/lane_336af3bdc474");
   assert.equal(payload.type, "execution_run.complete");
@@ -194,15 +205,25 @@ await test("failed first send does not record outcome; duplicate after success i
       throw err;
     }
   };
+  // A DELIVERY FAILURE MUST NOT ERASE THE EVENT. The old contract recorded the
+  // dedupe marker only when sent > 0, so a failed push left no memory and the
+  // next transition tried again — and on this host the failure path was the
+  // common one (30 of 93 dispatches failed with web_push_unavailable), so the
+  // operator got repeats of some events and no trace at all of others.
+  const { notificationForRun } = await import("../lib/vacilando/lane-notifications.mjs");
   const first = await pushRunOutcome({ run_id: id, lane_id: "alloy-identity", state: "COMPLETE" }, { root: r, send });
-  assert.equal(first.ok, false);
   assert.equal(first.sent, 0);
-  assert.equal(hasPushedRunOutcome(id, "COMPLETE", r), false);
+  const rec = notificationForRun(id, r);
+  assert.ok(rec, "the notification exists even though delivery failed");
+  assert.equal(rec.delivery.attempted, true);
+  assert.equal(rec.delivery.sent, 0);
+  assert.ok(rec.delivery.error, "the failure is retained for bounded recovery");
+  assert.equal(rec.seen_at, null, "an undelivered notification is still unseen work");
+
   const second = await pushRunOutcome({ run_id: id, lane_id: "alloy-identity", state: "COMPLETE" }, { root: r, send });
-  assert.equal(second.sent, 1);
-  assert.equal(hasPushedRunOutcome(id, "COMPLETE", r), true);
-  const third = await pushRunOutcome({ run_id: id, lane_id: "alloy-identity", state: "COMPLETE" }, { root: r, send });
-  assert.equal(third.skipped, "duplicate_outcome");
+  assert.equal(second.skipped, "duplicate_prompt", "a failed push does not license a second one");
+  assert.equal(second.sent, 0);
+  assert.equal(blows, 1, "no retry storm");
 });
 
 await test("404/410 push endpoints are pruned", async () => {

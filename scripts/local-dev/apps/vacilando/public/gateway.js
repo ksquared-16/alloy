@@ -36,7 +36,6 @@ const G = {
   threadNewUpdate: false,
   threadUserScrolled: false,
   userMessageExpanded: false,
-  lastNotified: {},
   telemetry: null,
   telemetryByLane: {},
   pollTel: null,
@@ -46,7 +45,21 @@ const G = {
   copyTimer: null,
   connect: { step: "chooser", candidates: [], candidate: null, name: "", instruction: "", loading: false, submitting: false, error: null },
   executionCapacity: null,
+  unseenCount: 0,
+  unseenByLane: {},
+  attachments: [],
+  attachmentsUploading: 0,
+  attachmentError: null,
+  lightbox: null,
+  folders: [],
+  repositories: [],
+  repositorySheet: null,
+  laneWizard: null,
+  cancelPending: false,
+  collapsedFolders: null,
   releasing: false,
+  providers: null,
+  providersInflight: false,
   notify: {
     permission: typeof Notification !== "undefined" ? Notification.permission : "unsupported",
     enabled: false,
@@ -72,6 +85,20 @@ function routeName() {
 function routeLaneId() {
   const r = View.parseGatewayHash(location.hash);
   return r.name === "lanes" ? r.sub : null;
+}
+
+async function fetchProviders(force = false) {
+  if (G.providersInflight && !force) return G.providers;
+  G.providersInflight = true;
+  try {
+    const r = await gwFetch("/api/providers");
+    G.providers = await r.json();
+    if (G.providers?.pending) {
+      setTimeout(() => { fetchProviders(true).then(() => paint()).catch(() => {}); }, 2500);
+    }
+  } catch { /* keep last probe */ }
+  G.providersInflight = false;
+  return G.providers;
 }
 
 function draftKey(id) { return `vac.gw.draft.${id}`; }
@@ -160,25 +187,6 @@ function markViewed(id) {
   }, storage());
 }
 
-function maybeNotify(map) {
-  if (!notifyEnabled()) return;
-  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-  for (const lane of G.lanes || []) {
-    const st = map[lane.lane_id];
-    const ev = View.notificationEvent({
-      status: st,
-      viewingSelected: G.selected === lane.lane_id && !document.hidden,
-      lastInstruction: lastInstructionFor(lane.lane_id) || lane.last_instruction,
-      laneLabel: lane.label || lane.lane_id,
-    });
-    if (!ev) continue;
-    const key = `${lane.lane_id}:${st?.activity}:${paneOutputForLane(lane.lane_id)?.fingerprint || lane.last_activity_ms || ""}`;
-    if (G.lastNotified[lane.lane_id] === key) continue;
-    G.lastNotified[lane.lane_id] = key;
-    try { new Notification(ev.title, { body: ev.body }); } catch { /* */ }
-  }
-}
-
 function notifyEnabled() {
   try { return storage()?.getItem(View.NOTIFY_ENABLED_KEY) === "1"; } catch { return false; }
 }
@@ -250,6 +258,7 @@ async function completeCopyText() {
     output: G.output,
     outputText: G.output?.lane_id === id ? G.output?.text : "",
     lane: G.lane,
+    latestResponse: G.latestResponse?.lane_id === id ? G.latestResponse : null,
   });
   const plan = View.copySourcePlan(G.output, { lane: G.lane });
   if (!id || !plan.needsFetch) return visible;
@@ -258,7 +267,8 @@ async function completeCopyText() {
       const r = await gwFetch(`/api/lanes/${encodeURIComponent(id)}/output?mode=${encodeURIComponent(mode)}`);
       const j = await r.json();
       if (!View.outputBelongsToLane(j, id, G.lane)) continue;
-      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text, lane: G.lane });
+      const full = View.copyableOutputText({ selectedId: id, output: j, outputText: j?.text, lane: G.lane,
+        latestResponse: G.latestResponse?.lane_id === id ? G.latestResponse : null });
       if (full && (!visible || full.length >= visible.length)) return full;
     } catch { /* fall through to the visible snapshot */ }
   }
@@ -552,6 +562,9 @@ async function fetchLanes() {
   const r = await gwFetch("/api/lanes");
   const j = await r.json();
   G.lanes = Array.isArray(j.lanes) ? j.lanes : [];
+  if (Array.isArray(j.folders)) G.folders = j.folders;
+  if (Array.isArray(j.repositories)) G.repositories = j.repositories;
+  if (typeof j.unseen_count === "number") applyUnseen(j.unseen_count, j.unseen_by_lane);
   if (j.development_resources) G.developmentResources = j.development_resources;
   if (j.execution_capacity) G.executionCapacity = j.execution_capacity;
   else G.executionCapacity = View.summarizeExecutionCapacity(G.lanes);
@@ -883,6 +896,60 @@ function setAsideOpen(open, { restoreFocus = false, fromHistory = false } = {}) 
   }
 }
 
+function collapsedFolders() {
+  if (!G.collapsedFolders) G.collapsedFolders = View.readCollapsedFolders(storage());
+  return G.collapsedFolders;
+}
+
+function toggleFolderCollapsed(folderId) {
+  const set = collapsedFolders();
+  if (set.has(folderId)) set.delete(folderId);
+  else set.add(folderId);
+  View.writeCollapsedFolders(set, storage());
+  paint();
+}
+
+async function refreshFolders() {
+  try {
+    const r = await gwFetch("/api/lane-folders");
+    const j = await r.json();
+    if (Array.isArray(j.folders)) G.folders = j.folders;
+  } catch { /* the list poll will carry them on the next tick */ }
+}
+
+/**
+ * The unseen count is SERVER truth, applied in one place.
+ *
+ * Every path that can change it — a poll, an acknowledgement, a reconnect —
+ * funnels through here, so the lane indicators and the app tile can never
+ * disagree with each other or drift out of sync with the store.
+ */
+function applyUnseen(count, byLane) {
+  G.unseenCount = Number(count) || 0;
+  if (byLane && typeof byLane === "object") G.unseenByLane = byLane;
+  for (const lane of G.lanes || []) lane.unseen_notifications = G.unseenByLane[lane.lane_id] || 0;
+  View.applyAppBadge(G.unseenCount);
+}
+
+/**
+ * Opening a lane IS the acknowledgement — the operator is reading the answer.
+ * Acknowledge against the canonical owner and repaint from ITS reply, never
+ * from an optimistic local guess.
+ */
+async function acknowledgeLane(laneId) {
+  if (!laneId) return;
+  if (!(G.unseenByLane?.[laneId] > 0)) return;
+  try {
+    const r = await gwFetch("/api/notifications/seen", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lane_id: laneId }),
+    });
+    const j = await r.json();
+    if (j.ok) { applyUnseen(j.unseen_count, j.unseen_by_lane); paint(); }
+  } catch { /* the next list poll reconciles */ }
+}
+
 /** Entering a lane is always chat-first. */
 function resetAsideForLaneEntry() {
   if (isMobileWidth()) G.asideOpen = false;
@@ -900,7 +967,11 @@ function paint() {
     draft: saved?.value ?? getDraft(G.selected),
   };
   const map = attentionMap();
-  maybeNotify(map);
+  // NO CLIENT-SIDE NOTIFIER. maybeNotify() used to fire browser notifications
+  // from the poll loop, deduped only by an in-memory map — so every refresh,
+  // reconnect or tab reopen re-announced work the operator had already seen,
+  // and it raced the server's own push for the same event. The Gateway's
+  // durable notification record is now the single producer.
   const outputForSelected = View.outputBelongsToLane(G.output, G.selected, outputLane(G.selected)) ? G.output : null;
   view.innerHTML = View.renderGatewayShell({
     lanes: G.lanes,
@@ -927,6 +998,18 @@ function paint() {
     listReady: G.listReady,
     loading: G.loading,
     connect: G.connect,
+    folders: G.folders,
+    collapsedFolders: collapsedFolders(),
+    repositories: G.repositories,
+    repositorySheet: G.repositorySheet,
+    laneWizard: G.laneWizard,
+    cancelPending: G.cancelPending,
+    attachments: G.attachments,
+    attachmentsUploading: G.attachmentsUploading,
+    attachmentError: G.attachmentError,
+    lightbox: G.lightbox,
+    providers: G.providers,
+    settings: View.parseGatewayHash(location.hash).name === "settings",
   });
   paintRail();
   restoreComposer(saved);
@@ -936,7 +1019,10 @@ function paint() {
   const ta = document.getElementById("gw-instruction");
   if (count && ta) count.textContent = `${ta.value.length.toLocaleString()} characters`;
   autosizeInstruction(ta);
-  if (G.selected && G.lane?.lane_id === G.selected) markViewed(G.selected);
+  if (G.selected && G.lane?.lane_id === G.selected) {
+    markViewed(G.selected);
+    acknowledgeLane(G.selected);
+  }
 }
 
 function stopOutputPoll() {
@@ -1196,6 +1282,24 @@ async function show(r) {
   const route = parsed.name ? parsed : (r && typeof r === "object"
     ? { name: r.name || "lanes", sub: View.decodeLaneId(r.sub) }
     : parsed);
+  if (route.name === "settings") {
+    G.selected = null;
+    G.lane = null;
+    G.loading = false;
+    paint();
+    stopOutputPoll();
+    stopTelemetryPoll();
+    startListPoll();
+    fetchProviders().then(() => { if (gen === G.showGen) paint(); }).catch(() => {});
+    if (!G.listReady) {
+      try { await fetchLanes(); } catch { G.lanes = G.lanes || []; }
+      if (gen !== G.showGen) return;
+      G.listReady = true;
+      paint();
+    }
+    return;
+  }
+  if (!G.providers && !G.providersInflight) fetchProviders().then(() => paint()).catch(() => {});
   const nextId = route.name === "lanes" ? (route.sub || null) : null;
   const connecting = nextId === "connect" || nextId === "create";
   if (G.selected !== nextId) {
@@ -1285,8 +1389,16 @@ async function show(r) {
       G.threadEntered = false;
       G.threadNewUpdate = false;
       G.asideHistory = false;
+      // Draft attachments belong to ONE lane. Carrying them across would attach
+      // a screenshot to the wrong prompt, and the server would refuse it anyway.
+      G.attachments = [];
+      G.attachmentError = null;
+      G.lightbox = null;
       resetAsideForLaneEntry();
     }
+    // A refresh mid-draft must not lose images the operator already picked:
+    // they are durable server-side, so re-read them rather than assuming none.
+    hydrateAttachments(G.selected);
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1404,6 +1516,12 @@ async function sendCurrent() {
     paint();
     return;
   }
+  // A half-uploaded image must never be silently dropped from the prompt.
+  if (G.attachmentsUploading > 0) {
+    G.notice = { kind: "err", text: "Wait for the images to finish uploading." };
+    paint();
+    return;
+  }
   G.sending = true;
   G.notice = { kind: "idle", text: "Sending…" };
   paint();
@@ -1414,6 +1532,7 @@ async function sendCurrent() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(View.buildSendBody(instruction, {
         provider: document.getElementById("gw-composer-provider")?.value,
+        attachmentIds: (G.attachments || []).map((a) => a.attachment_id),
       })),
     });
     result = await r.json();
@@ -1429,6 +1548,9 @@ async function sendCurrent() {
     setDraft(id, "");
     const box = document.getElementById("gw-instruction");
     if (box) box.value = "";
+    // The images are now the run's, not the draft's.
+    G.attachments = [];
+    G.attachmentError = null;
     const rec = result.last_instruction || {
       instruction,
       delivered_at: result.delivered_at,
@@ -1851,6 +1973,145 @@ document.addEventListener("click", async (e) => {
     paint();
     return;
   }
+  const cancelRun = e.target?.closest?.("[data-gw-cancel-run]");
+  if (cancelRun) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (cancelRun.disabled || G.cancelPending) return;
+    const run = G.lane?.execution_run;
+    // Interrupting real work needs an explicit yes; taking back something the
+    // agent never received does not.
+    const delivered = cancelRun.getAttribute("data-gw-cancel-delivered") === "1";
+    if (delivered && !window.confirm(View.cancelConfirmCopy(run))) return;
+    G.cancelPending = true;
+    paint();
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(G.selected)}/run/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ run_id: run?.run_id || null, confirm: true }),
+      });
+      const j = await r.json();
+      G.notice = j.ok
+        ? { kind: "ok", text: j.interrupted
+            ? "Prompt stopped. Your lane, branch, worktree and conversation are kept."
+            : "Prompt cancelled. The agent was not interrupted — check the pane if it is still working." }
+        : { kind: "err", text: View.cancelErrorText(j.error) };
+      if (j.ok) { try { await fetchLane(G.selected); } catch { /* poll catches up */ } }
+    } catch {
+      G.notice = { kind: "err", text: "Could not reach the Gateway. The prompt was not cancelled." };
+    } finally {
+      G.cancelPending = false;
+      paint();
+    }
+    return;
+  }
+  const repoToggle = e.target?.closest?.("[data-gw-repo-toggle]");
+  if (repoToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    // Repository collapse shares the folder preference store, keyed apart so a
+    // folder and a repository can never collide on one id.
+    toggleFolderCollapsed(`repo:${repoToggle.getAttribute("data-gw-repo-toggle")}`);
+    return;
+  }
+  const addLane = e.target?.closest?.("[data-gw-add]");
+  if (addLane) {
+    e.preventDefault();
+    e.stopPropagation();
+    openLaneWizard();
+    return;
+  }
+  const repoNew = e.target?.closest?.("[data-gw-repo-new]");
+  if (repoNew) {
+    e.preventDefault();
+    e.stopPropagation();
+    await addRepositoryFlow();
+    return;
+  }
+  const folderToggle = e.target?.closest?.("[data-gw-folder-toggle]");
+  if (folderToggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFolderCollapsed(folderToggle.getAttribute("data-gw-folder-toggle"));
+    return;
+  }
+  const folderNew = e.target?.closest?.("[data-gw-folder-new]");
+  if (folderNew) {
+    e.preventDefault();
+    e.stopPropagation();
+    const name = window.prompt("New folder name", "");
+    if (name == null || !name.trim()) return;
+    try {
+      const r = await gwFetch("/api/lane-folders/create", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const j = await r.json();
+      if (!j.ok) {
+        G.notice = { kind: "error", text: folderErrorText(j.error) };
+      } else {
+        await refreshFolders();
+      }
+      paint();
+    } catch { /* */ }
+    return;
+  }
+  const folderRename = e.target?.closest?.("[data-gw-folder-rename]");
+  if (folderRename) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = folderRename.getAttribute("data-gw-folder-rename");
+    const current = (G.folders || []).find((f) => f.folder_id === id)?.name || "";
+    const name = window.prompt("Rename folder", current);
+    if (name == null || !name.trim()) return;
+    try {
+      const r = await gwFetch(`/api/lane-folders/${encodeURIComponent(id)}/rename`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const j = await r.json();
+      if (!j.ok) G.notice = { kind: "error", text: folderErrorText(j.error) };
+      else await refreshFolders();
+      paint();
+    } catch { /* */ }
+    return;
+  }
+  const folderDelete = e.target?.closest?.("[data-gw-folder-delete]");
+  if (folderDelete) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = folderDelete.getAttribute("data-gw-folder-delete");
+    const folder = (G.folders || []).find((f) => f.folder_id === id) || null;
+    const count = Number(folder?.lane_count) || 0;
+    // Say plainly what survives: an operator must never have to guess whether
+    // deleting a folder deletes the lanes in it.
+    const msg = count
+      ? `Delete the folder "${folder?.name || id}"? The ${count} lane${count === 1 ? "" : "s"} inside stay exactly as they are and become unfiled.`
+      : `Delete the folder "${folder?.name || id}"?`;
+    if (!window.confirm(msg)) return;
+    try {
+      const r = await gwFetch(`/api/lane-folders/${encodeURIComponent(id)}/delete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json();
+      if (!j.ok) G.notice = { kind: "error", text: folderErrorText(j.error) };
+      else {
+        const set = collapsedFolders();
+        set.delete(id);
+        View.writeCollapsedFolders(set, storage());
+        G.lanes = (G.lanes || []).map((l) => (l.folder_id === id ? { ...l, folder_id: null } : l));
+        if (G.lane?.folder_id === id) G.lane = { ...G.lane, folder_id: null };
+        await refreshFolders();
+      }
+      paint();
+    } catch { /* */ }
+    return;
+  }
   const renameBtn = e.target?.closest?.("[data-gw-rename]");
   if (renameBtn) {
     e.preventDefault();
@@ -2020,3 +2281,443 @@ fetch("/api/gateway/session", { cache: "no-store", credentials: "same-origin" })
   .then((r) => r.json())
   .then((j) => { if (j.authRequired && !j.authenticated) showLogin(); })
   .catch(() => {});
+
+/** Folder failures in operator language, not store error codes. */
+function folderErrorText(error) {
+  if (error === "folder_name_taken") return "A folder with that name already exists.";
+  if (error === "folder_name_empty") return "A folder needs a name.";
+  if (error === "folder_name_too_large") return "That folder name is too long.";
+  if (error === "folder_name_invalid") return "That folder name contains characters that cannot be shown.";
+  if (error === "folder_limit_reached") return "You have reached the folder limit.";
+  if (error === "folder_not_found") return "That folder no longer exists.";
+  if (error === "lane_not_found") return "That lane no longer exists.";
+  return "Could not update folders.";
+}
+
+document.addEventListener("change", async (e) => {
+  const pick = e.target?.closest?.("[data-gw-folder-select]");
+  if (!pick) return;
+  const laneId = pick.getAttribute("data-lane-id");
+  const folderId = pick.value || null;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/folder`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ folder_id: folderId }),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      G.notice = { kind: "error", text: folderErrorText(j.error) };
+    } else {
+      // Repaint from the answer the store gave, not from what was clicked.
+      G.lanes = (G.lanes || []).map((l) => (l.lane_id === laneId ? { ...l, folder_id: j.folder_id ?? null } : l));
+      if (G.lane?.lane_id === laneId) G.lane = { ...G.lane, folder_id: j.folder_id ?? null };
+      await refreshFolders();
+    }
+    paint();
+  } catch { /* */ }
+});
+
+// ---------------------------------------------------------------------------
+// Image attachments on the operator prompt.
+//
+// Three entry points, one upload path: the file picker, a clipboard paste, and
+// a drop onto the composer. Everything funnels through uploadAttachments so the
+// draft-preservation and error rules can only be written once.
+// ---------------------------------------------------------------------------
+const ATTACHMENT_TYPES = new Set([
+  "image/png", "image/jpeg", "image/webp", "image/gif",
+  "application/pdf", "text/html",
+]);
+
+async function uploadAttachments(files) {
+  const laneId = G.selected;
+  if (!laneId) return;
+  const list = Array.from(files || []).filter((f) => {
+    if (!f) return false;
+    if (ATTACHMENT_TYPES.has(f.type) || !f.type) return true;
+    // Browsers report .htm/.html inconsistently; the server sniffs the bytes,
+    // so an extension match is enough to let it make the real decision.
+    return /\.(html?|pdf)$/i.test(f.name || "");
+  });
+  if (!list.length) {
+    if ((files || []).length) {
+      G.attachmentError = View.attachmentErrorText("unsupported_media_type");
+      paint();
+    }
+    return;
+  }
+  G.attachmentsUploading += list.length;
+  G.attachmentError = null;
+  paint();
+  for (const file of list) {
+    try {
+      const bytes = await file.arrayBuffer();
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/attachments`, {
+        method: "POST",
+        headers: {
+          "content-type": file.type || "application/octet-stream",
+          // A LABEL, not a path. The server sanitizes it and never touches the
+          // filesystem with it. Header values must be latin-1, so a non-ASCII
+          // filename is encoded rather than throwing and losing the upload.
+          "x-attachment-filename": encodeURIComponent(file.name || "image"),
+        },
+        body: bytes,
+      });
+      const j = await r.json();
+      if (j.ok && j.attachment) {
+        G.attachments = [...G.attachments, j.attachment];
+      } else {
+        // One bad file must not discard the draft or the images that worked.
+        G.attachmentError = View.attachmentErrorText(j.error, j);
+      }
+    } catch {
+      G.attachmentError = "That file could not be uploaded. Your draft is still here.";
+    } finally {
+      G.attachmentsUploading = Math.max(0, G.attachmentsUploading - 1);
+      paint();
+    }
+  }
+}
+
+async function hydrateAttachments(laneId) {
+  if (!laneId) return;
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/attachments`);
+    const j = await r.json();
+    if (j.ok && Array.isArray(j.attachments) && G.selected === laneId) {
+      G.attachments = j.attachments;
+      paint();
+    }
+  } catch { /* an empty strip is the safe default */ }
+}
+
+async function removeAttachment(attachmentId) {
+  const laneId = G.selected;
+  if (!laneId || !attachmentId) return;
+  const before = G.attachments;
+  G.attachments = G.attachments.filter((a) => a.attachment_id !== attachmentId);
+  G.attachmentError = null;
+  paint();
+  try {
+    const r = await gwFetch(
+      `/api/lanes/${encodeURIComponent(laneId)}/attachments/${encodeURIComponent(attachmentId)}/remove`,
+      { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({}) },
+    );
+    const j = await r.json();
+    if (!j.ok) {
+      // Put it back rather than showing a prompt that no longer matches what
+      // the server will actually send.
+      G.attachments = before;
+      G.attachmentError = View.attachmentErrorText(j.error, j);
+      paint();
+    }
+  } catch {
+    G.attachments = before;
+    G.attachmentError = "Could not remove that file.";
+    paint();
+  }
+}
+
+document.addEventListener("change", (e) => {
+  const input = e.target?.closest?.("[data-gw-attach-input]");
+  if (!input) return;
+  const files = input.files;
+  // Clear the input so picking the same file twice in a row still fires.
+  uploadAttachments(files).finally(() => { try { input.value = ""; } catch { /* */ } });
+});
+
+document.addEventListener("click", (e) => {
+  const rm = e.target?.closest?.("[data-gw-att-remove]");
+  if (rm) {
+    e.preventDefault();
+    e.stopPropagation();
+    removeAttachment(rm.getAttribute("data-gw-att-remove"));
+    return;
+  }
+  const open = e.target?.closest?.("[data-gw-att-open]");
+  if (open) {
+    e.preventDefault();
+    e.stopPropagation();
+    const id = open.getAttribute("data-gw-att-open");
+    const run = G.lane?.execution_run || G.lane?.previous_run;
+    const found = (run?.attachments || []).find((a) => a.attachment_id === id);
+    if (found) { G.lightbox = found; paint(); }
+    return;
+  }
+  if (e.target?.closest?.("[data-gw-lightbox-close]") || e.target?.closest?.("[data-gw-lightbox]")) {
+    if (G.lightbox) { e.preventDefault(); G.lightbox = null; paint(); }
+  }
+}, true);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && G.lightbox) { G.lightbox = null; paint(); }
+});
+
+// Clipboard paste: a screenshot on the clipboard is the fastest way in, and it
+// must not also paste a filename into the textarea.
+document.addEventListener("paste", (e) => {
+  if (!G.selected) return;
+  const items = Array.from(e.clipboardData?.items || []);
+  const files = items.filter((i) => i.kind === "file" && ATTACHMENT_TYPES.has(i.type))
+    .map((i) => i.getAsFile()).filter(Boolean);
+  if (!files.length) return;
+  e.preventDefault();
+  uploadAttachments(files);
+});
+
+// Drag and drop onto the composer.
+document.addEventListener("dragover", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (!box || !G.selected) return;
+  e.preventDefault();
+  box.classList.add("is-dropping");
+});
+document.addEventListener("dragleave", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (box) box.classList.remove("is-dropping");
+});
+document.addEventListener("drop", (e) => {
+  const box = e.target?.closest?.("[data-gw-composer]");
+  if (!box || !G.selected) return;
+  e.preventDefault();
+  box.classList.remove("is-dropping");
+  uploadAttachments(e.dataTransfer?.files);
+});
+
+// ---------------------------------------------------------------------------
+// Add repository — Connect local only in this slice.
+//
+// The flow INSPECTS before it registers, so the operator confirms what the path
+// actually is (a repository or a worktree of one, its branch, whether it has a
+// remote) rather than finding out afterwards. Clone is not implemented and says
+// so instead of offering a button that fails.
+// ---------------------------------------------------------------------------
+function addRepositoryFlow() {
+  // Opens the sheet. Nothing is validated and nothing is registered until the
+  // operator asks for it.
+  G.repositorySheet = { method: "connect", path: "", name: null, validation: null, error: null };
+  paint();
+}
+
+async function validateRepositoryPath() {
+  const st = G.repositorySheet;
+  if (!st || st.validating) return;
+  const path = String(st.path || "").trim();
+  if (!path) return;
+  st.validating = true; st.error = null; st.validation = null;
+  paint();
+  try {
+    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(path)}`);
+    const j = await r.json();
+    if (!j.ok) { st.error = j.error; st.errorDetail = j; }
+    else {
+      // Read-only: this endpoint persists nothing.
+      st.validation = j;
+      st.name = st.name ?? View.suggestRepositoryName(j.root);
+    }
+  } catch {
+    st.error = "network";
+    st.errorDetail = {};
+  } finally {
+    st.validating = false;
+    paint();
+  }
+}
+
+async function confirmRepositoryRegistration() {
+  const st = G.repositorySheet;
+  if (!st?.validation || st.submitting) return;   // double-submit guard
+  st.submitting = true; st.error = null;
+  paint();
+  try {
+    const r = await gwFetch("/api/repositories/connect-local", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ path: st.validation.path, name: st.name || null }),
+    });
+    const j = await r.json();
+    if (!j.ok) { st.error = j.error; st.errorDetail = j; st.submitting = false; paint(); return; }
+    G.repositorySheet = null;
+    G.notice = { kind: "ok", text: `Registered ${j.repository.name}.` };
+    try { await fetchLanes(); } catch { /* the poll catches up */ }
+    paint();
+  } catch {
+    st.error = "network"; st.errorDetail = {}; st.submitting = false; paint();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sheet + wizard interaction.
+//
+// Nothing here writes anything durable until the final confirm. Values live in
+// G.repositorySheet / G.laneWizard.draft, so Back preserves what was typed and
+// Cancel throws the whole thing away without leaving a record behind.
+// ---------------------------------------------------------------------------
+function openLaneWizard() {
+  const viewing = (G.lanes || []).find((l) => l.lane_id === G.selected);
+  G.laneWizard = {
+    step: "repository",
+    // Default to the repository the operator is already looking at.
+    draft: { repository_id: viewing?.repository_id || G.repositories?.[0]?.repository_id || null, provider: "claude" },
+    error: null,
+  };
+  paint();
+}
+
+function closeSheets() {
+  G.repositorySheet = null;
+  G.laneWizard = null;
+  paint();
+}
+
+async function wizardValidateWorktree() {
+  const w = G.laneWizard;
+  if (!w?.draft?.worktree_path) return;
+  w.connectCheck = null;
+  paint();
+  try {
+    const r = await gwFetch(`/api/repositories/inspect?path=${encodeURIComponent(w.draft.worktree_path)}`);
+    const j = await r.json();
+    const repo = (G.repositories || []).find((x) => x.repository_id === w.draft.repository_id);
+    if (!j.ok) {
+      w.connectCheck = { ok: false, text: View.repositoryErrorText(j.error, j) };
+    } else if (repo && j.git_common_dir !== repo.git_common_dir) {
+      // The cross-repository refusal, surfaced before anything is created.
+      w.connectCheck = { ok: false, text: `That worktree belongs to a different repository (${j.git_common_dir}).` };
+    } else {
+      w.connectCheck = { ok: true, branch: j.branch, git_common_dir: j.git_common_dir };
+    }
+  } catch {
+    w.connectCheck = { ok: false, text: "Could not reach the Gateway." };
+  }
+  paint();
+}
+
+async function wizardCreate() {
+  const w = G.laneWizard;
+  if (!w || w.submitting) return;            // double-submit guard
+  const d = w.draft || {};
+  w.submitting = true; w.error = null;
+  paint();
+  try {
+    // A folder named in the wizard is created first, so the lane can be filed
+    // into it in the same confirmed action.
+    let folderId = d.folder_id || null;
+    if (d.new_folder && String(d.new_folder).trim()) {
+      const fr = await gwFetch("/api/lane-folders/create", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: d.new_folder, repository_id: d.repository_id }),
+      });
+      const fj = await fr.json();
+      if (fj.ok) folderId = fj.folder.folder_id;
+    }
+    const body = {
+      name: d.name,
+      provider: d.provider || "claude",
+      repository_id: d.repository_id,
+      workspace_mode: d.workspace_mode,
+    };
+    if (d.workspace_mode === "new_worktree" && d.branch_suffix) body.branch = d.branch_suffix;
+    if (d.workspace_mode === "connect_existing") body.worktree_path = d.worktree_path;
+    const r = await gwFetch("/api/lanes/create", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+    });
+    const j = await r.json();
+    if (!j.ok) {
+      w.error = j.error;
+      w.errorText = View.repositoryErrorText(j.error, j);
+      w.submitting = false;
+      paint();
+      return;
+    }
+    if (folderId && j.lane?.lane_id) {
+      await gwFetch(`/api/lanes/${encodeURIComponent(j.lane.lane_id)}/folder`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ folder_id: folderId }),
+      }).catch(() => {});
+    }
+    G.laneWizard = null;
+    try { await fetchLanes(); } catch { /* */ }
+    // Land in the new lane's chat, which is where the operator wants to be.
+    if (j.lane?.lane_id) location.hash = View.laneDetailHash(j.lane.lane_id);
+    else paint();
+  } catch {
+    w.error = "network";
+    w.errorText = "Could not reach the Gateway. Nothing was created.";
+    w.submitting = false;
+    paint();
+  }
+}
+
+document.addEventListener("input", (e) => {
+  const t = e.target;
+  if (!t) return;
+  if (t.matches?.("[data-gw-repo-path]") && G.repositorySheet) { G.repositorySheet.path = t.value; return; }
+  if (t.matches?.("[data-gw-repo-name]") && G.repositorySheet) { G.repositorySheet.name = t.value; return; }
+  if (!G.laneWizard) return;
+  const d = G.laneWizard.draft;
+  if (t.matches?.("[data-gw-wiz-name]")) d.name = t.value;
+  else if (t.matches?.("[data-gw-wiz-newfolder]")) { d.new_folder = t.value; if (t.value) d.folder_id = null; }
+  else if (t.matches?.("[data-gw-wiz-suffix]")) d.branch_suffix = t.value;
+  else if (t.matches?.("[data-gw-wiz-worktree]")) { d.worktree_path = t.value; G.laneWizard.connectCheck = null; }
+});
+
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  const hit = (sel) => t?.closest?.(sel);
+
+  if (hit("[data-gw-sheet-cancel]")) { e.preventDefault(); closeSheets(); return; }
+  if (hit("[data-gw-repo-validate]")) { e.preventDefault(); await validateRepositoryPath(); return; }
+  if (hit("[data-gw-repo-confirm]")) { e.preventDefault(); await confirmRepositoryRegistration(); return; }
+  const method = hit("[data-gw-repo-method]");
+  if (method && G.repositorySheet) {
+    e.preventDefault();
+    G.repositorySheet.method = method.getAttribute("data-gw-repo-method");
+    paint();
+    return;
+  }
+
+  if (!G.laneWizard) return;
+  const w = G.laneWizard;
+  const d = w.draft;
+  const repo = hit("[data-gw-wiz-repo]");
+  if (repo) {
+    e.preventDefault();
+    const next = repo.getAttribute("data-gw-wiz-repo");
+    // Changing repository invalidates every choice that was scoped to the old
+    // one; keeping them would offer another repository's folder.
+    if (next !== d.repository_id) { d.repository_id = next; d.folder_id = null; d.new_folder = ""; d.worktree_path = ""; w.connectCheck = null; }
+    paint();
+    return;
+  }
+  if (hit("[data-gw-wiz-add-repo]")) { e.preventDefault(); addRepositoryFlow(); return; }
+  const folder = hit("[data-gw-wiz-folder]");
+  if (folder) { e.preventDefault(); d.folder_id = folder.getAttribute("data-gw-wiz-folder") || null; d.new_folder = ""; paint(); return; }
+  const mode = hit("[data-gw-wiz-mode]");
+  if (mode) {
+    e.preventDefault();
+    d.workspace_mode = mode.getAttribute("data-gw-wiz-mode");
+    if (d.workspace_mode === "planning") { d.provider = null; d.worktree_path = ""; w.connectCheck = null; }
+    if (d.workspace_mode === "new_worktree") { d.worktree_path = ""; w.connectCheck = null; }
+    paint();
+    return;
+  }
+  const prov = hit("[data-gw-wiz-provider]");
+  if (prov && !prov.disabled) { e.preventDefault(); d.provider = prov.getAttribute("data-gw-wiz-provider") || null; paint(); return; }
+  if (hit("[data-gw-wiz-validate-wt]")) { e.preventDefault(); await wizardValidateWorktree(); return; }
+  if (hit("[data-gw-wiz-back]")) { e.preventDefault(); w.step = View.prevLaneStep(w.step); w.error = null; paint(); return; }
+  if (hit("[data-gw-wiz-next]")) {
+    e.preventDefault();
+    if (w.step === "identity" && !String(d.name || "").trim()) {
+      w.nameError = "Give this lane a name.";
+      paint();
+      return;
+    }
+    w.nameError = null;
+    w.step = View.nextLaneStep(w.step, d);
+    paint();
+    return;
+  }
+  if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
+});

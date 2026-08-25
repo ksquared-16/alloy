@@ -63,7 +63,7 @@ export function developmentLaneStorePath(root = runtimeRoot()) {
 }
 
 function emptyStore() {
-  return { schema_version: DEVELOPMENT_LANE_SCHEMA, lanes: {} };
+  return { schema_version: DEVELOPMENT_LANE_SCHEMA, lanes: {}, folders: {} };
 }
 
 export function readDevelopmentLaneStore(root = runtimeRoot()) {
@@ -73,6 +73,10 @@ export function readDevelopmentLaneStore(root = runtimeRoot()) {
     return {
       schema_version: DEVELOPMENT_LANE_SCHEMA,
       lanes: raw.lanes && typeof raw.lanes === "object" ? raw.lanes : {},
+      // This normalisation drops every top-level key it does not name, so a
+      // store shape that is not listed here is silently erased on the next
+      // write. Folders live in the same file and must be carried forward.
+      folders: raw.folders && typeof raw.folders === "object" ? raw.folders : {},
     };
   } catch {
     return emptyStore();
@@ -82,6 +86,11 @@ export function readDevelopmentLaneStore(root = runtimeRoot()) {
 function writeStore(store, root) {
   atomicWrite(developmentLaneStorePath(root), store);
   return store;
+}
+
+/** Same writer, exported so lane-folders.mjs persists through one code path. */
+export function writeDevelopmentLaneStore(store, root = runtimeRoot()) {
+  return writeStore(store, root);
 }
 
 export function newDurableLaneId() {
@@ -231,6 +240,7 @@ export function createDurableLane({
   work_class = WORK_CLASS_PRODUCT,
   scarce_resource_priority = null,
   preferred_provider = null,
+  repository_id = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
 } = {}) {
@@ -282,6 +292,10 @@ export function createDurableLane({
       "claude",
     ) || "claude",
     binding: binding ? normalizeBinding(binding, { root }) : null,
+    folder_id: null,
+    // Which repository this lane executes in. A folder is presentation; this is
+    // the execution boundary, and it is never changed by reorganising a list.
+    repository_id: repository_id ? String(repository_id) : null,
   };
   const store = readDevelopmentLaneStore(root);
   store.lanes[rec.lane_id] = rec;
@@ -850,7 +864,36 @@ export function publicDurableLane(rec) {
     mission_bound_at: rec.mission_bound_at || null,
     preferred_provider: normalizeExecutionProvider(rec.preferred_provider || rec.binding?.provider, "claude") || "claude",
     execution_capacity: rec.execution_capacity || null,
+    folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
   };
+}
+
+/**
+ * Attribute a lane to a repository.
+ *
+ * Deliberately NOT reachable from folder reorganisation: moving a lane between
+ * folders is presentation, moving it between repositories changes where its
+ * provider is allowed to run. `expectCurrent` makes a rebind explicit — a
+ * caller must state what it believes the current attribution is.
+ */
+export function setLaneRepository(laneId, repositoryId, {
+  expectCurrent = undefined,
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const store = readDevelopmentLaneStore(root);
+  const id = canonicalLaneStoreId(laneId, root);
+  const rec = store.lanes?.[id] || store.lanes?.[String(laneId || "")];
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  const current = rec.repository_id || null;
+  if (expectCurrent !== undefined && current !== expectCurrent) {
+    return { ok: false, error: "repository_attribution_conflict", current };
+  }
+  rec.repository_id = repositoryId ? String(repositoryId) : null;
+  rec.updated_at = iso(nowMs);
+  writeStore(store, root);
+  return { ok: true, lane_id: rec.lane_id, repository_id: rec.repository_id, previous: current };
 }
 
 export function resetDevelopmentLanesForTests(root = runtimeRoot()) {

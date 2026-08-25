@@ -368,6 +368,30 @@ function refused(laneId, error, nowMs, size, run = null) {
   }, run);
 }
 
+async function ensureCursorDeliveryTransport({ rec, nowMs, root }) {
+  try {
+    const { getDevelopmentLane, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } = await import("./lanes.mjs");
+    const found = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
+    if (cursorExecutableTransport(found?.lane).ok) return { ok: true };
+    try {
+      const { setLanePreferredProvider } = await import("./development-lane.mjs");
+      setLanePreferredProvider(rec.lane_id, "cursor", { nowMs, root });
+    } catch { /* send still owns the Cursor attempt */ }
+    const { startLaneAgentSession } = await import("./agent-session-lifecycle.mjs");
+    const start = await startLaneAgentSession({ laneId: rec.lane_id, nowMs, root, origin: "operator" });
+    if (start?.queued || start?.waiting_for_execution_capacity || start?.error === "provider_capacity") {
+      return { ok: false, queue: true };
+    }
+    if (!start?.ok) {
+      return { ok: false, error: start?.error || CURSOR_DELIVERY_UNAVAILABLE };
+    }
+    const again = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
+    if (cursorExecutableTransport(again?.lane).ok) return { ok: true, started: true };
+    return { ok: false, queue: true };
+  } catch (e) {
+    return { ok: false, error: e?.message || "cursor_delivery_unavailable" };
+  }
+}
 async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
   const { transitionExecutionRun, patchRunFields, getExecutionRun } = await import("./execution-run.mjs");
   const { CURSOR_DELIVERY_UNAVAILABLE, CURSOR_DELIVERY_UNAVAILABLE_SUMMARY } = await import("./lanes.mjs");
@@ -408,12 +432,59 @@ async function failCursorDeliveryUnavailable({ rec, run, nowMs, root, size }) {
  * NEEDS_INPUT: operator send continues the same run (decision reply).
  * Other non-terminal states: refuse current_run_active.
  */
+/**
+ * A run exists, but its images could not be prepared.
+ *
+ * The run must NOT proceed to EXECUTING and must NOT be delivered as text-only:
+ * the operator wrote about a picture. FAILED with an explicit reason is the
+ * closest valid existing state — no new ungoverned state is invented — and the
+ * attachment records keep their own error for the operator to read.
+ */
+function failAttachmentPreparation({ run, laneId, nowMs, root, size, error }) {
+  try {
+    transitionExecutionRun(run.run_id, "FAILED", {
+      reason: `attachment_preparation_failed:${error}`,
+      origin: "system",
+      nowMs,
+      root,
+    });
+  } catch { /* the refusal below is what the operator sees either way */ }
+  return refused(laneId, error, nowMs, size, activeRunForLane(laneId, root) || run);
+}
+
 export async function deliverManagedLaneInstruction(laneId, instruction, opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
   const root = opts.root;
   const send = opts.sendLaneInstruction || sendLaneInstruction;
   const text = String(instruction ?? "");
   const size = text.length;
+
+  // ---------------------------------------------------------------------
+  // Attachments are validated BEFORE any run is created or continued.
+  //
+  // A prompt with images is one prompt: if an image cannot be delivered, the
+  // operator must not end up with a run carrying text they wrote about a
+  // picture the provider never saw. Failing here leaves the draft and the
+  // attachment records untouched, so the operator can retry.
+  // ---------------------------------------------------------------------
+  const attachmentIds = Array.isArray(opts.attachmentIds)
+    ? opts.attachmentIds.map(String).filter(Boolean)
+    : [];
+  let A = null;
+  let promptKey = text;
+  if (attachmentIds.length) {
+    A = await import("./lane-attachments.mjs");
+    if (attachmentIds.length > A.ATTACHMENT_MAX_PER_PROMPT) {
+      return refused(laneId, "too_many_attachments", nowMs, size, null);
+    }
+    const preflight = A.validateAttachmentsForPrompt(attachmentIds, { laneId, root });
+    if (!preflight.ok) return refused(laneId, preflight.error, nowMs, size, null);
+    // Different images are a different prompt, so the duplicate window keys on
+    // text PLUS the ordered attachment checksums.
+    promptKey = A.promptFingerprint(text, preflight.attachments.map((a) => ({
+      checksum_sha256: a.checksum_sha256,
+    })));
+  }
 
   if (opts.provider) {
     try {
@@ -449,7 +520,7 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     } catch { /* fall through to current_run_active */ }
     return refused(laneId, "current_run_active", nowMs, size, active);
   }
-  if (active && active.state !== "NEEDS_INPUT") {
+  if (active) {
     try {
       const facts = collectStaleRunFacts(active, { root, nowMs });
       if (canOperatorSupersedeRun(active, facts)) {
@@ -479,20 +550,29 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     return refused(laneId, "send_in_progress", nowMs, size, active);
   }
 
-  if (!active && wouldDuplicateLaneSend(laneId, text, nowMs, opts.duplicateWindowMs)) {
+  if (!active && wouldDuplicateLaneSend(laneId, promptKey, nowMs, opts.duplicateWindowMs)) {
     return send(laneId, text, opts);
   }
 
   if (active?.state === "NEEDS_INPUT") {
-    const out = await send(laneId, text, {
+    let replyText = text;
+    if (A) {
+      const bound = A.bindAttachmentsToRun(attachmentIds, { laneId, runId: active.run_id, nowMs, root });
+      if (!bound.ok) return refused(laneId, bound.error, nowMs, size, active);
+      replyText = `${text}${A.providerAttachmentBlock(bound.attachments)}`;
+    }
+    const out = await send(laneId, replyText, {
       ...opts,
       nowMs,
-      dedupeKey: text,
+      dedupeKey: promptKey,
       duplicateWindowMs: 0,
     });
     if (!(out.ok && out.status === "delivered")) {
+      // Text did not land, so the images did not either. The attachments stay
+      // BOUND and undelivered rather than being marked as if they arrived.
       return decorate(out, active);
     }
+    if (A) A.markAttachmentsDelivered(active.run_id, { nowMs, root });
     try {
       await markDeliveryAcknowledged(active, out, {
         nowMs,
@@ -538,9 +618,17 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
   }
 
   let run = created.run;
+  // Bind BEFORE the eligibility branch below. A run that queues for a session
+  // must already own its images, or the later delivery would paste the text
+  // without them — the exact silent text-only send this must never do.
+  if (A) {
+    const bound = A.bindAttachmentsToRun(attachmentIds, { laneId, runId: run.run_id, nowMs, root });
+    if (!bound.ok) {
+      return failAttachmentPreparation({ run, laneId, nowMs, root, size, error: bound.error });
+    }
+  }
   try {
     const { getDurableLane } = await import("./development-lane.mjs");
-    const { getDevelopmentLane, cursorExecutableTransport } = await import("./lanes.mjs");
     const { normalizeExecutionProvider } = await import("./execution-providers.mjs");
     const rec = getDurableLane(laneId, root);
     if (rec) {
@@ -549,15 +637,13 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
         rec.binding?.provider || "claude",
       );
       if (selected === "cursor") {
-        const found = await getDevelopmentLane(rec.lane_id, { includeGitFacts: false });
-        const transport = cursorExecutableTransport(found?.lane || {
-          lane_id: rec.lane_id,
-          worktree: { managed: Boolean(rec.binding?.worktree_path), path: rec.binding?.worktree_path },
-          tmux: { alive: false },
-          binding: rec.binding,
-          preferred_provider: rec.preferred_provider,
-        });
-        if (!transport.ok) {
+        const ensured = await ensureCursorDeliveryTransport({ rec, nowMs, root });
+        if (ensured.queue) {
+          return queueWithoutImmediateDelivery({
+            rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+          });
+        }
+        if (!ensured.ok) {
           return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
         }
       }
@@ -568,13 +654,17 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
       }
     }
   } catch { /* fall through to live send */ }
-  const out = await send(laneId, executionEnvelope(run.run_id, text, { laneId }), {
+  const providerText = A
+    ? `${text}${A.providerAttachmentBlock(A.listRunAttachments(run.run_id, { root, includePath: true }))}`
+    : text;
+  const out = await send(laneId, executionEnvelope(run.run_id, providerText, { laneId }), {
     ...opts,
     nowMs,
-    dedupeKey: text,
+    dedupeKey: promptKey,
   });
 
   if (out.ok && out.status === "delivered") {
+    if (A) A.markAttachmentsDelivered(run.run_id, { nowMs, root });
     try {
       run = await markDeliveryAcknowledged(run, out, {
         nowMs,
@@ -622,7 +712,15 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
         rec.binding?.provider || "claude",
       );
       if (selected === "cursor") {
-        return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+        const ensured = await ensureCursorDeliveryTransport({ rec, nowMs, root });
+        if (ensured.queue) {
+          return queueWithoutImmediateDelivery({
+            rec, run, nowMs, root, size, reason: "waiting_for_agent_session",
+          });
+        }
+        if (!ensured.ok) {
+          return failCursorDeliveryUnavailable({ rec, run, nowMs, root, size });
+        }
       }
       const reason = bindingExists(rec) ? "waiting_for_agent_session" : "waiting_for_execution_capacity";
       return queueWithoutImmediateDelivery({ rec, run, nowMs, root, size, reason });
@@ -669,12 +767,26 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     }
   } catch { /* deliver if session store is unavailable */ }
   const send = opts.sendLaneInstruction || sendLaneInstruction;
-  const out = await send(run.lane_id, executionEnvelope(run.run_id, run.instruction, { laneId: run.lane_id }), {
+  // A queued run keeps its images. Admission delivers the SAME prompt the
+  // operator wrote, references included — a run that waited for a session must
+  // not arrive as text about pictures the provider was never given.
+  let queuedText = run.instruction;
+  let queuedAttachments = null;
+  try {
+    const A = await import("./lane-attachments.mjs");
+    const bound = A.listRunAttachments(run.run_id, { root, includePath: true });
+    if (bound.length) {
+      queuedAttachments = A;
+      queuedText = `${run.instruction}${A.providerAttachmentBlock(bound)}`;
+    }
+  } catch { /* text-only delivery is correct when there are no attachments */ }
+  const out = await send(run.lane_id, executionEnvelope(run.run_id, queuedText, { laneId: run.lane_id }), {
     ...opts,
     nowMs,
     dedupeKey: `admission:${run.run_id}`,
   });
   if (out.ok && out.status === "delivered") {
+    if (queuedAttachments) queuedAttachments.markAttachmentsDelivered(run.run_id, { nowMs, root });
     let next = run;
     try {
       next = await markDeliveryAcknowledged(run, out, {

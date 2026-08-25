@@ -63,6 +63,8 @@ import {
   renderLastInstruction,
   renderLaneSessionCallout,
   renderComposer,
+  cursorComposerAvailable,
+  renderProviderRuntimeSection,
   renderCurrentWork,
   renderPreviousWork,
   renderLaneRuntimeControls,
@@ -266,9 +268,11 @@ await test("old Mission Director is not the default primary experience", () => {
   assert.equal(defaultGatewayHash(), "#/lanes");
   assert.equal(GATEWAY_HOME, "#/lanes");
   assert.equal(isGatewayRoute("lanes"), true);
+  assert.equal(isGatewayRoute("settings"), true);
   assert.equal(isGatewayRoute("missions"), false);
   assert.equal(isPrimaryGatewayHash(""), true);
   assert.equal(isPrimaryGatewayHash("#/lanes/alloy-identity"), true);
+  assert.equal(isPrimaryGatewayHash("#/settings"), true);
   assert.match(htmlSrc, /Development Gateway/);
   assert.equal(htmlSrc.includes("Vacilando<b>OS</b>"), false);
   assert.equal(htmlSrc.includes("Engineering Operating System"), false);
@@ -291,7 +295,7 @@ await test("resource/status calls do not introduce expensive polling fan-out", (
   assert.equal(viewSrc.includes('fetch("/api/state")'), false);
   assert.equal(gwSrc.includes('fetch("/api/resources")'), false);
   assert.equal(gwSrc.includes('fetch("/api/state")'), false);
-  assert.match(appSrc, /if \(parseRoute\(\)\.name === "lanes"\)/);
+  assert.match(appSrc, /if \(parseRoute\(\)\.name === "lanes" \|\| parseRoute\(\)\.name === "settings"\)/);
   assert.equal(shouldPollOutput({ hidden: true, routeName: "lanes", laneId: "alloy-identity" }), false);
   assert.equal(shouldPollOutput({ hidden: false, routeName: "lanes", laneId: "alloy-identity" }), true);
   assert.equal(shouldPollList({ hidden: false, routeName: "missions" }), false);
@@ -1955,8 +1959,18 @@ await test("canonical work state maps live execution to Working and stale heartb
     previous_run: { state: "COMPLETE" },
   }, { nowMs: now });
   assert.equal(idle.label, "Idle");
+  const thinking = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 180_000,
+  }, { output: { captured_at: new Date(now - 180_000).toISOString() }, nowMs: now });
+  assert.equal(thinking.label, "Working");
+  assert.equal(thinking.stale, false);
   const stale = canonicalLaneWorkState({
     ...identity,
+    tmux: { alive: false },
+    claude: { presence: "absent" },
+    agent_session: { state: "ENDED" },
     execution_run: { state: "EXECUTING" },
     last_activity_ms: now - 180_000,
   }, { output: { captured_at: new Date(now - 180_000).toISOString() }, nowMs: now });
@@ -2033,6 +2047,58 @@ await test("merged historical git is not shown as behind on the lane list", () =
   assert.equal(html.includes("88 behind"), false);
   assert.equal(html.includes("Sync required"), false);
   assert.match(gitLine(merged.git, merged.source_control), /Merged/);
+});
+
+await test("Cursor composer option is enabled when Cursor is authenticated", () => {
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "needs_auth" } }] } }), false);
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "unavailable" } }] } }), false);
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "authenticated" } }] } }), true);
+  assert.equal(cursorComposerAvailable({
+    providers: { providers: [{ id: "cursor", auth: { state: "unknown" }, executable: "/x/cursor-agent" }] },
+  }), true);
+  const enabled = renderComposer({
+    provider: "cursor",
+    cursorSendAvailable: true,
+  });
+  assert.match(enabled, /data-gw-provider-opt="cursor"/);
+  assert.doesNotMatch(enabled, /data-gw-provider-opt="cursor"[^>]*disabled/);
+  const shell = renderGatewayShell({
+    lanes: [identity],
+    selectedId: identity.lane_id,
+    lane: { ...identity, preferred_provider: "cursor" },
+    listReady: true,
+    providers: { providers: [{ id: "cursor", auth: { state: "authenticated", label: "Signed in" } }] },
+  });
+  assert.doesNotMatch(shell, /data-gw-provider-opt="cursor"[^>]*disabled/);
+});
+
+await test("Gateway settings renders Claude and Cursor connect cards", () => {
+  assert.deepEqual(parseGatewayHash("#/settings"), { name: "settings", sub: null });
+  const html = renderGatewayShell({
+    lanes: [identity],
+    settings: true,
+    providers: {
+      providers: [
+        { id: "claude", label: "Claude", auth: { state: "authenticated", label: "Signed in", identity: "a@b.c" }, executable: "/usr/local/bin/claude", version: "1.0" },
+        { id: "cursor", label: "Cursor", auth: { state: "needs_auth", label: "Needs sign-in" }, executable: "cursor-agent" },
+      ],
+    },
+  });
+  assert.match(html, /data-gw-mode="settings"/);
+  assert.match(html, /data-gw-provider-card="claude"/);
+  assert.match(html, /data-gw-provider-card="cursor"/);
+  assert.match(html, /data-prov-connect="cursor"/);
+  assert.match(html, /data-prov-verify="claude"/);
+  assert.match(appSrc, /provider\.connect/);
+  assert.match(appSrc, /r\.name === "settings"/);
+  const section = renderProviderRuntimeSection({
+    providers: [
+      { id: "claude", label: "Claude", auth: { state: "authenticated", label: "Signed in" } },
+      { id: "openai", label: "OpenAI", auth: { state: "not_configured" } },
+    ],
+  });
+  assert.match(section, /data-gw-provider-card="claude"/);
+  assert.equal(section.includes("OpenAI"), false);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

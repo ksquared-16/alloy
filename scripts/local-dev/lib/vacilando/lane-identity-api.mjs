@@ -204,11 +204,40 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
   if (!provider) {
     return { status: 400, body: { ok: false, error: "unsupported_provider" } };
   }
+
+  // ---------------------------------------------------------------------
+  // Repository selection. A lane belongs to exactly one repository, and the
+  // repository must be registered and active before a lane can point at it —
+  // a lane attributed to nothing has no execution boundary at all.
+  // ---------------------------------------------------------------------
+  const R = await import("./repository-registry.mjs");
+  const requestedRepo = body.repository_id ? String(body.repository_id) : null;
+  let repositoryId = requestedRepo;
+  if (!repositoryId) {
+    // No explicit choice: fall back to Alloy only if it is registered, so the
+    // existing single-repository flow keeps working unchanged.
+    const alloy = R.getRepository(R.ALLOY_REPOSITORY_ID);
+    repositoryId = alloy ? alloy.repository_id : null;
+  }
+  if (repositoryId) {
+    const repo = R.getRepository(repositoryId);
+    if (!repo) return { status: 404, body: { ok: false, error: "repository_not_found" } };
+    if (repo.state !== "ACTIVE") return { status: 409, body: { ok: false, error: "repository_not_active" } };
+  }
+
+  // workspace_mode says what the lane should have, not what it is called.
+  //   new_worktree      — provision a worktree and branch in the repository
+  //   connect_existing  — bind an existing worktree of that repository
+  //   planning          — no worktree, no provider, no capacity consumed
+  const workspaceMode = ["new_worktree", "connect_existing", "planning"]
+    .includes(String(body.workspace_mode || "")) ? String(body.workspace_mode) : null;
+
   const instruction = instructionText;
   const created = createDurableLane({
     name: named.name,
     origin: "created",
     preferred_provider: provider,
+    repository_id: repositoryId,
     nowMs,
   });
   if (!created.ok) {
@@ -257,15 +286,64 @@ export async function createNewLaneRequest(body = {}, { actor = "operator", nowM
     }, nowMs);
   } catch { /* */ }
 
+  // Provision the workspace the operator asked for. A planning lane gets
+  // nothing on purpose: no worktree, no provider, no capacity.
+  let workspace = { mode: workspaceMode || "planning", provisioned: false };
+  if (workspaceMode === "new_worktree" && repositoryId) {
+    const { createRepositoryWorktree } = await import("./repository-worktree.mjs");
+    const made = await createRepositoryWorktree({
+      repositoryId,
+      laneName: named.name,
+      branch: body.branch || null,
+      baseRef: body.base_ref || null,
+    });
+    if (!made.ok) {
+      // The lane exists but has no workspace. Say so rather than pretending it
+      // is ready; the operator can retry provisioning without losing the lane.
+      workspace = { mode: workspaceMode, provisioned: false, error: made.error, detail: made.detail || null };
+    } else {
+      const { bindDurableLane } = await import("./development-lane.mjs");
+      bindDurableLane(created.lane.lane_id, {
+        worktree_path: made.worktree_path,
+        worktree_name: made.worktree_name,
+        branch: made.branch,
+        provider,
+      }, { nowMs });
+      workspace = {
+        mode: workspaceMode, provisioned: true,
+        worktree_path: made.worktree_path, branch: made.branch,
+        base_ref: made.base_ref, repository_id: made.repository_id,
+      };
+    }
+  } else if (workspaceMode === "connect_existing" && repositoryId && body.worktree_path) {
+    const { connectRepositoryWorktree } = await import("./repository-worktree.mjs");
+    const { listDurableLanes, bindDurableLane } = await import("./development-lane.mjs");
+    const boundPaths = listDurableLanes().map((l) => l.binding?.worktree_path).filter(Boolean);
+    const conn = await connectRepositoryWorktree({ repositoryId, path: body.worktree_path, boundPaths });
+    if (!conn.ok) {
+      workspace = { mode: workspaceMode, provisioned: false, error: conn.error, detail: conn.actual || null };
+    } else {
+      bindDurableLane(created.lane.lane_id, {
+        worktree_path: conn.worktree_path,
+        worktree_name: conn.worktree_name,
+        branch: conn.branch,
+        provider,
+      }, { nowMs });
+      workspace = { mode: workspaceMode, provisioned: true, worktree_path: conn.worktree_path, branch: conn.branch, repository_id: conn.repository_id };
+    }
+  }
+
   const found = await getDevelopmentLane(created.lane.lane_id);
   return {
     status: 200,
     body: {
       ok: true,
       lane: found.ok ? found.lane : publicDurableLane(created.lane),
+      repository_id: repositoryId,
+      workspace,
       execution_run: run ? { run_id: run.run_id, state: run.state, lane_id: run.lane_id } : null,
       admission,
-      substrate_mutated: false,
+      substrate_mutated: workspace.provisioned === true,
     },
   };
 }

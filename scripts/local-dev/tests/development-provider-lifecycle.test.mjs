@@ -13,7 +13,7 @@
  * parked on a question held a seat indefinitely while a queued lane waited.
  */
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -473,6 +473,95 @@ await test("a provisioned worktree gets a tmux session name tmux can accept", as
   }
   assert.equal(tmuxSessionNameFor(""), null, "no name is null, never a session nothing can find");
   assert.equal(tmuxSessionNameFor(null), null);
+});
+
+/**
+ * A default parameter only fires for `undefined`.
+ *
+ * suspend/resume defaulted `root = null` and passed it into helpers whose own
+ * default is `root = runtimeRoot()`. Null is not undefined, so the literal null
+ * reached the store and every lookup missed: suspending a lane that plainly
+ * existed returned `lane_not_found`, which meant a parked provider could never
+ * be reclaimed by any caller that omitted root.
+ */
+await test("suspend and resume resolve the runtime root when none is passed", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  assert.equal(/root = null/.test(src), false,
+    "a null root default defeats the downstream runtimeRoot() default");
+  // And the lane lookup itself must agree.
+  const { getDurableLane } = await import("../lib/vacilando/development-lane.mjs");
+  assert.equal(typeof getDurableLane, "function");
+});
+
+
+/**
+ * A record that says SUSPENDED while the provider is alive.
+ *
+ * Suspension lives in two places — the agent session and the run — and a resume
+ * that starts the process without flipping both leaves the lane reading
+ * "Needs input / suspended" while a Claude sits at a ready prompt in its
+ * worktree. Observed on two lanes at once; nothing in the governor corrected
+ * it, so to the operator the lanes simply looked dead.
+ */
+await test("the reconciler revives a suspended record when the provider is live", () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("export async function reconcileParkedProviders"));
+  assert.ok(fn.includes("revived"), "reconcileParkedProviders must report what it revived");
+  assert.ok(fn.includes("providerIsLive"), "and decide from the live substrate");
+  // It must flip BOTH stores, or the lane keeps reading suspended from the other.
+  assert.ok(fn.includes("patchAgentSession"), "session record");
+  assert.ok(fn.includes("patchRunFields"), "run record");
+  assert.ok(src.includes("async function providerIsLive"), "liveness is asked of tmux, not of the record");
+});
+
+
+/**
+ * The revive pass must read the STORES, not projection fields.
+ *
+ * laneProviderIsSuspended reads lane.agent_session / lane.execution_run, which
+ * exist only on a PROJECTED lane. The governor calls the reconciler with
+ * durable lane RECORDS, which carry neither — so gating the revive loop on that
+ * predicate meant it never ran once in production. Runtime Performance sat with
+ * a live provider and a SUSPENDED session record, holding a seat while its own
+ * run stayed QUEUED, and capacity read 4 against a ceiling of 3.
+ */
+await test("revive decides from the session store, not projection fields", () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("export async function reconcileParkedProviders"));
+  const revive = fn.slice(fn.indexOf("const revived = []"));
+  assert.ok(revive.includes("activeAgentSessionForLane"),
+    "the revive pass must resolve the session from the store");
+  assert.equal(/if \(!laneProviderIsSuspended\(lane\)\) continue;/.test(revive), false,
+    "gating on a projection-only predicate makes this loop dead for record callers");
+});
+
+await test("a durable lane record carries no projection fields", async () => {
+  // The reason the predicate could never be true for the governor's callers.
+  const { listDurableLanes } = await import("../lib/vacilando/development-lane.mjs");
+  const sample = listDurableLanes()[0];
+  if (!sample) return;
+  assert.equal("agent_session" in sample, false);
+  assert.equal("execution_run" in sample, false);
+});
+
+
+/**
+ * Liveness must be asked through an EXPORTED api.
+ *
+ * providerIsLive imported `liveClaudePanes` from alloy-dev-adapter, which does
+ * not export it. The import threw straight into the helper's catch, so it
+ * answered "not live" for every lane and the revive pass could never fire even
+ * once its other gates were fixed. Three real bugs stacked on one symptom.
+ */
+await test("provider liveness uses an exported pane listing", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("async function providerIsLive"));
+  assert.equal(/import\([^)]*\)[^;]*liveClaudePanes|\{\s*liveClaudePanes\s*\}/.test(fn), false,
+    "liveClaudePanes must not be imported — it is not exported");
+  assert.ok(fn.includes("listTmuxPanesRaw"), "use the exported listing");
+  // And prove the symbol really is absent, so this cannot regress silently.
+  const adapter = await import("../lib/vacilando/alloy-dev-adapter.mjs");
+  assert.equal(typeof adapter.liveClaudePanes, "undefined");
 });
 
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
