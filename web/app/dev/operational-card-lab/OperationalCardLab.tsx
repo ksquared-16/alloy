@@ -24,8 +24,10 @@ import {
     ATTENDANCE_OVERFLOW_SPECIMENS,
     attendanceWithMovements,
     BILLING_FIXTURE,
+    BILLING_SPECIMENS,
     CARE_TEAM_FIXTURE,
     HEALTH_FIXTURE,
+    HEALTH_SPECIMENS,
     JOURNEY_FIXTURE,
     LAB_SUBJECT,
     STAFF_FIXTURE,
@@ -39,7 +41,10 @@ type TabKey =
     | "careteam"
     | "attendance"
     | "overflow"
-    | "billing";
+    | "billing"
+    | "healthspec"
+    | "billingspec"
+    | "wide";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -49,6 +54,9 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "attendance", label: "4 · Attendance" },
     { key: "overflow", label: "4b · Movement overflow" },
     { key: "billing", label: "5 · Billing" },
+    { key: "healthspec", label: "A · Health specimens" },
+    { key: "billingspec", label: "B · Billing specimens" },
+    { key: "wide", label: "C · Wide cards together" },
     { key: "combined", label: "6 · Combined Focus Panel" },
 ];
 
@@ -67,13 +75,48 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
             "A Milestones card is registered and permanently empty. Recommendation stands that Journey absorbs it.",
         ],
     },
+    healthspec: {
+        question: "Does the hierarchy hold for a typical, a higher-care and a complex child?",
+        decisions: [
+            "Three densities, not a state matrix: typical, higher-care, complex.",
+            "C exists to prove the compact hierarchy does not collapse when a child has significant medical needs — two critical facts, three ongoing needs, four medications.",
+            "With no critical facts (A) the region does not render at all, and nothing says \"No alerts\" — the header carries the care line instead.",
+        ],
+        open: [
+            "A child with more than three critical facts is not represented here; the region would need its own cap and a View all.",
+        ],
+    },
+    billingspec: {
+        question: "Does the composition survive realistic financial complexity?",
+        decisions: [
+            "Three situations: current with nothing overdue, past due with a failed payment, and mixed funding with subsidy, discount and credit.",
+            "In the current case Past Due states \"Nothing past due\" calmly rather than disappearing, so the three zones keep their shape.",
+            "Mixed funding pushes the arithmetic to five lines and the payer strip to three payers — the strip absorbs it because it runs full width.",
+        ],
+        open: [
+            "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    wide: {
+        question: "Do the three wide cards read as one system rather than three custom mini-apps?",
+        decisions: [
+            "Journey, Attendance and Billing all sit at span \"row\" — 1023px — and all three use the same header grammar, the same section-head grammar, and the same action treatment.",
+            "Journey and Attendance share the progression band; Billing does not, because its content is arithmetic rather than a sequence.",
+            "Colour is state in all three: bend-pine for what has happened or been paid, amber for what is late or missing, red reserved for safety.",
+        ],
+        open: [
+            "Billing is the only wide card with an internal column structure. If a fourth wide card wants zones, that structure should be promoted to a shared primitive rather than copied.",
+        ],
+    },
     health: {
         question: "What health and safety information do I need to know about this child?",
         decisions: [
-            "Grouped by how the information is OWNED, not how it was collected: critical → insight, then Medical, Medications, Enrollment health, and a projected emergency line.",
-            "The critical safety fact leads the card as the insight, so it needs no section, no banner and no count.",
-            "Enrollment health is Business Process requirement satisfaction, not a health fact. Missing reads amber inside its own section.",
-            "Emergency contacts are relationship truth. Household owns them; this card points at them.",
+            "Critical is a CONTAINED region — the Children --focused treatment in the risk tone, not a banner. Multiple critical facts stack inside the one region so two facts never become two alerts.",
+            "With no critical facts the region does not render, and nothing says \"No alerts\".",
+            "Medication nests UNDER the need it supports, because that is how an operator understands it. A medication with no associated need still appears on its own. Canonical ownership stays separate underneath.",
+            "The header states no summary when a critical region exists — announcing the same fact twice weakens both.",
+            "Enrollment health is requirement satisfaction, not a health fact: two compact columns so it never dominates the care information.",
+            "Emergency contacts are relationship truth — one quiet projected line, and Household owns them.",
         ],
         open: [
             "Health today is TWO fields in systemFieldRegistry — allergy_notes (textarea) and medication_flag (checkbox) — both entity_type \"enrollment\", not child. Severity, reaction, treatment and medication records have no owner.",
@@ -133,11 +176,12 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
     billing: {
         question: "Where does this family stand financially right now?",
         decisions: [
-            "Arithmetic hierarchy: charge, discounts and subsidy stack to a ruled Family responsibility total, then Next due, then payers.",
-            "Ledger direction is account balance — a charge INCREASES what is owed (+), a payment, credit, discount or subsidy REDUCES it (−). The sign is in the text; colour only reinforces it.",
-            "Recent ledger is a real column grid with tabular figures and right-aligned amounts, capped at five.",
-            "The past-due amount is the one number sized to be read from across the room. Pay now is filled; Manage payment is a quiet link.",
-            "Payer identity is kept distinct from household primary contact, and a funding source is a payer like any other.",
+            "The header states NO money. A summary there duplicated every number below it; if an amount is past due, the Past Due zone is already the loudest thing on the card.",
+            "Three zones, bounded by a 34px gap and aligned grammar rather than vertical rules.",
+            "Payers moved OUT of the arithmetic into a full-width strip below the zones — as three stacked rows under Current Billing they made zone one three times the height of the others.",
+            "Recent Ledger is a ledger: fixed column grid with a quiet Date / Description / Amount heading, uniform 20px rows, tabular figures, right-aligned amounts, no pills.",
+            "Direction is account balance — a charge or fee INCREASES what is owed (+), a payment, credit, discount or subsidy REDUCES it (−). The sign carries the meaning; colour only reinforces it.",
+            "Action hierarchy: Pay now filled inside Past Due because it is contextual and primary; every other financial action in one quiet footer row.",
         ],
         open: [
             "Alloy has a charge substrate but no family-grain posted balance, billing period, autopay or payment-method health.",
@@ -269,7 +313,12 @@ export default function OperationalCardLab() {
                         <div className="lab__frame">
                             <div className="lab__frame-label">
                                 Focus Panel · Summary · 1055px
-                                {tab === "journey" || tab === "attendance" || tab === "billing" || tab === "overflow"
+                                {tab === "journey" ||
+                                tab === "attendance" ||
+                                tab === "billing" ||
+                                tab === "overflow" ||
+                                tab === "billingspec" ||
+                                tab === "wide"
                                     ? " · full row"
                                     : " · one column"}
                             </div>
@@ -286,6 +335,33 @@ export default function OperationalCardLab() {
                                     <>
                                         <Cell span={1} kind="cand" name="Health & Safety">{health}</Cell>
                                         <Cell span={1} kind="real" name="Household">{realCard("household")}</Cell>
+                                        <Cell span={1} kind="real" name="Children">{realCard("children")}</Cell>
+                                    </>
+                                ) : null}
+                                {tab === "healthspec" ? (
+                                    <>
+                                        {HEALTH_SPECIMENS.map((sp) => (
+                                            <Cell key={sp.caseLabel} span={1} kind="cand" name={sp.caseLabel}>
+                                                <HealthSafetyCard evidence={sp} />
+                                            </Cell>
+                                        ))}
+                                        <Cell span={1} kind="real" name="Household">{realCard("household")}</Cell>
+                                    </>
+                                ) : null}
+                                {tab === "billingspec" ? (
+                                    <>
+                                        {BILLING_SPECIMENS.map((sp) => (
+                                            <Cell key={sp.caseLabel} span={2} kind="cand" name={sp.caseLabel}>
+                                                <BillingCard evidence={sp} />
+                                            </Cell>
+                                        ))}
+                                    </>
+                                ) : null}
+                                {tab === "wide" ? (
+                                    <>
+                                        <Cell span={2} kind="cand" name="Journey">{journey}</Cell>
+                                        <Cell span={2} kind="cand" name="Attendance">{attendance}</Cell>
+                                        <Cell span={2} kind="cand" name="Billing">{billing}</Cell>
                                     </>
                                 ) : null}
                                 {tab === "staff" ? (

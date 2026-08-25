@@ -41,27 +41,108 @@ export const JOURNEY_FIXTURE: JourneyEvidence = {
     ],
 };
 
-export const HEALTH_FIXTURE: HealthEvidence = {
-    criticalLine: "Peanut allergy — severe",
-    criticalDetail: "Anaphylaxis · EpiPen kept in Sunflower Room",
-    medical: [
-        { name: "Asthma", detail: "Exercise-induced" },
-        { name: "Dairy restriction", detail: "Substitute oat milk" },
-        { name: "Latex sensitivity", detail: "Contact rash" },
+/**
+ * Health specimens — three densities that prove the hierarchy, not a state matrix.
+ *
+ *   A  typical      one condition, one dietary restriction, requirements complete
+ *   B  higher care  a severe allergy, a condition with its medication, one missing requirement
+ *   C  complex      two critical facts, several needs, several medications
+ */
+export const HEALTH_TYPICAL: HealthEvidence = {
+    caseLabel: "A · Typical child",
+    critical: [],
+    needs: [
+        {
+            name: "Asthma",
+            detail: "Exercise-induced",
+            medications: [{ name: "Albuterol inhaler", detail: "As needed · Sunflower Room" }],
+        },
+        { name: "Dietary", detail: "Dairy restriction · substitute oat milk", medications: [] },
     ],
-    medications: [
-        { name: "Albuterol inhaler", detail: "As needed · Sunflower Room" },
-        { name: "Epinephrine auto-injector", detail: "Emergency · expires Mar 2027" },
-    ],
+    unattachedMedications: [],
     requirements: [
-        { name: "Physical exam", value: "Received Jul 14" },
-        { name: "Immunization record", value: "Received Jul 14" },
+        { name: "Physical", value: "Jul 14" },
+        { name: "Immunization", value: "Jul 14" },
+        { name: "Medication authorization", value: "Jul 14" },
+    ],
+    emergencyCount: 3,
+    emergencyPrimary: "Sam Rivera",
+};
+
+export const HEALTH_HIGHER_CARE: HealthEvidence = {
+    caseLabel: "B · Higher-care child",
+    critical: [
+        {
+            name: "Peanut allergy",
+            severity: "Severe",
+            reaction: "Anaphylaxis",
+            response: "EpiPen · Sunflower Room cabinet",
+        },
+    ],
+    needs: [
+        {
+            name: "Asthma",
+            detail: "Exercise-induced",
+            medications: [{ name: "Albuterol inhaler", detail: "As needed · Sunflower Room" }],
+        },
+        { name: "Dietary", detail: "Dairy restriction · substitute oat milk", medications: [] },
+        { name: "Latex sensitivity", detail: "Contact rash", medications: [] },
+    ],
+    unattachedMedications: [],
+    requirements: [
+        { name: "Physical", value: "Jul 14" },
+        { name: "Immunization", value: "Jul 14" },
         { name: "Medication authorization", value: "Missing", missing: true },
     ],
     emergencyCount: 3,
     emergencyPrimary: "Sam Rivera",
-    emergencyDetail: "First call · Aunt · (555) 444-0199",
 };
+
+export const HEALTH_COMPLEX: HealthEvidence = {
+    caseLabel: "C · Complex child",
+    critical: [
+        {
+            name: "Peanut allergy",
+            severity: "Severe",
+            reaction: "Anaphylaxis",
+            response: "EpiPen · Sunflower Room cabinet",
+        },
+        {
+            name: "Seizure disorder",
+            severity: "Active",
+            reaction: "Tonic-clonic, 1–2 min",
+            response: "Diastat · office fridge · call 911 after 5 min",
+        },
+    ],
+    needs: [
+        {
+            name: "Asthma",
+            detail: "Exercise-induced",
+            medications: [{ name: "Albuterol inhaler", detail: "As needed · Sunflower Room" }],
+        },
+        {
+            name: "Type 1 diabetes",
+            detail: "Checks before lunch and at 3:00",
+            medications: [
+                { name: "Insulin pen", detail: "Per sliding scale · office fridge" },
+                { name: "Glucagon", detail: "Emergency · office fridge" },
+            ],
+        },
+        { name: "Dietary", detail: "No peanuts, no dairy · carb count at meals", medications: [] },
+    ],
+    unattachedMedications: [{ name: "Melatonin", detail: "Nap only · parent authorized" }],
+    requirements: [
+        { name: "Physical", value: "Jul 14" },
+        { name: "Immunization", value: "Jul 14" },
+        { name: "Medication authorization", value: "Missing", missing: true },
+        { name: "Health care plan", value: "Missing", missing: true },
+    ],
+    emergencyCount: 4,
+    emergencyPrimary: "Sam Rivera",
+};
+
+export const HEALTH_FIXTURE = HEALTH_HIGHER_CARE;
+export const HEALTH_SPECIMENS = [HEALTH_TYPICAL, HEALTH_HIGHER_CARE, HEALTH_COMPLEX] as const;
 
 export const CARE_TEAM_FIXTURE: CareTeamEvidence = {
     answerLine: "Taylor Reed is Avery's lead teacher",
@@ -136,20 +217,50 @@ export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
     ],
 };
 
-export const BILLING_FIXTURE: BillingEvidence = {
-    answerLine: "$1,065 family responsibility · due Sep 1",
-    supportingLine: "Aug 1 – Aug 31 · autopay on",
-    statusChip: "$275 past due",
+/**
+ * Billing specimens — three real financial situations, not a state matrix.
+ *
+ *   A  current       nothing overdue, multiple payers
+ *   B  past due      an overdue amount and a failed payment
+ *   C  mixed funding subsidy, discount, split family payers
+ */
+export const BILLING_CURRENT: BillingEvidence = {
+    caseLabel: "A · Current, nothing overdue",
     period: {
         label: "Aug 1 – Aug 31",
         lines: [
             { label: "Tuition", value: "$1,850" },
             { label: "Sibling discount", value: "−$185" },
-            { label: "State subsidy", value: "−$600" },
-            { label: "Family responsibility", value: "$1,065", emphasis: true },
+            { label: "Family responsibility", value: "$1,665", emphasis: true },
         ],
     },
-    dueLabel: "Next due",
+    dueLabel: "Due",
+    dueValue: "Sep 1",
+    pastDue: null,
+    ledger: [
+        { when: "Aug 20", label: "Payment received", amount: "−$1,665", kind: "credit" },
+        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
+        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
+        { when: "Jul 20", label: "Payment received", amount: "−$1,665", kind: "credit" },
+        { when: "Jul 15", label: "Tuition — July", amount: "+$1,850", kind: "charge" },
+    ],
+    payers: [
+        { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
+        { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
+    ],
+};
+
+export const BILLING_PAST_DUE: BillingEvidence = {
+    caseLabel: "B · Past due, failed payment",
+    period: {
+        label: "Aug 1 – Aug 31",
+        lines: [
+            { label: "Tuition", value: "$1,850" },
+            { label: "Registration fee", value: "+$75" },
+            { label: "Family responsibility", value: "$1,925", emphasis: true },
+        ],
+    },
+    dueLabel: "Due",
     dueValue: "Sep 1",
     pastDue: {
         amount: "$275",
@@ -160,16 +271,46 @@ export const BILLING_FIXTURE: BillingEvidence = {
     ledger: [
         { when: "Aug 20", label: "Payment received", amount: "−$925", kind: "credit" },
         { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
-        { when: "Aug 15", label: "State subsidy", amount: "−$600", kind: "credit" },
-        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
+        { when: "Aug 12", label: "Registration fee", amount: "+$75", kind: "charge" },
         { when: "Aug 10", label: "Late fee", amount: "+$25", kind: "charge" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
+    ],
+};
+
+export const BILLING_MIXED_FUNDING: BillingEvidence = {
+    caseLabel: "C · Mixed funding",
+    period: {
+        label: "Aug 1 – Aug 31",
+        lines: [
+            { label: "Tuition", value: "$1,850" },
+            { label: "Sibling discount", value: "−$185" },
+            { label: "State subsidy", value: "−$600" },
+            { label: "Vacation credit", value: "−$100" },
+            { label: "Family responsibility", value: "$965", emphasis: true },
+        ],
+    },
+    dueLabel: "Due",
+    dueValue: "Sep 1",
+    pastDue: null,
+    ledger: [
+        { when: "Aug 20", label: "Payment received", amount: "−$925", kind: "credit" },
+        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
+        { when: "Aug 15", label: "State subsidy", amount: "−$600", kind: "credit" },
+        { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
+        { when: "Aug 08", label: "Vacation credit", amount: "−$100", kind: "credit" },
+    ],
+    payers: [
+        { name: "Jordan Johnson", share: "45%", method: "Visa •••• 4242" },
+        { name: "Taylor Johnson", share: "25%", method: "ACH •••• 8813" },
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance" },
     ],
 };
+
+export const BILLING_FIXTURE = BILLING_PAST_DUE;
+export const BILLING_SPECIMENS = [BILLING_CURRENT, BILLING_PAST_DUE, BILLING_MIXED_FUNDING] as const;
 
 /**
  * Overflow specimens — one child's day at 0, 2, 5, 8 and 12 movements, through the SAME card.

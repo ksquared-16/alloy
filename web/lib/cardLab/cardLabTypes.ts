@@ -28,9 +28,33 @@ export type JourneyEvidence = {
     stages: ProgressionStep[];
 };
 
-export type HealthFact = {
+/**
+ * One critical safety fact — what an adult needs BEFORE they can safely care for the child.
+ * Deliberately a separate type from an ordinary need: critical is not "a need with high
+ * severity", it is a different operational object, with a care instruction attached.
+ */
+export type HealthCritical = {
     name: string;
-    detail?: string | null;
+    severity: string;
+    reaction: string | null;
+    /** What staff do, and where the thing they need is kept. */
+    response: string | null;
+};
+
+/** A medication, shown WITH the need it supports when that relationship exists. */
+export type HealthMedication = {
+    name: string;
+    detail: string | null;
+};
+
+/**
+ * An ongoing care need. Medication nests inside the need it supports, because that is how an
+ * operator understands it — canonical ownership stays separate underneath.
+ */
+export type HealthNeed = {
+    name: string;
+    detail: string | null;
+    medications: HealthMedication[];
 };
 
 export type HealthRequirement = {
@@ -39,28 +63,20 @@ export type HealthRequirement = {
     missing?: boolean;
 };
 
-/**
- * Health evidence, grouped the way the architecture says the information is actually owned:
- *
- *   critical      the one safety fact an adult must know before touching the child (structured
- *                 health fact — category B, no owner yet)
- *   medical       conditions and restrictions (mix of B and simple child profile facts, A)
- *   medications   what is administered, and where it is kept (category B)
- *   enrollment    document/form requirements resolved by the Business Process (category D)
- *   emergency     relationship truth, projected — never stored here (category E)
- */
 export type HealthEvidence = {
-    /** The critical safety fact leads the card as the insight — no section, no banner. */
-    criticalLine: string | null;
-    criticalDetail: string | null;
-    medical: HealthFact[];
-    medications: HealthFact[];
+    /** Specimen label for the lab only — never rendered inside the card. */
+    caseLabel: string;
+    /** Empty means the region does not render at all — never "No alerts". */
+    critical: HealthCritical[];
+    needs: HealthNeed[];
+    /** Medications with no associated need. */
+    unattachedMedications: HealthMedication[];
     requirements: HealthRequirement[];
     emergencyCount: number;
     emergencyPrimary: string | null;
-    emergencyDetail: string | null;
 };
 
+/** A person on the CHILD-grain Care Team card. Not the employee-grain Staff card. */
 export type CareTeamPerson = {
     id: string;
     name: string;
@@ -118,9 +134,8 @@ export type BillingPayer = {
 };
 
 export type BillingEvidence = {
-    answerLine: string;
-    supportingLine: string;
-    statusChip: string | null;
+    /** Specimen label for the lab only — never rendered inside the card. */
+    caseLabel: string;
     period: { label: string; lines: { label: string; value: string; emphasis?: boolean }[] };
     dueLabel: string;
     dueValue: string;

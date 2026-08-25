@@ -86,16 +86,150 @@
 
 /* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
  * no banner, no count, no separate section. */
-/* Tier rules set the insight colour at (0,2,0), so the critical override has to outrank them —
- * otherwise the severe fact renders in ordinary card ink and the emphasis silently disappears. */
-.alloy-os-ucard.alloy-os-health--critical .alloy-os-ucard__insight {
+/* ── health & safety ────────────────────────────────────────────────────── */
+
+/* The critical region is the Children --focused treatment in the risk tone: a tint and a rail,
+ * not a banner. Multiple critical facts stack INSIDE it, so two facts never become two alerts. */
+.alloy-os-health__critical {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 7px 10px 8px;
+  border-radius: 8px;
+  border-left: 2px solid #dc2626;
+  background: color-mix(in srgb, #dc2626 5%, #fff);
+}
+.alloy-os-health__critical-label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #b91c1c;
 }
-.alloy-os-ucard.alloy-os-health--critical .alloy-os-ucard__supporting {
-  color: #dc2626;
+.alloy-os-health__critical-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-health__critical-name {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #991b1b;
+}
+.alloy-os-health__severity {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #dc2626 12%, #fff);
+  color: #b91c1c;
+}
+.alloy-os-health__critical-line {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: #b91c1c;
+}
+/* What staff DO is the line that has to survive a glance. */
+.alloy-os-health__critical-line--do {
+  font-weight: 650;
+  color: #991b1b;
+}
+
+.alloy-os-health__need {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+/* A need with no medication earns only one line. */
+.alloy-os-health__need-inline {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-health__need-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__need-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* A medication sits UNDER the need it supports, indented against a quiet rail. */
+.alloy-os-health__med {
+  margin: 1px 0 0;
+  padding-left: 8px;
+  border-left: 1.5px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__med-name {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* Supporting operational context — two columns so it never dominates the care information. */
+.alloy-os-health__reqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px 16px;
+}
+.alloy-os-health__req {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-health__req-name {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-health__req-value {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-health__req-value--missing {
+  color: #b45309;
+}
+
+/* Emergency contacts are relationship context, so they share the footer with the detail link
+ * rather than competing with medical information in the body. */
+.alloy-os-health__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
 }
 .alloy-os-health__emergency {
-  margin: 5px 0 0;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
@@ -357,21 +491,38 @@
   text-overflow: ellipsis;
 }
 
-/* ── billing zones ──────────────────────────────────────────────────────── */
+/* ── billing ────────────────────────────────────────────────────────────── */
 
 .alloy-os-billing__zones {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr) minmax(0, 1fr);
-  gap: 10px 26px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.72fr) minmax(0, 1.23fr);
+  gap: 10px 34px;
   min-width: 0;
   margin-top: 2px;
 }
 .alloy-os-billing__zone {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
   min-width: 0;
 }
+/* Each zone announces itself in the family's in-body section-head grammar; the boundary is the
+ * 34px gap and the alignment, not a rule. */
+.alloy-os-billing__zone-head {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-billing__period {
+  margin: -2px 0 2px;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+
+/* zone 1 — the arithmetic */
 .alloy-os-billing__lines {
   display: flex;
   flex-direction: column;
@@ -394,46 +545,29 @@
   color: var(--alloy-os-midnight, #273f52);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
-  min-width: 72px;
+  min-width: 76px;
   text-align: right;
 }
+/* The one rule the card carries — a financial subtotal, not a section divider. */
 .alloy-os-billing__line--emphasis {
   margin-top: 3px;
   padding-top: 5px;
-  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 20%, transparent);
 }
-.alloy-os-billing__line--emphasis .alloy-os-billing__line-label,
+.alloy-os-billing__line--emphasis .alloy-os-billing__line-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
 .alloy-os-billing__line--emphasis .alloy-os-billing__line-value {
-  font-size: 0.84rem;
+  font-size: 0.92rem;
   font-weight: 700;
   color: var(--alloy-os-midnight, #273f52);
 }
-/* A payer reads as one line — name, share, method — so payer context never outgrows the money. */
-.alloy-os-billing__payer {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 7px;
-  margin: 0;
-  min-width: 0;
-}
-.alloy-os-billing__payer-name {
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--alloy-os-midnight, #273f52);
-}
-.alloy-os-billing__payer-share {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
-  color: var(--alloy-os-text-secondary, #4b5563);
-  white-space: nowrap;
-}
-
 .alloy-os-billing__due {
-  margin: 2px 0 0;
+  margin: 3px 0 0;
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
@@ -443,35 +577,71 @@
   color: var(--alloy-os-midnight, #273f52);
 }
 
-/* The past-due amount is the one number that must be read from across the room. */
+/* zone 2 — past due. The amount is the one number readable from across the room. */
 .alloy-os-billing__amount {
-  margin: 0;
-  font-size: 1.75rem;
+  margin: 2px 0 0;
+  font-size: 1.9rem;
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.05;
   color: #b45309;
   font-variant-numeric: tabular-nums;
 }
 .alloy-os-billing__age {
-  margin: -2px 0 0;
+  margin: 2px 0 0;
   font-size: 11.5px;
   font-weight: 600;
+  line-height: 1.45;
   color: #b45309;
 }
+.alloy-os-billing__decline {
+  margin: 2px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__clear {
+  margin: 4px 0 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-billing__clear-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
+/* zone 3 — a ledger, not an activity feed: fixed columns, tabular figures, uniform row height. */
 .alloy-os-billing__ledger {
   display: flex;
   flex-direction: column;
-  gap: 3px;
 }
 .alloy-os-billing__entry {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) 72px;
-  gap: 10px;
+  grid-template-columns: 52px minmax(0, 1fr) 82px;
+  gap: 12px;
   align-items: baseline;
   min-width: 0;
+  height: 20px;
 }
 .alloy-os-billing__entry > :last-child {
   text-align: right;
+}
+.alloy-os-billing__entry--head {
+  height: 16px;
+}
+.alloy-os-billing__entry--head span {
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-billing__entry-when {
+  font-size: 0.7rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 .alloy-os-billing__entry-label {
   font-size: 0.74rem;
@@ -490,6 +660,60 @@
 }
 .alloy-os-billing__entry-amount--credit {
   color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* payer strip — full width, below the zones, deliberately placed rather than left over. */
+.alloy-os-billing__payers {
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alloy-os-billing__payer-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 3px 34px;
+}
+.alloy-os-billing__payer {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  margin: 0;
+  min-width: 0;
+}
+.alloy-os-billing__payer-name {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+.alloy-os-billing__payer-share {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-billing__payer-method {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One place for the financial management actions, so they stop scattering across the zones. */
+.alloy-os-billing__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 18px;
 }
 
 /* ── narrow columns ─────────────────────────────────────────────────────── */
