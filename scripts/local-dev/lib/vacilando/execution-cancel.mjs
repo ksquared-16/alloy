@@ -92,7 +92,7 @@ export async function cancelActiveRun(laneId, {
   const can = cancellability(run);
   if (!can.ok) return can;
   if (can.interrupts_work && !confirm) {
-    return { ok: false, error: "confirm_required", ...can };
+    return { ...can, ok: false, error: "confirm_required" };
   }
 
   // Interrupt the provider BEFORE the transition, so it stops working on a
