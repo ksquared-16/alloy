@@ -286,6 +286,27 @@ describe("the outbound seam gets the final word", () => {
         expect(r.ok).toBe(true);
     });
 
+    it("treats an SMS body exactly like an email body — one authority, both channels", () => {
+        // A Tour invitation renders ONE `invitationActionUrl` into both the email and the
+        // SMS draft, and the seam is channel-agnostic, so parity is structural rather than
+        // duplicated. Asserted anyway: a channel-specific origin is precisely the kind of
+        // divergence that would put a good link in one inbox and a broken one in the other.
+        const sms = "Choose a tour time: http://localhost:3013/a/AbCdEf12";
+        const email = enforceOutboundPublicLinkOrigin({ body: sms, env: STAGING });
+        const text = enforceOutboundPublicLinkOrigin({ body: sms, subject: null, env: STAGING });
+        expect(email.ok && email.body).toBe("Choose a tour time: https://staging.workwithalloy.com/a/AbCdEf12");
+        expect(text.ok && text.body).toBe(email.ok ? email.body : "");
+    });
+
+    it("leaves the participant token and path untouched", () => {
+        const token = "7PZgayMmsc-1bAHlQAG7dYHQqR4PM53A-UbGz5D6yB0";
+        const r = enforceOutboundPublicLinkOrigin({
+            body: `Book: http://localhost:3015/tour-booking/${token}?option=opt-9`,
+            env: PRODUCTION,
+        });
+        expect(r.ok && r.body).toBe(`Book: https://workwithalloy.com/tour-booking/${token}?option=opt-9`);
+    });
+
     it("takes no request, so a spoofed Host header has nothing to influence", () => {
         // Structural, not behavioural: the seam has no request parameter at all. A header
         // cannot reach a recipient's link because there is no path from one to the other.
