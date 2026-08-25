@@ -45,6 +45,20 @@ function mapDraftField(f: DraftFormField): FormField {
             return { ...base, type: "file_ref" };
         case "signature":
             return { ...base, type: "signature" };
+        case "select":
+        case "multiselect": {
+            // The source DECLARED these choices. Publishing them as free text would lose the one
+            // thing the author was explicit about. `static_options` is the schema's own inline-choice
+            // construct — no `option_sets` row is required, and the values are the labels verbatim so
+            // a submitted answer reads the way the source wrote it.
+            const options = (f.options ?? []).map((o) => o.trim()).filter(Boolean);
+            if (options.length === 0) return { ...base, type: "text" };
+            const seen = new Set<string>();
+            const static_options = options
+                .filter((o) => (seen.has(o) ? false : (seen.add(o), true)))
+                .map((o) => ({ value: o, label: o }));
+            return { ...base, type: f.type, static_options };
+        }
         case "text":
         default:
             return { ...base, type: "text" };

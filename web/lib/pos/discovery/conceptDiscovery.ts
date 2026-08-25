@@ -66,6 +66,10 @@ interface ScalarSemantics {
     concept_key: string;
     band: Confidence["band"];
     signals: string[];
+    /** Whose fact this is, when the label says. Carried onto the concept for binding safety. */
+    party?: import("./bindingSafety").ConceptParty;
+    /** What the label asks for, when recognized. */
+    attribute?: string;
 }
 
 /**
@@ -131,6 +135,8 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
             concept_key: key,
             band: "high",
             signals: [`label names the ${party.party.replace(/_/g, " ")} and asks for their ${attribute.replace(/_/g, " ")}`],
+            party: party.party as import("./bindingSafety").ConceptParty,
+            attribute,
         };
     }
     if (/\b(date of birth|birth\s*date|birthdate|d\.?o\.?b)\b/.test(l)) return { subject: "child", concept_key: "child.date_of_birth", band: "high", signals: sig("label matches date-of-birth") };
@@ -154,6 +160,8 @@ function scalarSemantics(label: string, ctx: SectionContext): ScalarSemantics {
             concept_key: `${party.party}.${core}`,
             band: "review",
             signals: [`no canonical alias — scoped to the ${party.party.replace(/_/g, " ")} the label names`],
+            party: party.party as import("./bindingSafety").ConceptParty,
+            ...(attribute ? { attribute } : {}),
         };
     }
     return { subject: ctx.subject === "internal" ? "internal" : ctx.subject, concept_key: `${ctx.subject}.${core}`, band: "review", signals: sig("no canonical alias — scoped by section subject") };
@@ -180,8 +188,40 @@ function conf(band: Confidence["band"], signals: string[]): Confidence {
     return { band, percent, signals };
 }
 
-function sourceRef(section: SemanticSection, labels: string[]): SourceRef {
-    return { page: section.page, section_title: section.title, section_key: section.section_key, labels };
+/**
+ * Build a concept's lineage. `fields` are the destinations it came from — carried by their reader
+ * identity so an operator can trace a proposed fact back to the exact controls, and so lineage
+ * survives a label being reworded.
+ */
+function sourceRef(section: SemanticSection, labels: string[], fields?: readonly SemanticField[]): SourceRef {
+    const destinations = (fields ?? [])
+        .filter((f) => !!f.evidence)
+        .map((f) => ({
+            evidence: f.evidence as string,
+            label: f.label,
+            page: typeof f.page === "number" ? f.page : section.page ?? null,
+            section_title: section.title,
+        }));
+    return {
+        page: section.page,
+        section_title: section.title,
+        section_key: section.section_key,
+        labels,
+        ...(destinations.length ? { destinations } : {}),
+    };
+}
+
+/** Add another destination to a concept's lineage, without duplicating one already recorded. */
+function addDestination(ref: SourceRef, section: SemanticSection, f: SemanticField): void {
+    if (!f.evidence) return;
+    ref.destinations = ref.destinations ?? [];
+    if (ref.destinations.some((d) => d.evidence === f.evidence)) return;
+    ref.destinations.push({
+        evidence: f.evidence,
+        label: f.label,
+        page: typeof f.page === "number" ? f.page : section.page ?? null,
+        section_title: section.title,
+    });
 }
 
 function conceptId(page: number, sectionKey: string, slug: string): string {
@@ -285,7 +325,7 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
                 subject: internal ? "internal" : "person",
                 cardinality: section.fields.filter((f) => f.role === "signature").length > 1 ? "multiple" : "single",
                 requirement_type: "signature",
-                source: sourceRef(section, section.fields.map((f) => f.label)),
+                source: sourceRef(section, section.fields.map((f) => f.label), section.fields.filter((f) => f.role === "signature")),
                 confidence: conf("high", internal ? ["director/internal signature block"] : ["participant signature block"]),
                 explanation: internal
                     ? "A director/internal signature — an operator responsibility, not participant work."
@@ -371,7 +411,7 @@ export function discoverConcepts(model: SemanticDocumentModel): BusinessConceptC
             cardinality: "multiple",
             relationship_role: role,
             relationship_scope: "child",
-            source: sourceRef(first, [...new Set(gathered)]),
+            source: sourceRef(first, [...new Set(gathered)], sects.flatMap((s2) => s2.fields)),
             confidence: conf("high", [
                 `${sects.length} repeated person block(s) with identity + relationship-to-child`,
                 `operational role: ${role}`,
@@ -416,7 +456,11 @@ function repetitionConcept(
         concept_key,
         subject,
         repetition,
-        source: sourceRef(section, group.member_labels),
+        source: sourceRef(
+            section,
+            group.member_labels,
+            section.fields.filter((f) => f.repeat_group_id === group.id)
+        ),
     };
 
     if (group.kind === "choice_group") {
@@ -474,7 +518,7 @@ function scalarConcept(
             cardinality: "single",
             suggested_data_type: "select",
             ...(f.options && f.options.length ? { options: f.options } : {}),
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf(f.options && f.options.length ? "high" : "review", [`single-choice field with ${f.options?.length ?? 0} option(s)`]),
             explanation: `A single-choice field${f.options?.length ? ` with ${f.options.length} options` : ""} — proposed as a select field (add/confirm options in the builder).`,
         };
@@ -490,7 +534,7 @@ function scalarConcept(
             subject: ctx.subject === "internal" ? "internal" : ctx.subject,
             cardinality: "single",
             suggested_data_type: "boolean",
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf("high", ["Yes / No question"]),
             explanation: "A Yes / No status question.",
         };
@@ -506,7 +550,7 @@ function scalarConcept(
             subject: ctx.subject === "internal" ? "internal" : ctx.subject,
             cardinality: "single",
             suggested_data_type: "text",
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf("review", ["free-text explanation conditional on a Yes/No question"]),
             explanation: `A conditional explanation${f.depends_on ? ` for "${f.depends_on}"` : ""} — collected only when the related answer is yes.`,
         };
@@ -526,7 +570,7 @@ function scalarConcept(
             subject: internal ? "internal" : "person",
             cardinality: "single",
             requirement_type: "signature",
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf("high", [isUpdate ? "a re-sign / update signature destination on this page" : "a signature destination on this page"]),
             explanation: internal
                 ? "A director/internal signature — an operator responsibility, not participant work."
@@ -547,7 +591,7 @@ function scalarConcept(
             subject: ctx.subject === "internal" ? "internal" : "child",
             cardinality: "single",
             requirement_type: "upload",
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf("high", ["a file destination on this page"]),
             explanation: "A document-upload requirement declared by the form itself.",
         };
@@ -560,7 +604,10 @@ function scalarConcept(
         if (seen.has(s.concept_key)) {
             // Same fact, another destination. Record the destination on the concept that owns it.
             const owner = byKey.get(s.concept_key);
-            if (owner && !owner.source.labels.includes(f.label)) owner.source.labels.push(f.label);
+            if (owner) {
+                if (!owner.source.labels.includes(f.label)) owner.source.labels.push(f.label);
+                addDestination(owner.source, section, f);
+            }
             return null;
         }
         seen.add(s.concept_key);
@@ -571,9 +618,11 @@ function scalarConcept(
             label: f.label,
             concept_key: s.concept_key,
             subject: s.subject,
+            ...(s.party ? { party: s.party } : {}),
+            ...(s.attribute ? { attribute: s.attribute } : {}),
             cardinality: "single",
             suggested_data_type: f.data_type,
-            source: sourceRef(section, [f.label]),
+            source: sourceRef(section, [f.label], [f]),
             confidence: conf(s.band, s.signals),
             explanation: `Represents ${labelForKey(s.concept_key)} — proposed for matching against Alloy's ${s.subject} model.`,
         };

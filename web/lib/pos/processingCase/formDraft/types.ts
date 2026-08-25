@@ -14,7 +14,16 @@
  */
 
 /** Field types we draft. A subset of FormFieldType that needs no extra config to be valid. */
-export type DraftFormFieldType = "text" | "number" | "date" | "boolean" | "file_ref" | "signature";
+/**
+ * Field types we draft.
+ *
+ * `select` / `multiselect` are here because a source can DECLARE its choices — a hosted form states
+ * them outright, and an AcroForm dropdown carries them in the widget. Drafting those as text was the
+ * one place a web source's best evidence was thrown away: a closed choice became free text, and the
+ * requiredness and options the author wrote were lost between extraction and publish. A choice is
+ * only drafted as a choice when the source actually supplied options — options are never invented.
+ */
+export type DraftFormFieldType = "text" | "number" | "date" | "boolean" | "select" | "multiselect" | "file_ref" | "signature";
 
 export type DraftFieldConfidence = "high" | "medium" | "low";
 

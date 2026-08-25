@@ -130,6 +130,7 @@ export function buildStructureFromAcroForm(
             ...(f.bbox ? { bbox: f.bbox } : {}),
             ...(groupOfField.has(f.name) ? { repeat_group_id: groupOfField.get(f.name) } : {}),
             ...(f.signature_variant ? { signature_variant: f.signature_variant } : {}),
+            ...(f.options && f.options.length ? { options: f.options } : {}),
         });
     }
 

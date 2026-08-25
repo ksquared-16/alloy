@@ -41,6 +41,9 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
+import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
+import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
+import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
 import type { BusinessConceptCandidate, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { toDecisionRecords, fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
@@ -172,7 +175,12 @@ export default function PosTemplateSetupColumn({
     const [phase, setPhase] = useState<"review" | "generate">("review");
     // Configuration Discovery (FP16): concept-first review is the default entry; the detailed
     // field/question review is a drill-down. Operator decisions on proposals are held here.
-    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed">("concepts");
+    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed" | "packet">("concepts");
+    // Packet analysis: the SAME case read across every source attached to it. Held here beside the
+    // single-document draft so the operator moves between them without leaving the case.
+    const [packet, setPacket] = useState<PacketIntakeResult | null>(null);
+    const [packetDecisions, setPacketDecisions] = useState<Record<string, PacketReviewDecision>>({});
+    const [packetBusy, setPacketBusy] = useState(false);
     const [conceptDecisions, setConceptDecisions] = useState<Record<string, ProposalDecisionState>>({});
     const [applying, setApplying] = useState(false);
     const [applicationCounts, setApplicationCounts] = useState<Record<string, number> | null>(null);
@@ -785,6 +793,76 @@ export default function PosTemplateSetupColumn({
         }
     };
 
+    /**
+     * Analyse EVERY source attached to this case as one packet. Same case, same authorization, same
+     * endpoint as the single-document detect — `mode: "packet"` is what changes. Publishes nothing.
+     */
+    const handleAnalyzePacket = async () => {
+        if (!caseId) return;
+        setPacketBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ mode: "packet" }),
+            });
+            const body = (await res.json().catch(() => ({}))) as {
+                data?: { packet_intake?: PacketIntakeResult; packet_review_decisions?: PacketReviewDecision[] };
+                error?: string;
+            };
+            if (!res.ok) throw new Error(body.error ?? "Couldn't analyse this case as a packet");
+            setPacket(body.data?.packet_intake ?? null);
+            const stored = body.data?.packet_review_decisions ?? [];
+            setPacketDecisions(Object.fromEntries(stored.map((d) => [`${d.subject}:${d.subject_id}`, d])));
+            setReviewMode("packet");
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn't analyse this case as a packet");
+        } finally {
+            setPacketBusy(false);
+        }
+    };
+
+    /** Record ONE packet review decision. Persisted immediately — a decision the operator made is
+     *  not something to lose to a reload. Actor and time are stamped server-side. */
+    const recordPacketDecision = async (d: Omit<PacketReviewDecision, "decided_by" | "decided_at">) => {
+        if (!caseId) return;
+        const key = `${d.subject}:${d.subject_id}`;
+        const optimistic: PacketReviewDecision = { ...d, decided_by: "you", decided_at: new Date().toISOString() };
+        const next = { ...packetDecisions, [key]: optimistic };
+        setPacketDecisions(next);
+        try {
+            await fetch(`/api/admin/processing/cases/${caseId}/form-draft/discovery-decisions`, {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ packet_decisions: Object.values(next).map(({ decided_by: _b, decided_at: _a, ...rest }) => rest) }),
+            });
+        } catch {
+            /* the decision is still shown; the next save retries the whole set */
+        }
+    };
+
+    /** Facts, in the review grain: one row per proposal, with its concept and source. */
+    const packetFacts: PacketFactRow[] = useMemo(() => {
+        if (!packet) return [];
+        const rows: PacketFactRow[] = [];
+        const OBLIGATION = new Set(["acknowledgement", "upload_requirement", "signature"]);
+        for (const src of packet.sources) {
+            const analysis = packet.source_analysis?.[src.document_id];
+            if (!analysis) continue;
+            const byCandidate = new Map(analysis.proposals.map((p) => [p.candidate_id, p]));
+            for (const c of analysis.concepts) {
+                if (OBLIGATION.has(c.kind)) continue;
+                const proposal = byCandidate.get(c.id);
+                if (!proposal) continue;
+                rows.push({ id: proposal.id, concept: c, proposal, documentId: src.document_id, documentTitle: src.title });
+            }
+        }
+        return rows;
+    }, [packet]);
+
     const handleCreate = async (generateAnyway = false) => {
         const trimmedFormName = formName.trim();
         if (!trimmedFormName) {
@@ -1091,6 +1169,34 @@ export default function PosTemplateSetupColumn({
                     testId="processing-generate-anyway-confirm"
                 />
                 </>
+            ) : reviewMode === "packet" && packet ? (
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div className="text-[13px] font-semibold text-alloy-midnight">Packet review</div>
+                            <div className="text-[11px] text-alloy-midnight/55">
+                                {packet.sources.length} source documents analysed together. Proposals only — nothing is published from this screen.
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className="rounded-lg border border-alloy-stone/25 px-2.5 py-1 text-[11px] text-alloy-midnight/70"
+                            data-testid="packet-back-to-document"
+                            onClick={() => setReviewMode("concepts")}
+                        >
+                            Back to this document
+                        </button>
+                    </div>
+                    <PacketIntakeReview
+                        packet={packet}
+                        facts={packetFacts}
+                        decisions={packetDecisions}
+                        onDecision={(d) => void recordPacketDecision(d)}
+                        onRenameArtifact={(artifactId, name) =>
+                            void recordPacketDecision({ subject: "artifact", subject_id: artifactId, decision: "renamed", name })
+                        }
+                    />
+                </div>
             ) : reviewMode === "concepts" && discovery && !created ? (
                 <ProcessingConceptReview
                     discovery={discovery}
@@ -1392,6 +1498,18 @@ export default function PosTemplateSetupColumn({
                         {!created ? (
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                                 {busy ? "Re-detecting…" : "Re-detect questions"}
+                            </button>
+                        ) : null}
+                        {!created ? (
+                            <button
+                                type="button"
+                                disabled={packetBusy || busy || creating}
+                                onClick={() => void handleAnalyzePacket()}
+                                className={WS_ACTION_SECONDARY}
+                                data-testid="processing-analyze-packet"
+                                title="Analyse every source attached to this case together"
+                            >
+                                {packetBusy ? "Analysing packet…" : packet ? "Re-analyse packet" : "Analyse as one packet"}
                             </button>
                         ) : null}
                         {created ? (

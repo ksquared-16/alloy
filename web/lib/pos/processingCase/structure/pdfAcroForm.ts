@@ -35,6 +35,8 @@ export interface PdfAcroFieldRaw {
     radioButton?: boolean;
     pushButton?: boolean;
     combo?: boolean;
+    /** Declared choices for a `Ch` widget, as pdf.js reports them. */
+    options?: Array<{ exportValue?: string; displayValue?: string }> | null;
 }
 
 export interface PdfFieldRegion {
@@ -49,6 +51,11 @@ export interface PdfFieldRegion {
      * separate "update signature"), and they are not the same responsibility.
      */
     signature_variant?: SignatureVariant;
+    /**
+     * Choices the widget itself declares. A dropdown's option list is source semantics — publishing
+     * it as free text loses the one thing the form's author was explicit about.
+     */
+    options?: string[];
 }
 
 /** A text run from the page content stream (for drawing form CONTEXT behind highlights). */
@@ -135,6 +142,9 @@ export function mapAcroFormFields(raw: PdfAcroFieldRaw[], pageCount = 0): PdfAcr
         if (seen.has(key)) continue;
         seen.add(key);
         const mapped = mapFieldType(a);
+        const options = (a.options ?? [])
+            .map((o) => (o.displayValue ?? o.exportValue ?? "").trim())
+            .filter((o) => o.length > 0);
         fields.push({
             label: cleanFieldName(name),
             name,
@@ -142,6 +152,7 @@ export function mapAcroFormFields(raw: PdfAcroFieldRaw[], pageCount = 0): PdfAcr
             page: a.page > 0 ? a.page : 1,
             bbox: toBbox(a.rect),
             ...(mapped.signatureVariant ? { signature_variant: mapped.signatureVariant } : {}),
+            ...(options.length ? { options } : {}),
         });
     }
     return { has_acroform: fields.length > 0, fields, page_count: pageCount };
@@ -174,6 +185,7 @@ export async function extractPdfAcroFormFields(bytes: Uint8Array): Promise<PdfAc
                     radioButton: an.radioButton === true,
                     pushButton: an.pushButton === true,
                     combo: an.combo === true,
+                    options: Array.isArray(an.options) ? (an.options as Array<{ exportValue?: string; displayValue?: string }>) : null,
                 });
             }
             // Best-effort page context: dimensions + a sample of text runs (form labels/headers).

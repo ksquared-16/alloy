@@ -28,7 +28,7 @@ import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sect
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
 
-export const DISCOVERY_CONTRACT_VERSION = "fp16.1";
+export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Confidence — operator language first, numeric as supporting detail (never the message).
@@ -71,6 +71,28 @@ export interface SourceRef {
     section_key: string;
     /** Detected field/question labels contributing to this concept (evidence, display). */
     labels: string[];
+    /**
+     * The DESTINATIONS this concept came from, by the reader's own stable identity — an AcroForm
+     * field name, a hosted-form control name. Labels are evidence, not identity: two destinations in
+     * different artifacts can share the label "Today's Date:", and a label-keyed lineage cannot tell
+     * them apart or survive a wording change. This is what lets an operator ask "why does Alloy think
+     * this fact belongs here?" and be shown the exact controls.
+     */
+    destinations?: SourceDestinationRef[];
+}
+
+/** One source destination, addressable and stable. */
+export interface SourceDestinationRef {
+    /** The reader's stable identity for the control (`pdf_field:Signature1`, `hosted_form:q10:RESULT_TextField-2`). */
+    evidence: string;
+    /** Label as the source wrote it — display evidence, never identity. */
+    label: string;
+    /** 1-based page, where the source has pages. */
+    page: number | null;
+    /** The section the destination sits in. */
+    section_title: string;
+    /** The logical artifact inside the source that owns it, when the source has several. */
+    logical_artifact_id?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -99,6 +121,10 @@ export interface SemanticField {
     repeat_group_id?: string;
     /** For signature fields: the initial required signature, or an update / re-sign line. */
     signature_variant?: import("@/lib/pos/processingCase/structure/signatureFieldName").SignatureVariant;
+    /** The reader's stable identity for this destination — lineage, not a display label. */
+    evidence?: string;
+    /** 1-based page, where the source has pages. */
+    page?: number;
     label: string;
     role: SemanticBlockRole;
     /** Draft field type (text/date/number/select/boolean/signature/file_ref). */
@@ -164,6 +190,14 @@ export interface BusinessConceptCandidate {
      */
     concept_key: string | null;
     subject: ConceptSubject;
+    /**
+     * WHO the label names, when it names anyone — child, guardian, physician, emergency contact.
+     * A canonical binding whose field belongs to a different party is refused rather than proposed.
+     * @see ./bindingSafety
+     */
+    party?: import("./bindingSafety").ConceptParty;
+    /** The attribute the label asks for (name / phone / email / address / date_of_birth). */
+    attribute?: string;
     /** How many of this concept the document collects (a group is `multiple`). */
     cardinality: "single" | "multiple";
     /** For relationship concepts: the child- or household-scoped operational role. */
@@ -261,6 +295,12 @@ export interface ConfigurationProposal {
     alternatives: ProposalAlternative[];
     /** Operator decision — persisted separately from detector output. */
     decision_state: ProposalDecisionState;
+    /**
+     * A canonical binding that WAS matched and then refused because it belongs to another party.
+     * Surfaced so the operator sees the decision instead of an unexplained gap — and so a refusal
+     * can never be mistaken for "the matcher found nothing".
+     */
+    refused_binding?: { target: FormFieldSource; reason: string };
     /** Validation problems that would block application (e.g. new field needs a key). */
     validation_issues: string[];
     explanation: string;

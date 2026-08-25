@@ -20,6 +20,8 @@
  */
 
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
+import { checkBindingParty, type ConceptParty } from "./bindingSafety";
+import type { FormFieldSource } from "@/lib/forms/schema";
 import {
     DISCOVERY_CONTRACT_VERSION,
     type BusinessConceptCandidate,
@@ -161,6 +163,23 @@ function reuseFieldProposal(
     };
 }
 
+/**
+ * Run a matched canonical binding past the party check before it is ever proposed.
+ *
+ * A refusal is not a miss: it is recorded on the proposal so the operator sees what was considered
+ * and why it was declined, and the concept falls through to the durable/form-only path as if the
+ * matcher had found nothing. @see ./bindingSafety
+ */
+function safeBinding(
+    concept: BusinessConceptCandidate,
+    suggested: FormFieldSource | undefined
+): { field_source?: FormFieldSource; refused?: { target: FormFieldSource; reason: string }; note?: string } {
+    if (!suggested) return {};
+    const verdict = checkBindingParty((concept.party ?? "unknown") as ConceptParty, concept.attribute ?? null, suggested, concept.label);
+    if (!verdict.ok) return { refused: { target: verdict.refused, reason: verdict.reason } };
+    return { field_source: verdict.field_source, ...(verdict.redirected ? { note: verdict.reason } : {}) };
+}
+
 export function matchConcept(concept: BusinessConceptCandidate): ConfigurationProposal {
     const base = {
         contract_version: DISCOVERY_CONTRACT_VERSION,
@@ -252,12 +271,14 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
 
     // First, resolve by the concept's SEMANTIC key (richer than the label). Scalar concepts only —
     // a boolean/choice concept never binds to a scalar canonical field.
-    const semantic = concept.kind === "scalar_field" && concept.concept_key ? CANONICAL_CONCEPT_BINDINGS[concept.concept_key] : undefined;
-    if (semantic) {
+    const semanticRaw = concept.kind === "scalar_field" && concept.concept_key ? CANONICAL_CONCEPT_BINDINGS[concept.concept_key] : undefined;
+    const semanticSafe = semanticRaw ? safeBinding(concept, { entity_type: semanticRaw.entity_type, field_key: semanticRaw.field_key }) : {};
+    const semantic = semanticRaw && semanticSafe.field_source ? semanticRaw : undefined;
+    if (semantic && semanticSafe.field_source) {
         return {
             ...base,
             disposition: "reuse_canonical_field",
-            target_field_source: { entity_type: semantic.entity_type, field_key: semantic.field_key },
+            target_field_source: semanticSafe.field_source,
             confidence: conf(semantic.band, [`matched by concept "${concept.concept_key}" to ${semantic.entity_type}.${semantic.field_key}`]),
             alternatives: [{ disposition: "create_proposed_field", label: `Create a new ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) }],
             explanation: `Matched "${concept.label}" to the canonical ${semantic.entity_type} field ${semantic.field_key} — reuse the existing field rather than create a duplicate.${nameCaptureNote(semantic.field_key)}`,
@@ -269,22 +290,28 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
     // customer_member field. The operator must not be pushed to create a field because the matcher
     // failed. A concept becomes a durable new field only when it is genuinely durable record data.
     if (concept.kind === "scalar_field" || concept.kind === "choice_field" || concept.kind === "boolean_status" || concept.kind === "conditional_explanation") {
-        const binding = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;
+        const rawBinding = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;
+        const guarded = safeBinding(concept, rawBinding?.field_source);
+        const binding = guarded.field_source ? { ...rawBinding, field_source: guarded.field_source, note: guarded.note ?? rawBinding?.note } : null;
         if (!binding?.field_source && !isDurableRecordConcept(concept)) {
             return {
                 ...base,
                 disposition: "form_only_response",
-                confidence: conf("high", [durabilitySignal(concept)]),
+                confidence: conf("high", [durabilitySignal(concept), ...(guarded.refused ? [`canonical binding refused: ${guarded.refused.reason}`] : [])]),
+                ...(guarded.refused ? { refused_binding: guarded.refused } : {}),
                 alternatives: [
                     { disposition: "create_proposed_field", label: `Create a durable ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) },
                 ],
                 explanation: `Collected as a form response (${concept.label}) — a ${formOnlyReason(concept)}. No durable record field is created unless you choose to.`,
             };
         }
-        if (binding?.field_source) return reuseFieldProposal(base, concept, binding.field_source, binding.confidence, binding.note);
+        if (binding?.field_source) return reuseFieldProposal(base, concept, binding.field_source, binding.confidence ?? "medium", binding.note);
+        if (guarded.refused) return proposeNewField(base, concept, wantsType, guarded.refused);
     }
 
-    const binding = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;
+    const rawBinding2 = concept.kind === "scalar_field" ? suggestFieldBinding(concept.label, wantsType) : null;
+    const guarded2 = safeBinding(concept, rawBinding2?.field_source);
+    const binding = guarded2.field_source ? { ...rawBinding2, field_source: guarded2.field_source, note: guarded2.note ?? rawBinding2?.note } : null;
 
     if (binding?.field_source) {
         const bandFromBinding: Confidence["band"] = binding.confidence === "high" ? "high" : binding.confidence === "medium" ? "review" : "attention";
@@ -302,6 +329,20 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
     }
 
     // no canonical match → propose a new configurable field (never auto-created)
+    return proposeNewField(base, concept, wantsType, guarded2.refused);
+}
+
+/**
+ * Propose a NEW configurable field. Also the landing place for a concept whose canonical match was
+ * refused on party grounds — the refusal travels with the proposal so the operator can see that a
+ * binding was found and declined, rather than assuming nothing matched.
+ */
+function proposeNewField(
+    base: Pick<ConfigurationProposal, "contract_version" | "id" | "candidate_id" | "decision_state" | "validation_issues" | "source">,
+    concept: BusinessConceptCandidate,
+    wantsType: string,
+    refused?: { target: FormFieldSource; reason: string }
+): ConfigurationProposal {
     const proposed: ProposedFieldDefinition = {
         operator_label: concept.label.replace(/\s*—\s*if\s+yes.*$/i, "").trim(),
         suggested_field_key: fieldKeyFrom(concept.concept_key, concept.label),
@@ -314,16 +355,21 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
         introduced_by: [concept.source.section_title],
     };
     const band: Confidence["band"] = concept.kind === "choice_field" ? "review" : "attention";
-    const proposal: ConfigurationProposal = {
+    return {
         ...base,
         disposition: "create_proposed_field",
         proposed_field: proposed,
-        confidence: conf(band, ["no canonical field matched this label", `owning entity: ${proposed.entity_type}`]),
+        confidence: conf(band, [
+            refused ? `a canonical field matched the label and was REFUSED: ${refused.reason}` : "no canonical field matched this label",
+            `owning entity: ${proposed.entity_type}`,
+        ]),
+        ...(refused ? { refused_binding: refused } : {}),
         alternatives: [],
-        explanation: `No existing Alloy field matched "${concept.label}". Proposed as a new ${proposed.entity_type} ${proposed.data_type} field — created only after you approve.`,
+        explanation: refused
+            ? `"${concept.label}" matched the canonical field ${refused.target.entity_type}.${refused.target.field_key}, and that binding was refused — ${refused.reason}. Proposed as a new ${proposed.entity_type} ${proposed.data_type} field instead, created only after you approve.`
+            : `No existing Alloy field matched "${concept.label}". Proposed as a new ${proposed.entity_type} ${proposed.data_type} field — created only after you approve.`,
         validation_issues: proposed.suggested_field_key ? [] : ["A field key is required before this can be created."],
     };
-    return proposal;
 }
 
 export function matchConcepts(concepts: BusinessConceptCandidate[]): ConfigurationProposal[] {

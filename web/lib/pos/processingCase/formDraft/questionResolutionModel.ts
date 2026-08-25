@@ -441,6 +441,12 @@ export function expandQuestionsForDraftSave(
                     type: "text",
                     section: question.section,
                     required: false,
+                    // A middle name has no durable canonical field yet, but it MUST still be asked
+                    // once. `shared_value_key` is the ask-once identity the packet planner dedupes
+                    // on first, so a middle name collected on one artifact populates every other
+                    // artifact that asks for it — which is the whole point of splitting the name.
+                    // The missing primitive is durable storage, not composition. @see G7 disposition.
+                    field_source: { entity_type: "child", field_key: "child_middle_name", shared_value_key: "child_middle_name" },
                     ...pdfProvenance,
                 });
             }

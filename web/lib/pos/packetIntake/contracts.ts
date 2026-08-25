@@ -48,6 +48,8 @@ export interface PacketSourceArtifact {
      * visible instead of looking like loss.
      */
     raw_control_count?: number | null;
+    /** When the bytes were captured, from the document row that owns them. */
+    captured_at?: string | null;
 }
 
 /** One destination in the packet, addressed by artifact + the reader's own identity for it. */
@@ -151,6 +153,14 @@ export interface PacketIntakeInput {
 export interface PacketIntakeResult {
     contract_version: string;
     sources: PacketSourceArtifact[];
+    /**
+     * Each source's own concepts and proposals, keyed by document.
+     *
+     * The packet is STORED on the case, and a review that had to re-read three documents to render
+     * itself would be a review of something else by the time it loaded. Keeping the analysis with
+     * the packet makes the stored object self-contained and the review reproducible.
+     */
+    source_analysis: Record<string, { concepts: ConfigurationDiscoveryResult["concepts"]; proposals: ConfigurationDiscoveryResult["proposals"] }>;
     /** Logical artifacts across the whole packet, in source order. */
     artifacts: Array<LogicalArtifact & { document_id: string }>;
     destinations: PacketDestination[];

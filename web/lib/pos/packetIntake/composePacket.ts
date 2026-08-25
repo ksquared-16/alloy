@@ -53,6 +53,21 @@ function artifactIndex(artifacts: LogicalArtifact[]): Map<string, string> {
     return out;
 }
 
+/**
+ * Stamp each concept's lineage destinations with the logical artifact that owns them, so an operator
+ * tracing a fact lands on artifact → page/section → control, not just on a label.
+ */
+function stampLineageArtifacts(inputs: PacketIntakeInput[]): void {
+    for (const input of inputs) {
+        const owner = artifactIndex(input.structure.logical_artifacts ?? []);
+        for (const concept of input.discovery.concepts) {
+            for (const d of concept.source.destinations ?? []) {
+                d.logical_artifact_id = owner.get(d.evidence) ?? null;
+            }
+        }
+    }
+}
+
 function collectDestinations(inputs: PacketIntakeInput[]): { destinations: PacketDestination[]; reported: Map<string, number> } {
     const destinations: PacketDestination[] = [];
     const reported = new Map<string, number>();
@@ -141,7 +156,12 @@ function correlateFacts(inputs: PacketIntakeInput[]): CrossArtifactCorrelation[]
         const owner = artifactIndex(input.structure.logical_artifacts ?? []);
         for (const concept of input.discovery.concepts) {
             if (OBLIGATION_KEY.test(concept.concept_key ?? "")) continue;
-            const artifactId = concept.source.labels.map((l) => owner.get(l)).find(Boolean) ?? null;
+            // Lineage first: a destination knows which artifact owns it. Labels are the fallback
+            // only because a reference document has no destinations to ask.
+            const artifactId =
+                concept.source.destinations?.map((d) => owner.get(d.evidence)).find(Boolean) ??
+                concept.source.labels.map((l) => owner.get(l)).find(Boolean) ??
+                null;
             const entry: Entry = { input, concept, artifactId: artifactId ?? null };
             const key = concept.concept_key ?? "";
             if (key && !NON_IDENTIFYING_KEY.test(key)) {
@@ -215,12 +235,13 @@ export function composePacket(inputs: PacketIntakeInput[]): PacketIntakeResult {
     if (inputs.length === 0) {
         return {
             contract_version: PACKET_INTAKE_CONTRACT_VERSION,
-            sources: [], artifacts: [], destinations: [], correlations: [], obligations: [], signatures: [],
+            sources: [], source_analysis: {}, artifacts: [], destinations: [], correlations: [], obligations: [], signatures: [],
             reconciliation: { by_source: [], total_raw: 0, total_reported: 0, total_accounted: 0, duplicated: [], missing: [], balanced: true },
             warnings: ["no_sources"],
         };
     }
 
+    stampLineageArtifacts(inputs);
     const { destinations, reported } = collectDestinations(inputs);
     const reconciliation = reconcile(inputs, destinations, reported);
     if (!reconciliation.balanced) {
@@ -242,6 +263,9 @@ export function composePacket(inputs: PacketIntakeInput[]): PacketIntakeResult {
     return {
         contract_version: PACKET_INTAKE_CONTRACT_VERSION,
         sources: inputs.map((i) => i.artifact),
+        source_analysis: Object.fromEntries(
+            inputs.map((i) => [i.artifact.document_id, { concepts: i.discovery.concepts, proposals: i.discovery.proposals }])
+        ),
         artifacts,
         destinations,
         correlations,

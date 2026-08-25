@@ -35,9 +35,9 @@ export const PROCESSING_IMPORT_INTENT_OPTIONS: ReadonlyArray<{
     },
     {
         value: "packet_source",
-        label: "Add to a packet",
-        description: "Coming soon — packet intake is not available in V1.",
-        available: false,
+        label: "Analyze as one packet",
+        description: "Attach this document to the case's packet and analyze every source together.",
+        available: true,
     },
 ] as const;
 

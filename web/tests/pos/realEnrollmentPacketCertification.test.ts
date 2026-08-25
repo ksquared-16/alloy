@@ -301,7 +301,7 @@ describe("the compression scorecard, guarded", () => {
         expect(uniqueObligations().size).toBe(32);
     });
 
-    it("11 of the 86 facts already carry a canonical binding proposal", () => {
+    it("8 of the 86 facts carry a SAFE canonical binding proposal, and 3 unsafe ones are refused", () => {
         const bound = new Set<string>();
         const merge = new Map<string, string>();
         for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
@@ -316,9 +316,21 @@ describe("the compression scorecard, guarded", () => {
                 }
             }
         }
-        expect(bound.size).toBe(11);
-        // The rest is Slice 3's classification input, and it is 75.
-        expect(uniqueFacts().size - bound.size).toBe(75);
+        expect(bound.size).toBe(8);
+        // The rest is Slice 4's classification input.
+        expect(uniqueFacts().size - bound.size).toBe(78);
+
+        // The three refusals are the ones that would have written a stranger onto a family record.
+        const refused = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.refused_binding));
+        expect(refused).toHaveLength(3);
+        expect(refused.map((p) => `${p.refused_binding!.target.entity_type}.${p.refused_binding!.target.field_key}`).sort()).toEqual([
+            "customer.address",
+            "person.phone",
+            "person.phone",
+        ]);
+        // Every refusal explains itself rather than looking like "nothing matched".
+        expect(refused.every((p) => p.refused_binding!.reason.length > 20)).toBe(true);
+        expect(refused.every((p) => p.disposition !== "reuse_canonical_field")).toBe(true);
     });
 
     it("every destination in the packet is claimed by a fact or by an obligation — none is orphaned", () => {

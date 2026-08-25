@@ -85,6 +85,8 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
                 label: f.label,
                 role,
                 ...(f.repeat_group_id ? { repeat_group_id: f.repeat_group_id } : {}),
+                ...(f.evidence ? { evidence: f.evidence } : {}),
+                ...(typeof f.page === "number" ? { page: f.page } : {}),
                 ...(f.signature_variant ? { signature_variant: f.signature_variant } : {}),
                 data_type: f.suggested_type,
                 ...(f.options && f.options.length ? { options: f.options } : {}),

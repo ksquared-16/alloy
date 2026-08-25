@@ -16,6 +16,48 @@
  * that carries two agreements segments the same way a hosted form does.
  */
 
+/**
+ * Name an artifact from what its OWN content says, when that is reliable.
+ *
+ * A page number is a position, not an identity — "Page 1" and "Page 2" tell an operator nothing and
+ * stop meaning anything the moment a page is inserted. The signature that closes an artifact usually
+ * states what is being agreed to ("By signing below, I agree to the Tuition and Enrollment
+ * Agreement"), and where it does, that is the artifact's name in the source's own words.
+ *
+ * Nothing is guessed. When no evidence names the artifact, the section title is kept and the
+ * artifact is marked `needs_name` so the operator names it during review.
+ */
+const AGREEMENT_FROM_SIGNATURE =
+    /\b(?:i\s+(?:agree|consent|acknowledge|authorize|authorise)\s+(?:to|that)?\s*(?:the\s+)?|by\s+signing[^,.]*,?\s*i\s+agree\s+to\s+(?:the\s+)?)([A-Z][\w&'’-]*(?:\s+[\w&'’-]+){0,5})/;
+const PAGE_TITLE = /^\s*page\s+\d+\s*$/i;
+
+/** Trim a name to its agreement phrase, dropping trailing prose. */
+function tidyName(raw: string): string {
+    return raw
+        .replace(/\s+/g, " ")
+        .replace(/[.,;:]+$/, "")
+        .replace(/\s+(listed|described|outlined|above|below|here)\b.*$/i, "")
+        .trim();
+}
+
+export function deriveArtifactName(sectionTitle: string, signatureLabels: readonly string[]): { title: string; needs_name: boolean; signal: string } {
+    for (const label of signatureLabels) {
+        const m = AGREEMENT_FROM_SIGNATURE.exec(label ?? "");
+        const name = m ? tidyName(m[1]) : "";
+        if (name.length >= 6) {
+            return { title: name, needs_name: false, signal: `named by its own signature statement: "${label.slice(0, 80)}"` };
+        }
+    }
+    if (PAGE_TITLE.test(sectionTitle)) {
+        return {
+            title: sectionTitle,
+            needs_name: true,
+            signal: "no evidence names this artifact — a page number is a position, not an identity, so the operator names it",
+        };
+    }
+    return { title: sectionTitle, needs_name: false, signal: `named by its section heading "${sectionTitle}"` };
+}
+
 export interface LogicalArtifact {
     /** Stable id from lineage: ordinal + normalized title. Never an array index alone. */
     id: string;
@@ -28,6 +70,11 @@ export interface LogicalArtifact {
     signature_ids: string[];
     /** True when nothing signs this artifact — it collects rather than commits. */
     unsigned: boolean;
+    /**
+     * True when no structural evidence names this artifact. The operator names it during review;
+     * until then the placeholder is shown as a placeholder rather than as a name.
+     */
+    needs_name: boolean;
     /** Why this boundary was drawn. */
     signals: string[];
 }
@@ -66,16 +113,20 @@ export function segmentLogicalArtifacts(sections: ArtifactSectionInput[]): Logic
         ordinal += 1;
         const dests = open.flatMap((s) => s.destinations);
         const sigs = dests.filter((d) => d.type === "signature");
+        const named = deriveArtifactName(open[0].title, sigs.map((d) => d.label));
         artifacts.push({
+            // The id is lineage — ordinal + the SECTION title — so renaming an artifact during review
+            // never changes its identity or orphans the decisions attached to it.
             id: `${ordinal}:${normalizeTitle(open[0].title)}`,
-            title: open[0].title,
+            title: named.title,
             section_titles: open.map((s) => s.title),
             destination_ids: dests.map((d) => d.id),
             signature_ids: sigs.map((d) => d.id),
             unsigned: !signed,
+            needs_name: named.needs_name,
             signals: signed
-                ? [`closed by ${sigs.length} signature destination(s)`, `opens at the heading "${open[0].title}"`]
-                : ["no signature closes this span — it collects information rather than committing to it"],
+                ? [`closed by ${sigs.length} signature destination(s)`, `opens at the heading "${open[0].title}"`, named.signal]
+                : ["no signature closes this span — it collects information rather than committing to it", named.signal],
         });
         open = [];
     };
