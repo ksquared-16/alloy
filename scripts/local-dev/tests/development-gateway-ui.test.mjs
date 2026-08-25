@@ -546,6 +546,7 @@ await test("post-send burst polling does not raise idle cadence or fan out", () 
   assert.equal(OUTPUT_BURST_WINDOW_MS <= 30000, true);
   assert.equal(outputPollIntervalMs({ burstUntil: 0, nowMs: 50_000 }), OUTPUT_POLL_MS);
   assert.equal(outputPollIntervalMs({ burstUntil: 60_000, nowMs: 50_000 }), OUTPUT_BURST_POLL_MS);
+  assert.equal(outputPollIntervalMs({ liveWork: true, nowMs: 50_000 }), OUTPUT_BURST_POLL_MS);
   assert.match(gwSrc, /burstUntil/);
   assert.equal(gwSrc.includes("/api/lanes/") && /for \(.*lanes.*output/.test(gwSrc), false);
   assert.equal((gwSrc.match(/\/output/g) || []).length >= 1, true);
@@ -1799,7 +1800,8 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(html, /Enter to send/);
   assert.match(gwSrc, /t\.id !== "gw-instruction"/);
   assert.match(gwSrc, /e\.key !== "Enter"/);
-  assert.match(gwSrc, /if \(listed\) G.lane = listed;/);
+  assert.match(gwSrc, /mergeListedLane\(G\.lane, listed\)/);
+  assert.match(gwSrc, /upsertLaneInList\(G\.lanes, G\.lane\)/);
   assert.match(gwSrc, /liveRun/);
   assert.match(gwSrc, /--gw-composer-h/);
 });
@@ -1937,6 +1939,19 @@ await test("canonical work state maps live execution to Working and stale heartb
   }, { nowMs: now });
   assert.equal(working.label, "Working");
   assert.equal(working.group, "active");
+  const idleOpen = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    provider_activity: { activity: "ready" },
+    last_activity_ms: now - 5_000,
+  }, { nowMs: now });
+  assert.equal(idleOpen.label, "Ready");
+  assert.equal(idleOpen.group, "idle");
+  assert.equal(deriveLaneExecutionPosture({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    provider_activity: { activity: "ready" },
+  }).state, "CONNECTED");
   const queued = canonicalLaneWorkState({
     ...identity,
     execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },

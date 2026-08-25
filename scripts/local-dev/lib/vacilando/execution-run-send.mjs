@@ -203,9 +203,30 @@ async function refuseUndeliveredPromptBlock({ run, out, nowMs, root, size, laneI
   const needsTerminal = readiness?.needs_terminal_operator === true;
   const detail = readiness?.summary
     || "The agent terminal was not at a prompt, so the instruction was not sent.";
-  const summary = needsTerminal
-    ? `Not sent — ${detail} This prompt can only be answered in the agent's terminal, not from Vacilando.`
-    : `Not sent — ${detail}`;
+  // If the screen offers numbered choices, the operator can answer it from
+  // Vacilando — so do not tell them to go find a terminal. The old copy said
+  // "this prompt has to be answered in the agent's terminal", which on a phone
+  // was a dead end: the lane could be blocked with no way forward at all.
+  let answerable = null;
+  try {
+    const { answerableScreen } = await import("./provider-screen-answer.mjs");
+    const { capturePaneText } = await import("./lanes.mjs");
+    const { getDurableLane } = await import("./development-lane.mjs");
+    const rec = getDurableLane(laneId, root);
+    const target = rec?.binding?.tmux_pane || rec?.binding?.tmux_session || null;
+    if (target) {
+      const cap = await capturePaneText(target);
+      if (cap?.ok && cap.text) {
+        answerable = answerableScreen(cap.text, { provider: rec?.preferred_provider || null });
+      }
+    }
+  } catch { /* fall back to the terminal wording */ }
+  const canAnswerHere = answerable?.answerable === true;
+  const summary = canAnswerHere
+    ? `Not sent — ${detail} Answer it below and send again.`
+    : needsTerminal
+      ? `Not sent — ${detail} This prompt can only be answered in the agent's terminal, not from Vacilando.`
+      : `Not sent — ${detail}`;
 
   patchRunFields(run.run_id, {
     delivery: {
@@ -215,7 +236,8 @@ async function refuseUndeliveredPromptBlock({ run, out, nowMs, root, size, laneI
       at: new Date(nowMs).toISOString(),
       instruction_fingerprint: instructionFingerprint(run.instruction),
       prompt_readiness: readiness,
-      needs_terminal_operator: needsTerminal,
+      needs_terminal_operator: needsTerminal && !canAnswerHere,
+      answerable_screen: canAnswerHere ? answerable : null,
     },
     state_reason: needsTerminal ? UNDELIVERED_PROMPT_BLOCK : "waiting_for_ready_prompt",
   }, { nowMs, root });
@@ -661,6 +683,10 @@ export async function deliverManagedLaneInstruction(laneId, instruction, opts = 
     ...opts,
     nowMs,
     dedupeKey: promptKey,
+    // Operator Send means start this instruction now. A pane that is mid-turn
+    // (not on a modal) is interrupted once, then re-read. Admission retries
+    // do not set this, so a queued prompt still waits for a natural prompt.
+    interruptIfBusy: opts.interruptIfBusy !== false,
   });
 
   if (out.ok && out.status === "delivered") {
@@ -784,6 +810,7 @@ export async function deliverExistingQueuedRun(runId, opts = {}) {
     ...opts,
     nowMs,
     dedupeKey: `admission:${run.run_id}`,
+    interruptIfBusy: false,
   });
   if (out.ok && out.status === "delivered") {
     if (queuedAttachments) queuedAttachments.markAttachmentsDelivered(run.run_id, { nowMs, root });

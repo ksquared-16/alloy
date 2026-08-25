@@ -56,6 +56,8 @@ const G = {
   repositorySheet: null,
   laneWizard: null,
   cancelPending: false,
+  blockingScreen: null,
+  screenPending: null,
   collapsedFolders: null,
   releasing: false,
   providers: null,
@@ -580,6 +582,7 @@ async function fetchLane(id) {
     try { history.replaceState(null, "", View.laneDetailHash(next.lane_id)); } catch { /* */ }
   }
   G.lane = View.applyFetchedLane(G.selected, next?.lane_id || id, G.lane, next);
+  if (G.lane) G.lanes = View.upsertLaneInList(G.lanes, G.lane);
   return G.lane;
 }
 
@@ -1004,6 +1007,8 @@ function paint() {
     repositorySheet: G.repositorySheet,
     laneWizard: G.laneWizard,
     cancelPending: G.cancelPending,
+    blockingScreen: G.blockingScreen,
+    screenPending: G.screenPending,
     attachments: G.attachments,
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
@@ -1088,7 +1093,10 @@ function startOutputPoll(laneId) {
   const tick = async () => {
     G.pollOut = null;
     if (!View.shouldPollOutput({ hidden: document.hidden, routeName: routeName(), laneId: G.selected })) {
-      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+        burstUntil: G.burstUntil,
+        liveWork: View.laneAgentIsWorking(G.lane),
+      }));
       return;
     }
     if (G.selected !== laneId) return;
@@ -1098,7 +1106,14 @@ function startOutputPoll(laneId) {
         await fetchOutput(laneId, { mode: "recent" });
         const watching = G.watchRefresh || View.contextRefreshStatus(G.lane)?.kind === "progress";
         const runState = G.lane?.execution_run?.state;
-        const liveRun = ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+        const liveWork = View.laneAgentIsWorking(G.lane);
+        const observed = G.lane?.provider_activity?.activity;
+        // An EXECUTING run with an idle pane is not live work. Trust Runtime
+        // sat on a 19-hour run after Claude had already cooked; bursting that
+        // as "still working" is what froze the thread on vac run-status.
+        const liveRun = liveWork
+          || ["VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(runState)
+          || (runState === "EXECUTING" && observed !== "ready")
           || (G.burstUntil && Date.now() < G.burstUntil);
         if (watching || liveRun) {
           await fetchLane(laneId).catch(() => {});
@@ -1118,7 +1133,7 @@ function startOutputPoll(laneId) {
           G.outputMode = "recent";
           G.output = G.recentOutput;
           G.finalizedOutput = false;
-        } else if (runState === "COMPLETE" || (!runState && G.lane?.previous_run?.state === "COMPLETE")) {
+        } else if (runState === "COMPLETE" || observed === "ready" || (!runState && G.lane?.previous_run?.state === "COMPLETE")) {
           await promoteCompletedOutput(laneId);
         }
         if (!watching && pre && document.activeElement && document.activeElement.id === "gw-instruction") {
@@ -1144,10 +1159,16 @@ function startOutputPoll(laneId) {
       finally { G.outInflight = false; }
     }
     if (G.selected === laneId) {
-      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+      G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+        burstUntil: G.burstUntil,
+        liveWork: View.laneAgentIsWorking(G.lane),
+      }));
     }
   };
-  G.pollOut = setTimeout(tick, View.outputPollIntervalMs({ burstUntil: G.burstUntil }));
+  G.pollOut = setTimeout(tick, View.outputPollIntervalMs({
+    burstUntil: G.burstUntil,
+    liveWork: View.laneAgentIsWorking(G.lane),
+  }));
 }
 
 function startListPoll() {
@@ -1161,7 +1182,8 @@ function startListPoll() {
       paintRail();
       if (G.selected) {
         const listed = View.knownLane(G.lanes, G.selected);
-        if (listed) G.lane = listed;
+        if (listed) G.lane = View.mergeListedLane(G.lane, listed);
+        if (G.lane) G.lanes = View.upsertLaneInList(G.lanes, G.lane);
         applyContextRefreshWatch();
         paint();
       } else {
@@ -1399,6 +1421,7 @@ async function show(r) {
     // A refresh mid-draft must not lose images the operator already picked:
     // they are durable server-side, so re-read them rather than assuming none.
     hydrateAttachments(G.selected);
+    refreshBlockingScreen(G.selected);
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1971,6 +1994,39 @@ document.addEventListener("click", async (e) => {
     document.querySelector("[data-gw-work]")?.scrollIntoView?.({ block: "nearest" });
     G.notice = { kind: "idle", text: "Review the current run before sending new work." };
     paint();
+    return;
+  }
+  const screenAnswer = e.target?.closest?.("[data-gw-screen-answer]");
+  if (screenAnswer) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (screenAnswer.disabled || G.screenPending != null) return;
+    const choice = Number(screenAnswer.getAttribute("data-gw-screen-answer"));
+    // Send the question the operator was LOOKING at, so the server can refuse
+    // if the dialog changed under them between render and tap.
+    const question = document.querySelector("[data-gw-screen]")?.getAttribute("data-gw-screen-question") || null;
+    G.screenPending = choice;
+    paint();
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(G.selected)}/screen/answer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ choice, question }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        G.notice = { kind: "ok", text: `Answered "${j.answered.label}". You can send again.` };
+        G.blockingScreen = null;
+      } else {
+        G.notice = { kind: "err", text: View.screenAnswerErrorText(j.error) };
+        await refreshBlockingScreen(G.selected);
+      }
+    } catch {
+      G.notice = { kind: "err", text: "Could not reach the Gateway. Nothing was answered." };
+    } finally {
+      G.screenPending = null;
+      paint();
+    }
     return;
   }
   const cancelRun = e.target?.closest?.("[data-gw-cancel-run]");
@@ -2721,3 +2777,21 @@ document.addEventListener("click", async (e) => {
   }
   if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
 });
+
+/**
+ * Poll for a blocking dialog on the open lane.
+ *
+ * Read-only: it captures the pane and reports what is on it. Nothing is
+ * answered without the operator tapping a choice.
+ */
+async function refreshBlockingScreen(laneId) {
+  if (!laneId) { G.blockingScreen = null; return; }
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/screen`);
+    const j = await r.json();
+    if (G.selected !== laneId) return;
+    G.blockingScreen = j?.ok ? j : null;
+  } catch {
+    // A failed read must not erase a dialog the operator is looking at.
+  }
+}

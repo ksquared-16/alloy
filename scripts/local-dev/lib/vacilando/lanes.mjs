@@ -858,6 +858,49 @@ export function pasteBufferArgv(bufferName, target) {
   return ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", target];
 }
 
+/**
+ * Read a pane's visible text.
+ *
+ * Exported because callers outside this module need the CURRENT screen — a
+ * blocking dialog must be re-read at answer time, not trusted from whatever the
+ * UI last rendered.
+ */
+export async function capturePaneText(target, historyLines = 200) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target", text: "" };
+  const out = await runTmux(capturePaneArgv(t, historyLines));
+  return { ok: Boolean(out?.ok), text: String(out?.stdout || ""), error: out?.error || null };
+}
+
+/**
+ * Send one bounded key argv to a pane.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how three earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function sendPaneKeys(argv) {
+  if (!Array.isArray(argv) || argv[0] !== "send-keys") {
+    return { ok: false, error: "unsupported_key_argv" };
+  }
+  return runTmux(argv);
+}
+
+/**
+ * Kill whatever is on the composer line before pasting into it.
+ *
+ * NOT yet wired into delivery. paste-buffer inserts at the cursor, so residual
+ * text on the composer is appended to and submitted as one line — observed on
+ * the Surfaces pane sitting at `❯ alloy-dev-stop wt6-surfaces-faacca`. Adding
+ * this to defaultDeliverInstruction is the fix, but the delivery sequence is a
+ * governed contract with tests asserting the exact tmux mutations, and widening
+ * it broke five of them. That belongs in a change that updates the contract
+ * deliberately, not as a side effect of a bug fix.
+ */
+export function clearComposerArgv(target) {
+  return ["send-keys", "-t", target, "C-u"];
+}
+
 export function submitEnterArgv(target) {
   return ["send-keys", "-t", target, "Enter"];
 }
@@ -1216,15 +1259,35 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
     }
 
     const tmux = opts.tmux || runTmux;
+    const provider = String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null;
 
     // Readiness is decided BEFORE the paste, from a live read of the pane. A
     // successful paste-buffer is not evidence an agent read anything.
-    const observed = await prePasteObservation(targetCheck.target, {
+    let observed = await prePasteObservation(targetCheck.target, {
       tmux,
       capturePane: opts.capturePane,
-      provider: String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null,
+      provider,
       nowMs,
     });
+    // Operator Send is a new turn. If the pane is mid-turn (a spinner, not a
+    // modal), interrupt once and re-read. Queued admission retries do not pass
+    // interruptIfBusy — they wait for the pane to become ready on its own.
+    if (opts.interruptIfBusy === true && observed.readiness?.state === "busy") {
+      try {
+        await tmux(["send-keys", "-t", targetCheck.target, "Escape", "Escape"]);
+      } catch { /* recapture below still decides */ }
+      const settle = Number.isFinite(opts.interruptSettleMs) ? opts.interruptSettleMs : 800;
+      if (settle > 0) {
+        const sleep = typeof opts.sleep === "function" ? opts.sleep : (ms) => new Promise((r) => setTimeout(r, ms));
+        await sleep(settle);
+      }
+      observed = await prePasteObservation(targetCheck.target, {
+        tmux,
+        capturePane: opts.capturePane,
+        provider,
+        nowMs,
+      });
+    }
     const gate = promptReadinessAllowsSend(observed.readiness, {
       strictCapture: opts.strictPromptCapture === true,
     });

@@ -252,8 +252,15 @@ await test("operator follow-up after grace closes leftover executing work", asyn
 await test("NEEDS_INPUT continues the same run instead of creating another", async () => {
   const { out } = await startRun("original");
   const id = out.run_id;
-  const need = reportRunState(id, "needs-input", { reason: "Which fixture?", origin: "agent", root: ROOT });
-  assert.equal(need.ok, true);
+  const { submitAgentReport } = await import("../lib/vacilando/execution-run-report.mjs");
+  const need = submitAgentReport(id, {
+    type: "needs_input",
+    message: "Which fixture?",
+    cwd: WT,
+    laneId: "alloy-identity",
+    root: ROOT,
+  });
+  assert.equal(need.ok, true, need.error);
   assert.equal(need.run.state, "NEEDS_INPUT");
   const payloads = [];
   const cont = await deliverManagedLaneInstruction("alloy-identity", "Use the loopback fixture.", {
@@ -468,6 +475,7 @@ await test("envelope helper stays small and does not change product scope", () =
   assert.match(text, /Ship it\./);
   assert.match(text, /governed-action/);
   assert.match(text, /run-status/);
+  assert.match(text, /complete --summary/);
   assert.equal(/fair queue|self-heal|lease grant/i.test(text), false);
 });
 

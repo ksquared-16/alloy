@@ -309,7 +309,8 @@ await test("another lane is independently lockable", async () => {
   await Promise.resolve();
   const other = await sendLaneInstruction("alloy-other", "two", baseOpts({ stdout, extra: { tmux: otherTmux } }));
   assert.equal(other.ok, true);
-  assert.equal(otherCalls[0].input, "two");
+  const loaded = otherCalls.find((c) => c.argv[0] === "load-buffer");
+  assert.equal(loaded?.input, "two");
   release();
   const first = await p1;
   assert.equal(first.ok, true);

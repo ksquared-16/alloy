@@ -10,7 +10,7 @@
  * as one line.
  */
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -35,21 +35,39 @@ const pane = (composer) => [
 
 // ------------------------------------------------------- dirty composer
 
-test("a composer holding unsent text is NOT ready", () => {
-  // The live Surfaces pane: readiness said ready while this sat in the input.
+test("residual composer text is detectable", () => {
+  // The live Surfaces pane sat at this while readiness reported ready.
+  assert.equal(
+    P.residualPromptText(pane("alloy-dev-stop wt6-surfaces-faacca")),
+    "alloy-dev-stop wt6-surfaces-faacca",
+  );
+  assert.equal(P.residualPromptText(pane("")), null);
+});
+
+test("detecting it does NOT flip the readiness verdict", () => {
+  // A merged contract says a composer holding text is still an actionable
+  // prompt — that rule exists because refusing one blocked a live operator from
+  // sending at all. The pane structure is identical either way (rule, caret
+  // line, rule, footer), so nothing can tell leftover text apart from a
+  // legitimate composer. Flipping this on a guess would re-break sending.
   const r = P.assessPanePromptReadiness(pane("alloy-dev-stop wt6-surfaces-faacca"), {
     provider: "claude", captured: true,
   });
-  assert.equal(r.ready, false);
-  assert.equal(r.state, "prompt_not_empty");
-  assert.equal(r.blocker.kind, "dirty_prompt");
-  assert.ok(r.summary.includes("alloy-dev-stop"), "it names what is in the way");
-  assert.ok(/append/i.test(r.summary), "and says why that matters");
+  assert.equal(r.ready, true, "readiness must not regress on a guess");
 });
 
-test("an empty composer is still ready", () => {
-  const r = P.assessPanePromptReadiness(pane(""), { provider: "claude", captured: true });
-  assert.equal(r.ready, true);
+test("the composer-clearing transport exists but is not wired into delivery", () => {
+  // paste-buffer inserts at the cursor, so residual text is appended to and
+  // submitted as one line. Clearing first is the fix — but delivery's tmux
+  // sequence is a governed contract with tests asserting the exact mutations,
+  // and widening it broke five of them. It lands with that contract updated,
+  // not as a side effect.
+  assert.equal(typeof L.clearComposerArgv, "function");
+  assert.deepEqual(L.clearComposerArgv("%1"), ["send-keys", "-t", "%1", "C-u"]);
+  const src = readFileSync(new URL("../lib/vacilando/lanes.mjs", import.meta.url), "utf8");
+  const deliver = src.slice(src.indexOf("async function defaultDeliverInstruction"));
+  const body = deliver.slice(0, deliver.indexOf("\n}"));
+  assert.equal(body.includes("clearComposerArgv"), false, "not wired yet, by decision");
 });
 
 test("the caret separator is a non-breaking space, and that is matched", () => {
