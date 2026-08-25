@@ -105,7 +105,13 @@ export default function WorkItemsKpiStrip() {
 
     const items: WorkspaceOperationalHealthItem[] = useMemo(
         () => [
-            { key: "assigned", label: "Assigned", value: String(c.assigned), tone: "pine", trend: QUEUE_TRENDS.assigned },
+            /*
+             * `Tasks assigned`, not `All assigned`: this band counts `operational_tasks` only and is
+             * always org-wide, while the view rail merges three sources and honours the selected
+             * site. Naming the population keeps the two metrics from reading as one comparable pair.
+             * The KEY stays `assigned`.
+             */
+            { key: "assigned", label: "Tasks assigned", value: String(c.assigned), tone: "pine", trend: QUEUE_TRENDS.assigned },
             { key: "waiting", label: "Waiting", value: String(c.waiting), tone: "gold", trend: QUEUE_TRENDS.waiting },
             { key: "due_soon", label: "Due Soon", value: String(c.due_soon), tone: "gold", trend: QUEUE_TRENDS.due_soon },
             { key: "overdue", label: "Overdue", value: String(c.overdue), tone: "ember", trend: QUEUE_TRENDS.overdue },

@@ -18,11 +18,20 @@ export const AGENT_SESSION_STATES = Object.freeze([
   "HANDOFF",
   "RESTARTING",
   "VERIFYING",
+  // The provider process was put down while its work stayed. The lane, run,
+  // question, worktree, branch and conversation are all intact; only the
+  // computation stopped. See provider-suspension.mjs.
+  "SUSPENDED",
   "ENDED",
   "FAILED",
 ]);
 
-const ACTIVEISH = new Set(["STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING"]);
+/**
+ * States where the session still OWNS the lane. SUSPENDED belongs here: the
+ * session is the thing that will be resumed, so it must remain the lane's
+ * active session — it simply is not consuming a provider seat.
+ */
+const ACTIVEISH = new Set(["STARTING", "ACTIVE", "ROTATION_PENDING", "HANDOFF", "RESTARTING", "VERIFYING", "SUSPENDED"]);
 
 function runtimeRoot() {
   return process.env.ALLOY_RUNTIME_ROOT?.trim()

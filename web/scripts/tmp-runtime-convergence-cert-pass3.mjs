@@ -73,7 +73,7 @@ try {
   const site = page.getByTestId("scheduling-workspace-shell").getByLabel("Site");
   if (await site.count()) await site.selectOption({ label: "North Campus" }).catch(() => {});
   await page.waitForTimeout(2000);
-  await page.locator('[data-comms-tab="roster"]').click();
+  await page.locator('[data-workspace-section-tab="roster"]').click();
   await page.locator('[data-assignment-roster-view="rooms"]').click();
   await page.waitForTimeout(2500);
   const meta = await page.locator("[data-scheduling-roster-room]").allTextContents();

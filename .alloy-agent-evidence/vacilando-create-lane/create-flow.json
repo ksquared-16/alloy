@@ -1,0 +1,60 @@
+{
+  "whileTyping": {
+    "textareaBottom": 493,
+    "submitBottom": 557,
+    "appBottom": 626,
+    "textareaInsideApp": true,
+    "submitInsideApp": true,
+    "caretVisible": true,
+    "scrollable": true,
+    "valueLen": 107
+  },
+  "keyboard": {
+    "textareaInsideApp": true,
+    "submitInsideApp": true,
+    "fontPx": 16,
+    "introHidden": true,
+    "textareaWidth": 355,
+    "textareaHeight": 76,
+    "boxDirection": "column",
+    "providerVisible": true
+  },
+  "providerToggle": {
+    "cursorPressed": "true",
+    "claudePressed": "false",
+    "hidden": "cursor"
+  },
+  "posted": {
+    "name": "",
+    "provider": "claude",
+    "instruction": "Fix create lane to be more like creating a new chat discussion\n\nOnce created the user can rename as needed."
+  },
+  "errors": [
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)",
+    "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "badResponses": [
+    {
+      "url": "http://localhost:3020/api/lanes/lane_abc123def456/telemetry",
+      "status": 404,
+      "body": "{\"ok\":false,\"available\":false,\"error\":\"lane_not_found\",\"lane_id\":\"lane_abc123def456\"}"
+    },
+    {
+      "url": "http://localhost:3020/api/lanes/lane_abc123def456/output",
+      "status": 404,
+      "body": "{\"ok\":false,\"available\":false,\"schema_version\":\"vacilando.lane.output.v1\",\"lane_id\":\"lane_abc123def456\",\"error\":\"lane_not_found\",\"captured_at\":\"2026-08-22T20:45"
+    },
+    {
+      "url": "http://localhost:3020/api/lanes/lane_abc123def456",
+      "status": 404,
+      "body": "{\"ok\":false,\"error\":\"lane_not_found\",\"lane_id\":\"lane_abc123def456\",\"lane\":null}"
+    },
+    {
+      "url": "http://localhost:3020/api/lanes/lane_abc123def456/output?mode=latest_response",
+      "status": 404,
+      "body": "{\"ok\":false,\"available\":false,\"schema_version\":\"vacilando.lane.output.v1\",\"lane_id\":\"lane_abc123def456\",\"error\":\"lane_not_found\",\"captured_at\":\"2026-08-22T20:45"
+    }
+  ]
+}

@@ -66,13 +66,26 @@ function identityFacts() {
   return { git: "clean", ahead_behind: "45/0", branch: "agent/claude/1-access-identity-v2" };
 }
 
+/**
+ * Delivery now begins with a READ: the pane is captured immediately before the
+ * paste to prove it is at an actionable prompt and to fix the output baseline.
+ * That read is not a mutation, so the fixed-mutation-sequence assertions below
+ * are made against mutations() rather than raw call indexes.
+ */
+const READY_PANE = "● Done.\n\n│ >                     │\n  ? for shortcuts\n";
+
 function recordingTmux() {
   const calls = [];
   const tmux = async (argv, opts = {}) => {
     calls.push({ argv: [...argv], input: opts.input ?? null });
+    if (argv[0] === "capture-pane") return { ok: true, stdout: READY_PANE, stderr: "" };
     return { ok: true, stdout: "", stderr: "" };
   };
   return { tmux, calls };
+}
+
+function mutations(calls) {
+  return (calls || []).filter((c) => c.argv[0] !== "capture-pane");
 }
 
 function baseOpts({ stdout, tmux, extra = {} } = {}) {
@@ -116,17 +129,19 @@ await test("valid lane + instruction resolves target server-side", async () => {
   assert.equal(out.ok, true);
   assert.equal(out.status, "delivered");
   assert.equal(out.lane_id, "alloy-identity");
-  assert.equal(opts.calls[0].argv[0], "load-buffer");
-  assert.equal(opts.calls[1].argv.includes("%1"), true);
-  assert.equal(opts.calls[1].argv[0], "paste-buffer");
-  assert.deepEqual(opts.calls[2].argv, submitEnterArgv("%1"));
+  const seq = mutations(opts.calls);
+  assert.equal(opts.calls[0].argv[0], "capture-pane", "readiness is read before anything is typed");
+  assert.equal(seq[0].argv[0], "load-buffer");
+  assert.equal(seq[1].argv.includes("%1"), true);
+  assert.equal(seq[1].argv[0], "paste-buffer");
+  assert.deepEqual(seq[2].argv, submitEnterArgv("%1"));
 });
 
 await test("literal multiline instruction is passed as data, never argv", async () => {
   const opts = baseOpts();
   const out = await sendLaneInstruction("alloy-identity", HARD_TEXT, opts);
   assert.equal(out.ok, true);
-  assert.equal(opts.calls[0].input, HARD_TEXT);
+  assert.equal(mutations(opts.calls)[0].input, HARD_TEXT);
   const joined = opts.calls.map((c) => c.argv.join(" ")).join("\n");
   assert.equal(joined.includes(HARD_TEXT), false);
   assert.equal(joined.includes("$HOME"), false);
@@ -142,8 +157,8 @@ await test("quotes/backticks/semicolons/code blocks are not shell-executed", asy
     assert.equal(call.argv.includes("bash"), false);
     assert.equal(call.argv[0] === "claude", false);
   }
-  assert.equal(opts.calls[0].argv[0], "load-buffer");
-  assert.equal(opts.calls[0].argv.includes("-"), true);
+  assert.equal(mutations(opts.calls)[0].argv[0], "load-buffer");
+  assert.equal(mutations(opts.calls)[0].argv.includes("-"), true);
 });
 
 await test("browser cannot override session/pane/target", async () => {
@@ -229,10 +244,11 @@ await test("empty input refuses", async () => {
 await test("only the expected fixed tmux mutation sequence is used", async () => {
   const opts = baseOpts();
   await sendLaneInstruction("alloy-identity", "hello", opts);
-  assert.equal(opts.calls.length, 3);
-  assert.deepEqual(opts.calls[0].argv, loadBufferArgv("vacilando-alloy-identity"));
-  assert.deepEqual(opts.calls[1].argv, pasteBufferArgv("vacilando-alloy-identity", "%1"));
-  assert.deepEqual(opts.calls[2].argv, submitEnterArgv("%1"));
+  const seq = mutations(opts.calls);
+  assert.equal(seq.length, 3);
+  assert.deepEqual(seq[0].argv, loadBufferArgv("vacilando-alloy-identity"));
+  assert.deepEqual(seq[1].argv, pasteBufferArgv("vacilando-alloy-identity", "%1"));
+  assert.deepEqual(seq[2].argv, submitEnterArgv("%1"));
   assert.deepEqual(deleteBufferArgv("vacilando-alloy-identity"), ["delete-buffer", "-b", "vacilando-alloy-identity"]);
 });
 
@@ -271,7 +287,7 @@ await test("concurrent sends to one lane cannot interleave", async () => {
   const first = await p1;
   assert.equal(first.ok, true);
   assert.equal(calls.filter((c) => c.argv[0] === "load-buffer").length, 1);
-  assert.equal(calls[0].input, "first");
+  assert.equal(mutations(calls)[0].input, "first");
 });
 
 await test("another lane is independently lockable", async () => {
@@ -293,7 +309,8 @@ await test("another lane is independently lockable", async () => {
   await Promise.resolve();
   const other = await sendLaneInstruction("alloy-other", "two", baseOpts({ stdout, extra: { tmux: otherTmux } }));
   assert.equal(other.ok, true);
-  assert.equal(otherCalls[0].input, "two");
+  const loaded = otherCalls.find((c) => c.argv[0] === "load-buffer");
+  assert.equal(loaded?.input, "two");
   release();
   const first = await p1;
   assert.equal(first.ok, true);
@@ -322,7 +339,7 @@ await test("same-payload retry is refused as duplicate_send", async () => {
   const second = await sendLaneInstruction("alloy-identity", "same", opts);
   assert.equal(second.ok, false);
   assert.equal(second.error, "duplicate_send");
-  assert.equal(opts.calls.length, 3);
+  assert.equal(mutations(opts.calls).length, 3);
 });
 
 await test("non-development alloy-test is not sendable", async () => {

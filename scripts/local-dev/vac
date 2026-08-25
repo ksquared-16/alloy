@@ -2,6 +2,7 @@
 # vac — short UX alias for the host-wide validation broker + worker protocol.
 #   vac run typecheck|typecheck:tests|test|build|playwright|imports [--force]
 #   vac run-status <run_id> <state> [...]
+#   vac run-report <run_id> <type> --message-file <path|-> [...]
 #   vac governed-action --run <id> --lane <lane> --json '{...}'
 #   vac status
 #   vac cancel <request_id>
@@ -14,6 +15,9 @@ usage() {
 Usage:
   vac run <kind> [--force]     Run a heavy validation kind in this worktree (brokered)
   vac run-status <run_id> <state>   Report Execution Run state (not the validation broker)
+  vac run-report <run_id> <type> --message-file <path|->
+                           Submit the user-facing agent report that IS the
+                           conversation: progress | needs-input | completion | failure
   vac governed-action --run <id> --lane <lane> --json '{...}'
                            Report a Director-owned governed action (not the validation broker)
   vac status                   Show active lease + FIFO queue
@@ -36,6 +40,10 @@ case "${1:-}" in
   run-status)
     shift
     exec node "$SCRIPT_DIR/vac-run-status.mjs" "$@"
+    ;;
+  run-report)
+    shift
+    exec node "$SCRIPT_DIR/vac-run-report.mjs" "$@"
     ;;
   governed-action)
     shift

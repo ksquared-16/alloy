@@ -26,7 +26,8 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction } from "./lanes.mjs";
+import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } from "./lanes.mjs";
+import { PROMPT_NOT_READY_ERROR } from "./provider-prompt-readiness.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -50,6 +51,7 @@ import {
   getDurableLane,
   isRuntimeAdoptionBlocked,
   listDurableLanes,
+  setLanePreferredProvider,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { normalizeExecutionProvider } from "./execution-providers.mjs";
@@ -518,7 +520,38 @@ export async function requestSessionRotation({
     dedupeKey: `handoff:${handoffId}`,
   });
   if (!delivered?.ok) {
-    return { ok: false, error: "handoff_delivery_failed", delivery: delivered, handoff_id: handoffId };
+    // The session was patched to HANDOFF before the instruction was delivered,
+    // so a refused paste left it there with the handoff still "requested" —
+    // and maybeAdvanceSessionRotation only ever aborts a handoff that reached
+    // "ready". The session stayed HANDOFF forever. Rotation that could not
+    // start must put the session back exactly as it found it.
+    const rec = readHandoffs(root);
+    if (rec.handoffs[handoffId]) {
+      rec.handoffs[handoffId].state = "failed";
+      rec.handoffs[handoffId].failed_at = iso(nowMs);
+      rec.handoffs[handoffId].error = delivered?.error || "handoff_delivery_failed";
+      writeHandoffs(rec, root);
+    }
+    const promptBlocked = delivered?.error === PROMPT_NOT_READY_ERROR;
+    restoreSessionAfterFailedRotation(session, {
+      root,
+      error: promptBlocked ? PROMPT_NOT_READY_ERROR : "handoff_delivery_failed",
+      escalate: !promptBlocked,
+      extra: {
+        origin,
+        handoff_id: handoffId,
+        reason: promptBlocked
+          ? "Context refresh could not start: the agent terminal is showing a prompt that must be answered there."
+          : undefined,
+      },
+    });
+    return {
+      ok: false,
+      error: "handoff_delivery_failed",
+      delivery: delivered,
+      handoff_id: handoffId,
+      session_restored: "ACTIVE",
+    };
   }
   if (!run) {
     const rec = store.handoffs[handoffId];
@@ -560,7 +593,7 @@ function resolveRunContext({ runId, laneId, root = null } = {}) {
   return null;
 }
 
-function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } = {}) {
+function restoreSessionAfterFailedRotation(session, { root, error, extra = {}, escalate = true } = {}) {
   if (!session?.agent_session_id) return;
   const trigger = session.rotation_trigger && typeof session.rotation_trigger === "object"
     ? { ...session.rotation_trigger, attempted: true }
@@ -572,7 +605,13 @@ function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } 
   emitAgentSessionEvent("rotation_failed", session, root, { error, ...extra });
   const auto = trigger?.origin === "automatic" || extra.origin === "automatic";
   const run = session.run_id ? getExecutionRun(session.run_id, root) : null;
-  if (auto && run) {
+  // A rotation blocked by a terminal dialog must NOT escalate the run to
+  // NEEDS_INPUT. That is the same trap the send path just stopped setting: the
+  // operator cannot answer a Claude permission prompt from the composer, and a
+  // NEEDS_INPUT run is protected from the governor. The work is still fine —
+  // it is the terminal that needs a person, which the provider-health banner
+  // and Details already say.
+  if (escalate && auto && run) {
     escalateNeedsInput(run, extra.reason || `Automatic context rotation failed: ${error}`, Date.now(), root).catch(() => {});
   }
 }
@@ -1124,6 +1163,29 @@ export async function maybeAdvanceSessionRotation(lane, { root = runtimeRoot(), 
   const session = activeAgentSessionForLane(lane.lane_id, root);
   if (!session || session.state !== "HANDOFF" || !session.handoff_id) return auto;
   const handoff = getHandoff(session.handoff_id, root);
+  // A handoff that never left "requested" means the outgoing agent never
+  // received the request. With Claude still present there is nothing to hand
+  // off TO and nothing to wait for, so after a bounded wait the session goes
+  // back to ACTIVE rather than sitting in HANDOFF indefinitely.
+  if (handoff && handoff.state !== "ready") {
+    const requestedAt = Date.parse(handoff.failed_at || handoff.created_at || "");
+    const stalled = handoff.state === "failed"
+      || (Number.isFinite(requestedAt) && (nowMs - requestedAt) > ROTATION_POLICY.exit_wait_ms);
+    if (stalled && laneClaudePresent(lane)) {
+      restoreSessionAfterFailedRotation(session, {
+        root,
+        error: handoff.error || "handoff_never_delivered",
+        escalate: handoff.error !== PROMPT_NOT_READY_ERROR,
+        extra: {
+          handoff_state: handoff.state,
+          waited_ms: Number.isFinite(requestedAt) ? nowMs - requestedAt : null,
+          origin: session.rotation_trigger?.origin,
+          reason: "Context refresh never started; the session was left running.",
+        },
+      });
+      return { ok: false, error: "handoff_never_delivered", aborted: true, restored: "ACTIVE" };
+    }
+  }
   if (handoff?.state !== "ready") return auto?.deferred ? auto : { ok: true, skipped: true };
   if (laneClaudePresent(lane)) {
     const started = Date.parse(handoff.ready_at || handoff.created_at || "");
@@ -1202,37 +1264,76 @@ function occupyingLaneSummaries(cap, root) {
   });
 }
 
-async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
-  const found = await observeLane(laneId);
-  if (!found) return { ok: false, error: "lane_not_found" };
-  const rec = getDurableLane(found.lane_id, root);
-  if (!rec) return { ok: false, error: "lane_not_found" };
-  if (isRuntimeAdoptionBlocked(rec.binding || {})) {
-    return { ok: false, error: "runtime_adoption_blocked" };
-  }
-  const boundPath = rec.binding?.worktree_path || found.worktree?.path;
-  if (!boundPath) {
-    return { ok: false, error: "binding_missing", start_session_implemented: true };
-  }
-  const owner = findLaneByBinding({ worktreePath: boundPath, root });
-  if (owner && owner.lane_id !== rec.lane_id) {
-    return { ok: false, error: "already_connected", lane_id: owner.lane_id };
-  }
-  const check = validateRuntimeBinding(rec, found);
-  if (!check.ok && check.blockers.some((b) => b.code === "worktree_missing" || b.code === "missing_worktree" || b.code === "worktree_mismatch")) {
-    return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
-  }
+function supersedeObservationOnlyCursorSession(lane, rec, { nowMs, root }) {
+  const existing = activeAgentSessionForLane(rec.lane_id, root);
+  if (!existing || existing.provider !== "cursor") return existing;
+  if (cursorExecutableTransport(lane).ok) return existing;
+  endAgentSession(existing.agent_session_id, {
+    reason: "observation_only_superseded",
+    nowMs,
+    root,
+  });
+  return null;
+}
 
-  const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
-  let provider;
-  if (bound === "cursor") {
-    provider = "cursor";
-  } else if (laneClaudePresent(found)) {
-    provider = "claude";
-  } else {
-    provider = laneProviderKind(found, rec);
+function bindClaudeExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "claude",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
+  } catch { /* preferred already Claude is fine */ }
+  return out;
+}
+
+function bindCursorExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "cursor",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "cursor", { nowMs, root });
+  } catch { /* preferred already Cursor is fine */ }
+  return out;
+}
+
+async function spawnCursorInPane({ lane }) {
+  const argv = ["cursor-agent"];
+  const forbidden = assertSafeSpawnArgv(argv);
+  if (!forbidden.ok) return forbidden;
+  if (spawnImpl) return spawnImpl({ lane, argv, provider: "cursor" });
+  const pane = lane?.tmux?.pane_id;
+  const cwd = lane?.worktree?.path;
+  if (!pane || !cwd) return { ok: false, error: "missing_pane" };
+  try {
+    execFileSync("tmux", [
+      "respawn-pane", "-k", "-c", cwd, "-t", pane, "--",
+      ...argv,
+    ], { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] });
+    return { ok: true, argv, provider: "cursor" };
+  } catch (e) {
+    return { ok: false, error: "spawn_failed", detail: String(e.stderr || e.message || e).slice(0, 300) };
   }
-  if (provider === "cursor") {
+}
+
+function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
+  const existing = activeAgentSessionForLane(laneId, root);
+  if (!existing) return null;
+  if (!["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) return existing;
+  endAgentSession(existing.agent_session_id, { reason, nowMs, root });
+  return null;
+}
+
+async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin }) {
+  const transport = cursorExecutableTransport(found);
+  if (transport.ok) {
     const existing = activeAgentSessionForLane(found.lane_id, root);
     if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
       if (existing.state !== "ACTIVE") {
@@ -1276,6 +1377,210 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     };
   }
 
+  const hasPane = Boolean(found.tmux?.pane_id) && found.tmux?.alive !== false;
+  let createdRuntime = null;
+  if (!hasPane) {
+    const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
+    const cap = await assessSessionStartCapacity({ root });
+    if (!cap.ok) {
+      const occupying = occupyingLaneSummaries(cap, root);
+      if (origin === "operator") {
+        return {
+          ok: false,
+          error: "provider_capacity",
+          start_session_implemented: true,
+          max_providers: cap.max_providers,
+          active_providers: cap.active_providers,
+          occupying,
+          occupying_names: occupying.map((o) => o.name),
+          capacity: cap,
+        };
+      }
+      const run = activeRunForLane(found.lane_id, root);
+      const { createAdmissionRequest } = await import("./execution-admission.mjs");
+      const adm = createAdmissionRequest({
+        laneId: found.lane_id,
+        runId: run?.run_id || null,
+        nowMs,
+        root,
+      });
+      return {
+        ok: true,
+        status: "queued",
+        queued: true,
+        waiting_for_execution_capacity: true,
+        admission_id: adm.request?.admission_id || null,
+        start_session_implemented: true,
+        occupying,
+        occupying_names: occupying.map((o) => o.name),
+        capacity: cap,
+      };
+    }
+    let started;
+    try {
+      started = startRuntimeImpl
+        ? await startRuntimeImpl({ lane: found, rec, root, nowMs, provider: "cursor" })
+        : await startPersistentAgentSession({
+          worktreePath: boundPath,
+          worktreeName: rec.binding?.worktree_name || found.worktree?.name,
+          laneName: rec.name,
+          existingTmuxSession: rec.binding?.tmux_session || null,
+          expectedBranch: rec.binding?.branch || null,
+          runtimeRoot: root,
+          expectedRepositoryId: rec.repository_id || null,
+          provider: "cursor",
+        });
+    } catch (e) {
+      started = { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: String(e.message || e).slice(0, 240) };
+    }
+    if (!started?.ok) {
+      return {
+        ok: false,
+        error: started?.error || CURSOR_DELIVERY_UNAVAILABLE,
+        start_session_implemented: true,
+        observation_only: true,
+        skip_queue: started?.skip_queue !== false,
+        rolled_back: Boolean(started?.rolled_back),
+      };
+    }
+    createdRuntime = started;
+  } else {
+    const { startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
+    let started;
+    try {
+      started = startRuntimeImpl
+        ? await startRuntimeImpl({ lane: found, rec, root, nowMs, provider: "cursor" })
+        : await startPersistentAgentSession({
+          worktreePath: boundPath,
+          worktreeName: rec.binding?.worktree_name || found.worktree?.name,
+          laneName: rec.name,
+          existingTmuxSession: rec.binding?.tmux_session || found.tmux?.session || null,
+          expectedBranch: rec.binding?.branch || null,
+          runtimeRoot: root,
+          expectedRepositoryId: rec.repository_id || null,
+          provider: "cursor",
+        });
+    } catch (e) {
+      started = { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: String(e.message || e).slice(0, 240) };
+    }
+    if (!started?.ok) {
+      const spawned = await spawnCursorInPane({ lane: found });
+      if (!spawned.ok) {
+        return {
+          ok: false,
+          error: spawned.error || CURSOR_DELIVERY_UNAVAILABLE,
+          start_session_implemented: true,
+          observation_only: true,
+        };
+      }
+      createdRuntime = { ok: true, tmux_session: found.tmux?.session, pane_id: found.tmux?.pane_id, created: { tmux: false, provider: true } };
+    } else {
+      createdRuntime = started;
+    }
+  }
+
+  bindCursorExecutable(rec, {
+    tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+    tmux_pane: createdRuntime?.pane_id || found.tmux?.pane_id,
+    worktree_path: boundPath,
+  }, { nowMs, root });
+
+  endActiveSessionForProviderSwitch(found.lane_id, {
+    nowMs,
+    root,
+    reason: "observation_only_superseded",
+  });
+
+  const run = activeRunForLane(found.lane_id, root);
+  const created = createAgentSession({
+    laneId: found.lane_id,
+    runId: run?.run_id || null,
+    provider: "cursor",
+    nowMs,
+    root,
+  });
+  if (!created.ok && created.error === "lane_has_active_session") {
+    const sess = created.session || activeAgentSessionForLane(found.lane_id, root);
+    if (sess && sess.provider !== "cursor") {
+      endAgentSession(sess.agent_session_id, { reason: "provider_switched", nowMs, root });
+      const retry = createAgentSession({
+        laneId: found.lane_id,
+        runId: run?.run_id || null,
+        provider: "cursor",
+        nowMs,
+        root,
+      });
+      if (!retry.ok) return retry;
+      const next = markAgentSessionActive(retry.session.agent_session_id, { root }) || retry.session;
+      return {
+        ok: true,
+        started: true,
+        provider: "cursor",
+        agent_session_id: next.agent_session_id,
+        tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+        start_session_implemented: true,
+      };
+    }
+    return {
+      ok: true,
+      adopted: true,
+      provider: "cursor",
+      agent_session_id: sess?.agent_session_id || null,
+      start_session_implemented: true,
+    };
+  }
+  if (!created.ok) return created;
+  const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+  return {
+    ok: true,
+    started: true,
+    adopted: false,
+    provider: "cursor",
+    agent_session_id: sess.agent_session_id,
+    tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+    start_session_implemented: true,
+  };
+}
+
+async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
+  const found = await observeLane(laneId);
+  if (!found) return { ok: false, error: "lane_not_found" };
+  const rec = getDurableLane(found.lane_id, root);
+  if (!rec) return { ok: false, error: "lane_not_found" };
+  if (isRuntimeAdoptionBlocked(rec.binding || {})) {
+    return { ok: false, error: "runtime_adoption_blocked" };
+  }
+  const boundPath = rec.binding?.worktree_path || found.worktree?.path;
+  if (!boundPath) {
+    return { ok: false, error: "binding_missing", start_session_implemented: true };
+  }
+  const owner = findLaneByBinding({ worktreePath: boundPath, root });
+  if (owner && owner.lane_id !== rec.lane_id) {
+    return { ok: false, error: "already_connected", lane_id: owner.lane_id };
+  }
+  const check = validateRuntimeBinding(rec, found);
+  if (!check.ok && check.blockers.some((b) => b.code === "worktree_missing" || b.code === "missing_worktree" || b.code === "worktree_mismatch")) {
+    return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
+  }
+
+  const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
+  const preferred = normalizeExecutionProvider(rec?.preferred_provider, bound || "claude");
+  let provider;
+  if (preferred === "claude") {
+    provider = "claude";
+  } else if (preferred === "cursor" || bound === "cursor") {
+    provider = "cursor";
+  } else if (laneClaudePresent(found)) {
+    provider = "claude";
+  } else {
+    provider = laneProviderKind(found, rec);
+  }
+  if (provider === "cursor") {
+    return startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin });
+  }
+
+  supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
+
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
       return { ok: false, error: "duplicate_claude" };
@@ -1298,9 +1603,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     });
     if (!created.ok) return created;
     sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    bindClaudeExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
     };
@@ -1366,6 +1677,10 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
         existingTmuxSession: rec.binding?.tmux_session || null,
         expectedBranch: rec.binding?.branch || null,
         runtimeRoot: root,
+        // The lane's attribution travels with the start, so the provider cannot
+        // come up in a repository other than the one this lane belongs to.
+        expectedRepositoryId: rec.repository_id || null,
+        provider: "claude",
       });
     if (!started?.ok) {
       return {
@@ -1377,8 +1692,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
       };
     }
     createdRuntime = started;
-    bindDurableLane(rec.lane_id, {
-      ...rec.binding,
+    bindClaudeExecutable(rec, {
       tmux_session: started.tmux_session,
       tmux_pane: started.pane_id,
       worktree_path: boundPath,
@@ -1412,6 +1726,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
       tmux_session: createdRuntime.tmux_session,
@@ -1479,6 +1794,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
     ok: true,
     started: true,
     status: "starting",
+    provider: "claude",
     agent_session_id: created.session.agent_session_id,
     tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
     start_session_implemented: true,

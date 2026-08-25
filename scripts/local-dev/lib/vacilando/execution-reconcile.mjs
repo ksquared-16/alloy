@@ -240,11 +240,16 @@ export async function reconcileGovernor({
   }
 
   try {
-    const { reconcileStaleExecutionRuns } = await import("./execution-stale.mjs");
+    const { reconcileStaleExecutionRuns, reconcileUndeliveredRuns } = await import("./execution-stale.mjs");
     const stale = reconcileStaleExecutionRuns({ root, nowMs });
     if (stale?.count > 0) {
       summary.repaired += stale.count;
       summary.actions.push("stale_execution_run");
+    }
+    const undelivered = reconcileUndeliveredRuns({ root, nowMs });
+    if (undelivered?.count > 0) {
+      summary.repaired += undelivered.count;
+      summary.actions.push("undelivered_run");
     }
   } catch { /* stale-run pass must not fail resource reconcile */ }
 

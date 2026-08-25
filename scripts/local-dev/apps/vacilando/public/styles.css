@@ -3,15 +3,54 @@
    Presentation only; all data comes from the runtime snapshot via app.js. */
 :root{
   color-scheme: light;
-  --rail-0:#15402c; --rail-1:#0e3323; --rail-2:#0b2a1c;
-  --rail-active:#1f5a3d; --rail-hover:#194832;
+
+  /* ---------------------------------------------------------------------
+     Approved Vacilando palette. These seven are the brand; everything below
+     is either derived from them or is a SEMANTIC colour that deliberately
+     stays put.
+
+     Contrast was measured, not assumed (ratios against --card unless noted):
+       navy 13.66 · juniper 7.54 · landscape 5.97 · river 4.88 · sage 4.29
+       terracotta 3.39 · sand 1.62
+     So navy carries text, juniper/landscape/river carry text-sized accents,
+     and terracotta and sand are surfaces and emphasis — never small text.
+     Where a brand colour sits on a tint rather than on white, a derived
+     *-ink variant is used so small text still clears 4.5:1.
+     --------------------------------------------------------------------- */
+  --vacilando-navy:#17313A;
+  --vacilando-terracotta:#D96C4A;
+  --vacilando-sand:#E8C78A;
+  --vacilando-river:#3F7891;
+  --vacilando-sage:#6F8055;
+  --vacilando-juniper:#365C4A;
+  --vacilando-landscape:#476B5A;
+  /* Derived for accessible text on tinted surfaces. */
+  --vacilando-river-ink:#396c83;      /* 4.93 on --run-bg */
+  --vacilando-terracotta-ink:#b85c3f; /* 4.53 on white, 4.53 as pill bg with white text */
+
+  /* Navigation structure: juniper, with derived depths. Light rail text
+     clears AA on every one of them (5.74 / 7.34 / 8.72 / 4.91 / 6.15). */
+  --rail-0:var(--vacilando-juniper); --rail-1:#2c4b3d; --rail-2:#253f32;
+  --rail-active:#3c6753; --rail-hover:#33574a;
   --rail-text:#d7e4da; --rail-text-lo:#8fae9c; --rail-line:rgba(255,255,255,.08);
   --bg:#f6f2ea; --bg-tint:#efe9dd; --card:#fff; --card-2:#fbf9f4;
   --line:#ece5d8; --line-soft:#f1ece1; --line-strong:#e0d7c6;
-  --ink:#1f2a24; --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
-  --terra:#cf6f47; --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  /* Primary text is navy. */
+  --ink:var(--vacilando-navy); --ink-2:#54605a; --ink-3:#8a938c; --ink-4:#aab1a9;
+  /* Warm emphasis / selected + active accents. */
+  --terra:var(--vacilando-terracotta); --terra-soft:#f4e2d7; --terra-line:#e8c3af;
+  --sand:var(--vacilando-sand); --sand-soft:#f6ecd8;
+  --sage:var(--vacilando-sage); --juniper:var(--vacilando-juniper); --landscape:var(--vacilando-landscape);
+  /* SEMANTIC COLOURS DELIBERATELY UNCHANGED. Success, warning, error and
+     paused/planned carry meaning that is not the brand's to restate, and no
+     approved colour matches both the meaning and the contrast. Recolouring
+     these would make a failure look like an accent. */
   --green:#3a8a5b; --green-soft:#e2f0e6; --green-ink:#2c7048; --script:#d9825f;
-  --run:#3a76d8; --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
+  /* Links, progress and informational state: river. On --run-bg this is a
+     better ratio than the blue it replaces (4.18 vs 3.78), and small text on
+     that tint uses --run-ink at 4.93. */
+  --run:var(--vacilando-river); --run-ink:var(--vacilando-river-ink);
+  --run-bg:#e6eefb; --review:#c98a2e; --review-bg:#f8eed6;
   --blocked:#cf5a3a; --blocked-bg:#f8e2da; --done:#5a6b61; --done-bg:#eef0ec;
   --plan:#5f7c9a; --plan-bg:#e9eff5; --paused:#b0894a; --paused-bg:#f3ead6; --idle:#8a938c; --idle-bg:#eef0ec;
   --radius:12px; --radius-sm:9px; --pill:999px;
@@ -24,8 +63,17 @@
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;font-size:14px;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);}
 svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .app{display:grid;grid-template-columns:212px 1fr;min-height:100vh;}
-.app:has(.gw.is-detail){height:var(--gw-vvh, 100dvh);min-height:0;overflow:hidden;margin-top:var(--gw-vvo, 0px);}
-.app:has(.gw.is-detail) .rail{height:var(--gw-vvh, 100dvh);}
+/* --gw-vvh is the VISUAL viewport height, but `body` insets the app by the
+   safe areas, so the app box starts below the notch and must be that much
+   shorter or its bottom — the composer — falls outside the visible region.
+   With a 59px top and 34px bottom inset the composer sat 25px below the
+   keyboard-shrunk viewport. Invisible on a simulator that reports 0 insets;
+   plainly wrong on the device. */
+.app:has(.gw.is-detail){
+  height:calc(var(--gw-vvh, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  min-height:0;overflow:hidden;margin-top:var(--gw-vvo, 0px);
+}
+.app:has(.gw.is-detail) .rail{height:calc(var(--gw-vvh, 100dvh) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));}
 .app:has(.gw.is-detail) .main{min-height:0;height:100%;overflow:hidden;}
 .app:has(.gw.is-detail) .topbar{flex:0 0 auto;}
 .view:has(.gw.is-detail){flex:1 1 auto;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));}
@@ -35,6 +83,15 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 /* ---------- rail ---------- */
 .rail{background:linear-gradient(180deg,var(--rail-0),var(--rail-1) 62%,var(--rail-2));color:var(--rail-text);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
 .brand{padding:16px 18px 12px;}
+/* The approved mark sits above the wordmark in the rail, on a deliberate cream
+   plate.
+   MEASURED, NOT ASSUMED. Dropped straight onto the juniper rail the artwork
+   disappears: pine 1.11:1, river 1.55:1, sage 1.76:1, navy 1.81:1 against
+   #365C4A. The illustration was drawn for a light ground, and the same cream
+   the app icons are composed on is what keeps every element of the journey
+   readable. */
+.brand-mark{display:block;width:100%;max-width:154px;height:auto;margin:0 0 10px;
+  background:var(--bg);border-radius:10px;padding:8px 9px;}
 .brand .word{font-family:var(--script-face);font-size:26px;color:var(--script);line-height:1;}
 .brand .word b{font-family:var(--sans);font-weight:600;font-style:normal;color:#eaf1ec;font-size:19px;margin-left:5px;}
 .brand .sub{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-text-lo);margin-top:6px;}
@@ -45,7 +102,7 @@ svg.i{width:1em;height:1em;vertical-align:-.12em;}
 .nav a:not(.active):hover{background:var(--rail-hover);}
 .nav a .badge{margin-left:auto;background:var(--terra);color:#fff;font-size:10.5px;font-weight:700;min-width:18px;height:18px;border-radius:999px;display:grid;place-items:center;font-family:var(--mono);padding:0 5px;}
 .nav-sep{height:1px;background:var(--rail-line);margin:8px 18px;}
-.desert{margin-top:auto;height:104px;}
+.rail .nav-sep{margin-top:auto;}
 .ruser{display:flex;align-items:center;gap:10px;padding:11px 15px;border-top:1px solid var(--rail-line);background:var(--rail-2);text-decoration:none;color:inherit;cursor:pointer;}
 .ruser:hover{background:var(--rail-hover);}
 .ruser .av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#c98a5e,#7a4a2e);display:grid;place-items:center;color:#fff;font-weight:700;font-size:12px;}
@@ -1391,6 +1448,176 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-lanes-h-row .gw-lanes-h{padding:4px 8px 0;}
 .gw-add{font-size:12px;font-weight:650;color:var(--rail-0);text-decoration:none;padding:8px;min-height:44px;display:inline-flex;align-items:center;white-space:nowrap;}
 .gw-add-actions{display:flex;flex-direction:column;gap:10px;max-width:28em;margin:12px 0 8px;}
+/* Lane folders — organisation over the attention-ordered list. */
+.gw-add-folder{background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:650;color:var(--rail-0);}
+.gw-folder{display:block;margin:0 0 4px;}
+.gw-folder-h{display:flex;align-items:center;gap:4px;padding:2px 4px;}
+.gw-folder-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;background:none;border:0;cursor:pointer;font:inherit;font-size:12px;font-weight:700;color:var(--ink);text-align:left;text-transform:uppercase;letter-spacing:.04em;}
+.gw-folder-caret{flex:0 0 auto;opacity:.7;}
+.gw-folder-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:none;letter-spacing:0;font-size:13px;}
+.gw-folder-count{flex:0 0 auto;opacity:.6;font-weight:600;}
+.gw-folder-badge{flex:0 0 auto;border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;letter-spacing:0;text-transform:none;}
+.gw-folder-badge.is-attention{background:var(--review-bg);color:var(--review);}
+.gw-folder-edit{flex:0 0 auto;background:none;border:0;cursor:pointer;font:inherit;font-size:11px;color:var(--rail-0);opacity:.75;min-height:44px;padding:0 6px;}
+.gw-folder-edit:hover{opacity:1;}
+.gw-folder-empty{padding:8px 12px;font-size:12px;opacity:.65;}
+.gw-folder .gw-lane{margin-left:10px;}
+.gw-folder-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-folder-pick select{min-height:44px;font-size:16px;padding:6px 8px;border-radius:8px;}
+.gw-folder-pick-hint{opacity:.65;}
+/* Image attachments. The draft strip lives INSIDE the composer box so the
+   pinned composer grows as one unit — a strip stacked outside it pushed the
+   input and Send below the iPhone safe area. */
+.gw-attach{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:36px;height:36px;min-height:36px;border-radius:8px;cursor:pointer;font-size:17px;
+  color:var(--ink-2);background:transparent;border:1px solid transparent;}
+.gw-attach:hover{background:var(--bg-tint);}
+.gw-attach:focus-within{border-color:var(--run);outline:2px solid var(--run);outline-offset:1px;}
+.gw-attach input[type=file]{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;}
+.gw-atts{padding:6px 8px 0;}
+.gw-att-list{display:flex;flex-wrap:wrap;gap:8px;list-style:none;margin:0;padding:0;}
+.gw-att{position:relative;display:flex;align-items:center;gap:8px;max-width:100%;
+  padding:4px 26px 4px 4px;border:1px solid var(--line);border-radius:10px;background:var(--card-2);}
+.gw-att-thumb{width:38px;height:38px;object-fit:cover;border-radius:6px;flex:0 0 auto;background:var(--bg-tint);}
+.gw-att-doc{display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;
+  letter-spacing:.04em;color:var(--vacilando-terracotta-ink);background:var(--terra-soft);}
+.gw-msg-att-doc{display:inline-flex;align-items:center;gap:8px;max-width:220px;padding:8px 10px;
+  border:1px solid var(--line);border-radius:10px;background:var(--card-2);text-decoration:none;min-height:44px;}
+.gw-msg-att-kind{flex:0 0 auto;font-size:10px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border-radius:5px;
+  background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-msg-att-name{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gw-att-meta{display:flex;flex-direction:column;min-width:0;font-size:11px;line-height:1.25;}
+.gw-att-name{font-weight:650;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:12ch;}
+.gw-att-size{color:var(--ink-3);}
+.gw-att-x{position:absolute;top:2px;right:2px;width:20px;height:20px;border:0;border-radius:999px;
+  background:var(--bg-tint);color:var(--ink-2);font-size:14px;line-height:1;cursor:pointer;padding:0;}
+.gw-att-x:hover{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-att.is-uploading{padding-right:10px;}
+.gw-att-spin{width:14px;height:14px;border-radius:999px;border:2px solid var(--line-strong);
+  border-top-color:var(--run);animation:gwspin .8s linear infinite;flex:0 0 auto;}
+@keyframes gwspin{to{transform:rotate(360deg);}}
+.gw-att-err{margin-top:6px;font-size:12px;color:var(--blocked);}
+.gw-composer.is-dropping .gw-composer-box{outline:2px dashed var(--run);outline-offset:2px;}
+
+/* Thumbnails on a sent prompt: bounded, never full resolution. */
+.gw-msg-atts{display:flex;flex-wrap:wrap;gap:6px;list-style:none;margin:8px 0 0;padding:0;}
+.gw-msg-att-open{padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer;
+  line-height:0;overflow:hidden;min-height:0;}
+.gw-msg-att-open img{width:92px;height:92px;object-fit:cover;display:block;}
+.gw-msg-att.is-failed .gw-msg-att-bad{font-size:11px;color:var(--blocked);}
+
+/* Bounded preview. Aspect ratio preserved; never larger than the viewport. */
+.gw-lightbox{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;gap:10px;background:rgba(23,49,58,.92);
+  padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px);}
+.gw-lightbox img{max-width:100%;max-height:78vh;object-fit:contain;border-radius:8px;}
+.gw-lightbox-cap{color:#fff;font-size:12px;opacity:.85;text-align:center;}
+/* Sheets: Add repository and the Add lane wizard.
+   Full-height and safe-area aware, because on a phone this IS the screen while
+   it is open. The footer is pinned so the primary action never scrolls away and
+   never sits under the home indicator. */
+.gw.is-sheet{display:block;height:100%;}
+.gw-sheet{display:flex;flex-direction:column;height:100%;max-height:100%;background:var(--bg);}
+.gw-sheet-head{display:flex;align-items:center;gap:8px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+  border-bottom:1px solid var(--line);background:var(--card);}
+.gw-sheet-x{width:44px;height:44px;border:0;background:none;font-size:20px;cursor:pointer;color:var(--ink);}
+.gw-sheet-title{margin:0;font-size:17px;font-weight:750;color:var(--ink);}
+.gw-sheet-body{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 14px 20px;}
+.gw-sheet-foot{flex:0 0 auto;display:flex;gap:10px;justify-content:flex-end;padding:10px 14px calc(env(safe-area-inset-bottom) + 12px);
+  border-top:1px solid var(--line);background:var(--card);}
+.gw-sheet-foot .btn{min-height:44px;flex:1 1 auto;}
+.gw-sheet-note{font-size:13px;color:var(--ink-2);line-height:1.45;margin:10px 0 0;}
+
+.gw-field{display:block;margin:0 0 14px;}
+.gw-field-label{display:block;font-size:12px;font-weight:650;color:var(--ink-2);margin-bottom:5px;}
+.gw-field input{width:100%;min-height:44px;padding:10px 12px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--card);color:var(--ink);
+  /* 16px keeps iOS from zooming the whole page when the field is focused. */
+  font-size:16px;}
+.gw-field input:focus{outline:2px solid var(--run);outline-offset:1px;border-color:var(--run);}
+.gw-field-hint{display:block;font-size:11px;color:var(--ink-3);margin-top:5px;}
+.gw-field-err{display:block;font-size:12px;color:var(--blocked);margin-top:5px;font-weight:600;}
+
+.gw-seg{display:flex;gap:6px;margin:0 0 14px;}
+.gw-seg-opt{flex:1 1 0;min-height:44px;border:1px solid var(--line-strong);border-radius:10px;
+  background:var(--card);font:inherit;font-size:13px;font-weight:650;color:var(--ink);cursor:pointer;}
+.gw-seg-opt[aria-pressed="true"]{background:var(--terra-soft);border-color:var(--terra-line);color:var(--vacilando-terracotta-ink);}
+.gw-seg-opt[disabled]{opacity:.5;cursor:not-allowed;}
+
+.gw-choices{display:flex;flex-direction:column;gap:8px;margin:0 0 6px;}
+.gw-choice{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;
+  min-height:56px;padding:10px 12px;border:1px solid var(--line-strong);border-radius:12px;
+  background:var(--card);cursor:pointer;font:inherit;}
+.gw-choice.is-on{border-color:var(--run);background:var(--run-bg);}
+.gw-choice[disabled],.gw-choice.is-off{opacity:.55;cursor:not-allowed;}
+.gw-choice.is-add{border-style:dashed;}
+.gw-choice-t{font-size:14px;font-weight:700;color:var(--ink);}
+.gw-choice-s{font-size:11.5px;color:var(--ink-3);}
+
+.gw-steps{display:flex;gap:4px;list-style:none;margin:0;padding:8px 12px;background:var(--card);
+  border-bottom:1px solid var(--line);overflow-x:auto;}
+.gw-step{display:flex;align-items:center;gap:5px;flex:0 0 auto;font-size:11px;color:var(--ink-3);}
+.gw-step-n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+  border-radius:999px;background:var(--bg-tint);font-size:10px;font-weight:700;}
+.gw-step.is-current{color:var(--ink);font-weight:700;}
+.gw-step.is-current .gw-step-n{background:var(--run);color:#fff;}
+.gw-step.is-done .gw-step-n{background:var(--green-soft);color:var(--green-ink);}
+
+.gw-preview{margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--card-2);}
+.gw-repo-check dd,.gw-review dd{word-break:break-all;}
+.gw-notice.ok{background:var(--green-soft);color:var(--green-ink);}
+
+/* A provider dialog, answerable from Vacilando. Sits directly above the
+   composer, because that is where the operator is trying to act. */
+.gw-screen{margin:0 12px 8px;padding:12px;border:1px solid var(--review);border-radius:12px;background:var(--review-bg);}
+.gw-screen.is-terminal{border-color:var(--line-strong);background:var(--card-2);}
+.gw-screen-h{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--review);}
+.gw-screen.is-terminal .gw-screen-h{color:var(--ink-3);}
+.gw-screen-q{margin-top:5px;font-size:14px;font-weight:700;color:var(--ink);}
+.gw-screen-d{margin-top:3px;font-size:12px;color:var(--ink-2);}
+.gw-screen-opts{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.gw-screen-opt{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 10px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--card);font:inherit;font-size:14px;color:var(--ink);cursor:pointer;text-align:left;}
+.gw-screen-opt.is-default{border-color:var(--review);font-weight:700;}
+.gw-screen-opt[disabled]{opacity:.6;cursor:progress;}
+.gw-screen-num{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:999px;background:var(--bg-tint);font-size:11px;font-weight:800;}
+.gw-screen-note{margin-top:8px;font-size:11px;color:var(--ink-3);}
+/* Take back a sent prompt. A restrained text control, not another big button. */
+.gw-cancel-run{align-self:flex-start;margin-top:8px;min-height:44px;padding:6px 10px;border:1px solid var(--line-strong);
+  border-radius:8px;background:var(--card);color:var(--blocked);font:inherit;font-size:12px;font-weight:650;cursor:pointer;}
+.gw-cancel-run:hover{background:var(--blocked-bg);}
+.gw-cancel-run[disabled]{opacity:.6;cursor:progress;}
+/* Repository groups: the top organisational boundary, and an execution one.
+   Styled a step stronger than a folder header so the hierarchy reads at a
+   glance without adding another large button. */
+.gw-repo{display:block;margin:0 0 6px;}
+.gw-repo-h{display:flex;align-items:center;padding:2px 4px;}
+.gw-repo-toggle{flex:1 1 auto;display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 8px;
+  background:none;border:0;cursor:pointer;font:inherit;font-size:13px;font-weight:800;color:var(--ink);text-align:left;}
+.gw-repo-name{flex:0 0 auto;}
+.gw-repo-meta{flex:1 1 auto;font-size:11px;font-weight:600;color:var(--ink-3);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;}
+.gw-repo .gw-folder{margin-left:8px;}
+.gw-repo .gw-lane{margin-left:10px;}
+.gw-add-repo{color:var(--vacilando-terracotta-ink);}
+.gw-repo-id{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin:8px 0 0;font-size:12px;}
+.gw-repo-id-label{color:var(--ink-3);}
+.gw-repo-id-value{font-weight:700;color:var(--ink);}
+.gw-repo-id-meta{font-size:11px;color:var(--ink-3);}
+.gw-repo-id.is-unknown .gw-repo-id-value{color:var(--blocked);}
+.gw-lightbox-x{position:absolute;top:calc(env(safe-area-inset-top) + 8px);right:12px;width:44px;height:44px;
+  border:0;border-radius:999px;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;}
+/* Unread notification indicators. Restrained on purpose: execution state stays
+   the loudest thing in a lane row, and this sits beside the name rather than
+   competing with the posture line. White on --vacilando-terracotta is only
+   3.39:1, so the pill uses the derived ink at 4.53:1. */
+.gw-lane-unseen{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  margin-left:8px;padding:0 5px;border-radius:999px;background:var(--vacilando-terracotta-ink);color:#fff;
+  font-size:11px;font-weight:700;line-height:1;vertical-align:middle;}
+.gw-lane.has-unseen .gw-lane-title{font-weight:700;}
+.gw-folder-badge.is-unseen{background:var(--terra-soft);color:var(--vacilando-terracotta-ink);}
+.gw-folder-badge.is-active{background:var(--run-bg);color:var(--run-ink);}
 .gw-add-actions .btn{min-height:44px;}
 .gw-candidate{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:12px;margin:0 0 10px;box-shadow:var(--shadow);}
 .gw-candidate .btn{margin-top:10px;}
@@ -1469,13 +1696,6 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 }
 .gw-lane-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
 .gw-lane-heading{min-width:0;flex:1 1 auto;}
-.gw-stage-status{
-  flex:0 0 auto;
-  display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px;
-  padding:6px 10px;
-  background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
-  box-shadow:var(--shadow);
-}
 .gw-thread{flex:1 1 auto;min-width:0;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:10px;}
 .gw-thread .gw-last,.gw-msg-user{flex:0 0 auto;}
 .gw-msg{position:relative;}
@@ -1486,37 +1706,167 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 }
 .gw-msg-label{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
 .gw-msg-body,.gw-last-text{margin-top:4px;font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;}
+/* A long instruction is flex:0 0 auto in the thread, so unclamped it took the
+   whole scroller and starved the reply. Clamp to 6 lines; View more expands. */
+.gw-msg-user.is-clamped .gw-msg-body{
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:6;
+  overflow:hidden;
+}
+.gw-msg-user .gw-msg-more{margin-top:6px;min-height:44px;padding:6px 10px;}
 .gw-msg-meta,.gw-last-meta{margin-top:6px;font-size:11.5px;color:var(--ink-3);}
 .gw-msg-assistant{
-  position:relative;flex:1 1 auto;min-height:0;display:flex;flex-direction:column;
+  /* flex:1 1 auto inside a SCROLLING column does not grow — it shrinks to
+     min-content and the reply overflows its own bubble. Measured on an iPhone
+     14 Pro: the bubble was 123px tall while the <pre> inside it needed 176px.
+     A real minimum on the bubble, and the pre fills it. */
+  position:relative;flex:0 0 auto;display:flex;flex-direction:column;
+  min-height:min(58vh, 24rem);
   background:var(--card);border:1px solid var(--line);border-radius:16px 16px 16px 6px;
   padding:8px 8px 8px;min-width:0;
 }
 .gw-msg-assistant .gw-copy{
-  position:absolute;top:8px;left:8px;z-index:2;min-height:44px;min-width:44px;padding:8px;
+  position:static;flex:0 0 auto;min-height:44px;min-width:44px;padding:8px;
   width:44px;border-radius:10px;
 }
 .gw-copy-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);}
 .gw-live-dot{
-  position:absolute;top:14px;right:14px;font-size:11px;font-weight:700;color:var(--run);
+  position:static;flex:0 0 auto;font-size:11px;font-weight:700;color:var(--run);
   letter-spacing:.04em;text-transform:uppercase;
 }
 .gw-msg-assistant[data-gw-live="1"] .gw-live-dot::before{
   content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--run);
   margin-right:6px;box-shadow:0 0 0 3px var(--run-bg);vertical-align:middle;
 }
-.gw-details{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);}
-.gw-details > summary{cursor:pointer;min-height:44px;display:flex;align-items:center;padding:8px 12px;font-size:13px;font-weight:650;list-style:none;}
-.gw-details > summary::-webkit-details-marker{display:none;}
-.gw-details-body{padding:8px 12px 12px;display:flex;flex-direction:column;gap:8px;}
+/* ---- the structured agent report IS the assistant message ---- */
+.gw-report{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.gw-report-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;}
+.gw-report-kind{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);}
+.gw-report-kind.is-run{color:var(--run);}
+.gw-report-kind.is-needs{color:var(--review);}
+.gw-report-kind.is-complete{color:var(--green-ink);}
+.gw-report-kind.is-failed{color:var(--blocked);}
+.gw-report-phase{font-size:12px;color:var(--ink-3);}
+.gw-report-reason{margin:0;font-size:12.5px;color:var(--ink-2);}
+.gw-report-waiting{margin:0;font-size:13.5px;color:var(--ink-3);font-style:italic;}
+/* A lane still on the status-only CLI. Its summary is real and is shown; the
+   label says what it is so it is never mistaken for a full agent message. */
+.gw-report-note{margin:6px 0 0;font-size:12px;color:var(--ink-3);border-top:1px solid var(--line-soft,var(--line));padding-top:6px;}
+.gw-report-note code{font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:11.5px;}
+.gw-report-body{
+  flex:1 1 auto;min-width:0;min-height:0;overflow:auto;
+  font-size:14px;line-height:1.5;overflow-wrap:anywhere;
+}
+.gw-md-p{margin:0 0 8px;}
+.gw-md-h{margin:12px 0 6px;font-size:14.5px;letter-spacing:-.01em;}
+.gw-md-h:first-child{margin-top:0;}
+.gw-md-list{margin:0 0 8px;padding-left:1.25em;display:flex;flex-direction:column;gap:3px;}
+.gw-report-body code{
+  font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:12.5px;
+  background:var(--bg-tint,rgba(0,0,0,.05));padding:1px 4px;border-radius:4px;
+}
+.gw-md-code{
+  margin:0 0 8px;padding:8px 10px;border-radius:8px;overflow-x:auto;
+  background:#1c241f;color:#f4f7f4;font-size:12px;line-height:1.45;white-space:pre;
+}
+.gw-md-code code{background:transparent;padding:0;color:inherit;font-size:12px;}
+.gw-md-table{border-collapse:collapse;margin:0 0 8px;font-size:12.5px;display:block;overflow-x:auto;max-width:100%;}
+.gw-md-table th,.gw-md-table td{border:1px solid var(--line);padding:4px 8px;text-align:left;vertical-align:top;}
+.gw-md-table th{background:var(--bg-tint,rgba(0,0,0,.04));font-weight:650;}
+.gw-report-choices{margin:2px 0 0;padding-left:1.1em;display:flex;flex-direction:column;gap:4px;font-size:13px;}
+.gw-report-choice-detail{display:block;font-size:12px;color:var(--ink-2);}
+.gw-report-result{
+  margin:4px 0 0;display:grid;grid-template-columns:auto minmax(0,1fr);gap:2px 10px;
+  font-size:12.5px;border-top:1px solid var(--line-soft,var(--line));padding-top:6px;
+}
+.gw-report-result dt{color:var(--ink-3);text-transform:capitalize;}
+.gw-report-result dd{margin:0;overflow-wrap:anywhere;}
+
+/* Starting a lane uses the lane skeleton: header, scrollable body, pinned
+   composer. The intro scrolls; the composer never leaves the screen. */
+.gw-start{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.gw-start-intro{flex:1 1 auto;min-height:0;overflow-y:auto;padding:4px 2px 0;}
+.gw-start-intro .gw-lead{margin:0;}
+.gw-start-composer{flex:0 0 auto;}
+.gw-start-composer textarea{min-height:96px;}
+.gw-start-composer .gw-composer-h{
+  position:static;width:auto;height:auto;clip:auto;overflow:visible;
+  font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--ink-3);font-weight:700;
+  margin-bottom:6px;
+}
+
+/* A quiet way down when something arrives while the operator is reading further
+   up. Never a jump — the page must not move under a reader. */
+.gw-new-update{
+  /* In normal flow between the thread and the composer. An absolutely
+     positioned pill would need a positioned ancestor whose height it cannot
+     know; this cannot drift. */
+  flex:0 0 auto;align-self:center;
+  margin:4px 0 0;min-height:36px;padding:6px 14px;
+  border:1px solid var(--line-strong,var(--line));border-radius:999px;
+  background:var(--card);color:var(--ink);box-shadow:var(--shadow);
+  font-size:12.5px;font-weight:650;cursor:pointer;
+}
+.gw-new-update[hidden]{display:none;}
+
+.gw-capacity-block{display:flex;flex-direction:column;gap:4px;}
+.gw-capacity-holders{margin:0;padding-left:1.1em;font-size:12.5px;color:var(--ink-2);}
+.gw-capacity-holders li{overflow-wrap:anywhere;}
+
+/* Raw terminal: diagnostics, never the answer. */
+.gw-terminal{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);}
+.gw-terminal-sum{cursor:pointer;list-style:none;min-height:44px;display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;font-weight:650;}
+.gw-terminal-sum::-webkit-details-marker{display:none;}
+.gw-terminal-tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);border:1px solid var(--line);border-radius:99px;padding:1px 6px;}
+.gw-terminal-body{padding:0 10px 10px;display:flex;flex-direction:column;gap:6px;}
+.gw-terminal-note{margin:0;font-size:12px;color:var(--ink-2);}
+.gw-terminal .gw-output{min-height:0;max-height:44vh;margin-top:0;font-size:12px;}
+
+/* The lane page is a conversation. Header, one status line, thread, composer —
+   everything else lives in the single details panel. */
+.gw-chat-head{
+  flex:0 0 auto;
+  display:flex;align-items:center;gap:8px;
+  padding:2px 0 6px;
+}
+.gw-chat-id{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.gw-chat-title{
+  margin:0;min-width:0;
+  font-size:17px;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+/* State and provider ride with the lane name instead of taking a full-width
+   card of their own below a second header. */
+.gw-chat-id .gw-work-state{font-size:12px;font-weight:650;color:var(--ink-2);}
+.gw-aside-toggle,.gw-aside-close{flex:0 0 auto;min-height:44px;}
+.gw-aside-head{
+  flex:0 0 auto;
+  display:none;align-items:center;justify-content:space-between;gap:8px;
+  padding:4px 2px 8px;
+}
+.gw-aside-title{font-size:15px;font-weight:700;}
+.gw-aside-id h1{margin:0;font-size:18px;letter-spacing:-.02em;}
+/* Controlled entirely by .is-aside-open; never by the [hidden] attribute,
+   which display:block would silently override. */
+.gw-aside-scrim{display:none;}
+
+/* The copy control sits in its own row instead of floating over the output.
+   It used to be absolutely positioned, which forced a 36px dead margin at the
+   top of every response — vertical space the reply itself needed. */
+.gw-msg-tools{
+  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  min-height:28px;padding:0 2px 4px;
+}
 .gw-lane-stage .gw-output,.gw-thread .gw-output,.gw-msg-assistant .gw-output{
   flex:1 1 auto;
   min-width:0;
-  min-height:0;
+  /* A real floor. With min-height:0 the assistant reply collapsed to whatever
+     the user message left over — observed at two rows. */
+  min-height:11rem;
   overflow:auto;
   background:#1c241f;
   color:#f4f7f4;
-  margin-top:36px;
+  margin-top:0;
 }
 .gw-thread .gw-output-h,.gw-thread .gw-output-chrome{flex:0 0 auto;position:static;background:transparent;padding-top:2px;}
 .gw-claude-run{
@@ -1700,51 +2050,59 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
     height:100%;
     overflow:hidden;
   }
+  /* THE clipping fix. The details panel used to sit at the TOP of the mobile
+     column taking up to 38vh, before the conversation had a single pixel. It is
+     now a right-side slide-over, off-canvas until asked for, so the thread owns
+     the full height it always should have. */
   .gw-lane-aside,.gw-lane-chrome{
-    order:-1;
-    max-height:38vh;
-    flex:0 0 auto;
-    overflow-y:auto;
-    overflow-x:hidden;
-  }
-  .gw-lane-compact{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    padding:max(6px, env(safe-area-inset-top, 0px)) 2px 8px;
-    position:relative;
-    z-index:7;
-  }
-  .gw-lane-compact-id{min-width:0;flex:1 1 auto;}
-  .gw-lane-compact-id h1{margin:0;font-size:16px;line-height:1.2;}
-  .gw-lane-compact .gw-presence{margin:2px 0 0;font-size:12px;color:var(--ink-2);}
-  .gw-lane-compact .gw-notify{flex:0 0 auto;}
-  .gw-notify-sum-label{white-space:nowrap;}
-  .gw-lane-fold{
-    border:1px solid var(--line);
-    border-radius:var(--radius);
+    position:fixed;
+    top:0;right:0;bottom:0;
+    width:min(92vw, 420px);
+    max-height:none;
+    z-index:60;
     background:var(--card);
-    box-shadow:var(--shadow);
+    border-left:1px solid var(--line);
+    box-shadow:-12px 0 32px rgba(31,42,36,.22);
+    transform:translateX(100%);
+    transition:transform .18s ease-out;
+    overflow-y:auto;overflow-x:hidden;
+    padding:max(10px, env(safe-area-inset-top, 0px)) 12px max(12px, env(safe-area-inset-bottom, 0px));
+    overscroll-behavior:contain;
   }
-  .gw-lane-fold-sum{
-    cursor:pointer;
-    list-style:none;
-    min-height:44px;
-    display:flex;
-    align-items:center;
-    padding:8px 12px;
-    font-size:13px;
-    font-weight:650;
+  /* Closed: not merely off-screen. A transformed element still takes keyboard
+     focus and still answers hit-testing at its translated position. */
+  .gw-lane-aside,.gw-lane-chrome{visibility:hidden;pointer-events:none;}
+  .gw.is-aside-open .gw-lane-aside,.gw.is-aside-open .gw-lane-chrome{
+    transform:translateX(0);visibility:visible;pointer-events:auto;
   }
-  .gw-lane-fold-sum::-webkit-details-marker{display:none;}
-  .gw-lane-fold[open] .gw-lane-fold-sum{border-bottom:1px solid var(--line);}
-  .gw-lane-fold .gw-back-desktop,
-  .gw-lane-fold .gw-lane-h h1,
-  .gw-lane-fold .gw-presence{display:none;}
+  .gw-aside-head{display:flex;}
+  .gw.is-aside-open .gw-aside-scrim{
+    display:block;position:fixed;inset:0;z-index:55;
+    background:rgba(14,51,35,.4);
+  }
+  .gw-notify-sum-label{white-space:nowrap;}
+  /* ONE lane header. The global "Lane / ↻ Refresh / Live" bar was a second
+     header stacked on the lane's own, and the state was repeated a third time
+     in a full-width card below both. Automatic updates are the normal
+     behaviour; manual refresh lives in Details as recovery. */
+  .app:has(.gw.is-detail) .topbar{display:none;}
+  /* The SHELL owns the safe-area inset — `body` already pads
+     env(safe-area-inset-top). This header re-applied the same inset, so on a
+     device reporting 59px the app spent it twice: 59 (body) + 8 (view) + 59
+     (header) = 131px of dead space above the lane name on a 660px viewport.
+     The header is sticky inside the shell's padding box, so top:0 already sits
+     below the safe area. Compact padding only, and never the inset again. */
+  .gw-chat-head{
+    position:sticky;top:0;z-index:8;
+    background:var(--bg);
+    padding:6px 0 8px;
+    min-height:0;
+    border-bottom:1px solid var(--line-soft, var(--line));
+  }
+  .gw-chat-title{font-size:16px;}
+  .view:has(.gw.is-detail){padding-top:2px;}
   .gw-lane-stage{flex:1 1 auto;min-height:0;overflow:hidden;}
   .gw-claude-run{display:none;}
-  .gw-stage-status{display:flex;flex:0 0 auto;}
-  .gw-stage-status .gw-work-text{display:none;}
   .gw-decision-bar{display:block;}
   .gw-decision-bar .gw-work-stale-actions{flex-direction:column;}
   .gw-decision-bar .btn{width:100%;min-height:44px;white-space:normal;}
@@ -1754,7 +2112,55 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-back{display:inline-flex;}
   .gw-claude-run .gw-session-refresh{margin-left:auto;}
   .gw-refresh-hint{font-size:11px;color:var(--ink-3);font-weight:600;}
-  .gw-output{max-height:none;font-size:13px;min-height:0;}
+  /* The reply gets a real floor on mobile too; the user message is clamped, so
+     nothing above it can take this space back. */
+  .gw-output{max-height:none;font-size:13px;min-height:9rem;}
+  .gw-msg-assistant{flex:0 0 auto;min-height:min(58vh, 22rem);}
+  .gw-msg-user{max-width:100%;}
+  /* Keyboard open: the conversation must stay readable while typing. The
+     topbar and the status line stand down, and the reply sizes to the visual
+     viewport instead of the (unshrunk) layout viewport. */
+  :root[data-gw-keyboard] .topbar{display:none;}
+  :root[data-gw-keyboard] .gw-chat-id .gw-work-state{display:none;}
+  :root[data-gw-keyboard] .gw-chat-head{padding-top:2px;}
+  /* With the keyboard up the thread is ~100px. A 7rem floor on the bubble is
+     larger than its own scroller, so the bubble overflowed and the visible
+     slice landed on empty space. Let it size to the thread instead. */
+  :root[data-gw-keyboard] .gw-msg-assistant{min-height:0;}
+  :root[data-gw-keyboard] .gw-output{min-height:6rem;}
+  /* 16px or iOS zooms the whole page on focus — the same rule the lane
+     composer already follows. */
+  .gw-start-composer textarea{font-size:16px;min-height:88px;max-height:min(30dvh,180px);}
+  .gw.is-start .gw-composer{padding-bottom:max(10px, env(safe-area-inset-bottom, 0px));}
+  :root[data-gw-keyboard] .gw-start-intro{display:none;}
+  :root[data-gw-keyboard] .gw-msg-user{display:none;}
+  /* Keyboard open, minus both safe areas, leaves ~270px. A 156px composer and a
+     floating pill took all of it and the conversation collapsed to nothing.
+     While typing, the composer is the field and Send — the provider toggle and
+     the update affordance can wait. */
+  :root[data-gw-keyboard] .gw-new-update{display:none;}
+  /* On a LANE the provider is already chosen, so the toggle can stand down for
+     space while typing. On the start screen it is part of the decision the
+     operator is making — hiding it there would remove the question. */
+  :root[data-gw-keyboard] .gw-lane-stage:not(:has(.gw-start)) .gw-provider{display:none;}
+  /* Keyboard open on a 363px visual viewport leaves 270px once both safe areas
+     are removed. A 160px composer left the conversation an 11px sliver. While
+     typing the composer is one field and Send, side by side. */
+  :root[data-gw-keyboard] .gw.is-detail .gw-composer{
+    padding:6px 8px;box-shadow:none;border-radius:16px;
+    padding-bottom:max(6px, env(safe-area-inset-bottom, 0px));
+  }
+  /* The single-row keyboard composer belongs to a LANE, where the field is a
+     quick reply. The start screen's field is the whole point of the screen —
+     collapsing it into a row left a 40px-wide box beside the label. */
+  :root[data-gw-keyboard] .gw-composer-box{flex-direction:row;align-items:flex-end;gap:8px;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-box{flex-direction:column;align-items:stretch;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-h{display:none;}
+  :root[data-gw-keyboard] .gw-start-composer textarea{min-height:72px;max-height:34dvh;}
+  :root[data-gw-keyboard] .gw-start-composer .gw-composer-row{margin-top:8px;justify-content:space-between;}
+  :root[data-gw-keyboard] .gw-composer textarea{min-height:44px;max-height:76px;flex:1 1 auto;}
+  :root[data-gw-keyboard] .gw-composer-row{margin-top:0;flex:0 0 auto;}
+  :root[data-gw-keyboard] .gw-send{min-height:44px;min-width:72px;padding:8px 12px;}
   .gw-lane-stage{padding-bottom:0;}
   .gw.is-detail .gw-composer{
     position:static;
@@ -1775,22 +2181,26 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-provider-opt{min-height:44px;padding:8px 12px;font-size:14px;}
   #gw-composer-provider{min-height:0;max-width:none;background:transparent;color:inherit;border:0;}
   .gw-send{min-height:44px;min-width:88px;width:auto;flex:0 0 auto;font-size:16px;padding:10px 16px;opacity:1;}
-  .gw-lane-compact .gw-session-refresh,.gw-lane-compact .gw-session-refresh{min-height:44px;padding:8px 10px;margin-top:0;}
+  .gw-lane-aside .gw-session-refresh{min-height:44px;padding:8px 10px;margin-top:0;}
   .gw-rename{min-height:44px;}
   .gw-notify-sum{min-height:44px;}
   .gw-notify-enable{min-height:44px;}
-  .gw-lane-compact .gw-notify-pop{
-    position:fixed;left:10px;right:10px;top:auto;width:auto;z-index:20;
+  .gw-lane-aside .gw-notify-pop{
+    position:static;width:auto;z-index:1;
   }
   .gw-enter-hint{display:none;}
   .gw-lane{padding:12px 10px;}
 }
 @media (min-width:861px){
-  .gw-lane-compact{display:none;}
-  .gw-lane-fold{border:0;background:transparent;box-shadow:none;}
-  .gw-lane-fold-sum{display:none;}
+  /* Desktop shows the one details panel beside the conversation, always. */
+  .gw-aside-toggle,.gw-aside-close,.gw-aside-scrim{display:none;}
   .gw-claude-run .gw-session-refresh{display:none;}
 }
+.gw-settings{padding:8px 4px 28px;max-width:52rem;}
+.gw-settings h1{margin:0 0 8px;font-size:22px;}
+.gw-settings .gw-lead{margin:0 0 16px;}
+.gw-settings .section-title{margin:18px 0 10px;}
+.gw-settings .pm-cards{margin-top:4px;}
 .gw-login{position:fixed;inset:0;z-index:400;background:rgba(14,51,35,.55);display:grid;place-items:center;padding:24px;pointer-events:auto;}
 .gw-login[hidden]{display:none !important;}
 .gw-login-card{width:min(28rem,100%);background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:22px 20px 20px;pointer-events:auto;}

@@ -101,6 +101,59 @@ Permanent slots (1–6) keep stable roles (Product, Architecture, Performance, U
 
 ---
 
+## Vacilando resource model — durable work vs active computation
+
+**Status:** Canonical (August 2026). Owner of the concurrency vocabulary the
+Vacilando Gateway enforces in `scripts/local-dev/lib/vacilando/provider-capacity.mjs`
+and `provider-suspension.mjs`.
+
+Vacilando governs two different scarce things, and conflating them is what
+refused new work while the machine was nearly idle: five worktrees claimed
+slots, four were counted as active agents against a ceiling of three, and
+exactly one of them had a process in it.
+
+| Concept | What it is | Consumes provider capacity? | Governed by |
+|---|---|---|---|
+| **Durable lane** | Conversation, run history, status, provider preference, work identity | **No** — not by existing | Lane store; unbounded in practice |
+| **Worktree** | Branch checkout and durable files | **No** — regardless of lifecycle metadata | Disk; reported separately |
+| **Provider session** | A real Claude/Cursor agent **process** attached to a lane | **Yes, while it must think** | `ALLOY_MAX_ACTIVE_PROVIDERS` (default 3) |
+| **Runtime/validation resource** | Ports, browsers, test workers, databases, exclusive leases | No — counted separately | `execution-resource.mjs` broker |
+| **Slot** | A *placement* identifier for governed fixed ports (3011–3016) and legacy `alloy-sprint-*` commands | No | Compatibility only |
+
+### The rules this implies
+
+- **A worktree may exist without a running provider.** Retain as many lanes and
+  worktrees as disk allows. Six slots never meant six workspaces; a lane or
+  worktree with no slot is entirely normal.
+- **Capacity is measured from live processes**, correlated to the owning lane
+  and de-duplicated by PID. Never from lane count, worktree count, slot count,
+  metadata lifecycle, shell existence, or a background `node` process.
+- **Unknown is not active.** When live process inspection is unavailable the
+  assessment is marked `degraded` and falls back conservatively.
+- **Parked work does not hold a seat.** A lane in `NEEDS_INPUT` is durable work
+  awaiting a person. After a warm grace period its provider is suspended: the
+  process stops, the lane, run, exact question, conversation, worktree, branch
+  and resumable session identity are all kept, and the seat is released. The
+  lane reads `Needs input · provider suspended`.
+- **`WAITING_RESOURCE` suspends only when nothing in memory must stay alive** —
+  never while an exclusive lease is `EXCLUSIVE_ACTIVE`, a continuation is
+  mid-delivery, or the run is resuming.
+- **Durability precedes termination.** A provider is never stopped until the
+  question has been written and read back. A suspension that loses the question
+  is worse than a held seat.
+- **Exactly once.** A queued instruction is delivered once after admission; a
+  reply to a suspended lane is stored first, then delivered once by the ordinary
+  `NEEDS_INPUT` continuation after the provider resumes.
+
+### What the ceiling is for
+
+`ALLOY_MAX_ACTIVE_PROVIDERS` caps concurrent agent **processes** — CPU, memory,
+and model seats. It is not a limit on how much work the machine remembers.
+Disk protection for durable work is a separate maintenance concern
+(`alloy-sprint-finish`, disk hygiene), never a concurrency gate.
+
+---
+
 ## Operating model
 
 ### Worktrees

@@ -57,14 +57,18 @@ import {
   getExecutionRun,
   isCertificationInstruction,
   isTerminalRunState,
+  patchRunFields,
   publicExecutionRun,
   readExecutionRunStore,
+  runCompletionAdmissible,
   transitionExecutionRun,
+  noteInstructionReceipt,
 } from "./execution-run.mjs";
+import { runReceiptConfirmed, runReceiptToken } from "./lanes.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
 import { SEND_BASELINE_WINDOW_MS, readLaneRuntimeStore } from "./lane-runtime.mjs";
 import { activeAgentSessionForLane } from "./agent-session.mjs";
-import { canonicalLaneStoreId, getDurableLane } from "./development-lane.mjs";
+import { canonicalLaneStoreId, getDurableLane, setLanePreferredProvider } from "./development-lane.mjs";
 import { statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -73,6 +77,12 @@ const IN_FLIGHT_CONTINUATION = new Set(["PENDING", "DELIVERING"]);
 const SESSION_BUSY = new Set(["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]);
 /** Paste/submit still landing. After this, a new operator instruction is a new turn. */
 export const OPERATOR_SUPERSEDE_GRACE_MS = 20 * 1000;
+/**
+ * Auto-complete from leftover Cooked must not close a turn that just started.
+ * Operator Send can supersede after 20s; inferring completion needs longer so
+ * a new prompt is not closed on the previous viewport.
+ */
+export const IDLE_TURN_COMPLETE_GRACE_MS = 90 * 1000;
 const PROTECTIVE_STATES = new Set(["VALIDATING", "RECOVERING", "WAITING_RESOURCE", "NEEDS_INPUT"]);
 
 /** Genuine post-delivery activity is protective within this window. Not sole stale authority. */
@@ -94,6 +104,15 @@ export const WORKTREE_ACTIVITY_RECENT_MS = 45 * 60 * 1000;
  * movement, and no heartbeat for this long — never on silence alone.
  */
 export const ABANDON_AFTER_HEARTBEAT_MS = 4 * 60 * 60 * 1000;
+/** QUEUED→EXECUTING requires a provider ack. Fail closed if none arrives. */
+export const DELIVERY_ACK_TIMEOUT_MS = 30 * 1000;
+
+export function runHasDeliveryAck(run) {
+  if (run?.delivery && typeof run.delivery === "object") {
+    return run.delivery.acknowledged === true;
+  }
+  return Boolean(run?.started_at);
+}
 
 function parseMs(iso) {
   const n = Date.parse(iso || "");
@@ -371,7 +390,37 @@ export function classifyExecutionRunStale(run, facts = {}) {
   return { class: "ambiguous", reason: "executing_without_live_signals", evidence };
 }
 
-function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
+/**
+ * Close an idle turn as COMPLETE — but only when the completion is actually
+ * attributable to THIS run.
+ *
+ * A run delivered through the receipt-tracking path carries its own token. If
+ * that token was never observed in advanced pane output, nothing on this lane
+ * has proven the instruction reached a provider, and an idle pane is showing
+ * some EARLIER turn. Completing on that evidence is how a stale completion gets
+ * attached to a newer instruction. Such a run is abandoned instead: terminal for
+ * scheduling, recoverable, and never a false claim that work finished.
+ */
+function completeIdleRun(run, { root, nowMs, origin, reason, summary, attributionRequired = false }) {
+  if (attributionRequired && runReceiptToken(run) && !runReceiptConfirmed(run)) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: "completion_not_attributable",
+      summary: "Not completed: this run's instruction receipt was never observed in provider output.",
+    });
+  }
+  const admissible = runCompletionAdmissible(run);
+  if (attributionRequired && !admissible.ok) {
+    return abandonRun(run, {
+      root,
+      nowMs,
+      origin,
+      reason: admissible.error,
+      summary: "Not completed: the instruction was never delivered to a provider.",
+    });
+  }
   return transitionExecutionRun(run.run_id, "COMPLETE", {
     reason,
     origin,
@@ -381,20 +430,162 @@ function completeIdleRun(run, { root, nowMs, origin, reason, summary }) {
   });
 }
 
+async function defaultCollectLatestOutput(lane) {
+  const cwd = lane?.execution_run?.worktree_path || lane?.worktree?.path || lane?.binding?.worktree_path;
+  if (!cwd) return { available: false, text: null };
+  const sessionId = lane?.agent_session?.session_id || lane?.claude?.session_id || null;
+  const provider = lane?.preferred_provider || lane?.binding?.provider || "claude";
+  if (provider === "cursor") {
+    const { collectLatestCursorResponse } = await import("./providers/cursor/telemetry.mjs");
+    return collectLatestCursorResponse({ cwd, sessionId: lane?.agent_session?.session_id });
+  }
+  const { collectLatestClaudeResponse } = await import("./providers/claude/telemetry.mjs");
+  return collectLatestClaudeResponse({ cwd, sessionId });
+}
+
+/**
+ * The pane still showing the previous turn must not close a new send. The
+ * transcript has to be the same writeup as the Cooked viewport.
+ */
+export function paneResultAgreesWithTranscript(paneSummary, transcript) {
+  const pane = String(paneSummary || "").replace(/\s+/g, " ").trim();
+  const tr = String(transcript || "").replace(/\s+/g, " ").trim();
+  if (pane.length < 40 || tr.length < 40) return false;
+  const offset = pane.length > 160 ? 24 : 0;
+  const needle = pane.slice(offset, offset + 64).trim();
+  if (needle.length >= 40 && tr.includes(needle)) return true;
+  const head = pane.slice(0, 48).trim();
+  return head.length >= 40 && tr.includes(head);
+}
+
+/**
+ * When a worker finishes a turn but forgets `vac run-status complete --summary`,
+ * Vacilando still has to provide that last output at completion. The pane
+ * saying Cooked plus an idle prompt is the finished-turn signal; the session
+ * transcript is the last output. Filed as a completion report so the
+ * conversation and the run record both carry it.
+ */
+export async function maybeCompleteIdleTurnFromLastOutput(lane, {
+  root,
+  nowMs = Date.now(),
+  collectLatest = null,
+} = {}) {
+  const run = lane?.execution_run;
+  if (!run?.run_id || run.state !== "EXECUTING") {
+    return { ok: true, completed: false, skipped: "not_executing" };
+  }
+  if (lane?.provider_activity?.activity !== "ready") {
+    return { ok: true, completed: false, skipped: "not_idle" };
+  }
+  if (lane?.provider_activity?.live_progress?.idle_result !== true) {
+    return { ok: true, completed: false, skipped: "turn_not_finished" };
+  }
+  const started = parseMs(run.started_at);
+  if (started != null && (nowMs - started) < IDLE_TURN_COMPLETE_GRACE_MS) {
+    return { ok: true, completed: false, skipped: "grace" };
+  }
+  const admissible = runCompletionAdmissible(run);
+  if (!admissible.ok) {
+    return { ok: true, completed: false, skipped: admissible.error };
+  }
+
+  let latest = null;
+  try {
+    latest = collectLatest ? await collectLatest(lane) : await defaultCollectLatestOutput(lane);
+  } catch {
+    latest = null;
+  }
+  const text = String(latest?.text || "").trim();
+  if (text.length < 40) {
+    return { ok: true, completed: false, skipped: "no_last_output" };
+  }
+  const captured = parseMs(latest?.captured_at || latest?.timestamp);
+  if (started != null && captured != null && captured < started) {
+    return { ok: true, completed: false, skipped: "last_output_predates_run" };
+  }
+  if (started != null && captured == null) {
+    return { ok: true, completed: false, skipped: "last_output_unattributed" };
+  }
+  const paneSummary = lane?.provider_activity?.live_progress?.summary || "";
+  if (!paneResultAgreesWithTranscript(paneSummary, text)) {
+    return { ok: true, completed: false, skipped: "last_output_mismatch" };
+  }
+
+  if (runReceiptToken(run) && !runReceiptConfirmed(run)) {
+    noteInstructionReceipt(run.run_id, { text, nowMs, root });
+  }
+  // The receipt token lives in the delivery envelope, not in the last output.
+  // Requiring it in the completion writeup is how a delivered, cooked turn
+  // never got its last-output summary. Delivery ack is the proof the
+  // instruction reached the provider; the Cooked pane is the finished turn.
+  const confirmed = runReceiptConfirmed(getExecutionRun(run.run_id, root) || run);
+  if (runReceiptToken(run) && !confirmed && !runHasDeliveryAck(run)) {
+    return { ok: true, completed: false, skipped: "receipt_unconfirmed" };
+  }
+
+  const { submitAgentReport } = await import("./execution-run-report.mjs");
+  const out = submitAgentReport(run.run_id, {
+    type: "completion",
+    message: text,
+    origin: "governor",
+    reason: "last_output_at_idle_prompt",
+    laneId: run.lane_id,
+    cwd: run.worktree_path,
+    nowMs,
+    root,
+  });
+  if (!out.ok) return { ok: false, completed: false, error: out.error };
+  return {
+    ok: true,
+    completed: out.run?.state === "COMPLETE" || out.transition === "COMPLETE",
+    run: out.run,
+    report: out.report,
+  };
+}
+
+export async function applyIdleTurnCompletions(lanes, { root, nowMs = Date.now(), collectLatest = null } = {}) {
+  const list = Array.isArray(lanes) ? lanes : [];
+  if (!list.length) return list;
+  const { attachLaneRuns } = await import("./execution-run.mjs");
+  for (let i = 0; i < list.length; i += 1) {
+    try {
+      const out = await maybeCompleteIdleTurnFromLastOutput(list[i], { root, nowMs, collectLatest });
+      if (!out?.completed) continue;
+      const activity = list[i].provider_activity;
+      list[i] = attachLaneRuns([list[i]], root, { includeInstruction: true })[0];
+      if (activity) list[i].provider_activity = activity;
+    } catch { /* a missed completion must not fail discovery */ }
+  }
+  return list;
+}
+
 /**
  * Operator Send is a new turn. An EXECUTING run with an idle (not rotating)
  * session must not 409 forever because of a leftover heartbeat or ACTIVE pane.
  */
 export function canOperatorSupersedeRun(run, facts = {}) {
-  if (!run || run.state !== "EXECUTING") return false;
+  if (!run) return false;
   if (facts.open_resource || facts.in_flight_continuation) return false;
   if (SESSION_BUSY.has(facts.session_state)) return false;
-  const delivered = facts.delivered_ms;
   const nowMs = facts.now_ms || Date.now();
+  if (run.state === "NEEDS_INPUT") {
+    const report = run.agent_report;
+    // A structured blocking question is a real operator decision. Status-only
+    // NEEDS_INPUT is a parked status string — Send is a new turn, not an answer.
+    if (report?.type === "needs_input" && report.blocking !== false) return false;
+    return true;
+  }
+  if (run.state !== "EXECUTING") return false;
+  const delivered = facts.delivered_ms;
   if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
   return true;
 }
 
+/**
+ * Operator Send closes the previous turn. This is an explicit operator act on a
+ * run they can see, not an inference from pane output, so it does not require
+ * receipt attribution — the operator moving on is the authority.
+ */
 export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() } = {}) {
   return completeIdleRun(run, {
     root,
@@ -407,12 +598,17 @@ export function completeRunForOperatorFollowUp(run, { root, nowMs = Date.now() }
 
 function closeClassifiedRun(run, cls, { root, nowMs, origin }) {
   if (cls.reason === "turn_finished_session_remains") {
+    // Inferred from an idle pane, not from a worker report. Attribution is
+    // mandatory here: without it, the PREVIOUS turn's finished screen closes
+    // this run. Operator follow-up (below) is an explicit operator act and is
+    // governed differently.
     return completeIdleRun(run, {
       root,
       nowMs,
       origin,
       reason: cls.reason,
       summary: cls.summary,
+      attributionRequired: true,
     });
   }
   return abandonRun(run, {
@@ -468,6 +664,59 @@ export function reconcileStaleExecutionRuns({
     if (out.ok && !out.noop) abandoned.push(out.run);
   }
   return { ok: true, abandoned, count: abandoned.length };
+}
+
+/**
+ * Fail runs that never received a provider delivery acknowledgement.
+ * Cursor observation (transcript readability) is not delivery. Claude QUEUED
+ * waiting for a real agent session is not failed here.
+ */
+export function reconcileUndeliveredRuns({
+  root,
+  nowMs = Date.now(),
+} = {}) {
+  const store = readExecutionRunStore(root);
+  const failed = [];
+  for (const id of Object.keys(store.lanes || {})) {
+    const pack = store.lanes[id];
+    if (!pack?.current_run_id) continue;
+    const run = (pack.runs || []).find((r) => r.run_id === pack.current_run_id);
+    if (!run || isTerminalRunState(run.state) || runHasDeliveryAck(run)) continue;
+    const rec = getDurableLane(run.lane_id, root);
+    const selected = String(
+      run.delivery?.provider || rec?.preferred_provider || rec?.binding?.provider || "",
+    ).toLowerCase();
+    const createdMs = parseMs(run.created_at) ?? parseMs(run.updated_at) ?? nowMs;
+    const timedOut = nowMs - createdMs >= DELIVERY_ACK_TIMEOUT_MS;
+    const cursorUndelivered = selected === "cursor";
+    const executingWithoutAck = run.state === "EXECUTING" && timedOut;
+    if (!cursorUndelivered && !executingWithoutAck) continue;
+    const reason = cursorUndelivered ? "cursor_delivery_unavailable" : "delivery_unacknowledged";
+    const summary = cursorUndelivered
+      ? "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached."
+      : "No provider delivery acknowledgement for this instruction.";
+    patchRunFields(run.run_id, {
+      delivery: {
+        ...(run.delivery && typeof run.delivery === "object" ? run.delivery : {}),
+        acknowledged: false,
+        provider: cursorUndelivered ? "cursor" : (run.delivery?.provider || selected || null),
+        error: reason,
+        at: new Date(nowMs).toISOString(),
+      },
+    }, { nowMs, root });
+    const out = transitionExecutionRun(run.run_id, "FAILED", {
+      reason,
+      origin: "governor",
+      nowMs,
+      root,
+      completion_report: { summary },
+    });
+    if (cursorUndelivered && rec?.lane_id) {
+      try { setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root }); } catch { /* retry with Claude */ }
+    }
+    if (out.ok) failed.push(out.run);
+  }
+  return { ok: true, failed, count: failed.length };
 }
 
 export function closeStaleExecutionRun(runId, {

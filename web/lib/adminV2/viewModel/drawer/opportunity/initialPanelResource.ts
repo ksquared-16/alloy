@@ -143,6 +143,14 @@ export async function buildInitialPanelResource(
     });
 
     const tDeps0 = Date.now();
+    // The Activity leg runs BESIDE the first-paint dependencies, so its own completion has to be
+    // stamped where it finishes. Reporting `Date.now() - tDeps0` for both legs made the two phases
+    // report one identical number and hid which leg the wait actually belonged to.
+    let tActivityDone: number | null = null;
+    const stampActivity = <T,>(value: T): T => {
+        tActivityDone = Date.now();
+        return value;
+    };
     const [resolved, activityRows] = await Promise.all([
         resolveOpportunityDrawerFirstPaintDependencies({
             supabase,
@@ -165,13 +173,15 @@ export async function buildInitialPanelResource(
             orgId: gate.orgId,
             opportunityId,
             limit: 24,
-        }).catch((err) => {
-            console.warn(
-                "[initialPanelResource] activity timeline hydrate failed",
-                err instanceof Error ? err.message : err,
-            );
-            return [] as Awaited<ReturnType<typeof loadOpportunityActivityEvents>>;
-        }),
+        })
+            .then(stampActivity)
+            .catch((err) => {
+                console.warn(
+                    "[initialPanelResource] activity timeline hydrate failed",
+                    err instanceof Error ? err.message : err,
+                );
+                return stampActivity([] as Awaited<ReturnType<typeof loadOpportunityActivityEvents>>);
+            }),
     ]);
     Object.assign(record, resolved.record_patches);
     if (activityRows.length > 0) {
@@ -184,7 +194,7 @@ export async function buildInitialPanelResource(
     }
     Object.assign(phases_ms, resolved.phases_ms);
     phases_ms.first_paint_resolve_ms = Date.now() - tDeps0;
-    phases_ms.activity_timeline_hydrate_ms = Date.now() - tDeps0;
+    phases_ms.activity_timeline_hydrate_ms = tActivityDone === null ? 0 : tActivityDone - tDeps0;
 
     const reminders = remindersFromFirstPaintData(resolved.data) ?? EMPTY_REMINDERS;
     const resolvedActions = headerActionsFromFirstPaintData(resolved.data);

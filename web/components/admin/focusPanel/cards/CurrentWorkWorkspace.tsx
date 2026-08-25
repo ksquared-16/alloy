@@ -6,6 +6,7 @@ import clsx from "clsx";
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import CurrentWorkActivityPreview, {
+    currentWorkActivityRowKey,
     type CurrentWorkActivityPreviewItem,
 } from "@/components/admin/focusPanel/cards/CurrentWorkActivityPreview";
 import CurrentWorkTourGroupedActions from "@/components/admin/focusPanel/cards/CurrentWorkTourGroupedActions";
@@ -499,7 +500,7 @@ export default function CurrentWorkWorkspace({
                             <ul className="alloy-os-currentwork-workspace__activity-list">
                                 {activityItems.slice(0, 5).map((item, index) => (
                                     <li
-                                        key={`${item.label}-${item.occurredAt ?? index}`}
+                                        key={currentWorkActivityRowKey(item, index)}
                                         className="alloy-os-currentwork-workspace__activity-item"
                                     >
                                         <span className="alloy-os-currentwork-workspace__activity-label">

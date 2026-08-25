@@ -26,6 +26,8 @@ import {
   classifyExecutionRunStale,
   closeStaleExecutionRun,
   collectStaleRunFacts,
+  maybeCompleteIdleTurnFromLastOutput,
+  paneResultAgreesWithTranscript,
   reconcileStaleExecutionRuns,
   STALE_SETTLE_MS,
 } from "../lib/vacilando/execution-stale.mjs";
@@ -148,6 +150,56 @@ await test("1. operator follow-up is a new turn even with a leftover heartbeat",
   assert.equal(second.stale_run_closed, true);
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
   assert.equal(activeRunForLane(LANE, ROOT).instruction, "another job");
+});
+
+await test("1a. status-only NEEDS_INPUT is a leftover turn, not a composer question", async () => {
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    reason: "Director review of the Local Design Lab",
+    origin: "agent",
+    nowMs: now - 50_000,
+    root: ROOT,
+    completion_report: { summary: "Director review of the Local Design Lab" },
+  });
+  seedSend(PRODUCT, now - 60_000, now - 50_000);
+  const second = await deliverManagedLaneInstruction(LANE, "keep going", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(activeRunForLane(LANE, ROOT).instruction, "keep going");
+});
+
+await test("1a. status-only NEEDS_INPUT is a leftover turn, not a composer question", async () => {
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: now - 60_000 });
+  transitionExecutionRun(run.run_id, "NEEDS_INPUT", {
+    reason: "Director review of the Local Design Lab",
+    origin: "agent",
+    nowMs: now - 50_000,
+    root: ROOT,
+    completion_report: { summary: "Director review of the Local Design Lab" },
+  });
+  seedSend(PRODUCT, now - 60_000, now - 50_000);
+  const second = await deliverManagedLaneInstruction(LANE, "keep going", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(activeRunForLane(LANE, ROOT).instruction, "keep going");
 });
 
 await test("1b. a rotating session still blocks a new send", async () => {
@@ -555,6 +607,140 @@ await test("STARTING session still protects an in-flight run", async () => {
   assert.equal(cls.reason, "session_busy");
   const swept = reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE });
   assert.equal(swept.count, 0);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+});
+
+await test("an idle cooked turn files the last output as the completion summary", async () => {
+  const start = Date.parse("2026-08-24T16:00:00.000Z");
+  const now = start + 2 * 3600 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  const LAST = [
+    "Slice 6 is closed on the engineering side.",
+    "",
+    "The typecheck boundary held. Safeguarding ownership is a Director decision.",
+  ].join("\n");
+  const out = await maybeCompleteIdleTurnFromLastOutput({
+    lane_id: LANE,
+    execution_run: getExecutionRun(run.run_id, ROOT),
+    provider_activity: {
+      activity: "ready",
+      live_progress: { summary: LAST, idle_result: true },
+    },
+  }, {
+    root: ROOT,
+    nowMs: now,
+    collectLatest: async () => ({
+      available: true,
+      text: LAST,
+      timestamp: new Date(start + 3600 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(out.completed, true, out.error || out.skipped);
+  const closed = getExecutionRun(run.run_id, ROOT);
+  assert.equal(closed.state, "COMPLETE");
+  assert.equal(closed.agent_report.message, LAST, "the last output is the completion message");
+  assert.match(closed.completion_report.summary, /Slice 6 is closed/);
+});
+
+await test("a delivered cooked turn still files last output when the receipt token is not in the writeup", async () => {
+  const start = Date.parse("2026-08-24T16:00:00.000Z");
+  const now = start + 2 * 3600 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  const { patchRunFields } = await import("../lib/vacilando/execution-run.mjs");
+  patchRunFields(run.run_id, {
+    delivery: { acknowledged: true, receipt_token: "erun_secret_token", receipt_confirmed: false },
+  }, { nowMs: start, root: ROOT });
+  const LAST = "The last output summary for this finished turn. Safeguarding stays a Director decision.";
+  const out = await maybeCompleteIdleTurnFromLastOutput({
+    lane_id: LANE,
+    execution_run: getExecutionRun(run.run_id, ROOT),
+    provider_activity: {
+      activity: "ready",
+      live_progress: { summary: LAST, idle_result: true },
+    },
+  }, {
+    root: ROOT,
+    nowMs: now,
+    collectLatest: async () => ({
+      available: true,
+      text: LAST,
+      timestamp: new Date(start + 3600 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(out.completed, true, out.error || out.skipped);
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "COMPLETE");
+  assert.equal(getExecutionRun(run.run_id, ROOT).agent_report.message, LAST);
+});
+
+await test("a quiet prompt without a finished-turn marker does not invent a completion", async () => {
+  const start = Date.parse("2026-08-24T16:00:00.000Z");
+  const now = start + 2 * 3600 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  const out = await maybeCompleteIdleTurnFromLastOutput({
+    lane_id: LANE,
+    execution_run: getExecutionRun(run.run_id, ROOT),
+    provider_activity: { activity: "ready", live_progress: null },
+  }, {
+    root: ROOT,
+    nowMs: now,
+    collectLatest: async () => ({ available: true, text: "Full last output from the transcript that is long enough." }),
+  });
+  assert.equal(out.completed, false);
+  assert.equal(out.skipped, "turn_not_finished");
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+});
+
+await test("leftover Cooked does not complete a new run from the previous transcript", async () => {
+  const start = Date.parse("2026-08-25T19:45:00.000Z");
+  const now = start + 5 * 60 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  const OLD = "Slice 6 is closed on the engineering side. The typecheck boundary held for safeguarding.";
+  const out = await maybeCompleteIdleTurnFromLastOutput({
+    lane_id: LANE,
+    execution_run: getExecutionRun(run.run_id, ROOT),
+    provider_activity: {
+      activity: "ready",
+      live_progress: { summary: OLD, idle_result: true },
+    },
+  }, {
+    root: ROOT,
+    nowMs: now,
+    collectLatest: async () => ({
+      available: true,
+      text: OLD,
+      timestamp: new Date(start - 3600 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(out.completed, false);
+  assert.equal(out.skipped, "last_output_predates_run");
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+});
+
+await test("a leftover Cooked pane does not complete a run whose transcript is a new turn", async () => {
+  const start = Date.parse("2026-08-25T19:45:00.000Z");
+  const now = start + 5 * 60 * 1000;
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  const PANE = "Slice 6 is closed on the engineering side. The typecheck boundary held for safeguarding.";
+  const NEW = "Investigation complete. No canonical owner exists — writing the finding, then the model.";
+  assert.equal(paneResultAgreesWithTranscript(PANE, NEW), false);
+  const out = await maybeCompleteIdleTurnFromLastOutput({
+    lane_id: LANE,
+    execution_run: getExecutionRun(run.run_id, ROOT),
+    provider_activity: {
+      activity: "ready",
+      live_progress: { summary: PANE, idle_result: true },
+    },
+  }, {
+    root: ROOT,
+    nowMs: now,
+    collectLatest: async () => ({
+      available: true,
+      text: NEW,
+      timestamp: new Date(start + 60 * 1000).toISOString(),
+    }),
+  });
+  assert.equal(out.completed, false);
+  assert.equal(out.skipped, "last_output_mismatch");
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
 });
 

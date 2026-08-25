@@ -320,6 +320,28 @@ export async function attachChildGrainWaitlistPlacement(params: {
         expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode, waitlistCategoryContext);
         assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode, waitlistCategoryContext);
 
+        /*
+         * ── LAW 36: HAND OVER THE ORDER THAT WAS ACTUALLY COMPUTED ──
+         *
+         * `sortPlacementCandidateQueueRows` decided the canonical order and
+         * `assignWaitlistCandidateRuntimePositions` numbered the rows FROM that order. Returning the
+         * caller's original order threw the ordering away and kept only the labels, so the surface
+         * rendered "1/12" on whichever row happened to come back fourth. Measured on staging
+         * 7184efedf: labels ran 3, 5, 10, 1, 2, 8, 12, 6, 11, 4, 9, 7 down the screen.
+         *
+         * Membership, identity and payload are untouched — the returned array is a PERMUTATION of the
+         * same row objects. Nothing is re-sorted here and the sorter is not consulted a second time;
+         * the canonical rank of each candidate is simply carried across to its child row.
+         */
+        const canonicalRankByCandidateId = new Map<string, number>();
+        expandedRows.forEach((row, index) => {
+            const proj = row._placement_waitlist_row as PlacementWaitlistCandidateRowProjection | undefined;
+            const candidateId = str(proj?.placement_candidate_id);
+            if (candidateId && !canonicalRankByCandidateId.has(candidateId)) {
+                canonicalRankByCandidateId.set(candidateId, index);
+            }
+        });
+
         const claimed = new Set<string>();
         for (const child of rows) {
             const matched = findBestPlacementMatch(
@@ -346,7 +368,17 @@ export async function attachChildGrainWaitlistPlacement(params: {
                 : (proj.placement_priority_v2?.sort_tuple ?? null);
         }
 
-        return rows;
+        // A child with no placement candidate has no canonical rank; those keep their existing
+        // relative order after the ranked rows rather than being interleaved at an invented position.
+        const rankOf = (child: ChildProvisioningRowWithPlacement): number => {
+            const candidateId = str(child.placementCandidateId);
+            const rank = candidateId ? canonicalRankByCandidateId.get(candidateId) : undefined;
+            return rank ?? Number.MAX_SAFE_INTEGER;
+        };
+        return rows
+            .map((row, inputIndex) => ({ row, inputIndex }))
+            .sort((a, b) => rankOf(a.row) - rankOf(b.row) || a.inputIndex - b.inputIndex)
+            .map((entry) => entry.row);
     } catch {
         // Fail-open: membership already correct; ranking fields stay absent rather than failing the answer.
         return params.childRows.map((r) => ({ ...r }) as ChildProvisioningRowWithPlacement);
@@ -362,6 +394,7 @@ export function waitlistContextFromPlacementProjection(
     priority?: number | null;
     placement_candidate_id?: string | null;
     can_adjust_placement?: boolean | null;
+    precedence_reason?: "pin_scoped_to_cohort" | null;
 } | undefined {
     if (!proj) return undefined;
     const positionLabel = str(proj.runtime_position_label);
@@ -376,5 +409,6 @@ export function waitlistContextFromPlacementProjection(
         priority: score,
         placement_candidate_id: candidateId,
         can_adjust_placement: Boolean(candidateId),
+        precedence_reason: proj.runtime_position_precedence_reason ?? null,
     };
 }

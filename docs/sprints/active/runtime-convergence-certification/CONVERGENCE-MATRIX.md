@@ -525,8 +525,12 @@ slowest read on the surface (~3.3–4.5 s).
 **Open (measured, not fixed):** Operations **reopen is not warm** — 6 of 7 primary resources refetch
 even on a tight close/reopen; only `scheduling?view=sites` is reused.
 
-**UX inconsistency noted:** Operations' section tabs carry `data-comms-tab` attributes — a
-Communications-named control contract reused in Operations.
+**UX inconsistency noted — RESOLVED (R13).** Operations' section tabs carried `data-comms-tab`, a
+Communications-named control contract on the shared Layer-1 `WorkspaceSubTabs` primitive that
+Communications, Operations, Digital Mailroom, Work Items and Scheduling all mount. The shared contract
+is now `data-workspace-section-tab` (tablist `data-workspace-section-tabs`), matching the existing
+`data-workspace-mode-sections` vocabulary. `data-comms-tab-panel` is a different, genuinely
+Communications-owned attribute and is unchanged.
 
 ### Communications — reference vocabularies converged
 
@@ -554,7 +558,7 @@ TTL — that is the precise remaining work, not a mystery.
 | Work Unit | premium, prepared | ✓ rows+totals converge | ✓ | ✓ | — | **yes** |
 | Focus Panel Summary | premium | ✓ identity converges | ✓ | ✓ | Assignments card reads record patch late | **yes** |
 | Activity | first meaningful **401 ms** | ✓ | ✓ | ✓ identities duplicate fixed | timeline initial read 100 events / 61 KB, needs a demand-driven path before bounding | **yes** |
-| Operations | T1 109 ms · T3 119 ms | ✓ targeted day/lens | ✓ | ✓ fixed (staff, children) | `data-comms-tab` naming debt only | **yes** |
+| Operations | T1 109 ms · T3 119 ms | ✓ targeted day/lens | ✓ | ✓ fixed (staff, children) | `data-comms-tab` naming debt — resolved in R13 | **yes** |
 | Processing | certified prior | ✓ | ✓ | ✓ | — | **yes** |
 | Work Items | ✓ | ✓ | ✓ | ✓ | Assigned vs Mine vocabulary | **yes** |
 | Communications | open 29→15, reopen 27→14 | ✓ | ✓ | ✓ one owner incl. warm cache | 3 unrelated resources still ×2 | **yes** |
