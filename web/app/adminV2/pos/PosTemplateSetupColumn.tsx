@@ -65,7 +65,8 @@ import { formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat
 import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
-import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import { capabilitiesForFormat, detectProcessingSourceFormat, processingImportAcceptList } from "@/lib/pos/processingSourceCapabilities";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
 import { isBulkAcceptSafe } from "@/lib/pos/discovery/bulkAcceptSafety";
 
 function formatWhen(iso: string | null | undefined): string {
@@ -800,6 +801,43 @@ export default function PosTemplateSetupColumn({
      * Analyse EVERY source attached to this case as one packet. Same case, same authorization, same
      * endpoint as the single-document detect — `mode: "packet"` is what changes. Publishes nothing.
      */
+    /**
+     * Add another source to THIS case.
+     *
+     * The whole gap in one control: `processing_case_sources` always allowed several sources and
+     * packet analysis always read them, but nothing an operator could press ever wrote one — so
+     * "Analyse as one packet" sat next to a case that could only ever have one.
+     */
+    const addSourceInputRef = useRef<HTMLInputElement | null>(null);
+    const [addingSource, setAddingSource] = useState(false);
+
+    const handleAddSource = async (file: File | null) => {
+        if (!file || !caseId) return;
+        setAddingSource(true);
+        setErr(null);
+        try {
+            const res = await uploadProcessingDocument({
+                file,
+                intent: "generate_form",
+                displayName: file.name,
+                attachToCaseId: caseId,
+            });
+            if (res.attach_outcome && res.attach_outcome !== "attached" && res.attach_outcome !== "already_attached") {
+                throw new Error(
+                    res.attach_outcome === "is_primary"
+                        ? "That document is already this case's primary source."
+                        : `Couldn't attach that document (${res.attach_outcome}).`,
+                );
+            }
+            await reload();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn't add that source");
+        } finally {
+            setAddingSource(false);
+            if (addSourceInputRef.current) addSourceInputRef.current.value = "";
+        }
+    };
+
     const handleAnalyzePacket = async () => {
         if (!caseId) return;
         setPacketBusy(true);
@@ -1492,6 +1530,14 @@ export default function PosTemplateSetupColumn({
             <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                 {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
+                    {(detail?.sources.length ?? 0) > 1 ? (
+                        <p className="min-w-0 text-[10px] text-alloy-midnight/55" data-testid="processing-case-sources">
+                            {detail!.sources.length} sources on this case:{" "}
+                            {detail!.sources
+                                .map((s) => `${s.display.originalFilename ?? s.display.label}${s.role === "primary" ? " (primary)" : ""}`)
+                                .join(" · ")}
+                        </p>
+                    ) : null}
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
                             ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
@@ -1502,6 +1548,28 @@ export default function PosTemplateSetupColumn({
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                                 {busy ? "Re-detecting…" : "Re-detect questions"}
                             </button>
+                        ) : null}
+                        {!created ? (
+                            <>
+                                <input
+                                    ref={addSourceInputRef}
+                                    type="file"
+                                    accept={processingImportAcceptList()}
+                                    className="hidden"
+                                    data-testid="processing-add-source-input"
+                                    onChange={(e) => void handleAddSource(e.target.files?.[0] ?? null)}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={addingSource || packetBusy || busy || creating}
+                                    onClick={() => addSourceInputRef.current?.click()}
+                                    className={WS_ACTION_SECONDARY}
+                                    data-testid="processing-add-source"
+                                    title="Attach another document to this case, then analyse them together"
+                                >
+                                    {addingSource ? "Adding…" : "Add source"}
+                                </button>
+                            </>
                         ) : null}
                         {!created ? (
                             <button

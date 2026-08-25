@@ -17,7 +17,7 @@ import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
 import { resolveUploadEntityTarget } from "@/lib/admin/resolveUploadEntityTarget";
-import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
+import { attachRelatedSourceToCaseSafe, maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
@@ -128,6 +128,18 @@ export async function POST(request: NextRequest) {
     // existing Processing Case spine (non-form on-ramp). Default OFF — existing callers
     // that don't send this flag are completely unaffected.
     const openProcessingCase = formData.get("open_processing_case") === "true";
+    /**
+     * Attach this upload to an EXISTING case as a related source instead of opening a new one.
+     *
+     * Same handler on purpose. This endpoint already owns "create the canonical document, then link
+     * it to a Processing case"; the only thing that varies is whether the case is new. A second
+     * upload endpoint would be a parallel packet-upload system, which is what the packet work has
+     * avoided from the start.
+     */
+    const attachToCaseId =
+        typeof formData.get("attach_to_case_id") === "string"
+            ? (formData.get("attach_to_case_id") as string).trim()
+            : "";
 
     // Resolve where this document attaches. Normal uploads still require a valid entity;
     // POS intake (open_processing_case=true) may upload without one (entity-less artifact).
@@ -357,13 +369,29 @@ export async function POST(request: NextRequest) {
     // upload response. No extraction/matching/commit happens here — that stays honest
     // in the review spine (a document source resolves to a "routed" no-op on approval).
     let processingCaseId: string | null = null;
+    let attachOutcome: string | null = null;
     let classificationKey: string | null = null;
     let candidateCount: number | null = null;
     // Defensive outer guard: the upload has already succeeded (storage + row + event).
     // Opening the case / classification / extraction are all best-effort and must NEVER
     // turn a successful upload into a failed response, even if a helper is changed later.
     try {
-      if (openProcessingCase) {
+      if (attachToCaseId) {
+        // Attach to the case the operator is looking at. Never opens a second case, never touches
+        // the primary — a packet is one case with several sources, not several cases.
+        const attached = await attachRelatedSourceToCaseSafe(supabase, {
+            orgId: ctx.orgId,
+            processingCaseId: attachToCaseId,
+            sourceKind: "document",
+            sourceId: docId,
+        });
+        processingCaseId = attached.ok ? attachToCaseId : null;
+        attachOutcome = attached.ok
+            ? attached.attached
+                ? "attached"
+                : "already_attached"
+            : attached.reason;
+      } else if (openProcessingCase) {
         const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
             orgId: ctx.orgId,
             sourceKind: "document",
@@ -468,6 +496,7 @@ export async function POST(request: NextRequest) {
         document,
         raw: row,
         processing_case_id: processingCaseId,
+        ...(attachOutcome ? { attach_outcome: attachOutcome } : {}),
         classification_key: classificationKey,
         extraction_candidate_count: candidateCount,
     });
