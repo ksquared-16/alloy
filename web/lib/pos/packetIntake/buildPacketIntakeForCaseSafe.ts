@@ -119,6 +119,15 @@ async function readSource(
 
 export interface PacketIntakeBuildResult {
     packet: PacketIntakeResult;
+    /**
+     * The per-source inputs the packet was composed from, structures included.
+     *
+     * The STORED packet keeps concepts, proposals, destinations and artifacts, but not the
+     * `DocumentStructureCandidate` each came from — so artifact-grain realization, which must
+     * project a structure down to one artifact, has nothing to project without this. Returned
+     * rather than re-derived by a second reader.
+     */
+    inputs: PacketIntakeInput[];
     /** Sources the packet could not read, named rather than dropped. */
     unreadable: string[];
 }
@@ -173,7 +182,7 @@ export async function buildPacketIntakeForCaseSafe(
         if (unreadable.length > 0) packet.warnings.push(...unreadable.map((u) => `Source not analysed — ${u}`));
 
         await dbStorePacketIntake(supabase, { orgId: args.orgId, caseId: args.caseId, packet });
-        return { packet, unreadable };
+        return { packet, unreadable, inputs };
     } catch (e) {
         console.warn("[buildPacketIntakeForCaseSafe]", e instanceof Error ? e.message : e);
         return null;
