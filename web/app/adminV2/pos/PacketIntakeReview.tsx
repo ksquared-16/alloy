@@ -50,6 +50,10 @@ function ownership(p: ConfigurationProposal): { label: string; tone: string } {
             return { label: "Existing record field", tone: "border-emerald-300 bg-emerald-50 text-emerald-800" };
         case "relationship_binding":
             return { label: "A linked person", tone: "border-sky-300 bg-sky-50 text-sky-800" };
+        case "safeguarding_binding":
+            // Deliberately distinct from every other tone. This is the one row on the page whose
+            // mishandling is a safety failure rather than a data-quality one.
+            return { label: "A safeguarding restriction", tone: "border-rose-300 bg-rose-50 text-rose-800" };
         case "structured_collection":
             return { label: "A repeating set", tone: "border-sky-300 bg-sky-50 text-sky-800" };
         case "create_proposed_field":

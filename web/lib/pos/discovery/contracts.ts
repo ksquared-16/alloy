@@ -29,6 +29,7 @@ import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
 import type { OwnershipHold } from "./canonicalOwnershipHolds";
 import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
+import type { SafeguardingRestrictionKind } from "@/lib/safeguarding/safeguardingRestriction";
 
 export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
@@ -240,6 +241,7 @@ export type ProposalDisposition =
     | "create_proposed_field" // no match → propose a NEW durable configurable field (never auto-created)
     | "form_only_response" // collected on the form but NOT durable record data — no field created
     | "relationship_binding" // repeated person → operational-role relationship
+    | "safeguarding_binding" // an active restriction on a child — the canonical safeguarding owner
     | "upload_requirement"
     | "acknowledgement"
     | "signature_requirement"
@@ -290,6 +292,13 @@ export interface ConfigurationProposal {
     target_field_source?: FormFieldSource;
     /** Matched relationship role (relationship_binding). */
     target_relationship_role?: OperationalRoleKey;
+    /**
+     * Matched safeguarding restriction kind (safeguarding_binding). The operational EFFECT is
+     * deliberately absent: a form question rarely states the terms of an order, and inferring
+     * "may not pick up" from "is there a restraining order?" would be Alloy deciding what a court
+     * decided. The operator supplies the effect at approval.
+     */
+    target_safeguarding_kind?: SafeguardingRestrictionKind;
     /** Matched requirement type (upload/acknowledgement/signature). */
     target_requirement_type?: RequirementType;
     /**
@@ -329,6 +338,7 @@ export type DiscoveryCategory =
     | "existing_fields"
     | "new_fields"
     | "held_for_owner"
+    | "safeguarding"
     | "form_responses"
     | "relationships"
     | "upload_requirements"

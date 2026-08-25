@@ -31,6 +31,7 @@ import type {
     LinkPersonToHouseholdPayload,
     LinkPersonToLeadPayload,
     ProposeMergePayload,
+    ProposeSafeguardingRestrictionPayload,
     UpdateChildPayload,
     UpdateCommunicationPreferencesPayload,
     UpdateLeadPayload,
@@ -915,6 +916,78 @@ const proposeMerge: ProcessingIdentityCommand<ProposeMergePayload, { escalated: 
     },
 };
 
+// ---------------------------------------------------------------------------
+// propose_safeguarding_restriction (propose only, NOT executable)
+// ---------------------------------------------------------------------------
+// A safeguarding restriction is a safety control. Participant free text and document extraction
+// must never activate one: a parent typing "her father isn't allowed to get her" is an assertion
+// that deserves a person's attention, not a control that switches itself on. Neither is the
+// opposite acceptable — the assertion must not evaporate because nothing could carry it.
+//
+// So the assertion travels as a PROPOSAL, exactly as `propose_merge` does. The database enforces
+// the same boundary independently (`status <> 'active' OR review_state = 'approved'`), so this
+// holds even for a caller that never goes through the registry.
+const proposeSafeguardingRestriction: ProcessingIdentityCommand<ProposeSafeguardingRestrictionPayload, { proposed: true }> = {
+    metadata: {
+        key: IDENTITY_COMMAND_KEYS.proposeSafeguardingRestriction,
+        version: IDENTITY_COMMAND_VERSION,
+        requiredPermission: "crm.customers.safeguarding.manage",
+        targetType: "safeguarding_restriction",
+        atomicity: "asynchronous",
+        reversibility: "reversible",
+        idempotency: "operation_key",
+        downstreamEvents: ["safeguarding_restriction_proposed"],
+        // The whole payload is sensitive. A child's protective order is not profile content, and
+        // naming the fields individually would imply the rest is ordinary.
+        sensitiveFields: [
+            "restriction_kind",
+            "operational_effect",
+            "affected_person_id",
+            "affected_party_description",
+            "evidence_document_id",
+        ],
+        executableInV1: false,
+    },
+    validate(input) {
+        const issues: ValidationIssue[] = [];
+        requireString(input.customer_member_id, "customer_member_id", issues);
+        requireString(input.restriction_kind, "restriction_kind", issues);
+        requireString(input.operational_effect, "operational_effect", issues);
+        requireString(input.evidence_basis, "evidence_basis", issues);
+        requireString(input.source, "source", issues);
+        if (input.evidence_basis === "document" && !input.evidence_document_id) {
+            issues.push({ field: "evidence_document_id", code: "missing_field", message: "A document basis must name the document.", severity: "error" });
+        }
+        if (!input.affected_person_id && !input.affected_party_description) {
+            // Allowed, and worth saying: a child-general restriction is real, and the resolver
+            // treats it as "unclear", never as an all-clear.
+            issues.push({
+                field: "affected_person_id",
+                code: "no_party_named",
+                message: "No party named — this will be recorded as a restriction on the child with no identified person.",
+                severity: "warning",
+            });
+        }
+        return ok(issues);
+    },
+    preview(input) {
+        return {
+            targetType: "safeguarding_restriction",
+            summary: `Propose a ${input.restriction_kind} on this child (${input.operational_effect})`,
+            effects: ["safeguarding_restriction_proposed (requires approval — nothing becomes active)"],
+        };
+    },
+    execute() {
+        return Promise.resolve({
+            ok: false,
+            refs: [],
+            result: { proposed: true } as { proposed: true },
+            idempotentReplay: false,
+            error: "safeguarding_restriction_requires_approval",
+        });
+    },
+};
+
 /** All registered commands, keyed by semantic command key. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const IDENTITY_COMMANDS: Record<string, ProcessingIdentityCommand<any, any>> = {
@@ -933,6 +1006,7 @@ export const IDENTITY_COMMANDS: Record<string, ProcessingIdentityCommand<any, an
     [IDENTITY_COMMAND_KEYS.attachDocument]: attachDocument,
     [IDENTITY_COMMAND_KEYS.updateCommunicationPreferences]: updateCommunicationPreferences,
     [IDENTITY_COMMAND_KEYS.proposeMerge]: proposeMerge,
+    [IDENTITY_COMMAND_KEYS.proposeSafeguardingRestriction]: proposeSafeguardingRestriction,
 };
 
 export type { ValidationResult };

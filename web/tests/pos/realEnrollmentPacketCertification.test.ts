@@ -383,17 +383,22 @@ describe("Slice 5 — a settled owner elsewhere is a state, not a blank", () => 
         expect(cis.every((h) => h.proposal.proposed_field === undefined)).toBe(true);
     });
 
-    it("holds the two safeguarding questions with NO owner, not as health data", () => {
-        const safeguarding = inputs.flatMap((i) =>
+    it("no longer holds the safeguarding questions — Slice 6 gave them an owner", () => {
+        // Slice 5 held these because nothing could own them, and classified them as the only
+        // BLOCKS_CERTIFICATION concepts. `child_safeguarding_restrictions` owns them now.
+        const stillHeld = inputs.flatMap((i) =>
             i.discovery.proposals.filter((p) => p.ownership_hold?.state === "NEEDS_CANONICAL_SAFEGUARDING_OWNER"),
         );
-        expect(safeguarding).toHaveLength(2);
-        expect(safeguarding.every((p) => p.ownership_hold!.owner === null)).toBe(true);
+        expect(stillHeld).toHaveLength(0);
+        const bound = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "safeguarding_binding"));
+        expect(bound).toHaveLength(3);
     });
 
-    it("holds twelve facts in total, and creates a field for none of them", () => {
+    it("holds ten facts in total, and creates a field for none of them", () => {
+        // Twelve in Slice 5, minus the two safeguarding questions that now bind.
         const held = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.disposition === "held_for_canonical_owner"));
-        expect(held).toHaveLength(12);
+        expect(held).toHaveLength(10);
+        expect(held.every((p) => p.ownership_hold!.state === "AWAITING_HEALTH_FOUNDATION")).toBe(true);
         expect(held.every((p) => p.proposed_field === undefined), "a held fact must carry nothing creatable").toBe(true);
         expect(held.every((p) => p.explanation.length > 0), "the operator must be told why").toBe(true);
     });

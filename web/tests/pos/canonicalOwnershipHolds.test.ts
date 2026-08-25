@@ -45,15 +45,34 @@ describe("the three cross-platform concepts", () => {
         expect(hold.owner).toBe("Consent");
     });
 
-    it("marks safeguarding as having NO owner — a different situation from waiting for one", () => {
-        const hold = held("Is there a custody or restraining order affecting pick-up?")!;
-        expect(hold.state).toBe("NEEDS_CANONICAL_SAFEGUARDING_OWNER");
-        expect(hold.owner, "an unassigned problem must not look scheduled").toBeNull();
-        expect(hold.decision).toBe("D-H4");
+    it("no longer holds safeguarding — Slice 6 gave it an owner", () => {
+        // Slice 5 held these because nothing could own them. `child_safeguarding_restrictions` now
+        // can, so they bind like any other proposal rather than waiting.
+        expect(held("Is there a custody or restraining order affecting pick-up?")).toBeNull();
+        expect(held("Persons not permitted to pick up this child")).toBeNull();
     });
 
-    it("does not file a pickup restriction as health data", () => {
-        expect(held("Persons not permitted to pick up this child")?.state).toBe("NEEDS_CANONICAL_SAFEGUARDING_OWNER");
+    it("emits the retired state from nowhere at all", () => {
+        // What makes the retirement a fact rather than a claim. If a rule is ever re-added, this
+        // fails before the packet re-run does.
+        const probes = [
+            "Is there a custody or restraining order affecting pick-up?",
+            "Persons not permitted to pick up this child",
+            "Are there any custody or visiting arrangements we need to be aware of?",
+            "Is there anyone who has a legal restraining order prohibiting or limiting contact with your child?",
+            "Court order on file",
+            "Allergies",
+            "Regular medications?",
+        ];
+        for (const p of probes) {
+            expect(held(p)?.state, p).not.toBe("NEEDS_CANONICAL_SAFEGUARDING_OWNER");
+        }
+    });
+
+    it("still does not file a safeguarding question as health data", () => {
+        // The rule that mattered in Slice 5 still holds: these are not medical facts. They are now
+        // simply owned rather than unowned.
+        expect(held("Persons not permitted to pick up this child")?.state).not.toBe("AWAITING_HEALTH_FOUNDATION");
     });
 });
 

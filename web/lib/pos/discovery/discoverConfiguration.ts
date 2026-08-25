@@ -23,6 +23,7 @@ const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
     existing_fields: "Existing fields matched",
     new_fields: "New fields proposed",
     held_for_owner: "Held for another owner",
+    safeguarding: "Safeguarding restrictions found",
     form_responses: "Form responses (no field)",
     relationships: "Relationships found",
     upload_requirements: "Upload requirements found",
@@ -38,6 +39,7 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "existing_fields",
     "new_fields",
     "held_for_owner",
+    "safeguarding",
     "form_responses",
     "relationships",
     "upload_requirements",
@@ -62,6 +64,8 @@ function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
             return "form_responses";
         case "relationship_binding":
             return "relationships";
+        case "safeguarding_binding":
+            return "safeguarding";
         case "upload_requirement":
             return "upload_requirements";
         case "acknowledgement":

@@ -24,9 +24,12 @@ import type { BusinessConceptCandidate } from "./contracts";
 /**
  * What is unresolved, stated so the operator and the next sprint read the same thing.
  *
- * `NEEDS_CANONICAL_SAFEGUARDING_OWNER` is deliberately shaped differently from the others: the rest
- * are waiting for a NAMED owner to build something, and safeguarding has no owner at all yet.
- * Collapsing that difference would make an unassigned problem look scheduled.
+ * `NEEDS_CANONICAL_SAFEGUARDING_OWNER` was shaped differently from the others: the rest wait for a
+ * NAMED owner to build something, and safeguarding had no owner at all. **Slice 6 gave it one**
+ * (`child_safeguarding_restrictions`), so no rule below can produce that state any more and a
+ * safeguarding question now binds like any other proposal. The name is kept so the retired state
+ * stays readable in the certification record — and `canonicalOwnershipHolds.test.ts` asserts nothing
+ * emits it, which is what makes the retirement a fact rather than a claim.
  */
 export type OwnershipHoldState =
     | "AWAITING_HEALTH_FOUNDATION"
@@ -71,14 +74,6 @@ const HOLDS: readonly HoldRule[] = [
         test: /\b(authoriz|authoris|consent|permission)\w*\b[\s\S]{0,60}\b(emergency|medical|treatment|care)\b|\b(emergency|medical)\b[\s\S]{0,60}\b(authoriz|authoris|consent|permission)\w*/i,
         explanation:
             "Emergency medical authorization is a consent record — who granted it, when, and under what terms. A signature on this form is evidence that it was granted, not the grant itself. Consent owns it.",
-    },
-    {
-        state: "NEEDS_CANONICAL_SAFEGUARDING_OWNER",
-        owner: null,
-        decision: "D-H4",
-        test: /\b(custody|restraining order|court order|guardianship order|not permitted to (?:pick ?up|collect)|pick-?up restriction|unauthorized pick|do not release)\b/i,
-        explanation:
-            "Who may not collect this child is a safeguarding fact, not a medical one. Alloy has no canonical owner for safeguarding yet, so this must not be filed as health data or as an ordinary contact.",
     },
     {
         state: "AWAITING_HEALTH_FOUNDATION",

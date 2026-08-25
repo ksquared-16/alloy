@@ -22,6 +22,7 @@
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
 import { ownershipHoldFor } from "./canonicalOwnershipHolds";
+import { safeguardingConceptKind, SAFEGUARDING_KIND_LABELS } from "./safeguardingConcepts";
 import { classifyNonFormSource } from "@/lib/pos/processingCase/classification/classifyNonFormSource";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
@@ -254,6 +255,26 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             confidence: conf("high", [`operational role ${concept.relationship_role}`, "reuses the canonical Person↔Child relationship model"]),
             alternatives: [],
             explanation: `Bind as a ${concept.label.toLowerCase()} relationship (role: ${concept.relationship_role}) on each child — persons are linked or created, not stored as flat fields.`,
+        };
+    }
+
+    // ── safeguarding ──
+    // Ahead of field matching on purpose. These questions match ordinary text destinations and
+    // would otherwise land in a child text field — the free-text `custody_notes` failure with extra
+    // steps. A restriction is its own record with its own approval and its own access boundary.
+    const safeguardingKind = safeguardingConceptKind(concept);
+    if (safeguardingKind && concept.kind !== "acknowledgement" && concept.kind !== "signature") {
+        return {
+            ...base,
+            disposition: "safeguarding_binding",
+            target_safeguarding_kind: safeguardingKind,
+            confidence: conf("review", [
+                `safeguarding restriction (${safeguardingKind})`,
+                "records as a restriction on the child, not as profile text",
+            ]),
+            alternatives: [],
+            explanation: `"${concept.label}" records a ${SAFEGUARDING_KIND_LABELS[safeguardingKind].toLowerCase()} on this child. It is stored as a restriction — with its own dates, evidence and approval — not as text on the child's profile, so that a later question like "may this person collect her today" can actually consult it. Nothing becomes active until someone approves it.`,
+            validation_issues: [],
         };
     }
 

@@ -41,7 +41,8 @@ export type CommandTargetType =
     | "participation"
     | "document"
     | "communication_preferences"
-    | "merge_candidate";
+    | "merge_candidate"
+    | "safeguarding_restriction";
 
 /** Registered, immutable command metadata (RFC §8). */
 export type CommandMetadata = {
