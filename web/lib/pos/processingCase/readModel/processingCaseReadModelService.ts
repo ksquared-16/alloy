@@ -156,5 +156,7 @@ export async function getProcessingCaseDetail(
         formDraftPreview: parseStoredFormDraftPreview(c.metadata),
         formDraftCreated: parseFormDraftCreated(c.metadata),
         processingIntent: parseProcessingIntentFromMetadata(c.metadata),
+        // Present only when the case was analysed as a packet. Read, never recomputed here.
+        packetIntake: ((c.metadata as Record<string, unknown> | null)?.packet_intake ?? null) as unknown,
     };
 }

@@ -55,7 +55,9 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
     });
 
     it("produces the operator-facing summary categories", () => {
-        expect(summaryCount(/Existing fields matched/)).toBeGreaterThanOrEqual(6);
+        // Labels are operator-facing now ("Alloy already has", not "Existing fields matched"). The
+        // counts are the assertion; the wording belongs to the review, not to discovery's contract.
+        expect(summaryCount(/Alloy already has/)).toBeGreaterThanOrEqual(6);
         // Five, not three: the care-provider definitions added in Slice 4 mean this school's
         // "Primary Care Doctor" and "Dentist" fields bind to a physician / dentist relationship
         // instead of being proposed as new child fields. Different school, same vocabulary.

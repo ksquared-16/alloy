@@ -22,40 +22,63 @@ import { isBulkAcceptSafe } from "./bulkAcceptSafety";
 
 export type ReviewSectionKey =
     | "needs_review"
-    | "existing_data"
-    | "relationships"
-    | "safeguarding"
-    | "health_held"
-    | "financials"
-    | "derived"
-    | "form_responses"
-    | "acknowledgements"
-    | "signatures"
+    | "families_provide"
+    | "already_have"
+    | "automatic"
+    | "documents_signatures"
     | "all";
 
 export interface ReviewSection {
     key: ReviewSectionKey;
     label: string;
-    /** Discovery categories that land here. `needs_review` and `all` are computed, not category-based. */
+    /** One line under the heading, so the grouping explains itself. */
+    blurb: string;
     categories?: readonly DiscoveryCategory[];
 }
 
 /**
- * Ordered by what the operator is here to do. `needs_review` is first and is the default view —
- * everything after it is inspection.
+ * The operator's five questions, in the order they matter.
+ *
+ * These replace a grouping that named DURABLE OWNERSHIP — "Owned elsewhere in Alloy", "Needs an
+ * owner". That was true and it read as exclusion: medications appeared under "held", which looks
+ * exactly like "this will not be asked". It will be asked. Enrollment collects it, the parent
+ * answers it, and Health becomes the durable owner later — collection and ownership are different
+ * questions, and only one of them is what an operator is deciding on this screen.
+ *
+ * So the primary grouping answers "what happens to this family", and where the answer eventually
+ * lives moved to Why. Nothing about routing changed; this is the same conclusions, said usefully.
  */
 export const REVIEW_SECTIONS: readonly ReviewSection[] = [
-    { key: "needs_review", label: "Needs review" },
-    { key: "existing_data", label: "Existing data", categories: ["existing_fields", "new_fields", "collections"] },
-    { key: "relationships", label: "Relationships", categories: ["relationships"] },
-    { key: "safeguarding", label: "Safeguarding", categories: ["safeguarding"] },
-    { key: "health_held", label: "Health / held", categories: ["held_for_owner"] },
-    { key: "financials", label: "Financials", categories: ["financial"] },
-    { key: "derived", label: "Derived by Alloy", categories: ["derived"] },
-    { key: "form_responses", label: "Form responses", categories: ["form_responses", "static_content", "output_copies"] },
-    { key: "acknowledgements", label: "Acknowledgements", categories: ["acknowledgements", "upload_requirements"] },
-    { key: "signatures", label: "Signatures", categories: ["signatures"] },
-    { key: "all", label: "All" },
+    {
+        key: "needs_review",
+        label: "Needs your review",
+        blurb: "Decisions only you can make.",
+    },
+    {
+        key: "families_provide",
+        label: "Families will provide",
+        blurb: "Questions this enrollment asks. Where each answer finally lives is in Why.",
+        categories: ["form_responses", "held_for_owner", "financial", "relationships", "collections"],
+    },
+    {
+        key: "already_have",
+        label: "Alloy already has",
+        blurb: "Existing records this enrollment confirms or prefills.",
+        categories: ["existing_fields"],
+    },
+    {
+        key: "automatic",
+        label: "Handled automatically",
+        blurb: "Alloy fills these in. No question is asked.",
+        categories: ["derived"],
+    },
+    {
+        key: "documents_signatures",
+        label: "Documents & signatures",
+        blurb: "Obligations executed through artifacts.",
+        categories: ["acknowledgements", "signatures", "upload_requirements", "static_content", "output_copies"],
+    },
+    { key: "all", label: "All", blurb: "Every concept, with full detail." },
 ];
 
 /**
@@ -84,6 +107,12 @@ export function sectionFor(p: ConfigurationProposal, category: DiscoveryCategory
     for (const s of REVIEW_SECTIONS) {
         if (!s.categories) continue;
         if (s.categories.includes(category)) keys.push(s.key);
+    }
+    // A concept the operator must decide is STILL something the family will be asked. Undecided
+    // ownership does not remove the question from the packet, and grouping it only under a decision
+    // would hide it from the one list that answers "what will this family see".
+    if (needsOperatorReview(p) && !keys.includes("families_provide") && p.disposition !== "create_proposed_field") {
+        keys.push("families_provide");
     }
     return keys;
 }
@@ -121,8 +150,8 @@ export function conciseRow(p: ConfigurationProposal): ConciseRow {
         case "reuse_existing_field": {
             const t = p.target_field_source;
             return {
-                ownership: t ? `${humanEntity(t.entity_type)} · ${humanKey(t.field_key)}` : "Existing data",
-                consequence: "Uses the existing canonical value.",
+                ownership: t ? `Alloy already has · ${humanKey(t.field_key)}` : "Alloy already has this",
+                consequence: "Confirmed or prefilled from the record Alloy already keeps.",
             };
         }
 
@@ -135,7 +164,7 @@ export function conciseRow(p: ConfigurationProposal): ConciseRow {
         case "relationship_binding":
             return {
                 ownership: p.target_relationship_role ? `Relationship · ${humanKey(p.target_relationship_role)}` : "Relationship",
-                consequence: "Links or creates a person. Not stored as a field on the child.",
+                consequence: "Asked during enrollment, then linked as a person rather than a field.",
             };
 
         case "safeguarding_binding":
@@ -154,33 +183,39 @@ export function conciseRow(p: ConfigurationProposal): ConciseRow {
             // A value that IS the execution is recorded; a value computed from records is calculated.
             const recorded = from.startsWith("when ");
             return {
-                ownership: OWNER_LINE.derived_value_system!,
-                consequence: recorded ? `Recorded ${from}. No field needed.` : `Calculated from ${from}. No field needed.`,
+                ownership: "Handled automatically",
+                consequence: recorded
+                    ? `Alloy records this ${from}. No question needed.`
+                    : `Alloy works this out from ${from}. No question needed.`,
             };
         }
 
         case "held_for_canonical_owner": {
+            // Never "held". A family IS asked these; what is unsettled is where the answer finally
+            // lives, and that belongs in Why. "Held" read as "will not be collected", which for
+            // medications is both false and the most alarming thing the screen could imply.
             const state = p.ownership_hold?.state;
             if (state === "AWAITING_CANONICAL_CONSENT_OWNER") {
-                return { ownership: "Consent · Held", consequence: "Collected for this enrollment; the consent record lands with Consent." };
+                return { ownership: "Families provide", consequence: "Asked during enrollment. Consent keeps the record of what was granted." };
             }
             if (state === "AWAITING_REQUIREMENT_EXCEPTION_MODEL") {
-                return { ownership: "Requirement exception · Held", consequence: "Collected as evidence; exceptions land with Business Process." };
+                return { ownership: "Families provide", consequence: "Asked during enrollment, and kept as evidence for the exception." };
             }
-            return { ownership: "Health · Held", consequence: "Collected for this enrollment; durable health ownership lands in the Health foundation." };
+            return { ownership: "Families provide", consequence: "Asked during enrollment. Health & Safety keeps the ongoing record." };
         }
 
         case "held_unknown_owner":
-            return { ownership: OWNER_LINE.held_unknown_owner!, consequence: whyStopped(p) };
+            // Asked either way. The decision is where it should live, not whether to ask.
+            return { ownership: "Needs your decision", consequence: `Asked during enrollment. ${whyStopped(p)}` };
 
         case "form_only_response":
-            return { ownership: OWNER_LINE.form_only_response!, consequence: "Kept with this enrollment. No record is updated." };
+            return { ownership: "Families provide", consequence: "Asked during enrollment. The answer stays with this enrollment." };
 
         case "acknowledgement":
-            return { ownership: OWNER_LINE.acknowledgement!, consequence: "Every guardian must acknowledge it." };
+            return { ownership: OWNER_LINE.acknowledgement!, consequence: "Every guardian acknowledges this during enrollment." };
 
         case "signature_requirement":
-            return { ownership: OWNER_LINE.signature_requirement!, consequence: "Every guardian must sign it." };
+            return { ownership: OWNER_LINE.signature_requirement!, consequence: "Every guardian signs this during enrollment." };
 
         case "upload_requirement":
             return {
@@ -215,19 +250,19 @@ function financialRow(p: ConfigurationProposal): ConciseRow {
     const basis = p.ownership_routing?.basis ?? "";
     if (/routing or account number|protected/i.test(basis)) {
         return {
-            ownership: "Financials · Bank credential",
-            consequence: "Sent directly to the payment provider. Not stored as an Alloy field.",
+            ownership: "Families provide",
+            consequence: "Asked during enrollment and sent straight to your payment provider. Alloy never stores it.",
         };
     }
     if (/billing configuration/i.test(basis)) {
         return {
-            ownership: "Financials · Billing",
-            consequence: "An amount the school sets. Owned by your rate plans, not by this family.",
+            ownership: "Handled automatically",
+            consequence: "An amount your school sets. Comes from your rate plans, so no one is asked.",
         };
     }
     return {
-        ownership: "Financials · Payment setup",
-        consequence: "Needed while payment is set up. Not kept as an Alloy field.",
+        ownership: "Families provide",
+        consequence: "Asked while payment is set up. Your payment provider keeps it, not Alloy.",
     };
 }
 

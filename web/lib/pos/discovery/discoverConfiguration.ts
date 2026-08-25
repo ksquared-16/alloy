@@ -20,14 +20,14 @@ import { discoverConcepts } from "./conceptDiscovery";
 import { matchConcepts } from "./configurationMatching";
 
 const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
-    existing_fields: "Existing fields matched",
-    new_fields: "New fields proposed",
-    held_for_owner: "Held for another owner",
+    existing_fields: "Alloy already has",
+    new_fields: "New durable fields",
+    held_for_owner: "Handled by another area",
     safeguarding: "Safeguarding restrictions found",
-    financial: "Financial / payment — held",
-    derived: "Derived by Alloy — no field needed",
-    needs_ownership_review: "Needs ownership review",
-    form_responses: "Form responses (no field)",
+    financial: "Payments",
+    derived: "Handled automatically",
+    needs_ownership_review: "Needs your decision",
+    form_responses: "Families will provide",
     relationships: "Relationships found",
     upload_requirements: "Upload requirements found",
     acknowledgements: "Acknowledgements found",

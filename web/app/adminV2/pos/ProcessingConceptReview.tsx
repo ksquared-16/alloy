@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Layers } from "lucide-react";
-import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY, WS_PANEL_SURFACE, WS_PANEL_SURFACE_FLAT, WS_PANEL_HEADER } from "@/components/workspace/workspaceTokens";
 
 import { categoryFor } from "@/lib/pos/discovery/discoverConfiguration";
 import {
@@ -47,19 +47,23 @@ import {
  * bookkeeping. Same strip, no new chrome.
  */
 const CATEGORY_ORDER: DiscoveryCategory[] = [
+    // 1. What only a person can decide.
     "needs_ownership_review",
     "safeguarding",
-    "financial",
-    "held_for_owner",
     "new_fields",
-    "existing_fields",
+    // 2. What the family will be asked — the packet's actual content.
+    "form_responses",
+    "held_for_owner",
+    "financial",
     "relationships",
     "collections",
-    "derived",
+    // 3. Obligations executed through artifacts.
     "upload_requirements",
-    "form_responses",
     "acknowledgements",
     "signatures",
+    // 4. Conclusions to inspect, not decide.
+    "existing_fields",
+    "derived",
     "static_content",
     "output_copies",
     "needs_review",
@@ -78,25 +82,25 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     static_content: "Static content",
     output_binding: "Output copy",
     derived_value: "Derived value",
-    held_for_canonical_owner: "Held for another owner",
+    held_for_canonical_owner: "Families provide",
     safeguarding_binding: "Safeguarding restriction",
-    financial_payment: "Financials / payments",
-    derived_value_system: "Alloy already knows this",
-    held_unknown_owner: "Needs an owner",
+    financial_payment: "Payments",
+    derived_value_system: "Handled automatically",
+    held_unknown_owner: "Needs your decision",
     unresolved: "Needs classification",
 };
 
 const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
-    existing_fields: "Existing data",
+    existing_fields: "Alloy already has",
     relationships: "Relationships",
     collections: "Repeating structures",
     new_fields: "New fields",
-    held_for_owner: "Owned elsewhere in Alloy",
+    held_for_owner: "Handled by another area",
     safeguarding: "Safeguarding",
-    financial: "Financials & payments",
-    derived: "Alloy already knows these",
-    needs_ownership_review: "Needs an owner",
-    form_responses: "Form responses",
+    financial: "Payments",
+    derived: "Handled automatically",
+    needs_ownership_review: "Needs your decision",
+    form_responses: "Families will provide",
     upload_requirements: "Document requirements",
     acknowledgements: "Acknowledgements",
     signatures: "Signatures",
@@ -104,6 +108,16 @@ const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     output_copies: "Internal / output",
     needs_review: "Needs review",
 };
+
+/**
+ * Groups the operator inspects rather than decides.
+ *
+ * The screen's priority is: what needs you, then what is ready, then what Alloy handled, then the
+ * audit. A conclusion should not compete visually with a decision.
+ */
+function quietCategory(category: DiscoveryCategory): boolean {
+    return category === "derived" || category === "existing_fields" || category === "static_content" || category === "output_copies";
+}
 
 function bandChip(band: ConfidenceBand) {
     const cls =
@@ -290,10 +304,14 @@ export default function ProcessingConceptReview({
                         // of decision ends and the next begins instead of reading one long ribbon.
                         <section
                             key={category}
-                            className="overflow-hidden rounded-xl border border-alloy-stone/22 bg-white shadow-[0_1px_3px_rgba(24,39,58,0.04)]"
+                            // Focus Panel card doctrine — the same surface, radius, elevation and ring
+                            // the drawer panels use. A decision screen should not look like a
+                            // different product from the record it configures. Quieter treatment for
+                            // groups the operator only inspects.
+                            className={quietCategory(category) ? WS_PANEL_SURFACE_FLAT : WS_PANEL_SURFACE}
                             data-testid={`concept-group-${category}`}
                         >
-                            <h3 className="border-b border-alloy-stone/22 bg-alloy-stone/[0.04] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                            <h3 className={`${WS_PANEL_HEADER} px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/70`}>
                                 {CATEGORY_TITLE[category]}
                             </h3>
                             <div className="space-y-1.5 p-2.5">
@@ -338,8 +356,9 @@ export default function ProcessingConceptReview({
                                                     onClick={() => onDecision(p.id, "proposed")}
                                                     className="shrink-0 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight hover:underline"
                                                     data-testid={`concept-undo-${p.id}`}
+                                                    title="Change this decision"
                                                 >
-                                                    Undo
+                                                    Change
                                                 </button>
                                             </div>
                                         );

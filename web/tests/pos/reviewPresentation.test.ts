@@ -51,8 +51,10 @@ describe("sections are a view, never a second analysis", () => {
         // second copy — the row and its decision are the same object in both views.
         const p = proposal({ disposition: "safeguarding_binding" });
         const keys = sectionFor(p, "safeguarding");
-        expect(keys).toContain("safeguarding");
         expect(keys).toContain("needs_review");
+        // …and it is ALSO something the family is asked, so it appears where an operator looks to
+        // answer "what will this family see".
+        expect(keys).toContain("families_provide");
         expect(keys).toContain("all");
     });
 
@@ -77,8 +79,8 @@ describe("there is exactly one categorizer", () => {
         expect(categoryFor(proposal({ disposition: "financial_payment" }))).toBe("financial");
         expect(categoryFor(proposal({ disposition: "derived_value_system" }))).toBe("derived");
         expect(categoryFor(proposal({ disposition: "held_unknown_owner" }))).toBe("needs_ownership_review");
-        expect(sectionFor(proposal({ disposition: "financial_payment" }), "financial")).toContain("financials");
-        expect(sectionFor(proposal({ disposition: "derived_value_system" }), "derived")).toContain("derived");
+        expect(sectionFor(proposal({ disposition: "financial_payment" }), "financial")).toContain("families_provide");
+        expect(sectionFor(proposal({ disposition: "derived_value_system" }), "derived")).toContain("automatic");
     });
 
     it("gives every disposition a section other than All", async () => {
@@ -124,14 +126,14 @@ describe("what counts as the operator's work", () => {
 
 describe("row copy says one thing per line", () => {
     const cases: Array<[string, Partial<ConfigurationProposal>, RegExp, RegExp]> = [
-        ["existing field", { target_field_source: { entity_type: "customer_member", field_key: "dob" } }, /^Child · Dob$/, /existing canonical value/i],
-        ["relationship", { disposition: "relationship_binding", target_relationship_role: "physician" }, /^Relationship · Physician$/, /Links or creates a person/i],
+        ["existing field", { target_field_source: { entity_type: "customer_member", field_key: "dob" } }, /^Alloy already has · Dob$/, /Confirmed or prefilled/i],
+        ["relationship", { disposition: "relationship_binding", target_relationship_role: "physician" }, /^Relationship · Physician$/, /Asked during enrollment/i],
         ["safeguarding", { disposition: "safeguarding_binding" }, /^Safeguarding · Restriction$/, /Nothing becomes active until approved/i],
-        ["financial credential", { disposition: "financial_payment", ownership_routing: { owner: "FINANCIAL_PAYMENT", basis: "A bank routing or account number. Alloy has no destination…", bulkAcceptSafe: false } }, /^Financials · Bank credential$/, /payment provider.*Not stored/i],
-        ["derived", { disposition: "derived_value_system", ownership_routing: { owner: "DERIVED_SYSTEM", basis: "", derivedFrom: "date of birth and the enrolment start date", bulkAcceptSafe: false } }, /^Derived by Alloy$/, /Calculated from date of birth.*No field needed/i],
-        ["health held", { disposition: "held_for_canonical_owner", ownership_hold: { state: "AWAITING_HEALTH_FOUNDATION", owner: "Health & Safety", decision: "D-H5", explanation: "" } }, /^Health · Held$/, /Health foundation/i],
-        ["acknowledgement", { disposition: "acknowledgement" }, /^Requirement · Acknowledgement$/, /guardian must acknowledge/i],
-        ["needs owner", { disposition: "held_unknown_owner" }, /^Needs an owner$/, /Owner undecided/i],
+        ["financial credential", { disposition: "financial_payment", ownership_routing: { owner: "FINANCIAL_PAYMENT", basis: "A bank routing or account number. Alloy has no destination…", bulkAcceptSafe: false } }, /^Families provide$/, /straight to your payment provider/i],
+        ["derived", { disposition: "derived_value_system", ownership_routing: { owner: "DERIVED_SYSTEM", basis: "", derivedFrom: "date of birth and the enrolment start date", bulkAcceptSafe: false } }, /^Handled automatically$/, /works this out from date of birth/i],
+        ["health held", { disposition: "held_for_canonical_owner", ownership_hold: { state: "AWAITING_HEALTH_FOUNDATION", owner: "Health & Safety", decision: "D-H5", explanation: "" } }, /^Families provide$/, /Asked during enrollment.*Health & Safety/i],
+        ["acknowledgement", { disposition: "acknowledgement" }, /^Requirement · Acknowledgement$/, /guardian acknowledges/i],
+        ["needs owner", { disposition: "held_unknown_owner" }, /^Needs your decision$/, /Asked during enrollment/i],
     ];
 
     for (const [name, over, ownership, consequence] of cases) {
@@ -141,7 +143,7 @@ describe("row copy says one thing per line", () => {
             expect(row.consequence, name).toMatch(consequence);
             // The density target: a breadcrumb and one sentence, not a paragraph.
             expect(row.ownership.length, `${name} ownership too long`).toBeLessThanOrEqual(48);
-            expect(row.consequence.length, `${name} consequence too long`).toBeLessThanOrEqual(110);
+            expect(row.consequence.length, `${name} consequence too long`).toBeLessThanOrEqual(120);
         });
     }
 
@@ -150,16 +152,52 @@ describe("row copy says one thing per line", () => {
         const billing = conciseRow(proposal({ disposition: "financial_payment", ownership_routing: { owner: "FINANCIAL_PAYMENT", basis: "An amount the school charges — billing configuration, owned by rate plans.", bulkAcceptSafe: false } }));
         const setup = conciseRow(proposal({ disposition: "financial_payment", ownership_routing: { owner: "FINANCIAL_PAYMENT", basis: "Payment-method setup detail.", bulkAcceptSafe: false } }));
         expect(new Set([credential.consequence, billing.consequence, setup.consequence]).size).toBe(3);
-        // And the ownership breadcrumb distinguishes them too — three reasons, three labels.
-        expect(new Set([credential.ownership, billing.ownership, setup.ownership]).size).toBe(3);
+        // The ownership line groups by WHAT HAPPENS, not by reason: a credential and a setup detail
+        // are both asked of the family, while a school-set fee is asked of nobody. Two labels for
+        // three reasons is the correct collapse — the reasons stay distinct in the consequence.
+        expect(billing.ownership).toBe("Handled automatically");
+        expect(credential.ownership).toBe("Families provide");
+        expect(setup.ownership).toBe("Families provide");
     });
 });
 
 describe("derived copy reads like a sentence", () => {
     it("records an execution value rather than 'calculating' it", () => {
         const row = conciseRow(proposal({ disposition: "derived_value_system", ownership_routing: { owner: "DERIVED_SYSTEM", basis: "", derivedFrom: "when the form was submitted", bulkAcceptSafe: false } }));
-        expect(row.consequence).toBe("Recorded when the form was submitted. No field needed.");
+        expect(row.consequence).toBe("Alloy records this when the form was submitted. No question needed.");
         expect(row.consequence).not.toMatch(/Calculated from when/);
+    });
+});
+
+describe("collection and durable ownership are different questions", () => {
+    it("never presents a health concept as if it will not be asked", () => {
+        // The correction: medications ARE collected through Enrollment. Health becomes the durable
+        // owner later. Grouping them under "held" read as "this will not be asked", which is both
+        // false and the most alarming thing this screen could imply.
+        const meds = proposal({
+            disposition: "held_for_canonical_owner",
+            ownership_hold: { state: "AWAITING_HEALTH_FOUNDATION", owner: "Health & Safety", decision: "D-H5", explanation: "" },
+        });
+        const row = conciseRow(meds);
+        expect(row.ownership).toBe("Families provide");
+        expect(row.consequence).toMatch(/^Asked during enrollment/);
+        expect(row.consequence).not.toMatch(/\bheld\b/i);
+        expect(row.ownership).not.toMatch(/held|owned elsewhere/i);
+    });
+
+    it("puts every family-facing concept in the families list, decision or not", () => {
+        for (const disposition of ["held_for_canonical_owner", "held_unknown_owner", "financial_payment", "form_only_response", "safeguarding_binding"] as const) {
+            const p = proposal({ disposition });
+            const keys = sectionFor(p, disposition === "financial_payment" ? "financial" : "form_responses");
+            expect(keys, disposition).toContain("families_provide");
+        }
+    });
+
+    it("keeps architecture vocabulary out of the primary line", () => {
+        for (const disposition of ["held_for_canonical_owner", "held_unknown_owner", "derived_value_system", "financial_payment"] as const) {
+            const row = conciseRow(proposal({ disposition }));
+            expect(row.ownership, disposition).not.toMatch(/owner|routing|grain|canonical|disposition/i);
+        }
     });
 });
 

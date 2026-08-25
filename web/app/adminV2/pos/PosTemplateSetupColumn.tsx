@@ -178,6 +178,22 @@ export default function PosTemplateSetupColumn({
     // Configuration Discovery (FP16): concept-first review is the default entry; the detailed
     // field/question review is a drill-down. Operator decisions on proposals are held here.
     const [reviewMode, setReviewMode] = useState<"concepts" | "detailed" | "packet">("concepts");
+    /**
+     * A case that has been analysed as a packet IS a packet — land on it.
+     *
+     * The analysis was always durable and only the VIEW was not: `reviewMode` starts at "concepts",
+     * so reopening this case rendered the single-document draft instead. On the real certification
+     * packet that meant a three-question handbook preview standing in for 180 destinations, and the
+     * operator had no way to reach the analysis their tenant already held.
+     */
+    const restoredPacketRef = useRef<string | null>(null);
+    useEffect(() => {
+        const stored = detail?.packetIntake as PacketIntakeResult | null | undefined;
+        if (!caseId || !stored || restoredPacketRef.current === caseId) return;
+        restoredPacketRef.current = caseId;
+        setPacket(stored);
+        setReviewMode("packet");
+    }, [caseId, detail]);
     // Packet analysis: the SAME case read across every source attached to it. Held here beside the
     // single-document draft so the operator moves between them without leaving the case.
     const [packet, setPacket] = useState<PacketIntakeResult | null>(null);
