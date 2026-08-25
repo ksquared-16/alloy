@@ -37,6 +37,7 @@ SUITES=(
   "development-repository-flows.test.mjs"
   "development-copy-control.test.mjs"
   "development-run-cancel.test.mjs"
+  "development-screen-answer.test.mjs"
 )
 
 PASS=0

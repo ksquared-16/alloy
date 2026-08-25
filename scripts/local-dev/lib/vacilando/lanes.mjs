@@ -859,6 +859,34 @@ export function pasteBufferArgv(bufferName, target) {
 }
 
 /**
+ * Read a pane's visible text.
+ *
+ * Exported because callers outside this module need the CURRENT screen — a
+ * blocking dialog must be re-read at answer time, not trusted from whatever the
+ * UI last rendered.
+ */
+export async function capturePaneText(target, historyLines = 200) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target", text: "" };
+  const out = await runTmux(capturePaneArgv(t, historyLines));
+  return { ok: Boolean(out?.ok), text: String(out?.stdout || ""), error: out?.error || null };
+}
+
+/**
+ * Send one bounded key argv to a pane.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how three earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function sendPaneKeys(argv) {
+  if (!Array.isArray(argv) || argv[0] !== "send-keys") {
+    return { ok: false, error: "unsupported_key_argv" };
+  }
+  return runTmux(argv);
+}
+
+/**
  * Kill whatever is on the composer line before pasting into it.
  *
  * NOT yet wired into delivery. paste-buffer inserts at the cursor, so residual

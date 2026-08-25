@@ -1567,6 +1567,22 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-repo-check dd,.gw-review dd{word-break:break-all;}
 .gw-notice.ok{background:var(--green-soft);color:var(--green-ink);}
 
+/* A provider dialog, answerable from Vacilando. Sits directly above the
+   composer, because that is where the operator is trying to act. */
+.gw-screen{margin:0 12px 8px;padding:12px;border:1px solid var(--review);border-radius:12px;background:var(--review-bg);}
+.gw-screen.is-terminal{border-color:var(--line-strong);background:var(--card-2);}
+.gw-screen-h{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--review);}
+.gw-screen.is-terminal .gw-screen-h{color:var(--ink-3);}
+.gw-screen-q{margin-top:5px;font-size:14px;font-weight:700;color:var(--ink);}
+.gw-screen-d{margin-top:3px;font-size:12px;color:var(--ink-2);}
+.gw-screen-opts{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.gw-screen-opt{display:flex;align-items:center;gap:8px;min-height:44px;padding:8px 10px;border:1px solid var(--line-strong);
+  border-radius:10px;background:var(--card);font:inherit;font-size:14px;color:var(--ink);cursor:pointer;text-align:left;}
+.gw-screen-opt.is-default{border-color:var(--review);font-weight:700;}
+.gw-screen-opt[disabled]{opacity:.6;cursor:progress;}
+.gw-screen-num{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;
+  border-radius:999px;background:var(--bg-tint);font-size:11px;font-weight:800;}
+.gw-screen-note{margin-top:8px;font-size:11px;color:var(--ink-3);}
 /* Take back a sent prompt. A restrained text control, not another big button. */
 .gw-cancel-run{align-self:flex-start;margin-top:8px;min-height:44px;padding:6px 10px;border:1px solid var(--line-strong);
   border-radius:8px;background:var(--card);color:var(--blocked);font:inherit;font-size:12px;font-weight:650;cursor:pointer;}

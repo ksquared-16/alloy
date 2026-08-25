@@ -56,6 +56,8 @@ const G = {
   repositorySheet: null,
   laneWizard: null,
   cancelPending: false,
+  blockingScreen: null,
+  screenPending: null,
   collapsedFolders: null,
   releasing: false,
   providers: null,
@@ -1004,6 +1006,8 @@ function paint() {
     repositorySheet: G.repositorySheet,
     laneWizard: G.laneWizard,
     cancelPending: G.cancelPending,
+    blockingScreen: G.blockingScreen,
+    screenPending: G.screenPending,
     attachments: G.attachments,
     attachmentsUploading: G.attachmentsUploading,
     attachmentError: G.attachmentError,
@@ -1399,6 +1403,7 @@ async function show(r) {
     // A refresh mid-draft must not lose images the operator already picked:
     // they are durable server-side, so re-read them rather than assuming none.
     hydrateAttachments(G.selected);
+    refreshBlockingScreen(G.selected);
     startOutputPoll(G.selected);
     startTelemetryPoll(G.selected);
     const hydrateId = G.selected;
@@ -1971,6 +1976,39 @@ document.addEventListener("click", async (e) => {
     document.querySelector("[data-gw-work]")?.scrollIntoView?.({ block: "nearest" });
     G.notice = { kind: "idle", text: "Review the current run before sending new work." };
     paint();
+    return;
+  }
+  const screenAnswer = e.target?.closest?.("[data-gw-screen-answer]");
+  if (screenAnswer) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (screenAnswer.disabled || G.screenPending != null) return;
+    const choice = Number(screenAnswer.getAttribute("data-gw-screen-answer"));
+    // Send the question the operator was LOOKING at, so the server can refuse
+    // if the dialog changed under them between render and tap.
+    const question = document.querySelector("[data-gw-screen]")?.getAttribute("data-gw-screen-question") || null;
+    G.screenPending = choice;
+    paint();
+    try {
+      const r = await gwFetch(`/api/lanes/${encodeURIComponent(G.selected)}/screen/answer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ choice, question }),
+      });
+      const j = await r.json();
+      if (j.ok) {
+        G.notice = { kind: "ok", text: `Answered "${j.answered.label}". You can send again.` };
+        G.blockingScreen = null;
+      } else {
+        G.notice = { kind: "err", text: View.screenAnswerErrorText(j.error) };
+        await refreshBlockingScreen(G.selected);
+      }
+    } catch {
+      G.notice = { kind: "err", text: "Could not reach the Gateway. Nothing was answered." };
+    } finally {
+      G.screenPending = null;
+      paint();
+    }
     return;
   }
   const cancelRun = e.target?.closest?.("[data-gw-cancel-run]");
@@ -2721,3 +2759,21 @@ document.addEventListener("click", async (e) => {
   }
   if (hit("[data-gw-wiz-create]")) { e.preventDefault(); await wizardCreate(); return; }
 });
+
+/**
+ * Poll for a blocking dialog on the open lane.
+ *
+ * Read-only: it captures the pane and reports what is on it. Nothing is
+ * answered without the operator tapping a choice.
+ */
+async function refreshBlockingScreen(laneId) {
+  if (!laneId) { G.blockingScreen = null; return; }
+  try {
+    const r = await gwFetch(`/api/lanes/${encodeURIComponent(laneId)}/screen`);
+    const j = await r.json();
+    if (G.selected !== laneId) return;
+    G.blockingScreen = j?.ok ? j : null;
+  } catch {
+    // A failed read must not erase a dialog the operator is looking at.
+  }
+}

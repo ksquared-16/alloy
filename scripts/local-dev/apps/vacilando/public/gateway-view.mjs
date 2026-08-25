@@ -163,6 +163,21 @@ export function buildSendBody(instruction, extra = {}) {
   return body;
 }
 
+/** Operator-facing text when answering a provider dialog fails. */
+export function screenAnswerErrorText(error) {
+  switch (error) {
+    case "screen_changed": return "That dialog changed. Here is the current one.";
+    case "choice_not_on_screen": return "That option is no longer on screen.";
+    case "no_blocking_screen": return "The agent is not waiting on a dialog any more.";
+    case "no_selectable_options": return "That screen has no options to pick — it needs the agent's terminal.";
+    case "lane_has_no_pane": return "This lane has no running agent.";
+    case "capture_failed": return "Could not read the agent's screen.";
+    case "answer_send_failed": return "The choice could not be delivered to the agent.";
+    case "invalid_choice": return "That is not a valid option.";
+    default: return "The dialog could not be answered.";
+  }
+}
+
 /** Operator-facing text for cancel refusals. */
 export function cancelErrorText(error) {
   switch (error) {
@@ -1957,6 +1972,44 @@ export function renderOperatorDecisionBar(run) {
  * otherwise. Deliberately a small text control, not another large button: it is
  * a recovery affordance, not a primary action.
  */
+/**
+ * A blocking provider dialog, answerable from here.
+ *
+ * Vacilando does NOT decide: it shows the choices the provider is actually
+ * offering, verbatim and in order, and sends the one the operator taps. Before
+ * this, the operator was told to go answer it in the agent's terminal — which
+ * on a phone is not a thing they can do, so the lane was simply stuck.
+ */
+export function renderBlockingScreen(screen, { pending = null } = {}) {
+  if (!screen || screen.answerable !== true) return "";
+  const opts = (screen.options || []).map((o) => `<button type="button"
+      class="gw-screen-opt${o.selected ? " is-default" : ""}"
+      data-gw-screen-answer="${esc(String(o.index))}"
+      ${pending != null ? "disabled" : ""}>
+      <span class="gw-screen-num">${esc(String(o.index))}</span>
+      <span class="gw-screen-label">${esc(o.label)}</span>
+      ${pending === o.index ? `<span class="gw-screen-busy">\u2026</span>` : ""}
+    </button>`).join("");
+  return `<aside class="gw-screen" data-gw-screen data-gw-screen-question="${esc(screen.question || "")}" role="group"
+    aria-label="${esc(screen.title || "The agent is waiting on a choice")}">
+    <div class="gw-screen-h">${esc(screen.title || "The agent is waiting on a choice")}</div>
+    <div class="gw-screen-q">${esc(screen.question || "")}</div>
+    ${screen.detail ? `<div class="gw-screen-d">${esc(screen.detail)}</div>` : ""}
+    <div class="gw-screen-opts">${opts}</div>
+    <div class="gw-screen-note">Your choice is sent to the agent exactly as shown. Vacilando does not answer for you.</div>
+  </aside>`;
+}
+
+/** When there is a blocker but nothing selectable, say so honestly. */
+export function renderUnanswerableScreen(screen) {
+  if (!screen || screen.answerable !== false || !screen.needs_terminal) return "";
+  return `<aside class="gw-screen is-terminal" data-gw-screen-terminal>
+    <div class="gw-screen-h">${esc(screen.blocker?.title || "The agent is waiting")}</div>
+    <div class="gw-screen-q">${esc(screen.blocker?.signal || "")}</div>
+    <div class="gw-screen-note">This one has no choices to pick, so it has to be answered in the agent's terminal.</div>
+  </aside>`;
+}
+
 export function renderCancelControl(run, { pending = false } = {}) {
   const state = run?.state;
   if (!state || ["COMPLETE", "FAILED", "ABANDONED"].includes(state)) return "";
@@ -4116,6 +4169,8 @@ export function renderGatewayShell({
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderOperatorDecisionBar(lane?.execution_run)}
+        ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
+        ${renderUnanswerableScreen(blockingScreen)}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",

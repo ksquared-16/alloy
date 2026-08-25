@@ -1072,6 +1072,30 @@ export function createVacilandoServer() {
         const out = renameLaneRequest(laneId, body.value || {});
         return sendJson(res, out.status, out.body);
       }
+      const answerMatch = path.match(/^\/api\/lanes\/([^/]+)\/screen\/answer$/);
+      if (answerMatch) {
+        const laneId = normalizeLaneId(answerMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        const body = await readJsonBody(req);
+        if (!body.ok) return sendJson(res, 400, { ok: false, error: body.error });
+        // Only a choice index and the question the operator was looking at. No
+        // free text, no keys, no target — the browser never names a pane.
+        const extra = Object.keys(body.value || {}).filter((k) => !["choice", "question"].includes(k));
+        if (extra.length) return sendJson(res, 400, { ok: false, error: "unexpected_control_field", fields: extra });
+        try {
+          const { answerBlockingScreen } = await import("./vacilando/provider-screen-answer.mjs");
+          const out = await answerBlockingScreen(laneId, {
+            choice: body.value?.choice,
+            expectedQuestion: body.value?.question || null,
+          });
+          const status = out.ok ? 200
+            : (out.error === "lane_not_found" ? 404
+              : (out.error === "screen_changed" || out.error === "choice_not_on_screen" ? 409 : 400));
+          return sendJson(res, status, out);
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "screen_answer_failed", detail: String(e && e.message || e) });
+        }
+      }
       const cancelMatch = path.match(/^\/api\/lanes\/([^/]+)\/run\/cancel$/);
       if (cancelMatch) {
         const laneId = normalizeLaneId(cancelMatch[1]);
@@ -2006,6 +2030,28 @@ export function createVacilandoServer() {
         });
       } catch (e) {
         return sendJson(res, 500, { ok: false, error: "notifications_failed", detail: String(e && e.message || e) });
+      }
+    }
+    {
+      const screenMatch = path.match(/^\/api\/lanes\/([^/]+)\/screen$/);
+      if (screenMatch) {
+        const laneId = normalizeLaneId(screenMatch[1]);
+        if (!LANE_ID_RE.test(laneId)) return sendJson(res, 400, { ok: false, error: "invalid_lane_id" });
+        try {
+          const { getDurableLane } = await import("./vacilando/development-lane.mjs");
+          const { capturePaneText } = await import("./vacilando/lanes.mjs");
+          const { answerableScreen } = await import("./vacilando/provider-screen-answer.mjs");
+          const rec = getDurableLane(laneId);
+          if (!rec) return sendJson(res, 404, { ok: false, error: "lane_not_found" });
+          const target = rec.binding?.tmux_pane || rec.binding?.tmux_session || null;
+          if (!target) return sendJson(res, 200, { ok: true, answerable: false, reason: "lane_has_no_pane" });
+          const cap = await capturePaneText(target);
+          if (!cap?.ok) return sendJson(res, 200, { ok: true, answerable: false, reason: "capture_failed" });
+          const screen = answerableScreen(cap.text, { provider: rec.preferred_provider || null });
+          return sendJson(res, 200, { ok: true, lane_id: rec.lane_id, ...screen });
+        } catch (e) {
+          return sendJson(res, 500, { ok: false, error: "screen_read_failed", detail: String(e && e.message || e) });
+        }
       }
     }
     if (path === "/api/repositories") {
