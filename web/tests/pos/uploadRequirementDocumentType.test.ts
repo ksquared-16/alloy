@@ -45,6 +45,34 @@ describe("a requested document that Alloy has a name for", () => {
     });
 });
 
+describe("a wrong type is worse than no type", () => {
+    it("does not classify the ACH clause as a form-like document", () => {
+        // Found in the real packet. The platform classifier matched its `form` token INSIDE the word
+        // "information" — the same substring defect that once read "hib" inside "prohibiting" and
+        // "parent" inside "Parent Handbook". Fixed at the classifier (a token now matches at the
+        // start of a word, keeping deliberate prefixes like `immun`), and guarded again here.
+        const p = proposeFor("To update information provided in your ACH account, complete this authorization.");
+        expect(p.target_document_classification).toBeUndefined();
+    });
+
+    it("keeps the deliberate prefix tokens working", async () => {
+        const { classifyNonFormSource } = await import("@/lib/pos/processingCase/classification/classifyNonFormSource");
+        expect(classifyNonFormSource({ sourceKind: "document", title: "Immunisation summary" }).classification_key).toBe(
+            "immunization_record",
+        );
+        expect(classifyNonFormSource({ sourceKind: "document", title: "Enrollment agreement" }).classification_key).toBe(
+            "enrollment_document",
+        );
+    });
+
+    it("requires more than one weak keyword to name a document", () => {
+        // A single 0.4-weight signal is a guess. The requirement survives; only the type is withheld.
+        const p = proposeFor("Please complete the attached form.");
+        expect(p.target_document_classification).toBeUndefined();
+        expect(p.target_requirement_type).toBe("upload");
+    });
+});
+
 describe("a requested document that Alloy has NO name for", () => {
     it("leaves the real packet's care-plan clause unclassified rather than forcing a type", () => {
         // The packet asks for an individual health care plan. There is no such classification key,

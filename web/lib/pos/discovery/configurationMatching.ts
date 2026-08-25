@@ -262,7 +262,10 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
         // Reuse the platform's own document classifier rather than inventing a second document
         // vocabulary here — the clause text is the title it reads.
         const classified = classifyNonFormSource({ sourceKind: "document", title: concept.label });
-        const documentType = classified.status === "classified" ? classified.classification_key : null;
+        // A WRONG document type is worse than none — it makes a mis-filed upload look answered.
+        // One weak keyword is not enough to name a document; require corroboration.
+        const documentType =
+            classified.status === "classified" && classified.confidence >= 0.5 ? classified.classification_key : null;
         return {
             ...base,
             disposition: "upload_requirement",
