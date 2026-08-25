@@ -92,6 +92,7 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
                 description: f.evidence ? undefined : undefined,
                 confidence: f.confidence === "invalid" ? "low" : f.confidence,
                 evidence: f.evidence,
+                ...(f.options && f.options.length ? { options: f.options } : {}),
                 ...(typeof f.page === "number" ? { page: f.page } : {}),
                 // Geometry the native-layout detector recovered. Without it the review canvas has
                 // nothing to place, which is why Detailed Questions rendered an empty document.

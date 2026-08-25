@@ -33,6 +33,13 @@ export interface DraftFormField {
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
+    /**
+     * Allowed choices the SOURCE declared. A hosted form states its options outright, unlike a PDF
+     * where they must be guessed, and losing them at the draft would throw away the best evidence a
+     * web source gives. `DraftFormFieldType` has no `select` yet, so a choice still drafts as text
+     * and the options ride alongside until the builder can publish them.
+     */
+    options?: string[];
     /** Canonical binding (operator-reviewed or auto-suggested) — persisted to the form. */
     field_source?: import("@/lib/forms/schema").FormFieldSource;
     /**

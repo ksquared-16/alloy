@@ -25,7 +25,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DocumentStructureCandidate, DocumentTextResult } from "../structure/types";
 import type { PdfAcroFormResult } from "../structure/pdfAcroForm";
 import { extractPdfAcroFormFields } from "../structure/pdfAcroForm";
-import { downloadDocumentBytesSafe, looksLikePdfBytes } from "../structure/documentBytes";
+import { decodeCaptureText, downloadDocumentBytesSafe, looksLikeHtmlBytes, looksLikePdfBytes } from "../structure/documentBytes";
 import { extractDocumentTextSafe } from "../structure/extractDocumentTextSafe";
 import { detectDocumentStructure } from "../structure/detectDocumentStructure";
 import { extractPdfPositional } from "../structure/pdfPositionalExtract";
@@ -36,6 +36,7 @@ import { buildFormDraftFromStructure } from "./buildFormDraftFromStructure";
 import { layoutPageContexts } from "../structure/layoutFieldGeometry";
 import { buildFormDraftFromAcroForm } from "./buildFormDraftFromAcroForm";
 import { buildStructureFromAcroForm } from "../structure/acroFormStructure";
+import { detectHostedFormStructure } from "../structure/hostedFormStructure";
 import { deriveDocumentTitle } from "./deriveDocumentTitle";
 import { ocrProvenanceFromDocument } from "./ocrDraftProvenance";
 import { dbStoreFormDraftPreview, stampFormDraftPreview } from "./formDraftPreviewDb";
@@ -61,7 +62,7 @@ export interface FormDraftCaseDeps {
 }
 
 /** Which reader produced the draft — recorded so the enrichment step is source-agnostic. */
-export type DraftOrigin = "acroform" | "layout" | "flat_text";
+export type DraftOrigin = "acroform" | "hosted_form" | "layout" | "flat_text";
 
 /**
  * A selected draft together with the document structure it came from. Keeping the structure
@@ -95,6 +96,36 @@ async function selectDraftSource(
     // ArrayBuffer, so a second consumer of the same bytes sees length 0. Hand every consumer its own
     // `.slice()` copy from the still-intact download.
     const pdfCopy = (): Uint8Array => (input.pdfBytes as Uint8Array).slice();
+
+    // PRIMARY (hosted form) — a captured web form declares its own labels, control types,
+    // requiredness and choices. That is the best structural evidence any reader gets, so it wins
+    // outright when the source is one. It reads the stored CAPTURE; it never fetches.
+    if (!isPdf && input.pdfBytes && looksLikeHtmlBytes(input.pdfBytes, input.mimeType)) {
+        try {
+            const html = decodeCaptureText(input.pdfBytes);
+            if (html) {
+                const structure = await timed(
+                    "hosted_form_detect",
+                    () => detectHostedFormStructure({ html, sourceUri: input.sourceUri ?? null }),
+                    (st) => `sections=${st.sections.length} destinations=${st.sections.reduce((n, x) => n + x.fields.length, 0)} artifacts=${st.logical_artifacts?.length ?? 0}`
+                );
+                const total = structure.sections.reduce((n, s2) => n + s2.fields.length, 0);
+                if (total > 0) {
+                    const draft = buildFormDraftFromStructure({
+                        structure,
+                        sourceDocumentId: input.sourceDocumentId,
+                        extractedText: input.text.text,
+                        fileName: input.fileName,
+                        classificationKey: input.classificationKey,
+                        extractedTextAvailable: input.text.available,
+                    });
+                    return { draft, structure, origin: "hosted_form" };
+                }
+            }
+        } catch (e) {
+            console.warn("[selectDraftSource] hosted_form", e instanceof Error ? e.message : e);
+        }
+    }
 
     // PRIMARY — real PDF AcroForm widget fields.
     if (isPdf && input.pdfBytes) {
@@ -168,6 +199,8 @@ async function selectDraftSource(
 
 export interface ChooseDraftInput {
     sourceDocumentId: string | null;
+    /** The hosted form's own address, when the source is a captured web form. Provenance only. */
+    sourceUri?: string | null;
     fileName: string | null;
     classificationKey: string | null;
     text: DocumentTextResult;
@@ -261,7 +294,7 @@ export async function buildFormDraftForCaseSafe(
 
         const { data: docRow } = await supabase
             .from("documents")
-            .select("original_filename, title, doc_type, extraction_provider, metadata")
+            .select("original_filename, title, doc_type, extraction_provider, metadata, public_url")
             .eq("org_id", args.orgId)
             .eq("id", source.source_id)
             .maybeSingle();
@@ -270,6 +303,8 @@ export async function buildFormDraftForCaseSafe(
             title?: string | null;
             extraction_provider?: string | null;
             metadata?: Record<string, unknown> | null;
+            /** For a hosted-form capture: the address the capture was taken from. Provenance only. */
+            public_url?: string | null;
         };
 
         // Classification (for title fallback) lives on the case_type.
@@ -288,6 +323,7 @@ export async function buildFormDraftForCaseSafe(
 
         const draftPre = await chooseDraftForCase({
             sourceDocumentId: source.source_id,
+            sourceUri: doc.public_url ?? null,
             fileName: doc.title ?? doc.original_filename ?? null,
             classificationKey,
             text: textResult,

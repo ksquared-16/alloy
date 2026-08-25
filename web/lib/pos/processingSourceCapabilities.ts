@@ -12,6 +12,7 @@ export type ProcessingSourceFormat =
     | "heic"
     | "txt"
     | "csv"
+    | "html"
     | "unsupported";
 
 export type ProcessingFormatCapabilities = {
@@ -79,6 +80,19 @@ const CAPABILITIES: Record<ProcessingSourceFormat, Omit<ProcessingFormatCapabili
         questionDetection: false,
         acceptMime: ["image/heic", "image/heif"],
         acceptExt: [".heic", ".heif"],
+    },
+    html: {
+        // A CAPTURE of a hosted form — the bytes already stored as a document, with a hash. Never
+        // fetched. A hosted form declares its labels, control types, requiredness and choices, so
+        // it is better structural evidence than any PDF heuristic; converting it to a PDF to reuse
+        // the PDF importer would throw that away. @see processingCase/structure/hostedFormStructure
+        label: "Hosted form capture",
+        store: true,
+        preview: true,
+        textExtraction: true,
+        questionDetection: true,
+        acceptMime: ["text/html", "application/xhtml+xml"],
+        acceptExt: [".html", ".htm"],
     },
     txt: {
         label: "Plain text",

@@ -24,6 +24,7 @@
 
 import type { PdfAcroFormResult, PdfFieldRegion, PdfPageContext, PdfPageText } from "./pdfAcroForm";
 import { detectRepeatingFieldGroups } from "./repeatingFieldGroups";
+import { segmentLogicalArtifacts, type LogicalArtifact } from "./logicalArtifacts";
 import type {
     DocumentStructureCandidate,
     DocumentStructureField,
@@ -152,10 +153,22 @@ export function buildStructureFromAcroForm(
         sections.push({ ...prose, fields: [] });
     }
 
+    // A fillable PDF can carry more than one attestation — the immunization certificate's front
+    // records vaccinations and its back declares an exemption, each signed separately. Scoping them
+    // is what stops one signature from appearing to satisfy the other.
+    const logicalArtifacts: LogicalArtifact[] = segmentLogicalArtifacts(
+        sections.map((s, i) => ({
+            title: s.title,
+            index: i,
+            destinations: s.fields.map((f) => ({ id: f.evidence ?? f.label, type: f.suggested_type, label: f.label })),
+        }))
+    );
+
     const fieldCount = acro.fields.length;
     return {
         sections,
         warnings: [],
+        ...(logicalArtifacts.length ? { logical_artifacts: logicalArtifacts } : {}),
         ...(repeatingGroups.length > 0 ? { repeating_groups: repeatingGroups } : {}),
         diagnostics: {
             text_length: sections.reduce((n, s) => n + (s.static_text?.length ?? 0), 0),

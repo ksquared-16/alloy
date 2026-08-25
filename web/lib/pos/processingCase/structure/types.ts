@@ -107,6 +107,18 @@ export interface DocumentStructureCandidate {
      * value five times is reviewed once. @see ./repeatingFieldGroups
      */
     repeating_groups?: import("./repeatingFieldGroups").RepeatingFieldGroup[];
+    /**
+     * Logical artifacts inside this ONE source document — a hosted submission that is really four
+     * agreements, a PDF that carries two. Signatures and acknowledgements are scoped to these, so a
+     * signature on one cannot satisfy another. @see ./logicalArtifacts
+     */
+    logical_artifacts?: import("./logicalArtifacts").LogicalArtifact[];
+    /**
+     * Whether the source is something to fill in or something to read. A reference document yields
+     * sections, prose, acknowledgements and evidence obligations — but no participant fields.
+     * @see ./documentFillIntent
+     */
+    fill_intent?: import("./documentFillIntent").FillIntentVerdict;
     /** Detection diagnostics (always present from the detector; optional for back-compat). */
     diagnostics?: StructureDiagnostics;
 }
