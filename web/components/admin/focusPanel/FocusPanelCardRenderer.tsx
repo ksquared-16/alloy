@@ -15,6 +15,7 @@ import CommunicationsCard from "@/components/admin/focusPanel/cards/Communicatio
 import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
+import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 // Drill-only content: renders ONLY inside the `documents` / `notes` cards on drill-down (an operator
@@ -150,10 +151,20 @@ export default function FocusPanelCardRenderer({
             <SchedulingCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
-    // Both names render the Current Work presentation today. `business_process` is the canonical
-    // successor and the only one composition can select; `current_work` stays reachable for any
-    // direct internal consumer. Slice 2 replaces this presentation with the combined Process card.
-    if (model.key === "current_work" || model.key === "business_process") {
+    // The production Business Process card — the canonical successor's own presentation. Current
+    // Work remains a consumed data owner (the evidence builder reads it); what changed is which
+    // card renders, not who owns the truth.
+    if (model.key === "business_process") {
+        return (
+            <BusinessProcessCard
+                model={model}
+                context={context}
+                receded={receded}
+                coordination={coordination}
+            />
+        );
+    }
+    if (model.key === "current_work") {
         return (
             <CurrentWorkCard
                 model={model}

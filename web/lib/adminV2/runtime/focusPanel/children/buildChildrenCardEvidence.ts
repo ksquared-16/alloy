@@ -20,7 +20,7 @@ import {
 } from "@/lib/scheduling/projection/projectCompactScheduleForIdentity";
 import { humanizeStatusKey } from "@/lib/admin/status/humanizeStatusKey";
 import { canonicalNewLeadStatusLabel } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
-import { resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
+import { resolveChildProcessStageKey, resolveChildProcessStageLabel } from "@/lib/lifecycle/childEnrollmentProcessStageLabel";
 import {
     formatFocusPanelDate,
     formatFocusPanelDobAgeLine,
@@ -103,6 +103,20 @@ export type ChildrenEvidenceChild = {
     /** Preferred weekdays label (e.g. "Mon, Wed, Fri"); null when unset. */
     preferredWeekdays?: string | null;
     status: string | null;
+    /**
+     * THE STABLE PROCESS STAGE IDENTITY, beside the label rather than instead of it.
+     *
+     * `status` is presentation and may be reworded; this is what a rail places a marker by. They are
+     * separate concepts on purpose: matching a participant to a stage by display string means
+     * stripping suffixes until "Waitlisted" and "Waitlist" agree, which drops the marker silently
+     * the day someone rewords a label.
+     *
+     * Null — or absent, following this type's existing convention for partial projections — means
+     * genuinely unknown. Both are the SAME answer to a rail: unresolved. The caller records an
+     * unresolved participant rather than guessing a placement, because a guess would put a real
+     * child at a stage they are not at.
+     */
+    stageKey?: string | null;
     statusTone: ChildStatusTone;
     /** Missing operational essentials (program / schedule / start) for this child. */
     needsAttention: boolean;
@@ -304,11 +318,15 @@ export function buildChildrenCardEvidence(
         const familyStageKey =
             trimOrNull(context.truth.stage_key)
             ?? trimOrNull((context.truth as { lifecycle_stage_key?: unknown }).lifecycle_stage_key);
-        const processStageLabel = resolveChildProcessStageLabel({
+        const stageResolutionInput = {
             stageKey: trimOrNull((row as { stage_key?: unknown }).stage_key),
             dispositionKey: statusKey,
             familyStageKey,
-        });
+        };
+        const processStageLabel = resolveChildProcessStageLabel(stageResolutionInput);
+        // The identity behind that label, from the same inputs and the same chain — so a child can
+        // never be labelled with one stage and placed at another.
+        const processStageKey = resolveChildProcessStageKey(stageResolutionInput);
         const declined = statusKey?.toLowerCase().includes("declin") ?? false;
         // Active children need the enrollment essentials; declined children do not.
         const needsAttention = !declined && (!program || !schedule || !startDateIso);
@@ -420,6 +438,7 @@ export function buildChildrenCardEvidence(
             // The child's PROCESS STAGE (replaces the retired Participation Status). Falls back to
             // the canonical New Lead label, then humanize; null key → null → badge suppressed.
             status: processStageLabel ?? canonicalNewLeadStatusLabel(statusKey) ?? humanizeStatusKey(statusKey),
+            stageKey: processStageKey,
             statusTone: statusTone(statusKey),
             needsAttention,
             detailLine,

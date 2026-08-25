@@ -34,6 +34,22 @@ export type OperationalBusinessProcess = {
     label: string | null;
     /** Current builder stage key, when known. */
     stageKey: string | null;
+    /**
+     * THE CONFIGURED STAGE SET, in configured order — the department lifecycle's own answer to
+     * "what are the stages of this process", carried so a card can render the rail without
+     * re-deriving an order from somewhere else.
+     *
+     * Each entry may declare up to TWO annotation slots. The cap lives with the platform, not with
+     * configuration: configuration chooses WHICH canonical fact fills a slot, never how many slots
+     * there are. Empty when the department declares no lifecycle — an unstaged process is a real
+     * answer, and the rail is simply absent.
+     */
+    stages?: Array<{
+        key: string;
+        label: string;
+        /** Configured annotation slots, capped at two by the platform. */
+        support?: readonly string[];
+    }>;
 };
 
 export type OperationalContextPerspective = {
