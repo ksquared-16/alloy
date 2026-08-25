@@ -135,6 +135,7 @@ describe("the wire format preserves the card maps", () => {
             personId: "p-1",
             label: "Dana Okafor",
             truth: { id: "p-1" },
+            imageUrl: null,
             employment: personEmploymentSignal("p-1", "Dana Okafor", composition()),
         },
         canMutate: false,

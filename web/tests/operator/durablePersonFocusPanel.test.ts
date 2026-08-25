@@ -106,6 +106,7 @@ function staffSubject(
         personId: PERSON_ID,
         label: "Dana Okafor",
         truth,
+        imageUrl: null,
         employment: personEmploymentSignal(PERSON_ID, "Dana Okafor", composition),
     };
 }
