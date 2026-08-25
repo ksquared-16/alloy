@@ -69,7 +69,12 @@ describe("processingReviewFieldMapping representative fixture", () => {
             displayLabel: "Allergies",
             type: "text",
         });
-        expect(allergySource?.field_key).toBe("allergy_notes");
+        // M1 — an allergy is a fact about the CHILD, not about an admission, so a health question
+        // asked in an enrollment context now binds at child grain. The deprecated enrollment row
+        // still resolves for forms already stamped with it and shares its ask-once identity.
+        expect(allergySource?.entity_type).toBe("child");
+        expect(allergySource?.field_key).toBe("allergies");
+        expect(allergySource?.shared_value_key).toBe("child_allergies");
     });
 
     it.each(REPRESENTATIVE_QUESTIONS.filter((q) => q.expectedFieldId !== null))(

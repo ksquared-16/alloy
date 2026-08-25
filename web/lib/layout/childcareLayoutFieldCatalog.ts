@@ -10,6 +10,7 @@
 
 import type { LayoutPickerAnchorEntity } from "./platformFieldResolutionManifest";
 import {
+    CHILD_PROFILE_PERSON_SHADOW_REF_KEYS,
     CHILD_PROFILE_REF_KEYS,
     deriveChildProfileCatalogRows,
 } from "@/lib/fields/customerMemberProfileSurfaces";
@@ -468,11 +469,8 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
 export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
     "person.relationship_to_child",
     "person.secondary_phone",
-    "person.special_instructions",
-    "person.gender",
-    "person.allergies",
-    "person.medical_notes",
-    "person.preferred_name",
+    // Every child-profile fact's person-grain spelling, derived — not re-listed by hand.
+    ...CHILD_PROFILE_PERSON_SHADOW_REF_KEYS,
     "customer.primary_contact",
     "customer.secondary_contact",
     "customer.address_line1",

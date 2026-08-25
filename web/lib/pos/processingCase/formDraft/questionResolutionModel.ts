@@ -303,7 +303,10 @@ export function deriveFieldSources(input: {
 
     if (input.intent === "health" || input.subject === "enrollment") {
         if (/\ballerg/i.test(input.displayLabel)) {
-            return registrySource("enrollment", "allergy_notes", "allergy_notes");
+            // M1 — an allergy is a fact about the CHILD, not about an admission. New bindings go to
+            // the child-grain destination; the deprecated enrollment row still resolves for forms
+            // already stamped with it, and shares its ask-once identity.
+            return registrySource("child", "allergies", "child_allergies");
         }
     }
 
@@ -322,7 +325,8 @@ const PROCESSING_FIELD_LABEL_BY_KEY = new Map<string, string>(
         ["guardian:guardian_phone", "Parent phone"],
         ["enrollment:start_date", "Desired start date"],
         ["enrollment:child_site", "Preferred school / site"],
-        ["enrollment:allergy_notes", "Allergies"],
+        ["child:allergies", "Allergies"],
+        ["enrollment:allergy_notes", "Allergies (deprecated — child grain now)"],
     ] as const
 );
 

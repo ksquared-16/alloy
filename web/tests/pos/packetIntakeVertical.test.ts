@@ -73,8 +73,10 @@ function seed() {
 /** A double for exactly the queries the builder and the store perform. Nothing more is emulated. */
 function fakeSupabase(db: ReturnType<typeof seed>) {
     const writes: Array<{ table: string; metadataKeys: string[] }> = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the builder is self-referential
+    type QueryBuilder = any;
     const client = {
-        from(table: string) {
+        from(table: string): QueryBuilder {
             const filters: Record<string, unknown> = {};
             let inFilter: { col: string; values: unknown[] } | null = null;
             let pendingUpdate: Record<string, unknown> | null = null;

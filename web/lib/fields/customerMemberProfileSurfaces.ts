@@ -109,3 +109,15 @@ export function deriveChildProfileCatalogRows(): DerivedChildProfileCatalogRow[]
 export const CHILD_PROFILE_HEALTH_REF_KEYS: readonly string[] = CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST.filter(
     (r) => r.sensitivity === "health"
 ).map((r) => childProfileRefKey(r.field_key));
+
+/**
+ * Sixth surface — the person-grain shadow.
+ *
+ * These facts have a `person.*` spelling too, from the legacy person-bridge. A child-profile fact
+ * offered at BOTH grains is offered twice, and the second one stores to the wrong row: the picker
+ * must show exactly one destination per fact. Deriving the shadow list means adding a manifest row
+ * cannot leave a person-grain duplicate behind.
+ */
+export const CHILD_PROFILE_PERSON_SHADOW_REF_KEYS: readonly string[] = CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST.map(
+    (row) => `person.${row.field_key}`,
+);

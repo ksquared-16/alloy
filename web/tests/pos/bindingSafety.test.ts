@@ -20,7 +20,6 @@ const concept = (over: Partial<BusinessConceptCandidate> & { label: string }): B
     contract_version: DISCOVERY_CONTRACT_VERSION,
     id: "1:section:field_x",
     kind: "scalar_field",
-    label: over.label,
     concept_key: over.concept_key ?? "unknown.x",
     subject: (over.subject ?? "child") as ConceptSubject,
     cardinality: "single",

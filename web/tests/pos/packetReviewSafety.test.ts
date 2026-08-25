@@ -103,7 +103,7 @@ describe("declared choices survive into a publishable form", () => {
     it("drafts a hosted form's choices as choices, with the options the source declared", async () => {
         const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
         const hosted = inputs.find((i) => i.artifact.document_id === "doc-formsite")!;
-        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null });
         const gender = draft.fields.find((f) => f.label.startsWith("How would you describe"))!;
         expect(gender.type).toBe("select");
         expect(gender.options).toEqual(["Male", "Female", "Gender-diverse"]);
@@ -113,8 +113,8 @@ describe("declared choices survive into a publishable form", () => {
         const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
         const { draftFormToFormSchemaV1 } = await import("@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1");
         const hosted = inputs.find((i) => i.artifact.document_id === "doc-formsite")!;
-        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
-        const schema = draftFormToFormSchemaV1(draft, { name: "Admissions Packet" });
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null });
+        const schema = draftFormToFormSchemaV1(draft);
         const flat = schema.sections.flatMap((s) => s.field_ids.map((id) => schema.fields.find((f) => f.id === id)!)).filter(Boolean);
         const gender = flat.find((f) => f.label.startsWith("How would you describe"))!;
         expect(gender.type).toBe("select");
@@ -131,7 +131,7 @@ describe("declared choices survive into a publishable form", () => {
         const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
         const draft = buildFormDraftFromStructure({
             structure: { sections: [{ title: "S", confidence: "high", fields: [{ label: "Pick one", suggested_type: "select", confidence: "medium" }] }], warnings: [] },
-            sourceDocumentId: "d", extractedText: null, fileName: null, classificationKey: null,
+            sourceDocumentId: "d", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null,
         });
         expect(draft.fields[0].type).toBe("text");
         expect(draft.warnings.join(" ")).toMatch(/choices/i);
@@ -140,7 +140,7 @@ describe("declared choices survive into a publishable form", () => {
     it("leaves every non-choice field exactly as it was", async () => {
         const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
         const hosted = inputs.find((i) => i.artifact.document_id === "doc-formsite")!;
-        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null });
         const byType = draft.fields.reduce<Record<string, number>>((a, f) => { a[f.type] = (a[f.type] ?? 0) + 1; return a; }, {});
         // 5 choices: gender, account type, the annual fee, and the two Yes/No questions.
         expect(byType.select).toBe(5);
@@ -153,7 +153,7 @@ describe("requiredness survives extraction", () => {
     it("carries the hosted form's 79 required destinations onto the draft", async () => {
         const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
         const hosted = inputs.find((i) => i.artifact.document_id === "doc-formsite")!;
-        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null });
         expect(draft.fields.filter((f) => f.required)).toHaveLength(79);
     });
 });
@@ -220,9 +220,9 @@ describe("G9 — source validation survives, or is reported as lost", () => {
         expect(withLimit.length).toBe(4);
         expect(withLimit.every((f) => f.validate!.max_length === 10)).toBe(true);
 
-        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, extractedTextAvailable: false, fileName: null, classificationKey: null });
         expect(draft.fields.filter((f) => f.validate?.max_length === 10)).toHaveLength(4);
-        const schema = draftFormToFormSchemaV1(draft, { name: "Admissions Packet" });
+        const schema = draftFormToFormSchemaV1(draft);
         expect(schema.fields.filter((f) => f.validate?.max_length === 10)).toHaveLength(4);
     });
 
