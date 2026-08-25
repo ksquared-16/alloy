@@ -31,6 +31,16 @@ export function mapRawInquiryChildrenToDrawerRows(raw: unknown[]): InquiryChildR
                 r.outcome_status_key != null && String(r.outcome_status_key).trim()
                     ? String(r.outcome_status_key)
                     : null,
+            /*
+             * THE CHILD'S OWN PROCESS STAGE, carried rather than dropped.
+             *
+             * It was absent here, so every consumer downstream resolved a child's stage from the
+             * disposition or from the family it rides — which cannot express a child standing at a
+             * different stage than their household. Divergence is precisely what the process rail
+             * exists to show, so the identity has to survive this mapping.
+             */
+            stage_key:
+                r.stage_key != null && String(r.stage_key).trim() ? String(r.stage_key) : null,
             outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
             notes: r.notes != null ? String(r.notes) : null,
             start_date:
