@@ -341,9 +341,14 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     return { status, body: out };
   }
   if (path === "/api/v2/governed-actions/approve") {
-    const { approveGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const { approveGovernedAction, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const id = v.request_id || v.requestId;
-    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    // A repository-authorized request has no mission, so the mission lookup
+    // cannot find it. The lane always can.
+    const pending = id
+      ? null
+      : (pendingGovernedActionForMission(v.mission_id || v.missionId)
+        || pendingGovernedActionForLane(v.lane_id || v.laneId));
     try {
       const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, { actor: actorDefault }));
       return { status: out.ok ? 200 : 409, body: out };
@@ -355,9 +360,12 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
     }
   }
   if (path === "/api/v2/governed-actions/deny") {
-    const { denyGovernedAction, pendingGovernedActionForMission } = await import("./governed-action-request.mjs");
+    const { denyGovernedAction, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const id = v.request_id || v.requestId;
-    const pending = id ? null : pendingGovernedActionForMission(v.mission_id || v.missionId);
+    const pending = id
+      ? null
+      : (pendingGovernedActionForMission(v.mission_id || v.missionId)
+        || pendingGovernedActionForLane(v.lane_id || v.laneId));
     const out = denyGovernedAction(id || pending?.request_id, {
       actor: actorDefault,
       reason: v.reason || "approval_denied",

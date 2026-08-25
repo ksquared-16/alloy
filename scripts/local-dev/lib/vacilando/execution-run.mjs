@@ -378,6 +378,8 @@ export function publicExecutionRun(run, { includeInstruction = false, includeTra
     node_id: run.node_id || null,
     latest_progress: run.latest_progress || null,
     completion_report: run.completion_report || null,
+    git_baseline: run.git_baseline || null,
+    checkpoint_readiness: run.checkpoint_readiness || null,
     resource_wait: run.resource_wait || null,
     governed_action: run.governed_action || null,
     checkpoint_ready: Boolean(run.checkpoint_ready),
@@ -569,6 +571,10 @@ export function createQueuedRun({
     delivery: { acknowledged: false, provider: null, error: null, at: null },
     agent_report: null,
     agent_reports: [],
+    // Attribution evidence: what was already dirty when this run began. Never
+    // permission to touch those paths — see checkpoint-readiness.
+    git_baseline: null,
+    checkpoint_readiness: null,
     provider_suspension: null,
     transitions: [],
     updated_at: iso(nowMs),
@@ -633,7 +639,13 @@ export function transitionExecutionRun(runId, toState, {
   found.state_reason = bound(reason, EXECUTION_RUN_REASON_MAX);
   found.updated_at = iso(nowMs);
   if (phase !== undefined) found.current_phase = bound(phase, 80);
-  if (to === "EXECUTING" && !found.started_at) found.started_at = iso(nowMs);
+  if (to === "EXECUTING" && !found.started_at) {
+    found.started_at = iso(nowMs);
+    // Capture what was ALREADY dirty the moment this run began working. This is
+    // the evidence that later lets a checkpoint refuse a file it did not create;
+    // without it nothing can be attributed and readiness fails closed.
+    scheduleGitBaselineCapture(found, { nowMs, root });
+  }
   if (to === "COMPLETE" || to === "FAILED" || to === "ABANDONED") found.completed_at = iso(nowMs);
   if (progress) {
     found.latest_progress = { summary: bound(progress, EXECUTION_RUN_SUMMARY_MAX), at: iso(nowMs) };
@@ -731,6 +743,24 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     }
     // Structured agent reports (execution-run-report.mjs). Stored verbatim:
     // the user-facing message must never be shortened on its way to disk.
+    if (fields.completion_report !== undefined) {
+      // Allowlisted and bounded like every other patchable field. Needed so an
+      // agent's own summary can replace a system-authored placeholder on a run
+      // that was closed before the agent filed it — see run-summary-output.
+      found.completion_report = fields.completion_report
+        ? {
+          summary: bound(fields.completion_report.summary || fields.completion_report, EXECUTION_RUN_SUMMARY_MAX),
+          at: fields.completion_report.at || iso(nowMs),
+          ...(fields.completion_report.report_id ? { report_id: String(fields.completion_report.report_id) } : {}),
+        }
+        : null;
+    }
+    if (fields.git_baseline !== undefined) {
+      found.git_baseline = fields.git_baseline || null;
+    }
+    if (fields.checkpoint_readiness !== undefined) {
+      found.checkpoint_readiness = fields.checkpoint_readiness || null;
+    }
     if (fields.agent_report !== undefined) {
       found.agent_report = fields.agent_report || null;
     }
@@ -1022,16 +1052,80 @@ export function reportRunState(runId, state, {
   return out;
 }
 
+/**
+ * Record the worktree's starting state for a run, best effort.
+ *
+ * Deliberately fire-and-forget: a run must start even when Git is slow or
+ * unreadable. A run with no baseline is not a run that may commit anything —
+ * readiness treats a missing baseline as "nothing is attributable".
+ */
+function scheduleGitBaselineCapture(run, { nowMs, root } = {}) {
+  const worktreePath = run?.worktree_path;
+  if (!worktreePath || run?.git_baseline) return;
+  const runId = run.run_id;
+  import("./checkpoint-readiness.mjs").then(async ({ captureRunGitBaseline }) => {
+    const out = await captureRunGitBaseline({
+      worktreePath,
+      laneId: run.lane_id || null,
+      nowMs,
+    });
+    if (!out?.ok) return;
+    // Re-check at WRITE time, not only at schedule time. The capture is async,
+    // so a baseline recorded by another path while this was in flight must win —
+    // a later capture would fold work done since the run started into the
+    // "already dirty" set and quietly mark this run's own files foreign.
+    if (getExecutionRun(runId, root)?.git_baseline) return;
+    patchRunFields(runId, { git_baseline: out.baseline }, { nowMs, root });
+  }).catch(() => { /* a missing baseline fails closed on its own */ });
+}
+
+/**
+ * Report checkpoint readiness. Read-only, by construction.
+ *
+ * THIS FUNCTION USED TO CREATE A COMMIT. It called
+ * `maybeCreateCheckpoint({ origin: "agent", summary })`, which ran
+ * `git add -A && git commit -m "<the status summary>"` in the lane worktree.
+ * In wt5-runtime-performance-ux-completion that swept roughly 67 unrelated
+ * dirty files into the lane branch, twice, with the status summary as the
+ * commit message.
+ *
+ * A status report may not mutate a repository. It now inspects the worktree,
+ * compares it with the baseline captured when the run began, records the
+ * verdict on the run, and stops. Creating a commit is `vac checkpoint-create`,
+ * which requires an explicit path manifest and an expected HEAD.
+ *
+ * The evaluation is asynchronous and deliberately not awaited: reporting run
+ * state must never fail or stall because Git is slow or unreadable. The verdict
+ * lands on the run when it arrives, and `out.checkpoint_readiness` carries the
+ * promise for callers that want it.
+ */
 function afterCheckpointReport(out, laneId, root, nowMs, summary) {
-  import("./source-control.mjs").then((scm) => scm.maybeCreateCheckpoint({
-    laneId,
-    origin: "agent",
-    summary,
-    nowMs,
-    root,
-  })).then((checkpoint) => {
-    out.checkpoint = checkpoint;
-  }).catch(() => {});
+  const runId = out?.run?.run_id || null;
+  const worktreePath = out?.run?.worktree_path || null;
+  out.checkpoint_mutations = "none";
+  out.checkpoint_readiness = (async () => {
+    try {
+      const { evaluateCheckpointReadiness } = await import("./checkpoint-readiness.mjs");
+      const result = await evaluateCheckpointReadiness({
+        worktreePath,
+        baseline: out?.run?.git_baseline || null,
+        runId,
+        laneId,
+      });
+      if (runId) {
+        patchRunFields(runId, {
+          checkpoint_readiness: result,
+          // The flag now means "the agent asked", never "a commit was made".
+          checkpoint_ready: result.checkpoint_ready === true,
+          checkpoint_summary: summary || null,
+        }, { nowMs, root });
+      }
+      out.readiness = result;
+      return result;
+    } catch (e) {
+      return { checkpoint_ready: false, reason: "git_unreadable", detail: String(e?.message || e) };
+    }
+  })();
   return out;
 }
 

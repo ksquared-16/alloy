@@ -77,10 +77,17 @@ await test("safe checkpoint requires explicit checkpoint_ready", async () => {
     commitCheckpoint: async () => ({ ok: true, sha: "abc" }),
     evaluateSafeCheckpoint: () => ({ ok: true, blockers: [] }),
   });
-  const skipped = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(records): add roster filter", root: ROOT });
+  // A checkpoint with no path manifest is refused outright. This gate comes
+  // first because it is the one whose absence let `git add -A` commit 67
+  // unrelated files: without named paths there is no authorization to commit
+  // anything, however explicit the request was.
+  const noManifest = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(records): add roster filter", root: ROOT });
+  assert.equal(noManifest.error, "checkpoint_requires_manifest");
+
+  const skipped = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(records): add roster filter", paths: ["web/x.ts"], root: ROOT });
   assert.equal(skipped.error, "checkpoint_not_explicit");
   patchRunFields(run.run.run_id, { checkpoint_ready: true, checkpoint_summary: "feat(records): add roster filter" }, { root: ROOT });
-  const made = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(records): add roster filter", root: ROOT });
+  const made = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(records): add roster filter", paths: ["web/x.ts"], root: ROOT });
   assert.equal(made.ok, true);
   assert.equal(made.pushed, false);
   assert.equal(made.message, "feat(records): add roster filter");
@@ -97,7 +104,7 @@ await test("does not commit conflict or garbage messages", async () => {
     commitCheckpoint: async () => ({ ok: true, sha: "nope" }),
     evaluateSafeCheckpoint: () => ({ ok: true, blockers: [] }),
   });
-  const conflicted = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(ok): real message here", root: ROOT });
+  const conflicted = await maybeCreateCheckpoint({ laneId: rec.lane_id, summary: "feat(ok): real message here", paths: ["web/x.ts"], root: ROOT });
   assert.equal(conflicted.error, "conflict");
   assert.equal(validCheckpointMessage("checkpoint"), false);
   assert.equal(validCheckpointMessage("auto commit"), false);
@@ -191,7 +198,10 @@ await test("resource wait dirty without explicit ready is not committed", async 
     commitCheckpoint: async () => { commits += 1; return { ok: true, sha: "z" }; },
     evaluateSafeCheckpoint: () => ({ ok: true, blockers: [] }),
   });
-  const out = await maybeCreateCheckpoint({ laneId: rec.lane_id, root: ROOT });
+  // Without a manifest it is refused for that reason; with one, the
+  // explicitness gate is what holds. Both refuse, and neither commits.
+  assert.equal((await maybeCreateCheckpoint({ laneId: rec.lane_id, root: ROOT })).error, "checkpoint_requires_manifest");
+  const out = await maybeCreateCheckpoint({ laneId: rec.lane_id, paths: ["web/x.ts"], root: ROOT });
   assert.equal(out.error, "checkpoint_not_explicit");
   assert.equal(commits, 0);
 });

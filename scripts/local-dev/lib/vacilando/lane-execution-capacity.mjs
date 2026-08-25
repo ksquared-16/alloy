@@ -308,11 +308,18 @@ export async function releaseLaneExecutionCapacity(laneId, {
       if (run?.checkpoint_ready) {
         const ck = await checkpointLane(rec.lane_id, root, nowMs);
         if (!ck?.ok) {
+          // A checkpoint now requires an explicit path manifest, so this path
+          // no longer commits on the lane's behalf. Say what to run instead —
+          // the alternative was the automatic broad commit this replaced.
+          const detail = ck?.error === "checkpoint_requires_manifest"
+            ? "This lane has uncommitted work and Vacilando no longer commits it automatically. Run vac checkpoint-create with the paths to keep, or release after committing by hand."
+            : (ck?.detail || ck?.error || "checkpoint_failed");
           return {
             ok: false,
             error: "source_control_gate",
             command: RELEASE_COMMAND,
-            detail: ck?.error || "checkpoint_failed",
+            detail,
+            checkpoint_error: ck?.error || null,
           };
         }
       } else {

@@ -269,10 +269,50 @@ export function requestTrustedHostAction({
   return { ok: true, action, normalized: validated.normalized };
 }
 
+/**
+ * Does this single-use grant authorize THIS action?
+ *
+ * Re-derived from the action's own normalized inputs, never from the governed
+ * request that produced it — a check that reads the same record twice proves
+ * nothing. Each field is compared on its own so the refusal can say what
+ * changed; `grant_head_sha_mismatch` is the one that carries the weight, because
+ * it is what happens when the branch moves after a Director approves.
+ */
+export function grantAuthorizesAction(grant, action, { nowMs = Date.now() } = {}) {
+  if (!grant) return { ok: false, error: "grant_missing" };
+  if (grant.status === "CONSUMED") return { ok: false, error: "grant_already_used" };
+  if (grant.status === "REVOKED") return { ok: false, error: "grant_revoked" };
+  if (!(Date.parse(grant.expires_at) > nowMs)) return { ok: false, error: "grant_expired" };
+  if (grant.action_key !== action.actionType) return { ok: false, error: "grant_action_mismatch" };
+  if (grant.repository_id && action.missionId && grant.repository_id !== action.missionId) {
+    return { ok: false, error: "grant_scope_mismatch" };
+  }
+  if (grant.run_id && action.executionSessionId && grant.run_id !== action.executionSessionId) {
+    return { ok: false, error: "grant_run_mismatch" };
+  }
+  const i = action.inputs || {};
+  if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (Number(grant.pull_request_number) !== Number(i.pullRequestNumber)) {
+      return { ok: false, error: "grant_pull_request_mismatch" };
+    }
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    if (String(grant.target_branch || "") !== String(i.targetBranch || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    if (String(grant.merge_method || "") !== String(i.mergeMethod || "")) {
+      return { ok: false, error: "grant_merge_method_mismatch" };
+    }
+  }
+  return { ok: true };
+}
+
 export function authorizeTrustedHostAction(actionId, {
   actor = "operator",
   authorizationId = null,
   nowMs,
+  grant = null,
 } = {}) {
   const action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
@@ -299,6 +339,27 @@ export function authorizeTrustedHostAction(actionId, {
       nowMs: nowMs ?? Date.now(),
     });
   }
+  if (!auth && grant) {
+    // A repository-authorized action carries a single-use grant instead of a
+    // mission authorization. It still has to CLEAR: the grant is verified
+    // against this action's own parameters, not merely presented. A grant that
+    // is expired, already spent, revoked, or pinned to a different head SHA is
+    // no authorization at all, and the action falls through to policy_review
+    // below exactly as an unauthorized one does.
+    const check = grantAuthorizesAction(grant, action, { nowMs: nowMs ?? Date.now() });
+    if (check.ok) {
+      auth = {
+        authorizationId: grant.grant_id,
+        kind: "repository_grant",
+        actor: grant.approved_by,
+        grantedAt: grant.approved_at,
+        expiresAt: grant.expires_at,
+        singleUse: true,
+      };
+    } else {
+      action.grantRefusal = check.error;
+    }
+  }
   if (!auth) {
     action.state = "policy_review";
     action.authorizationState = "required";
@@ -314,22 +375,22 @@ export function authorizeTrustedHostAction(actionId, {
   return { ok: true, action, authorization: auth };
 }
 
-export function executeTrustedHostAction(actionId, { actor = "director", nowMs } = {}) {
+export function executeTrustedHostAction(actionId, { actor = "director", nowMs, grant = null } = {}) {
   let action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
   if (action.state === "completed") return { ok: true, action, already: true };
 
   if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    return executeMergeTrustedHostAction(action, { actor, nowMs });
+    return executeMergeTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-    return executeMigrationTrustedHostAction(action, { actor, nowMs });
+    return executeMigrationTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
   }
 
-  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs });
+  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
 
@@ -580,6 +641,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
   worktreePath = null,
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   recognizePriorCensusAuthorization(missionId, { nowMs });
 
@@ -601,7 +663,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
     return { ok: true, action: req.action, already: true };
   }
 
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -620,7 +682,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
     };
   }
 
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function trustedHostDiagnostics() {
@@ -758,8 +820,12 @@ function completeTrustedAction(action, result, { nowMs } = {}) {
   return { ok: true, action, result };
 }
 
-export function executeMergeTrustedHostAction(action, { actor = "director", nowMs } = {}) {
-  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+export function executeMergeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  // Re-authorized here on purpose: execution must never trust that an earlier
+  // call in this same flow already checked. The grant is threaded through so
+  // this second check re-derives from the action's own inputs rather than being
+  // skipped — the defence stays, it just has the evidence it needs.
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
   action.state = "executing";
@@ -842,8 +908,8 @@ function defaultApplyMigrationFile({ entry, text }) {
   return { ok: true, ledger: "applied" };
 }
 
-export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs } = {}) {
-  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
   action.state = "executing";
@@ -892,6 +958,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
   inputs = {},
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -904,7 +971,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -912,7 +979,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
       action: auth.action,
     };
   }
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillDatabaseMigrationForMission(missionId, {
@@ -921,6 +988,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   inputs = {},
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -933,7 +1001,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -941,7 +1009,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
       action: auth.action,
     };
   }
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export { ACTION_TYPES, listRegisteredActions };

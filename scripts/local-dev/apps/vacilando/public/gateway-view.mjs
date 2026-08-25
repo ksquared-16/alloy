@@ -2096,11 +2096,43 @@ export function executionRunTone(stateOrRun) {
   return "";
 }
 
+/**
+ * The facts of a governed proposal, as a definition list.
+ *
+ * A Director approving a merge from a phone should not have to leave the app to
+ * find out what the pull request is called or whether CI is green. Rendered as
+ * rows rather than a sentence so the same markup reads at any width.
+ */
+export function renderGovernedProposal(proposal) {
+  if (!proposal) return "";
+  const rows = (proposal.facts || [])
+    .map((f) => `<div class="gw-gp-row"><dt class="gw-gp-k">${esc(f.label)}</dt><dd class="gw-gp-v">${esc(f.value)}</dd></div>`)
+    .join("");
+  const consequences = (proposal.consequences || [])
+    .map((c) => `<li>${esc(c)}</li>`)
+    .join("");
+  // Say plainly when the live facts could not be read, rather than showing a
+  // card with gaps that reads as "nothing to report".
+  const staleNote = proposal.snapshot_available
+    ? ""
+    : `<p class="gw-gp-note">GitHub could not be read when this was proposed, so continuous integration and size are not shown. The head commit is still pinned.</p>`;
+  return `<div class="gw-gp" data-gw-governed-proposal>
+      ${proposal.headline ? `<p class="gw-gp-head">${esc(proposal.headline)}</p>` : ""}
+      <dl class="gw-gp-facts">${rows}</dl>
+      ${staleNote}
+      ${proposal.reason ? `<p class="gw-gp-note"><span class="gw-gp-k">Why the lane cannot do this</span> ${esc(proposal.reason)}</p>` : ""}
+      ${consequences ? `<div class="gw-gp-conseq"><p class="gw-gp-k">If you approve</p><ul>${consequences}</ul></div>` : ""}
+      ${proposal.authorization_note ? `<p class="gw-gp-note">${esc(proposal.authorization_note)}</p>` : ""}
+    </div>`;
+}
+
 export function renderOperatorDecisionActions(run) {
   const ga = run?.governed_action;
   if (ga?.status === "awaiting_operator") {
+    const proposal = renderGovernedProposal(ga.proposal);
     return `<div class="gw-work-stale" data-gw-governed-approval>
       <p class="gw-work-stale-copy">${esc(ga.detail || ga.mission_need || `Read-only database census · Target: ${ga.target || "alloy_deployed_primary"} · Data mode: Read-only`)}</p>
+      ${proposal}
       <div class="gw-work-stale-actions">
         <button type="button" class="btn primary" data-gw-governed-approve data-request-id="${esc(ga.request_id || "")}">${esc(ga.approve_label || "Authorize census")}</button>
         <button type="button" class="btn" data-gw-governed-deny data-request-id="${esc(ga.request_id || "")}">${esc(ga.deny_label || "Deny")}</button>
@@ -3702,6 +3734,7 @@ export function renderStatus(lane, resources, { open = false, summary, sessionLi
       ${machine ? `<dt>Machine</dt><dd>${esc(machine)}</dd>` : ""}
     </dl>
     ${renderSourceControl(lane)}
+    ${renderCheckpointReadiness(lane.execution_run || lane.previous_run)}
     ${renderAgentTelemetry(telemetry, Date.now(), { lane })}
     ${renderDevelopmentResources(developmentResources, lanes || [lane])}
   </details>`;
@@ -4113,6 +4146,59 @@ export function createErrorText(error) {
     default:
       return error ? String(error) : "Could not start the lane.";
   }
+}
+
+/**
+ * Checkpoint readiness, as a report rather than a promise of action.
+ *
+ * The Director needs four facts to act: whether a checkpoint is possible, what
+ * this run actually owns, how much dirt is NOT this run's, and why it is
+ * blocked. The last line states that reporting created no commit — the previous
+ * behaviour silently did, so the absence of a mutation is worth saying out loud.
+ *
+ * Path lists are bounded and the foreign list collapses behind a disclosure: an
+ * incident-shaped worktree has dozens of them and a phone must stay usable.
+ */
+export function renderCheckpointReadiness(run) {
+  const r = run?.checkpoint_readiness;
+  if (!r) return "";
+  const ready = r.checkpoint_ready === true;
+  const why = {
+    foreign_dirty_files: "Files are dirty that this run did not create.",
+    no_run_baseline: "This run has no recorded starting state, so nothing can be attributed to it.",
+    baseline_truncated: "The recorded starting state was too large to record in full, so attribution is not exact.",
+    head_moved_since_baseline: "The branch moved since this run started.",
+    worktree_conflict: "The worktree has a merge conflict.",
+    nothing_to_checkpoint: "This run has not changed any files.",
+    git_unreadable: "Git could not be read.",
+    ready: "This run's files can be checkpointed.",
+  }[r.reason] || "Checkpoint is not available.";
+
+  const list = (label, group, cls) => {
+    if (!group?.count) return "";
+    const shown = (group.paths || []).slice(0, 12).map((p) => `<li>${esc(p)}</li>`).join("");
+    const more = group.count > 12 ? `<li class="gw-ck-more">… ${group.count - 12} more</li>` : "";
+    return `<details class="gw-ck-group ${cls}"${cls === "is-owned" ? " open" : ""}>
+      <summary>${esc(label)} · ${group.count}</summary>
+      <ul class="gw-ck-paths">${shown}${more}</ul>
+    </details>`;
+  };
+
+  return `<div class="gw-status-block gw-ck" data-gw-checkpoint-readiness>
+    <div class="gw-status-h">Checkpoint</div>
+    <p class="gw-ck-verdict ${ready ? "is-ready" : "is-blocked"}">
+      ${ready ? "Ready" : "Not ready"} — ${esc(why)}
+    </p>
+    <dl class="gw-kv">
+      <dt>HEAD</dt><dd class="gw-ck-sha">${esc((r.head || "—").slice(0, 12))}</dd>
+      <dt>Changed by this run</dt><dd>${r.owned?.count ?? 0}</dd>
+      <dt>Already dirty</dt><dd>${r.foreign?.count ?? 0}</dd>
+      <dt>Staged / unstaged / untracked</dt><dd>${r.staged_count ?? 0} / ${r.unstaged_count ?? 0} / ${r.untracked_count ?? 0}</dd>
+    </dl>
+    ${list("Candidate paths for a checkpoint", r.owned, "is-owned")}
+    ${list("Not from this run — will not be committed", r.foreign, "is-foreign")}
+    <p class="gw-ck-note">Status was recorded. No commit was created, nothing was staged, and the working tree was not touched.</p>
+  </div>`;
 }
 
 export function renderSourceControl(lane) {

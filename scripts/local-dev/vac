@@ -15,6 +15,7 @@ usage() {
 Usage:
   vac run <kind> [--force]     Run a heavy validation kind in this worktree (brokered)
   vac run-status <run_id> <state>   Report Execution Run state (not the validation broker)
+  vac checkpoint-create <run_id>    Commit ONLY the named paths (never a broad add)
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
                            conversation: progress | needs-input | completion | failure
@@ -44,6 +45,10 @@ case "${1:-}" in
   run-report)
     shift
     exec node "$SCRIPT_DIR/vac-run-report.mjs" "$@"
+    ;;
+  checkpoint-create)
+    shift
+    exec node "$SCRIPT_DIR/vac-checkpoint-create.mjs" "$@"
     ;;
   governed-action)
     shift
