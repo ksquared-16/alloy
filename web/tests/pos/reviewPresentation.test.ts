@@ -67,6 +67,36 @@ describe("sections are a view, never a second analysis", () => {
     });
 });
 
+describe("there is exactly one categorizer", () => {
+    it("routes financial and derived rows to their own sections, not to the fallback", async () => {
+        // The defect this locks: the review kept a private copy of the category switch, and the copy
+        // fell behind. `financial_payment` and `derived_value_system` rendered correctly inside "All"
+        // while their own tabs read zero — a duplicated taxonomy disagrees in the one place nobody
+        // is looking. Found in the browser, on the real packet.
+        const { categoryFor } = await import("@/lib/pos/discovery/discoverConfiguration");
+        expect(categoryFor(proposal({ disposition: "financial_payment" }))).toBe("financial");
+        expect(categoryFor(proposal({ disposition: "derived_value_system" }))).toBe("derived");
+        expect(categoryFor(proposal({ disposition: "held_unknown_owner" }))).toBe("needs_ownership_review");
+        expect(sectionFor(proposal({ disposition: "financial_payment" }), "financial")).toContain("financials");
+        expect(sectionFor(proposal({ disposition: "derived_value_system" }), "derived")).toContain("derived");
+    });
+
+    it("gives every disposition a section other than All", async () => {
+        const { categoryFor } = await import("@/lib/pos/discovery/discoverConfiguration");
+        const dispositions = [
+            "reuse_canonical_field", "reuse_existing_field", "create_proposed_field", "relationship_binding",
+            "safeguarding_binding", "financial_payment", "derived_value_system", "held_for_canonical_owner",
+            "held_unknown_owner", "form_only_response", "acknowledgement", "signature_requirement",
+            "upload_requirement", "static_content", "output_binding", "structured_collection",
+        ] as const;
+        for (const disposition of dispositions) {
+            const p = proposal({ disposition });
+            const keys = sectionFor(p, categoryFor(p)).filter((k) => k !== "all");
+            expect(keys.length, `${disposition} is only reachable through All`).toBeGreaterThan(0);
+        }
+    });
+});
+
 describe("what counts as the operator's work", () => {
     it("claims undecided ownership, unclassified rows and new durable truth", () => {
         for (const disposition of ["held_unknown_owner", "unresolved", "create_proposed_field"] as const) {

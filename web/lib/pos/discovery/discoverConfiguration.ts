@@ -57,7 +57,13 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "needs_review",
 ];
 
-function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
+/**
+ * The ONE categorizer. Exported because the review UI used to keep a second copy of this switch,
+ * and the copy fell behind: `financial_payment` and `derived_value_system` were added here and not
+ * there, so those rows rendered correctly inside "All" while their own tabs read zero. A duplicated
+ * taxonomy does not disagree loudly — it disagrees in the one place nobody is looking.
+ */
+export function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
     switch (p.disposition) {
         case "reuse_canonical_field":
         case "reuse_existing_field":

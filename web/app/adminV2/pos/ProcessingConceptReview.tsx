@@ -14,6 +14,7 @@ import { useMemo, useState } from "react";
 import { Check, ChevronDown, ChevronRight, Layers } from "lucide-react";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 
+import { categoryFor } from "@/lib/pos/discovery/discoverConfiguration";
 import {
     REVIEW_SECTIONS,
     acceptOutcome,
@@ -84,38 +85,6 @@ const DISPOSITION_LABEL: Record<ProposalDisposition, string> = {
     held_unknown_owner: "Needs an owner",
     unresolved: "Needs classification",
 };
-
-function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
-    switch (p.disposition) {
-        case "reuse_canonical_field":
-        case "reuse_existing_field":
-            return "existing_fields";
-        case "create_proposed_field":
-            return "new_fields";
-        case "held_for_canonical_owner":
-            return "held_for_owner";
-        case "safeguarding_binding":
-            return "safeguarding";
-        case "form_only_response":
-            return "form_responses";
-        case "relationship_binding":
-            return "relationships";
-        case "structured_collection":
-            return "collections";
-        case "upload_requirement":
-            return "upload_requirements";
-        case "acknowledgement":
-            return "acknowledgements";
-        case "signature_requirement":
-            return "signatures";
-        case "static_content":
-            return "static_content";
-        case "output_binding":
-            return "output_copies";
-        default:
-            return "needs_review";
-    }
-}
 
 const CATEGORY_TITLE: Record<DiscoveryCategory, string> = {
     existing_fields: "Existing data",
