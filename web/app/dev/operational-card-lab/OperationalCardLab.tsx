@@ -14,19 +14,28 @@ import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 import AttendanceCard from "@/components/cardLab/AttendanceCard";
-import BillingCard from "@/components/cardLab/BillingCard";
-import BillingDetailCard from "@/components/cardLab/BillingDetailCard";
+import AddChargeCommand from "@/components/cardLab/AddChargeCommand";
+import FinancialsCard from "@/components/cardLab/FinancialsCard";
+import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
 import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
+import ProcessCard from "@/components/cardLab/ProcessCard";
+import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
 import JourneyCard from "@/components/cardLab/JourneyCard";
 import StaffCard from "@/components/cardLab/StaffCard";
 import {
+    ADD_CHARGE_SPECIMEN,
     ATTENDANCE_FIXTURE,
     ATTENDANCE_OVERFLOW_SPECIMENS,
     attendanceWithMovements,
-    BILLING_FIXTURE,
-    BILLING_SPECIMENS,
+    CHARGE_TEMPLATES,
+    FINANCIALS_FIXTURE,
+    FINANCIALS_LEDGER_PERIODS,
+    FINANCIALS_SPECIMENS,
+    PROCESS_ENROLLMENT,
+    PROCESS_SPECIMENS,
+    SAFETY_SIGNALS,
     CARE_TEAM_FIXTURE,
     HEALTH_DETAIL_FIXTURE,
     HEALTH_FIXTURE,
@@ -49,7 +58,10 @@ type TabKey =
     | "billingspec"
     | "wide"
     | "billingdetail"
-    | "healthdetail";
+    | "healthdetail"
+    | "process"
+    | "addcharge"
+    | "signals";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -58,11 +70,14 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "careteam", label: "3b · Care Team" },
     { key: "attendance", label: "4 · Attendance" },
     { key: "overflow", label: "4b · Movement overflow" },
-    { key: "billing", label: "5 · Billing" },
+    { key: "billing", label: "5 · Financials" },
     { key: "healthspec", label: "A · Health specimens" },
+    { key: "process", label: "P · Process card (3 processes)" },
+    { key: "addcharge", label: "F · Add charge" },
+    { key: "signals", label: "S · Safety Signals" },
     { key: "healthdetail", label: "D1 · Health detail" },
-    { key: "billingdetail", label: "D2 · Billing detail" },
-    { key: "billingspec", label: "B · Billing specimens" },
+    { key: "billingdetail", label: "D2 · Financials detail" },
+    { key: "billingspec", label: "B · Financials specimens" },
     { key: "wide", label: "C · Wide cards together" },
     { key: "combined", label: "6 · Combined Focus Panel" },
 ];
@@ -102,6 +117,45 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         ],
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    process: {
+        question: "Can one card carry both where this record is and what to do about it?",
+        decisions: [
+            "Journey and What's Next composed into ONE card. Data ownership is NOT merged — stage stays with the Business Process, work and actions with Current Work, missing information with Readiness.",
+            "Nothing is said twice: the band's current column IS the stage, so the work band names it once as a micro-label. What's Next stated the stage AND the status; both are now stated once.",
+            "Recent Activity is deliberately absent. Activity has its own canonical mode; reproducing it here would make this a third Activity surface.",
+            "No process branching in the component. Enrollment, Assignment and Billing render through the same code from configuration alone.",
+            "Journey 119 + What's Next 348 = 467px across two cards. The combined card is one card at roughly half that.",
+        ],
+        open: [
+            "No durable stage-history store exists. Past entry dates come from events, and a skipped stage can only be inferred — the card must never fabricate a date. A process-stage-history projection is the implementation gap.",
+            "The Assignment and Billing stage sets are labelled fixtures based on intended process semantics; the configured processes should replace them.",
+        ],
+    },
+    addcharge: {
+        question: "How does an operator bill something outside the recurring flow?",
+        decisions: [
+            "Driven entirely by `financial_charge_templates` — the L1 commercial configuration. amount_strategy decides whether the amount is editable, billable_on decides the due date, responsibility decides who is billed.",
+            "No fee definition is duplicated into the card, and no generic payload is hardcoded.",
+            "Preview before confirmation, showing the balance change the mutation will cause.",
+            "Placed as a secondary footer action so it never competes with Pay now when money is overdue.",
+        ],
+        open: [
+            "THE GAP: there is no registered action definition for adding a charge. `financial_charge_templates` exists, `createChildcareDraftCharge` and `postChildcareCharge` exist, and nothing in lib/adminV2/actions/definitions wraps them.",
+        ],
+    },
+    signals: {
+        question: "Which health facts must be visible outside the Health card?",
+        decisions: [
+            "A PROJECTION, never a copy: canonical health fact → configured signal eligibility → permission and context evaluation → projection. Health remains the single owner.",
+            "The organization configures which fact TYPES project and to which surfaces. Configuration controls projection; it never creates truth.",
+            "Minimum operationally useful fact only — \"Peanut allergy · severe\", never the medical note behind it.",
+            "Each surface renders only the signals configured for it: Meals sees dietary, the roster does not.",
+        ],
+        open: [
+            "Signal eligibility configuration has no owner yet — it would sit alongside the health-fact type configuration (gap B1).",
+            "Health visibility policy is not yet expressed as a field-level permission, so the permission evaluation step is specified but not enforceable today.",
         ],
     },
     healthdetail: {
@@ -276,7 +330,7 @@ export default function OperationalCardLab() {
     const staff = <StaffCard evidence={STAFF_FIXTURE} />;
     const careTeam = <CareTeamCard evidence={CARE_TEAM_FIXTURE} />;
     const attendance = <AttendanceCard evidence={ATTENDANCE_FIXTURE} />;
-    const billing = <BillingCard evidence={BILLING_FIXTURE} />;
+    const financials = <FinancialsCard evidence={FINANCIALS_FIXTURE} />;
 
     return (
         <div className="lab">
@@ -330,15 +384,17 @@ export default function OperationalCardLab() {
                             className="alloy-os-focus-panel-grid lab__grid"
                             style={{ ["--alloy-os-fp-cols" as string]: 2 }}
                         >
-                            <Cell span={2} kind="cand" name="Journey">{journey}</Cell>
-                            <Cell span={1} kind="real" name="What's Next">{realCard("current_work")}</Cell>
+                            <Cell span={2} kind="cand" name="Business Process — replaces Journey + What's Next">
+                                <ProcessCard evidence={PROCESS_ENROLLMENT} />
+                            </Cell>
                             <Cell span={1} kind="real" name="Household">{realCard("household")}</Cell>
+                            <Cell span={1} kind="real" name="Readiness">{realCard("readiness_kpi")}</Cell>
                             <Cell span={2} kind="cand" name="Attendance">{attendance}</Cell>
                             <Cell span={1} kind="real" name="Children">{realCard("children")}</Cell>
                             <Cell span={1} kind="cand" name="Care Team">{careTeam}</Cell>
                             <Cell span={1} kind="cand" name="Health & Safety">{health}</Cell>
-                            <Cell span={1} kind="real" name="Readiness">{realCard("readiness_kpi")}</Cell>
-                            <Cell span={2} kind="cand" name="Billing">{billing}</Cell>
+                            <Cell span={1} kind="cand" name="Staff">{staff}</Cell>
+                            <Cell span={2} kind="cand" name="Financials">{financials}</Cell>
                         </div>
                     </div>
                 </>
@@ -357,6 +413,7 @@ export default function OperationalCardLab() {
                                 tab === "overflow" ||
                                 tab === "billingspec" ||
                                 tab === "billingdetail" ||
+                                tab === "process" ||
                                 tab === "healthdetail" ||
                                 tab === "wide"
                                     ? " · full row"
@@ -370,7 +427,7 @@ export default function OperationalCardLab() {
                                 {tab === "attendance" ? (
                                     <Cell span={2} kind="cand" name="Attendance">{attendance}</Cell>
                                 ) : null}
-                                {tab === "billing" ? <Cell span={2} kind="cand" name="Billing">{billing}</Cell> : null}
+                                {tab === "billing" ? <Cell span={2} kind="cand" name="Financials">{financials}</Cell> : null}
                                 {tab === "health" ? (
                                     <>
                                         <Cell span={1} kind="cand" name="Health & Safety">{health}</Cell>
@@ -390,11 +447,68 @@ export default function OperationalCardLab() {
                                 ) : null}
                                 {tab === "billingspec" ? (
                                     <>
-                                        {BILLING_SPECIMENS.map((sp) => (
+                                        {FINANCIALS_SPECIMENS.map((sp) => (
                                             <Cell key={sp.caseLabel} span={2} kind="cand" name={sp.caseLabel}>
-                                                <BillingCard evidence={sp} />
+                                                <FinancialsCard evidence={sp} />
                                             </Cell>
                                         ))}
+                                    </>
+                                ) : null}
+                                {tab === "process" ? (
+                                    <>
+                                        {PROCESS_SPECIMENS.map((sp) => (
+                                            <Cell key={sp.processLabel} span={2} kind="cand" name={`${sp.processLabel} · same card`}>
+                                                <ProcessCard evidence={sp} />
+                                            </Cell>
+                                        ))}
+                                        <Cell span={1} kind="real" name="What's Next · runtime, for comparison">
+                                            {realCard("current_work")}
+                                        </Cell>
+                                    </>
+                                ) : null}
+                                {tab === "addcharge" ? (
+                                    <>
+                                        <Cell span={1} kind="cand" name="Add charge · command">
+                                            <AddChargeCommand specimen={ADD_CHARGE_SPECIMEN} templates={CHARGE_TEMPLATES} />
+                                        </Cell>
+                                        <Cell span={1} kind="cand" name="Financials · Add charge in the action row">
+                                            {financials}
+                                        </Cell>
+                                    </>
+                                ) : null}
+                                {tab === "signals" ? (
+                                    <>
+                                        <Cell span={2} kind="cand" name="Configured projections">
+                                            <div className="lab-surface">
+                                                <p className="lab-surface__label">Child Focus Panel header</p>
+                                                <div className="lab-surface__row">
+                                                    <span className="lab-surface__name">Avery Johnson</span>
+                                                    <span className="lab-surface__meta">Enrolling · Sunflower Room</span>
+                                                    <SafetySignals signals={SAFETY_SIGNALS} surface="Child header" />
+                                                </div>
+                                                <p className="lab-surface__label">Attendance card</p>
+                                                <div className="lab-surface__row">
+                                                    <span className="lab-surface__name">In Nap Room since 12:05 PM</span>
+                                                    <SafetySignals signals={SAFETY_SIGNALS} surface="Attendance" />
+                                                </div>
+                                                <p className="lab-surface__label">Room roster</p>
+                                                <div className="lab-surface__row">
+                                                    <span className="lab-surface__name">Avery Johnson</span>
+                                                    <span className="lab-surface__meta">Present · 8:04 AM</span>
+                                                    <SafetySignals signals={SAFETY_SIGNALS} surface="Roster" dense />
+                                                </div>
+                                                <div className="lab-surface__row">
+                                                    <span className="lab-surface__name">Riley Johnson</span>
+                                                    <span className="lab-surface__meta">Present · 8:11 AM</span>
+                                                    <SafetySignals signals={SAFETY_SIGNALS} surface="Roster" dense />
+                                                </div>
+                                                <p className="lab-surface__label">Meals — dietary projects here, EpiPen does not</p>
+                                                <div className="lab-surface__row">
+                                                    <span className="lab-surface__name">Avery Johnson</span>
+                                                    <SafetySignals signals={SAFETY_SIGNALS} surface="Meals" />
+                                                </div>
+                                            </div>
+                                        </Cell>
                                     </>
                                 ) : null}
                                 {tab === "healthdetail" ? (
@@ -411,12 +525,12 @@ export default function OperationalCardLab() {
                                 ) : null}
                                 {tab === "billingdetail" ? (
                                     <>
-                                        <Cell span={2} kind="cand" name="Billing detail · runtime height (body scrolls at 360px)">
-                                            <BillingDetailCard evidence={BILLING_FIXTURE} />
+                                        <Cell span={2} kind="cand" name="Financials detail · runtime height (body scrolls at 360px)">
+                                            <FinancialsDetailCard evidence={FINANCIALS_FIXTURE} periods={FINANCIALS_LEDGER_PERIODS} />
                                         </Cell>
-                                        <Cell span={2} kind="cand" name="Billing detail · unclipped for review">
+                                        <Cell span={2} kind="cand" name="Financials detail · unclipped for review">
                                             <div className="lab-detail-unclipped">
-                                                <BillingDetailCard evidence={BILLING_FIXTURE} />
+                                                <FinancialsDetailCard evidence={FINANCIALS_FIXTURE} periods={FINANCIALS_LEDGER_PERIODS} />
                                             </div>
                                         </Cell>
                                     </>
@@ -425,7 +539,7 @@ export default function OperationalCardLab() {
                                     <>
                                         <Cell span={2} kind="cand" name="Journey">{journey}</Cell>
                                         <Cell span={2} kind="cand" name="Attendance">{attendance}</Cell>
-                                        <Cell span={2} kind="cand" name="Billing">{billing}</Cell>
+                                        <Cell span={2} kind="cand" name="Financials">{financials}</Cell>
                                     </>
                                 ) : null}
                                 {tab === "staff" ? (

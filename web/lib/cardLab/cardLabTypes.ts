@@ -207,7 +207,7 @@ export type LedgerEntry = {
     source?: string | null;
 };
 
-export type BillingPayer = {
+export type FinancialsPayer = {
     name: string;
     share: string;
     method: string;
@@ -232,24 +232,25 @@ export type BillingPayer = {
  *   familyResponsibility − paymentsReceived   = currentBalance
  *   pastDue ⊆ currentBalance                  (the portion whose due_date has passed)
  */
-export type BillingPeriod = {
+export type FinancialsPeriod = {
     label: string;
     charges: { label: string; value: string }[];
     reductions: { label: string; value: string }[];
     funding: { label: string; value: string }[];
+    /** Only totals carry weight. Individual rows stay regular. */
     familyResponsibility: string;
     paymentsReceived: string;
     currentBalance: string;
     dueLabel: string;
 };
 
-export type BillingEvidence = {
+export type FinancialsEvidence = {
     /** Specimen label for the lab only — never rendered inside the card. */
     caseLabel: string;
-    period: BillingPeriod;
+    period: FinancialsPeriod;
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
-    payers: BillingPayer[];
+    payers: FinancialsPayer[];
     payment: {
         autopayLabel: string | null;
         autopayHealthy: boolean;
@@ -285,4 +286,71 @@ export type StaffEvidence = {
     presenceLine: string | null;
     assignments: { room: string; when: string }[];
     contact: { email: string | null; phone: string | null };
+};
+
+/** A ledger period group for the Financials detail. */
+export type FinancialsLedgerPeriod = {
+    label: string;
+    summary: string;
+    open: boolean;
+    entries: LedgerEntry[];
+};
+
+/**
+ * Add charge — driven entirely by `financial_charge_templates`, the L1 commercial configuration.
+ * The template decides whether the amount is editable, when the charge becomes billable, and who
+ * is responsible; the card hardcodes none of it.
+ */
+export type ChargeTemplateOption = {
+    key: string;
+    label: string;
+    /** `amount_strategy` — fixed locks the amount, manual lets the operator set it. */
+    amountStrategy: "fixed" | "manual" | "rate_derived";
+    amount: string | null;
+    /** `billable_on` — decides the default due date. */
+    billableOn: string;
+    /** `responsibility` — household | employer | third_party | agency. */
+    responsibility: string;
+    requiresSubject: boolean;
+    requiresNote: boolean;
+};
+
+export type AddChargeSpecimen = {
+    template: ChargeTemplateOption;
+    subject: string;
+    amount: string;
+    period: string;
+    due: string;
+    note: string;
+    previewBefore: string;
+    previewAfter: string;
+    blockers: string[];
+};
+
+/** A configured Business Process, as the combined Process card consumes it. */
+export type ProcessStage = {
+    label: string;
+    state: "done" | "current" | "future";
+    when: string | null;
+    outcome: string | null;
+};
+
+export type ProcessAction = { label: string; primary?: boolean };
+
+export type ProcessEvidence = {
+    processLabel: string;
+    stages: ProcessStage[];
+    currentStageLabel: string;
+    workLine: string;
+    dueLine: string | null;
+    actions: ProcessAction[];
+    stillNeeded: string[];
+};
+
+/** A health fact configured to project outside the Health card. */
+export type SafetySignal = {
+    label: string;
+    tone: "critical" | "dietary" | "medication";
+    /** Which configured surfaces this signal projects to. */
+    surfaces: string[];
 };

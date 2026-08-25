@@ -540,9 +540,10 @@
   font-size: 11.5px;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+/* Only meaningful totals carry weight; individual rows stay regular and tabular. */
 .alloy-os-billing__line-value {
   font-size: 0.76rem;
-  font-weight: 650;
+  font-weight: 500;
   color: var(--alloy-os-midnight, #273f52);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum" 1;
@@ -1070,4 +1071,305 @@
 .lab-detail-unclipped .alloy-os-ucard--expanded .alloy-os-ucard__body {
   max-height: none;
   overflow-y: visible;
+}
+
+/* ── process card: the work band under the stage band ─────────────────────── */
+.alloy-os-process__work {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
+  gap: 10px 24px;
+  align-items: start;
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-process__work-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.alloy-os-process__work-label {
+  margin: 0;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-process__work-line {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-process__due {
+  font-weight: 500;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-process__needed {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-process__needed-label {
+  margin-right: 6px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #b45309;
+}
+.alloy-os-process__anchor { display: none; }
+
+/* ── safety signals: configured projections, minimum useful fact ───────────── */
+.alloy-os-signals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+.alloy-os-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.alloy-os-signal[data-signal-tone="critical"] {
+  background: color-mix(in srgb, #c2410c 10%, #fff);
+  color: #c2410c;
+}
+.alloy-os-signal[data-signal-tone="medication"] {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-signal[data-signal-tone="dietary"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 10%, #fff);
+  color: var(--alloy-os-accent-ink, #00806a);
+}
+.alloy-os-signals--dense .alloy-os-signal {
+  font-size: 9px;
+  padding: 0 6px;
+}
+
+/* ── financials detail: condensed strip + period-grouped ledger ────────────── */
+.alloy-os-fdetail__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin-top: 2px;
+}
+.alloy-os-fdetail__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-fdetail__statlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__statvalue {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__statvalue--strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
+.alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-fdetail__payers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__payer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-fdetail__filterrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  align-items: center;
+}
+.alloy-os-fdetail__filterlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-right: 2px;
+}
+.alloy-os-fdetail__period { margin-top: 8px; }
+.alloy-os-fdetail__periodhead {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+.alloy-os-fdetail__periodname {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__periodsum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__collapsed {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__upcoming { margin-top: 8px; }
+.alloy-os-fdetail__upcominglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+}
+.alloy-os-fdetail__up {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+/* ── add charge command ───────────────────────────────────────────────────── */
+.alloy-os-addcharge {
+  border: 1px solid var(--alloy-os-fp-card-border, #a6b2bd);
+  border-radius: 14px;
+  background: #fff;
+  padding: 14px 16px 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 460px;
+}
+.alloy-os-addcharge__title {
+  margin: 0 0 3px;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.alloy-os-addcharge__type {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__type[data-on="true"] {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-addcharge__config {
+  margin: 1px 0 0;
+  font-size: 0.66rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__field {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+  padding: 2px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 5%, transparent);
+}
+.alloy-os-addcharge__field-label {
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__req {
+  margin-left: 5px;
+  font-size: 8.5px;
+  color: #b45309;
+}
+.alloy-os-addcharge__field-value {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-addcharge__field-value[data-locked="true"] {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-addcharge__hint {
+  margin-left: 7px;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-addcharge__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── lab-only surface mocks for Safety Signal projection ──────────────────── */
+.lab-surface {
+  border: 1px solid var(--alloy-os-border, #e5e9ef);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lab-surface__label {
+  margin: 0;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.lab-surface__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lab-surface__name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.lab-surface__meta {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
 }

@@ -4,10 +4,14 @@ import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
-import type { BillingEvidence } from "@/lib/cardLab/cardLabTypes";
+import type { FinancialsEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
- * Billing — a financial operating surface at full row width.
+ * Financials — the family's financial operating surface, at full row width.
+ *
+ * Named Financials rather than Billing because the card carries charges, fees, funding, credits,
+ * payer responsibility, payments, past due, payment setup and history. The Business Process may
+ * still be called Billing; the card is broader than it.
  *
  *   header          names the card. No money: a summary here duplicated the zones below it.
  *   three zones     Current period · Past due · Payment
@@ -37,30 +41,35 @@ import type { BillingEvidence } from "@/lib/cardLab/cardLabTypes";
  * Payers, methods, autopay and the responsibility split are one operator concern, so there is one
  * `Manage payment` destination rather than three unrelated links.
  */
-export default function BillingCard({
+export default function FinancialsCard({
     evidence,
     onDetails,
+    onAddCharge,
 }: {
-    evidence: BillingEvidence;
+    evidence: FinancialsEvidence;
     onDetails?: () => void;
+    onAddCharge?: () => void;
 }) {
     const { period, pastDue } = evidence;
 
     return (
-        <div className="alloy-os-billing" data-billing-card="true">
+        <div className="alloy-os-billing" data-financials-card="true">
             <UniversalCard
-                title="Billing"
+                title="Financials"
                 insight=""
                 iconName="Receipt"
                 tier="context"
                 archetype="status"
                 density="compact"
                 gridSpan="row"
-                data-universal-card-key="billing"
+                data-universal-card-key="financials"
                 footerAction={
                     <div className="alloy-os-billing__footer">
+                        {/* Action hierarchy: Pay now is contextual and primary inside Past Due;
+                            Add charge is the operator capability; then management, then navigation. */}
+                        <FooterAction onClick={onAddCharge}>Add charge</FooterAction>
                         <FooterAction>Manage payment</FooterAction>
-                        <FooterAction onClick={onDetails}>Billing details →</FooterAction>
+                        <FooterAction onClick={onDetails}>Details →</FooterAction>
                     </div>
                 }
             >
@@ -69,20 +78,19 @@ export default function BillingCard({
                         <p className="alloy-os-billing__zone-head">Current period</p>
                         <p className="alloy-os-billing__period">{period.label}</p>
                         <div className="alloy-os-billing__lines">
+                            <Group>Charges</Group>
                             {period.charges.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
+                            {period.reductions.length ? <Group>Discounts &amp; credits</Group> : null}
                             {period.reductions.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
+                            {period.funding.length ? <Group>Funding</Group> : null}
                             {period.funding.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
-                            <Line
-                                label="Family responsibility"
-                                value={period.familyResponsibility}
-                                emphasis
-                            />
+                            <Line label="Family responsibility" value={period.familyResponsibility} emphasis />
                             <Line label="Payments received" value={period.paymentsReceived} />
                             <Line label="Current balance" value={period.currentBalance} emphasis />
                         </div>
@@ -152,6 +160,10 @@ export default function BillingCard({
             </UniversalCard>
         </div>
     );
+}
+
+function Group({ children }: { children: React.ReactNode }) {
+    return <p className="alloy-os-billingdetail__group">{children}</p>;
 }
 
 function Line({ label, value, emphasis }: { label: string; value: string; emphasis?: boolean }) {

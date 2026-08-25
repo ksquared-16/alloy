@@ -11,7 +11,12 @@
 
 import type {
     AttendanceEvidence,
-    BillingEvidence,
+    AddChargeSpecimen,
+    ChargeTemplateOption,
+    FinancialsEvidence,
+    FinancialsLedgerPeriod,
+    ProcessEvidence,
+    SafetySignal,
     HealthDetailEvidence,
     HealthEvidence,
     JourneyEvidence,
@@ -319,7 +324,7 @@ export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
  *   family responsibility − payments = current balance
  *   past due ⊆ current balance
  */
-export const BILLING_CURRENT: BillingEvidence = {
+export const FINANCIALS_CURRENT: FinancialsEvidence = {
     caseLabel: "A · Current, nothing overdue",
     period: {
         label: "Aug 1 – Aug 31",
@@ -344,7 +349,7 @@ export const BILLING_CURRENT: BillingEvidence = {
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $1,665" },
-    historyLine: "Last payment $1,665 · Aug 20 · 5 transactions this period",
+    historyLine: "Last payment · $1,665 · Aug 20",
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -352,23 +357,24 @@ export const BILLING_CURRENT: BillingEvidence = {
     ],
 };
 
-export const BILLING_PAST_DUE: BillingEvidence = {
+export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
     caseLabel: "B · Past due, failed payment",
     period: {
         label: "Aug 1 – Aug 31",
         charges: [
             { label: "Tuition", value: "$1,850" },
             { label: "Registration fee", value: "$75" },
+            { label: "Field trip", value: "$40" },
         ],
         reductions: [{ label: "Sibling discount", value: "−$185" }],
         funding: [{ label: "State subsidy", value: "−$600" }],
-        familyResponsibility: "$1,140",
+        familyResponsibility: "$1,180",
         paymentsReceived: "−$925",
-        currentBalance: "$215",
+        currentBalance: "$255",
         dueLabel: "Was due Aug 15",
     },
     pastDue: {
-        amount: "$215",
+        amount: "$255",
         oldest: "Aug 15",
         age: "10 days past due",
         note: "Visa •••• 4242 declined Aug 16",
@@ -378,6 +384,7 @@ export const BILLING_PAST_DUE: BillingEvidence = {
         { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" },
         { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" },
         { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+        { when: "Aug 01", type: "fee", label: "Field trip", amount: "+$40", kind: "charge", status: "Unpaid", source: "Manual · operator" },
         { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" },
         { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" },
     ],
@@ -390,7 +397,7 @@ export const BILLING_PAST_DUE: BillingEvidence = {
         autopayHealthy: false,
         nextChargeLabel: "Retry after payment method update",
     },
-    historyLine: "Last payment $925 · Aug 20 · 6 transactions this period",
+    historyLine: "Last payment · $925 · Aug 20",
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -398,7 +405,7 @@ export const BILLING_PAST_DUE: BillingEvidence = {
     ],
 };
 
-export const BILLING_MIXED_FUNDING: BillingEvidence = {
+export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     caseLabel: "C · Mixed funding",
     period: {
         label: "Aug 1 – Aug 31",
@@ -427,7 +434,7 @@ export const BILLING_MIXED_FUNDING: BillingEvidence = {
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance", funding: true },
     ],
     payment: { autopayLabel: "Autopay on", autopayHealthy: true, nextChargeLabel: "Sep 1 · $965" },
-    historyLine: "Last payment $925 · Aug 20 · 5 transactions this period",
+    historyLine: "Last payment · $925 · Aug 20",
     upcoming: [
         { label: "Next period", value: "Sep 1 – Sep 30" },
         { label: "Scheduled charge", value: "$1,850 · Sep 1" },
@@ -435,8 +442,8 @@ export const BILLING_MIXED_FUNDING: BillingEvidence = {
     ],
 };
 
-export const BILLING_FIXTURE = BILLING_PAST_DUE;
-export const BILLING_SPECIMENS = [BILLING_CURRENT, BILLING_PAST_DUE, BILLING_MIXED_FUNDING] as const;
+export const FINANCIALS_FIXTURE = FINANCIALS_PAST_DUE;
+export const FINANCIALS_SPECIMENS = [FINANCIALS_CURRENT, FINANCIALS_PAST_DUE, FINANCIALS_MIXED_FUNDING] as const;
 
 /**
  * Overflow specimens — one child's day at 0, 2, 5, 8 and 12 movements, through the SAME card.
@@ -518,3 +525,105 @@ export const STAFF_FIXTURE: StaffEvidence = {
     ],
     contact: { email: "taylor.reed@example.com", phone: "(541) 555-0148" },
 };
+
+/** Ledger grouped by billing period — prior periods collapsed by default. */
+export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
+    { label: "August 2026", summary: "Balance $255", open: true, entries: FINANCIALS_PAST_DUE.ledger },
+    {
+        label: "July 2026",
+        summary: "Closed · $0",
+        open: false,
+        entries: [
+            { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" },
+            { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" },
+            { when: "Jul 01", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" },
+        ],
+    },
+    { label: "June 2026", summary: "Closed · $0", open: false, entries: [] },
+];
+
+/**
+ * Add charge specimen. Every input is decided by the selected `financial_charge_templates` row —
+ * `amount_strategy` decides whether the amount is editable, `billable_on` decides the due date,
+ * `responsibility` decides who is billed. The card hardcodes none of it.
+ */
+export const CHARGE_TEMPLATES: ChargeTemplateOption[] = [
+    { key: "field_trip", label: "Field trip", amountStrategy: "manual", amount: null, billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: true, requiresNote: true },
+    { key: "registration", label: "Registration fee", amountStrategy: "fixed", amount: "$75.00", billableOn: "Immediately", responsibility: "Household", requiresSubject: true, requiresNote: false },
+    { key: "late_pickup", label: "Late pickup", amountStrategy: "rate_derived", amount: "$1.00 / min", billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: true, requiresNote: false },
+    { key: "supplies", label: "Supplies & materials", amountStrategy: "manual", amount: null, billableOn: "Next billing cycle", responsibility: "Household", requiresSubject: false, requiresNote: true },
+];
+
+export const ADD_CHARGE_SPECIMEN: AddChargeSpecimen = {
+    template: CHARGE_TEMPLATES[0]!,
+    subject: "Avery Johnson",
+    amount: "$40.00",
+    period: "August 2026",
+    due: "Sep 1, 2026",
+    note: "Zoo field trip",
+    previewBefore: "$255",
+    previewAfter: "$295",
+    blockers: [],
+};
+
+/** Safety Signals — configured projections of canonical health facts. */
+export const SAFETY_SIGNALS: SafetySignal[] = [
+    { label: "Peanut allergy · severe", tone: "critical", surfaces: ["Child header", "Attendance", "Roster", "Meals"] },
+    { label: "EpiPen on site", tone: "medication", surfaces: ["Child header", "Attendance", "Roster"] },
+    { label: "No dairy", tone: "dietary", surfaces: ["Meals", "Attendance"] },
+];
+
+/** Three configured Business Processes, through ONE process card. */
+export const PROCESS_ENROLLMENT: ProcessEvidence = {
+    processLabel: "Enrollment",
+    stages: [
+        { label: "Lead", state: "done", when: "Aug 2", outcome: null },
+        { label: "Tour", state: "done", when: "Aug 5 – 8", outcome: "Completed" },
+        { label: "Waitlist", state: "done", when: "Aug 9 – 18", outcome: "Offer accepted" },
+        { label: "Enrolling", state: "current", when: "Since Aug 18", outcome: null },
+        { label: "Enrolled", state: "future", when: "Expected Sep 2", outcome: null },
+    ],
+    currentStageLabel: "Enrolling",
+    workLine: "2 items remain",
+    dueLine: "Enrollment packet due Aug 28",
+    actions: [
+        { label: "Send packet", primary: true },
+        { label: "Complete placement" },
+        { label: "Contact family" },
+    ],
+    stillNeeded: ["Medication authorization", "Payment setup"],
+};
+
+export const PROCESS_ASSIGNMENT: ProcessEvidence = {
+    processLabel: "Assignment",
+    stages: [
+        { label: "Requested", state: "done", when: "Aug 9", outcome: null },
+        { label: "Offered", state: "done", when: "Aug 12", outcome: "Sunflower Room" },
+        { label: "Confirmed", state: "done", when: "Aug 18", outcome: null },
+        { label: "Active", state: "current", when: "Since Aug 19", outcome: null },
+        { label: "Ended", state: "future", when: null, outcome: null },
+    ],
+    currentStageLabel: "Active",
+    workLine: "Sunflower Room · Mon – Fri",
+    dueLine: null,
+    actions: [{ label: "Change assignment", primary: true }, { label: "End assignment" }],
+    stillNeeded: [],
+};
+
+export const PROCESS_BILLING: ProcessEvidence = {
+    processLabel: "Billing",
+    stages: [
+        { label: "Setup", state: "done", when: "Aug 1", outcome: null },
+        { label: "Active", state: "done", when: "Aug 1 – 15", outcome: null },
+        { label: "Past due", state: "current", when: "Since Aug 15", outcome: null },
+        { label: "Recovery", state: "future", when: null, outcome: null },
+        { label: "Current", state: "future", when: null, outcome: null },
+    ],
+    currentStageLabel: "Past due",
+    workLine: "$255 outstanding · 10 days",
+    dueLine: "Payment failed Aug 16",
+    actions: [{ label: "Pay now", primary: true }, { label: "Contact payer" }],
+    stillNeeded: ["Payment method update"],
+};
+
+export const PROCESS_SPECIMENS = [PROCESS_ENROLLMENT, PROCESS_ASSIGNMENT, PROCESS_BILLING] as const;
