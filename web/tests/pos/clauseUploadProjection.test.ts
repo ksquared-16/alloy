@@ -48,9 +48,7 @@ function draft(over: Partial<StoredFormDraftPreview> = {}): StoredFormDraftPrevi
 const concept = (over: Partial<BusinessConceptCandidate> & { id: string; label: string; sectionKey: string }): BusinessConceptCandidate =>
     ({
         contract_version: DISCOVERY_CONTRACT_VERSION,
-        id: over.id,
         kind: "upload_requirement",
-        label: over.label,
         concept_key: `requirement.upload.${over.id}`,
         subject: "child",
         cardinality: "single",
@@ -79,7 +77,7 @@ const uploadProposal = (id: string, candidateId: string, documentType?: string):
     }) as ConfigurationProposal;
 
 function discovery(concepts: BusinessConceptCandidate[], proposals: ConfigurationProposal[]): ConfigurationDiscoveryResult {
-    return { contract_version: DISCOVERY_CONTRACT_VERSION, concepts, proposals, summary: [], warnings: [] } as ConfigurationDiscoveryResult;
+    return { contract_version: DISCOVERY_CONTRACT_VERSION, concepts, proposals, summary: [], warnings: [] } as unknown as ConfigurationDiscoveryResult;
 }
 
 function publish(d: StoredFormDraftPreview, disc: ConfigurationDiscoveryResult, decisions: Record<string, ProposalDecisionState>) {
