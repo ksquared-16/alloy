@@ -376,3 +376,110 @@ suites with the change removed and re-applied:
 identity. The change caused exactly one break — a hardcoded `FOCUS_PANEL_CARD_KEYS.length === 25` —
 now 26, because the predecessor key is *retained* rather than swapped. The first read of the run had
 looked like ~25 new failures; only the failing-test **list** distinguished mine from the base's.
+
+---
+
+## 13. Slice 1 — Staff, grain-scoped successor (2026-08-25)
+
+Director approved: do not register a third sibling card. `employment → staff`, **person grain only**.
+
+### The mechanism
+
+Supersession became a declared **concern** (`focusPanelCardSupersession.ts`) beside `grains` and
+lifecycle, read by one composer — not a flat table and not a conditional in a renderer. Scope lives
+in the declaration:
+
+| Predecessor | Successor | Scope |
+|---|---|---|
+| `current_work` | `business_process` | every grain |
+| `employment` | `staff` | `person` only |
+
+The composer is deliberately asymmetric: asked **without** a grain it answers only about global
+supersession. A caller that cannot state its grain must not receive a person-grain answer, because
+applying a person rule to a case placement is the exact defect the scope exists to prevent.
+
+`employment` also stops declaring the person grain, so the registry — the single placement authority
+at person grain — makes exactly one of the two compose.
+
+### Proofs — `tests/adminV2/runtime/staffGrainScopedSupersession.test.ts` (9 passing)
+
+person-grain `employment` → `staff` · case-grain `employment` unchanged · grainless caller gets the
+case answer · explicit `staff` resolves once · both forms dedupe to one card · ordering and placement
+preserved on both grains · `scheduling` untouched and still separately placed · grain declarations
+make exactly one card compose · the global supersession still applies everywhere.
+
+### What Staff is, and is not
+
+Staff reuses the Employment **presentation** and the same `PersonEmploymentComposition`. It is not a
+re-implementation: that presentation already answers "who is this employee, in what capacity, where,
+in what state" in the order an operator reads it. Rebuilding those sections under a new name would
+have created a second presentation of one owner's truth. Identity and placement changed; the facts
+and the component are shared.
+
+`scheduling` stays separate and answers "when and where are they scheduled".
+
+### A second reader, found again
+
+`DurableRecordContextualCard` called `derivePersonEmploymentCard` **directly**, bypassing the
+composition path. After the grain change its gate asked about `employment`+`person` — now false — so
+the card silently vanished on that surface while rendering correctly on the native panel. Same shape
+as the published-layout seam and the activity-row key: several readers deriving one identity
+independently, and only some of them correct. It now asks about `staff`.
+
+### Certification fixture
+
+`web/scripts/seedStaffCertificationFixture.ts` (`npm run dev:seed:staff-certification`). Additive,
+namespaced to the RFC-2606 reserved domain `staff-cert.alloy.invalid`, idempotent (skips on existing
+email), and removable via `--remove`, which matches on that namespace alone — never on a name, never
+on "created recently". It writes only through `addStaff`, the canonical path behind the registered
+`staff.add` capability.
+
+**It could not run in this lane**: privileged Supabase values never enter the worktree by design, so
+the script has no credentials. The four specimens were therefore created through the **product UI**,
+executing the same registered capability against the same namespaced emails, so `--remove` still
+cleans them. The script remains the durable artifact and needs a privileged environment to run.
+
+| Specimen | Person id | Proves |
+|---|---|---|
+| Active-Bare | `51d1b1fd…` | active, part time, **no** position or location |
+| Active-Located | `98b6c801…` | active, full time, primary location |
+| Ended | `271a35cd…` | intended `ended` — **not achieved**, see below |
+| Starting-Soon | `66ca494c…` | canonical `pending_start` and its "Starts …" label |
+
+### Browser certification — `/adminV2/workspace/record/person/<id>`
+
+| Check | Result |
+|---|---|
+| Staff card renders on real canonical records | ✅ `cards: ["staff"]` on all four |
+| Exactly one card — no duplicate presentation | ✅ `employment` never appears beside it |
+| Case-grain composition unchanged | ✅ `business_process · scheduling · household · children · billing_preview` |
+| Scheduling separate | ✅ untouched on both grains |
+| Active state | ✅ "Active · Staff at North Campus · Full time" |
+| Starting-soon state | ✅ "**Starts Sep 15, 2026** · Staff at South Campus · Full time" |
+| Optional facts absent, not faked | ✅ Active-Bare shows no location and no placeholder |
+| Position absent → no invention | ✅ tenant configures **zero** `employment_positions`; the card says "Staff", never a fabricated title |
+| Row-to-row stale leakage | ✅ 4 distinct card bodies for 4 records |
+| Page errors / failed requests | ✅ 0 / 0 |
+| Readiness | 7.5–8.0 s per record (**dev** build — not a production figure) |
+
+### Not certified, and why
+
+- **Ended employment.** The Add Staff flow has no end-date field, so that specimen is Active. Reaching
+  `ended` needs the registered `employment.end` capability, which is a separate execution.
+- **Avatar image / initials fallback ON THE CARD.** The Employment presentation renders **no avatar**
+  at all, so there is nothing to certify there yet. Initials do render in the Operations Staff list
+  (`CA` / `CE` / `CS`), which is a different surface. The person's identity belongs in the shell
+  header, and `FocusPanelSubjectIdentityBlock` already accepts `personSubjectName`/`ImageUrl` with
+  **no caller** — a durable person panel is a more natural caller than Process participant scope, and
+  it is reachable today. Recommend wiring it here rather than in Slice 2.
+
+### Environment defect repaired
+
+Restarting the dev server surfaced `Cannot find module '../lightningcss.darwin-arm64.node'`. Root
+cause: this shell resolves `/usr/local/bin/node` (**x64**, under Rosetta) while every nvm node — and
+the node the toolkit starts the server with — is **arm64**. `npm install` run from this shell resolves
+optional native dependencies for the wrong architecture. Repaired by installing
+`lightningcss-darwin-arm64@1.30.2` with an **arm64** npm and clearing `.next`. 0 page errors after.
+
+**Anyone running npm in an Alloy worktree from a Rosetta shell will corrupt native optional deps.**
+Use `~/.nvm/versions/node/v22.21.1/bin/npm`.
