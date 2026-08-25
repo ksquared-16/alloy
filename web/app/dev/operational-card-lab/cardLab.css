@@ -1208,6 +1208,49 @@
   padding: 1px 6px;
 }
 
+/* Bounded activity — a supporting region, never the card's body. */
+.alloy-os-process__activity {
+  margin-top: 6px;
+  padding-top: 7px;
+  gap: 1px;
+}
+/* Cap the measure so the timestamp pairs with its label instead of stranding at the card edge —
+ * at 1021px wide, space-between put ~700px of nothing between the two halves of one fact. */
+.alloy-os-process__activity-row {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  max-width: 420px;
+  line-height: 1.35;
+}
+.alloy-os-process__activity .alloy-os-cardlab__section-head {
+  margin-top: 0;
+}
+/* Title left, affordance right on ONE line — the same head geometry the Household card uses for its
+ * collection groups (`.alloy-os-household__group-header`). The link costs no vertical band of its own. */
+.alloy-os-process__activity-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  max-width: 420px;
+}
+.alloy-os-process__activity-head .alloy-os-ucard__action {
+  padding: 0;
+  font-size: 11px;
+}
+.alloy-os-process__activity-row .alloy-os-currentwork__recent-activity-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-process__activity-row .alloy-os-currentwork__recent-activity-when {
+  flex: 0 0 auto;
+}
+
 /* The one row that survives the rail: a scoped child with its own action. */
 .alloy-os-process__scoped {
   display: flex;

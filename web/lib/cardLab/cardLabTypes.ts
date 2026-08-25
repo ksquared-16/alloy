@@ -417,18 +417,16 @@ export type ProcessChildState = {
     imageUrl?: string | null;
 };
 
-/** A stage's history, rendered ONLY where authoritative. P1 gates every field here. */
-export type ProcessStageHistory = {
+/**
+ * A bounded slice of CANONICAL activity — the same projection the Activity mode reads.
+ *
+ * The card persists nothing and infers nothing. It never renders a historical STAGE event, because
+ * no durable stage-history projection exists: an activity row is something that happened and was
+ * recorded, not a reconstruction of when a stage was entered.
+ */
+export type ProcessActivityRow = {
     label: string;
-    enteredAt: string | null;
-    exitedAt: string | null;
-    outcome: string | null;
-    transition: string | null;
-    /** Never inferred. Absent unless the canonical history model asserts it. */
-    note: string | null;
-    work: string[];
-    requirements: { label: string; satisfied: boolean }[];
-    participants: { name: string; state: string }[];
+    when: string;
 };
 
 export type ProcessEvidence = {
@@ -447,11 +445,11 @@ export type ProcessEvidence = {
     /** Actions whose SUBJECT is the case. */
     actions: ProcessAction[];
     stillNeeded: string[];
-    /** Expanded detail. Empty until P1 exists — the card must not fabricate history. */
-    history: ProcessStageHistory[];
-    /** True when a canonical stage-history projection backs `history`. */
-    historyAuthoritative: boolean;
-    startedAt: string | null;
+    /**
+     * At most {@link 3} rows, from canonical Activity. Omitted entirely when empty — an empty
+     * Activity heading is worse than none. Whether a placement includes it is configuration.
+     */
+    recentActivity: ProcessActivityRow[];
     /**
      * Present only when the process has participant grain at all. Assignment and Billing omit it,
      * and the card renders no children region — there is no Enrollment-specific section here.

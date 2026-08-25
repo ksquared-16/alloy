@@ -19,7 +19,6 @@ import FinancialsCard from "@/components/cardLab/FinancialsCard";
 import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
 import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
 import ProcessCard from "@/components/cardLab/ProcessCard";
-import ProcessDetailCard from "@/components/cardLab/ProcessDetailCard";
 import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
@@ -70,7 +69,6 @@ type TabKey =
     | "density"
     | "spans"
     | "counts"
-    | "procdetail"
     | "final";
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -87,7 +85,6 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "density", label: "W · Financials densities" },
     { key: "spans", label: "X · Intermediate span (12-track)" },
     { key: "counts", label: "N · Participant counts 1–8" },
-    { key: "procdetail", label: "V · View process (expanded)" },
     { key: "final", label: "Z · Final Focus Panel" },
     { key: "addcharge", label: "F · Add charge" },
     { key: "signals", label: "S · Safety Signals" },
@@ -144,17 +141,6 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
             "All aligned → the projection is suppressed entirely and one muted line replaces it.",
         ],
         open: [],
-    },
-    procdetail: {
-        question: "What does View process open, and what may it claim?",
-        decisions: [
-            "The SAME card at density=expanded — the centered Focus Card pattern Household, Children and Financials already use. Not a standalone Process page.",
-            "Sections: process identity · full journey with participant projection · stage history · participants at their own grain · current work and what remains.",
-            "Activity and provenance reuse the canonical activity mode; no second activity system.",
-        ],
-        open: [
-            "P1 GATES EVERY HISTORICAL FACT. Entered/exited/outcome render only when historyAuthoritative is true; skipped and reopened are never inferred. With no projection the surface SAYS SO rather than drawing an empty timeline that reads like nothing happened — an operator cannot tell a guess from a record.",
-        ],
     },
     final: {
         question: "Do these behave like one configurable card system?",
@@ -563,7 +549,6 @@ export default function OperationalCardLab() {
                                 tab === "process" ||
                                 tab === "grain" ||
                                 tab === "counts" ||
-                                tab === "procdetail" ||
                                 tab === "density" ||
                                 tab === "healthdetail" ||
                                 tab === "wide"
@@ -624,13 +609,6 @@ export default function OperationalCardLab() {
                                             </Cell>
                                         ))}
                                     </>
-                                ) : null}
-                                {tab === "procdetail" ? (
-                                    <Cell span={2} kind="cand" name="View process · expanded">
-                                        <div className="lab-detail-unclipped">
-                                            <ProcessDetailCard evidence={PROCESS_GRAIN_SPECIMENS[0]!} />
-                                        </div>
-                                    </Cell>
                                 ) : null}
                                 {tab === "grain" ? (
                                     <>

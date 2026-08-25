@@ -596,9 +596,7 @@ export const SAFETY_SIGNALS: SafetySignal[] = [
 /** Three configured Business Processes, through ONE process card. */
 export const PROCESS_ENROLLMENT: ProcessEvidence = {
     participantsLabel: null,
-    history: [],
-    historyAuthoritative: false,
-    startedAt: null,
+    recentActivity: [],
     caseLabel: "Enrollment · Johnson",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -624,9 +622,7 @@ export const PROCESS_ENROLLMENT: ProcessEvidence = {
 
 export const PROCESS_ASSIGNMENT: ProcessEvidence = {
     participantsLabel: null,
-    history: [],
-    historyAuthoritative: false,
-    startedAt: null,
+    recentActivity: [],
     caseLabel: "Assignment",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -648,9 +644,7 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
 
 export const PROCESS_BILLING: ProcessEvidence = {
     participantsLabel: null,
-    history: [],
-    historyAuthoritative: false,
-    startedAt: null,
+    recentActivity: [],
     caseLabel: "Billing",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -717,9 +711,10 @@ const RILEY = (scoped: boolean): ProcessChildState => ({
 function wright(caseLabel: string, scoped: "Avery" | "Riley" | null): ProcessEvidence {
     return {
         participantsLabel: "Children",
-        history: [],
-        historyAuthoritative: false,
-        startedAt: "Aug 11, 2026",
+        recentActivity: [
+            { label: "Tour invitation sent", when: "Today · 9:47 AM" },
+            { label: "Avery joined waitlist", when: "Aug 19" },
+        ],
         caseLabel,
         subjectLabel: "Wright Family",
         sourceWorkView: null,
@@ -798,7 +793,14 @@ export const PROCESS_WRIGHT_MANY: ProcessEvidence = {
     ],
 };
 
+/** The same case with the activity region omitted — proving the modest delta. */
+export const PROCESS_WRIGHT_NO_ACTIVITY: ProcessEvidence = {
+    ...wright("A0 · no recent activity", null),
+    recentActivity: [],
+};
+
 export const PROCESS_GRAIN_SPECIMENS = [
+    PROCESS_WRIGHT_NO_ACTIVITY,
     PROCESS_WRIGHT_TOUR,
     PROCESS_WRIGHT_ALL,
     PROCESS_WRIGHT_AVERY,

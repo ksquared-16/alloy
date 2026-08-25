@@ -678,17 +678,10 @@ proof, same component, no domain branching:
 | Assignment | Active | `Sunflower Room` | `Mon – Fri` |
 | Billing | Past due | `$255 · 10 days` | `Visa declined Aug 16` |
 
-### 9.3 `View process →` and P1
+### 9.3 `View process →` and P1 — **SUPERSEDED by §11**
 
-The **same card at `density="expanded"`** — the centered Focus Card pattern already in use. Not a
-standalone Process page. Sections: process identity · full journey with participant projection ·
-stage history · participants at their own grain · current work and what remains. Activity and
-provenance reuse the canonical activity mode.
-
-> **P1 gates every historical fact.** Entered / exited / outcome / transition render **only** when
-> `historyAuthoritative` is true. Skipped and reopened are never inferred. With no projection the
-> surface **says so** rather than drawing an empty timeline that reads like "nothing happened" —
-> an operator cannot tell a guess from a record. P1 must not be solved in card state.
+This section specified an expanded Process detail gated on P1. **Both are withdrawn.** The Process
+card has no expanded representation and no detail affordance; P1 no longer gates it. See §11.
 
 ### 9.4 Configuration contract
 
@@ -724,7 +717,7 @@ provenance reuse the canonical activity mode.
 | **Attendance** | ✅ | ✅ `ChildAttendanceReadModel` | ❌ no child-attendance capability | ✅ | **Yes, read-only** | Capability for correct/movement/check-out |
 | **Care Team** | ✅ | ⚠ needs a resolver joining presence + scheduling | ❌ none needed | ⚠ relationship config | Yes, read-only | The join resolver |
 | **Staff** | ✅ | ✅ employments + presence + assignments | ❌ none needed | ✅ | **Yes, read-only** | — |
-| **Business Process** | ✅ | ⚠ participant state resolver | ⚠ registered actions exist; subject scoping needed | ✅ | Yes, summary only | Participant resolver · **P1** before expanded |
+| **Business Process** | ✅ | ⚠ participant state resolver | ⚠ registered actions exist; subject scoping needed | ✅ | **Yes** | Participant resolver (§11: P1 no longer gates) |
 | **Financials** | ✅ | ❌ **F0** read model | ❌ **F5** | ⚠ V5 grid placement | **No** | F0 → F7 → F5 |
 | **Health & Safety** | ✅ | ❌ **B1** health facts | ❌ **H4** | ❌ **A1** grain | **No** | M1 → H1–H4 |
 | **Safety Signals** | ✅ | ❌ depends on B1 | — | ❌ **S1** | **No** | **S2 first, always** |
@@ -740,8 +733,8 @@ provenance reuse the canonical activity mode.
 | **M1** health grain → `customer_member` | **required before production registration** of Health, and before H2 |
 | **H1–H4** health foundation | **required before summary** (Health) |
 | **S2** health visibility permission | **required before production registration** of Safety Signals |
-| **P1** stage-history projection | **required before expanded detail** (Process) |
-| **G1** 360px expanded-body cap | **required before expanded detail** (all details) — Director decision |
+| **P1** stage-history projection | **not a shipping gate** — future capability, §11.4 |
+| **G1** 360px expanded-body cap | **required before expanded detail** — **Financials and Health & Safety only** (§11.5) |
 
 ### 9.8 Recommended first implementation slice
 
@@ -752,9 +745,9 @@ Both have complete canonical read truth today (`ChildAttendanceReadModel`; `empl
 They prove the whole registration path — provider, catalog, archetype, Surfaces placement — against
 cards whose truth already exists, before any card that needs new backend work.
 
-Then: **Slice 2** F0 → F7 → F5 → Financials · **Slice 3** participant resolver → Process summary ·
-**Slice 4** M1 → H1–H4 → Health · **Slice 5** P1 + G1 → expanded details · **Slice 6** S2 → S1 →
-Safety Signals.
+Then: **Slice 2** F0 → F7 → F5 → Financials · **Slice 3** participant resolver → Process card ·
+**Slice 4** M1 → H1–H4 → Health · **Slice 5** G1 → Financials and Health expanded details ·
+**Slice 6** S2 → S1 → Safety Signals. P1 is not in the sequence — see §11.4.
 
 **Design and specification are complete.** The next mission is production implementation.
 
@@ -894,3 +887,89 @@ FOCUS_PANEL_CARD_KEYS → FOCUS_PANEL_CARDS → FOCUS_PANEL_CARD_CATALOG
 | Participant bound | Rail height is constant from 1 to N participants |
 | Scoped visibility | A scoped participant is never collapsed into `+N` |
 | History honesty | No entered/exited date renders without the P1 projection |
+
+## 11. Design closure — Process detail removed, bounded activity restored (2026-08-25)
+
+This section is the **final authority** on the Process card. Where §9.3 and the P1/G1 rows of §9.6–§9.8
+disagree with it, this section wins.
+
+### 11.1 What was removed, and why it was wrong to specify
+
+`View process →` and the `density="expanded"` Process detail are **withdrawn from the specification**.
+
+The detail surface was specified to hold five sections: process identity, the full journey, stage
+history, participants at their own grain, and current work. Measured against the summary, **four of
+those five were the summary again at a larger size.** Only stage history was new — and stage history
+is exactly the one thing Alloy cannot project (P1). A detail surface whose only original content is
+the content that does not exist is not a detail surface; it is a magnifying glass.
+
+The Process card is now **summary-only, at every placement**. There is no second representation of a
+process anywhere in the card family.
+
+### 11.2 Recent activity — a bounded window on canonical truth
+
+The card's fourth layer is a bounded slice of the **existing** activity projection — the same truth
+the Focus Panel's activity mode reads. It introduces no store, no state, and no new projection.
+
+| Rule | Contract |
+|---|---|
+| **Row cap** | **3.** `MAX_ACTIVITY = 3`, enforced in render, not by the caller |
+| **Truth** | Canonical activity only. The card renders what it is handed and derives nothing |
+| **Empty** | The region is **omitted entirely** — heading included. An empty "Recent activity" heading reads as "nothing has happened", which is a claim the card has no standing to make |
+| **Inclusion** | Configuration decides whether a placement carries the region at all. It cannot change the cap, the source, or the empty rule |
+| **Affordance** | `View all activity →` → `coordination.openFocusPanelMode("activity")` — the **existing** mode. It is not a Process surface and opens nothing new |
+| **Never** | A stage-history row. An activity row is *something that happened and was recorded*, never a reconstruction of when a stage was entered |
+
+**Geometry.** The region costs **63px** for two rows (184px → 247px measured at 1055px full-row). The
+affordance shares the section-head line rather than taking a band of its own — the head geometry the
+Household card already uses for its collection groups (`.alloy-os-household__group-header`: uppercase
+title left, affordance right). Row measure is capped at 420px so each timestamp pairs with its label
+instead of stranding at the card edge. Activity does not dominate the card: three lines, quiet weight,
+below the action row.
+
+### 11.3 Final Process implementation contract
+
+| Layer | Content | Truth owner |
+|---|---|---|
+| 1 · Identity | Process name, icon | Business Process definition |
+| 2 · Journey rail | Stages, current stage, ≤2 annotation slots per node, participant markers | Business Process + participant process state |
+| 3 · Current work | Scope label, primary answer, action row | Current Work |
+| 4 · Recent activity | ≤3 canonical rows + `View all activity →` | The canonical activity projection |
+
+- **Grain stays case.** The Focus Panel is case-grain (shipped conformance test); participant divergence
+  projects **onto the rail**, which is why no children section survives below it.
+- **Densities.** `compact` and `standard` only. **No `expanded` variant exists.**
+- **Actions** carry their subject explicitly; the card never infers one from selection.
+
+### 11.4 P1 is no longer a blocker
+
+P1 (a durable stage-history projection) blocked nothing that ships. The Process card never renders a
+historical stage fact, so its absence is invisible at every density.
+
+P1 is **retained as a future capability** — reporting, analytics, and cycle-time questions all want it,
+and none of them are card questions. The constraint that made it a blocker survives intact and applies
+to whatever consumes it: **entered / exited / outcome / transition are rendered only from a projection
+that holds them. Skipped and reopened are never inferred, and a date is never fabricated to fill a
+slot.** P1 must not be solved in card state.
+
+### 11.5 G1 is scoped to two cards
+
+With the Process detail withdrawn, **G1 (the 360px expanded-body cap) is relevant only to Financials
+and Health & Safety** — the two cards that still have an expanded representation. It remains a Director
+decision, and it gates Slice 5 for those two cards alone.
+
+### 11.6 Final verdict — all eight cards LOCKED
+
+| Card | Verdict |
+|---|---|
+| Business Process (summary-only, bounded activity) | **LOCKED** |
+| Financials (compact · summary 8/12 · expanded) | **LOCKED** |
+| Health & Safety (summary + detail) | **LOCKED** |
+| Safety Signals | **LOCKED** — must not ship before S2 |
+| Attendance | **LOCKED** |
+| Staff | **LOCKED** |
+| Care Team / Assigned Staff | **LOCKED** |
+| Focus Panel shell (spacing + subject avatar) | **LOCKED** |
+
+**The design phase is closed.** No further design pass is authorized. The next mission is production
+implementation, beginning at Slice 1 (§9.8).

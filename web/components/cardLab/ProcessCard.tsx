@@ -55,6 +55,14 @@ import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabType
  *                          stage each is actually at
  *   2  current case work   and the actions whose SUBJECT is the case
  *   3  selected participant — a row ONLY when a scoped child has its own action
+ *   4  recent activity      — bounded, canonical, and omitted when empty
+ *
+ * ── NO EXPANDED REPRESENTATION ──
+ *
+ * There is no `View process →` and no Process detail. The summary carries progression, current
+ * case state, participant divergence, current work, what is still needed, and the registered
+ * actions — which is what operating the process requires. `View all activity →` switches the Focus
+ * Panel to its EXISTING Activity mode rather than opening a surface of this card's own.
  *
  * A participant marker never moves the case marker. Avery sits under Waitlist while the case
  * marker stays on Tour, so both grains are legible in one glance — and the generic children list
@@ -74,10 +82,16 @@ import type { ProcessEvidence, RailParticipant } from "@/lib/cardLab/cardLabType
  */
 export default function ProcessCard({
     evidence,
-    onViewProcess,
+    onViewAllActivity,
 }: {
     evidence: ProcessEvidence;
-    onViewProcess?: () => void;
+    /**
+     * Switches the Focus Panel to its existing ACTIVITY mode —
+     * `coordination.openFocusPanelMode("activity")`. Not a Process detail surface: the Process
+     * card has no expanded representation, because the summary already carries everything needed
+     * to operate the process.
+     */
+    onViewAllActivity?: () => void;
 }) {
     const current = evidence.stages.find((s) => s.state === "current");
     // Collapse participant noise when every child matches the case — the divergence IS the signal.
@@ -113,7 +127,7 @@ export default function ProcessCard({
                 density="compact"
                 gridSpan="row"
                 data-universal-card-key="business_process"
-                footerAction={<FooterAction onClick={onViewProcess}>View process →</FooterAction>}
+                footerAction={null}
             >
                 <ProgressionBand
                     steps={evidence.stages.map((s) => ({
@@ -192,8 +206,29 @@ export default function ProcessCard({
                         all at {evidence.currentStageLabel}
                     </p>
                 ) : null}
+                {/* 4 · BOUNDED RECENT ACTIVITY — canonical Activity, at most three rows.
+                    Omitted entirely when empty: an Activity heading with nothing under it is worse
+                    than no region. Never a stage-history reconstruction. */}
+                {evidence.recentActivity.length ? (
+                    <div className="alloy-os-currentwork__recent-activity alloy-os-process__activity">
+                        <div className="alloy-os-process__activity-head">
+                            <p className="alloy-os-cardlab__section-head">Recent activity</p>
+                            <FooterAction onClick={onViewAllActivity}>View all activity →</FooterAction>
+                        </div>
+                        {evidence.recentActivity.slice(0, MAX_ACTIVITY).map((a) => (
+                            <p key={`${a.label}-${a.when}`} className="alloy-os-process__activity-row">
+                                <span className="alloy-os-currentwork__recent-activity-label">{a.label}</span>
+                                <span className="alloy-os-currentwork__recent-activity-when">{a.when}</span>
+                            </p>
+                        ))}
+                    </div>
+                ) : null}
+
                 <span className={clsx("alloy-os-process__anchor")} data-current-stage={current?.label} />
             </UniversalCard>
         </div>
     );
 }
+
+/** The card is orientation plus current work; activity supports, never dominates. */
+const MAX_ACTIVITY = 3;
