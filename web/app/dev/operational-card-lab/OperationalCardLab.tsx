@@ -15,25 +15,39 @@ import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPa
 
 import AttendanceCard from "@/components/cardLab/AttendanceCard";
 import BillingCard from "@/components/cardLab/BillingCard";
+import CareTeamCard from "@/components/cardLab/CareTeamCard";
 import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
 import JourneyCard from "@/components/cardLab/JourneyCard";
 import StaffCard from "@/components/cardLab/StaffCard";
 import {
     ATTENDANCE_FIXTURE,
+    ATTENDANCE_OVERFLOW_SPECIMENS,
+    attendanceWithMovements,
     BILLING_FIXTURE,
+    CARE_TEAM_FIXTURE,
     HEALTH_FIXTURE,
     JOURNEY_FIXTURE,
     LAB_SUBJECT,
     STAFF_FIXTURE,
 } from "@/lib/cardLab/cardLabFixtures";
 
-type TabKey = "combined" | "journey" | "health" | "staff" | "attendance" | "billing";
+type TabKey =
+    | "combined"
+    | "journey"
+    | "health"
+    | "staff"
+    | "careteam"
+    | "attendance"
+    | "overflow"
+    | "billing";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
     { key: "health", label: "2 · Health & Safety" },
     { key: "staff", label: "3 · Staff" },
+    { key: "careteam", label: "3b · Care Team" },
     { key: "attendance", label: "4 · Attendance" },
+    { key: "overflow", label: "4b · Movement overflow" },
     { key: "billing", label: "5 · Billing" },
     { key: "combined", label: "6 · Combined Focus Panel" },
 ];
@@ -43,61 +57,87 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
     journey: {
         question: "Where did this record start, what has it passed through, and where is it now?",
         decisions: [
+            "Orientation strip, not a report. One summary line in the header instead of two, and one folded supporting line per stage.",
             "Spine is the configured Business Process stages. Work Views are operator lenses and are not history.",
-            "span: \"row\" — the grid already grants 1023px, so no new width mechanism was added.",
-            "One outcome line per stage. Everything deeper is View journey.",
-            "Current stage uses the Children --focused tint; progression is carried by connector colour, not a banner.",
+            "Progression is carried by connector colour; the current stage takes the Children --focused tint.",
+            "Everything deeper — skipped, revisited and reopened stages, and the events behind each outcome — is View journey.",
         ],
         open: [
-            "No durable stage-history store exists, so past entry dates come from events, and a skipped stage can only be inferred.",
-            "A Milestones card is registered and permanently empty. Recommendation stands that Journey absorbs it rather than adding a second answer.",
+            "No durable stage-history store exists, so past entry dates come from events and a skipped stage can only be inferred.",
+            "A Milestones card is registered and permanently empty. Recommendation stands that Journey absorbs it.",
         ],
     },
     health: {
-        question: "What do I need to know about this child's health and safety?",
+        question: "What health and safety information do I need to know about this child?",
         decisions: [
-            "Information card, not an evaluation — no Complete / Needs attention / Severe state taxonomy.",
-            "A severe allergy is prominent because the fact is rendered in risk red, not because a count is announced.",
-            "Missing required information is amber inside its own section, so it never becomes a second Readiness.",
-            "Emergency contacts are Household's truth — shown as a count chip that hands off.",
+            "Grouped by how the information is OWNED, not how it was collected: critical → insight, then Medical, Medications, Enrollment health, and a projected emergency line.",
+            "The critical safety fact leads the card as the insight, so it needs no section, no banner and no count.",
+            "Enrollment health is Business Process requirement satisfaction, not a health fact. Missing reads amber inside its own section.",
+            "Emergency contacts are relationship truth. Household owns them; this card points at them.",
         ],
         open: [
-            "Child health facts have no canonical Alloy store today; category and severity vocabulary needs an owner.",
-            "Whether medication authorization is an enrollment requirement or a health fact decides which section owns it.",
+            "Health today is TWO fields in systemFieldRegistry — allergy_notes (textarea) and medication_flag (checkbox) — both entity_type \"enrollment\", not child. Severity, reaction, treatment and medication records have no owner.",
+            "Repeatable structured facts are already expressible (form group.repeat + collection_binding) but no canonical health collection provider exists — only \"children\" is bound today.",
+            "requirement kind \"document\" is declared but NOT authorable: document evidence is bound to a form submission, so a document required outside a form has no owner that can prove it.",
         ],
     },
     staff: {
-        question: "Who is caring for, or operationally responsible for, this child right now?",
+        question: "Who is this employee, what is their role, where are they assigned, and what matters right now?",
         decisions: [
-            "Built from the Household and Children person row — same avatar, name weight, pill slot and label-over-value pair.",
-            "Scope is site → program → room → today. Anyone else collapses into one count chip.",
-            "The enrollment owner is one more row with its own pill, never a second section.",
+            "Employee-grain — the subject is the staff person. Care Team is its child-grain relative; they are different questions, not variants.",
+            "A direct sibling of Household and Children: identity row, label-over-value fact grids, chips for assignments, one state pill.",
+            "Employment carries PersonEmploymentComposition.current verbatim, in the order the existing Employment card already uses.",
+            "Today reads staff_presence_events; assignments read schedule_assignments with subject_type = 'staff'.",
         ],
         open: [
-            "Which relationships appear should be configuration; there is no relationship-type config surface for staff-to-child yet.",
-            "Room assignment for staff is staff_presence truth; the child-to-room link is scheduling truth. One resolver has to join them.",
+            "NO qualifications or credentials are rendered. No credential, certification or training store exists anywhere in Alloy — the only credential table is org_provider_credential_authority, which is communications Vault refs. Rendering CPR / First Aid would be inventing employment truth.",
+            "staff_presence has no room_transfer kind by design, so a staff member's room changes within a day are not observable — only the room their latest presence fact asserts.",
+        ],
+    },
+    careteam: {
+        question: "Who is caring for, or operationally responsible for, this child right now?",
+        decisions: [
+            "PRESERVED and reclassified from the previous pass. Child-grain, and explicitly not the Staff card.",
+            "Built from the Household and Children person row — same avatar, name weight, pill slot and label-over-value pair.",
+            "Scope is the child's site, program, room and today. The enrollment owner is one more row with its own pill and its own labels.",
+        ],
+        open: [
+            "Which relationships appear should be configuration; there is no staff-to-child relationship config surface yet.",
+            "Staff room assignment is staff_presence truth while the child-to-room link is scheduling truth — one resolver has to join them.",
         ],
     },
     attendance: {
         question: "How is this child's day going, and is it recorded correctly?",
         decisions: [
             "Pure projection of ChildAttendanceReadModel. No second attendance model.",
-            "Classroom movement is real: room_transfer is a first-class event kind with from/to room ids.",
-            "Corrections are entry_type correction | reversal events, so every path is an action, not an editable field.",
+            "room_transfer is a first-class event kind with from/to room ids, so classroom movement is real truth.",
+            "Corrections are entry_type correction | reversal events, so every path is an action, never an editable field.",
             "Shares the progression band with Journey — one new primitive, used twice.",
         ],
         open: [
             "Child attendance has no registered capability (staff has staff_presence.*), so these actions have no action key to call yet.",
-            "Expected-hours truth comes from ExpectedAttendanceEntry; the card assumes one contiguous window per day.",
+        ],
+    },
+    overflow: {
+        question: "What happens when a child has more movements than the card can reasonably show?",
+        decisions: [
+            "A bounded PROJECTION, not a data rule — the record keeps every movement. Six columns maximum, whatever the day did.",
+            "Kept in priority order: check-in, earliest movement, collapsed count, the two most recent movements, current location, check-out.",
+            "The collapsed count is an affordance, not an event — dashed outline, no glyph fill — and opens View day.",
+            "The card never widens, never shrinks its type, and never grows taller as the day gets busier.",
+        ],
+        open: [
+            "Whether the earliest movement is worth a column when it repeats the check-in room is a judgement the evidence builder should make, not the card.",
         ],
     },
     billing: {
         question: "Where does this family stand financially right now?",
         decisions: [
-            "Three zones across one grid row, separated only by the gap — the family has no vertical rules.",
-            "Payer identity is its own evidence; household primary contact is not assumed to be a payer.",
-            "Emphasis follows state: Pay now while past due, otherwise Manage payment.",
-            "Recent activity is a preview capped at five, matching Timeline's SUMMARY_MAX rule.",
+            "Arithmetic hierarchy: charge, discounts and subsidy stack to a ruled Family responsibility total, then Next due, then payers.",
+            "Ledger direction is account balance — a charge INCREASES what is owed (+), a payment, credit, discount or subsidy REDUCES it (−). The sign is in the text; colour only reinforces it.",
+            "Recent ledger is a real column grid with tabular figures and right-aligned amounts, capped at five.",
+            "The past-due amount is the one number sized to be read from across the room. Pay now is filled; Manage payment is a quiet link.",
+            "Payer identity is kept distinct from household primary contact, and a funding source is a payer like any other.",
         ],
         open: [
             "Alloy has a charge substrate but no family-grain posted balance, billing period, autopay or payment-method health.",
@@ -152,6 +192,7 @@ export default function OperationalCardLab() {
     const journey = <JourneyCard evidence={JOURNEY_FIXTURE} />;
     const health = <HealthSafetyCard evidence={HEALTH_FIXTURE} />;
     const staff = <StaffCard evidence={STAFF_FIXTURE} />;
+    const careTeam = <CareTeamCard evidence={CARE_TEAM_FIXTURE} />;
     const attendance = <AttendanceCard evidence={ATTENDANCE_FIXTURE} />;
     const billing = <BillingCard evidence={BILLING_FIXTURE} />;
 
@@ -212,7 +253,7 @@ export default function OperationalCardLab() {
                             <Cell span={1} kind="real" name="Household">{realCard("household")}</Cell>
                             <Cell span={2} kind="cand" name="Attendance">{attendance}</Cell>
                             <Cell span={1} kind="real" name="Children">{realCard("children")}</Cell>
-                            <Cell span={1} kind="cand" name="Staff">{staff}</Cell>
+                            <Cell span={1} kind="cand" name="Care Team">{careTeam}</Cell>
                             <Cell span={1} kind="cand" name="Health & Safety">{health}</Cell>
                             <Cell span={1} kind="real" name="Readiness">{realCard("readiness_kpi")}</Cell>
                             <Cell span={2} kind="cand" name="Billing">{billing}</Cell>
@@ -228,7 +269,7 @@ export default function OperationalCardLab() {
                         <div className="lab__frame">
                             <div className="lab__frame-label">
                                 Focus Panel · Summary · 1055px
-                                {tab === "journey" || tab === "attendance" || tab === "billing"
+                                {tab === "journey" || tab === "attendance" || tab === "billing" || tab === "overflow"
                                     ? " · full row"
                                     : " · one column"}
                             </div>
@@ -251,6 +292,26 @@ export default function OperationalCardLab() {
                                     <>
                                         <Cell span={1} kind="cand" name="Staff">{staff}</Cell>
                                         <Cell span={1} kind="real" name="Household">{realCard("household")}</Cell>
+                                    </>
+                                ) : null}
+                                {tab === "careteam" ? (
+                                    <>
+                                        <Cell span={1} kind="cand" name="Care Team">{careTeam}</Cell>
+                                        <Cell span={1} kind="real" name="Children">{realCard("children")}</Cell>
+                                    </>
+                                ) : null}
+                                {tab === "overflow" ? (
+                                    <>
+                                        {ATTENDANCE_OVERFLOW_SPECIMENS.map((n) => (
+                                            <Cell
+                                                key={n}
+                                                span={2}
+                                                kind="cand"
+                                                name={`Attendance · ${n} movements`}
+                                            >
+                                                <AttendanceCard evidence={attendanceWithMovements(n)} />
+                                            </Cell>
+                                        ))}
                                     </>
                                 ) : null}
                             </div>

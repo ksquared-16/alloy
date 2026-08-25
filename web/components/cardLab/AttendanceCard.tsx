@@ -3,6 +3,7 @@
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProgressionBand from "@/components/cardLab/ProgressionBand";
 import { Action, ActionRow, CardBody, EmptyLine, FooterAction } from "@/components/cardLab/CardLabKit";
+import { projectAttendanceDay } from "@/lib/cardLab/attendanceDayProjection";
 import type { AttendanceEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
@@ -32,6 +33,8 @@ export default function AttendanceCard({
     const clamp = (n: number) => Math.min(100, Math.max(0, n));
 
     const isEmpty = evidence.events.length === 0;
+    // Bounded projection — the card's width budget is fixed no matter how busy the day was.
+    const day = projectAttendanceDay(evidence.events);
 
     return (
         <div className="alloy-os-attendance" data-attendance-card="true">
@@ -84,7 +87,11 @@ export default function AttendanceCard({
                             <span>{expected.toLabel}</span>
                         </div>
 
-                        <ProgressionBand steps={evidence.events} dataName="attendance" />
+                        <ProgressionBand
+                            steps={day.steps}
+                            dataName="attendance"
+                            onCollapsedClick={onViewHistory}
+                        />
 
                         <ActionRow>
                             <Action>Correct check-in</Action>
@@ -103,6 +110,11 @@ export default function AttendanceCard({
                                     </div>
                                 ))}
                             </div>
+                            {day.hiddenCount ? (
+                                <p className="alloy-os-currentwork__recent-activity-when">
+                                    {day.hiddenCount} earlier {day.hiddenCount === 1 ? "movement is" : "movements are"} in View day — the record keeps every one.
+                                </p>
+                            ) : null}
                             {evidence.correctionNote ? (
                                 <p className="alloy-os-currentwork__recent-activity-when">
                                     {evidence.correctionNote}

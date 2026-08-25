@@ -1,80 +1,93 @@
 "use client";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import {
     CardBody,
-    EmptyLine,
     Fact,
     FactGrid,
     FooterAction,
-    PersonRow,
+    SectionHead,
     StatChips,
 } from "@/components/cardLab/CardLabKit";
 import type { StaffEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
- * Staff — "Who is caring for, or operationally responsible for, this child right now?"
+ * Staff — "Who is this employee, what is their role, where are they assigned, and what matters
+ * operationally right now?"
  *
- * The closest relative of Household and Children in this set, and deliberately so: open person
- * rows with the same avatar, the same name weight, the same role pill in the Primary / Guardian
- * slot, and the same two-column label-over-value pair beneath. No enclosure, no dividers, no
- * category headings — why a person is relevant is carried by the pill plus the room line.
+ * EMPLOYEE-grain: the subject is the staff person. Its child-grain relative is Care Team, which
+ * projects the people around a child; the two answer different questions and are not variants.
  *
- * Scope is the child's current site → program → room → date. A configured non-room relationship
- * (the enrollment owner) is one more row with its own pill, never a second section, so the card
- * cannot drift into an organization directory.
+ * Visually it is a direct sibling of Household and Children — the identity block leads with the
+ * avatar and the name, sections are label-over-value fact grids, and the only decoration is the
+ * state pill. The Employment section carries `PersonEmploymentComposition.current` verbatim, in
+ * the order the existing Employment card already uses: headline, then current period, then the
+ * configured facts.
+ *
+ * It renders NO qualifications or credentials. No store for them exists in Alloy, and inventing
+ * them to enrich a specimen is the failure this card is written to avoid.
  */
 export default function StaffCard({
     evidence,
-    onManage,
+    onView,
 }: {
     evidence: StaffEvidence;
-    onManage?: () => void;
+    onView?: () => void;
 }) {
-    const isEmpty = evidence.people.length === 0;
-
     return (
         <div className="alloy-os-staff" data-staff-card="true">
             <UniversalCard
                 title="Staff"
-                insight={isEmpty ? "No staff assigned" : evidence.answerLine}
-                supportingInsight={isEmpty ? null : evidence.supportingLine}
+                insight={evidence.name}
+                supportingInsight={evidence.answerLine}
                 iconName="Users"
                 tier="reference"
-                archetype="collection"
+                archetype="profile"
+                statusChip={evidence.stateLabel}
+                statusTone={evidence.stateTone}
                 density="compact"
                 gridSpan={1}
                 data-universal-card-key="staff"
-                footerAction={<FooterAction onClick={onManage}>Manage staff →</FooterAction>}
+                footerAction={<FooterAction onClick={onView}>View staff →</FooterAction>}
             >
-                {isEmpty ? (
-                    <CardBody>
-                        <EmptyLine>No one is assigned to this child&apos;s room today.</EmptyLine>
-                    </CardBody>
-                ) : (
-                    <CardBody>
-                        {evidence.people.map((p) => (
-                            <PersonRow
-                                key={p.id}
-                                name={p.name}
-                                pill={p.relationship}
-                                pillTone={p.lead ? "positive" : "neutral"}
-                                secondary={
-                                    <FactGrid>
-                                        {p.facts.map((fct) => (
-                                            <Fact key={fct.label} label={fct.label} value={fct.value} />
-                                        ))}
-                                    </FactGrid>
-                                }
-                            />
+                <CardBody>
+                    {/* Identity block — the Household person row, at the top, as the subject. */}
+                    <div className="alloy-os-household__row alloy-os-cardlab__person">
+                        <CardAvatar name={evidence.name} size={40} role="contact" />
+                        <div className="alloy-os-household__row-main">
+                            {evidence.presenceLine ? (
+                                <span className="alloy-os-staff__presence">{evidence.presenceLine}</span>
+                            ) : (
+                                <span className="alloy-os-staff__presence alloy-os-staff__presence--off">
+                                    Not on site today
+                                </span>
+                            )}
+                            <span className="alloy-os-household__row-detail">
+                                {[evidence.contact.email, evidence.contact.phone].filter(Boolean).join(" · ")}
+                            </span>
+                        </div>
+                    </div>
+
+                    <SectionHead ruled={false}>Today</SectionHead>
+                    <FactGrid>
+                        {evidence.today.map((f) => (
+                            <Fact key={f.label} label={f.label} value={f.value} />
                         ))}
-                        {evidence.othersCount ? (
-                            <StatChips
-                                items={[{ count: String(evidence.othersCount), label: evidence.othersLabel }]}
-                            />
-                        ) : null}
-                    </CardBody>
-                )}
+                    </FactGrid>
+
+                    <SectionHead ruled={false}>Employment</SectionHead>
+                    <FactGrid>
+                        {evidence.employment.map((f) => (
+                            <Fact key={f.label} label={f.label} value={f.value} />
+                        ))}
+                    </FactGrid>
+
+                    <SectionHead ruled={false}>Assignments</SectionHead>
+                    <StatChips
+                        items={evidence.assignments.map((a) => ({ count: a.room, label: a.when }))}
+                    />
+                </CardBody>
             </UniversalCard>
         </div>
     );

@@ -7,52 +7,59 @@ import {
     FactRow,
     FooterAction,
     SectionHead,
-    StatChips,
 } from "@/components/cardLab/CardLabKit";
 import type { HealthEvidence } from "@/lib/cardLab/cardLabTypes";
 
 /**
- * Health & Safety — "What do I need to know about this child's health and safety?"
+ * Health & Safety — "What health and safety information do I need to know about this child?"
  *
- * An information card, not an evaluation. It shows the facts; it does not report Alloy's opinion
- * of the facts. A severe allergy is prominent because the fact itself is rendered in the family's
- * risk red, not because a banner announces a count. A missing required document is amber inside
- * its own section, which keeps enrollment-blocking gaps visible without duplicating Readiness.
+ * Grouped by how the information is OWNED, not by how it was collected:
  *
- * Emergency contacts are Household's truth, so this card shows a count chip and hands off.
+ *   critical    → the insight and supporting line. The one fact an adult must know before
+ *                 touching the child leads the card, so it needs no section and no banner.
+ *   MEDICAL     → conditions and restrictions.
+ *   MEDICATIONS → what is administered and where it is kept.
+ *   ENROLLMENT  → Business Process requirement satisfaction, not health facts. Missing reads
+ *                 amber inside its own section, so a blocking gap is visible without the card
+ *                 becoming a second Readiness.
+ *   emergency   → relationship truth, PROJECTED. Household owns it; this card points at it.
+ *
+ * @see docs/platform/operator/child-health-information-architecture.md
  */
 export default function HealthSafetyCard({
     evidence,
+    onViewDetails,
     onEdit,
 }: {
     evidence: HealthEvidence;
+    onViewDetails?: () => void;
     onEdit?: () => void;
 }) {
     const isEmpty =
-        evidence.allergies.length === 0 &&
+        !evidence.criticalLine &&
         evidence.medical.length === 0 &&
         evidence.medications.length === 0 &&
-        evidence.dietary.length === 0 &&
         evidence.requirements.length === 0;
 
     return (
         <div className="alloy-os-health" data-health-card="true">
             <UniversalCard
                 title="Health & Safety"
-                insight={isEmpty ? "No health information recorded" : evidence.answerLine}
-                supportingInsight={isEmpty ? null : evidence.supportingLine}
+                insight={isEmpty ? "No health information recorded" : (evidence.criticalLine ?? "No critical alerts")}
+                supportingInsight={isEmpty ? null : evidence.criticalDetail}
                 iconName="HeartPulse"
                 tier="context"
                 archetype="status"
-                statusChip={evidence.statusChip ?? undefined}
-                statusTone="at-risk"
                 density="compact"
                 gridSpan={1}
                 data-universal-card-key="health_safety"
+                className={evidence.criticalLine ? "alloy-os-health--critical" : undefined}
                 footerAction={
-                    <FooterAction onClick={onEdit}>
-                        {isEmpty ? "Add health information →" : "Edit"}
-                    </FooterAction>
+                    isEmpty ? (
+                        <FooterAction onClick={onEdit}>Add health information →</FooterAction>
+                    ) : (
+                        <FooterAction onClick={onViewDetails}>View health details →</FooterAction>
+                    )
                 }
             >
                 {isEmpty ? (
@@ -61,39 +68,27 @@ export default function HealthSafetyCard({
                     </CardBody>
                 ) : (
                     <CardBody>
-                        {evidence.allergies.length ? (
-                            <>
-                                <SectionHead ruled={false}>Allergies</SectionHead>
-                                {evidence.allergies.map((a) => (
-                                    <FactRow key={a.name} name={a.name} detail={a.detail} severe={a.severe} />
-                                ))}
-                            </>
-                        ) : null}
-
-                        {evidence.medical.length || evidence.medications.length ? (
+                        {evidence.medical.length ? (
                             <>
                                 <SectionHead ruled={false}>Medical</SectionHead>
                                 {evidence.medical.map((m) => (
                                     <FactRow key={m.name} name={m.name} detail={m.detail} />
                                 ))}
+                            </>
+                        ) : null}
+
+                        {evidence.medications.length ? (
+                            <>
+                                <SectionHead ruled={false}>Medications</SectionHead>
                                 {evidence.medications.map((m) => (
                                     <FactRow key={m.name} name={m.name} detail={m.detail} />
                                 ))}
                             </>
                         ) : null}
 
-                        {evidence.dietary.length ? (
-                            <>
-                                <SectionHead ruled={false}>Dietary</SectionHead>
-                                {evidence.dietary.map((d) => (
-                                    <FactRow key={d.name} name={d.name} detail={d.detail} />
-                                ))}
-                            </>
-                        ) : null}
-
                         {evidence.requirements.length ? (
                             <>
-                                <SectionHead ruled={false}>Required information</SectionHead>
+                                <SectionHead ruled={false}>Enrollment health</SectionHead>
                                 {evidence.requirements.map((r) => (
                                     <FactRow
                                         key={r.name}
@@ -105,13 +100,12 @@ export default function HealthSafetyCard({
                             </>
                         ) : null}
 
-                        <SectionHead ruled={false}>Emergency</SectionHead>
                         {evidence.emergencyPrimary ? (
-                            <FactRow name={evidence.emergencyPrimary} detail={evidence.emergencyDetail} />
+                            <p className="alloy-os-health__emergency">
+                                <strong>{evidence.emergencyCount} emergency contacts</strong> ·{" "}
+                                {evidence.emergencyPrimary} first
+                            </p>
                         ) : null}
-                        <StatChips
-                            items={[{ count: String(evidence.emergencyCount), label: "Emergency contacts" }]}
-                        />
                     </CardBody>
                 )}
             </UniversalCard>

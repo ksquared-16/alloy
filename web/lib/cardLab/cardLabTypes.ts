@@ -7,7 +7,8 @@
  * in the card.
  */
 
-export type StepState = "done" | "current" | "future";
+/** `collapsed` is a projection artefact — N events the card is not showing, not an event. */
+export type StepState = "done" | "current" | "future" | "collapsed";
 
 /** One column of a progression band — shared by Journey (stages) and Attendance (day events). */
 export type ProgressionStep = {
@@ -29,8 +30,6 @@ export type JourneyEvidence = {
 
 export type HealthFact = {
     name: string;
-    /** Rendered in the family's risk red — reserved for genuinely severe facts. */
-    severe?: boolean;
     detail?: string | null;
 };
 
@@ -40,21 +39,29 @@ export type HealthRequirement = {
     missing?: boolean;
 };
 
+/**
+ * Health evidence, grouped the way the architecture says the information is actually owned:
+ *
+ *   critical      the one safety fact an adult must know before touching the child (structured
+ *                 health fact — category B, no owner yet)
+ *   medical       conditions and restrictions (mix of B and simple child profile facts, A)
+ *   medications   what is administered, and where it is kept (category B)
+ *   enrollment    document/form requirements resolved by the Business Process (category D)
+ *   emergency     relationship truth, projected — never stored here (category E)
+ */
 export type HealthEvidence = {
-    answerLine: string;
-    supportingLine: string;
-    statusChip?: string | null;
-    allergies: HealthFact[];
+    /** The critical safety fact leads the card as the insight — no section, no banner. */
+    criticalLine: string | null;
+    criticalDetail: string | null;
     medical: HealthFact[];
     medications: HealthFact[];
-    dietary: HealthFact[];
     requirements: HealthRequirement[];
     emergencyCount: number;
     emergencyPrimary: string | null;
     emergencyDetail: string | null;
 };
 
-export type StaffPerson = {
+export type CareTeamPerson = {
     id: string;
     name: string;
     /** The relationship pill — why this person is on this child's card. */
@@ -66,10 +73,10 @@ export type StaffPerson = {
     facts: { label: string; value: string }[];
 };
 
-export type StaffEvidence = {
+export type CareTeamEvidence = {
     answerLine: string;
     supportingLine: string;
-    people: StaffPerson[];
+    people: CareTeamPerson[];
     othersCount: number;
     othersLabel: string;
 };
@@ -93,9 +100,14 @@ export type AttendanceEvidence = {
 export type LedgerEntry = {
     when: string;
     label: string;
-    /** Already signed and formatted by the evidence builder — the card never does arithmetic. */
+    /**
+     * Already signed and formatted by the evidence builder — the card never does arithmetic.
+     * Direction is account balance: a charge INCREASES what is owed (`+`), a payment, credit,
+     * discount or subsidy REDUCES it (`−`). The sign is in the text, so the meaning survives
+     * without colour.
+     */
     amount: string;
-    /** credit = money toward the balance (payments, subsidy, discounts). Drives colour only. */
+    /** Reinforces the sign; never the only carrier of it. */
     kind: "charge" | "credit";
 };
 
@@ -115,4 +127,30 @@ export type BillingEvidence = {
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
     payers: BillingPayer[];
+};
+
+/**
+ * Employee-grain Staff evidence.
+ *
+ * Every field here has a canonical owner today:
+ *   identity     persons
+ *   employment   employments / employment_positions  → PersonEmploymentPeriod
+ *   assignment   schedule_assignments (subject_type = 'staff')
+ *   today        staff_presence_events               → StaffPresenceDayState
+ *   contact      persons
+ *
+ * Qualifications and credentials are DELIBERATELY absent — no store exists (see the lab's
+ * review panel). Adding them here would be inventing employment truth to make a specimen richer.
+ */
+export type StaffEvidence = {
+    name: string;
+    stateLabel: string;
+    stateTone: "ready" | "due" | "neutral";
+    answerLine: string;
+    supportingLine: string;
+    employment: { label: string; value: string }[];
+    today: { label: string; value: string }[];
+    presenceLine: string | null;
+    assignments: { room: string; when: string }[];
+    contact: { email: string | null; phone: string | null };
 };

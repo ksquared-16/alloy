@@ -14,6 +14,7 @@ import type {
     BillingEvidence,
     HealthEvidence,
     JourneyEvidence,
+    CareTeamEvidence,
     StaffEvidence,
 } from "@/lib/cardLab/cardLabTypes";
 
@@ -29,11 +30,11 @@ export const LAB_SUBJECT = {
 /** Stages of the configured Enrollment Business Process — the journey spine. */
 export const JOURNEY_FIXTURE: JourneyEvidence = {
     processLabel: "Enrollment Journey",
-    answerLine: "Enrolling · since Aug 18",
-    supportingLine: "Lead Aug 2 → Enrolling Aug 18 · 22 days in process",
+    answerLine: "Enrolling since Aug 18 · day 22 of 5 stages",
+    supportingLine: "",
     stages: [
-        { state: "done", value: "Lead", detail: "Aug 2", note: "Inquiry submitted" },
-        { state: "done", value: "Tour", detail: "Aug 5 – 8", note: "Tour completed" },
+        { state: "done", value: "Lead", detail: "Aug 2", note: null },
+        { state: "done", value: "Tour", detail: "Aug 5 – 8", note: "Completed" },
         { state: "done", value: "Waitlist", detail: "Aug 9 – 18", note: "Offer accepted" },
         { state: "current", value: "Enrolling", detail: "Since Aug 18", note: "2 items remain" },
         { state: "future", value: "Enrolled", detail: "Expected Sep 2", note: null },
@@ -41,21 +42,17 @@ export const JOURNEY_FIXTURE: JourneyEvidence = {
 };
 
 export const HEALTH_FIXTURE: HealthEvidence = {
-    answerLine: "Peanut allergy — severe · EpiPen on site",
-    supportingLine: "Asthma · no dairy · 3 emergency contacts",
-    statusChip: null,
-    allergies: [
-        { name: "Peanuts", severe: true, detail: "Anaphylaxis · EpiPen kept in Sunflower Room" },
-        { name: "Latex", detail: "Contact rash" },
-    ],
+    criticalLine: "Peanut allergy — severe",
+    criticalDetail: "Anaphylaxis · EpiPen kept in Sunflower Room",
     medical: [
         { name: "Asthma", detail: "Exercise-induced" },
+        { name: "Dairy restriction", detail: "Substitute oat milk" },
+        { name: "Latex sensitivity", detail: "Contact rash" },
     ],
     medications: [
-        { name: "Albuterol inhaler", detail: "As needed · 2 puffs · kept in Sunflower Room" },
-        { name: "Epinephrine auto-injector", detail: "Emergency use · expires Mar 2027" },
+        { name: "Albuterol inhaler", detail: "As needed · Sunflower Room" },
+        { name: "Epinephrine auto-injector", detail: "Emergency · expires Mar 2027" },
     ],
-    dietary: [{ name: "No dairy", detail: "Substitute oat milk" }],
     requirements: [
         { name: "Physical exam", value: "Received Jul 14" },
         { name: "Immunization record", value: "Received Jul 14" },
@@ -66,7 +63,7 @@ export const HEALTH_FIXTURE: HealthEvidence = {
     emergencyDetail: "First call · Aunt · (555) 444-0199",
 };
 
-export const STAFF_FIXTURE: StaffEvidence = {
+export const CARE_TEAM_FIXTURE: CareTeamEvidence = {
     answerLine: "Taylor Reed is Avery's lead teacher",
     supportingLine: "Sunflower Room · Toddler · North Campus · today",
     people: [
@@ -140,7 +137,7 @@ export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
 };
 
 export const BILLING_FIXTURE: BillingEvidence = {
-    answerLine: "$1,065 family share · due Sep 1",
+    answerLine: "$1,065 family responsibility · due Sep 1",
     supportingLine: "Aug 1 – Aug 31 · autopay on",
     statusChip: "$275 past due",
     period: {
@@ -149,7 +146,7 @@ export const BILLING_FIXTURE: BillingEvidence = {
             { label: "Tuition", value: "$1,850" },
             { label: "Sibling discount", value: "−$185" },
             { label: "State subsidy", value: "−$600" },
-            { label: "Family share", value: "$1,065", emphasis: true },
+            { label: "Family responsibility", value: "$1,065", emphasis: true },
         ],
     },
     dueLabel: "Next due",
@@ -161,15 +158,96 @@ export const BILLING_FIXTURE: BillingEvidence = {
         note: "Card declined Aug 16 · Visa •••• 4242",
     },
     ledger: [
-        { when: "Aug 20", label: "Payment received", amount: "+$925", kind: "credit" },
-        { when: "Aug 15", label: "Tuition — August", amount: "$1,850", kind: "charge" },
+        { when: "Aug 20", label: "Payment received", amount: "−$925", kind: "credit" },
+        { when: "Aug 15", label: "Tuition — August", amount: "+$1,850", kind: "charge" },
         { when: "Aug 15", label: "State subsidy", amount: "−$600", kind: "credit" },
         { when: "Aug 12", label: "Sibling discount", amount: "−$185", kind: "credit" },
-        { when: "Aug 10", label: "Late fee", amount: "$25", kind: "charge" },
+        { when: "Aug 10", label: "Late fee", amount: "+$25", kind: "charge" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
         { name: "Taylor Johnson", share: "30%", method: "ACH •••• 8813" },
         { name: "State subsidy", share: "$600 / mo", method: "Child Care Assistance" },
     ],
+};
+
+/**
+ * Overflow specimens — one child's day at 0, 2, 5, 8 and 12 movements, through the SAME card.
+ * They exist to prove the projection rule holds its width budget, not to enumerate states.
+ */
+const ROOMS = [
+    "Playground", "Sunflower Room", "Nap Room", "Art Room", "Gym", "Library",
+    "Sunflower Room", "Playground", "Music Room", "Nap Room", "Sunflower Room", "Playground",
+];
+
+function movementSteps(count: number): AttendanceEvidence["events"] {
+    const start = MIN(8, 30);
+    const step = Math.floor((MIN(15, 30) - start) / Math.max(1, count));
+    return Array.from({ length: count }, (_, i) => {
+        const at = start + step * i;
+        const h = Math.floor(at / 60);
+        const m = at % 60;
+        const hh = h > 12 ? h - 12 : h;
+        const ampm = h >= 12 ? "PM" : "AM";
+        return {
+            state: (i === count - 1 ? "current" : "done") as "current" | "done",
+            label: "Moved",
+            value: `${hh}:${String(m).padStart(2, "0")} ${ampm}`,
+            note: ROOMS[i % ROOMS.length]!,
+        };
+    });
+}
+
+export function attendanceWithMovements(count: number): AttendanceEvidence {
+    const movements = movementSteps(count);
+    const last = movements[movements.length - 1];
+    // The day bar must advance with the last recorded fact, or a busy afternoon reads as a
+    // morning that stopped — the specimen would then be testing the wrong thing.
+    const lastMin = count === 0 ? MIN(8, 4) : MIN(8, 30) + Math.floor((MIN(15, 30) - MIN(8, 30)) / count) * (count - 1);
+    return {
+        ...ATTENDANCE_FIXTURE,
+        actual: { fromMin: MIN(8, 4), toMin: lastMin },
+        answerLine:
+            count === 0
+                ? "In Sunflower Room since 8:04 AM"
+                : `In ${last!.note} since ${last!.value}`,
+        supportingLine: `Expected 8:00 AM – 4:30 PM · ${count} ${count === 1 ? "movement" : "movements"} today`,
+        events: [
+            { state: "done", label: "Checked in", value: "8:04 AM", note: "Sunflower Room" },
+            ...movements,
+            { state: "future", label: "Check-out", value: "—", note: "Expected 4:30 PM" },
+        ],
+        correctionNote: null,
+    };
+}
+
+export const ATTENDANCE_OVERFLOW_SPECIMENS = [0, 2, 5, 8, 12] as const;
+
+/**
+ * Employee-grain Staff fixture. Taylor Reed is the SUBJECT here, not a row on a child's card.
+ * Values map one-to-one onto canonical shapes — `PersonEmploymentPeriod` for employment,
+ * `StaffPresenceDayState` for today, `schedule_assignments` for the rooms.
+ */
+export const STAFF_FIXTURE: StaffEvidence = {
+    name: "Taylor Reed",
+    stateLabel: "Active",
+    stateTone: "ready",
+    answerLine: "Lead Teacher · Full time · North Campus",
+    supportingLine: "Since Aug 12, 2024",
+    employment: [
+        { label: "Position", value: "Lead Teacher" },
+        { label: "Type", value: "Full time" },
+        { label: "Started", value: "Aug 12, 2024" },
+        { label: "Primary site", value: "North Campus" },
+    ],
+    today: [
+        { label: "Scheduled", value: "7:30 AM – 4:00 PM" },
+        { label: "Room", value: "Sunflower Room" },
+    ],
+    presenceLine: "On site since 7:27 AM · Sunflower Room",
+    assignments: [
+        { room: "Sunflower Room", when: "Mon – Fri · 7:30 – 4:00" },
+        { room: "Playground", when: "Mon, Wed · 10:00 – 10:45" },
+    ],
+    contact: { email: "taylor.reed@example.com", phone: "(541) 555-0148" },
 };

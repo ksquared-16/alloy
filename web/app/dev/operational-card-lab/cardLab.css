@@ -84,6 +84,40 @@
   color: #b91c1c;
 }
 
+/* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
+ * no banner, no count, no separate section. */
+/* Tier rules set the insight colour at (0,2,0), so the critical override has to outrank them —
+ * otherwise the severe fact renders in ordinary card ink and the emphasis silently disappears. */
+.alloy-os-ucard.alloy-os-health--critical .alloy-os-ucard__insight {
+  color: #b91c1c;
+}
+.alloy-os-ucard.alloy-os-health--critical .alloy-os-ucard__supporting {
+  color: #dc2626;
+}
+.alloy-os-health__emergency {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__emergency strong {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+.alloy-os-staff__name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-staff__presence {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-staff__presence--off {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+
 .alloy-os-cardlab__person {
   align-items: flex-start;
 }
@@ -116,6 +150,40 @@
   padding: 6px 12px 8px 8px;
   border-radius: 8px;
 }
+/* Journey is an orientation strip: tighter rhythm, one folded supporting line. */
+.alloy-os-progression--compact .alloy-os-progression__step {
+  gap: 3px;
+  padding: 3px 12px 3px 6px;
+}
+.alloy-os-progression--compact .alloy-os-progression__glyph {
+  width: 12px;
+  height: 12px;
+}
+.alloy-os-progression--compact .alloy-os-progression__value {
+  font-size: 0.78rem;
+}
+
+/* A projection artefact, not an event — it reads as an affordance, never as a stage. */
+.alloy-os-progression__collapsed {
+  align-self: flex-start;
+  border: 1px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
+  background: transparent;
+  border-radius: 999px;
+  padding: 1px 9px;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.alloy-os-progression__collapsed:hover {
+  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 50%, transparent);
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-progression__step[data-progression-state="collapsed"] .alloy-os-progression__rail {
+  opacity: 0.55;
+}
 /* The current column takes the Children --focused treatment: tint, no border, no banner. */
 .alloy-os-progression__step--current {
   background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
@@ -143,6 +211,10 @@
 .alloy-os-progression__glyph[data-glyph="current"] {
   background: var(--alloy-os-bend-pine, #00a283);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 22%, transparent);
+}
+.alloy-os-progression__glyph[data-glyph="collapsed"] {
+  background: #fff;
+  border: 1.5px dashed color-mix(in srgb, var(--alloy-os-midnight, #273f52) 26%, transparent);
 }
 .alloy-os-progression__glyph[data-glyph="future"] {
   background: #fff;
@@ -321,6 +393,9 @@
   font-weight: 650;
   color: var(--alloy-os-midnight, #273f52);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  min-width: 72px;
+  text-align: right;
 }
 .alloy-os-billing__line--emphasis {
   margin-top: 3px;
@@ -357,17 +432,29 @@
   white-space: nowrap;
 }
 
+.alloy-os-billing__due {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-billing__due strong {
+  font-size: 0.76rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* The past-due amount is the one number that must be read from across the room. */
 .alloy-os-billing__amount {
   margin: 0;
-  font-size: 1.28rem;
+  font-size: 1.75rem;
   font-weight: 700;
   line-height: 1.15;
   color: #b45309;
   font-variant-numeric: tabular-nums;
 }
 .alloy-os-billing__age {
-  margin: 0;
-  font-size: 11px;
+  margin: -2px 0 0;
+  font-size: 11.5px;
   font-weight: 600;
   color: #b45309;
 }
@@ -378,10 +465,13 @@
 }
 .alloy-os-billing__entry {
   display: grid;
-  grid-template-columns: 46px minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 46px minmax(0, 1fr) 72px;
+  gap: 10px;
   align-items: baseline;
   min-width: 0;
+}
+.alloy-os-billing__entry > :last-child {
+  text-align: right;
 }
 .alloy-os-billing__entry-label {
   font-size: 0.74rem;
@@ -395,6 +485,8 @@
   font-weight: 650;
   color: var(--alloy-os-midnight, #273f52);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  white-space: nowrap;
 }
 .alloy-os-billing__entry-amount--credit {
   color: var(--alloy-os-bend-pine, #00a283);

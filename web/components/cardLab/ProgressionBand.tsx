@@ -18,12 +18,20 @@ import type { ProgressionStep } from "@/lib/cardLab/cardLabTypes";
 export default function ProgressionBand({
     steps,
     dataName,
+    compact = false,
+    onCollapsedClick,
 }: {
     steps: ProgressionStep[];
     dataName: string;
+    /** Journey: fold detail and note onto one line. The strip is orientation, not a report. */
+    compact?: boolean;
+    onCollapsedClick?: () => void;
 }) {
     return (
-        <div className="alloy-os-progression" data-progression={dataName}>
+        <div
+            className={clsx("alloy-os-progression", compact && "alloy-os-progression--compact")}
+            data-progression={dataName}
+        >
             {steps.map((step, i) => (
                 <div
                     key={`${step.value}-${i}`}
@@ -58,11 +66,33 @@ export default function ProgressionBand({
                         {step.label ? (
                             <p className="alloy-os-currentwork__context-label">{step.label}</p>
                         ) : null}
-                        <p className="alloy-os-progression__value">{step.value}</p>
-                        {step.detail ? (
-                            <p className="alloy-os-progression__detail">{step.detail}</p>
-                        ) : null}
-                        {step.note ? <p className="alloy-os-progression__note">{step.note}</p> : null}
+                        {step.state === "collapsed" ? (
+                            <button
+                                type="button"
+                                className="alloy-os-progression__collapsed"
+                                onClick={onCollapsedClick}
+                            >
+                                {step.value}
+                            </button>
+                        ) : (
+                            <p className="alloy-os-progression__value">{step.value}</p>
+                        )}
+                        {compact ? (
+                            step.detail || step.note ? (
+                                <p className="alloy-os-progression__detail">
+                                    {[step.detail, step.note].filter(Boolean).join(" · ")}
+                                </p>
+                            ) : null
+                        ) : (
+                            <>
+                                {step.detail ? (
+                                    <p className="alloy-os-progression__detail">{step.detail}</p>
+                                ) : null}
+                                {step.note ? (
+                                    <p className="alloy-os-progression__note">{step.note}</p>
+                                ) : null}
+                            </>
+                        )}
                     </div>
                 </div>
             ))}

@@ -7,7 +7,6 @@ import {
     Action,
     ActionRow,
     EmptyLine,
-    Fact,
     FooterAction,
     SectionHead,
 } from "@/components/cardLab/CardLabKit";
@@ -70,7 +69,9 @@ export default function BillingCard({
                                 </div>
                             ))}
                         </div>
-                        <Fact label={evidence.dueLabel} value={evidence.dueValue} />
+                        <p className="alloy-os-billing__due">
+                            {evidence.dueLabel} · <strong>{evidence.dueValue}</strong>
+                        </p>
                         <SectionHead ruled={false}>Payers</SectionHead>
                         {evidence.payers.map((p) => (
                             <p key={p.name} className="alloy-os-billing__payer">
@@ -86,17 +87,16 @@ export default function BillingCard({
                         {pastDue ? (
                             <>
                                 <p className="alloy-os-billing__amount">{pastDue.amount}</p>
-                                <Fact label="Oldest unpaid" value={pastDue.oldest} tone="missing" />
-                                <p className="alloy-os-household__row-detail--missing alloy-os-billing__age">
-                                    {pastDue.age}
+                                <p className="alloy-os-billing__age">
+                                    Oldest unpaid · {pastDue.oldest} · {pastDue.age}
                                 </p>
                                 {pastDue.note ? (
                                     <p className="alloy-os-household__row-detail">{pastDue.note}</p>
                                 ) : null}
                                 <ActionRow>
                                     <Action primary>Pay now</Action>
-                                    <Action>Manage payment</Action>
                                 </ActionRow>
+                                <FooterAction>Manage payment →</FooterAction>
                             </>
                         ) : (
                             <>
@@ -109,8 +109,8 @@ export default function BillingCard({
                     </section>
 
                     <section className="alloy-os-billing__zone">
-                        <SectionHead ruled={false}>Recent activity</SectionHead>
-                        <div className="alloy-os-billing__ledger">
+                        <SectionHead ruled={false}>Recent ledger</SectionHead>
+                        <div className="alloy-os-billing__ledger" role="table">
                             {evidence.ledger.map((e, i) => (
                                 <div key={`${e.when}-${i}`} className="alloy-os-billing__entry">
                                     <span className="alloy-os-currentwork__recent-activity-when">{e.when}</span>
