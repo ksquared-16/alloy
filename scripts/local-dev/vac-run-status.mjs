@@ -8,6 +8,7 @@
 import { resolve } from "node:path";
 import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 import { reportRunState } from "./lib/vacilando/execution-run.mjs";
+import { fileTerminalSummaryOutput } from "./lib/vacilando/run-summary-output.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac run-status <run_id> <state> [--reason "..."] [--summary "..."] [--resource <key>] [--json '{...}']
@@ -75,4 +76,29 @@ if (!out.ok) {
 }
 
 const run = out.run;
+
+// A summary on a finished turn is the operator-facing account of the work, so
+// file it where the lane actually reads from. reportRunState only writes the
+// bounded row label, and on an already-closed run it drops even that — which is
+// how whole turn summaries went missing while this command still exited 0.
+let presented = null;
+if (summary && !checkpointReady) {
+  presented = fileTerminalSummaryOutput(run.run_id, run.state, {
+    summary,
+    laneId: lane || null,
+    cwd: resolve(process.cwd()),
+    origin: "agent",
+  });
+}
+
 process.stdout.write(`${run.run_id} ${run.lane_id} ${run.state}\n`);
+
+// Say plainly whether the operator will see it. Staying quiet here is what let
+// a discarded summary look identical to a filed one.
+if (presented && presented.presented === false && presented.reason !== "state_not_presented") {
+  process.stderr.write(`vac run-status: summary NOT presented to the operator (${presented.reason}).\n`);
+  process.exit(5);
+}
+if (presented?.presented) {
+  process.stdout.write(`summary presented (${presented.reason}, ${presented.bytes ?? 0} bytes)\n`);
+}

@@ -40,6 +40,7 @@ SUITES=(
   "development-screen-answer.test.mjs"
   "development-lane-activity.test.mjs"
   "development-governed-approval.test.mjs"
+  "development-run-summary-output.test.mjs"
 )
 
 PASS=0

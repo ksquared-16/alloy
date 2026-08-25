@@ -731,6 +731,18 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     }
     // Structured agent reports (execution-run-report.mjs). Stored verbatim:
     // the user-facing message must never be shortened on its way to disk.
+    if (fields.completion_report !== undefined) {
+      // Allowlisted and bounded like every other patchable field. Needed so an
+      // agent's own summary can replace a system-authored placeholder on a run
+      // that was closed before the agent filed it — see run-summary-output.
+      found.completion_report = fields.completion_report
+        ? {
+          summary: bound(fields.completion_report.summary || fields.completion_report, EXECUTION_RUN_SUMMARY_MAX),
+          at: fields.completion_report.at || iso(nowMs),
+          ...(fields.completion_report.report_id ? { report_id: String(fields.completion_report.report_id) } : {}),
+        }
+        : null;
+    }
     if (fields.agent_report !== undefined) {
       found.agent_report = fields.agent_report || null;
     }
