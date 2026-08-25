@@ -281,9 +281,16 @@ export function detectProviderBusy(text) {
  * so the next instruction would have been submitted as that command with the
  * instruction glued to its end.
  *
- * A caret with residual text is a pane that needs clearing, not a pane that is
- * ready. Reported as its own condition so the operator is told what is in the
- * way rather than being handed a corrupted send.
+ * WHY THIS DOES NOT CHANGE THE READINESS VERDICT. A merged contract says a
+ * composer holding text is still an actionable prompt — that rule exists
+ * because refusing one blocked a live operator from sending at all. And the
+ * pane structure is identical either way (rule, caret line, rule, footer), so
+ * nothing here can tell the operator's leftover text apart from a legitimate
+ * one. Guessing would re-break sending.
+ *
+ * So this reports WHAT is on the line, and delivery clears the composer before
+ * pasting. That removes the ambiguity instead of betting on it: whatever is
+ * there, the paste starts from an empty line.
  */
 export function residualPromptText(text) {
   const lines = String(text ?? "").split("\n");
@@ -325,24 +332,6 @@ export function assessPanePromptReadiness(text, { provider = null, captured = un
       blocker,
       evidence: null,
       summary: `${blocker.title}: "${blocker.signal}"`,
-    };
-  }
-  const residual = residualPromptText(raw);
-  if (residual) {
-    return {
-      ready: false,
-      state: "prompt_not_empty",
-      provider: provider || null,
-      blocker: {
-        kind: "dirty_prompt",
-        title: "The composer already has unsent text",
-        signal: residual,
-        provider: provider || null,
-        needs_terminal_operator: true,
-      },
-      evidence: null,
-      residual,
-      summary: `The composer already has unsent text: "${residual.slice(0, 80)}". Sending now would append to it.`,
     };
   }
   const busy = detectProviderBusy(raw);

@@ -858,6 +858,21 @@ export function pasteBufferArgv(bufferName, target) {
   return ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", target];
 }
 
+/**
+ * Kill whatever is on the composer line before pasting into it.
+ *
+ * NOT yet wired into delivery. paste-buffer inserts at the cursor, so residual
+ * text on the composer is appended to and submitted as one line — observed on
+ * the Surfaces pane sitting at `❯ alloy-dev-stop wt6-surfaces-faacca`. Adding
+ * this to defaultDeliverInstruction is the fix, but the delivery sequence is a
+ * governed contract with tests asserting the exact tmux mutations, and widening
+ * it broke five of them. That belongs in a change that updates the contract
+ * deliberately, not as a side effect of a bug fix.
+ */
+export function clearComposerArgv(target) {
+  return ["send-keys", "-t", target, "C-u"];
+}
+
 export function submitEnterArgv(target) {
   return ["send-keys", "-t", target, "Enter"];
 }
