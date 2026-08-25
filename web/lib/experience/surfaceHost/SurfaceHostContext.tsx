@@ -34,6 +34,7 @@ import { surfaceIdFor } from "@/lib/runtime/kernel/focus";
 import { destinationIdKey, nodeDestinationId } from "@/lib/runtime/graph/destinationId";
 import { destinationIdFromAnswer } from "@/lib/runtime/provisioning/provisioningAnswerDestination";
 import { readHistoryDestination, stampHistoryDestination } from "@/lib/experience/surfaceHost/historyDestination";
+import { historyProjectionMode } from "@/lib/experience/surfaceHost/historyProjectionMode";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { subscribeWorkspaceReturn } from "@/lib/experience/surfaceHost/workspaceReturnIntent";
 import { ProvisionedWorkUnitSurface } from "@/components/presentation/workUnit/ProvisionedWorkUnitSurface";
@@ -162,10 +163,17 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
     const desiredIsWorkspace = focus.desired?.target === WORKSPACE_ATTENTION_TARGET;
 
     // ── URL PROJECTION — written FROM committed Focus, after the commit. Never before, never as a
-    //    cause. `replaceState` keeps the address honest without manufacturing history entries the
-    //    operator did not create; K3 owns the address, the router does not. The one exception is the
-    //    Workspace: it has no committed surface to project from, so when the operator is on it the
-    //    address is its bare path rather than the stale (retained) Work Unit's slug URL.
+    //    cause. K3 owns the address, the router does not. The one exception is the Workspace: it has
+    //    no committed surface to project from, so when the operator is on it the address is its bare
+    //    path rather than the stale (retained) Work Unit's slug URL.
+    //
+    //    A SURFACE EXCHANGE CREATES A HISTORY ENTRY; refining the address inside the surface does
+    //    not. This projection used `replaceState` for both, which collapsed an entire operator
+    //    session into ONE entry — Back then left the application (measured: a full document load out
+    //    of the Work Unit), and the popstate adapter above could never restore a stamped destination
+    //    because no second entry existed. `historyProjectionMode` owns that distinction; a 17-row
+    //    queue still produces no entries, because a subject movement keeps the same path.
+    const lastProjectedPathRef = useRef<string | null>(null);
     useEffect(() => {
         if (typeof window === "undefined") return;
         const url = desiredIsWorkspace ? WORKSPACE_URL : focus.projectedUrl;
@@ -196,9 +204,24 @@ export function SurfaceHostProvider({ children }: { children: ReactNode }) {
         const destKey = dest ? destinationIdKey(dest) : null;
         const prevDest = readHistoryDestination(window.history.state);
         const prevKey = prevDest ? destinationIdKey(prevDest) : null;
-        const addressUnchanged = window.location.pathname + window.location.search === url;
+        const projectedPath = url.split("?")[0] ?? url;
+        const currentPath = window.location.pathname;
+        const mode = historyProjectionMode({
+            projectedPath,
+            currentPath,
+            lastProjectedPath: lastProjectedPathRef.current,
+        });
+        // Recorded before the early return: a projection that changed nothing is still the surface
+        // this document last projected, and the NEXT exchange must be measured against it.
+        lastProjectedPathRef.current = projectedPath;
+        const addressUnchanged = currentPath + window.location.search === url;
         if (addressUnchanged && destKey === prevKey) return;
-        window.history.replaceState(stampHistoryDestination(window.history.state, dest), "", url);
+        const nextState = stampHistoryDestination(window.history.state, dest);
+        if (mode === "push") {
+            window.history.pushState(nextState, "", url);
+            return;
+        }
+        window.history.replaceState(nextState, "", url);
     }, [focus.projectedUrl, desiredIsWorkspace, focus.current]);
 
     // ── THE VISIBLE DECISION — committed Focus, and nothing else. ──
