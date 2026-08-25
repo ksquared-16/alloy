@@ -64,7 +64,9 @@ describe("M5C — apply approved configuration", () => {
     it("projects relationships through the canonical collection provider (not flat fields)", () => {
         const { result } = applyDiscovery({ draft, discovery, decisions });
         const rel = result.results.filter((r) => r.disposition === "relationship_binding" && r.outcome === "applied");
-        expect(rel.length).toBe(3);
+        // Five, not three: this school names a doctor and a dentist, and both now bind to a
+        // care-provider relationship instead of becoming flat child fields.
+        expect(rel.length).toBe(5);
         expect(rel.some((r) => r.provider_ref === "person.contact_role.emergency_contacts")).toBe(true);
         expect(rel.some((r) => r.provider_ref === "person.contact_role.authorized_pickups")).toBe(true);
         // each carries the canonical apply command (relationshipExecutionAdapter) for submission-time write

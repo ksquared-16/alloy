@@ -301,7 +301,7 @@ describe("the compression scorecard, guarded", () => {
         expect(uniqueObligations().size).toBe(32);
     });
 
-    it("8 of the 86 facts carry a SAFE canonical binding proposal, and 3 unsafe ones are refused", () => {
+    it("12 of the 86 facts carry a SAFE proposal, and the one remaining unsafe binding is refused", () => {
         const bound = new Set<string>();
         const merge = new Map<string, string>();
         for (const c of packet.correlations) for (const m of c.members) merge.set(`${m.document_id}:${m.concept_id}`, c.concept_key);
@@ -317,20 +317,25 @@ describe("the compression scorecard, guarded", () => {
             }
         }
         expect(bound.size).toBe(8);
-        // The rest is Slice 4's classification input.
-        expect(uniqueFacts().size - bound.size).toBe(78);
 
-        // The three refusals are the ones that would have written a stranger onto a family record.
+        // Slice 4 added the care-provider relationships, so the physician's and dentist's name and
+        // phone are no longer refusals — they bind to a relationship, which is where they belong.
+        const relationshipScalars = inputs.flatMap((i) =>
+            i.discovery.proposals.filter((p) => {
+                const c = i.discovery.concepts.find((x) => x.id === p.candidate_id);
+                return p.disposition === "relationship_binding" && c && c.kind !== "relationship_group";
+            })
+        );
+        expect(relationshipScalars).toHaveLength(4);
+        expect(relationshipScalars.map((p) => p.target_relationship_role).sort()).toEqual(["dentist", "dentist", "physician", "physician"]);
+
+        // One refusal remains, and it is the right one: a secondary parent's address is not the
+        // household's, and no relationship collects it.
         const refused = inputs.flatMap((i) => i.discovery.proposals.filter((p) => p.refused_binding));
-        expect(refused).toHaveLength(3);
-        expect(refused.map((p) => `${p.refused_binding!.target.entity_type}.${p.refused_binding!.target.field_key}`).sort()).toEqual([
-            "customer.address",
-            "person.phone",
-            "person.phone",
-        ]);
-        // Every refusal explains itself rather than looking like "nothing matched".
-        expect(refused.every((p) => p.refused_binding!.reason.length > 20)).toBe(true);
-        expect(refused.every((p) => p.disposition !== "reuse_canonical_field")).toBe(true);
+        expect(refused).toHaveLength(1);
+        expect(refused[0].refused_binding!.target).toEqual({ entity_type: "customer", field_key: "address" });
+        expect(refused[0].refused_binding!.reason.length).toBeGreaterThan(20);
+        expect(refused[0].disposition).not.toBe("reuse_canonical_field");
     });
 
     it("every destination in the packet is claimed by a fact or by an obligation — none is orphaned", () => {

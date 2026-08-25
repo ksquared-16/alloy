@@ -76,7 +76,7 @@ const PARTY_FIELDS: Partial<Record<ConceptParty, Partial<Record<string, FormFiel
  * not a party at all. Binding their attributes to a person or household field is the exact failure
  * this module exists to stop.
  */
-const PARTIES_WITHOUT_A_CANONICAL_HOME = new Set<ConceptParty>([
+export const PARTIES_WITHOUT_A_CANONICAL_HOME = new Set<ConceptParty>([
     "physician",
     "dentist",
     "sibling",
@@ -91,6 +91,14 @@ const PARTIES_WITHOUT_A_CANONICAL_HOME = new Set<ConceptParty>([
  * phone number into the household's person field.
  */
 const PARTIES_OWNED_BY_A_RELATIONSHIP = new Set<ConceptParty>(["emergency_contact", "account_holder"]);
+
+/**
+ * True when Alloy has no canonical field for this party — the case where a relationship definition,
+ * if one exists for the role, is the right owner instead of a field.
+ */
+export function partyHasNoCanonicalHome(party: ConceptParty): boolean {
+    return PARTIES_WITHOUT_A_CANONICAL_HOME.has(party);
+}
 
 export type BindingVerdict =
     | { ok: true; field_source: FormFieldSource; redirected: boolean; reason: string }

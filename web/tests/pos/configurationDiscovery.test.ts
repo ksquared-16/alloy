@@ -56,7 +56,10 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
 
     it("produces the operator-facing summary categories", () => {
         expect(summaryCount(/Existing fields matched/)).toBeGreaterThanOrEqual(6);
-        expect(summaryCount(/Relationships found/)).toBe(3);
+        // Five, not three: the care-provider definitions added in Slice 4 mean this school's
+        // "Primary Care Doctor" and "Dentist" fields bind to a physician / dentist relationship
+        // instead of being proposed as new child fields. Different school, same vocabulary.
+        expect(summaryCount(/Relationships found/)).toBe(5);
         // Three, not two: the page asks for immunization records on or before the first day AND for
         // updated records after every new immunization. The old fixed lexicon collapsed both into
         // one "immunization" requirement; they are different obligations with different timing.
@@ -71,7 +74,7 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         const formOnly = proposals.filter((p) => p.disposition === "form_only_response");
         // The 5 audited durable new fields — no more (25→5 correction). Optimize ownership, not count.
         const newLabels = newFields.map((p) => concepts.find((c) => c.id === p.candidate_id)!.label).sort();
-        expect(newLabels).toEqual(["Date of Enrollment", "Dentist Name/Practice", "Nickname", "Preferred Hospital", "Primary Care Doctor Name/Practice"]);
+        expect(newLabels).toEqual(["Date of Enrollment", "Nickname", "Preferred Hospital"]);
         // The health-history screening grid is FORM-ONLY, never durable customer_member fields.
         for (const screening of ["Ear Infections", "Diabetes", "Asthma", "Nosebleeds", "Convulsions/Seizures", "Heart Disease/Defect"]) {
             expect(formOnly.some((p) => concepts.find((c) => c.id === p.candidate_id)!.label === screening)).toBe(true);
@@ -81,9 +84,12 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(formOnly.some((p) => /health care plan/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
         expect(formOnly.some((p) => /if yes, please explain/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
         expect(formOnly.length).toBeGreaterThanOrEqual(18);
-        // A durable medical-provider field carries health sensitivity.
-        const doctor = newFields.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
-        expect(doctor?.proposed_field?.sensitivity).toBe("health");
+        // The doctor is no longer a proposed FIELD at all — it binds to the physician relationship,
+        // which is a better answer than a health-sensitive field on the child. The sensitivity claim
+        // moves with it: what carries health data now is the person the relationship links.
+        const doctor = proposals.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
+        expect(doctor?.disposition).toBe("relationship_binding");
+        expect(doctor?.target_relationship_role).toBe("physician");
     });
 
     it("matches high-confidence canonical fields to the existing model (no duplicates)", () => {
@@ -105,7 +111,7 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
     it("classifies guardians, emergency contacts, and pickups as child-scoped relationships", () => {
         const rel = proposals.filter((p) => p.disposition === "relationship_binding");
         const roles = rel.map((p) => p.target_relationship_role).sort();
-        expect(roles).toEqual(["authorized_pickup", "emergency_contact", "guardian"]);
+        expect(roles).toEqual(["authorized_pickup", "dentist", "emergency_contact", "guardian", "physician"]);
         // relationship concepts, not flat person fields
         expect(concepts.filter((c) => c.kind === "relationship_group").every((c) => c.cardinality === "multiple")).toBe(true);
         // no "Emergency Contact #1 Name" leaked as a scalar field concept

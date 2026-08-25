@@ -218,14 +218,19 @@ describe("the packet reconciles and means something", () => {
 });
 
 describe("the unsafe binding is refused", () => {
-    it("does not offer a person's phone field for the physician's phone", () => {
+    it("never offers a person's phone field for the physician's phone", () => {
         const proposals = Object.values(packet.source_analysis).flatMap((a) => a.proposals);
-        const refused = proposals.filter((p) => p.refused_binding);
-        expect(refused.length).toBe(3);
-        const physician = refused.find((p) => /physician/i.test(p.refused_binding!.reason))!;
-        expect(physician, "the physician's phone must be among the refusals").toBeTruthy();
-        expect(physician.disposition).not.toBe("reuse_canonical_field");
-        expect(physician.refused_binding!.target).toEqual({ entity_type: "person", field_key: "phone" });
+        // Slice 4 gave the physician a canonical home, so the fact is BOUND rather than refused —
+        // but never to the household's person record, which is the property that must hold either way.
+        const toPersonPhone = proposals.filter(
+            (p) => p.target_field_source?.entity_type === "person" && p.target_field_source?.field_key === "phone"
+        );
+        for (const p of toPersonPhone) {
+            const c = Object.values(packet.source_analysis).flatMap((a) => a.concepts).find((x) => x.id === p.candidate_id)!;
+            expect(c.party ?? "unknown", `${c.label} bound to person.phone`).not.toMatch(/physician|dentist/);
+        }
+        const rel = proposals.filter((p) => p.target_relationship_role === "physician");
+        expect(rel.length).toBe(2);
     });
 
     it("proposes no canonical binding whose field belongs to another party", () => {

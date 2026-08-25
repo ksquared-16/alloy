@@ -38,11 +38,21 @@ describe("a physician's phone must not become a family member's phone", () => {
         if (!v.ok) expect(v.reason).toContain("no canonical field for a physician");
     });
 
-    it("refuses it end to end, and says what it refused", () => {
+    it("binds it to the physician relationship end to end, never to a person field", () => {
+        // Slice 4 gave the physician a canonical owner — a relationship definition row — so the
+        // fact is no longer merely refused, it lands somewhere correct. The property that must hold
+        // either way is that it never reaches the household's person record.
         const p = matchConcept(concept({ label: "Primary Physician Phone Number:", party: "physician", attribute: "phone", concept_key: "physician.phone" }));
-        expect(p.disposition).not.toBe("reuse_canonical_field");
-        expect(p.refused_binding?.target).toEqual(PERSON_PHONE);
-        expect(p.explanation).toContain("refused");
+        expect(p.disposition).toBe("relationship_binding");
+        expect(p.target_relationship_role).toBe("physician");
+        expect(p.target_field_source).toBeUndefined();
+    });
+
+    it("still refuses the person binding for a party with no owner at all", () => {
+        // The boundary itself is unchanged: a party with no canonical home and no relationship
+        // definition is refused rather than approximated.
+        const v = checkBindingParty("sibling", "phone", PERSON_PHONE, "Sibling phone");
+        expect(v.ok).toBe(false);
     });
 
     it("a dentist is not a physician and not a person record either", () => {

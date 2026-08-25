@@ -35,6 +35,39 @@ const LAYERS: ReadonlyArray<{ key: PacketLayer; label: string }> = [
     { key: "obligations", label: "Obligations" },
 ];
 
+/**
+ * WHERE Alloy intends this information to live, in the operator's language.
+ *
+ * "matched `guardian.guardian_phone`" tells an operator which key won a comparison. It does not tell
+ * them that the physician's phone is about to become a person linked to the child rather than a box
+ * on the child's record — which is the thing they are actually approving. The ontology stays in the
+ * evidence; the destination is what the row says.
+ */
+function ownership(p: ConfigurationProposal): { label: string; tone: string } {
+    switch (p.disposition) {
+        case "reuse_canonical_field":
+        case "reuse_existing_field":
+            return { label: "Existing record field", tone: "border-emerald-300 bg-emerald-50 text-emerald-800" };
+        case "relationship_binding":
+            return { label: "A linked person", tone: "border-sky-300 bg-sky-50 text-sky-800" };
+        case "structured_collection":
+            return { label: "A repeating set", tone: "border-sky-300 bg-sky-50 text-sky-800" };
+        case "create_proposed_field":
+            return { label: "Needs a new field", tone: "border-amber-300 bg-amber-50 text-amber-800" };
+        case "form_only_response":
+            return { label: "This form only", tone: "" };
+        case "acknowledgement":
+        case "signature_requirement":
+        case "upload_requirement":
+            return { label: "A requirement", tone: "border-sky-300 bg-sky-50 text-sky-800" };
+        case "static_content":
+        case "output_binding":
+            return { label: "Content", tone: "" };
+        default:
+            return { label: "Needs a decision", tone: "border-orange-300 bg-orange-50 text-orange-800" };
+    }
+}
+
 function band(b: string): string {
     if (b === "high") return "border-emerald-300 bg-emerald-50 text-emerald-800";
     if (b === "review") return "border-amber-300 bg-amber-50 text-amber-800";
@@ -219,6 +252,7 @@ export default function PacketIntakeReview({
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                                         <span className="truncate text-[13px] font-semibold text-alloy-midnight">{f.concept.label}</span>
+                                        <Chip tone={ownership(f.proposal).tone}>{ownership(f.proposal).label}</Chip>
                                         <Chip tone={band(f.proposal.confidence.band)}>{f.proposal.confidence.band}</Chip>
                                         {f.concept.repetition ? <Chip>×{f.concept.repetition.instances}</Chip> : null}
                                         {f.concept.party ? <Chip>{f.concept.party.replace(/_/g, " ")}</Chip> : null}
@@ -263,7 +297,14 @@ export default function PacketIntakeReview({
                                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">{f.proposal.explanation}</p>
                                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-alloy-midnight/45">
                                     <span>{f.documentTitle}</span>
-                                    {target ? <span className="font-medium text-alloy-midnight/60">→ {target.entity_type}.{target.field_key}</span> : <span>no canonical binding proposed</span>}
+                                    {/* The ontology lives in the evidence line, not in the headline. */}
+                                    {target ? (
+                                        <span className="font-medium text-alloy-midnight/60">→ {target.entity_type}.{target.field_key}</span>
+                                    ) : f.proposal.target_relationship_role ? (
+                                        <span className="font-medium text-alloy-midnight/60">→ {f.proposal.target_relationship_role} relationship</span>
+                                    ) : (
+                                        <span>no canonical binding proposed</span>
+                                    )}
                                     {f.concept.source.destinations ? <span>{f.concept.source.destinations.length} source destination(s)</span> : null}
                                     {f.proposal.refused_binding ? (
                                         <span className="text-orange-700" data-testid={`packet-fact-refused-${f.id}`}>

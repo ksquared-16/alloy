@@ -110,10 +110,21 @@ describe("the operator reviews the packet, not three importer runs", () => {
     it("shows a refused binding as a refusal, with its reason", () => {
         mount();
         click("packet-layer-facts");
-        const refused = facts.find((f) => f.proposal.refused_binding && /physician/i.test(f.proposal.refused_binding.reason))!;
+        const refused = facts.find((f) => !!f.proposal.refused_binding)!;
         const row = container.querySelector(`[data-testid="packet-fact-${refused.id}"]`)!.textContent ?? "";
-        expect(row).toContain("refused person.phone");
-        expect(row).toContain("no canonical field for a physician");
+        expect(row).toContain("refused customer.address");
+        expect(row).toContain("belongs to the household");
+    });
+
+    it("shows where a fact will live when its owner is a relationship, not a field", () => {
+        mount();
+        click("packet-layer-facts");
+        const provider = facts.find((f) => f.proposal.target_relationship_role === "physician")!;
+        const row = container.querySelector(`[data-testid="packet-fact-${provider.id}"]`)!.textContent ?? "";
+        // The operator is told WHERE it lands, in their language — not which field key matched.
+        expect(row).toContain("A linked person");
+        expect(row).toContain("physician relationship");
+        expect(row).toContain("linked through the Physicians relationship");
     });
 
     it("separates collections from scalar facts", () => {

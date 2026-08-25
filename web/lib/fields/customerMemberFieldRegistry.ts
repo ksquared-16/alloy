@@ -41,6 +41,12 @@ export type CustomerMemberConfigFieldManifestRow = {
     label: string;
     section_key: string;
     sort_order: number;
+    /**
+     * Privacy classification. Health data is not "standard data with a medical label" — it carries
+     * different access and retention expectations, and a field that never states its class cannot be
+     * governed by one. Absent means `standard`.
+     */
+    sensitivity?: "standard" | "health";
     config?: Record<string, unknown>;
 };
 
@@ -71,6 +77,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
         label: "Allergies",
         section_key: "medical",
         sort_order: 70,
+        sensitivity: "health",
     },
     {
         field_key: "medical_notes",
@@ -78,6 +85,7 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
         label: "Medical notes",
         section_key: "medical",
         sort_order: 80,
+        sensitivity: "health",
     },
     {
         field_key: "special_instructions",

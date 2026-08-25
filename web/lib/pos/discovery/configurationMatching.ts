@@ -20,7 +20,8 @@
  */
 
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
-import { checkBindingParty, type ConceptParty } from "./bindingSafety";
+import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
+import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { FormFieldSource } from "@/lib/forms/schema";
 import {
     DISCOVERY_CONTRACT_VERSION,
@@ -189,6 +190,47 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
         validation_issues: [] as string[],
         source: concept.source,
     };
+
+    // ── a fact ABOUT a party that has its own relationship definition ──
+    //
+    // A physician's name is not a child field with an awkward label; it is an attribute of a person
+    // reached through a relationship. Discovery already derives the party from the label, and the
+    // relationship layer already owns which parties are relationships — so when those two agree, the
+    // proposal is a relationship binding rather than a new field.
+    //
+    // Semantic, not a lookup table: nothing here knows this school's wording. A tenant that
+    // configures "therapist" as a definition row gets the same treatment with no edit here.
+    // Only where the party has NO canonical field of its own. A guardian HAS registered fields
+    // (`guardian_first_name`, `guardian_phone`), and those are what a form collects and what prefill
+    // reads — rerouting them to the relationship would move a working binding for no gain. A
+    // physician has none, which is exactly the gap the definition row fills.
+    if (
+        (concept.kind === "scalar_field" || concept.kind === "choice_field") &&
+        concept.party &&
+        concept.party !== "unknown" &&
+        partyHasNoCanonicalHome(concept.party as ConceptParty)
+    ) {
+        const definition = relationshipDefinitionForRole(concept.party);
+        if (definition && definition.collectable) {
+            const nested = concept.attribute === "name" ? "full_name" : concept.attribute;
+            const covered = nested ? definition.nested_field_keys.includes(nested) : false;
+            if (covered) {
+                return {
+                    ...base,
+                    disposition: "relationship_binding",
+                    target_relationship_role: definition.operational_role_key,
+                    confidence: conf("high", [
+                        `the label names the ${definition.label.toLowerCase().replace(/s$/, "")}`,
+                        `"${nested}" is collected for each member of the ${definition.label} relationship`,
+                    ]),
+                    alternatives: [
+                        { disposition: "create_proposed_field", label: `Create a ${concept.subject} field instead`, confidence: conf("attention", ["operator override"]) },
+                    ],
+                    explanation: `Bind as the ${nested?.replace(/_/g, " ")} of a ${definition.label.toLowerCase().replace(/s$/, "")} on this child — a person linked through the ${definition.label} relationship, not a field on the child record.`,
+                };
+            }
+        }
+    }
 
     // ── relationships → operational-role relationship binding ──
     if (concept.kind === "relationship_group" && concept.relationship_role) {
