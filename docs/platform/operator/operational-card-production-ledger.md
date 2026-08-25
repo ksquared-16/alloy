@@ -483,3 +483,79 @@ optional native dependencies for the wrong architecture. Repaired by installing
 
 **Anyone running npm in an Alloy worktree from a Rosetta shell will corrupt native optional deps.**
 Use `~/.nvm/versions/node/v22.21.1/bin/npm`.
+
+---
+
+## 14. Slice 2 — avatar caller closed, stage authority guarded, provider scoped (2026-08-25)
+
+### §13 Person-panel avatar — DONE and certified
+
+The shell's `personSubject`/avatar capability had no caller because it was built on the **case**
+header, which must keep household identity. The real caller is the durable **person** panel, where
+the person genuinely is the subject.
+
+Two gaps closed to reach it:
+
+| Gap | Fix |
+|---|---|
+| `DurablePersonSubject` carried no photo | Composer resolves one via `resolveIdentityPhotoUrlFromRaw` — the canonical owner, which distinguishes an actor-authorized URL from one merely found in storage |
+| The `full` presentation rendered a context strip with **no subject identity at all** | Identity now renders above both presentation branches, not only the minimal one |
+
+**Certified** on the Staff records: avatar tile path renders, initials fallback correct
+(`CA · Certified Active-Bare`), 0 page errors, 5.6–7.3 s.
+**Not certified:** the with-image case — no certification record carries a canonical photo, so the
+resolver path is wired and typed but unproven end to end. Needs a profile-photo upload.
+
+Case panels keep household identity; a scoped participant stays inside the Process card. One
+`CardAvatar` primitive throughout.
+
+### §2 Stage authority — guarded
+
+`tests/adminV2/runtime/processStageAuthority.test.ts` (4 passing), built on the real
+`OpportunityDrawerViewModel` fixture shape rather than a stub:
+
+- the same case opened from **Tour** and from **All** resolves the same `stageKey`;
+- a differing per-lens `statusLabel` cannot reach the stage **key** (the label has a documented
+  fallback; the key must not);
+- when `lifecycle_rail` and `stage_context` disagree, the **rail wins**;
+- the panel stays case-grain regardless of the lens.
+
+The rule is structural, not defensive: `buildOperationalContext` holds no reference to a work unit,
+lens or queue, so a lens has no seam to write through. This guard is what the rail depends on.
+
+### §5/§6 Participant rail — the gating truth EXISTS
+
+The rail was the open risk. It is answerable:
+
+| Need | Canonical owner |
+|---|---|
+| Case stage key | `workspace.lifecycle_rail.current_stage_key` |
+| **Per-child stage key** | `row.stage_key` on the participation row — read today by `buildChildrenCardEvidence` |
+| Child stage label | `resolveChildProcessStageLabel({ stageKey, dispositionKey, familyStageKey })` |
+| Child identity + photo | the same `CardAvatar` + `resolveIdentityPhotoUrl` path |
+
+**The one blocker is exposure, not existence.** `ChildrenEvidenceChild` publishes `status` (a
+LABEL) and keeps `statusKey` only "to drive tone + the declined attention gate" — the stage **key**
+is resolved and then dropped. §6 forbids placing markers by display string, so the provider's first
+job is to surface that key on the evidence type. That is a small, additive change to a canonical
+owner, not a new store.
+
+### Slice 2 — what remains, precisely
+
+| Item | State |
+|---|---|
+| §13 person avatar caller | **done, certified** (image case deferred) |
+| §2 stage-authority guard | **done, 4 passing** |
+| §10 `currentWorkActivityRowKey` adoption | **done** (previous run) |
+| §11 no `View process`, no expanded density | **holds** — never built |
+| §1 `business_process` provider/VM | **not built** — needs per-child `stageKey` exposed first |
+| §3/§4 rail + two-slot annotations | **not built** |
+| §5/§6/§7 participant projection + key matching + scoping | **not built** |
+| §8/§9 case work band + participant action | **not built** |
+| §14 multi-process proof | **blocked on tenant data** — Firefly configures Enrollment only; Assignment and Billing processes are not present to prove against |
+| §15 certification A–H | **not run** — needs the provider, and B/C/D/F need a case with divergent children |
+| §16 performance delta | case panel **6.53 s** before this slice; unchanged (no Process provider added yet) |
+
+The live `business_process` card still renders the transitional Current Work presentation. That is
+the headline item outstanding, and it is deliberately not half-built: a provider that placed
+participant markers by label would violate §6 in the first line of code.
