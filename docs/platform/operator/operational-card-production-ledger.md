@@ -348,3 +348,31 @@ controls must not render.
 | Second defect | On genuine type errors the broker reports `class=config` and prints *"FAILED TO START … the command never ran"* — while the compiler plainly ran and emitted `error TS2741`. The message contradicts its own output and would send an agent looking for a config fault instead of the type error |
 
 Do not weaken Alloy's typecheck heap to accommodate the broker.
+
+### Browser certification of the identity change
+
+Real runtime, same route as §8. The published composition before and after:
+
+```
+before   current_work · scheduling · household · children · billing_preview
+after    business_process · scheduling · household · children · billing_preview
+```
+
+Same first position, same siblings, same order, five cards both times. No duplicate, no
+disappearance, 0 page errors. Panel readiness 6.58s vs 6.65s — unchanged (dev build; not a
+production figure).
+
+### Regression attribution
+
+The identity change was measured against a baseline rather than assumed. Running four affected
+suites with the change removed and re-applied:
+
+| | Failing | Passing |
+|---|---|---|
+| Baseline (change removed) | **11** | 109 |
+| With the change | **11** | 117 |
+
+**Zero new failures.** All 11 are pre-existing on the merged staging base and unrelated to card
+identity. The change caused exactly one break — a hardcoded `FOCUS_PANEL_CARD_KEYS.length === 25` —
+now 26, because the predecessor key is *retained* rather than swapped. The first read of the run had
+looked like ~25 new failures; only the failing-test **list** distinguished mine from the base's.
