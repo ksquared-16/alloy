@@ -1,0 +1,281 @@
+<title>Health Ownership Contract</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --ground:#ffffff; --panel:#f6f9fa; --sunk:#eef3f5;
+  --ink:#273f52; --ink-2:#4b5c6b; --muted:#7c8a97; --faint:#9dabb6;
+  --line:#dfe5ea; --line-soft:#eaeff2;
+  --accent:#00a283; --accent-ink:#00806a;
+  --warn:#c2410c; --warn-soft:#fdf0e8;
+  --shadow:0 1px 2px rgba(39,63,82,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#131b21; --panel:#1a242b; --sunk:#202c34;
+    --ink:#e4ecf1; --ink-2:#b6c6d1; --muted:#8ba0ad; --faint:#6f838f;
+    --line:#2b3a44; --line-soft:#243139;
+    --accent:#3ecfae; --accent-ink:#5fe0c2;
+    --warn:#f08a55; --warn-soft:#33241c;
+    --shadow:0 1px 2px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#131b21; --panel:#1a242b; --sunk:#202c34;
+  --ink:#e4ecf1; --ink-2:#b6c6d1; --muted:#8ba0ad; --faint:#6f838f;
+  --line:#2b3a44; --line-soft:#243139;
+  --accent:#3ecfae; --accent-ink:#5fe0c2;
+  --warn:#f08a55; --warn-soft:#33241c;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,sans-serif;font-size:15px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:56px 24px 96px;display:flex;flex-direction:column;gap:46px}
+h1,h2,h3{font-family:Outfit,"IBM Plex Sans",sans-serif;text-wrap:balance;margin:0}
+h1{font-size:40px;line-height:1.1;font-weight:600;letter-spacing:-.015em}
+h2{font-size:22px;line-height:1.25;font-weight:600;letter-spacing:-.01em}
+p{margin:0} a{color:var(--accent-ink)}
+code{font-family:"IBM Plex Mono",monospace;font-size:.88em;color:var(--ink-2)}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;text-transform:uppercase;
+  letter-spacing:.525px;color:var(--faint);display:flex;align-items:center;gap:9px}
+.eyebrow::after{content:"";flex:1;height:1px;background:var(--line-soft)}
+header .lede{font-size:18px;line-height:1.55;color:var(--ink-2);max-width:66ch}
+.meta{display:flex;flex-wrap:wrap;gap:6px 10px;font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--muted)}
+.meta span{background:var(--sunk);border-radius:999px;padding:3px 10px;white-space:nowrap}
+section{display:flex;flex-direction:column;gap:18px}
+.prose{max-width:70ch;display:flex;flex-direction:column;gap:14px;color:var(--ink-2)}
+.prose strong{color:var(--ink);font-weight:600}
+figure{margin:0;display:flex;flex-direction:column;gap:9px}
+figure img{display:block;width:100%;height:auto;border-radius:12px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow)}
+figcaption{font-size:12.5px;color:var(--muted);font-family:"IBM Plex Mono",monospace;line-height:1.5}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:20px 22px;display:flex;flex-direction:column;gap:14px}
+.card h2{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.tag{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.525px;
+  color:var(--accent-ink);background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:999px;padding:2px 9px}
+.dim{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:400;color:var(--faint);font-variant-numeric:tabular-nums}
+.card p{color:var(--ink-2);max-width:74ch}
+.card p strong{color:var(--ink);font-weight:600}
+.open{border-left:2px solid var(--warn);background:var(--warn-soft);border-radius:0 10px 10px 0;padding:11px 16px;display:flex;flex-direction:column;gap:5px}
+.open .lbl{font-family:"IBM Plex Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--warn)}
+.open p{color:var(--ink-2);font-size:14px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--panel)}
+table{border-collapse:collapse;width:100%;font-size:13.5px;min-width:560px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+thead th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.525px;
+  color:var(--faint);background:var(--sunk);border-bottom:1px solid var(--line);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.who{font-family:"IBM Plex Mono",monospace;font-size:10px;text-transform:uppercase;letter-spacing:.4px;border-radius:999px;padding:1px 8px}
+.who--r{background:var(--sunk);color:var(--muted)}
+.who--c{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent-ink)}
+ol.fixes{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:1px;background:var(--line-soft);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+ol.fixes li{background:var(--panel);padding:14px 18px;display:flex;gap:14px;align-items:baseline}
+ol.fixes b{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--warn);flex:0 0 auto}
+ol.fixes span{color:var(--ink-2)} ol.fixes em{font-style:normal;color:var(--ink);font-weight:600}
+footer{border-top:1px solid var(--line);padding-top:20px;font-size:12.5px;color:var(--muted);font-family:"IBM Plex Mono",monospace;line-height:1.7}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+@media (max-width:640px){.wrap{padding:36px 16px 64px;gap:34px}h1{font-size:30px}}
+</style>
+
+<div class="wrap">
+
+<header style="display:flex;flex-direction:column;gap:16px">
+  <p class="eyebrow">Cross-sprint reconciliation &middot; audit only</p>
+  <h1>One health ownership contract</h1>
+  <p class="lede">Both lanes can now reference the same answer. The audit found the shipped code disagreeing
+  with itself about where child health belongs, and corrected one premise in the brief — neither of which
+  should be discovered during implementation.</p>
+  <div class="meta">
+    <span>19 concepts classified</span><span>verified vs origin/staging 9aad66349</span>
+    <span>no schema written</span><span>no binding altered</span>
+  </div>
+</header>
+
+<section>
+  <div class="open" style="border-radius:0 14px 14px 0">
+    <p class="eyebrow">The finding that matters most</p>
+    <p><strong>Three Forms subsystems, two answers about where child health binds.</strong></p>
+    <p><code>systemFieldRegistry.ts</code> registers <code>allergy_notes</code> and
+    <code>medication_flag</code> at <code>entity_type: "enrollment"</code>.
+    <code>canonicalBindingSuggestions.ts</code> suggests <code>cm("allergies")</code> and
+    <code>cm("medical_notes")</code> — where <code>cm</code> is
+    <code>entity_type: "customer_member", scope: "child"</code>. And
+    <code>packets/sharedValuesToFieldIds.ts</code> uses <strong><code>customer_member:allergies</code></strong>
+    as its canonical key example.</p>
+    <p>Two of three point at the child; the one that ships the registered fields points at the enrollment.
+    An operator authoring a form is <em>suggested</em> a child-grain destination that has no registered
+    field, while the registered field lands on the enrollment episode — so <strong>a child's allergy does not
+    survive their enrollment</strong>. Migration <strong>M1</strong> must land before either lane binds more
+    health.</p>
+  </div>
+</section>
+
+<section>
+  <div class="open" style="border-radius:0 14px 14px 0">
+    <p class="eyebrow">Correction to the brief</p>
+    <p>The brief states physician/dentist relationships have already been registered. Fetched
+    <code>origin/staging</code> (tip <code>9aad66349</code>, Aug 23): <code>RELATIONSHIP_DEFINITIONS</code>
+    contains exactly three roles — <code>guardian</code>, <code>emergency_contact</code>,
+    <code>authorized_pickup</code>. <strong>Physician and dentist are not registered in code.</strong></p>
+    <p><strong>This is not a blocker.</strong> <code>person_child_relationship</code> is child-grain
+    (<code>customer_member_id</code> + <code>person_id</code>) with an <em>open</em> role vocabulary —
+    <code>OperationalRoleKey = PersonChildOperationalRoleKey | (string &amp; {})</code>, documented as
+    &ldquo;a relationship definition can declare a role the platform has never heard of (physician, attorney,
+    case worker)&rdquo;, and the resolver is explicitly &ldquo;generic for ANY configured role &hellip; no
+    per-role code&rdquo;. Physician and dentist are <strong>configuration, not code</strong>. If Enrollment
+    created them as org config that is correct and complete; if it expected code, none exists and none is
+    needed.</p>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Classification &mdash; the four lists</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Classification</th><th>Concepts</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>READY NOW</strong><br><span class="dim">Enrollment may bind during certification</span></td>
+        <td>dietary restriction <em>(at <code>customer_member</code>, not <code>enrollment</code>)</em> &middot;
+        physician relationship &middot; dentist relationship &middot; emergency contacts &middot;
+        physical/assessment document &middot; health-care plan document &middot; generic medical evidence
+        document &middot; routines, toileting, naps, temperament as child profile facts</td>
+      </tr>
+      <tr>
+        <td><strong>HEALTH FOUNDATION REQUIRED</strong><br><span class="dim">valid durable truth, blocked</span></td>
+        <td>allergy &middot; medical condition &middot; medication &middot; immunization vaccine/dose &middot;
+        facts extracted from a physical &middot; facts derived from a health-care plan.<br>
+        Blocked on R1 only (no Health foundation needed): physical required &middot; medication authorization
+        required</td>
+      </tr>
+      <tr>
+        <td><strong>NOT HEALTH TRUTH</strong><br><span class="dim">another owner</span></td>
+        <td>routines, toileting, naps, bedtime, comfort strategies, preferences, temperament &rarr; child
+        profile <code>field_values</code> &middot; emergency contacts &rarr; Relationships &middot; every
+        document &rarr; Documents &middot; every requirement &rarr; Business Process</td>
+      </tr>
+      <tr>
+        <td><strong>CROSS-SPRINT DECISION</strong><br><span class="dim">neither lane may implement</span></td>
+        <td>immunization exemption <em>(requirement exceptions are not modelled)</em> &middot; emergency
+        medical authorization <em>(no canonical consent record exists)</em> &middot; safeguarding / custody /
+        pickup restriction <em>(no owner, highest sensitivity)</em></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Minimal foundation &mdash; one entity, four kinds</p>
+  <div class="prose">
+    <p><strong><code>person_health_facts</code></strong> with a <code>fact_kind</code> discriminator
+    (<code>allergy</code> | <code>condition</code> | <code>medication</code> | <code>immunization</code>),
+    polymorphic by <code>subject_entity_type</code>/<code>subject_entity_id</code> exactly as
+    <code>documents</code> already is, with the payload schema <strong>org-configurable per kind</strong> —
+    so no childcare conditional ever reaches the code.</p>
+    <p><strong>Why one and not three:</strong> the card, the requirement evaluator and the packet planner all
+    want one list per child. Three tables triple the resolver, provider, proposal adapter and RLS surface for
+    shapes that share everything but the payload, and a medication referencing the allergy it treats would
+    need a polymorphic join.</p>
+    <p><strong>Versioning is supersede, never delete</strong> — a correction writes a new row with
+    <code>supersedes_id</code> and closes the old one; a resolution just closes it. This mirrors attendance's
+    <code>original | correction | reversal</code>, so the platform keeps one mental model for &ldquo;a durable
+    fact changed&rdquo;.</p>
+    <p>Build order <strong>H1 &rarr; H2 &rarr; H3 &rarr; H4</strong> (entity &rarr; collection provider
+    registration &rarr; resolver &rarr; mutation capabilities). Forms binding and Trust proposals both start
+    working the moment <strong>H2</strong> lands, because both already speak the collection-provider
+    contract.</p>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Immunization &mdash; one fact per vaccine</p>
+  <div class="prose">
+    <p>Immunization is <code>vaccine &rarr; doses[] &rarr; date</code> — two levels of nesting, which is
+    exactly why 69 CIS destinations compress to ~15 semantic needs. <strong>One fact per vaccine, with the
+    dose series in the payload.</strong> Doses are ordered values of one fact, not independent facts — nothing
+    references a single dose — and one row per vaccine keeps the collection grain uniform, so no immunization
+    special case reaches the resolver. <code>vaccine_key</code> and the required series come from org
+    configuration, which is what makes Oregon's schedule differ without a jurisdiction branch.</p>
+    <p><strong>Exemption is not a dose and not a payload field.</strong> It is a requirement exception with its
+    own approval and evidence. Burying it in vaccine data makes &ldquo;no doses recorded&rdquo; and
+    &ldquo;lawfully exempt&rdquo; indistinguishable. Requirement exceptions are not modelled today &rarr;
+    cross-sprint decision.</p>
+    <p>The CIS itself stays <code>documents</code> evidence — never
+    <code>immunization_document_present = true</code>. Processing already classifies
+    <code>immunization_record</code> as a document type.</p>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Direct-bind vs Trust</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Destination</th><th>Path</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Dietary restriction — closed choice</td><td><strong>Direct</strong></td><td>Closed vocabulary</td></tr>
+      <tr><td>Dietary restriction — open text</td><td>Trust</td><td>Normalization into a controlled value</td></tr>
+      <tr><td>Physician / dentist name, phone</td><td><strong>Direct</strong></td><td>Typed scalar; role is configuration</td></tr>
+      <tr><td>Allergy — closed allergen + closed severity</td><td><strong>Direct</strong></td><td>Both ends controlled</td></tr>
+      <tr><td>Allergy — open text</td><td>Trust</td><td>Allergen extraction <em>and</em> severity classification</td></tr>
+      <tr><td>Medication — structured dose controls</td><td><strong>Direct</strong></td><td>Typed</td></tr>
+      <tr><td>CIS immunization dates</td><td>Trust</td><td>Document-derived, OCR/layout, per-vaccine mapping</td></tr>
+      <tr><td>Any conflicting source</td><td>Trust</td><td>Conflict resolution is Trust's job by definition</td></tr>
+      <tr><td>Uploaded document</td><td><strong>Direct</strong> &rarr; <code>documents</code></td><td>The artifact is the truth</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="prose"><p><strong>Do not route everything through AI.</strong> A closed choice bound to a
+  registered field must take the deterministic path — interpretation adds cost, latency and a failure mode
+  for no gain. Participant Runtime type and plausibility checks stay upstream of every path.</p></div>
+</section>
+
+<section>
+  <p class="eyebrow">Migration findings</p>
+  <ol class="fixes">
+    <li><b>M1</b><span><em>Wrong grain.</em> Re-binding health fields to <code>customer_member</code> moves existing <code>field_values</code> rows between entity grains, and any form bound to the enrollment-grain field needs its <code>field_source</code> updated. Reversible, but it touches tenant data. <strong>Do it before either lane binds more health.</strong></span></li>
+    <li><b>M2</b><span><em><code>allergy_notes</code> free text is not mechanically migratable.</em> A blob cannot be split into allergen/severity/reaction by rule. Route it through Trust as a one-time interpretation pass with operator approval — and <strong>do not delete the note until its facts are approved</strong>.</span></li>
+    <li><b>M3</b><span><em><code>medication_flag</code> should be deprecated, not migrated.</em> &ldquo;This child takes medication&rdquo; is derivable from the collection once H1 lands; keeping both creates two answers to one question.</span></li>
+  </ol>
+</section>
+
+<section>
+  <p class="eyebrow">Sequencing &mdash; the lanes do not block each other until step 5</p>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>#</th><th>Work</th><th>Lane</th><th>Unblocks</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><strong>M1</strong> re-bind health to <code>customer_member</code></td><td>Platform</td><td>Everything downstream inherits the right grain</td></tr>
+      <tr><td class="num">2</td><td><strong>READY NOW bindings</strong></td><td>Enrollment</td><td>Real Enrollment Certification proceeds now</td></tr>
+      <tr><td class="num">3</td><td><strong>R1</strong> authorable <code>kind: "document"</code> + evaluator</td><td>Platform</td><td>Physical, immunization, medication-authorization requirements</td></tr>
+      <tr><td class="num">4</td><td><strong>Cross-sprint decisions</strong></td><td>Director</td><td>Removes three blocked concepts from both backlogs</td></tr>
+      <tr><td class="num">5</td><td><strong>H1 → H4</strong> the Health foundation</td><td>Health</td><td>Allergy, condition, medication, immunization</td></tr>
+      <tr><td class="num">6</td><td><strong>M2</strong> governed interpretation of legacy notes</td><td>Health + Trust</td><td>Retires the blob</td></tr>
+      <tr><td class="num">7</td><td><strong>M3</strong> deprecate <code>medication_flag</code></td><td>Platform</td><td>One answer per question</td></tr>
+      <tr><td class="num">8</td><td><strong>S2 → S1</strong> health visibility permission, then signal config</td><td>Platform</td><td>Safety Signals</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <p class="eyebrow">Six decisions</p>
+  <ol class="fixes">
+    <li><b>1</b><span><strong>M1</strong> — approve the grain migration. Everything else assumes it.</span></li>
+    <li><b>2</b><span><strong>Immunization exemption</strong> — requirement exception, health fact, or process state? Recommend requirement exception; exceptions are not modelled today.</span></li>
+    <li><b>3</b><span><strong>Emergency medical authorization</strong> — a consent must carry the version authorized, by whom, when, and whether withdrawn. A form signature proves a signature, not withdrawal. Recommend a canonical consent record, scoped separately.</span></li>
+    <li><b>4</b><span><strong>Safeguarding / custody</strong> — needs an owner, and it is not Health. Highest sensitivity of anything here, and it must not land in Health merely because it sits near health questions in the source documents.</span></li>
+    <li><b>5</b><span><strong>One entity, four kinds</strong>, immunization included with a dose series in the payload — confirm.</span></li>
+    <li><b>6</b><span><strong>S2</strong> — health visibility as a field-level permission, before any Safety Signal ships.</span></li>
+  </ol>
+</section>
+
+<footer>
+  Commit cde9070ab. Not pushed. No schema written, no data migrated, no Enrollment binding altered.<br>
+  Contract: docs/platform/operator/health-ownership-cross-sprint-contract.md &middot;
+  Rationale: docs/platform/operator/child-health-information-architecture.md
+</footer>
+
+</div>
