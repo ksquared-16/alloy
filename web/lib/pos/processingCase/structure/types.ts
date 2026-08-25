@@ -46,6 +46,13 @@ export interface DocumentStructureField {
      * destination; the group is what the operator decides about. @see ./repeatingFieldGroups
      */
     repeat_group_id?: string;
+    /**
+     * Validation the SOURCE declared — a max length, a pattern, a numeric range. These are source
+     * semantics like requiredness and choices are: the author wrote them, and dropping them at the
+     * draft would publish a form that claims fidelity it does not have. Only what the source
+     * actually states; nothing inferred.
+     */
+    validate?: { pattern?: string; min?: number; max?: number; min_length?: number; max_length?: number };
     /** For signature destinations: the initial required signature, or an update / re-sign line. */
     signature_variant?: import("./signatureFieldName").SignatureVariant;
 }

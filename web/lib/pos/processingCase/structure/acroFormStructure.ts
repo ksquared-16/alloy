@@ -131,6 +131,8 @@ export function buildStructureFromAcroForm(
             ...(groupOfField.has(f.name) ? { repeat_group_id: groupOfField.get(f.name) } : {}),
             ...(f.signature_variant ? { signature_variant: f.signature_variant } : {}),
             ...(f.options && f.options.length ? { options: f.options } : {}),
+            ...(f.required === true ? { required: true } : {}),
+            ...(f.max_length ? { validate: { max_length: f.max_length } } : {}),
         });
     }
 

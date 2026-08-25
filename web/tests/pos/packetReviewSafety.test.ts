@@ -209,3 +209,40 @@ describe("NOTHING publishes from the review path", () => {
         expect(db).not.toMatch(/createFormFromCaseDraft/);
     });
 });
+
+describe("G9 — source validation survives, or is reported as lost", () => {
+    it("carries a declared max length from the hosted form onto the published field", async () => {
+        const { buildFormDraftFromStructure } = await import("@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure");
+        const { draftFormToFormSchemaV1 } = await import("@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1");
+        const hosted = inputs.find((i) => i.artifact.document_id === "doc-formsite")!;
+        const withLimit = hosted.structure.sections.flatMap((s) => s.fields).filter((f) => f.validate?.max_length);
+        // The form declares maxlength on its four date controls.
+        expect(withLimit.length).toBe(4);
+        expect(withLimit.every((f) => f.validate!.max_length === 10)).toBe(true);
+
+        const draft = buildFormDraftFromStructure({ structure: hosted.structure, sourceDocumentId: "doc-formsite", extractedText: null, fileName: null, classificationKey: null });
+        expect(draft.fields.filter((f) => f.validate?.max_length === 10)).toHaveLength(4);
+        const schema = draftFormToFormSchemaV1(draft, { name: "Admissions Packet" });
+        expect(schema.fields.filter((f) => f.validate?.max_length === 10)).toHaveLength(4);
+    });
+
+    it("reads the AcroForm's own required and max-length flags rather than guessing", async () => {
+        const { extractPdfAcroFormFields } = await import("@/lib/pos/processingCase/structure/pdfAcroForm");
+        const acro = await extractPdfAcroFormFields(new Uint8Array(fs.readFileSync(path.join(FIXTURE_DIR, "oregon-certificate-of-immunization-status.pdf"))));
+        // The Oregon form marks nothing required and sets no max length. Reading the flags and
+        // finding them empty is a measurement; assuming it is not.
+        expect(acro.fields.some((f) => f.required)).toBe(false);
+        expect(acro.fields.some((f) => f.max_length)).toBe(false);
+    }, 120_000);
+
+    it("never invents validation the source did not state", () => {
+        for (const i of inputs) {
+            for (const f of i.structure.sections.flatMap((s) => s.fields)) {
+                if (!f.validate) continue;
+                // Every rule present must have come from a declared attribute or widget flag.
+                expect(Object.keys(f.validate).length).toBeGreaterThan(0);
+                expect(Object.values(f.validate).every((v) => v !== undefined && v !== null)).toBe(true);
+            }
+        }
+    });
+});

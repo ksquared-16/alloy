@@ -106,6 +106,8 @@ interface RawDestination {
     label: string;
     required: boolean;
     options: string[];
+    /** Validation the control declares (maxlength / pattern / min / max). */
+    validate?: { pattern?: string; min?: number; max?: number; min_length?: number; max_length?: number };
     /** Byte offset in the stripped document — establishes source ORDER. */
     at: number;
     /** How the destination was recognized. */
@@ -156,6 +158,25 @@ function promptBefore(html: string, at: number, forLabel: string | null): { labe
     const required = classList(ownContainer).includes("required") || /class="[^"]*\bicon_required\b[^"]*"/i.test(item);
     const cleaned = label.replace(/\s*\*\s*$/, "").replace(/\s+/g, " ").trim();
     return { label: cleaned, required, containerId: containerId || null };
+}
+
+/** Validation the control itself declares. Only what is written; nothing inferred. */
+function declaredValidation(tag: string): RawDestination["validate"] {
+    const num = (name: string): number | undefined => {
+        const raw = attr(tag, name);
+        if (raw === null || raw.trim() === "") return undefined;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : undefined;
+    };
+    const pattern = attr(tag, "pattern");
+    const out = {
+        ...(pattern ? { pattern } : {}),
+        ...(num("min") !== undefined ? { min: num("min") } : {}),
+        ...(num("max") !== undefined ? { max: num("max") } : {}),
+        ...(num("minlength") !== undefined ? { min_length: num("minlength") } : {}),
+        ...(num("maxlength") !== undefined ? { max_length: num("maxlength") } : {}),
+    };
+    return Object.keys(out).length ? out : undefined;
 }
 
 function inputType(tag: string): StructureFieldType {
@@ -226,6 +247,7 @@ function collectDestinations(html: string): RawDestination[] {
 
         const id = attr(tag, "id");
         const prompt = promptBefore(html, m.index, id ? (forLabels.get(id) ?? null) : null);
+        const validate = declaredValidation(tag);
         out.push({
             name,
             containerId: prompt.containerId,
@@ -233,6 +255,7 @@ function collectDestinations(html: string): RawDestination[] {
             label: prompt.label,
             required: prompt.required || attr(tag, "required") !== null,
             options: [],
+            ...(validate ? { validate } : {}),
             at: m.index,
             evidenceKind: type === "file" ? "file" : "input",
         });
@@ -420,6 +443,7 @@ export function detectHostedFormStructure(capture: HostedFormCapture): HostedFor
             evidence: `hosted_form:${d.containerId ? `${d.containerId}:` : ""}${d.name}`,
             page: 1,
             ...(d.options.length ? { options: d.options } : {}),
+            ...(d.validate ? { validate: d.validate } : {}),
         }));
         sections.push({
             title: b.title,

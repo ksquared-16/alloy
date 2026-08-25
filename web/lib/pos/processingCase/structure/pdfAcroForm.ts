@@ -37,6 +37,10 @@ export interface PdfAcroFieldRaw {
     combo?: boolean;
     /** Declared choices for a `Ch` widget, as pdf.js reports them. */
     options?: Array<{ exportValue?: string; displayValue?: string }> | null;
+    /** The widget's own required flag. */
+    required?: boolean;
+    /** The widget's declared maximum length (0 when unset). */
+    maxLen?: number;
 }
 
 export interface PdfFieldRegion {
@@ -56,6 +60,10 @@ export interface PdfFieldRegion {
      * it as free text loses the one thing the form's author was explicit about.
      */
     options?: string[];
+    /** The widget's own required flag — source semantics, not a heuristic. */
+    required?: boolean;
+    /** The widget's declared maximum length, when it sets one. */
+    max_length?: number;
 }
 
 /** A text run from the page content stream (for drawing form CONTEXT behind highlights). */
@@ -153,6 +161,8 @@ export function mapAcroFormFields(raw: PdfAcroFieldRaw[], pageCount = 0): PdfAcr
             bbox: toBbox(a.rect),
             ...(mapped.signatureVariant ? { signature_variant: mapped.signatureVariant } : {}),
             ...(options.length ? { options } : {}),
+            ...(a.required === true ? { required: true } : {}),
+            ...(typeof a.maxLen === "number" && a.maxLen > 0 ? { max_length: a.maxLen } : {}),
         });
     }
     return { has_acroform: fields.length > 0, fields, page_count: pageCount };
@@ -186,6 +196,8 @@ export async function extractPdfAcroFormFields(bytes: Uint8Array): Promise<PdfAc
                     pushButton: an.pushButton === true,
                     combo: an.combo === true,
                     options: Array.isArray(an.options) ? (an.options as Array<{ exportValue?: string; displayValue?: string }>) : null,
+                    required: an.required === true,
+                    maxLen: typeof an.maxLen === "number" ? an.maxLen : 0,
                 });
             }
             // Best-effort page context: dimensions + a sample of text runs (form labels/headers).

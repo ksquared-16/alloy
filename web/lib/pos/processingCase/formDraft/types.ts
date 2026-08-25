@@ -49,6 +49,8 @@ export interface DraftFormField {
      * and the options ride alongside until the builder can publish them.
      */
     options?: string[];
+    /** Validation the SOURCE declared. Carried so a published form cannot claim fidelity it lost. */
+    validate?: { pattern?: string; min?: number; max?: number; min_length?: number; max_length?: number };
     /** Canonical binding (operator-reviewed or auto-suggested) — persisted to the form. */
     field_source?: import("@/lib/forms/schema").FormFieldSource;
     /**
