@@ -3991,6 +3991,8 @@ export function renderGatewayShell({
   cancelPending = false,
   providers = null,
   settings = false,
+  blockingScreen = null,
+  screenPending = null,
 } = {}) {
   const statusOpts = { developmentResources, lanes, executionCapacity };
   const list = renderLaneList(lanes, selectedId, { loading, attentionByLane, telemetryByLane, folders, collapsedFolders, repositories });
