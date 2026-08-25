@@ -171,3 +171,35 @@ truth and no mutation dependency". Phase 0 splits that pair:
 overrides the declared heap **downward**. `vac run typecheck:tests` runs the same compiler at 8192
 over `tsconfig.json` — a **superset** of `tsconfig.build.json`, tests included — and returns rc=0.
 The merge is type-clean; the failure is toolkit configuration, not code.
+
+---
+
+## 8. Slice 1 — shell polish browser certification
+
+Certified through the real operator runtime on 2026-08-25:
+`/workspace` → `/workspace/work-unit/waitlist` → queue row → Focus Panel. 17 real queue rows,
+0 page errors, 0 failed requests.
+
+| Item | Result |
+|---|---|
+| **Reduced mode-control → card-grid gap** | ✅ **CERTIFIED.** Computed `padding-top: 10px` on the live `.alloy-os-focus-panel-grid--composed --published`, down from 16px. Measured in the real runtime, not the lab |
+| **Scoped subject / person avatar** | ⛔ **NOT CERTIFIABLE — no production caller** |
+
+The published Surface composed five cards: `current_work`, `scheduling`, `household`, `children`,
+`billing_preview`. Focus Panel readiness 6.65s on a **dev** build — dev compilation dominates that
+figure (R2 disproved an 11.7s true-cold number on exactly this basis), so it is not a production
+performance datum and no conclusion is drawn from it.
+
+### The avatar finding
+
+`FocusPanelSubjectIdentityBlock` accepts `personSubjectName` / `personSubjectImageUrl` /
+`personSubjectRecordId`, and **nothing in production passes them.** The only real call site
+(`FocusPanelCompactHeader.tsx:61`) supplies `subjectTitle`, `contextChips`, `identitySummaryLine`
+and nothing else. The treatment renders the household tile in every reachable state.
+
+This is a capability that exists in code and cannot be reached — the precise thing this program
+forbids shipping. It was not wrong to build, but it was filed under the wrong slice: a *person*
+subject only arises from the **scoped participant** on the Process card, and the Focus Panel is
+case-grain by shipped conformance test. **The avatar treatment moves to Slice 2** and is certified
+with the Process card's scoped participant, or not at all. No speculative caller was wired to make
+it appear reachable.
