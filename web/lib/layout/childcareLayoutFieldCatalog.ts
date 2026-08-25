@@ -9,6 +9,10 @@
  */
 
 import type { LayoutPickerAnchorEntity } from "./platformFieldResolutionManifest";
+import {
+    CHILD_PROFILE_REF_KEYS,
+    deriveChildProfileCatalogRows,
+} from "@/lib/fields/customerMemberProfileSurfaces";
 
 export type ChildcareOperatorEntity = "lead" | "child" | "parent" | "household" | "location";
 
@@ -263,12 +267,16 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageTable: "customer_members",
         storageColumn: "first_name",
     }),
-    childField("child.preferred_name", "Preferred name", "text", 30, {
-        entityType: "customer_member",
-        fieldKey: "preferred_name",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
+    // Child-profile config fields, DERIVED from the canonical manifest. Adding a durable child fact
+    // is a manifest row; this catalog follows it. @see lib/fields/customerMemberProfileSurfaces
+    ...deriveChildProfileCatalogRows().map((row) =>
+        childField(row.refKey, row.pickerLabel, row.fieldType, row.sortOrder, {
+            entityType: row.defEntityType,
+            fieldKey: row.defFieldKey,
+            storageTable: row.storageTable,
+            storageColumn: row.storageColumn,
+        })
+    ),
     childField("child.date_of_birth", "Date of birth", "date", 40, {
         entityType: "child",
         fieldKey: "date_of_birth",
@@ -276,30 +284,6 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageColumn: "dob",
     }),
     childField("child.age", "Age", "text", 50, { computed: true, storageTable: "customer_members", storageColumn: "dob" }),
-    childField("child.gender", "Gender", "select", 60, {
-        entityType: "customer_member",
-        fieldKey: "gender",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.allergies", "Allergies", "text", 70, {
-        entityType: "customer_member",
-        fieldKey: "allergies",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.medical_notes", "Medical notes", "text", 80, {
-        entityType: "customer_member",
-        fieldKey: "medical_notes",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
-    childField("child.special_instructions", "Special instructions", "text", 90, {
-        entityType: "customer_member",
-        fieldKey: "special_instructions",
-        storageTable: "customer_members",
-        storageColumn: "field_values",
-    }),
 
     // Child enrollment — inquiry_child.* / OCM
     childField("inquiry_child.program_category_id", "Program", "select", 110, {
@@ -510,13 +494,7 @@ export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
  * Child profile config fields on customer_member — seeded by FC-CM-1 migration.
  * Layout picker refKeys remain child.*; field_definitions entity_type = customer_member.
  */
-export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS = [
-    "child.preferred_name",
-    "child.gender",
-    "child.allergies",
-    "child.medical_notes",
-    "child.special_instructions",
-] as const;
+export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS: readonly string[] = CHILD_PROFILE_REF_KEYS;
 
 /** Lead-only primary contact projections (not field_definitions; opportunity anchor). */
 export const CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS = [

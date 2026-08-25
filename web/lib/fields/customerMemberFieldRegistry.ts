@@ -31,6 +31,17 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_KEYS = [
     "allergies",
     "medical_notes",
     "special_instructions",
+    // READY NOW (Slice 5) — durable child-profile facts the Health & Safety contract cleared for
+    // Enrollment to bind at child grain. Each is ONE manifest row now that every surface derives.
+    // Deliberately NOT here: allergy, condition, medication, immunization — those are Health
+    // foundation kinds (D-H5) and Enrollment must not create a competing destination for them.
+    "special_diet",
+    "eating_habits",
+    "favorite_foods",
+    "foods_refused",
+    "toileting_routine",
+    "nap_routine",
+    "temperament",
 ] as const;
 
 export type CustomerMemberConfigFieldKey = (typeof CUSTOMER_MEMBER_CONFIG_FIELD_KEYS)[number];
@@ -93,6 +104,63 @@ export const CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST: CustomerMemberConfigFieldMan
         label: "Special instructions",
         section_key: "medical",
         sort_order: 90,
+    },
+    {
+        field_key: "special_diet",
+        field_type: "text",
+        label: "Special diet",
+        section_key: "medical",
+        sort_order: 100,
+        // A standing dietary restriction sits beside allergies as a safety fact, not a preference —
+        // and it is a DIET, not an allergy, so it never stands in for one.
+        sensitivity: "health",
+    },
+    {
+        field_key: "eating_habits",
+        field_type: "text",
+        label: "Eating habits",
+        section_key: "child_profile",
+        sort_order: 110,
+    },
+    {
+        field_key: "favorite_foods",
+        field_type: "text",
+        label: "Favourite foods",
+        section_key: "child_profile",
+        sort_order: 120,
+    },
+    {
+        field_key: "foods_refused",
+        field_type: "text",
+        label: "Foods refused",
+        section_key: "child_profile",
+        sort_order: 130,
+    },
+    {
+        field_key: "toileting_routine",
+        field_type: "text",
+        label: "Toileting routine",
+        section_key: "child_profile",
+        // The packet asks four questions about toileting — habits, how the child signals, reluctance,
+        // specific needs. They describe one routine staff follow daily, so they are one fact.
+        sort_order: 140,
+    },
+    {
+        field_key: "nap_routine",
+        field_type: "text",
+        label: "Nap routine",
+        section_key: "child_profile",
+        // Two questions — whether the child naps, and what they need at naptime — about one routine.
+        sort_order: 150,
+    },
+    {
+        field_key: "temperament",
+        field_type: "text",
+        label: "Temperament",
+        section_key: "child_profile",
+        // The profile concept the packet's nine "getting to know your child" questions circle. One
+        // durable fact a teacher uses all year; the remaining eight stay Director decisions.
+        sort_order: 160,
     },
 ];
 

@@ -8,24 +8,28 @@
 import { CUSTOMER_MEMBER_CONFIG_FIELD_KEYS } from "@/lib/fields/customerMemberFieldRegistry";
 import type { InquiryChildCompletionSnapshot } from "@/lib/completion/requirementValidationTypes";
 
-/** Profile fields owned by customer_member — not OCM enrollment columns. */
+/**
+ * NATIVE customer_members columns. These are a genuine exception — they are columns, not manifest
+ * rows, so they are listed here and nowhere else.
+ */
+export const CUSTOMER_MEMBER_NATIVE_PROFILE_FIELDS = ["first_name", "last_name", "dob", "date_of_birth"] as const;
+
+/**
+ * Every profile field owned by customer_member: the native columns above, plus every CONFIG field
+ * the canonical manifest declares.
+ *
+ * The config half used to be hand-listed here as well — the fifth parallel list a new durable child
+ * fact had to be added to, and the one that silently kept a manifest field out of the Focus Panel
+ * even after the other four derived. It derives now. @see lib/fields/customerMemberProfileSurfaces
+ */
 export const CUSTOMER_MEMBER_PROFILE_RESOLUTION_FIELDS = [
-    "first_name",
-    "last_name",
-    "dob",
-    "date_of_birth",
-    "preferred_name",
-    "gender",
-    "allergies",
-    "medical_notes",
-    "special_instructions",
+    ...CUSTOMER_MEMBER_NATIVE_PROFILE_FIELDS,
+    ...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS,
 ] as const;
 
 export type CustomerMemberProfileResolutionField = (typeof CUSTOMER_MEMBER_PROFILE_RESOLUTION_FIELDS)[number];
 
 const PROFILE_FIELD_SET = new Set<string>(CUSTOMER_MEMBER_PROFILE_RESOLUTION_FIELDS);
-
-const CONFIG_PROFILE_SET = new Set<string>(CUSTOMER_MEMBER_CONFIG_FIELD_KEYS);
 
 /** Rule / layout field_key → customer_member storage key. */
 export function normalizeCustomerMemberProfileFieldKey(fieldKey: string): CustomerMemberProfileResolutionField | null {
