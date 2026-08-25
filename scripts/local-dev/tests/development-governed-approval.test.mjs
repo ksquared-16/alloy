@@ -64,7 +64,14 @@ const {
   resetDevelopmentLanesForTests,
   getDurableLane,
 } = await import("../lib/vacilando/development-lane.mjs");
-const { resetExecutionRunsForTests } = await import("../lib/vacilando/execution-run.mjs");
+const {
+  createQueuedRun,
+  transitionExecutionRun,
+  getExecutionRun,
+  resetExecutionRunsForTests,
+} = await import("../lib/vacilando/execution-run.mjs");
+const { DIRECTOR_GOVERNED_RESOURCE_KEY, orchestrateDirectorGovernedWait, processGovernedAction } =
+  await import("../lib/vacilando/governed-action-request.mjs");
 const { repositoryStorePath } = await import("../lib/vacilando/repository-registry.mjs");
 const { renderGovernedProposal, renderOperatorDecisionActions } =
   await import("../apps/vacilando/public/gateway-view.mjs");
@@ -463,6 +470,113 @@ await test("a merge attempt under the test runner refuses instead of merging", (
   // merge path untestable.
   assert.equal(out.ok, true, out.detail || out.code || "");
   assert.equal(mergeCalled, true, "an injected client must still exercise the merge");
+});
+
+// -------------------------------------------------- orchestrator and resume
+
+/** A lane in a repository with a run parked on the governed-action wait. */
+function blockedRunIn(repositoryId) {
+  const laneId = laneIn(repositoryId, { name: "runtime performance" });
+  const queued = createQueuedRun({
+    laneId,
+    instruction: "Promote the reviewed change",
+    worktreePath: ROOT,
+    origin: "operator",
+    root: ROOT,
+  });
+  assert.equal(queued.ok, true, queued.error);
+  transitionExecutionRun(queued.run.run_id, "EXECUTING", {
+    origin: "system", root: ROOT, reason: "delivered", worktreePath: ROOT,
+  });
+  transitionExecutionRun(queued.run.run_id, "WAITING_RESOURCE", {
+    origin: "agent",
+    root: ROOT,
+    resource_wait: {
+      resource_key: DIRECTOR_GOVERNED_RESOURCE_KEY,
+      action_key: "repository.merge_pull_request",
+      target: "staging",
+      purpose: "Promote the reviewed change",
+      reason_worker_cannot_execute: "The lane cannot hold GitHub credentials.",
+      inputs: {
+        repository: "ksquared-16/alloy",
+        pull_request_number: 508,
+        target_branch: "staging",
+        expected_head_sha: HEAD,
+        merge_method: "merge",
+      },
+    },
+  });
+  return { laneId, runId: queued.run.run_id };
+}
+
+await test("a blocked run reaches a proposal instead of a dead end", () => {
+  // This is the exact shape that produced `missing_mission_binding` in
+  // production: a run parked on director_governed_action, in a lane with a
+  // repository and no mission.
+  const { laneId, runId } = blockedRunIn("repo_alloy");
+  const out = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  assert.equal(out.ok, true, out.error || out.detail || "");
+  // The orchestrator records the request; the Director tick processes it.
+  assert.equal(out.request.status, "requested");
+  assert.equal(out.request.authority.kind, "repository");
+  const processed = processGovernedAction(out.request.request_id, { root: ROOT });
+  assert.equal(processed.awaiting_operator, true, processed.error || "");
+  assert.equal(getGovernedAction(out.request.request_id, ROOT).status, "awaiting_operator");
+  assert.ok(pendingGovernedActionForLane(laneId, ROOT), "the lane must now hold an approvable request");
+});
+
+await test("the orchestrator still refuses a repository that forbids promotion", () => {
+  // POSITIVE CONTROL for the test above, on the same code path.
+  const { runId } = blockedRunIn("repo_plain");
+  const out = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  assert.equal(out.ok, false);
+  assert.equal(out.error, "repository_profile_forbids_governed_action");
+  assert.match(out.detail, /generic profile/i);
+  // And it says so on the run, so the operator is not left guessing.
+  assert.match(getExecutionRun(runId, ROOT).state_reason || "", /generic profile/i);
+});
+
+await test("approving resumes the originating run exactly once", async () => {
+  const { runId } = blockedRunIn("repo_alloy");
+  const made = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  const resumed = [];
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: true,
+    action: {
+      id: "tha_merge",
+      state: "completed",
+      actionType: "repository.merge_pull_request",
+      inputs: {},
+      result: { mergeSha: "37cd4113a", evidencePath: join(ROOT, "merge.json") },
+    },
+  }));
+  setGovernedActionResumeImplForTests({
+    resumeLane: async (id) => {
+      resumed.push(id);
+      return { ok: true, same_lane: true, same_worktree: true, same_branch: true };
+    },
+  });
+  const out = await approveGovernedAction(made.request.request_id, { actor: "kelly", root: ROOT });
+  assert.equal(out.ok, true, out.error || "");
+  assert.equal(out.request.status, "complete");
+  await new Promise((r) => setImmediate(r));
+  assert.equal(resumed.length, 1, "the originating lane resumes once, not zero times and not twice");
+  // resumeLane is handed the request, and the request carries the lane.
+  assert.equal(getGovernedAction(resumed[0], ROOT).run_id, runId);
+});
+
+await test("a denied proposal does not resume the run", async () => {
+  // POSITIVE CONTROL for the resume above: resume must be a consequence of
+  // approval, not something that happens whenever a decision is recorded.
+  const { runId } = blockedRunIn("repo_alloy");
+  const made = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  const resumed = [];
+  setGovernedActionResumeImplForTests({
+    resumeLane: async (id) => { resumed.push(id); return { ok: true }; },
+  });
+  denyGovernedAction(made.request.request_id, { actor: "kelly", reason: "not now", root: ROOT });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(resumed.length, 0);
 });
 
 function readMergeSource() {

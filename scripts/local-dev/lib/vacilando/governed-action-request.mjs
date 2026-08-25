@@ -1083,13 +1083,24 @@ export function orchestrateDirectorGovernedWait({
     target: fields.target || null,
     purpose: fields.purpose || null,
     artifact_refs: fields.artifact_refs || fields.artifactRefs || (fields.artifact ? [fields.artifact] : []),
-    requested_mode: fields.requested_mode || fields.requestedMode || "read_only",
+    // Defer to the action's own default instead of hardcoding read_only.
+    // A merge is privileged_write, so forcing read_only here made every merge
+    // raised through the WAITING_RESOURCE seam fail `policy_denied` before a
+    // Director ever saw it — the CLI path never hit this because it sends its
+    // own mode. Census still resolves to read_only, which is its default.
+    requested_mode: fields.requested_mode || fields.requestedMode || null,
     reason_worker_cannot_execute: fields.reason_worker_cannot_execute
       || fields.reasonWorkerCannotExecute
       || reason
       || "Lane cannot execute this privileged capability",
     worktree_path: run.worktree_path || rec?.binding?.worktree_path || null,
     title: fields.title || null,
+    // Forwarded, because a merge or a migration IS its inputs. Dropping them
+    // here left the request with nothing to validate and it failed as
+    // `missing_repository` — which reads like a registry problem rather than
+    // the plumbing gap it was. Census carries its parameters in artifact_refs
+    // and so never noticed.
+    inputs: fields.inputs || fields.action_inputs || {},
   };
   if (!request.action_key) {
     patchRunFields(run.run_id, { state_reason: "Governed wait missing action_key" }, { nowMs, root });
