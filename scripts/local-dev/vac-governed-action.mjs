@@ -42,15 +42,26 @@ if (json) {
   }
 }
 
+// Resolve who can vouch for this action BEFORE asking. A lane with no Mission
+// is not automatically ungoverned: its repository's profile may carry governed
+// promotion, in which case the Director gets a proposal to approve instead of
+// this CLI dead-ending on `missing_mission_binding`.
+const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
+const authority = await resolveGovernedAuthority(
+  payload.lane_id || payload.laneId || lane,
+);
+
 const out = requestGovernedAction({
   ...payload,
   run_id: payload.run_id || payload.runId || runId,
   lane_id: payload.lane_id || payload.laneId || lane,
   mission_id: payload.mission_id || payload.missionId,
+  __authority: authority,
 }, { processNow: false });
 
 if (!out.ok) {
-  process.stderr.write(`vac governed-action: ${out.error}\n`);
+  const detail = out.detail ? ` — ${out.detail}` : "";
+  process.stderr.write(`vac governed-action: ${out.error}${detail}\n`);
   process.exit(out.error === "missing_mission_binding" ? 4 : 1);
 }
 

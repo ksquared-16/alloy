@@ -1925,6 +1925,20 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-work-stale-copy{margin:0;font-size:13px;color:var(--ink-2);}
 .gw-work-stale-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
 .gw-work-stale-actions .btn{min-height:44px;}
+/* Governed proposal card — the facts a Director weighs before authorizing.
+   Two columns where there is room, stacked where there is not, so the same
+   markup is legible on a phone without a second layout to keep in step. */
+.gw-gp{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);}
+.gw-gp-head{margin:0 0 6px;font-size:13px;font-weight:700;color:var(--ink-1);}
+.gw-gp-facts{margin:0;display:grid;grid-template-columns:minmax(9em,auto) 1fr;gap:2px 12px;}
+.gw-gp-row{display:contents;}
+.gw-gp-k{margin:0;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:700;align-self:baseline;}
+.gw-gp-v{margin:0;font-size:13px;color:var(--ink-1);overflow-wrap:anywhere;}
+.gw-gp-note{margin:8px 0 0;font-size:12px;color:var(--ink-2);}
+.gw-gp-note .gw-gp-k{display:block;margin-bottom:2px;}
+.gw-gp-conseq{margin-top:8px;}
+.gw-gp-conseq ul{margin:4px 0 0;padding-left:18px;}
+.gw-gp-conseq li{font-size:12px;color:var(--ink-2);margin:2px 0;}
 .gw-decision-bar{display:none;flex:0 0 auto;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);}
 .gw-decision-h{margin:0 0 6px;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--review);font-weight:700;}
 .gw-decision-bar .gw-work-stale{margin-top:0;padding:0;border:0;background:transparent;box-shadow:none;}
@@ -2105,6 +2119,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-claude-run{display:none;}
   .gw-decision-bar{display:block;}
   .gw-decision-bar .gw-work-stale-actions{flex-direction:column;}
+  /* Stack the fact rows on a phone: a fixed label column would squeeze the
+     values to a few characters each. */
+  .gw-gp-facts{grid-template-columns:1fr;gap:0;}
+  .gw-gp-row{display:block;margin:0 0 6px;}
+  .gw-gp-v{margin-top:1px;}
   .gw-decision-bar .btn{width:100%;min-height:44px;white-space:normal;}
   .gw-thread{flex:1 1 auto;min-height:0;overflow:auto;padding-bottom:0;}
   .gw-thread .gw-last{max-height:none;}

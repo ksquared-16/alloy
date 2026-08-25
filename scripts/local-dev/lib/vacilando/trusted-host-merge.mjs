@@ -2,6 +2,9 @@
  * Bounded trusted-host GitHub merge. No generic shell. No worker tokens.
  */
 import { spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 export const ALLOWED_TARGET_BRANCHES = Object.freeze(["staging"]);
 export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
@@ -88,6 +91,68 @@ export function validateMergeInputs(inputs = {}) {
       dedupeKey: `merge:${repository}#${pullRequestNumber}#${expectedHeadSha.slice(0, 12)}#${targetBranch}`,
     },
   };
+}
+
+/**
+ * The only runtime root a real merge may be executed from.
+ *
+ * The Gateway runs with ALLOY_RUNTIME_ROOT pointing here. Nothing else does.
+ */
+export function canonicalGatewayRuntimeRoot() {
+  return join(homedir(), ".local", "state", "alloy-dev", "gateway");
+}
+
+function resolvedPath(p) {
+  const raw = String(p || "").trim().replace(/\/+$/, "");
+  if (!raw) return null;
+  try { return realpathSync(raw); } catch { return raw; }
+}
+
+/**
+ * May this process really merge a pull request on GitHub right now?
+ *
+ * WHY THIS EXISTS, PLAINLY. On 2026-08-25 a verification of the governed
+ * approval path merged PR #508 into staging for real. The run was "isolated" by
+ * pointing ALLOY_RUNTIME_ROOT at a throwaway copy of the Gateway state — which
+ * isolated every STORE the code writes and isolated nothing about the `gh`
+ * subprocess at the end of it. State redirection is not a sandbox for an
+ * outward-facing write, and the merge went to the real repository.
+ *
+ * So the executor now has to be able to name where it is running. A real merge
+ * is permitted only from the Gateway's own runtime root, and never from inside
+ * a test runner. Everything else refuses before the subprocess is spawned.
+ *
+ * An injected `gh` is exempt because it is by definition not the real client —
+ * that is the seam tests are supposed to use, and this guard exists to make
+ * forgetting it harmless instead of expensive.
+ */
+export function liveMergePermitted({ env = process.env, injectedGh = false } = {}) {
+  if (injectedGh) return { ok: true, simulated: true };
+  if (env.NODE_TEST_CONTEXT) {
+    return {
+      ok: false,
+      code: "live_merge_from_test_runner",
+      detail: "A real merge cannot be executed from the test runner. Inject a gh client instead.",
+    };
+  }
+  const root = resolvedPath(env.ALLOY_RUNTIME_ROOT);
+  if (!root) {
+    return {
+      ok: false,
+      code: "live_merge_requires_gateway_runtime_root",
+      detail: "ALLOY_RUNTIME_ROOT is unset, so this process cannot show it is the Gateway.",
+    };
+  }
+  const canonical = resolvedPath(canonicalGatewayRuntimeRoot());
+  if (root !== canonical) {
+    return {
+      ok: false,
+      code: "live_merge_outside_gateway_runtime_root",
+      // The path is the operator's own home directory, not a credential.
+      detail: `A real merge may only run from the Gateway runtime root. This process is rooted at ${root}.`,
+    };
+  }
+  return { ok: true };
 }
 
 function defaultGh(args, { timeout = 60_000 } = {}) {
@@ -338,7 +403,7 @@ export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
   const view = gh([
     "pr", "view", String(n.pullRequestNumber),
     "--repo", n.repository,
-    "--json", "number,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefOid,url,title,statusCheckRollup,reviewDecision,mergeCommit",
+    "--json", "number,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName,headRefOid,url,title,statusCheckRollup,reviewDecision,mergeCommit,changedFiles,additions,deletions",
   ]);
   if (view.status !== 0) {
     return {
@@ -365,6 +430,10 @@ export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
       headRefOid: firstDefined(pr.headRefOid, pr.headRefOid, pr.headSha),
       mergeCommitSha: pr.mergeCommit?.oid || pr.mergeCommit || null,
       reviewDecision: pr.reviewDecision || pr.reviewDecision || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: Number.isFinite(pr.changedFiles) ? pr.changedFiles : null,
+      additions: Number.isFinite(pr.additions) ? pr.additions : null,
+      deletions: Number.isFinite(pr.deletions) ? pr.deletions : null,
       checks: checkSummary(enriched.rollup, { requiredNames: enriched.requiredNames }),
     },
   };
@@ -494,6 +563,12 @@ export function mergePullRequest(inputs, { gh = defaultGh } = {}) {
       checks: ready.pr.checks,
       credentialsExposed: false,
     };
+  }
+  // Everything above this line only READ the pull request. This is the first
+  // statement that changes the repository, so this is where the guard belongs.
+  const permitted = liveMergePermitted({ injectedGh: gh !== defaultGh });
+  if (!permitted.ok) {
+    return { ok: false, code: permitted.code, detail: permitted.detail };
   }
   const methodFlag = n.mergeMethod === "squash" ? "--squash" : n.mergeMethod === "rebase" ? "--rebase" : "--merge";
   const merged = gh([

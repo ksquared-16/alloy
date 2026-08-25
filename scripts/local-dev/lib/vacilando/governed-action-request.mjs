@@ -59,6 +59,13 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { canonicalLaneStoreId, getDurableLane, missionIdForLane } from "./development-lane.mjs";
+import {
+  consumeGrant,
+  getGrant,
+  mintGrant,
+  resolveGovernedAuthoritySync,
+} from "./governed-repository-authority.mjs";
+import { inspectPullRequest } from "./trusted-host-merge.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -228,12 +235,129 @@ export function presentationForGovernedAction(req = {}) {
   };
 }
 
+/**
+ * The facts a Director weighs before authorizing a merge, as structured rows.
+ *
+ * WHY STRUCTURED AND NOT A SENTENCE. The card used to be one line — "Merge PR
+ * #508 into staging · expected SHA 4cffed0abe32 · method merge". That is enough
+ * to identify the action and not enough to DECIDE it: it never said what the PR
+ * was called, whether CI was green, how much it changed, or what merging would
+ * do that could not be undone. A Director approving from a phone had to leave
+ * the app to find out.
+ *
+ * Everything here is either pinned in the request or captured from a read-only
+ * inspection at request time. Nothing is a credential, and nothing is inferred.
+ */
+export const GRANT_TTL_MINUTES = 30;
+
+const MERGE_CONSEQUENCES = Object.freeze([
+  "The pull request is merged into the target branch on GitHub.",
+  "The target branch moves for everyone, not just this lane.",
+  "Vacilando cannot undo this. Reverting is a separate, human decision.",
+]);
+
+function factRow(label, value) {
+  if (value === null || value === undefined || value === "") return null;
+  return { label, value: String(value) };
+}
+
+export function governedProposalFor(req = {}) {
+  if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  const i = req.inputs || {};
+  const snap = req.proposal_snapshot || null;
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const number = i.pull_request_number || i.pullRequestNumber || null;
+
+  // CI is reported as what was OBSERVED, including "not checked" — a card that
+  // silently omits the check state reads as "fine" when it means "unknown".
+  let ci = "not checked at proposal time";
+  if (snap?.checks) {
+    const c = snap.checks;
+    const failing = (c.failing || []).length;
+    const pending = (c.pending || []).length;
+    const unknown = (c.unknown || []).length;
+    ci = failing ? `${failing} failing`
+      : pending ? `${pending} still running`
+        : unknown ? `${unknown} unknown`
+          : "all required checks green";
+  }
+
+  const facts = [
+    factRow("Repository", i.repository || i.repo || null),
+    factRow("Pull request", number ? `#${number}` : null),
+    factRow("Title", snap?.title || null),
+    factRow("Branch", snap?.headRefName ? `${snap.headRefName} → ${i.target_branch || i.targetBranch || req.target}` : null),
+    factRow("Target branch", i.target_branch || i.targetBranch || req.target || null),
+    factRow("Head commit", sha ? sha.slice(0, 12) : null),
+    factRow("Merge method", i.merge_method || i.mergeMethod || "merge"),
+    factRow("Continuous integration", ci),
+    factRow("Mergeable", snap?.mergeable || null),
+    factRow("Changed files", Number.isFinite(snap?.changedFiles) ? snap.changedFiles : null),
+    factRow("Lines", Number.isFinite(snap?.additions) && Number.isFinite(snap?.deletions)
+      ? `+${snap.additions} / −${snap.deletions}` : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+
+  return {
+    kind: "repository_merge",
+    headline: number ? `Merge PR #${number} into ${i.target_branch || i.targetBranch || req.target}` : "Merge pull request",
+    url: snap?.url || null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...MERGE_CONSEQUENCES],
+    // Stated before approval so the Director knows what approving creates.
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_at: snap?.observed_at || null,
+    snapshot_available: Boolean(snap),
+  };
+}
+
+/**
+ * Read-only look at the pull request, captured once when the proposal is made.
+ *
+ * Best effort on purpose: a Director must still be able to see and decide the
+ * proposal when GitHub is unreachable. When it fails the card says the facts
+ * were not captured rather than showing blanks that read as zeroes.
+ */
+function capturePullRequestSnapshot(rec, { gh = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  // Never reach the network from the test runner. Tests inject `gh`.
+  if (!gh && process.env.NODE_TEST_CONTEXT) return null;
+  try {
+    const out = inspectPullRequest(rec.inputs || {}, gh ? { gh } : {});
+    if (!out?.ok || !out.pr) return null;
+    const pr = out.pr;
+    return {
+      title: pr.title || null,
+      url: pr.url || null,
+      state: pr.state || null,
+      mergeable: pr.mergeable || null,
+      merge_state: pr.mergeStateStatus || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: pr.changedFiles ?? null,
+      additions: pr.additions ?? null,
+      deletions: pr.deletions ?? null,
+      checks: pr.checks || null,
+      observed_at: iso(Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
   return {
     request_id: req.request_id,
     mission_id: req.mission_id,
+    // What vouched for this action, so the approval card can say so instead of
+    // leaving a repository-authorized request looking unattributed.
+    authority: req.authority || (req.mission_id ? { kind: "mission", mission_id: req.mission_id } : null),
+    grant_id: req.grant_id || null,
+    proposal: governedProposalFor(req),
+    grant_expires_at: req.grant_expires_at || null,
     lane_id: req.lane_id,
     run_id: req.run_id || null,
     action_key: req.action_key,
@@ -243,6 +367,7 @@ export function publicGovernedAction(req) {
     requested_mode: req.requested_mode,
     reason_worker_cannot_execute: req.reason_worker_cannot_execute || null,
     operator_approval_required: Boolean(req.operator_approval_required),
+    operator_approval: req.operator_approval || null,
     status: req.status,
     result_ref: req.result_ref || null,
     failure_reason: req.failure_reason || null,
@@ -587,11 +712,48 @@ function validateRequestShape(input, { root } = {}) {
   const missionId = String(
     input.mission_id || input.missionId || missionIdForLane(laneId, root) || "",
   ).trim();
-  if (!missionId) return { ok: false, error: "missing_mission_binding" };
+  // A lane with no Mission is not automatically ungoverned.
+  //
+  // A provider on an authorized run reached repository.merge_pull_request and
+  // this refused with `missing_mission_binding`, leaving nothing for a Director
+  // to approve — the only route left was merging by hand outside Vacilando.
+  // The refusal was right; having nothing on the other side of it was the bug.
+  //
+  // Authority may instead come from the lane's REPOSITORY, and only when its
+  // profile actually carries governed promotion. A generic repository has no
+  // promotion policy and stays exactly as fail-closed as before: this widens
+  // where authority may come from, never what may be done without it.
+  let repositoryAuthority = null;
+  if (!missionId) {
+    // Resolve here rather than requiring every caller to thread it. Both entry
+    // points — the CLI and the WAITING_RESOURCE orchestrator — reach this one
+    // function, and a caller that forgot to pass authority would have failed
+    // closed for the wrong reason.
+    const authority = input.__authority || resolveGovernedAuthoritySync(laneId, { root });
+    if (!authority || authority.ok !== true) {
+      return {
+        ok: false,
+        error: authority?.error || "missing_mission_binding",
+        detail: authority?.detail || null,
+        repository_id: authority?.repository_id || null,
+      };
+    }
+    if (authority.kind !== "repository") return { ok: false, error: "missing_mission_binding" };
+    repositoryAuthority = authority;
+  }
   const mode = defaultModeForAction(
     actionKey,
     String(input.requested_mode || input.requestedMode || "").trim() || null,
   );
+  const authorityRecord = repositoryAuthority
+    ? {
+      kind: "repository",
+      repository_id: repositoryAuthority.repository_id,
+      repository_name: repositoryAuthority.repository_name || null,
+      profile: repositoryAuthority.profile || null,
+      canonical_branch: repositoryAuthority.canonical_branch || null,
+    }
+    : { kind: "mission", mission_id: missionId };
   if (!GOVERNED_MODES.includes(mode)) return { ok: false, error: "invalid_mode", requested_mode: mode };
   const reason = bound(input.reason_worker_cannot_execute || input.reasonWorkerCannotExecute, 1000);
   if (!reason) return { ok: false, error: "missing_reason_worker_cannot_execute" };
@@ -609,7 +771,10 @@ function validateRequestShape(input, { root } = {}) {
   return {
     ok: true,
     actionKey,
-    missionId,
+    // null, never "", so every `if (missionId)` downstream reads the same way.
+    missionId: missionId || null,
+    // Present when a repository, not a mission, is vouching for this action.
+    authority: authorityRecord,
     laneId,
     mode,
     reason,
@@ -806,6 +971,9 @@ export function requestGovernedAction(input = {}, {
     schema_version: GOVERNED_ACTION_SCHEMA,
     request_id: newRequestId(),
     mission_id: shape.missionId,
+    // What vouched for this action. A repository-authorized request has no
+    // mission, so this is the only place the audit trail can name its source.
+    authority: shape.authority || null,
     lane_id: laneId,
     run_id: runId,
     worktree_path: worktreePath,
@@ -838,6 +1006,11 @@ export function requestGovernedAction(input = {}, {
     created_at: iso(nowMs),
     updated_at: iso(nowMs),
   };
+  // Capture the pull request's facts ONCE, at the moment the proposal is made,
+  // so the Director decides against what was true then and the head-SHA pin
+  // catches anything that moves afterwards.
+  const snapshot = capturePullRequestSnapshot(rec, { gh: input.__gh || null });
+  if (snapshot) rec.proposal_snapshot = snapshot;
   saveRequest(rec, storeRoot);
   appendAudit(rec, "requested", { nowMs }, storeRoot);
   attachRunWait(rec, { nowMs, root: storeRoot });
@@ -878,15 +1051,32 @@ export function orchestrateDirectorGovernedWait({
   const laneId = run.lane_id;
   const rec = getDurableLane(laneId, root);
   const missionId = fields.mission_id || fields.missionId || run.mission_id || rec?.mission_id || null;
-  if (!missionId) {
-    patchRunFields(run.run_id, {
-      state_reason: "Lane has no Mission binding",
-    }, { nowMs, root });
-    return { ok: false, error: "missing_mission_binding" };
+  const authority = fields.__authority
+    || (missionId ? null : resolveGovernedAuthoritySync(laneId, { root }));
+  if (!missionId && !(authority && authority.ok === true && authority.kind === "repository")) {
+    // Say WHICH authority is missing. "Lane has no Mission binding" sent the
+    // Director looking for a mission to repair, when the real answer is that
+    // this repository's profile does not carry governed promotion at all.
+    const detail = authority?.error === "repository_profile_forbids_governed_action"
+      ? `This repository's ${authority.profile} profile does not carry governed promotion.`
+      : "Lane has no Mission binding and no repository that can authorize this action.";
+    patchRunFields(run.run_id, { state_reason: detail }, { nowMs, root });
+    return { ok: false, error: authority?.error || "missing_mission_binding", detail };
   }
 
   const request = {
     mission_id: missionId,
+    // Which authority vouched for this action, recorded on the request so the
+    // approval card and the audit trail can say so.
+    authority: missionId
+      ? { kind: "mission", mission_id: missionId }
+      : {
+        kind: "repository",
+        repository_id: authority.repository_id,
+        repository_name: authority.repository_name || null,
+        profile: authority.profile || null,
+        canonical_branch: authority.canonical_branch || null,
+      },
     lane_id: laneId,
     run_id: run.run_id,
     action_key: fields.action_key || fields.actionKey || null,
@@ -910,6 +1100,30 @@ export function orchestrateDirectorGovernedWait({
 
 function openApprovalDecision(rec, { nowMs, root } = {}) {
   const presentation = presentationForGovernedAction(rec);
+
+  // A repository-authorized request has no Mission, and the Decision store is
+  // mission-scoped by construction — createDecision throws without one. Two
+  // things follow, and both matter.
+  //
+  // First, do NOT fall through to listDecisions(null): that scans EVERY
+  // mission's open decisions, and the merge branch below matches on
+  // `defaultAction === "approve_governed_merge"` alone. This request would have
+  // silently adopted an unrelated mission's open merge decision, so approving
+  // one would have approved the other.
+  //
+  // Second, no parallel approval system is invented here. The governed action
+  // record IS the approval surface — `awaiting_operator` plus `operator_approval`
+  // is what the Director approves, exactly as a mission-bound request does. The
+  // Decision is the extra mission-side view, and its absence costs nothing.
+  if (!rec.mission_id) {
+    emitNotification("governed_action_approval_required", rec, {
+      title: presentation.mission_need,
+      body: presentation.detail,
+      root,
+    });
+    return null;
+  }
+
   const isCensus = rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS;
   const open = listDecisions(rec.mission_id, { status: "open" })
     .find((d) => {
@@ -1040,18 +1254,55 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
   return decision;
 }
 
-function defaultExecute(rec, { nowMs, actor } = {}) {
+/**
+ * The key the trusted-host stores are partitioned by.
+ *
+ * A mission when there is one; otherwise the repository that vouched. Same
+ * store, same states, same execution path — only the authority differs, which
+ * is the whole point of this change.
+ */
+function authorityScopeFor(rec) {
+  return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/** Everything a Director actually weighs, in the shape the grant is pinned to. */
+function proposalForRequest(rec) {
+  return {
+    proposal_id: rec.request_id,
+    action_key: rec.action_key,
+    repository_id: rec.authority?.repository_id || null,
+    pull_request_number: rec.inputs?.pull_request_number ?? rec.inputs?.pullRequestNumber ?? null,
+    expected_head_sha: rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null,
+    // Normalized the way validateMergeInputs will normalize them, so the grant
+    // pins the values the action is actually built from. Comparing an unset
+    // merge_method against the action's defaulted "merge" would make every
+    // grant look stale.
+    target_branch: rec.target || "staging",
+    merge_method: rec.inputs?.merge_method || rec.inputs?.mergeMethod || "merge",
+    run_id: rec.run_id || null,
+    lane_id: rec.lane_id || null,
+    requested_by: rec.requesting_worker || null,
+  };
+}
+
+function defaultExecute(rec, { nowMs, actor, root } = {}) {
+  const scope = authorityScopeFor(rec);
+  // Present only on the repository-authorized path. A mission-bound request is
+  // authorized exactly as before and never looks at this.
+  const grant = rec.grant_id ? getGrant(rec.grant_id, root) : null;
+
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    return fulfillRepositoryMergeForMission(rec.mission_id, {
+    return fulfillRepositoryMergeForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},
       actor,
       nowMs,
+      grant,
     });
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-    return fulfillDatabaseMigrationForMission(rec.mission_id, {
+    return fulfillDatabaseMigrationForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: {
@@ -1061,12 +1312,13 @@ function defaultExecute(rec, { nowMs, actor } = {}) {
       },
       actor,
       nowMs,
+      grant,
     });
   }
   if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "action_unavailable" };
   }
-  return fulfillDatabaseCensusForMission(rec.mission_id, {
+  return fulfillDatabaseCensusForMission(scope, {
     assignmentId: rec.run_id || null,
     executionSessionId: rec.run_id || null,
     queryArtifactPath: artifactPathFrom(rec.artifact_refs),
@@ -1273,6 +1525,15 @@ export function executeGovernedAction(requestId, {
   } catch (e) {
     out = { ok: false, error: "execution_threw", detail: String(e && e.message || e) };
   }
+  // Spend the grant the moment it is used for anything other than a refusal.
+  // Single-use is the property that makes this an authorization for ONE merge
+  // rather than standing permission: a retry, a replay, or a second tap needs a
+  // fresh Director decision. `already` covers the double-click, so consuming
+  // twice reads as done rather than as a second execution.
+  if (rec.grant_id && out?.error !== "authorization_required") {
+    const spent = consumeGrant(rec.grant_id, { by: actor || "director", nowMs, root });
+    appendAudit(rec, "grant_consumed", { nowMs, grant_id: rec.grant_id, already: Boolean(spent.already) }, root);
+  }
   const applied = applyExecuteResult(rec, out, { nowMs, root, actor });
   if (applied.ok && rec.status === "complete") {
     applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
@@ -1294,16 +1555,44 @@ export async function approveGovernedAction(requestId, {
     rec.failure_reason = null;
   }
 
-  grantMissionAuthorization({
-    missionId: rec.mission_id,
-    actionType: rec.action_key,
-    databaseTarget: rec.target,
-    actor,
-    queryHash: actionQueryHash(rec),
-    sourceDecisionId: rec.decision_id,
-    note: `Operator approved governed action ${rec.action_key}.`,
-    nowMs,
-  });
+  // WHICH AUTHORIZATION THIS APPROVAL CREATES.
+  //
+  // A mission-bound request keeps grantMissionAuthorization exactly as it was:
+  // mission scoped, reusable within the mission, unchanged behaviour.
+  //
+  // A repository-authorized request must NOT get that. A mission authorization
+  // is keyed only by action type and target, so approving one merge would leave
+  // standing permission to merge that branch again — including a head SHA the
+  // Director never saw. It gets a single-use grant pinned to this exact
+  // proposal instead: this PR, this head SHA, this target, this method, this
+  // run. A different SHA is a different decision.
+  if (rec.mission_id) {
+    grantMissionAuthorization({
+      missionId: rec.mission_id,
+      actionType: rec.action_key,
+      databaseTarget: rec.target,
+      actor,
+      queryHash: actionQueryHash(rec),
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved governed action ${rec.action_key}.`,
+      nowMs,
+    });
+  } else {
+    const minted = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (!minted.ok) {
+      // Refuse loudly rather than executing unauthorized. self_approval_refused
+      // lands here: the provider that asked cannot be the identity that approves.
+      appendAudit(rec, "approval_refused", { nowMs, error: minted.error }, root);
+      return { ok: false, error: minted.error, request: publicGovernedAction(rec) };
+    }
+    rec.grant_id = minted.grant.grant_id;
+    rec.grant_expires_at = minted.grant.expires_at;
+  }
   rec.operator_approval = {
     decision: "approved",
     actor,

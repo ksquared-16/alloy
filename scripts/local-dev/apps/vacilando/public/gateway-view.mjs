@@ -2096,11 +2096,43 @@ export function executionRunTone(stateOrRun) {
   return "";
 }
 
+/**
+ * The facts of a governed proposal, as a definition list.
+ *
+ * A Director approving a merge from a phone should not have to leave the app to
+ * find out what the pull request is called or whether CI is green. Rendered as
+ * rows rather than a sentence so the same markup reads at any width.
+ */
+export function renderGovernedProposal(proposal) {
+  if (!proposal) return "";
+  const rows = (proposal.facts || [])
+    .map((f) => `<div class="gw-gp-row"><dt class="gw-gp-k">${esc(f.label)}</dt><dd class="gw-gp-v">${esc(f.value)}</dd></div>`)
+    .join("");
+  const consequences = (proposal.consequences || [])
+    .map((c) => `<li>${esc(c)}</li>`)
+    .join("");
+  // Say plainly when the live facts could not be read, rather than showing a
+  // card with gaps that reads as "nothing to report".
+  const staleNote = proposal.snapshot_available
+    ? ""
+    : `<p class="gw-gp-note">GitHub could not be read when this was proposed, so continuous integration and size are not shown. The head commit is still pinned.</p>`;
+  return `<div class="gw-gp" data-gw-governed-proposal>
+      ${proposal.headline ? `<p class="gw-gp-head">${esc(proposal.headline)}</p>` : ""}
+      <dl class="gw-gp-facts">${rows}</dl>
+      ${staleNote}
+      ${proposal.reason ? `<p class="gw-gp-note"><span class="gw-gp-k">Why the lane cannot do this</span> ${esc(proposal.reason)}</p>` : ""}
+      ${consequences ? `<div class="gw-gp-conseq"><p class="gw-gp-k">If you approve</p><ul>${consequences}</ul></div>` : ""}
+      ${proposal.authorization_note ? `<p class="gw-gp-note">${esc(proposal.authorization_note)}</p>` : ""}
+    </div>`;
+}
+
 export function renderOperatorDecisionActions(run) {
   const ga = run?.governed_action;
   if (ga?.status === "awaiting_operator") {
+    const proposal = renderGovernedProposal(ga.proposal);
     return `<div class="gw-work-stale" data-gw-governed-approval>
       <p class="gw-work-stale-copy">${esc(ga.detail || ga.mission_need || `Read-only database census · Target: ${ga.target || "alloy_deployed_primary"} · Data mode: Read-only`)}</p>
+      ${proposal}
       <div class="gw-work-stale-actions">
         <button type="button" class="btn primary" data-gw-governed-approve data-request-id="${esc(ga.request_id || "")}">${esc(ga.approve_label || "Authorize census")}</button>
         <button type="button" class="btn" data-gw-governed-deny data-request-id="${esc(ga.request_id || "")}">${esc(ga.deny_label || "Deny")}</button>
