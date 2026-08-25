@@ -201,3 +201,70 @@ export async function createPacketFromProcessingAnalysis(
         return { ok: false, code: "failed", message: e instanceof Error ? e.message : "Packet realization failed" };
     }
 }
+
+/**
+ * Supabase-backed deps. Every writer here already existed — this only wires them together at
+ * artifact grain, and stores the realization link on the case so a re-run finds its own work.
+ */
+export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): CreatePacketDeps {
+    const caseMeta = async (orgId: string, caseId: string): Promise<Record<string, unknown>> => {
+        const { data } = await supabase.from("processing_cases").select("metadata").eq("org_id", orgId).eq("id", caseId).maybeSingle();
+        const m = (data as { metadata?: unknown } | null)?.metadata;
+        return m && typeof m === "object" && !Array.isArray(m) ? (m as Record<string, unknown>) : {};
+    };
+    return {
+        async listFormKeys(orgId) {
+            const { data } = await supabase.from("form_definitions").select("key").eq("org_id", orgId);
+            return new Set(((data ?? []) as Array<{ key: string | null }>).map((r) => r.key ?? "").filter(Boolean));
+        },
+        async listPacketKeys(orgId) {
+            const { data } = await supabase.from("form_packet_definitions").select("key").eq("org_id", orgId);
+            return new Set(((data ?? []) as Array<{ key: string | null }>).map((r) => r.key ?? "").filter(Boolean));
+        },
+        async insertFormDefinition({ orgId, key, name, metadata }) {
+            const { data, error } = await supabase.from("form_definitions")
+                .insert({ org_id: orgId, key, name, description: null, kind: "center", is_active: true, metadata })
+                .select("id").single();
+            if (error) throw new Error(error.message);
+            return { id: (data as { id: string }).id };
+        },
+        async insertVersion({ orgId, formDefinitionId, versionNumber, schemaJson, metadata }) {
+            const { data, error } = await supabase.from("form_definition_versions")
+                .insert({ org_id: orgId, form_definition_id: formDefinitionId, version_number: versionNumber, status: "draft", schema_json: schemaJson, metadata })
+                .select("id").single();
+            if (error) throw new Error(error.message);
+            return { id: (data as { id: string }).id };
+        },
+        async publishVersion({ orgId, versionId, userId }) {
+            const { error } = await supabase.from("form_definition_versions")
+                .update({ status: "published", published_at: new Date().toISOString(), published_by_user_id: userId })
+                .eq("org_id", orgId).eq("id", versionId).eq("status", "draft");
+            if (error) throw new Error(error.message);
+        },
+        async insertPacketDefinition({ orgId, key, name, metadata }) {
+            const { data, error } = await supabase.from("form_packet_definitions")
+                .insert({ org_id: orgId, key, name, description: null, is_active: true, metadata })
+                .select("id").single();
+            if (error) throw new Error(error.message);
+            return { id: (data as { id: string }).id };
+        },
+        async insertPacketItem({ orgId, packetDefinitionId, formDefinitionId, pinnedVersionId, sequenceIndex, metadata }) {
+            const { data, error } = await supabase.from("form_packet_items")
+                .insert({ org_id: orgId, packet_definition_id: packetDefinitionId, sequence_index: sequenceIndex, form_definition_id: formDefinitionId, pinned_form_definition_version_id: pinnedVersionId, metadata })
+                .select("id").single();
+            if (error) throw new Error(error.message);
+            return { id: (data as { id: string }).id };
+        },
+        async loadRealization({ orgId, caseId }) {
+            const raw = (await caseMeta(orgId, caseId))[PACKET_REALIZATION_METADATA_KEY];
+            return raw && typeof raw === "object" ? (raw as PacketRealization) : null;
+        },
+        async saveRealization({ orgId, caseId, realization }) {
+            const base = await caseMeta(orgId, caseId);
+            const { error } = await supabase.from("processing_cases")
+                .update({ metadata: { ...base, [PACKET_REALIZATION_METADATA_KEY]: realization } })
+                .eq("org_id", orgId).eq("id", caseId);
+            if (error) throw new Error(error.message);
+        },
+    };
+}
