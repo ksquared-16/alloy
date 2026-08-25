@@ -757,3 +757,140 @@ Then: **Slice 2** F0 → F7 → F5 → Financials · **Slice 3** participant res
 Safety Signals.
 
 **Design and specification are complete.** The next mission is production implementation.
+
+---
+
+## 10. Execution-ready mapping chains
+
+The handoff artifact the implementation mission consumes. Each line is a real module, table or
+registry — `✅` exists, `⚠` partial, `❌` to build.
+
+### 10.1 Financials
+
+```
+✅ charges · charge_line_items · ledger_transactions · payments · payment_allocations
+✅ CHARGE_CATEGORIES · chargeCategoryLabel() · financial_charge_templates
+✅ gl_accounts · gl_account_mappings · resolveGlMapping
+        ↓
+❌ F0  resolveBillingPeriod(orgId, date)            derive from charges.service_date + org cadence
+❌ F7  charges.subject_entity_type / _entity_id     nullable, polymorphic; null = household
+        ↓
+❌     buildFamilyFinancialsReadModel(customerId, period)   lib/financials/ — NOT in the card
+         gross − reductions − funding = familyResponsibility
+         familyResponsibility − payments = currentBalance
+         pastDue ⊆ currentBalance
+        ↓
+❌ F5  charge.add action definition                 wraps createChildcareDraftCharge +
+                                                    postChildcareCharge; inputs derived from the
+                                                    template, never hardcoded
+        ↓
+❌     financialsCardProvider                       compact (span 1) · summary (8/12) · expanded
+✅     Pay now / Record payment                     existing payment path
+⚠      Manage payment                               needs F3 for the split it displays
+⚠      subject + payer filters                      subject needs F7 · payer-on-charges needs F3/F6
+        ↓
+⚠      V5 grid placement                            author the surface layout as `grid`, not lanes
+        ↓
+       production Focus Panel
+```
+
+**F3 / F6** (responsibility split, payer attribution for charges) enter **after** the provider
+ships: the Payment zone and the payer filter degrade gracefully without them, so they must not gate
+the first release.
+
+### 10.2 Process
+
+```
+✅ lifecycle_rail.current_stage_key / stage_context   current case stage
+✅ Current Work / stage work runtime                  case work + case-subject actions
+✅ buildReadinessCardEvidence                          still-needed
+❌ participant process state resolver                  each child's own stage + stageKey
+✅ scope hint (initialChildScope)                      emphasis only — panel stays case-grain
+✅ registered action registry                          subject resolution for child actions
+        ↓
+❌     buildProcessCardEvidence(context)               composes the five above; owns nothing
+        ↓
+❌     businessProcessCardProvider                     summary, span row
+```
+
+then, and only then:
+
+```
+❌ P1  process_stage_history projection
+         org_id · process_instance_id
+         subject_type · subject_id          ← the grain, explicit
+         stage_key · stage_label_snapshot
+         entered_at · exited_at · outcome_key
+         transition_source (event|operator|system) · transition_event_id → workflow_events
+        ↓
+❌     expanded Process detail                        historical sections render ONLY when this
+                                                      projection backs them
+```
+
+### 10.3 Health
+
+Governed by [`health-ownership-cross-sprint-contract.md`](./health-ownership-cross-sprint-contract.md)
+and [`health-foundation-h1-h4-contract.md`](./health-foundation-h1-h4-contract.md).
+
+```
+❌ M1  re-bind allergy_notes / medication_flag → entity_type customer_member   (migrates data)
+        ↓
+❌ H1  person_health_facts                     fact_kind allergy|condition|medication|immunization
+❌ H2  collection provider + `health_fact` kind ← ENROLLMENT UNBLOCKS HERE (four stable refs)
+❌ H3  healthFactCollectionResolver
+❌ H4  health_fact.add / .edit / .end
+✅     documents · document_field_definitions   evidence, already sufficient
+⚠  D1 requirement kind "document" authorable   store exists; needs a doc_type catalog + evaluator
+        ↓
+❌     healthSafetyCardProvider                 summary + expanded
+        ↓
+❌ S2  health field-visibility permission       ← MUST precede signals
+❌ S1  signal eligibility configuration
+        ↓
+❌     Safety Signal projection                 child header · Attendance · roster · Meals
+```
+
+### 10.4 Attendance · Staff · Care Team
+
+No new stores. These map onto read models that already exist.
+
+```
+Attendance   ✅ ChildAttendanceReadModel (currentPresenceState · checkInOutTimeline ·
+                roomMovementTimeline · absences · corrections · expectedVsActualVariances)
+             ✅ lib/cardLab/attendanceDayProjection  → promote to lib/childcareOperational
+             ❌ child-attendance capability          correct / record movement / check out
+                                                     (entry_type correction|reversal events)
+             → attendanceCardProvider
+
+Staff        ✅ PersonEmploymentComposition · staff_presence_events · schedule_assignments
+                (subject_type='staff')
+             ❌ NO credential store — qualifications stay off the card
+             → staffCardProvider   (read-only; no actions needed)
+
+Care Team    ⚠  resolver joining staff_presence (actual room) × scheduling (child→room)
+             ⚠  staff-to-child relationship configuration
+             → careTeamCardProvider
+```
+
+### 10.5 The registration path itself
+
+Every card, once its read model lands:
+
+```
+FOCUS_PANEL_CARD_KEYS → FOCUS_PANEL_CARDS → FOCUS_PANEL_CARD_CATALOG
+→ SYSTEM5_CARD_ARCHETYPE → SYSTEM5_CARD_ICON → focusPanelCardProviders
+→ Surfaces catalog + placement/span/density
+```
+
+**Per card, as its truth lands — never as a batch, and never ahead of the truth it projects.**
+
+### 10.6 Tests the implementation must carry
+
+| Guard | Asserts |
+|---|---|
+| Work View vs stage | A lens cannot alter `businessProcess.stageKey` |
+| Density invariance | Changing density changes no action's availability |
+| Financial reconciliation | gross − reductions − funding − payments = balance, on every specimen |
+| Participant bound | Rail height is constant from 1 to N participants |
+| Scoped visibility | A scoped participant is never collapsed into `+N` |
+| History honesty | No entered/exited date renders without the P1 projection |
