@@ -24,6 +24,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   activeAgentSessionForLane,
+  listAgentSessionsForLane,
   patchAgentSession,
 } from "./agent-session.mjs";
 import { getExecutionRun, patchRunFields } from "./execution-run.mjs";
@@ -366,7 +367,12 @@ export async function reconcileParkedProviders({
     // live Claude (pid 97004, ready caret) and a SUSPENDED session record,
     // holding a seat while its own run stayed QUEUED: it starved itself, and
     // capacity read 4/3 because a fourth provider was alive.
-    const session = activeAgentSessionForLane(lane.lane_id, root);
+    // activeAgentSessionForLane filters to ACTIVE-ish states, so it never
+    // returns a SUSPENDED session — the exact record this pass exists to heal.
+    // Look at the lane's sessions directly.
+    const all = listAgentSessionsForLane(lane.lane_id, root) || [];
+    const session = all.find((x) => x?.state === "SUSPENDED")
+      || activeAgentSessionForLane(lane.lane_id, root);
     const linkedRun = session?.run_id ? getExecutionRun(session.run_id, root) : null;
     const suspended = session?.state === "SUSPENDED"
       || linkedRun?.provider_suspension?.state === "SUSPENDED"
@@ -402,9 +408,15 @@ async function providerIsLive(lane, { root = undefined } = {}) {
   const path = lane?.binding?.worktree_path || null;
   if (!session && !path) return false;
   try {
-    const { liveClaudePanes } = await import("./alloy-dev-adapter.mjs");
-    const panes = await liveClaudePanes();
-    return (panes || []).some((p) => (session && p.session === session)
+    // liveClaudePanes is NOT exported from alloy-dev-adapter — importing it
+    // threw straight into the catch below, so this helper answered "not live"
+    // for every lane and the revive pass could never fire. Use the exported
+    // pane listing instead.
+    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+    const raw = await listTmuxPanesRaw();
+    if (!raw?.ok) return false;
+    const panes = parseTmuxPaneLines(raw.stdout) || [];
+    return panes.some((p) => (session && p.session === session)
       || (path && (p.cwd === path || String(p.cwd || "").startsWith(`${path}/`))));
   } catch {
     return false;

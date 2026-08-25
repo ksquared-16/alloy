@@ -544,5 +544,25 @@ await test("a durable lane record carries no projection fields", async () => {
   assert.equal("execution_run" in sample, false);
 });
 
+
+/**
+ * Liveness must be asked through an EXPORTED api.
+ *
+ * providerIsLive imported `liveClaudePanes` from alloy-dev-adapter, which does
+ * not export it. The import threw straight into the helper's catch, so it
+ * answered "not live" for every lane and the revive pass could never fire even
+ * once its other gates were fixed. Three real bugs stacked on one symptom.
+ */
+await test("provider liveness uses an exported pane listing", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/provider-suspension.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("async function providerIsLive"));
+  assert.equal(/import\([^)]*\)[^;]*liveClaudePanes|\{\s*liveClaudePanes\s*\}/.test(fn), false,
+    "liveClaudePanes must not be imported — it is not exported");
+  assert.ok(fn.includes("listTmuxPanesRaw"), "use the exported listing");
+  // And prove the symbol really is absent, so this cannot regress silently.
+  const adapter = await import("../lib/vacilando/alloy-dev-adapter.mjs");
+  assert.equal(typeof adapter.liveClaudePanes, "undefined");
+});
+
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
 process.exit(fail === 0 ? 0 : 1);
