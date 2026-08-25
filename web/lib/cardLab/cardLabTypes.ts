@@ -131,6 +131,10 @@ export type BillingPayer = {
     name: string;
     share: string;
     method: string;
+    /** A funding source is not an ordinary parent payer and must not be drawn as one. */
+    funding?: boolean;
+    /** Set when this payer's method has a problem the operator can act on. */
+    methodIssue?: string | null;
 };
 
 export type BillingEvidence = {
@@ -142,6 +146,13 @@ export type BillingEvidence = {
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
     payers: BillingPayer[];
+    /** Expected-payment context — the B composition's third zone. */
+    payment: {
+        autopayLabel: string | null;
+        nextChargeLabel: string | null;
+    };
+    /** Compact history line used when the ledger steps down out of a primary zone. */
+    historyLine: string;
 };
 
 /**

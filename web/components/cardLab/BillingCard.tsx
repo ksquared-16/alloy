@@ -34,12 +34,21 @@ import type { BillingEvidence } from "@/lib/cardLab/cardLabTypes";
  */
 export default function BillingCard({
     evidence,
+    variant = "payment",
     onDetails,
 }: {
     evidence: BillingEvidence;
+    /**
+     * Which question the third zone answers.
+     *   "ledger"  — what just happened financially
+     *   "payment" — how this obligation is expected to be paid
+     * Rendered both ways so the composition can be judged, not assumed.
+     */
+    variant?: "ledger" | "payment";
     onDetails?: () => void;
 }) {
     const pastDue = evidence.pastDue;
+    const showPayment = variant === "payment";
 
     return (
         <div className="alloy-os-billing" data-billing-card="true">
@@ -112,43 +121,90 @@ export default function BillingCard({
                     </section>
 
                     <section className="alloy-os-billing__zone">
-                        <p className="alloy-os-billing__zone-head">Recent ledger</p>
-                        <div className="alloy-os-billing__ledger">
-                            <div className="alloy-os-billing__entry alloy-os-billing__entry--head">
-                                <span>Date</span>
-                                <span>Description</span>
-                                <span>Amount</span>
-                            </div>
-                            {evidence.ledger.map((e, i) => (
-                                <div key={`${e.when}-${i}`} className="alloy-os-billing__entry">
-                                    <span className="alloy-os-billing__entry-when">{e.when}</span>
-                                    <span className="alloy-os-billing__entry-label">{e.label}</span>
-                                    <span
-                                        className={clsx(
-                                            "alloy-os-billing__entry-amount",
-                                            e.kind === "credit" && "alloy-os-billing__entry-amount--credit",
-                                        )}
-                                    >
-                                        {e.amount}
-                                    </span>
+                        <p className="alloy-os-billing__zone-head">
+                            {showPayment ? "Payment" : "Recent ledger"}
+                        </p>
+                        {showPayment ? (
+                            <>
+                                <p className="alloy-os-billing__autopay" data-autopay-ok={pastDue ? undefined : "true"}>
+                                    {evidence.payment.autopayLabel ?? "No autopay"}
+                                </p>
+                                {evidence.payment.nextChargeLabel ? (
+                                    <p className="alloy-os-billing__next">
+                                        Next · {evidence.payment.nextChargeLabel}
+                                    </p>
+                                ) : null}
+                                <div className="alloy-os-billing__payer-list">
+                                    {evidence.payers.map((p) => (
+                                        <div
+                                            key={p.name}
+                                            className="alloy-os-billing__payer-row"
+                                            data-funding={p.funding ? "true" : undefined}
+                                        >
+                                            <p className="alloy-os-billing__payer">
+                                                <span className="alloy-os-billing__payer-name">{p.name}</span>
+                                                <span className="alloy-os-billing__payer-share">{p.share}</span>
+                                            </p>
+                                            <p className="alloy-os-billing__payer-method">
+                                                {p.method}
+                                                {p.methodIssue ? (
+                                                    <span className="alloy-os-billing__method-issue">
+                                                        {" "}
+                                                        · {p.methodIssue}
+                                                    </span>
+                                                ) : null}
+                                            </p>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
+                            </>
+                        ) : (
+                            <div className="alloy-os-billing__ledger" role="table">
+                                <div className="alloy-os-billing__entry alloy-os-billing__entry--head">
+                                    <span>Date</span>
+                                    <span>Description</span>
+                                    <span>Amount</span>
+                                </div>
+                                {evidence.ledger.map((e, i) => (
+                                    <div key={`${e.when}-${i}`} className="alloy-os-billing__entry">
+                                        <span className="alloy-os-billing__entry-when">{e.when}</span>
+                                        <span className="alloy-os-billing__entry-label">{e.label}</span>
+                                        <span
+                                            className={clsx(
+                                                "alloy-os-billing__entry-amount",
+                                                e.kind === "credit" && "alloy-os-billing__entry-amount--credit",
+                                            )}
+                                        >
+                                            {e.amount}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </section>
                 </div>
 
-                <section className="alloy-os-billing__payers">
-                    <p className="alloy-os-billing__zone-head">Payers</p>
-                    <div className="alloy-os-billing__payer-strip">
-                        {evidence.payers.map((p) => (
-                            <p key={p.name} className="alloy-os-billing__payer">
-                                <span className="alloy-os-billing__payer-name">{p.name}</span>
-                                <span className="alloy-os-billing__payer-share">{p.share}</span>
-                                <span className="alloy-os-billing__payer-method">{p.method}</span>
-                            </p>
-                        ))}
-                    </div>
-                </section>
+                {showPayment ? (
+                    // The ledger steps down to one compact line; the full history is Billing detail.
+                    <p className="alloy-os-billing__history">{evidence.historyLine}</p>
+                ) : (
+                    <section className="alloy-os-billing__payers">
+                        <p className="alloy-os-billing__zone-head">Payers</p>
+                        <div className="alloy-os-billing__payer-strip">
+                            {evidence.payers.map((p) => (
+                                <p
+                                    key={p.name}
+                                    className="alloy-os-billing__payer"
+                                    data-funding={p.funding ? "true" : undefined}
+                                >
+                                    <span className="alloy-os-billing__payer-name">{p.name}</span>
+                                    <span className="alloy-os-billing__payer-share">{p.share}</span>
+                                    <span className="alloy-os-billing__payer-method">{p.method}</span>
+                                </p>
+                            ))}
+                        </div>
+                    </section>
+                )}
             </UniversalCard>
         </div>
     );

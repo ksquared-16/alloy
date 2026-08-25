@@ -15,10 +15,14 @@ import type { HealthEvidence } from "@/lib/cardLab/cardLabTypes";
  *
  * Two structural decisions carry the hierarchy:
  *
- * **Critical is a contained region, not red text.** It is a tinted panel with a risk rail — the
- * Children `--focused` treatment in the risk tone, so it is native rather than a warning banner.
- * Multiple critical items stack INSIDE the one region, so two facts do not become two alerts.
- * With none, the region does not render, and nothing says "No alerts".
+ * **Critical is a contained region with a RESTRAINED risk treatment.** A narrow risk rail, a small
+ * labelled heading with a risk glyph, and otherwise a normal card surface in ordinary card ink.
+ * Red is spent on exactly two things: the severity, and what staff actually do. The card carries
+ * DURABLE safety information, not an active incident — a red wash would make a calm operational
+ * health profile read as an emergency surface. Multiple critical items stack INSIDE the one
+ * region, so two facts never become two alerts. With none, the region does not render, and
+ * nothing says "No alerts". Reserve stronger alarm for an active condition, if Alloy ever
+ * distinguishes one.
  *
  * **Medication nests under the need it supports.** An operator understands "asthma, and here is
  * the inhaler for it", not "conditions" and "medications" as two lists to cross-reference.
@@ -81,7 +85,24 @@ export default function HealthSafetyCard({
                     <CardBody>
                         {hasCritical ? (
                             <section className="alloy-os-health__critical" data-health-critical>
-                                <p className="alloy-os-health__critical-label">Critical</p>
+                                <p className="alloy-os-health__critical-label">
+                                    <svg
+                                        className="alloy-os-health__critical-icon"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                        aria-hidden="true"
+                                    >
+                                        <path
+                                            d="M8 1.8 15 14.2H1L8 1.8Z"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinejoin="round"
+                                        />
+                                        <path d="M8 6.3v3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                                        <circle cx="8" cy="11.6" r="0.85" fill="currentColor" />
+                                    </svg>
+                                    Critical
+                                </p>
                                 {evidence.critical.map((c) => (
                                     <div key={c.name} className="alloy-os-health__critical-item">
                                         <p className="alloy-os-health__critical-name">

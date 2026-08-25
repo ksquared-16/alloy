@@ -1,237 +1,292 @@
 ---
 owner: operator
 status: draft
-last_reviewed: 2026-08-24
+last_reviewed: 2026-08-25
 supersedes: []
 ---
 
-# Child health information — collection, ownership, and the smallest missing capability
+# Child health information — verified inventory, ownership, and the smallest gaps
 
-**Why this exists.** The Health & Safety card could not be finished as a visual problem. Its
-content has no canonical owner, so any layout would have been a picture of data that does not
-exist. This document answers where each kind of health information should live, using systems
-Alloy already has, and names the one capability that is genuinely missing.
+**Why this exists.** The Health & Safety card cannot be locked as a visual problem. Its content
+has no canonical owner, so any layout would be a picture of data that does not exist. This
+document is a repository-backed inventory of what Alloy stores today, a category-by-category
+ownership recommendation, and the smallest platform gaps that would support it.
 
-**Nothing here proposes a medical-intake platform.** Every recommendation routes through Forms,
-Fields, Documents, Business Process requirements and Relationships as they exist today.
+**Every claim below is verified against the schema and source, not against the Design Lab
+fixture.** Where a previous pass asserted something this one disproves, the correction is marked.
+
+**Nothing here proposes a medical-intake platform.** The recommended path is the Enrollment /
+Forms / Processing / Trust program that already exists.
 
 ---
 
-## 0. What Alloy actually stores about a child's health today
+## 1. Verified inventory
 
-Two fields, both in `lib/forms/systemFieldRegistry.ts`:
+### 1.1 What Alloy stores about a child's health today: two fields
 
-| Field | Type | `entity_type` | `shared_value_key` |
+`web/lib/forms/systemFieldRegistry.ts` holds 18 system fields. Exactly two are health:
+
+| Field | Type | `entity_type` | `crm_mapping_key` |
 |---|---|---|---|
-| `allergy_notes` | textarea | **`enrollment`** | `allergy_notes` |
-| `medication_flag` | checkbox | **`enrollment`** | `medication_flag` |
+| `allergy_notes` | textarea | **`enrollment`** | `health.allergy_notes` |
+| `medication_flag` | checkbox | **`enrollment`** | `health.medication_flag` |
 
-That is the whole of it. Three consequences, and each one is load-bearing:
+The registry already uses `entity_type: "child"` for three fields (`child_first_name`,
+`child_last_name`, `child_date_of_birth`), so **binding a field to the child is already
+expressible in the same registry**. Health simply is not bound that way.
 
-1. **Health is enrollment-scoped, not child-scoped.** Both fields bind to `entity_type:
-   "enrollment"`. A child's peanut allergy is therefore a property of an *enrollment episode*, not
-   of the child. Re-enroll the child next year and the allergy does not follow them.
-2. **There is no structure.** Severity, reaction, treatment, where the EpiPen is kept, whether the
-   authorization is current — none of it is expressible. `allergy_notes` is one free-text blob.
-3. **`medication_flag` is a boolean.** It records *that* a child takes medication, never what,
-   how much, or who authorized it.
+> **The platform's own documentation disagrees with its binding.**
+> `lib/forms/packets/sharedValuesToFieldIds.ts` gives the canonical example of an
+> `entity_type` + `field_key` key as **`customer_member:allergies`**. The intended grain is the
+> child. The shipped binding is the enrollment.
 
-Values land in `public.field_values` — an EAV row keyed by `field_definition_id` +
-`entity_type`/`entity_id`, with `value_text` / `value_number` / `value_boolean` / `value_date` /
-`value_json`. It has no ordinal and no per-item identity, so a repeatable record with its own
-lifecycle cannot live there except as an opaque `value_json` array.
+**Consequence:** a child's allergy is a property of an enrollment episode. Re-enroll next year and
+it does not follow them. There is no severity, no reaction, no treatment, no medication record —
+`allergy_notes` is one free-text blob and `medication_flag` is a boolean.
 
----
-
-## 1. Recommended classification
-
-### A — Simple child profile facts → configurable fields on the child
-
-**Recommendation: canonical `field_values` rows at `entity_type: "customer_member"`.**
-
-| Fact | Why it is scalar |
-|---|---|
-| Dietary restriction / preference | One value, no lifecycle, no evidence |
-| Physician / provider name + phone | A contact detail of the child |
-| General medical notes | Deliberately unstructured |
-| Accommodation notes | Deliberately unstructured |
-
-These need no new capability. They need the **field definitions to be re-scoped from
-`enrollment` to the child**, which is a configuration change plus a migration of existing values,
-not a schema change.
-
-> **The one required correction:** a health fact about a child must bind to the child. Leaving
-> health on `entity_type: "enrollment"` is the single biggest structural defect in this area.
-
-### B — Structured repeatable health facts → a canonical collection, and this is the gap
-
-Allergies, medical conditions and medications are **not scalars**. Each instance has its own
-identity, its own lifecycle, and its own evidence:
+### 1.2 `customer_members` — no health columns
 
 ```
-allergy      allergen · severity · reaction · treatment · medication · instructions
-             · effective from/to · source (which submission asserted it)
-medication   medication · dosage · route · frequency · authorization · expires
-             · storage location · administering staff role
-condition    condition · onset · management plan · restrictions · review date
+id · org_id · customer_id · display_name · relationship · first_name · last_name · dob
+is_active · metadata(jsonb) · external_source · external_id · created_at · updated_at
+status_key · person_id
 ```
 
-**What already exists.** The Forms schema can already express a repeatable structured group:
+No allergy, condition, medication, dietary or provider column. `metadata` is the only escape
+hatch, and it is unindexed, untyped and unversioned.
 
-```ts
-| (FormFieldBase & {
-      type: "group";
-      fields: FormField[];
-      repeat?: FormRepeatRules;
-      collection_binding?: FormGroupCollectionBinding;   // ← binds instances to a canonical collection
-  })
+### 1.3 `field_definitions` / `field_values` — a working configurable-field substrate
+
+`field_definitions` is org-scoped with `entity_type`, `field_key`, `field_type`, `is_system`,
+`is_required`, `section_key`, `sort_order` and a `config` jsonb. `field_values` is the EAV:
+`field_definition_id` + `entity_type` / `entity_id`, with `value_text` / `value_number` /
+`value_boolean` / `value_date` / `value_json`.
+
+It has **no ordinal and no per-item identity**, so a repeatable record with its own lifecycle
+cannot live there except as an opaque `value_json` array.
+
+### 1.4 Documents — ✅ **CORRECTION: a full document substrate exists**
+
+> **A previous pass recorded that document evidence exists only as `form_submission_documents`,
+> and that a document required outside a form has no owner. That was WRONG.** It was taken from
+> the code comment in `REQUIREMENT_KIND_UNSUPPORTED_REASON_V1` rather than verified against the
+> schema. The correction materially shrinks the document gap.
+
+```
+public.documents
+  org_id · owner_contact_id · entity_type · entity_id   ← POLYMORPHIC: attaches to any entity
+  doc_type · title · original_filename · mime_type · byte_size
+  bucket · storage_path · public_url · checksum_sha256 · status · metadata
+  extracted_text · extracted_data(jsonb) · extraction_status · extraction_provider
+  extraction_error · extracted_at · generated_from_document_id · template_key
+
+public.document_versions            version_number · storage_path · checksum_sha256
+public.document_field_definitions   org_id · doc_type · field_key · field_label · field_type
+                                    is_required · is_ai_extractable · extraction_hint · sort_order
+public.document_field_values        the extracted values
 ```
 
-`FormGroupCollectionBinding` carries `collection_provider_ref` + `iteration_entity_type`. The
-machinery for "collect N of these and land each one as a canonical record" is built and running.
+This is free-standing, polymorphic, versioned, checksummed, and it already carries the
+Processing / Trust extraction columns. `document_field_definitions` is effectively a **per-org,
+per-`doc_type` configurable schema with AI extraction hints** — a `doc_type` exists as a type
+when an org has authored field definitions for it.
 
-**What is missing.** Only ONE collection provider is bound anywhere in the repository today —
-`"children"` (`lib/pos/processingCase/commit/auditExistingChildCommit.ts`). There is no
-`child_health_facts` collection and no entity for the instances to become.
+`documents` has **no expiry column** — an expiration date would be a `document_field_values` row
+against a `document_field_definitions` field, which is the right place for it anyway, because
+what expires differs per document type.
 
-> **Gap B1 — the largest one.** A repeatable health collection is fully expressible in Forms and
-> has nowhere to land. The missing capability is a canonical child-health-fact collection (entity
-> + provider ref), NOT a new form capability. Recommend one table with a `fact_kind` discriminator
-> (`allergy` / `condition` / `medication`) and a typed `details` payload per kind, rather than
-> three tables — the card, the requirement evaluator and the packet planner all want one list.
->
-> **Do not build this schema yet.** This document recommends the ownership; the shape needs its
-> own review.
+### 1.5 Requirements — the right architecture, two kinds authorable
 
-### C — Documents and evidence → Documents, via Forms
-
-Immunization record, physical / health assessment, medication authorization, health care plan.
-
-**These are documents, and they must not become boolean profile fields.** A `physical_received`
-checkbox is a claim with no artifact behind it — exactly the failure mode this classification
-exists to prevent.
-
-The only document evidence store today is **`form_submission_documents`**, which is scoped to a
-form submission. There is no free-standing `documents` table.
-
-> **Gap C1.** A health document that is *not* collected through a form submission has nowhere to
-> live. In practice this is tolerable — health documents arrive through the enrollment packet, so
-> they arrive as submission-scoped evidence — but a document uploaded by an operator outside a
-> packet cannot be recorded.
-
-### D — Requirements → Business Process stage requirements, already correct
-
-Requirements are **not health facts**, and Alloy already has the right architecture for them.
 `lib/lifecycle/stageRequirementsV1.ts` defines a requirement over five independent axes:
 
 | Axis | Values |
 |---|---|
 | `kind` | `field` · `form` · `document` · `consent` · `acknowledgment` · `signature` |
 | `level` | `recommended` · `required` · `enforced` |
-| `scope` | `record` · `primary_contact` · `any_child` · `each_child` · `relationship` |
+| `scope` | `record` · `primary_contact` · `any_child` · **`each_child`** · `relationship` |
 | `timing` | `record_creation` · `stage_progress` · `stage_exit` · `process_completion` |
 | `enforcement` | `informational` · `attention` · `blocking` |
 
-`scope: "each_child"` plus `timing: "stage_exit"` plus `enforcement: "blocking"` already expresses
-*"every child must have an immunization record before leaving Enrolling."* This is the existing
-requirement/readiness architecture and the Health card should consume it, never restate it.
+plus `applies_to_transition_keys` / `excluded_transition_keys` for conditionality.
 
-> **Gap D1 — and this is the smallest missing capability of the whole area.** Only `field` and
-> `form` are authorable. `document` is declared but refused, with a concrete reason recorded in
-> `REQUIREMENT_KIND_UNSUPPORTED_REASON_V1`:
->
-> > "No canonical document-requirement owner exists. Document evidence is bound to a form
-> > submission, so a document required outside a form has no owner that can prove it was
-> > satisfied."
->
-> Making `kind: "document"` authorable — which requires giving C1 an owner — is the single change
-> that unlocks configurable health-document requirements. Everything else already works.
+Only `field` and `form` are in `REQUIREMENT_KINDS_AUTHORABLE_V1`. `document` is declared and
+refused — but the recorded reason ("document evidence is bound to a form submission") is
+**stale**, per §1.4.
 
-### E — Relationships → Household owns them; Health projects them
+### 1.6 Collection providers — a typed registry, extensible by design
 
-Emergency contacts are relationship truth on `_opportunity_persons` / `customer_persons`, and
-Household already renders them. **Health must never store a contact.** The card projects a count
-and the first call, and hands off.
+`lib/fields/collection/canonicalCollectionProviderRegistry.ts`:
+
+```ts
+type CanonicalCollectionProviderKind =
+  "household_membership" | "relationship_role" | "document" | "communication" | "work";
+
+type CanonicalCollectionProviderDefinition = {
+  refKey; collectionRef; label; itemEntityType; providerKind;
+  sourceEntityType; requiredContextKeys; resolverOwner;
+  activeOnly; itemIdentityField; orderingPolicy; relationshipRoleKey?;
+};
+```
+
+Registered today: `children` and `household.members` (native structural), plus relationship-backed
+providers derived from `RELATIONSHIP_DEFINITIONS` — including
+`person.contact_role.emergency_contacts`.
+
+The Forms schema can already bind a repeatable group to one of these:
+
+```ts
+type: "group"; fields; repeat?: FormRepeatRules; collection_binding?: { collection_provider_ref, iteration_entity_type }
+```
+
+**So repeatable structured collection is a built, typed platform seam.** What is missing for
+health is a provider and an entity for its items to become — not a Forms capability.
+
+### 1.7 Governed intake → canonical destination
+
+`lib/forms/processing/adaptFormSubmissionToRelatedRecordProposals.ts` maps a submission's
+collection envelope to `RelatedRecordProposal`s with:
+
+- `origin`: `existing_record` | `proposed_new_record`
+- `status`: `valid` | `invalid` | `unsupported` | `incomplete`
+- `diagnostics`: including `unknown_provider`, `unsupported_item_entity`, `missing_field_binding`
+
+A health collection today would produce exactly `unknown_provider` / `unsupported_item_entity`.
+That is the platform correctly refusing to fabricate a destination.
+
+### 1.8 Emergency contacts — correctly owned, do not touch
+
+`person.contact_role.emergency_contacts` is a `relationship_role` collection provider with
+`role_key_candidates: ["emergency_contact", "emergency"]`. Household renders it. Health projects
+it and must never store it.
 
 ---
 
-## 2. Jurisdiction configuration — how Oregon differs, without `if (state === "oregon")`
+## 2. Ownership matrix
 
-The answer is that **a jurisdiction is not a runtime branch; it is a different published Business
-Process revision**, and that mechanism already exists.
+| Category | Example | Recommended owner | Exists today? |
+|---|---|---|---|
+| **A** simple child facts | dietary note, accommodation note, physician, general health note | `field_definitions` + `field_values` at `entity_type: "customer_member"` | Substrate ✅ · binding ❌ (health binds to `enrollment`) |
+| **B** structured records | allergy, condition, medication | A new child-scoped health-fact collection + a registered `CanonicalCollectionProviderDefinition` | Seam ✅ · entity and provider ❌ |
+| **C** documents / evidence | immunization, physical, medication authorization, health care plan | `documents` (+ `document_versions`, `document_field_definitions`, `document_field_values`) at `entity_type: "customer_member"` | ✅ **already sufficient** |
+| **D** requirements | "immunization before Enrolling" | `stageRequirementsV1` on the published Business Process revision | Architecture ✅ · `kind: "document"` not authorable ❌ |
+| **E** relationships | emergency contacts | `person.contact_role.emergency_contacts` | ✅ — Health projects, never owns |
 
-```
-Org configures an Enrollment Business Process
-        ↓
-Stage requirements_v1 authored per stage      ← WHICH health facts / forms / documents
-        ↓  (publish)
-Immutable published revision, checksum + CAS
-        ↓  (D-96 pin)
-process_instances pinned to that revision
-        ↓
-Requirement evaluation → readiness
-        ↓
-Health & Safety card projects the result
-```
+### Why B needs structured records rather than repeaters over `field_values`
 
-Three properties make this sufficient:
+An allergy is not a value; it is a record with a lifecycle. It needs its own identity so a
+medication can reference it, its own effective dates so a resolved condition stops appearing, and
+its own evidence pointer so the card can say where the fact came from. `field_values` has no
+ordinal and no per-item identity, so the alternative is a `value_json` array in which no item can
+be referenced, superseded, or traced to the submission that asserted it.
 
-- **Requirements are per published revision**, normalized into every stage at publish time by
-  `normalizePublishedStageRequirements` (D-97), so a revision is a self-contained executable
-  artifact. An Oregon org's revision requires an Oregon immunization document; another state's
-  revision requires something else. Neither knows the other exists.
-- **Conditionality is already expressible** two ways: `applies_to_transition_keys` /
-  `excluded_transition_keys` on the requirement, and `visibility` rules on the form field. *"A
-  medication authorization is required when the child takes medication"* is a conditional field
-  requirement, not a jurisdiction rule.
-- **The vocabulary is org-owned.** Field definitions, option sets and form definitions are all
-  per-org rows, so "these health questions" is authored, never coded.
+**Recommended shape — one entity, not three.** A `fact_kind` discriminator
+(`allergy` / `condition` / `medication`) with a typed per-kind payload, because the card, the
+requirement evaluator and the packet planner all want one list, and because three near-identical
+tables would triple the resolver, the provider and the proposal-adapter surface.
 
-> **Do not build a jurisdiction rules engine.** The requirement is already
-> org-scoped, revision-pinned and conditional. What is missing is only Gap D1 — the ability to
-> require a *document* — plus Gap B1 for the structured facts themselves.
+**This stays industry-transferable.** The entity is "a structured health fact about a person",
+scoped by `entity_type` / `entity_id`, the same polymorphic shape `documents` already uses. It is
+not a childcare subsystem: a home-care agency, a school district and a camp all need the same
+three kinds. Nothing about it names a program, an age group or an industry.
+
+> **Do not build this schema during this pass.** The recommendation is the ownership. The shape
+> needs its own review.
 
 ---
 
-## 3. Recommended collection flow, end to end
+## 3. Collection flow, end to end
 
 ```
 Org / jurisdiction configuration
-   · field definitions at entity_type customer_member      (A)
-   · a repeatable health group with collection_binding     (B — blocked on B1)
-   · document requirements per stage                       (D — blocked on D1)
+  · field_definitions at entity_type customer_member                    (A)
+  · a Forms group with repeat + collection_binding → health facts       (B — blocked on B1)
+  · document_field_definitions per doc_type, with extraction hints      (C — exists)
+  · stage requirements_v1 per stage                                     (D — document kind blocked on D1)
+        ↓  publish → immutable revision (checksum + CAS), D-96 pinned per instance
+Configured Forms / enrollment packet
         ↓
-Enrollment packet / Forms
-   · scalar facts bind through field_source
-   · repeatable groups iterate the health collection
-   · documents arrive as form_submission_documents
+Parent Participant Runtime
+  · scalar answers settle into form_packet_sessions.shared_values, keyed by canonicalKeyFor
+  · repeatable groups iterate the bound collection
+  · documents upload to `documents` with entity_type/entity_id = the child
         ↓
-Processing / governed interpretation where applicable
-   · existing D-99 confirmation semantics; a participant edit at review IS a confirmation
+Processing / Trust governed interpretation — ONLY where it is required
+  · document extraction → extracted_data → document_field_values
+  · collection envelope → RelatedRecordProposal (valid | invalid | unsupported | incomplete)
         ↓
-Approved canonical child health information
-   · field_values at customer_member  +  the health-fact collection
+Operator approval — ONLY for proposals, never for a validated direct mapping
         ↓
-Requirement / readiness evaluation
-   · stageRequirementsV1 over the pinned revision
+Canonical truth
+  · field_values at customer_member          (A)
+  · child health facts                        (B)
+  · documents + document_field_values         (C)
         ↓
-Health & Safety card
-   · critical fact → insight; conditions → Medical; administration → Medications;
-     requirement satisfaction → Enrollment health; contacts → projected from Household
+Requirement evaluation over the pinned revision            (D)
+        ↓
+Health & Safety card — projects what exists and what applies
 ```
+
+**When each path applies:**
+
+| Situation | Path |
+|---|---|
+| A form field with a validated `field_source` binding | **Direct write.** No interpretation, no approval. |
+| A repeatable group bound to a collection provider | **Proposal.** `origin: proposed_new_record` or `existing_record`; operator approves. |
+| A conversational answer in Participant Runtime | Settles to `shared_values`; the D-99 confirmation rule applies — a participant edit at review IS a confirmation. |
+| An uploaded document | Direct to `documents`; extraction populates `document_field_values`; **the document is the evidence, never a boolean**. |
+| Requirement satisfaction | **Derived, never stored.** Evaluated from the artifacts above against the pinned revision. |
+
+There is **no parallel mutation path**: every write above is an existing one.
 
 ---
 
-## 4. Gap register
+## 4. Configuration and portability
 
-| # | Gap | Consequence today | Smallest fix |
-|---|---|---|---|
-| **A1** | Health fields bind to `entity_type: "enrollment"`, not the child | A child's allergy does not survive their enrollment episode | Re-scope the field definitions to `customer_member`; migrate existing `field_values` |
-| **B1** | No canonical child-health-fact collection or provider ref | Allergies, conditions and medications cannot be structured; only `allergy_notes` free text and a `medication_flag` boolean exist | One collection entity with a `fact_kind` discriminator, plus its `collection_provider_ref` |
-| **C1** | Document evidence exists only as `form_submission_documents` | A health document outside a packet cannot be recorded | Give documents an owner independent of a submission |
-| **D1** | `requirement kind: "document"` is declared but not authorable | Health document requirements cannot be configured at all | Depends on C1; then add `document` to `REQUIREMENT_KINDS_AUTHORABLE_V1` |
-| **E1** | None — emergency contacts are correctly owned | — | Keep projecting, never store |
+The model carries organization, jurisdiction, program, age group and industry **without any
+runtime branch**, because all four axes are already configuration:
 
-**Order.** C1 → D1 unblocks configurable health documents, which is the jurisdiction requirement.
-B1 unblocks the structured facts the card shows. A1 is independent, cheap, and should go first
-because every later decision inherits the wrong grain otherwise.
+| Axis | Carried by |
+|---|---|
+| Organization | `field_definitions`, `document_field_definitions`, form definitions and business processes are all `org_id`-scoped rows |
+| Jurisdiction | **A jurisdiction is a different published Business Process revision.** `normalizePublishedStageRequirements` (D-97) makes every published revision self-contained, so an Oregon org's revision requires Oregon's documents and no other revision knows it exists |
+| Program | `applies_to_transition_keys` / `excluded_transition_keys` on the requirement, plus form-field `visibility` rules |
+| Age group | `scope: "each_child"` evaluates per child; a conditional field rule keys off the child's own data |
+| Industry | Nothing in A–E names a domain. The health-fact entity is polymorphic by `entity_type` / `entity_id`, exactly as `documents` is |
+
+`if (state === "oregon")` is not needed and must not appear. **No jurisdiction rules engine should
+be built** — the requirement model is already org-scoped, revision-pinned and conditional.
+
+---
+
+## 5. Gap register — smallest changes, in order
+
+| # | Gap | Consequence today | Smallest fix | Size |
+|---|---|---|---|---|
+| **A1** | `allergy_notes` and `medication_flag` bind to `entity_type: "enrollment"` | A child's allergy does not survive their enrollment episode | Re-bind the registry entries to `customer_member`; migrate existing `field_values` rows | **Small** |
+| **D1** | `requirement kind: "document"` is declared but not authorable | Health document requirements cannot be configured at all | A `doc_type` catalog for authoring, plus a satisfaction evaluator answering "does a `documents` row of type X exist for this child, accepted, and not expired". **The store already exists** — this is an evaluator, not a schema | **Medium** |
+| **B1** | No child-scoped structured health-fact entity or collection provider | Allergy severity, reaction, treatment and medication records cannot be captured at all | One entity with a `fact_kind` discriminator, one `CanonicalCollectionProviderDefinition`, one resolver, one new `CanonicalCollectionProviderKind` | **Large** |
+| ~~C1~~ | ~~No document owner outside a form submission~~ | — | **Withdrawn — `public.documents` is polymorphic, versioned and sufficient** | — |
+| **E1** | None | — | Keep projecting emergency contacts, never store | — |
+
+**Order: A1 → D1 → B1.**
+
+A1 first because it is cheap and every later decision inherits the wrong grain otherwise. D1
+second because it is now much smaller than previously believed and it unlocks the entire
+jurisdiction story. B1 last because it is the only genuinely new schema, and it should not be
+designed until A1 has settled the grain.
+
+---
+
+## 6. Decisions that require Director approval
+
+1. **A1 is a migration of live data.** Re-binding `allergy_notes` / `medication_flag` to
+   `customer_member` moves existing `field_values` rows between entity grains. Reversible, but it
+   touches tenant data.
+2. **B1 introduces a new canonical entity and a new `CanonicalCollectionProviderKind`.** That is a
+   platform-vocabulary change, not a feature.
+3. **Whether medication authorization is a document (C) or a requirement (D)** — it is both, and
+   which one the card shows changes what "Missing" means. The recommendation is D: the requirement
+   is the operator's concern and the document is its evidence.
+4. **Whether an "active condition" distinction should exist**, which would justify a stronger
+   alarm treatment than the restrained one now on the card. Absent that distinction, the card
+   deliberately treats all critical facts as durable safety information.

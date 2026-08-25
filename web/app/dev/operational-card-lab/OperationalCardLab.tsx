@@ -44,7 +44,8 @@ type TabKey =
     | "billing"
     | "healthspec"
     | "billingspec"
-    | "wide";
+    | "wide"
+    | "billingab";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -55,6 +56,7 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "overflow", label: "4b · Movement overflow" },
     { key: "billing", label: "5 · Billing" },
     { key: "healthspec", label: "A · Health specimens" },
+    { key: "billingab", label: "B1 · Billing A/B" },
     { key: "billingspec", label: "B · Billing specimens" },
     { key: "wide", label: "C · Wide cards together" },
     { key: "combined", label: "6 · Combined Focus Panel" },
@@ -95,6 +97,20 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         ],
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    billingab: {
+        question: "Should the third zone be Recent Ledger, or Payment?",
+        decisions: [
+            "Rendered both ways from the same evidence rather than assuming — A keeps the mini ledger, B answers how the bill is expected to be paid and steps the ledger down to one line.",
+            "In B the payers live in the Payment zone where they belong, and the payer strip disappears.",
+            "A funding source is drawn as a funding source, not as an ordinary parent payer.",
+            "Recommendation is in the review doc: A ships now, because every field it renders has a canonical owner today and half of B's does not.",
+        ],
+        open: [
+            "Autopay state and next scheduled charge have NO owner in Alloy — no table, no column. B renders them as fixture only.",
+            "customer_payment_methods is scoped to the household, not to a payer, so \"Jordan · Visa 4242\" cannot be built today.",
+            "Responsibility split has no field: billing_responsibility is a composition group with defaultFieldKeys: [].",
         ],
     },
     wide: {
@@ -318,6 +334,7 @@ export default function OperationalCardLab() {
                                 tab === "billing" ||
                                 tab === "overflow" ||
                                 tab === "billingspec" ||
+                                tab === "billingab" ||
                                 tab === "wide"
                                     ? " · full row"
                                     : " · one column"}
@@ -355,6 +372,16 @@ export default function OperationalCardLab() {
                                                 <BillingCard evidence={sp} />
                                             </Cell>
                                         ))}
+                                    </>
+                                ) : null}
+                                {tab === "billingab" ? (
+                                    <>
+                                        <Cell span={2} kind="cand" name="A · Current | Past due | Recent ledger">
+                                            <BillingCard evidence={BILLING_FIXTURE} variant="ledger" />
+                                        </Cell>
+                                        <Cell span={2} kind="cand" name="B · Current | Past due | Payment">
+                                            <BillingCard evidence={BILLING_FIXTURE} variant="payment" />
+                                        </Cell>
                                     </>
                                 ) : null}
                                 {tab === "wide" ? (
