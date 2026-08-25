@@ -148,7 +148,10 @@ export default function FocusPanelCardRenderer({
             <SchedulingCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
-    if (model.key === "current_work") {
+    // Both names render the Current Work presentation today. `business_process` is the canonical
+    // successor and the only one composition can select; `current_work` stays reachable for any
+    // direct internal consumer. Slice 2 replaces this presentation with the combined Process card.
+    if (model.key === "current_work" || model.key === "business_process") {
         return (
             <CurrentWorkCard
                 model={model}

@@ -26,7 +26,10 @@ export type FocusPanelCardVisibility = (typeof FOCUS_PANEL_CARD_VISIBILITIES)[nu
 
 /** Enrollment default composition — Visible / Linked only (Hidden stay in library). */
 export const ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS: readonly FocusPanelCardKey[] = [
-    "current_work",
+    // The canonical successor, in the placement `current_work` held. Stored tenant configuration
+    // naming the legacy key normalizes to this one, so the card keeps its position rather than
+    // moving or disappearing.
+    "business_process",
     "household",
     "children",
     "scheduling",

@@ -74,6 +74,9 @@ export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<Car
  */
 export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
     { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
+    // The combined Business Process card — successor to `current_work` as a card presentation.
+    // Same work-completion ownership, because it is the same operating question at a fuller depth.
+    { key: "business_process", title: "What's Next", ownsWorkCompletion: true },
     /**
      * Declared for the durable FAMILY as well as the case — and the declaration is what makes the
      * durable Household surface exist at all. Silence would have left it case-only by the

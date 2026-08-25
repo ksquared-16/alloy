@@ -19,23 +19,27 @@ describe("Focus Panel What's Next card identity", () => {
         );
         expect(matches).toHaveLength(1);
         expect(matches[0]?.label).toBe(FOCUS_PANEL_WHATS_NEXT_LABEL);
-        expect(matches[0]?.cardKey).toBe("current_work");
+        // The identity is now carried by its successor. Still exactly ONE catalog entry — that is
+        // the invariant this suite guards, and it is unchanged by the rename.
+        expect(matches[0]?.cardKey).toBe("business_process");
     });
 
-    it("normalizes legacy stored keys and labels to canonical current_work", () => {
-        expect(normalizeFocusPanelCardKey("current_work")).toBe("current_work");
-        expect(normalizeFocusPanelCardKey("whats_next")).toBe("current_work");
-        expect(normalizeFocusPanelCardKey("whats-next")).toBe("current_work");
-        expect(normalizeFocusPanelCardKey("current-work")).toBe("current_work");
-        expect(normalizeFocusPanelCardKey("Current Work")).toBe("current_work");
-        expect(normalizeFocusPanelCardKey("What's Next")).toBe("current_work");
+    it("normalizes legacy stored keys and labels to canonical business_process", () => {
+        // `current_work` joins the legacy spellings: the card identity is superseded, the Current
+        // Work CONCEPT is not (it remains the data owner the successor consumes).
+        expect(normalizeFocusPanelCardKey("current_work")).toBe("business_process");
+        expect(normalizeFocusPanelCardKey("whats_next")).toBe("business_process");
+        expect(normalizeFocusPanelCardKey("whats-next")).toBe("business_process");
+        expect(normalizeFocusPanelCardKey("current-work")).toBe("business_process");
+        expect(normalizeFocusPanelCardKey("Current Work")).toBe("business_process");
+        expect(normalizeFocusPanelCardKey("What's Next")).toBe("business_process");
         expect(normalizeFocusPanelCardKey("unknown_card")).toBeNull();
     });
 
     it("builder label, search, and reset identity use What's Next", () => {
         expect(focusPanelCardCatalogLabel("current_work")).toBe("What's Next");
         expect(findFocusPanelCatalogEntryByQuery("Current Work")?.label).toBe("What's Next");
-        expect(findFocusPanelCatalogEntryByQuery("What's Next")?.cardKey).toBe("current_work");
-        expect(findFocusPanelCatalogEntryByQuery("whats_next")?.cardKey).toBe("current_work");
+        expect(findFocusPanelCatalogEntryByQuery("What's Next")?.cardKey).toBe("business_process");
+        expect(findFocusPanelCatalogEntryByQuery("whats_next")?.cardKey).toBe("business_process");
     });
 });

@@ -26,7 +26,10 @@ const EXPECTED_OPERATIONAL_TRUTH = new Set([
     "documents",
     "communications",
 ]);
-const EXPECTED_WORK_OWNING = new Set(["current_work"]);
+// `business_process` is the canonical successor to the `current_work` CARD and renders the same
+// work-completion presentation, so it owns work completion for the same reason its predecessor
+// does. The predecessor stays declared because it remains reachable as a data identity.
+const EXPECTED_WORK_OWNING = new Set(["current_work", "business_process"]);
 
 describe("Focus Panel lifecycle concern — registry parity (concern 2)", () => {
     it("isOperationalTruthCard matches the pre-migration OPERATIONAL_TRUTH_CARDS set for every key", () => {

@@ -28,6 +28,31 @@ export type FocusPanelCardCatalogEntry = {
 /** Canonical runtime key for the What's Next / Current Work surface. */
 export const FOCUS_PANEL_WHATS_NEXT_CARD_KEY = "current_work" as const satisfies FocusPanelCardKey;
 
+/** Canonical runtime key for the combined Business Process card. */
+export const FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY = "business_process" as const satisfies FocusPanelCardKey;
+
+/**
+ * SUPERSEDED CARD IDENTITIES — a key that still exists in the runtime union but must never be
+ * composed as a card, because a canonical successor now owns its presentation.
+ *
+ * Consulted BEFORE the exact-key branch of {@link normalizeFocusPanelCardKey}, which is the whole
+ * point: `current_work` is still a member of `FOCUS_PANEL_CARD_KEYS`, so an exact-match-first
+ * lookup would return it unchanged and the alias would never be reached. Ordering is the mechanism.
+ *
+ * The key is NOT deleted from the union. `current_work` remains a canonical DATA owner that the
+ * Business Process card consumes, and every non-card reference to it (truth, providers, actions)
+ * keeps working. What is superseded is the CARD, not the concept.
+ */
+export const SUPERSEDED_FOCUS_PANEL_CARD_KEYS: Readonly<Record<string, FocusPanelCardKey>> = {
+    [FOCUS_PANEL_WHATS_NEXT_CARD_KEY]: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+};
+
+/** Is this key superseded as a CARD by a canonical successor? */
+export function supersededCardSuccessor(raw: unknown): FocusPanelCardKey | null {
+    if (typeof raw !== "string") return null;
+    return SUPERSEDED_FOCUS_PANEL_CARD_KEYS[raw.trim().toLowerCase()] ?? null;
+}
+
 /** Operator-facing catalog + builder label (runtime micro-label matches). */
 export const FOCUS_PANEL_WHATS_NEXT_LABEL = "What's Next";
 
@@ -36,16 +61,16 @@ export const FOCUS_PANEL_WHATS_NEXT_LABEL = "What's Next";
  * New authoring always persists {@link FOCUS_PANEL_WHATS_NEXT_CARD_KEY}.
  */
 const FOCUS_PANEL_CARD_KEY_ALIASES: Readonly<Record<string, FocusPanelCardKey>> = {
-    whats_next: FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
-    "whats-next": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
-    "current-work": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
+    whats_next: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+    "whats-next": FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+    "current-work": FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
 };
 
 /** Legacy operator labels that search/resolve to the same card. */
 const FOCUS_PANEL_CARD_LABEL_ALIASES: Readonly<Record<string, FocusPanelCardKey>> = {
-    "current work": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
-    "what's next": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
-    "whats next": FOCUS_PANEL_WHATS_NEXT_CARD_KEY,
+    "current work": FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+    "what's next": FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+    "whats next": FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
     /** Legacy Surfaces / catalog label for the Assignments card (runtime key stays `scheduling`). */
     scheduling: "scheduling",
     assignments: "scheduling",
@@ -54,7 +79,9 @@ const FOCUS_PANEL_CARD_LABEL_ALIASES: Readonly<Record<string, FocusPanelCardKey>
 export const FOCUS_PANEL_CARD_CATALOG: readonly FocusPanelCardCatalogEntry[] = [
     { label: "Why Now", cardKey: "attention" },
     { label: "Current Mission", cardKey: "current_mission" },
-    { label: FOCUS_PANEL_WHATS_NEXT_LABEL, cardKey: FOCUS_PANEL_WHATS_NEXT_CARD_KEY },
+    // ONE entry for this identity. The legacy key is not catalogued beside it — that is exactly the
+    // "never duplicate Current Work + What's Next" rule, now enforced against the successor.
+    { label: FOCUS_PANEL_WHATS_NEXT_LABEL, cardKey: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY },
     { label: "Enrollment Health", cardKey: "health" },
     { label: "Readiness", cardKey: "readiness_kpi" },
     { label: "Tour", cardKey: "tour_summary" },
@@ -85,7 +112,11 @@ function humanizeCardKey(key: FocusPanelCardKey): string {
 
 /** Operator-facing catalog label for a canonical card key (builder / search / reset). */
 export function focusPanelCardCatalogLabel(key: FocusPanelCardKey): string {
-    return CATALOG_LABEL_BY_KEY.get(key) ?? humanizeCardKey(key);
+    // A superseded key is no longer catalogued under its own name, but it must still resolve to the
+    // identity's label — otherwise the legacy key humanizes to "Current Work" and the builder shows
+    // two names for one card, which is the duplication this identity rule exists to prevent.
+    const canonical = supersededCardSuccessor(key) ?? key;
+    return CATALOG_LABEL_BY_KEY.get(canonical) ?? humanizeCardKey(canonical);
 }
 
 /**
@@ -101,6 +132,11 @@ export function normalizeFocusPanelCardKey(raw: unknown): FocusPanelCardKey | nu
     if (typeof raw !== "string") return null;
     const trimmed = raw.trim();
     if (!trimmed) return null;
+
+    // Supersession outranks exact match. `current_work` is still a union member, so checking the
+    // union first would return it unchanged and the successor would never be reached.
+    const superseded = supersededCardSuccessor(trimmed);
+    if (superseded) return superseded;
 
     if ((FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(trimmed)) {
         return trimmed as FocusPanelCardKey;

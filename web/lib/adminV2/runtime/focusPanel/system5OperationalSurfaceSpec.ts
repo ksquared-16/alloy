@@ -30,6 +30,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     employment: "wide",
     scheduling: "wide",
     current_work: "narrow",
+    business_process: "narrow",
     readiness_kpi: "medium",
     tour_summary: "narrow",
     communications: "wide",
@@ -70,6 +71,8 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     attention: "AlertCircle",
     current_mission: "Target",
     current_work: "Briefcase",
+    // The journey rail is the card's spine, so it takes the branch glyph, not the briefcase.
+    business_process: "GitBranch",
     required_information: "ClipboardList",
     readiness_kpi: "ShieldCheck",
     health: "HeartPulse",

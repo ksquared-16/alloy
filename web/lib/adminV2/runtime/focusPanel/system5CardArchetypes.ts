@@ -10,6 +10,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     attention: "action",
     current_mission: "action",
     current_work: "action",
+    business_process: "action",
     required_information: "action",
     primary_next_action: "action",
     readiness_kpi: "status",

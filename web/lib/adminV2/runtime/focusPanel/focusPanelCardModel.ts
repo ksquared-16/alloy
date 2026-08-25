@@ -100,6 +100,17 @@ export type FocusPanelCardPayload = {
 export const FOCUS_PANEL_CARD_KEYS = [
     /** @grain case — family attention flags */
     "attention",
+    /**
+     * @grain case — the combined Business Process card: configured stage rail + participant
+     * projection + Current Work + case actions + bounded Activity.
+     *
+     * THE CANONICAL SUCCESSOR TO `current_work` AS A CARD PRESENTATION. `current_work` remains a
+     * canonical DATA owner that this card consumes — the supersession is of card identity and
+     * composition, never of the Current Work platform concept. Stored tenant configuration naming
+     * `current_work` normalizes here (see `SUPERSEDED_FOCUS_PANEL_CARD_KEYS`), and the two must
+     * never render together.
+     */
+    "business_process",
     /** @grain case — current lifecycle mission label */
     "current_mission",
     /** @grain case — open work items for this family */

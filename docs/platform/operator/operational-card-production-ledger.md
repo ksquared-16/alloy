@@ -203,3 +203,148 @@ subject only arises from the **scoped participant** on the Process card, and the
 case-grain by shipped conformance test. **The avatar treatment moves to Slice 2** and is certified
 with the Process card's scoped participant, or not at all. No speculative caller was wired to make
 it appear reachable.
+
+---
+
+## 9. Card identity resolved — `current_work → business_process` (2026-08-25)
+
+Director approved the recommendation. Implemented through the **existing** alias mechanism; no
+one-off migration path was created.
+
+### The mechanism, and why ordering is the mechanism
+
+`normalizeFocusPanelCardKey` checked the exact key union *first*. `current_work` is still a member
+of that union — it must be, because the Current Work **concept** survives as a data owner — so an
+exact-match-first lookup would return it unchanged and the alias would never be reached.
+
+A `SUPERSEDED_FOCUS_PANEL_CARD_KEYS` table is therefore consulted **before** the union branch. The
+key is not deleted; the **card** is superseded, not the concept.
+
+### The seam this uncovered
+
+A published layout is a **second record of the same composition**, stored in doc metadata and
+returned verbatim by `readFocusPanelPublishedLayout`. The section path normalized; this one did not.
+A tenant whose layout was published naming a superseded key would have resolved it on one path and
+not the other — two readers of one document disagreeing about which card is placed. Normalization
+now happens at that read, so both records agree.
+
+This is the same failure shape as the activity-row key: several readers deriving one identity
+independently, and only some of them correct.
+
+### Proofs — `tests/adminV2/runtime/businessProcessCardIdentity.test.ts` (8 passing)
+
+| # | Requirement | Result |
+|---|---|---|
+| 1 | Existing `current_work` configuration resolves to `business_process` | ✅ — with every legacy spelling and both operator labels |
+| 2 | Explicit `business_process` resolves once, to itself | ✅ |
+| 3 | Both forms together deduplicate to one card | ✅ — in either order, and with three spellings at once |
+| 3b | Dedupe keeps the card at its existing placement | ✅ — `[household, current_work, children]` → `[household, business_process, children]` |
+| 4 | Current Work truth remains available | ✅ — key retained in the union, still titled, still a data owner |
+| 5 | Never render both | ✅ — the catalog offers the identity exactly once, and no configuration can yield both keys |
+
+Plus two beyond the required set: supersession outranks exact match (the mechanism itself), and a
+superseded key always names a **registered** successor (no disappearance).
+
+### No card disappears
+
+`business_process` publishes the **same model** the predecessor did
+(`deriveOpportunityFocusPanelCards`), and the renderer accepts both keys. Composition can only ever
+select the successor, so exactly one renders — carrying identical truth and content until Slice 2
+deepens the presentation. A successor with no model would have emptied the card out of every tenant
+that had configured it.
+
+Existing suites updated to the approved contract rather than the code reverted: the What's Next
+identity suite now asserts the successor, and the work-owning set legitimately grows by one, because
+the successor renders the same work-completion presentation.
+
+---
+
+## 10. Slice 1 (Staff) — the specified approach would create a duplicate owner
+
+Two findings, both from the repository and the running product rather than from reasoning.
+
+### A durable Person panel already has exactly one card, and it is Employment
+
+`derivePersonFocusPanelCards` is explicit:
+
+> a durable Person V1 has exactly one card with canonical Person truth: Employment
+> … **SPARSE IS THE CORRECT ANSWER**
+
+`employment` is already declared for `["opportunity", "person"]`, and it already consumes
+`PersonEmploymentComposition` — `is_staff`, current period, `state_label`, `position_label`,
+`employment_type_label`, `primary_location_label`, `external_employee_id`, start/end dates, tenant
+`configured_facts`, full period history. That is most of the approved Staff card's content.
+
+`scheduling` is declared for `["opportunity", "child", "person"]`, and
+`composeDurableStaffScheduling` already composes a **staff subject's** assignments, rooms, patterns
+and effective dating — firing the **same registered assignment actions**, deliberately not a fork:
+
+> `Operations → Roster → Staff → Jane → Schedule` renders the platform's canonical `scheduling`
+> card. Not a staff copy of it: the SAME card, reading the SAME `_scheduling_projection` bag.
+
+So the approved Staff card's facts are already delivered on the real person surface by **two
+existing canonical cards**. Registering a third `staff` key that re-shows employment plus assignment
+would duplicate both — the outcome the Definition of Done forbids ("no duplicate owner/store was
+created").
+
+**Recommended:** treat Staff the way the Director just treated Process. Either deepen `employment`
+at person grain, or register `staff` as the canonical successor that supersedes `employment` **at
+person grain only** (leaving the case-grain Employment reference chip untouched, since "does anyone
+on this family work here?" is a genuinely different question). The mechanism now exists and is
+tested. This is a Director decision because it changes what the person surface renders.
+
+### The certification tenant has zero staff
+
+`Operations → Staff` on Firefly Early Learning reports **All Staff 0 · Starting Soon 0 · Inactive 0
+· "No staff yet"**. Every required Staff certification case — avatar image, initials fallback,
+active employment, ended employment, assignment present/absent, cross-subject leakage, row-to-row
+navigation — needs staff records that do not exist.
+
+Creating them means writing to the **shared** local stack through `staff.add`. That is additive and
+uses the real registered capability, but this program has already been bitten once by shared-fixture
+mutation (a partially-applied fixture silently cost two children their Schedule contexts). Seeding
+is the right move; it is recorded here as a deliberate act rather than performed silently mid-run.
+
+---
+
+## 11. Ledger — corrected
+
+| Capability | UI | Read truth | Actions | Config | Permissions | Browser proof | Production-ready |
+|---|---|---|---|---|---|---|---|
+| **Business Process** | locked | partial — stage + activity by owner | existing Current Work actions | **key registered + legacy normalized** | existing | pending | pending |
+| Staff | locked | ready (`PersonEmploymentComposition`) | n/a — informational | **blocked on duplicate-owner decision** | existing | **blocked — zero staff in tenant** | pending |
+| Care Team | locked | **resolver missing** | n/a | pending | existing | pending | **NO** |
+| Attendance | locked | ready/partial | **missing child commands** | pending | existing | pending | **NO** |
+| Financials compact | locked | partial (F0) | missing | pending | existing | pending | **NO** |
+| Financials summary | locked | partial (F0) | missing (F5) | pending | existing | pending | **NO** |
+| Financials expanded | locked | partial (F0 + F7) | missing (F5) | pending | existing | pending | **NO** |
+| Health & Safety | locked | foundation missing (B1) | future | pending | health policy pending | pending | **NO** |
+| Safety Signals | locked | health dependent | n/a | pending | **S2 missing** | pending | **NO** |
+
+### Attendance command slice — plan before any enabled control
+
+| Command | Subject | Canonical effect | Status |
+|---|---|---|---|
+| `child_attendance.check_in` | child | attendance event → fold → read model | **absent** |
+| `child_attendance.check_out` | child | attendance event | **absent** |
+| `child_attendance.record_movement` | child | `room_transfer` event | **absent** |
+| `child_attendance.correct` | child | correction/reversal lineage entry | **absent** |
+| `child_attendance.mark_absent` | child | absence with reason | **absent** |
+
+`staff_presence.record` / `staff_presence.correct` exist and are the shape to follow — a different
+subject, not a substitute. Until these land, Attendance may register **read-only**; its mutation
+controls must not render.
+
+---
+
+## 12. Tooling debt — Vacilando typecheck broker
+
+| | |
+|---|---|
+| Symptom | `vac run typecheck` aborts **rc=134** (OOM) |
+| Cause | The broker invokes `--max-old-space-size=4096`; `web/package.json` declares `8192` for the same script. The broker overrides the declared heap **downward** |
+| Not | An Alloy type failure |
+| Workaround | `vac run typecheck:tests` runs the same compiler at 8192 over `tsconfig.json` — a **superset** of `tsconfig.build.json` — and returns rc=0 |
+| Second defect | On genuine type errors the broker reports `class=config` and prints *"FAILED TO START … the command never ran"* — while the compiler plainly ran and emitted `error TS2741`. The message contradicts its own output and would send an agent looking for a config fault instead of the type error |
+
+Do not weaken Alloy's typecheck heap to accommodate the broker.

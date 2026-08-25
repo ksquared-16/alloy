@@ -2,6 +2,7 @@
  * Derive Focus Panel Universal Card models from opportunity VM — not from layout sections.
  */
 
+import { FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardCatalog";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import { normalizeFocusPanelChildrenRowsFromTruth } from "@/lib/adminV2/runtime/focusPanel/collections/focusPanelCollectionPresentation";
 import { resolveLeadDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
@@ -673,13 +674,22 @@ function buildCardModels(input: {
         }),
     );
 
-    map.set(
-        "current_work",
-        buildCurrentWorkCardModel({
-            stageWorkRuntime: stageRuntime,
-            nextActionLabel: headerPrimaryAction?.label ?? null,
-        }),
-    );
+    const currentWorkModel = buildCurrentWorkCardModel({
+        stageWorkRuntime: stageRuntime,
+        nextActionLabel: headerPrimaryAction?.label ?? null,
+    });
+    map.set("current_work", currentWorkModel);
+    // THE SUCCESSOR PUBLISHES THE SAME MODEL UNDER THE CANONICAL IDENTITY.
+    //
+    // Configuration naming `current_work` normalizes to `business_process`, so composition asks for
+    // the successor — and a successor with no model would DISAPPEAR the card from every tenant that
+    // already configured it. Until Slice 2 deepens the presentation into the combined Process card,
+    // the successor renders exactly what the predecessor did: same truth, same content, one entry
+    // selected. There is no second source of work truth here, only a second name for it.
+    map.set(FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY, {
+        ...currentWorkModel,
+        key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+    });
 
     const health = healthInsight(displayVm);
     const documentsOutstanding =
