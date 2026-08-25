@@ -139,7 +139,10 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
  */
 export const FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION: readonly SummaryCompositionEntry[] = [
     {
-        key: "employment",
+        // `staff`, not `employment`: on a durable person the Employment presentation is superseded
+        // (registry SUPERSESSION concern, person grain only), and `employment` no longer declares
+        // this grain — so naming it here would place a card the grain gate then refuses.
+        key: "staff",
         tier: "reference",
         visibility: "visible",
         // Six columns in the left lane. A 12-column card cannot be planned into lanes and forces

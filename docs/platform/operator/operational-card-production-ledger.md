@@ -559,3 +559,18 @@ owner, not a new store.
 The live `business_process` card still renders the transitional Current Work presentation. That is
 the headline item outstanding, and it is deliberately not half-built: a provider that placed
 participant markers by label would violate §6 in the first line of code.
+
+### Regression follow-up — a default composition still named the predecessor
+
+Running `tests/operator/*` (which the Staff slice's regression check had not covered — it swept
+`tests/adminV2/runtime` only) surfaced 9 failures. Eight were assertions of the superseded contract
+and were updated. **One was a real defect:** `FOCUS_PANEL_SUMMARY_PERSON_COMPOSITION` still placed
+`employment` on the person surface, while `employment` no longer declares that grain — so the
+default composition named a card the grain gate would then refuse. It now names `staff`.
+
+That is the same shape as the two seams already recorded: a second place that states the same
+identity, updated late. The guard that caught it — "every card a grain's default composition places
+is declared for that grain" — is exactly the kind of invariant that survives a rename.
+
+67 tests green across the six affected suites; `typecheck:tests` rc=0; person surface re-certified
+after the change (avatar tile, initials fallback, 0 page errors).

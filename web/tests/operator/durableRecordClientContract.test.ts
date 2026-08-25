@@ -148,9 +148,9 @@ describe("the wire format preserves the card maps", () => {
         // cards and no error.
         expect(decoded.cardModels).toBeInstanceOf(Map);
         expect(decoded.cardReadiness).toBeInstanceOf(Map);
-        expect([...decoded.cardModels.keys()]).toEqual(["employment"]);
-        expect(decoded.cardReadiness.get("employment")).toBe("ready");
-        expect(decoded.cardModels.get("employment")?.insight).toBe("Lead Teacher at Riverside");
+        expect([...decoded.cardModels.keys()]).toEqual(["staff"]);
+        expect(decoded.cardReadiness.get("staff")).toBe("ready");
+        expect(decoded.cardModels.get("staff")?.insight).toBe("Lead Teacher at Riverside");
     });
 
     it("preserves subject, phase and grain across the hop", () => {
