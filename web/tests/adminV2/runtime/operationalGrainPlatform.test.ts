@@ -353,11 +353,11 @@ describe("Doctrine §8.5 — FocusPanelCardKey grain annotations", () => {
     // 25 since `child_identity` joined the vocabulary — the first CHILD-grain card, for the durable
     // child record. (24 was the count once `employment` joined: person-owned truth projected at case
     // grain, back when the case panel was the only surface that composed for a person.)
-    it("FOCUS_PANEL_CARD_KEYS contains all 26 keys", () => {
-        // 26 since `business_process` was registered as the canonical successor to the
-        // `current_work` CARD. The predecessor key is retained — the concept it names is still a
-        // data owner — so the union grows by one rather than swapping a member.
-        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(26);
+    it("FOCUS_PANEL_CARD_KEYS contains all 27 keys", () => {
+        // 27: `business_process` (successor to the `current_work` CARD, global) and `staff`
+        // (successor to the person-grain `employment` presentation). Both predecessors are RETAINED
+        // — each still names a live owner — so the union grows rather than swapping members.
+        expect(FOCUS_PANEL_CARD_KEYS.length).toBe(27);
     });
 
     it("focusPanelCardModel.ts still annotates each key's grain of origin", () => {

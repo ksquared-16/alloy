@@ -28,6 +28,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     household: "wide",
     children: "wide",
     employment: "wide",
+    staff: "wide",
     scheduling: "wide",
     current_work: "narrow",
     business_process: "narrow",
@@ -83,6 +84,8 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     // matter, different question (this child, vs this family's children).
     child_identity: "Baby",
     employment: "Users",
+    // One employee, not a group — the case chip keeps Users, the person card takes the singular.
+    staff: "User",
     milestones: "Flag",
     scheduling: "CalendarDays",
     communications: "MessageSquare",

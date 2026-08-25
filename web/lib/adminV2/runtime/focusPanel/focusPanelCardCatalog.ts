@@ -13,10 +13,12 @@
  * to that one identity — never duplicate Current Work + What's Next in catalog.
  */
 
+import { cardSuccessor } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardRegistry";
 import {
     FOCUS_PANEL_CARD_KEYS,
     type FocusPanelCardKey,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
 export type FocusPanelCardCatalogEntry = {
     label: string;
@@ -32,25 +34,18 @@ export const FOCUS_PANEL_WHATS_NEXT_CARD_KEY = "current_work" as const satisfies
 export const FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY = "business_process" as const satisfies FocusPanelCardKey;
 
 /**
- * SUPERSEDED CARD IDENTITIES — a key that still exists in the runtime union but must never be
- * composed as a card, because a canonical successor now owns its presentation.
- *
- * Consulted BEFORE the exact-key branch of {@link normalizeFocusPanelCardKey}, which is the whole
- * point: `current_work` is still a member of `FOCUS_PANEL_CARD_KEYS`, so an exact-match-first
- * lookup would return it unchanged and the alias would never be reached. Ordering is the mechanism.
- *
- * The key is NOT deleted from the union. `current_work` remains a canonical DATA owner that the
- * Business Process card consumes, and every non-card reference to it (truth, providers, actions)
- * keeps working. What is superseded is the CARD, not the concept.
+ * SUPERSEDED CARD IDENTITIES are declared on the registry (the SUPERSESSION concern), not listed
+ * here. This module only consults the composer, so there is ONE place a supersession is stated and
+ * it sits beside the card's other concern slices.
  */
-export const SUPERSEDED_FOCUS_PANEL_CARD_KEYS: Readonly<Record<string, FocusPanelCardKey>> = {
-    [FOCUS_PANEL_WHATS_NEXT_CARD_KEY]: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
-};
-
-/** Is this key superseded as a CARD by a canonical successor? */
-export function supersededCardSuccessor(raw: unknown): FocusPanelCardKey | null {
+export function supersededCardSuccessor(
+    raw: unknown,
+    grain?: OperationalSubjectType,
+): FocusPanelCardKey | null {
     if (typeof raw !== "string") return null;
-    return SUPERSEDED_FOCUS_PANEL_CARD_KEYS[raw.trim().toLowerCase()] ?? null;
+    const trimmed = raw.trim();
+    if (!(FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(trimmed)) return null;
+    return cardSuccessor(trimmed as FocusPanelCardKey, grain);
 }
 
 /** Operator-facing catalog + builder label (runtime micro-label matches). */
@@ -128,14 +123,17 @@ export function focusPanelCardCatalogLabel(key: FocusPanelCardKey): string {
  *   → canonical builder identity (`current_work` + "What's Next")
  *   → runtime identity (`current_work`, microLabel "What's Next")
  */
-export function normalizeFocusPanelCardKey(raw: unknown): FocusPanelCardKey | null {
+export function normalizeFocusPanelCardKey(
+    raw: unknown,
+    opts?: { grain?: OperationalSubjectType },
+): FocusPanelCardKey | null {
     if (typeof raw !== "string") return null;
     const trimmed = raw.trim();
     if (!trimmed) return null;
 
     // Supersession outranks exact match. `current_work` is still a union member, so checking the
     // union first would return it unchanged and the successor would never be reached.
-    const superseded = supersededCardSuccessor(trimmed);
+    const superseded = supersededCardSuccessor(trimmed, opts?.grain);
     if (superseded) return superseded;
 
     if ((FOCUS_PANEL_CARD_KEYS as readonly string[]).includes(trimmed)) {

@@ -6,6 +6,10 @@ import {
     grainsForDeclaration,
     type CardGrainApplicability,
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardGrainConcern";
+import {
+    successorForDeclaration,
+    type CardSupersession,
+} from "@/lib/adminV2/runtime/focusPanel/focusPanelCardSupersession";
 import type { OperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 
 /**
@@ -64,7 +68,10 @@ export type CardIdentity = {
  * `CardXxx` is a small contract imported from the module that OWNS that concern's composer. It must
  * never collapse into one flat schema this file defines wholesale.
  */
-export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<CardGrainApplicability>;
+export type CardDefinition = CardIdentity &
+    Partial<CardLifecycle> &
+    Partial<CardGrainApplicability> &
+    Partial<CardSupersession>;
 
 /**
  * The declared cards. Each carries only the concern slices it opts into: a reserved-cell `title`
@@ -73,7 +80,14 @@ export type CardDefinition = CardIdentity & Partial<CardLifecycle> & Partial<Car
  * placement folds in as a later concern.
  */
 export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
-    { key: "current_work", title: "What's Next", ownsWorkCompletion: true },
+    // Superseded on EVERY grain: the combined Process card answers this question wherever it is
+    // asked. The key stays because Current Work remains a canonical data owner.
+    {
+        key: "current_work",
+        title: "What's Next",
+        ownsWorkCompletion: true,
+        supersededBy: "business_process",
+    },
     // The combined Business Process card — successor to `current_work` as a card presentation.
     // Same work-completion ownership, because it is the same operating question at a fuller depth.
     { key: "business_process", title: "What's Next", ownsWorkCompletion: true },
@@ -123,7 +137,30 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * here"); on a durable Person it is the subject's own answer. Same card, same renderer, same
      * `context.employment` contract — only the producer of that projection differs.
      */
-    { key: "employment", title: "Employment", grains: ["opportunity", "person"] },
+    /**
+     * Case-grain ONLY from here on. On a family case this answers "does anyone on this household
+     * work here?" — a reference chip, and a different question from "who is this employee?".
+     *
+     * On a durable PERSON that second question is now owned by `staff`, so the presentation is
+     * superseded there and only there. The case chip is untouched, which is exactly why the
+     * supersession carries a grain scope instead of being global.
+     */
+    {
+        key: "employment",
+        title: "Employment",
+        grains: ["opportunity"],
+        supersededBy: "staff",
+        supersededOnGrains: ["person"],
+    },
+    /**
+     * THE EMPLOYEE-CENTRIC STAFF CARD — person grain only.
+     *
+     * Successor to the person-grain Employment presentation, reading the SAME
+     * `PersonEmploymentComposition`. It is not a second owner of employment truth; it is a fuller
+     * presentation of the one owner. Scheduling stays a separate card answering a separate question
+     * (when and where are they scheduled), and is deliberately NOT folded in here.
+     */
+    { key: "staff", title: "Staff", grains: ["person"] },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *
@@ -202,6 +239,30 @@ export function cardAppliesToGrain(key: FocusPanelCardKey, grain: OperationalSub
     const definition = CARD_BY_KEY.get(key);
     if (!definition) return false;
     return declarationAppliesToGrain(definition, grain);
+}
+
+/**
+ * The canonical successor that owns this card's presentation on `grain`, or null.
+ *
+ * Omit `grain` to ask only about GLOBAL supersession. That asymmetry is deliberate: a caller that
+ * cannot state its grain must not receive a grain-scoped answer, or a person-grain rule would be
+ * applied to a case placement — the exact defect the scope exists to prevent.
+ */
+export function cardSuccessor(
+    key: FocusPanelCardKey,
+    grain?: OperationalSubjectType,
+): FocusPanelCardKey | null {
+    const definition = CARD_BY_KEY.get(key);
+    if (!definition) return null;
+    return successorForDeclaration(definition, grain);
+}
+
+/** Resolve a key to the card that actually composes on `grain` (itself when not superseded). */
+export function resolveCardIdentity(
+    key: FocusPanelCardKey,
+    grain?: OperationalSubjectType,
+): FocusPanelCardKey {
+    return cardSuccessor(key, grain) ?? key;
 }
 
 /** The grains a registered card admits — its declaration, or the case-only default. */

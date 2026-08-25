@@ -138,7 +138,9 @@ export default function FocusPanelCardRenderer({
     // Employment reads the person-owned composition projected onto the context. Pure card: it
     // observes `model` + `context` only, and never mutates — Add/Edit/End live at
     // /organization/staff, so this surface has exactly one execution path for the capability.
-    if (model.key === "employment") {
+    // `staff` is the person-grain successor to this presentation. One component, because the two
+    // keys name one owner's truth at two grains — a second component would be a second presentation.
+    if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
         );

@@ -26,6 +26,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     household: "profile",
     children: "collection",
     employment: "profile",
+    staff: "profile",
     milestones: "summary",
     scheduling: "collection",
     tasks: "collection",
