@@ -14,6 +14,7 @@ import type {
     AddChargeSpecimen,
     ChargeTemplateOption,
     FinancialsEvidence,
+    FinancialsCompact,
     FinancialsLedgerPeriod,
     ProcessChildState,
     ProcessEvidence,
@@ -327,6 +328,8 @@ export const ATTENDANCE_FIXTURE: AttendanceEvidence = {
  */
 export const FINANCIALS_CURRENT: FinancialsEvidence = {
     caseLabel: "A · Current, nothing overdue",
+    compact: { dueLine: "$0 due · next charge Sep 1", lines: [{ label: "Tuition", value: "$1,850" }, { label: "Sibling discount", value: "−$185" }], paymentLine: "Visa •••• 4242 · Autopay on", paymentHealthy: true },
+    subjects: ["Household", "Avery", "Riley"],
     period: {
         label: "Aug 1 – Aug 31",
         charges: [{ label: "Tuition", value: "$1,850" }],
@@ -339,11 +342,11 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
     },
     pastDue: null,
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
-        { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
-        { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" , subject: "Household" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" , subject: "Household" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" , subject: "Avery" },
+        { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" , subject: "Household" },
+        { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" , subject: "Avery" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242" },
@@ -360,6 +363,8 @@ export const FINANCIALS_CURRENT: FinancialsEvidence = {
 
 export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
     caseLabel: "B · Past due, failed payment",
+    compact: { dueLine: "$255 due · was due Aug 15", lines: [{ label: "Tuition", value: "$1,850" }, { label: "Registration fee", value: "$75" }, { label: "Field trip", value: "$40" }], paymentLine: "Visa •••• 4242 · Autopay paused", paymentHealthy: false },
+    subjects: ["Household", "Avery", "Riley"],
     period: {
         label: "Aug 1 – Aug 31",
         charges: [
@@ -381,13 +386,13 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
         note: "Visa •••• 4242 declined Aug 16",
     },
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Operator · ACH 8813" , glCode: "1010 · Cash" },
-        { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
-        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
-        { when: "Aug 01", type: "fee", label: "Field trip", amount: "+$40", kind: "charge", status: "Unpaid", source: "Manual · operator" , glCode: "4100 · Fee revenue" },
-        { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" , glCode: "4100 · Fee revenue" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Operator · ACH 8813" , glCode: "1010 · Cash" , subject: "Household" },
+        { when: "Aug 16", type: "payment", label: "Payment attempt", amount: "$0", kind: "charge", status: "Declined", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" , subject: "Household" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" , subject: "Riley" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" , subject: "Household" },
+        { when: "Aug 01", type: "fee", label: "Field trip", amount: "+$40", kind: "charge", status: "Unpaid", source: "Manual · operator" , glCode: "4100 · Fee revenue" , subject: "Avery" },
+        { when: "Aug 01", type: "fee", label: "Registration fee", amount: "+$75", kind: "charge", status: "Partially paid", source: "Enrollment" , glCode: "4100 · Fee revenue" , subject: "Avery" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" , subject: "Avery" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "70%", method: "Visa •••• 4242", methodIssue: "Declined Aug 16" },
@@ -408,6 +413,8 @@ export const FINANCIALS_PAST_DUE: FinancialsEvidence = {
 
 export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     caseLabel: "C · Mixed funding",
+    compact: { dueLine: "$40 due · Sep 1", lines: [{ label: "Tuition", value: "$1,850" }, { label: "Subsidy & discounts", value: "−$885" }], paymentLine: "Visa •••• 4242 · Autopay on", paymentHealthy: true },
+    subjects: ["Household", "Avery", "Riley"],
     period: {
         label: "Aug 1 – Aug 31",
         charges: [{ label: "Tuition", value: "$1,850" }],
@@ -423,11 +430,11 @@ export const FINANCIALS_MIXED_FUNDING: FinancialsEvidence = {
     },
     pastDue: null,
     ledger: [
-        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
-        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" },
-        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
-        { when: "Aug 08", type: "credit", label: "Vacation credit", amount: "−$100", kind: "credit", status: "Posted", source: "Operator" , glCode: "4900 · Discounts" },
-        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
+        { when: "Aug 20", type: "payment", label: "Payment received", amount: "−$925", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" , subject: "Household" },
+        { when: "Aug 15", type: "subsidy_offset", label: "State subsidy", amount: "−$600", kind: "credit", status: "Posted", source: "Child Care Assistance" , glCode: "4200 · Subsidy revenue" , subject: "Riley" },
+        { when: "Aug 12", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" , subject: "Household" },
+        { when: "Aug 08", type: "credit", label: "Vacation credit", amount: "−$100", kind: "credit", status: "Posted", source: "Operator" , glCode: "4900 · Discounts" , subject: "Household" },
+        { when: "Aug 01", type: "service", label: "Tuition — August", amount: "+$1,850", kind: "charge", status: "Partially paid", source: "Schedule" , glCode: "4000 · Tuition revenue" , subject: "Avery" },
     ],
     payers: [
         { name: "Jordan Johnson", share: "45%", method: "Visa •••• 4242" },
@@ -535,9 +542,9 @@ export const FINANCIALS_LEDGER_PERIODS: FinancialsLedgerPeriod[] = [
         summary: "Closed · $0",
         open: false,
         entries: [
-            { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" },
-            { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" },
-            { when: "Jul 01", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" },
+            { when: "Jul 20", type: "payment", label: "Payment received", amount: "−$1,665", kind: "credit", status: "Settled", source: "Autopay · Visa 4242" , glCode: "1010 · Cash" , subject: "Household" },
+            { when: "Jul 01", type: "service", label: "Tuition — July", amount: "+$1,850", kind: "charge", status: "Paid", source: "Schedule" , glCode: "4000 · Tuition revenue" , subject: "Avery" },
+            { when: "Jul 01", type: "discount", label: "Sibling discount", amount: "−$185", kind: "credit", status: "Posted", source: "Rate rule" , glCode: "4900 · Discounts" , subject: "Household" },
         ],
     },
     { label: "June 2026", summary: "Closed · $0", open: false, entries: [] },
@@ -588,6 +595,7 @@ export const SAFETY_SIGNALS: SafetySignal[] = [
 
 /** Three configured Business Processes, through ONE process card. */
 export const PROCESS_ENROLLMENT: ProcessEvidence = {
+    participantsLabel: null,
     caseLabel: "Enrollment · Johnson",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -612,6 +620,7 @@ export const PROCESS_ENROLLMENT: ProcessEvidence = {
 };
 
 export const PROCESS_ASSIGNMENT: ProcessEvidence = {
+    participantsLabel: null,
     caseLabel: "Assignment",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -632,6 +641,7 @@ export const PROCESS_ASSIGNMENT: ProcessEvidence = {
 };
 
 export const PROCESS_BILLING: ProcessEvidence = {
+    participantsLabel: null,
     caseLabel: "Billing",
     subjectLabel: "Johnson Family",
     sourceWorkView: null,
@@ -654,17 +664,15 @@ export const PROCESS_BILLING: ProcessEvidence = {
 /**
  * ── MIXED-GRAIN PRESSURE TEST — the Wright family ──
  *
- * The case is at Tour. Avery is waitlisted; Riley is not. Four renders, ONE component:
+ * Three facts, all authoritative, at two grains:
+ *     CASE  Tour   ·   AVERY  Waitlisted   ·   RILEY  Tour
  *
- *   A  case opened from the Tour Work View
- *   B  the SAME case opened from All — identical stage, only the lens chip differs
- *   C  the same case with Avery as the scope hint
- *   D  the same case with Riley as the scope hint
+ * The card must not replace the case's Tour with Avery's Waitlist, must not reduce Avery's
+ * Waitlist to an incidental chip, must not imply the family is waitlisted, and must not imply
+ * Riley shares Avery's state. Case stage and participant stage are SEPARATE LAYERS.
  *
- * C and D are NOT child-grain panels. Per `operational-grain-doctrine.md` §2.4 the Focus Panel
- * always opens on an Opportunity, and a child selection is a scope HINT that pre-focuses a card —
- * it does not change the panel's grain. The stage stays the case's; the child's own participation
- * is projected as supporting context and is emphasised when scoped.
+ * Per `operational-grain-doctrine.md` §2.4 the Focus Panel stays case-grain; a child selection is
+ * a scope hint that emphasises a participant, never a change of subject.
  */
 const WRIGHT_STAGES: ProcessEvidence["stages"] = [
     { label: "Lead", state: "done", when: "Aug 11", outcome: null },
@@ -674,38 +682,82 @@ const WRIGHT_STAGES: ProcessEvidence["stages"] = [
     { label: "Enrolled", state: "future", when: null, outcome: null },
 ];
 
-function wright(sourceWorkView: string, scoped: string | null): ProcessEvidence {
+const AVERY = (scoped: boolean): ProcessChildState => ({
+    name: "Avery Wright",
+    stage: "Waitlisted",
+    since: "Joined Aug 19",
+    scoped,
+    actions: [{ label: "Review waitlist position", primary: scoped }],
+    imageUrl: null,
+});
+const RILEY = (scoped: boolean): ProcessChildState => ({
+    name: "Riley Wright",
+    stage: "Tour",
+    since: "Tour Aug 27",
+    scoped,
+    actions: [{ label: "Complete tour", primary: scoped }],
+    imageUrl: null,
+});
+
+function wright(caseLabel: string, scoped: "Avery" | "Riley" | null): ProcessEvidence {
     return {
-        caseLabel: scoped ? `Case · scoped to ${scoped}` : `Case · from ${sourceWorkView}`,
+        participantsLabel: "Children",
+        caseLabel,
         subjectLabel: "Wright Family",
-        sourceWorkView,
-        childStates: [
-            { name: "Avery Wright", stage: "Waitlisted", scoped: scoped === "Avery" },
-            { name: "Riley Wright", stage: "Tour", scoped: scoped === "Riley" },
-        ],
+        sourceWorkView: null,
+        childStates: [AVERY(scoped === "Avery"), RILEY(scoped === "Riley")],
         processLabel: "Enrollment",
         stages: WRIGHT_STAGES,
         currentStageLabel: "Tour",
-        workLine: scoped === "Avery" ? "Avery is waitlisted · case is at Tour" : "2 children · tour scheduled Aug 27",
-        dueLine: scoped ? null : "Tour Thu Aug 27 · 10:00 AM",
-        actions:
-            scoped === "Avery"
-                ? [{ label: "Review waitlist position", primary: true }, { label: "Contact family" }]
-                : [{ label: "Complete tour", primary: true }, { label: "Contact family" }],
+        workLine: "Tour scheduled Aug 27 · 10:00 AM",
+        dueLine: null,
+        actions: [{ label: "Complete tour", primary: true }, { label: "Contact family" }],
         stillNeeded: [],
     };
 }
 
-export const PROCESS_WRIGHT_TOUR = wright("Tour", null);
-export const PROCESS_WRIGHT_ALL = wright("All", null);
-export const PROCESS_WRIGHT_AVERY = wright("Tour", "Avery");
-export const PROCESS_WRIGHT_RILEY = wright("Tour", "Riley");
+export const PROCESS_WRIGHT_TOUR = wright("A · case from Tour", null);
+export const PROCESS_WRIGHT_ALL = wright("B · same case from All", null);
+export const PROCESS_WRIGHT_AVERY = wright("C · scoped to Avery", "Avery");
+export const PROCESS_WRIGHT_RILEY = wright("D · scoped to Riley", "Riley");
+
+/** E — the case has moved on and the children have diverged further. */
+export const PROCESS_WRIGHT_DIVERGENT: ProcessEvidence = {
+    ...wright("E · divergent children", null),
+    stages: [
+        { label: "Lead", state: "done", when: "Aug 11", outcome: null },
+        { label: "Tour", state: "done", when: "Aug 16 – 27", outcome: "Completed" },
+        { label: "Waitlist", state: "done", when: "Aug 27 – 30", outcome: null },
+        { label: "Enrolling", state: "current", when: "Since Aug 30", outcome: null },
+        { label: "Enrolled", state: "future", when: null, outcome: null },
+    ],
+    currentStageLabel: "Enrolling",
+    workLine: "1 of 2 children enrolling",
+    dueLine: "Packet due Sep 6",
+    actions: [{ label: "Send packet", primary: true }, { label: "Contact family" }],
+    childStates: [
+        { name: "Avery Wright", stage: "Waitlisted", since: "Joined Aug 19", actions: [{ label: "Review waitlist position" }], imageUrl: null },
+        { name: "Riley Wright", stage: "Enrolling", since: "Since Aug 30", actions: [{ label: "Complete placement" }], imageUrl: null },
+    ],
+};
+
+/** F — every child at the same state as the case. The region collapses to one line. */
+export const PROCESS_WRIGHT_ALIGNED: ProcessEvidence = {
+    ...wright("F · children aligned", null),
+    workLine: "Tour scheduled Aug 27 · 10:00 AM · both children",
+    childStates: [
+        { name: "Avery Wright", stage: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
+        { name: "Riley Wright", stage: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
+    ],
+};
 
 export const PROCESS_GRAIN_SPECIMENS = [
     PROCESS_WRIGHT_TOUR,
     PROCESS_WRIGHT_ALL,
     PROCESS_WRIGHT_AVERY,
     PROCESS_WRIGHT_RILEY,
+    PROCESS_WRIGHT_DIVERGENT,
+    PROCESS_WRIGHT_ALIGNED,
 ] as const;
 
 export const PROCESS_SPECIMENS = [PROCESS_ENROLLMENT, PROCESS_ASSIGNMENT, PROCESS_BILLING] as const;

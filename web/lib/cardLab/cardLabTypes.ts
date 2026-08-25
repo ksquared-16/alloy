@@ -198,6 +198,12 @@ export type AttendanceEvidence = {
 export type LedgerEntry = {
     when: string;
     /**
+     * WHO OR WHAT the financial item is for — household, or a specific child. This is a different
+     * dimension from the payer, and the two must never be collapsed: a charge for Avery may be
+     * paid by Jordan, and a household charge has no child subject at all.
+     */
+    subject: string;
+    /**
      * Canonical charge category key. The card NEVER renders this — it renders
      * `chargeCategoryLabel(type)` from `lib/financials/chargeCategories.ts`, which the
      * configuration catalog already owns. No ad-hoc display map lives in the card.
@@ -250,9 +256,20 @@ export type FinancialsPeriod = {
     dueLabel: string;
 };
 
+/** The compact card's reduced content — the same read model, fewer questions answered. */
+export type FinancialsCompact = {
+    dueLine: string;
+    lines: { label: string; value: string }[];
+    paymentLine: string;
+    paymentHealthy: boolean;
+};
+
 export type FinancialsEvidence = {
     /** Specimen label for the lab only — never rendered inside the card. */
     caseLabel: string;
+    compact: FinancialsCompact;
+    /** Subjects a charge may be for. Household is always present; children when they exist. */
+    subjects: string[];
     period: FinancialsPeriod;
     pastDue: { amount: string; oldest: string; age: string; note: string | null } | null;
     ledger: LedgerEntry[];
@@ -357,12 +374,20 @@ export type ProcessStage = {
 
 export type ProcessAction = { label: string; primary?: boolean };
 
-/** A child's own participation, projected as supporting context at family grain. */
+/**
+ * A child's own participation. FIRST-CLASS truth at its own grain — not a chip, not decoration.
+ * The case's stage and a child's stage are both authoritative and may legitimately differ.
+ */
 export type ProcessChildState = {
     name: string;
     stage: string;
-    /** True when the panel was opened with this child as the scope hint. */
+    /** Since when, where the participant state carries one. */
+    since: string | null;
+    /** True when the queue/context was scoped to this child. */
     scoped?: boolean;
+    /** Actions whose SUBJECT is this child, never the case. */
+    actions: ProcessAction[];
+    imageUrl?: string | null;
 };
 
 export type ProcessEvidence = {
@@ -378,8 +403,14 @@ export type ProcessEvidence = {
     currentStageLabel: string;
     workLine: string;
     dueLine: string | null;
+    /** Actions whose SUBJECT is the case. */
     actions: ProcessAction[];
     stillNeeded: string[];
+    /**
+     * Present only when the process has participant grain at all. Assignment and Billing omit it,
+     * and the card renders no children region — there is no Enrollment-specific section here.
+     */
+    participantsLabel: string | null;
 };
 
 /** A health fact configured to project outside the Health card. */

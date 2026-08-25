@@ -610,6 +610,16 @@
 }
 
 /* zone 2 — past due. The amount is the one number readable from across the room. */
+.alloy-os-billing__lines--compact {
+  max-width: none;
+  margin-top: 2px;
+}
+.alloy-os-billing__autopay--compact {
+  font-size: 0.76rem;
+  font-weight: 600;
+  margin-top: 5px;
+}
+
 .alloy-os-billing__amount {
   margin: 2px 0 0;
   font-size: 1.9rem;
@@ -867,8 +877,8 @@
 }
 .alloy-os-billingdetail__row {
   display: grid;
-  grid-template-columns: 60px 108px minmax(0, 1fr) 132px 92px 104px 168px;
-  gap: 11px;
+  grid-template-columns: 56px 92px 82px minmax(0, 1fr) 124px 88px 96px 150px;
+  gap: 10px;
   align-items: baseline;
   min-height: 21px;
   padding: 1px 0;
@@ -876,8 +886,16 @@
   font-size: 0.72rem;
   color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 82%, #64748b);
 }
-.alloy-os-billingdetail__row > :nth-child(5) {
+.alloy-os-billingdetail__row > :nth-child(6) {
   text-align: right;
+}
+.alloy-os-billingdetail__subject {
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .alloy-os-billingdetail__gl {
   font-size: 0.68rem;
@@ -1145,52 +1163,78 @@
   font-weight: 500;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
-/* The lens the panel was opened from — context only. It never touches the stage. */
-.alloy-os-process__lens {
-  margin-left: 8px;
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, #fff);
-  color: var(--alloy-os-text-secondary, #4b5563);
-}
-/* Child participations project as supporting context beneath the case's stage. */
-.alloy-os-process__children {
-  margin: 3px 0 0;
+/* Participant state is its own LAYER beneath the case work — not a chip strip. */
+.alloy-os-process__participants {
+  margin-top: 7px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
   display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  font-size: 11px;
+  flex-direction: column;
+  gap: 3px;
 }
-.alloy-os-process__children-count {
+.alloy-os-process__participants-head {
+  margin: 0 0 1px;
   font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
-.alloy-os-process__child {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid var(--alloy-os-border, #e5e9ef);
+.alloy-os-process__participant {
+  display: grid;
+  grid-template-columns: 26px minmax(120px, 190px) 108px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 4px;
+  border-radius: 8px;
+  min-width: 0;
+}
+/* A scoped child is emphasised and ordered first — never substituted for the subject. */
+.alloy-os-process__participant[data-scoped="true"] {
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+}
+.alloy-os-process__participant-name {
+  font-size: 12.5px;
   font-weight: 650;
   color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.alloy-os-process__child[data-scoped="true"] {
-  border-color: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 45%, transparent);
-  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 8%, #fff);
-}
-.alloy-os-process__child-stage {
-  font-size: 10px;
-  font-weight: 600;
+.alloy-os-process__participant-stage {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
   color: var(--alloy-os-text-secondary, #4b5563);
+  justify-self: start;
+  white-space: nowrap;
+}
+.alloy-os-process__participant-since {
+  font-size: 11px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-process__participant-actions {
+  display: inline-flex;
+  gap: 12px;
+  justify-self: end;
+}
+/* Every child matches the case — one line instead of a per-child list. */
+.alloy-os-process__aligned {
+  margin: 7px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-process__aligned .alloy-os-process__needed-label {
+  color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 .alloy-os-process__needed {
   margin: 2px 0 0;

@@ -63,7 +63,8 @@ type TabKey =
     | "process"
     | "addcharge"
     | "signals"
-    | "grain";
+    | "grain"
+    | "density";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -75,7 +76,8 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "billing", label: "5 · Financials" },
     { key: "healthspec", label: "A · Health specimens" },
     { key: "process", label: "P · Process card (3 processes)" },
-    { key: "grain", label: "G · Mixed grain (Wright family)" },
+    { key: "grain", label: "G · Mixed grain (6 scenarios)" },
+    { key: "density", label: "W · Financials densities" },
     { key: "addcharge", label: "F · Add charge" },
     { key: "signals", label: "S · Safety Signals" },
     { key: "healthdetail", label: "D1 · Health detail" },
@@ -120,6 +122,19 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         ],
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    density: {
+        question: "Should Financials be one card at several densities, or several cards?",
+        decisions: [
+            "ONE card, ONE read model. Presentation derives from the EXISTING primitives — FocusPanelCardDensity (micro · compact · standard · expanded) and FocusPanelCardSpan (1 · 2 · row). No parallel density system and no second capability.",
+            "span 1 → the compact policy: what is due, why at a glance, is payment healthy, and the three actions. For processes where Financials is supporting context — Enrollment, Waitlist, Registration.",
+            "span row → the summary policy: the full Current Period / Past Due / Payment reconciliation.",
+            "The compact card deliberately does NOT reconcile. A card that half-reconciles is the worst of both.",
+            "Density changes none of: ownership, the arithmetic, or which canonical actions exist.",
+        ],
+        open: [
+            "RECOMMENDATION: compact (span 1) is the DEFAULT summary placement. Full-row belongs to billing-heavy contexts only — see the width comparison.",
         ],
     },
     grain: {
@@ -431,6 +446,7 @@ export default function OperationalCardLab() {
                                 tab === "billingdetail" ||
                                 tab === "process" ||
                                 tab === "grain" ||
+                                tab === "density" ||
                                 tab === "healthdetail" ||
                                 tab === "wide"
                                     ? " · full row"
@@ -469,6 +485,17 @@ export default function OperationalCardLab() {
                                                 <FinancialsCard evidence={sp} />
                                             </Cell>
                                         ))}
+                                    </>
+                                ) : null}
+                                {tab === "density" ? (
+                                    <>
+                                        <Cell span={1} kind="cand" name="Compact · span 1 · supporting context">
+                                            <FinancialsCard evidence={FINANCIALS_FIXTURE} span={1} />
+                                        </Cell>
+                                        <Cell span={1} kind="real" name="Household · for scale">{realCard("household")}</Cell>
+                                        <Cell span={2} kind="cand" name="Summary · span row · billing-heavy context">
+                                            {financials}
+                                        </Cell>
                                     </>
                                 ) : null}
                                 {tab === "grain" ? (

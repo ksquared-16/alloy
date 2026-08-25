@@ -43,13 +43,28 @@ import type { FinancialsEvidence } from "@/lib/cardLab/cardLabTypes";
  */
 export default function FinancialsCard({
     evidence,
+    span = "row",
     onDetails,
     onAddCharge,
 }: {
     evidence: FinancialsEvidence;
+    /**
+     * ONE card, ONE read model, presentation derived from the EXISTING primitives:
+     * `FocusPanelCardDensity` (micro · compact · standard · expanded) and
+     * `FocusPanelCardSpan` (1 · 2 · "row"). No parallel density system, and no second card.
+     *
+     *   span 1    → the COMPACT policy: is money owed, why at a glance, is payment healthy,
+     *               and the three actions. For processes where Financials is supporting context.
+     *   span row  → the SUMMARY policy: the full Current Period / Past Due / Payment composition.
+     *
+     * Density never changes ownership, the arithmetic, or which canonical actions exist — only how
+     * many of the card's questions this placement chooses to answer.
+     */
+    span?: 1 | "row";
     onDetails?: () => void;
     onAddCharge?: () => void;
 }) {
+    if (span === 1) return <FinancialsCompactCard evidence={evidence} onDetails={onDetails} onAddCharge={onAddCharge} />;
     const { period, pastDue } = evidence;
 
     return (
@@ -174,6 +189,64 @@ function Line({ label, value, emphasis }: { label: string; value: string; emphas
         <div className={clsx("alloy-os-billing__line", emphasis && "alloy-os-billing__line--emphasis")}>
             <span className="alloy-os-billing__line-label">{label}</span>
             <span className="alloy-os-billing__line-value">{value}</span>
+        </div>
+    );
+}
+
+/**
+ * Compact placement — same evidence, fewer questions.
+ *
+ * Answers: what is due · why, at a glance · is payment healthy · Pay now · Add charge · Details.
+ * It deliberately does NOT reconcile: the arithmetic belongs to the summary and the detail. A
+ * compact card that half-reconciles would be the worst of both.
+ */
+function FinancialsCompactCard({
+    evidence,
+    onDetails,
+    onAddCharge,
+}: {
+    evidence: FinancialsEvidence;
+    onDetails?: () => void;
+    onAddCharge?: () => void;
+}) {
+    const c = evidence.compact;
+    return (
+        <div className="alloy-os-billing" data-financials-card="compact">
+            <UniversalCard
+                title="Financials"
+                insight={c.dueLine}
+                iconName="Receipt"
+                tier="context"
+                archetype="status"
+                statusChip={evidence.pastDue ? `${evidence.pastDue.amount} past due` : undefined}
+                statusTone="due"
+                density="compact"
+                gridSpan={1}
+                data-universal-card-key="financials"
+                footerAction={
+                    <div className="alloy-os-billing__footer">
+                        <FooterAction onClick={onAddCharge}>Add charge →</FooterAction>
+                        <FooterAction onClick={onDetails}>Details →</FooterAction>
+                    </div>
+                }
+            >
+                <div className="alloy-os-billing__lines alloy-os-billing__lines--compact">
+                    {c.lines.map((l) => (
+                        <Line key={l.label} label={l.label} value={l.value} />
+                    ))}
+                </div>
+                <p
+                    className="alloy-os-billing__autopay alloy-os-billing__autopay--compact"
+                    data-autopay-ok={c.paymentHealthy ? "true" : undefined}
+                >
+                    {c.paymentLine}
+                </p>
+                {evidence.pastDue ? (
+                    <ActionRow>
+                        <Action primary>Pay now</Action>
+                    </ActionRow>
+                ) : null}
+            </UniversalCard>
         </div>
     );
 }

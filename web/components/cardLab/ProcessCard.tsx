@@ -4,6 +4,7 @@ import clsx from "clsx";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProgressionBand from "@/components/cardLab/ProgressionBand";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
 import { Action, ActionRow, FooterAction } from "@/components/cardLab/CardLabKit";
 import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
 
@@ -33,6 +34,13 @@ import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
  * case in this component, which is what makes the Assignment and Billing specimens render through
  * the same code.
  *
+ * ── NO LENS CHIP ──
+ *
+ * The originating Work View is NOT rendered. The surrounding workspace already tells the operator
+ * which lens they are in, and repeating it consumed card space to restate navigation context. It
+ * would earn its place only if the lens materially changed the work or the recommendation — which,
+ * per the rule below, it cannot.
+ *
  * ── WORK VIEW NEVER DECIDES THE STAGE ──
  *
  * `sourceWorkView` renders as a lens chip and nothing else. It is structurally impossible for it
@@ -41,13 +49,23 @@ import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
  * NO reference to a work unit or work view. The only seam a lens can touch is the stage *label*
  * fallback (`stage_label ?? statusLabel`) — never the key.
  *
- * ── CHILD DIVERGENCE IS CONTEXT, NOT THE STAGE ──
+ * ── FOUR LAYERS, IN THIS ORDER ──
+ *
+ *   1  case journey        the configured stage spine
+ *   2  current case work   and the actions whose SUBJECT is the case
+ *   3  participant state   FIRST-CLASS, at its own grain — not a chip
+ *   4  child-scoped actions, sitting WITH the child they affect
+ *
+ * The case stage and a child's stage are both authoritative and may legitimately differ. A
+ * waitlisted Avery never rewrites a case at Tour, and Riley never inherits Avery's state.
  *
  * `operational-grain-doctrine.md` §2.4: the Focus Panel always opens on an Opportunity, and a
- * child selection is a scope HINT that pre-focuses a card — "it does not change the Focus Panel's
- * grain. The panel is still case-grain." So a child's own participation projects as supporting
- * context beneath the band, emphasised when scoped, and a waitlisted child NEVER rewrites the
- * case's Tour stage.
+ * child selection is a scope HINT — "it does not change the Focus Panel's grain. The panel is
+ * still case-grain." So a scoped child is ORDERED FIRST and emphasised; it never becomes the
+ * subject.
+ *
+ * When every child matches the case, the region collapses to one line: the divergence is the
+ * signal, so alignment should cost nothing.
  */
 export default function ProcessCard({
     evidence,
@@ -57,6 +75,12 @@ export default function ProcessCard({
     onViewProcess?: () => void;
 }) {
     const current = evidence.stages.find((s) => s.state === "current");
+    // Collapse participant noise when every child matches the case — the divergence IS the signal.
+    const aligned =
+        evidence.childStates.length > 0 &&
+        evidence.childStates.every((c) => c.stage === evidence.currentStageLabel);
+    // A scoped child leads; the others remain visible so the operator keeps the whole picture.
+    const ordered = [...evidence.childStates].sort((a, b) => Number(!!b.scoped) - Number(!!a.scoped));
 
     return (
         <div className="alloy-os-process" data-process-card="true">
@@ -82,39 +106,16 @@ export default function ProcessCard({
                     compact
                 />
 
+                {/* 2 · CURRENT CASE WORK — and the actions whose SUBJECT is the case. */}
                 <div className="alloy-os-process__work">
                     <div className="alloy-os-process__work-main">
-                        <p className="alloy-os-process__work-label">
-                            Current · {evidence.currentStageLabel}
-                            {evidence.sourceWorkView ? (
-                                <span className="alloy-os-process__lens">
-                                    from {evidence.sourceWorkView}
-                                </span>
-                            ) : null}
-                        </p>
+                        <p className="alloy-os-process__work-label">Case · {evidence.currentStageLabel}</p>
                         <p className="alloy-os-process__work-line">
                             {evidence.workLine}
                             {evidence.dueLine ? (
                                 <span className="alloy-os-process__due"> · {evidence.dueLine}</span>
                             ) : null}
                         </p>
-                        {evidence.childStates.length ? (
-                            <p className="alloy-os-process__children">
-                                <span className="alloy-os-process__children-count">
-                                    {evidence.childStates.length} children
-                                </span>
-                                {evidence.childStates.map((c) => (
-                                    <span
-                                        key={c.name}
-                                        className="alloy-os-process__child"
-                                        data-scoped={c.scoped ? "true" : undefined}
-                                    >
-                                        {c.name.split(" ")[0]}
-                                        <span className="alloy-os-process__child-stage">{c.stage}</span>
-                                    </span>
-                                ))}
-                            </p>
-                        ) : null}
                         {evidence.stillNeeded.length ? (
                             <p className="alloy-os-process__needed">
                                 <span className="alloy-os-process__needed-label">Still needed</span>
@@ -132,6 +133,49 @@ export default function ProcessCard({
                         </ActionRow>
                     </div>
                 </div>
+
+                {/* 3 · PARTICIPANT STATE — first-class, at its own grain. Rendered only when the
+                    process HAS participant grain, so Assignment and Billing omit it entirely and
+                    there is no Enrollment-specific section in this component. */}
+                {evidence.participantsLabel && evidence.childStates.length ? (
+                    aligned ? (
+                        // Everyone matches the case: one line, no per-child noise.
+                        <p className="alloy-os-process__aligned">
+                            <span className="alloy-os-process__needed-label">
+                                {evidence.participantsLabel}
+                            </span>
+                            {evidence.childStates.map((c) => c.name.split(" ")[0]).join(" · ")} — all at{" "}
+                            {evidence.currentStageLabel}
+                        </p>
+                    ) : (
+                        <section className="alloy-os-process__participants">
+                            <p className="alloy-os-process__participants-head">
+                                {evidence.participantsLabel}
+                            </p>
+                            {ordered.map((c) => (
+                                <div
+                                    key={c.name}
+                                    className="alloy-os-process__participant"
+                                    data-scoped={c.scoped ? "true" : undefined}
+                                >
+                                    <CardAvatar name={c.name} imageUrl={c.imageUrl ?? null} size={26} role="child" />
+                                    <span className="alloy-os-process__participant-name">{c.name}</span>
+                                    <span className="alloy-os-process__participant-stage">{c.stage}</span>
+                                    {c.since ? (
+                                        <span className="alloy-os-process__participant-since">{c.since}</span>
+                                    ) : null}
+                                    {/* Child-subject actions live WITH the child, so the operator can
+                                        never mistake which entity an action will affect. */}
+                                    <span className="alloy-os-process__participant-actions">
+                                        {c.actions.map((a) => (
+                                            <FooterAction key={a.label}>{a.label} →</FooterAction>
+                                        ))}
+                                    </span>
+                                </div>
+                            ))}
+                        </section>
+                    )
+                ) : null}
                 <span className={clsx("alloy-os-process__anchor")} data-current-stage={current?.label} />
             </UniversalCard>
         </div>

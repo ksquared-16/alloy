@@ -74,9 +74,12 @@ export default function AddChargeCommand({
                       : "operator sets the amount"}
             </p>
 
+            {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
+                Two dimensions, two inputs, never collapsed. Both are governed by the template. */}
             <SectionHead ruled={false}>Charge</SectionHead>
             <Field label="Applies to" required={t.requiresSubject}>
                 <Value>{specimen.subject}</Value>
+                <Hint>financial subject</Hint>
             </Field>
             <Field label="Amount" required={!amountLocked}>
                 <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
@@ -107,6 +110,7 @@ export default function AddChargeCommand({
             <SectionHead ruled={false}>Charge to</SectionHead>
             <Field label="Responsibility">
                 <Value>{specimen.chargeTo}</Value>
+                <Hint>financial responsibility</Hint>
                 <Hint>
                     {t.payerTargeting === "operator_selectable"
                         ? "operator may target a payer"

@@ -31,12 +31,20 @@ export default function FinancialsDetailCard({
     periods,
     activeFilter = "all",
     activePayer = "All payers",
+    activeSubject = "All",
 }: {
     evidence: FinancialsEvidence;
     periods: FinancialsLedgerPeriod[];
     activeFilter?: "all" | "charges" | "payments" | "credits" | "funding";
-    /** A FILTER over canonical truth, never a separate payer ledger. */
+    /**
+     * TWO INDEPENDENT DIMENSIONS, deliberately not collapsed:
+     *   subject — who or what the item is FOR   (Household · Avery · Riley)
+     *   payer   — who is responsible for PAYING (Jordan · Taylor · Funding)
+     * A charge for Avery may be paid by Jordan; a household charge has no child subject at all.
+     * Both are FILTERS over canonical truth, never separate ledgers, and they compose.
+     */
     activePayer?: string;
+    activeSubject?: string;
 }) {
     const payerFilters = ["All payers", ...evidence.payers.map((p) => (p.funding ? "Funding" : p.name.split(" ")[0]!))];
     const { period, pastDue } = evidence;
@@ -107,6 +115,21 @@ export default function FinancialsDetailCard({
                             ))}
                         </div>
                         <div className="alloy-os-billingdetail__filters">
+                            <span className="alloy-os-fdetail__filterlabel">Subject</span>
+                            {["All", ...evidence.subjects].map((f) => (
+                                <button
+                                    key={f}
+                                    type="button"
+                                    className={clsx(
+                                        "alloy-os-billingdetail__filter",
+                                        activeSubject === f && "alloy-os-billingdetail__filter--on",
+                                    )}
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="alloy-os-billingdetail__filters">
                             <span className="alloy-os-fdetail__filterlabel">Payer</span>
                             {payerFilters.map((f) => (
                                 <button
@@ -134,6 +157,7 @@ export default function FinancialsDetailCard({
                                     <div className="alloy-os-billingdetail__row alloy-os-billingdetail__row--head">
                                         <span>Date</span>
                                         <span>Type</span>
+                                        <span>Subject</span>
                                         <span>Description</span>
                                         <span>GL code</span>
                                         <span>Amount</span>
@@ -147,6 +171,7 @@ export default function FinancialsDetailCard({
                                             <span className="alloy-os-billingdetail__type">
                                                 {chargeCategoryLabel(e.type)}
                                             </span>
+                                            <span className="alloy-os-billingdetail__subject">{e.subject}</span>
                                             <span className="alloy-os-billingdetail__desc">{e.label}</span>
                                             <span className="alloy-os-billingdetail__gl">{e.glCode ?? "— unmapped"}</span>
                                             <span

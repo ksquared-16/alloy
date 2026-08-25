@@ -380,3 +380,140 @@ Recent Activity is deliberately dropped — activity has its own canonical mode.
 | **G1** | Expanded body capped at 360px | Still a Director decision |
 | **A1 / D1 / B1** | Health grain · document requirements · health facts | See the health contracts |
 | **S1 / S2** | Signal config · health visibility permission | Signals must not ship before S2 |
+
+---
+
+## 7. Final pass — density, subject dimension, mixed-grain truth (2026-08-25)
+
+### 7.1 Financials density — one card, existing primitives
+
+**No new density system.** Presentation derives from what the runtime already has:
+`FocusPanelCardDensity` (`micro · compact · standard · expanded`) and `FocusPanelCardSpan`
+(`1 · 2 · "row"`).
+
+| Placement | density | span | Renders | Height |
+|---|---|---|---|---|
+| **Compact** | `compact` | `1` | due line · 2–4 charge lines · payment health · Pay now / Add charge / Details | **221px** |
+| **Summary** | `compact` | `"row"` | full Current Period / Past Due / Payment | 450px |
+| **Detail** | `expanded` | `"row"` | ledger-first, filters, periods | 653px |
+
+The compact card **deliberately does not reconcile**. A card that half-reconciles is the worst of
+both; the arithmetic belongs to the summary and the detail.
+
+> **Proof that density changes nothing that matters:** all three read the same
+> `FinancialsEvidence`, compute nothing, and expose the same canonical actions. Density selects
+> *how many of the card's questions this placement answers* — never ownership, never the
+> arithmetic, never which actions exist.
+
+**Recommended default: compact (span 1).** At 221px it sits beside Household (216) and Readiness
+(188) without dominating, and answers the question most processes actually ask — *is money owed,
+and can I act on it*. **Full-row summary is for billing-heavy contexts only**: at 1023 × 450 it
+takes an entire row and its left column runs to dead space unless the operator is genuinely
+working the money. Expanded stays behind Details.
+
+### 7.2 Subject and payer are independent dimensions
+
+| Dimension | Question | Values |
+|---|---|---|
+| **Charge subject** | who or what is this *for* | Household · Avery · Riley |
+| **Payer** | who is responsible for *paying* | Jordan · Taylor · Funding |
+
+**Never collapsed.** A charge for Avery may be paid by Jordan; a household charge has no child
+subject at all. The detail ledger carries a Subject column and both filters, which compose:
+*all activity for Avery* · *Jordan's payments* · *Avery's charges allocated to Jordan* ·
+*household-only charges* · *funding applied to Riley*.
+
+Both are **projections over canonical truth, never separate ledgers.**
+
+In Add charge the two are separate inputs: **Applies to** = financial subject, **Charge to** =
+financial responsibility, each governed by the template (required · inherited · fixed ·
+selectable · overridable).
+
+### 7.3 Read-model resolution, per ledger row
+
+| Column | Resolvable today? | From |
+|---|---|---|
+| Billing period | ⚠ **derivable, not stored** | `charges.service_date` + org cadence → gap **F0** |
+| Operator-facing type | ✅ | `chargeCategoryLabel()` |
+| GL code | ✅ | `resolveGlMapping` → `gl_accounts.code`; unmapped is an honest state |
+| Status | ✅ | `charges.status` · `payment_statuses` |
+| Source | ✅ | `ledger_transactions.provider` / `payments.provider` · charge origin |
+| Amount + direction | ✅ | `charges.amount_cents` · `ledger_transactions.direction` |
+| **Subject** | ❌ **gap F7** | `charges` has `job_id`, `schedule_id`, `subscription_id` — **no subject column**. A child-specific charge cannot be attributed today |
+| **Payer / allocation** | ⚠ partial | `payment_allocations` attributes *payments*; responsibility split for *charges* has no field → gaps **F3 / F6** |
+
+> **F7 is new and it is the one that blocks the Subject filter.** Without a subject reference on
+> `charges`, "all activity for Avery" cannot be answered. Smallest fix: a nullable
+> `subject_entity_type` / `subject_entity_id` on `charges`, polymorphic exactly as `documents` and
+> the proposed `person_health_facts` are — null meaning household-level.
+
+### 7.4 Process card — four layers, and the acceptance answers
+
+```
+1  CASE JOURNEY          configured stage spine
+2  CASE work + actions   actions whose SUBJECT is the case
+3  PARTICIPANT STATE     first-class, at its own grain
+4  child-scoped actions  sitting WITH the child they affect
+```
+
+| # | Question | Answer |
+|---|---|---|
+| 1 | Authoritative journey spine | The configured Business Process stages, from `lifecycle_rail` / `stage_context` |
+| 2 | Owns current case work | Current Work / stage work runtime |
+| 3 | Owns participant state | The child's own process participation — **not** derived from the case |
+| 4 | Selected-child scope | The child is **ordered first and emphasised**; the panel's subject never changes |
+| 5 | Actions separated by subject | Case actions sit in the case work row; child actions sit **on the child's row** |
+| 6 | Changes with Work View | **Nothing.** Configuration may vary an action *recommendation*; stage and participant state cannot vary |
+| 7 | Stays identical | Journey, case stage, participant states, canonical actions |
+| 8 | Child region disappears | When `participantsLabel` is absent (no participant grain), or collapses to one line when every child matches the case |
+| 9 | Process with no participants | Renders layers 1–2 only. **No Enrollment-specific section exists in the component** |
+
+**Lens chip: removed.** The workspace already tells the operator which Work View they are in, and
+since a lens cannot change stage or work, the chip restated navigation context at the cost of card
+space. It would earn its place only if the lens materially changed the recommendation.
+
+**Scenario results — one implementation, six renders:**
+
+| Scenario | Case | Children | Height |
+|---|---|---|---|
+| A · from Tour | Tour | Avery Waitlisted · Riley Tour | 297 |
+| B · from All | Tour | identical to A | 297 |
+| C · scoped to Avery | Tour | Avery first, emphasised | 297 |
+| D · scoped to Riley | Tour | Riley first, emphasised | 297 |
+| E · divergent | Enrolling | Avery Waitlisted · Riley Enrolling | 297 |
+| F · aligned | Tour | collapsed to one line | **228** |
+
+### 7.5 Density comparison — combined vs the pair it replaces
+
+| Grain | Old: Journey + What's Next | New | Saved |
+|---|---|---|---|
+| Family case | 119 + 348 = **467**, two cards | **297**, one card | −36% |
+| Avery-scoped | 467 | 297 | −36% |
+| Riley-scoped | 467 | 297 | −36% |
+| Children aligned | 467 | 228 | −51% |
+
+The combined card is taller than the previous iteration (221 → 297) because participant state
+became **first-class** rather than a chip strip. That is the point: the old pair could not express
+child divergence at all, and the chip version understated it. Facts removed: current stage, status,
+current work, still-needed, due, actions each appear once; Recent Activity dropped. **Subject
+ambiguity: eliminated** — every action now sits with the entity it affects.
+
+### 7.6 Runtime work for the next mission
+
+| Area | Change |
+|---|---|
+| **Card providers** | Register `financials`, `business_process`, `health_safety`, `care_team`, `staff`, `attendance` in `FOCUS_PANEL_CARD_KEYS`, `FOCUS_PANEL_CARDS`, catalog, `SYSTEM5_CARD_ARCHETYPE`, `focusPanelCardProviders` |
+| **Surface config** | Placement + density/span per process context; Financials compact by default |
+| **Density/span** | No change needed — `compact`/`expanded` × `1`/`"row"` already exist |
+| **Shell** | Subject avatar wiring (done in lab); scoped-child identity line in the header |
+| **Commands** | `charge.add` (F5) · child-scoped process actions resolved through the registered action subject model |
+| **Read models** | `buildFamilyFinancialsReadModel` · participant process state resolver · `process_stage_history` projection (P1) |
+| **Migrations** | F7 subject on `charges` · F3 responsibility split · P1 history · M1 health grain |
+| **Tests** | Guard: a Work View cannot alter `stageKey`. Guard: density does not change action availability. Reconciliation invariant |
+
+**Dependency order:** F0 → F7 → F5 → M1 → P1 → G1 decision → F3/F6 → registration per card as its
+read model lands.
+
+**Remaining blockers to production implementation:** F7 (subject attribution) blocks the Subject
+filter; F0 blocks period grouping; F5 blocks Add charge; P1 blocks journey history; G1 is a
+Director decision. Everything else degrades gracefully.
