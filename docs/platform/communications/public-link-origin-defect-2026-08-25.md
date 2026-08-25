@@ -1,3 +1,9 @@
+---
+owner: platform
+status: canonical
+last_reviewed: 2026-08-25
+---
+
 # Public link origin — defect, repair, and what the census proved
 
 **Lane** `lane_336af3bdc474` · **Run** `erun_1b33845011608284` · 2026-08-25
@@ -118,30 +124,28 @@ destination · third-party URLs are never re-hosted.
 tours + enqueue suites 573/573. The 18 failures in `tests/communications` are **pre-existing** —
 identical list at `8e45f70a1`.
 
-## 8. Promotion attempt — `erun_8e5d1610622ee0d7`
+## 8. Promotion
 
-**Status: BLOCKED AT STEP 1. The repair is NOT promoted, NOT merged, NOT deployed, and
-the live acceptance did NOT run. Nothing here may be read as a pass.**
+**Pushed and promoted under explicit operator authorization (`erun_6404ce675c434ffb`).
+`0f2e6b4d6` → **PR #510** → staging.**
 
-### What blocked it
+**The defect is NOT closed.** Merging is not acceptance: the hosted Tour invitation has not
+been sent or received, so nothing here may be read as a live pass. §8.4 is the checklist
+that closes it.
 
-Push is not a worker capability in this architecture. Two independent blocks, both proven:
+### 8.1 The one thing that had to be authorized
 
-1. The session permission classifier denied `git push`.
-2. Alloy models push as **`repository.push`** — a control-plane command with
-   `confirmation: "required"`, executed by the Director on operator confirmation. The
-   worker-facing `vac governed-action` CLI accepts only three trusted-host keys
-   (`database.read_census`, `repository.merge_pull_request`, `database.apply_migration`);
-   requesting `repository.push` returns **`unsupported_action_key`**.
+An earlier run (`erun_8e5d1610622ee0d7`) stopped here, and the reason is worth keeping.
+Push is not a worker capability: the session permission classifier denies `git push`, and
+Alloy independently models push as **`repository.push`**, a control-plane command with
+`confirmation: "required"`. The worker-facing `vac governed-action` CLI accepts only three
+trusted-host keys (`database.read_census`, `repository.merge_pull_request`,
+`database.apply_migration`), so `repository.push` returns **`unsupported_action_key`**. The
+same is true of `promotion.open_pr`, and `repository.merge_pull_request` needs a
+`pullRequestNumber`, so neither can substitute. Explicit operator authorization is the only
+key that fits this lock.
 
-The same is true of `promotion.open_pr`. And `repository.merge_pull_request` requires a
-`pullRequestNumber` — it merges an existing PR, so it cannot substitute for either.
-
-Steps 1, 3 (PR/CI), 4 (merge), 5 (live acceptance) and 8 (close) all descend from that one
-gate. Step 5 is additionally blocked: a managed slot cannot perform hosted browser QA —
-its session cookie is loopback-scoped and there is no governed key for it.
-
-### What was completed, and is durable locally
+### 8.2 Reconciliation and validation
 
 **Step 2 — reconciliation against current staging: CLEAN.**
 
@@ -206,16 +210,20 @@ externally delivered but are sent **by Supabase**, not through
 could still emit a loopback password-reset link. Recorded rather than fixed: this run is
 bounded to the public-link-origin defect in outbound Communications.
 
-### To finish
+### 8.4 Hosted acceptance — the only remaining gate
 
-1. Operator confirms `repository.push` for slot 3 / this worktree.
-2. `promotion.open_pr` → CI → `merge.execute` (or `repository.merge_pull_request` once a PR
-   number exists).
-3. Verify the deployed staging SHA contains the repair.
-4. Hosted Tour invitation acceptance — needs a session that is not a managed slot.
+A managed slot cannot run this: its auth cookie is loopback-scoped. It needs a Director
+session on hosted staging.
 
-Then, and only then, this document records the merge SHA, the deployed SHA and the received
-link, and the defect may be marked closed.
+1. Open hosted staging and send **one** controlled Tour invitation.
+2. Inspect the **actually received** Email/SMS. Require `https://staging.workwithalloy.com/…`
+   and reject any `localhost`, `127.0.0.1`, or `:301X`.
+3. Click the received link. Prove it opens the intended hosted Tour/participant experience,
+   with no redirect back to localhost.
+4. Prove the action-link token and path still resolve, and that the Tour/Enrollment
+   transition still behaves.
+
+Until that is reported as passing, the defect stays open.
 
 ## 9. Original open items (superseded by §8)
 
