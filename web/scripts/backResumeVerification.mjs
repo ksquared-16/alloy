@@ -45,12 +45,21 @@ await withOperatorPage(async (page, context) => {
         await page.waitForTimeout(3500);
     };
 
-    // ── DIRECT URL ENTRY — the document already made the entry; projection must not add a second.
+    // ── DIRECT URL ENTRY — the document navigation makes ONE entry; the projection that follows
+    //    reconciles the address with the committed surface and must not add a second. Measured
+    //    against the stack as it stands, never against an absolute length: this page has already
+    //    visited `/login` to prove the build is fresh, and an assertion that assumed an empty tab
+    //    would fail for a reason that has nothing to do with the behaviour under test.
+    const beforeDirect = await stack();
     await page.goto(`${BASE}/workspace/work-unit/${SLUG}`, { waitUntil: "commit", timeout: 120_000 });
     await workUnitReady();
     await page.waitForTimeout(6000);
     let s = await stack();
-    check("direct URL entry adds no extra history entry", s.urls.length === 2 && s.index === 1, JSON.stringify(s.urls));
+    check(
+        "direct URL entry adds no entry beyond its own document navigation",
+        s.urls.length === beforeDirect.urls.length + 1 && s.index === s.urls.length - 1,
+        `${beforeDirect.urls.length} -> ${s.urls.length} (index ${s.index}): ${JSON.stringify(s.urls)}`,
+    );
 
     // ── RAPID ROW SWITCHING — a subject refinement is not somewhere to come back from.
     const rowIds = await page.evaluate(
@@ -152,4 +161,4 @@ await withOperatorPage(async (page, context) => {
 const failed = results.filter((r) => !r.pass);
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 if (failed.length) console.log(`failing: ${failed.map((r) => r.name).join(" | ")}`);
-process.exitCode = failed.length ? 1 : 0;
+process.exit(failed.length ? 1 : 0);
