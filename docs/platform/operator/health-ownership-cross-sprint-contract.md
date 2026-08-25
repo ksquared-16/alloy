@@ -94,15 +94,32 @@ export type OperationalRoleKey = PersonChildOperationalRoleKey | (string & {});
 (authorized_pickup, physician, …) — no per-role code". `processingPersonChildRelationshipProposalFoundation.ts`
 already carries `ProcessingRelationshipFieldProposal` and `ProcessingRelationshipRoleProposal`.
 
-> **Correction to the mission brief.** The brief states physician/dentist relationships have
-> already been *registered*. Verified against `origin/staging`: `RELATIONSHIP_DEFINITIONS` contains
-> exactly three roles — `guardian`, `emergency_contact`, `authorized_pickup`. **Physician and
-> dentist are not registered as relationship definitions in code.**
+> **⚠ SUPERSEDED 2026-08-25 — physician and dentist ARE now registered.**
 >
-> This is not a blocker and not a conflict of ownership: the role vocabulary is *open by design*,
-> so physician and dentist are **configuration**, not code. If the Enrollment lane created them as
-> org configuration, that is correct and complete. If it expected a code-level definition, none
-> exists and none is needed.
+> This section previously reported that `RELATIONSHIP_DEFINITIONS` contained only `guardian`,
+> `emergency_contact` and `authorized_pickup`. That was **true of `origin/staging`** — the branch
+> it was verified against, and correctly scoped at the time — but it was **already stale when
+> written**, and it must not be relied on.
+>
+> `ca3be9737` *"give a child's doctor a canonical home, and say what health data is"*, committed
+> 2026-08-25 09:18 on `agent/claude/4-enrollment-phase2-participant-anchor` (unmerged), registers
+> both:
+>
+> ```
+> operational_role_key: "physician"   provider_ref: "person.contact_role.physicians"
+> operational_role_key: "dentist"     provider_ref: "person.contact_role.dentists"
+> ```
+>
+> and derives the action registry, capability registry and role mapping from them — the one-row
+> property the doctrine promised. **The Enrollment lane did exactly the right thing.**
+>
+> The ownership conclusion is unchanged and now has an implementation: physician and dentist are
+> configured relationship roles on `person_child_relationship`, child-grain, with no bespoke code
+> role. They stay **READY NOW**.
+>
+> **Method note for both lanes.** A branch-scoped survey is a snapshot. `origin/staging` was the
+> wrong denominator for a question about work in flight on a sibling lane; the right check is
+> `git branch -a --contains`, which is how this was caught.
 
 ### 1.5 Documents — a complete evidence substrate
 
@@ -459,3 +476,45 @@ binding while the Health foundation is designed, provided M1 goes first.
 5. **One `person_health_facts` entity with four `fact_kind`s**, including immunization with a dose
    series in the payload — confirm.
 6. **S2** — health visibility as a field-level permission, before any Safety Signal ships.
+
+---
+
+## 10. Publication readiness — can a certification publish proceed?
+
+Requested by the Slice 5 mission. This classifies **only** the concepts this contract owns; the
+per-destination workload belongs to the Enrollment lane (§11).
+
+**The question is not "does every primitive exist" but "can the packet run without inventing
+canonical truth".** A concept blocks certification only when running the packet would require
+Alloy to assert something it has no owner for.
+
+| Concept | Classification | Why |
+|---|---|---|
+| Dietary restriction | **CAN REMAIN PROCESS-SCOPED** | Binds at `customer_member` today. Ready. |
+| Physician · dentist | **CAN REMAIN PROCESS-SCOPED** | Registered as configured roles (`ca3be9737`). Ready. |
+| Emergency contacts | **CAN REMAIN PROCESS-SCOPED** | Existing relationship truth. |
+| Physical · health-care plan · medical evidence documents | **CAN REMAIN PROCESS-SCOPED** | `documents` owns the artifact today. The *requirement* is separate — see below. |
+| Routines · toileting · naps · temperament | **CAN REMAIN PROCESS-SCOPED** | Child-profile facts; no health claim asserted. |
+| Allergy · condition · medication · immunization | **CAN REMAIN PROCESS-SCOPED** | ⚠ **Only as artifact-scoped responses.** The packet may *collect and retain* them on the form submission, and the importer may *propose* them, provided operator acceptance creates **no destination**. They become durable truth only after H1–H4. Collecting an answer is not asserting canonical truth; giving it a competing home is. |
+| Physical required · medication authorization required | **CAN REMAIN PROCESS-SCOPED** | The requirement cannot be *authored* (`kind: "document"` unauthorable, gap R1), but the packet can still collect the document. Certification proves collection, not enforcement — state that limit explicitly in the certification record. |
+| Immunization exemption | **BLOCKS CERTIFICATION** *if the packet must record one* | There is no honest place to put it. It is neither a dose nor a field, and requirement exceptions are not modelled. If the real corpus contains an exemption path, certification cannot represent it without inventing a primitive. **If the corpus has no exemption case, it does not block.** |
+| Emergency medical authorization | **BLOCKS CERTIFICATION** | A consent whose withdrawal cannot be modelled must not be recorded as satisfied. Capturing a signature and calling it authorization would assert a state Alloy cannot retract. |
+| Safeguarding · custody · pickup restriction | **MUST BE EXCLUDED** | Highest sensitivity, no owner, and the failure mode is silent: flattening it into a note or a health field puts a legal restriction somewhere nothing enforces it. Exclude from the certification packet and record the exclusion. |
+| `medication_flag` | **MUST BE EXCLUDED** | Deprecated direction (M3). Binding it now would make it the new truth. |
+
+### Minimum honest configuration
+
+A certification publish can proceed with:
+
+1. **M1 landed** — health at child grain, so nothing new binds to the wrong owner.
+2. **READY NOW bindings only** for durable truth.
+3. **Health-foundation concepts collected but undestined** — retained as artifact-scoped responses
+   and importer proposals, with acceptance blocked from creating a destination.
+4. **Three concepts held in explicit unresolved states**, not flattened.
+5. **Safeguarding excluded** from the packet, and the exclusion recorded.
+6. **The certification record stating what it did not prove** — requirement enforcement for
+   health documents, and durable health truth.
+
+**The blockers to a first real publish are exactly two**, and one is conditional:
+emergency medical authorization, and immunization exemption *if the corpus contains one*.
+Everything else is a scope statement, not a blocker.
