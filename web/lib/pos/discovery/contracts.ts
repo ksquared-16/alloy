@@ -28,6 +28,7 @@ import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sect
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
 import type { OwnershipHold } from "./canonicalOwnershipHolds";
+import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
 
 export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
@@ -291,6 +292,12 @@ export interface ConfigurationProposal {
     target_relationship_role?: OperationalRoleKey;
     /** Matched requirement type (upload/acknowledgement/signature). */
     target_requirement_type?: RequirementType;
+    /**
+     * For an upload requirement: the canonical document classification the requested document
+     * already has a name for. Absent means Alloy has no document type for what is being asked —
+     * which is a REPORTED gap, never a silently untyped upload.
+     */
+    target_document_classification?: ProcessingClassificationKey;
     /** Proposed new field (create_proposed_field only). */
     proposed_field?: ProposedFieldDefinition;
     confidence: Confidence;

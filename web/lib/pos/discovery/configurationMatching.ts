@@ -22,6 +22,8 @@
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from "./bindingSafety";
 import { ownershipHoldFor } from "./canonicalOwnershipHolds";
+import { classifyNonFormSource } from "@/lib/pos/processingCase/classification/classifyNonFormSource";
+import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
 import type { FormFieldSource } from "@/lib/forms/schema";
 import {
@@ -257,13 +259,20 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
 
     // ── requirements ──
     if (concept.kind === "upload_requirement") {
+        // Reuse the platform's own document classifier rather than inventing a second document
+        // vocabulary here — the clause text is the title it reads.
+        const classified = classifyNonFormSource({ sourceKind: "document", title: concept.label });
+        const documentType = classified.status === "classified" ? classified.classification_key : null;
         return {
             ...base,
             disposition: "upload_requirement",
             target_requirement_type: "upload",
+            ...(documentType ? { target_document_classification: documentType } : {}),
             confidence: concept.confidence,
             alternatives: [],
-            explanation: `A document-upload requirement (${concept.label}) — proposed against the frozen requirement model; responsibility remains editable in Packet Composition.`,
+            explanation: documentType
+                ? `A document-upload requirement (${concept.label}) — Alloy already recognises this document type as "${CLASSIFICATION_KEY_LABELS[documentType]}", so an uploaded file is classified rather than filed as an untyped attachment. Responsibility remains editable in Packet Composition.`
+                : `A document-upload requirement (${concept.label}) — Alloy has no canonical document type for what is being asked, so the upload is accepted and left unclassified rather than forced into a type that does not fit. Responsibility remains editable in Packet Composition.`,
         };
     }
     if (concept.kind === "acknowledgement") {
