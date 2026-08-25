@@ -517,3 +517,118 @@ read model lands.
 **Remaining blockers to production implementation:** F7 (subject attribution) blocks the Subject
 filter; F0 blocks period grouping; F5 blocks Add charge; P1 blocks journey history; G1 is a
 Director decision. Everything else degrades gracefully.
+
+---
+
+## 8. Final correction — intermediate span, participant rail (2026-08-25)
+
+### 8.1 The intermediate span already exists
+
+> `FocusPanelGridLayout = { columns: number; areas: FocusPanelGridArea[] }` — *"Track count (e.g.
+> 12). Areas place against `repeat(columns, 1fr)`."* `FocusPanelPublishedLayout.grid` is the V5
+> representation and **wins at runtime** when present. `FocusPanelCardGrid` renders each area as
+> `gridColumn: ${colStart} / span ${colSpan}`.
+
+**2/3 row is `colSpan: 8` of `columns: 12`.** No layout extension, no Financials-specific hack,
+and nothing new to build. The `1 | 2 | "row"` enum is the *lane* vocabulary; the 12-track grid is
+the richer one, and it is already the runtime source of truth where authored.
+
+| Placement | Track | Width | Height |
+|---|---|---|---|
+| Compact | 4/12 | 334px | 221 |
+| **Summary — recommended default** | **8/12** | **677px** | **450** |
+| Summary full row | 12/12 | 1021px | 450 |
+| Detail | 12/12 | 1021px | 653 |
+
+At 8/12 the arithmetic keeps its measure and the Past Due / Payment column sits beside it rather
+than floating in dead space. **Financials now reads as sized for its information.** The remaining
+4/12 takes a real card — Readiness (188) or Household (273) — which is the actual test: the card
+system, not an isolated specimen.
+
+> **Adoption note.** The published Enrollment surface composes with **lanes**, not the 12-track
+> grid. Using intermediate spans means authoring that surface's layout as a V5 `grid` — a
+> configuration change, not a code change.
+
+Financials semantics are unchanged: Current Period arithmetic · Add charge under Current Period ·
+Past Due with Pay now · Payment with Manage payment · Details · compact history line.
+
+### 8.2 Participants project onto the rail
+
+The generic CHILDREN section is **gone**. Participants are projected onto the stage each is
+actually at, under the rail.
+
+**The case marker never moves.** Avery sits under *Waitlist* while the case marker stays on
+*Tour* — both grains legible in one glance, with no explanatory section to read.
+
+**Bounded projection rule:**
+
+| Condition | Treatment |
+|---|---|
+| ≤ 3 participants at a stage | Individual avatar markers |
+| > 3 at a stage | First 3 avatars, then a `+N` count |
+| Every participant at the case stage | Projection suppressed; one muted line — *"2 children all at Tour"* |
+| Scoped participant | Bend-pine ring on the marker |
+| Complete participant history | `View process →` |
+
+A busy family cannot destroy the rail: the marker row is fixed-height and the count absorbs any
+number.
+
+**`stageKey` is explicit on the participant**, matching a `ProcessStage.label` exactly.
+"Waitlisted" and "Waitlist" are different vocabularies, and inferring one from the other would
+silently drop a marker.
+
+### 8.3 What survives below the rail
+
+Only a **scoped participant with its own action**:
+
+```
+[AW] Avery Wright   WAITLISTED   Joined Aug 19        Review waitlist position →
+```
+
+Nothing else. Name, stage and date are no longer repeated in two places, and a case with no scoped
+child renders no participant row at all.
+
+**Final anatomy:** process identity → case journey with participant projection → case work and
+case actions → selected-participant action row *only when needed* → View process.
+
+**Action subjects are unchanged.** Case actions stay in the case row; the child action stays on the
+child's row with the child's name and state beside it. Subject is stated, never inferred from
+proximity.
+
+### 8.4 Scenario results — one implementation
+
+| Scenario | Case | Participants | Height |
+|---|---|---|---|
+| A · from Tour | Tour | RW under Tour · AW under Waitlist | **222** |
+| B · from All | Tour | **identical to A** | 222 |
+| C · scoped to Avery | Tour | AW ringed under Waitlist + action row | 259 |
+| D · scoped to Riley | Tour | RW ringed under Tour + action row | 259 |
+| E · case Enrolling, divergent | Enrolling | AW Waitlist · RW Enrolling | 222 |
+| F · five children, three stages | Tour | markers + `+N` where needed | 222 |
+| G · all aligned | Tour | suppressed; one muted line | **228** |
+
+**297 → 222.** The rail absorbed the section it replaced, and the card is now smaller than the
+chip version it corrected while carrying strictly more meaning.
+
+Against the pair it replaces — Journey 119 + What's Next 348 = **467px across two cards** —
+that is **−52%**, and the old pair could not express participant divergence at all.
+
+Work View behaviour is unchanged and the lens chip stays removed.
+
+### 8.5 Updated sequencing
+
+| Order | Work | Unblocks |
+|---|---|---|
+| 1 | **F0** billing-period resolver + `buildFamilyFinancialsReadModel` | Every Financials density |
+| 2 | **F7** subject on `charges` | The Subject filter |
+| 3 | **F5** `charge.add` action definition | Add charge |
+| 4 | **M1** health grain → `customer_member` | Must precede H2 |
+| 5 | **P1** `process_stage_history` projection | Journey history, View process |
+| 6 | **G1** expanded-body cap decision | Both detail surfaces |
+| 7 | **F3 → F6** responsibility split, payer attribution | The payer filter's charge half |
+| 8 | Surface layout authored as a **V5 grid** | Intermediate spans in production |
+| 9 | Card registration, **per card as its read model lands** | — |
+
+**Design and specification are complete.** The next mission is production implementation:
+registration, read models, actions and migrations against this plan — not further specimen
+iteration.

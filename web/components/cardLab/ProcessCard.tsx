@@ -49,12 +49,17 @@ import type { ProcessEvidence } from "@/lib/cardLab/cardLabTypes";
  * NO reference to a work unit or work view. The only seam a lens can touch is the stage *label*
  * fallback (`stage_label ?? statusLabel`) — never the key.
  *
- * ── FOUR LAYERS, IN THIS ORDER ──
+ * ── THE RAIL CARRIES BOTH GRAINS ──
  *
- *   1  case journey        the configured stage spine
+ *   1  case journey        the configured stage spine, WITH participants projected onto the
+ *                          stage each is actually at
  *   2  current case work   and the actions whose SUBJECT is the case
- *   3  participant state   FIRST-CLASS, at its own grain — not a chip
- *   4  child-scoped actions, sitting WITH the child they affect
+ *   3  selected participant — a row ONLY when a scoped child has its own action
+ *
+ * A participant marker never moves the case marker. Avery sits under Waitlist while the case
+ * marker stays on Tour, so both grains are legible in one glance — and the generic children list
+ * that used to sit beneath the card is gone, because it repeated the name, the stage and the date
+ * the rail already shows.
  *
  * The case stage and a child's stage are both authoritative and may legitimately differ. A
  * waitlisted Avery never rewrites a case at Tour, and Riley never inherits Avery's state.
@@ -78,9 +83,23 @@ export default function ProcessCard({
     // Collapse participant noise when every child matches the case — the divergence IS the signal.
     const aligned =
         evidence.childStates.length > 0 &&
-        evidence.childStates.every((c) => c.stage === evidence.currentStageLabel);
-    // A scoped child leads; the others remain visible so the operator keeps the whole picture.
-    const ordered = [...evidence.childStates].sort((a, b) => Number(!!b.scoped) - Number(!!a.scoped));
+        evidence.childStates.every((c) => c.stageKey === evidence.currentStageLabel);
+    // Project each participant onto the stage they are ACTUALLY at. The case marker never moves.
+    const participantsByStep: Record<string, { name: string; imageUrl?: string | null; scoped?: boolean }[]> = {};
+    if (evidence.participantsLabel && !aligned) {
+        for (const c of evidence.childStates) {
+            // stageKey is explicit. "Waitlisted" and "Waitlist" are different vocabularies, and
+            // inferring one from the other would silently drop a marker.
+            if (!evidence.stages.some((st) => st.label === c.stageKey)) continue;
+            (participantsByStep[c.stageKey] ??= []).push({
+                name: c.name,
+                imageUrl: c.imageUrl,
+                scoped: c.scoped,
+            });
+        }
+    }
+    // Only a SCOPED child with its own action still earns a row — the rail says everything else.
+    const scopedChild = evidence.childStates.find((c) => c.scoped && c.actions.length);
 
     return (
         <div className="alloy-os-process" data-process-card="true">
@@ -104,6 +123,7 @@ export default function ProcessCard({
                     }))}
                     dataName="process"
                     compact
+                    participantsByStep={participantsByStep}
                 />
 
                 {/* 2 · CURRENT CASE WORK — and the actions whose SUBJECT is the case. */}
@@ -134,47 +154,38 @@ export default function ProcessCard({
                     </div>
                 </div>
 
-                {/* 3 · PARTICIPANT STATE — first-class, at its own grain. Rendered only when the
-                    process HAS participant grain, so Assignment and Billing omit it entirely and
-                    there is no Enrollment-specific section in this component. */}
-                {evidence.participantsLabel && evidence.childStates.length ? (
-                    aligned ? (
-                        // Everyone matches the case: one line, no per-child noise.
-                        <p className="alloy-os-process__aligned">
-                            <span className="alloy-os-process__needed-label">
-                                {evidence.participantsLabel}
-                            </span>
-                            {evidence.childStates.map((c) => c.name.split(" ")[0]).join(" · ")} — all at{" "}
-                            {evidence.currentStageLabel}
-                        </p>
-                    ) : (
-                        <section className="alloy-os-process__participants">
-                            <p className="alloy-os-process__participants-head">
-                                {evidence.participantsLabel}
-                            </p>
-                            {ordered.map((c) => (
-                                <div
-                                    key={c.name}
-                                    className="alloy-os-process__participant"
-                                    data-scoped={c.scoped ? "true" : undefined}
-                                >
-                                    <CardAvatar name={c.name} imageUrl={c.imageUrl ?? null} size={26} role="child" />
-                                    <span className="alloy-os-process__participant-name">{c.name}</span>
-                                    <span className="alloy-os-process__participant-stage">{c.stage}</span>
-                                    {c.since ? (
-                                        <span className="alloy-os-process__participant-since">{c.since}</span>
-                                    ) : null}
-                                    {/* Child-subject actions live WITH the child, so the operator can
-                                        never mistake which entity an action will affect. */}
-                                    <span className="alloy-os-process__participant-actions">
-                                        {c.actions.map((a) => (
-                                            <FooterAction key={a.label}>{a.label} →</FooterAction>
-                                        ))}
-                                    </span>
-                                </div>
+                {/* 3 · SELECTED PARTICIPANT — only when a scoped child carries its own action.
+                    The rail already communicates who is where, so a generic children list beneath
+                    it would repeat the name, the stage and the date for no added meaning. */}
+                {scopedChild ? (
+                    <div className="alloy-os-process__scoped">
+                        <CardAvatar
+                            name={scopedChild.name}
+                            imageUrl={scopedChild.imageUrl ?? null}
+                            size={22}
+                            role="child"
+                        />
+                        <span className="alloy-os-process__scoped-name">{scopedChild.name}</span>
+                        <span className="alloy-os-process__participant-stage">{scopedChild.stage}</span>
+                        {scopedChild.since ? (
+                            <span className="alloy-os-process__participant-since">{scopedChild.since}</span>
+                        ) : null}
+                        {/* Subject is stated, never inferred from proximity. */}
+                        <span className="alloy-os-process__participant-actions">
+                            {scopedChild.actions.map((a) => (
+                                <FooterAction key={a.label}>{a.label} →</FooterAction>
                             ))}
-                        </section>
-                    )
+                        </span>
+                    </div>
+                ) : null}
+
+                {aligned && evidence.participantsLabel ? (
+                    <p className="alloy-os-process__aligned">
+                        <span className="alloy-os-process__needed-label">
+                            {evidence.childStates.length} {evidence.participantsLabel.toLowerCase()}
+                        </span>
+                        all at {evidence.currentStageLabel}
+                    </p>
                 ) : null}
                 <span className={clsx("alloy-os-process__anchor")} data-current-stage={current?.label} />
             </UniversalCard>

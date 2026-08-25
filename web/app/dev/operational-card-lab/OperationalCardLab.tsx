@@ -64,7 +64,8 @@ type TabKey =
     | "addcharge"
     | "signals"
     | "grain"
-    | "density";
+    | "density"
+    | "spans";
 
 const TABS: { key: TabKey; label: string }[] = [
     { key: "journey", label: "1 · Journey" },
@@ -78,6 +79,7 @@ const TABS: { key: TabKey; label: string }[] = [
     { key: "process", label: "P · Process card (3 processes)" },
     { key: "grain", label: "G · Mixed grain (6 scenarios)" },
     { key: "density", label: "W · Financials densities" },
+    { key: "spans", label: "X · Intermediate span (12-track)" },
     { key: "addcharge", label: "F · Add charge" },
     { key: "signals", label: "S · Safety Signals" },
     { key: "healthdetail", label: "D1 · Health detail" },
@@ -122,6 +124,17 @@ const REVIEW: Record<Exclude<TabKey, "combined">, { question: string; decisions:
         ],
         open: [
             "A family with more than four payers would overflow the strip; a count-and-collapse rule would be needed, as Attendance has for movements.",
+        ],
+    },
+    spans: {
+        question: "Does Financials want less than a full row — and does the platform already allow it?",
+        decisions: [
+            "IT ALREADY DOES. FocusPanelGridLayout takes `columns` (e.g. 12) and places areas against repeat(columns, 1fr); the V5 `grid` wins at runtime. 2/3 row is colSpan 8 of 12. No layout extension, no Financials-specific hack.",
+            "At 8/12 (671px) the arithmetic keeps its measure and the Past Due / Payment column stops floating in dead space.",
+            "The remaining 4/12 (327px) takes a real runtime card, which is the actual test — the card system, not an isolated specimen.",
+        ],
+        open: [
+            "The published Enrollment surface currently composes with lanes, not the 12-track grid. Adopting intermediate spans means authoring that surface's layout as a V5 grid — a configuration change, not a code change.",
         ],
     },
     density: {
@@ -399,7 +412,48 @@ export default function OperationalCardLab() {
                 ))}
             </nav>
 
-            {tab === "combined" ? (
+            {tab === "spans" ? (
+                <>
+                    <section className="lab__section">
+                        <h2 className="lab__h2">{REVIEW.spans.question}</h2>
+                    </section>
+                    <div className="lab__split">
+                        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                            <Frame12 label="Financials 8/12 · Readiness 4/12 — recommended">
+                                <Area span={8} kind="cand" name="Financials">{financials}</Area>
+                                <Area span={4} kind="real" name="Readiness">{realCard("readiness_kpi")}</Area>
+                            </Frame12>
+                            <Frame12 label="Financials 8/12 · Household 4/12">
+                                <Area span={8} kind="cand" name="Financials">{financials}</Area>
+                                <Area span={4} kind="real" name="Household">{realCard("household")}</Area>
+                            </Frame12>
+                            <Frame12 label="Financials 12/12 — current full row, for comparison">
+                                <Area span={12} kind="cand" name="Financials">{financials}</Area>
+                            </Frame12>
+                            <Frame12 label="Financials 4/12 — compact, supporting context">
+                                <Area span={4} kind="cand" name="Financials">
+                                    <FinancialsCard evidence={FINANCIALS_FIXTURE} span={1} />
+                                </Area>
+                                <Area span={8} kind="real" name="Children">{realCard("children")}</Area>
+                            </Frame12>
+                        </div>
+                        <aside className="lab__review">
+                            <p className="lab__review-head">Design decisions</p>
+                            <ul className="lab__list">
+                                {REVIEW.spans.decisions.map((d) => (
+                                    <li key={d}>{d}</li>
+                                ))}
+                            </ul>
+                            <p className="lab__review-head">Open</p>
+                            <ul className="lab__list lab__list--open">
+                                {REVIEW.spans.open.map((d) => (
+                                    <li key={d}>{d}</li>
+                                ))}
+                            </ul>
+                        </aside>
+                    </div>
+                </>
+            ) : tab === "combined" ? (
                 <>
                     <section className="lab__section">
                         <h2 className="lab__h2">Realistic Focus Panel composition</h2>
@@ -640,6 +694,47 @@ export default function OperationalCardLab() {
                     </div>
                 </>
             )}
+        </div>
+    );
+}
+
+/**
+ * A 12-track frame — the SAME mechanism `FocusPanelGridLayout` already uses
+ * (`columns: 12`, areas placed against `repeat(columns, 1fr)`; the V5 `grid` wins at runtime).
+ * No Financials-specific width hack, and no new layout primitive: 2/3 is `colSpan: 8`.
+ */
+function Frame12({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="lab__frame">
+            <div className="lab__frame-label">{label}</div>
+            <div
+                className="alloy-os-focus-panel-grid lab__grid"
+                style={{ ["--alloy-os-fp-cols" as string]: 12 }}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
+
+function Area({
+    span,
+    kind,
+    name,
+    children,
+}: {
+    span: number;
+    kind: "real" | "cand";
+    name: string;
+    children: React.ReactNode;
+}) {
+    if (!children) return null;
+    return (
+        <div className="alloy-os-focus-panel-grid__cell lab__cell" style={{ gridColumn: `span ${span}` }}>
+            <span className={clsx("lab__cell-tag", kind === "real" ? "lab__cell-tag--real" : "lab__cell-tag--cand")}>
+                {name} · {span}/12
+            </span>
+            {children}
         </div>
     );
 }

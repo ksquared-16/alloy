@@ -1163,7 +1163,56 @@
   font-weight: 500;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
-/* Participant state is its own LAYER beneath the case work — not a chip strip. */
+/* Participants projected onto the rail, under the stage each is actually at. Bounded: at most
+ * three avatars per stage, then a count — a busy family cannot destroy the rail. */
+.alloy-os-progression__participants {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 4px;
+  padding-left: 1px;
+  min-height: 20px;
+}
+.alloy-os-progression__marker {
+  display: inline-flex;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.alloy-os-progression__marker[data-scoped="true"] {
+  box-shadow:
+    0 0 0 1.5px #fff,
+    0 0 0 3px var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-progression__marker-more {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, #fff);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+/* The one row that survives the rail: a scoped child with its own action. */
+.alloy-os-process__scoped {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 7px;
+  padding: 4px 8px 4px 5px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 7%, #fff);
+  min-width: 0;
+}
+.alloy-os-process__scoped-name {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+  white-space: nowrap;
+}
+.alloy-os-process__scoped .alloy-os-process__participant-actions {
+  margin-left: auto;
+}
+
 .alloy-os-process__participants {
   margin-top: 7px;
   padding-top: 8px;

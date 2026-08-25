@@ -372,6 +372,13 @@ export type ProcessStage = {
     outcome: string | null;
 };
 
+/** A participant projected onto the stage they are actually at. */
+export type RailParticipant = {
+    name: string;
+    imageUrl?: string | null;
+    scoped?: boolean;
+};
+
 export type ProcessAction = { label: string; primary?: boolean };
 
 /**
@@ -380,7 +387,14 @@ export type ProcessAction = { label: string; primary?: boolean };
  */
 export type ProcessChildState = {
     name: string;
+    /** Operator-facing participant state, e.g. "Waitlisted". */
     stage: string;
+    /**
+     * The stage this participant is projected onto — matches a `ProcessStage.label` exactly.
+     * Explicit rather than string-matched: "Waitlisted" and "Waitlist" are different vocabularies
+     * and inferring one from the other would silently drop a marker.
+     */
+    stageKey: string;
     /** Since when, where the participant state carries one. */
     since: string | null;
     /** True when the queue/context was scoped to this child. */

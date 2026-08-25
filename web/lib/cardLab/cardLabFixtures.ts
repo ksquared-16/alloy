@@ -685,6 +685,7 @@ const WRIGHT_STAGES: ProcessEvidence["stages"] = [
 const AVERY = (scoped: boolean): ProcessChildState => ({
     name: "Avery Wright",
     stage: "Waitlisted",
+    stageKey: "Waitlist",
     since: "Joined Aug 19",
     scoped,
     actions: [{ label: "Review waitlist position", primary: scoped }],
@@ -693,6 +694,7 @@ const AVERY = (scoped: boolean): ProcessChildState => ({
 const RILEY = (scoped: boolean): ProcessChildState => ({
     name: "Riley Wright",
     stage: "Tour",
+    stageKey: "Tour",
     since: "Tour Aug 27",
     scoped,
     actions: [{ label: "Complete tour", primary: scoped }],
@@ -736,18 +738,32 @@ export const PROCESS_WRIGHT_DIVERGENT: ProcessEvidence = {
     dueLine: "Packet due Sep 6",
     actions: [{ label: "Send packet", primary: true }, { label: "Contact family" }],
     childStates: [
-        { name: "Avery Wright", stage: "Waitlisted", since: "Joined Aug 19", actions: [{ label: "Review waitlist position" }], imageUrl: null },
-        { name: "Riley Wright", stage: "Enrolling", since: "Since Aug 30", actions: [{ label: "Complete placement" }], imageUrl: null },
+        { name: "Avery Wright", stage: "Waitlisted", stageKey: "Waitlist", since: "Joined Aug 19", actions: [{ label: "Review waitlist position" }], imageUrl: null },
+        { name: "Riley Wright", stage: "Enrolling", stageKey: "Enrolling", since: "Since Aug 30", actions: [{ label: "Complete placement" }], imageUrl: null },
     ],
 };
 
 /** F — every child at the same state as the case. The region collapses to one line. */
 export const PROCESS_WRIGHT_ALIGNED: ProcessEvidence = {
-    ...wright("F · children aligned", null),
+    ...wright("G · children aligned", null),
     workLine: "Tour scheduled Aug 27 · 10:00 AM · both children",
     childStates: [
-        { name: "Avery Wright", stage: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
-        { name: "Riley Wright", stage: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
+        { name: "Avery Wright", stage: "Tour", stageKey: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
+        { name: "Riley Wright", stage: "Tour", stageKey: "Tour", since: "Tour Aug 27", actions: [], imageUrl: null },
+    ],
+};
+
+/** F — five children across three stages. Proves the bounded marker rule. */
+export const PROCESS_WRIGHT_MANY: ProcessEvidence = {
+    ...wright("F · five children, three stages", null),
+    workLine: "Tour scheduled Aug 27 · 10:00 AM",
+    childStates: [
+        { name: "Avery Wright", stage: "Waitlisted",
+    stageKey: "Waitlist", since: "Joined Aug 19", actions: [], imageUrl: null },
+        { name: "Riley Wright", stage: "Tour", stageKey: "Tour", since: null, actions: [], imageUrl: null },
+        { name: "Sam Wright", stage: "Tour", stageKey: "Tour", since: null, actions: [], imageUrl: null },
+        { name: "Noa Wright", stage: "Tour", stageKey: "Tour", since: null, actions: [], imageUrl: null },
+        { name: "Jules Wright", stage: "Lead", stageKey: "Lead", since: null, actions: [], imageUrl: null },
     ],
 };
 
@@ -758,6 +774,7 @@ export const PROCESS_GRAIN_SPECIMENS = [
     PROCESS_WRIGHT_RILEY,
     PROCESS_WRIGHT_DIVERGENT,
     PROCESS_WRIGHT_ALIGNED,
+    PROCESS_WRIGHT_MANY,
 ] as const;
 
 export const PROCESS_SPECIMENS = [PROCESS_ENROLLMENT, PROCESS_ASSIGNMENT, PROCESS_BILLING] as const;

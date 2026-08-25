@@ -2,7 +2,8 @@
 
 import clsx from "clsx";
 
-import type { ProgressionStep } from "@/lib/cardLab/cardLabTypes";
+import CardAvatar from "@/components/admin/focusPanel/CardAvatar";
+import type { ProgressionStep, RailParticipant } from "@/lib/cardLab/cardLabTypes";
 
 /**
  * Horizontal progression band — past → past → current → future, read left to right.
@@ -20,12 +21,24 @@ export default function ProgressionBand({
     dataName,
     compact = false,
     onCollapsedClick,
+    participantsByStep,
 }: {
     steps: ProgressionStep[];
     dataName: string;
     /** Journey: fold detail and note onto one line. The strip is orientation, not a report. */
     compact?: boolean;
     onCollapsedClick?: () => void;
+    /**
+     * Participants projected onto the stage each is ACTUALLY at, keyed by step value.
+     *
+     * The rail keeps representing the CASE. A participant marker never moves the case marker: a
+     * waitlisted child appears under Waitlist while the case marker stays on Tour, so both grains
+     * are legible in one glance and no separate explanatory section is needed.
+     *
+     * Bounded by construction — at most {@link MAX_MARKERS} avatars per stage, then a count. A
+     * busy family cannot destroy the rail.
+     */
+    participantsByStep?: Record<string, RailParticipant[]>;
 }) {
     return (
         <div
@@ -94,8 +107,35 @@ export default function ProgressionBand({
                             </>
                         )}
                     </div>
+                    {participantsByStep?.[step.value]?.length ? (
+                        <div className="alloy-os-progression__participants" data-stage={step.value}>
+                            {participantsByStep[step.value]!.slice(0, MAX_MARKERS).map((p) => (
+                                <span
+                                    key={p.name}
+                                    className="alloy-os-progression__marker"
+                                    data-scoped={p.scoped ? "true" : undefined}
+                                    title={`${p.name} · ${step.value}`}
+                                >
+                                    <CardAvatar
+                                        name={p.name}
+                                        imageUrl={p.imageUrl ?? null}
+                                        size={18}
+                                        role="child"
+                                    />
+                                </span>
+                            ))}
+                            {participantsByStep[step.value]!.length > MAX_MARKERS ? (
+                                <span className="alloy-os-progression__marker-more">
+                                    +{participantsByStep[step.value]!.length - MAX_MARKERS}
+                                </span>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             ))}
         </div>
     );
 }
+
+/** Individual markers up to this many per stage; beyond it, a count. */
+const MAX_MARKERS = 3;
