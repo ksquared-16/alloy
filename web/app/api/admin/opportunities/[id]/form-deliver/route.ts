@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
 import { canonicalSend } from "@/lib/communications/send/canonicalSend";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
 /**
  * Generic form DELIVERY execution (v1, on existing comms + form-link infra).
@@ -24,10 +25,18 @@ import { canonicalSend } from "@/lib/communications/send/canonicalSend";
 
 type DeliverChannel = "email" | "sms" | "link";
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const proto = request.headers.get("x-forwarded-proto") ?? "https";
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    return host ? `${proto}://${host}` : null;
+/**
+ * The origin these public/embed links are built on.
+ *
+ * It is read from the ONE canonical public-origin authority and NOT from the request.
+ * These links are copied into emails, texts and third-party pages, so their origin has to
+ * be a property of the environment rather than of whichever host the operator's browser
+ * happened to reach — and a `Host` / `X-Forwarded-Host` header is caller-supplied, so
+ * deriving from it let a spoofed header choose where a recipient's link points.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -82,7 +91,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         orgId: ctx.orgId,
         formDefinitionId,
         launch: { entityType: "opportunity", entityId: opportunityId, label: formName },
-        embedBaseUrl: deriveEmbedBaseUrl(request),
+        embedBaseUrl: deriveEmbedBaseUrl(),
         clientMetadata: subjectIds.length > 0 ? { form_delivery_subject_ids: subjectIds } : undefined,
     });
     if (!mint.ok) return jsonError(mint.message, mint.status);

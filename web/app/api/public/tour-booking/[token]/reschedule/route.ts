@@ -110,7 +110,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 booking: replacement,
                 actionModel: buildTourParentActionModel({
                     actions: minted.ok ? minted.actions : [],
-                    baseUrl: resolvePublicBaseUrl(request),
+                    baseUrl: resolvePublicBaseUrl(),
                     bookingStatusKey: replacement.status_key,
                 }),
             })

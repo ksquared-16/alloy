@@ -25,12 +25,20 @@ import {
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { buildLocationSpecificLinkMetadata, readUuid } from "@/lib/forms/locationSpecificPublicLinkMetadata";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these public/embed links are built on.
+ *
+ * It is read from the ONE canonical public-origin authority and NOT from the request.
+ * These links are copied into emails, texts and third-party pages, so their origin has to
+ * be a property of the environment rather than of whichever host the operator's browser
+ * happened to reach — and a `Host` / `X-Forwarded-Host` header is caller-supplied, so
+ * deriving from it let a spoofed header choose where a recipient's link points.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 async function validatePinnedVersion(
@@ -212,7 +220,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             orgId: ctx.orgId,
             formDefinitionId: formId,
             launch: { ...parsedLaunch, entityId },
-            embedBaseUrl: deriveEmbedBaseUrl(request),
+            embedBaseUrl: deriveEmbedBaseUrl(),
             clientMetadata,
             label:
                 typeof body.label === "string"
@@ -262,7 +270,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (plan.reuse) {
             const sharePath = readShareEmbedPath(plan.reuse.metadata);
             if (sharePath) {
-                const base = deriveEmbedBaseUrl(request);
+                const base = deriveEmbedBaseUrl();
                 return jsonData(
                     {
                         ...(plan.reuse as unknown as Record<string, unknown>),
@@ -302,7 +310,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
 
         if (!error && row) {
-            const base = deriveEmbedBaseUrl(request);
+            const base = deriveEmbedBaseUrl();
             return jsonData(
                 {
                     ...(row as Record<string, unknown>),
