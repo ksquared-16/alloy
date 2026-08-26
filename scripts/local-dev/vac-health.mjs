@@ -24,6 +24,8 @@ import {
   probeTmuxPanes, looksLikeValidation, withBudget,
 } from "./lib/vacilando/health-probes.mjs";
 import { attributionReport, parseProcessTable } from "./lib/vacilando/process-attribution.mjs";
+import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
+import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
@@ -110,7 +112,13 @@ const attribution = psText
   })
   : null;
 
-const heavyDescendants = (attribution?.records || []).filter((r) => looksLikeValidation(r.command));
+// S3: classify every attributed process. looksLikeValidation only SELECTS
+// candidates; the class and weight come from the classifier, which reads scope.
+const workloads = (attribution?.records || [])
+  .filter((r) => looksLikeValidation(r.command))
+  .map((r) => classifyWorkload({ command: r.command, pid: r.pid, attribution: r }))
+  .filter((w) => w.workload_class);
+const workloadCost = concurrentWeightedCost(workloads);
 
 const lanes = lanesRaw.map((l) => ({
   lane_id: l.lane_id,
@@ -206,7 +214,7 @@ const report = composeReport({
   endedAt: new Date().toISOString(),
   probeResults: {
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
-    run_bounds: RUN_BOUNDS, attribution, heavy_descendants: heavyDescendants,
+    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost,
     ports, worktrees, toolkit, configured_max: configuredMax,
   },
 });

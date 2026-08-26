@@ -274,34 +274,68 @@ export function checkProviderCapacity({ thresholds, seats = [], configuredMax = 
 }
 
 /**
- * Validation collisions — DELIBERATELY APPROXIMATE UNTIL S3.
+ * Validation collisions — now backed by S3 classification.
  *
- * Weighted workload cost is S3's job. Reporting a confident collision count now
- * would be inventing the very number the doctrine says must be measured, so
- * this reports what ancestry alone can honestly show: how many likely-heavy
- * validation descendants are running, under how many distinct seats.
+ * Until S3 this reported a shape heuristic and marked itself
+ * approximate_pending_s3, because claiming a weighted cost it could not compute
+ * would have invented the number the doctrine says must be measured. It now
+ * consumes authoritative workload classes and reports real weights.
+ *
+ * WHAT IT STILL MUST NOT DO. There is no enforcement budget in S3. The
+ * comparison against `proposed_budget` is a DIAGNOSTIC — it says what a future
+ * S5 budget would have concluded, and says so in the finding. Exceeding it is
+ * not a violation, because nothing has agreed to enforce it yet.
  */
-export function checkValidationCollisions({ heavyDescendants = [] }) {
-  const bySeat = new Map();
-  for (const r of heavyDescendants) {
-    const k = r.root_provider_pid ?? "unattributed";
-    bySeat.set(k, (bySeat.get(k) || 0) + 1);
-  }
-  const seatsRunning = [...bySeat.keys()].filter((k) => k !== "unattributed").length;
-  const sev = seatsRunning > 1 ? "watch" : "healthy";
+export function checkValidationCollisions({ hw, workloads = [], cost = null, proposedBudget = null }) {
+  const classified = workloads.filter((w) => w.workload_class);
+  const unknown = workloads.filter((w) => !w.workload_class);
+  const seats = new Set(classified.map((w) => w.root_provider_pid).filter((p) => p != null));
+  const total = cost?.total_weight ?? 0;
+  const budget = Number.isFinite(proposedBudget)
+    ? proposedBudget
+    : Math.max(2, Math.floor((hw?.cores || 4) * 0.75));
+
+  const exceedsProposed = total > budget || cost?.machine_exclusive_present === true;
+  const sev = exceedsProposed ? "watch" : seats.size > 1 ? "watch" : "healthy";
+
   return finding({
     check: "validation.collisions",
     severity: sev,
     owner_resource: "vacilando.validation",
-    measurements: { likely_heavy_descendants: heavyDescendants.length, distinct_seats_running_validation: seatsRunning },
-    evidence: heavyDescendants.slice(0, 8).map((r) =>
-      `pid ${r.pid} · lane ${r.lane_name || r.lane_id || "unattributed"} · ${String(r.command || "").slice(0, 60)}`),
-    explanation: seatsRunning > 1
-      ? `Validation-like work is running under ${seatsRunning} seats at once. Whether that exceeds a safe budget cannot be decided yet.`
-      : "No concurrent cross-seat validation detected by ancestry.",
-    suggested_action: seatsRunning > 1 ? "Confirm both runs are intended; weighted budgets arrive in S3." : null,
-    // The contract's escape hatch, used honestly.
-    confidence: "approximate_pending_s3",
+    measurements: {
+      classified_workloads: classified.length,
+      unknown_invocations: unknown.length,
+      distinct_seats: seats.size,
+      concurrent_weight: total,
+      by_lane: cost?.by_lane || {},
+      machine_exclusive_present: cost?.machine_exclusive_present || false,
+      // Named to make its status unmistakable at every call site.
+      proposed_s5_budget: budget,
+      exceeds_proposed_s5_budget: exceedsProposed,
+      weight_policy_version: classified[0]?.weight_policy_version || null,
+    },
+    evidence: classified.slice(0, 8).map((w) => ({
+      pid: w.pid,
+      lane_id: w.lane_id,
+      lane_name: w.lane_name,
+      execution_run_id: w.execution_run_id,
+      workload_class: w.workload_class,
+      workload_label: w.workload_label,
+      workers_requested: w.workers_requested,
+      expected_weight: w.expected_weight,
+      confidence: w.confidence,
+      command: String(w.command || "").slice(0, 60),
+    })),
+    explanation: exceedsProposed
+      ? `Concurrent validation weight is ${total} against a proposed future budget of ${budget}. S3 measures; it does not enforce.`
+      : seats.size > 1
+        ? `Validation is running under ${seats.size} seats at once, within the proposed budget of ${budget}.`
+        : "No concurrent cross-seat validation detected.",
+    suggested_action: exceedsProposed
+      ? "Diagnostic only — no budget is enforced until S5. Confirm the concurrent runs are intended."
+      : null,
+    // Classification is authoritative; the BUDGET comparison is not enforcement.
+    confidence: classified.length ? "measured" : "measured",
   });
 }
 
@@ -506,7 +540,12 @@ export function composeReport({
   safe("disk.headroom", () => checkDiskHeadroom({ thresholds, disk: probeResults.disk }));
   safe("gateway.responsive", () => checkGatewayResponsive({ thresholds, gateway: probeResults.gateway }));
   safe("provider.capacity", () => checkProviderCapacity({ thresholds, seats: probeResults.seats || [], configuredMax: probeResults.configured_max }));
-  safe("validation.collisions", () => checkValidationCollisions({ heavyDescendants: probeResults.heavy_descendants || [] }));
+  safe("validation.collisions", () => checkValidationCollisions({
+    hw,
+    workloads: probeResults.workloads || [],
+    cost: probeResults.workload_cost || null,
+    proposedBudget: probeResults.proposed_budget ?? null,
+  }));
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {} }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));

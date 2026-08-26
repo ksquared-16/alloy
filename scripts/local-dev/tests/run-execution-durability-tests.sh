@@ -47,6 +47,7 @@ SUITES=(
   "development-browser-auth.test.mjs"
   "development-process-attribution.test.mjs"
   "development-health.test.mjs"
+  "development-workload-classification.test.mjs"
 )
 
 PASS=0

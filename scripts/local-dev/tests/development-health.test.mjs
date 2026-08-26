@@ -46,7 +46,8 @@ const HEALTHY_PROBES = {
   runs: [{ run_id: "r1", state: "EXECUTING", state_reason: "instruction_delivered", terminal: false, age_ms: 1000 }],
   run_bounds: { instruction_delivered: 3600000 },
   attribution: { seat_count: 1, attributed_count: 1, records: [{ pid: 2, attribution_status: "ancestry", execution_location: "inside_worktree" }] },
-  heavy_descendants: [],
+  workloads: [],
+  workload_cost: { total_weight: 0, machine_exclusive_present: false, by_lane: {} },
   ports: [{ port: 3011, verdict: "matched" }],
   worktrees: { onDisk: 3, registered: 3, unmanaged: [] },
   toolkit: { installed: 5, current: "abc" },
@@ -232,18 +233,28 @@ await test("NEGATIVE — ownership classification fails when attribution is brok
   assert.equal(sevOf(report({ attribution: broken }), "subprocess.ancestry"), "problem");
 });
 
-await test("NEGATIVE — validation.collisions refuses to claim S3's knowledge", () => {
-  const two = report({ heavy_descendants: [
-    { pid: 1, root_provider_pid: 10, lane_name: "A", command: "vitest run" },
-    { pid: 2, root_provider_pid: 20, lane_name: "B", command: "vitest run" },
-  ] });
+await test("NEGATIVE — validation.collisions reports weight but never enforces it", () => {
+  // S3 upgraded this from a shape heuristic to real classification. What it
+  // still must not do is treat its own budget comparison as a violation.
+  const two = report({
+    workloads: [
+      { pid: 1, root_provider_pid: 10, lane_id: "A", workload_class: "heavy_test", expected_weight: 8, weight_policy_version: "v1", command: "vitest run" },
+      { pid: 2, root_provider_pid: 20, lane_id: "B", workload_class: "typecheck", expected_weight: 4, weight_policy_version: "v1", command: "tsc --noEmit" },
+    ],
+    workload_cost: { total_weight: 12, machine_exclusive_present: false, by_lane: { A: 8, B: 4 } },
+    proposed_budget: 6,
+  });
   const f = two.findings.find((x) => x.check === "validation.collisions");
-  assert.equal(f.severity, "watch");
-  assert.equal(f.confidence, "approximate_pending_s3", "must be marked approximate until S3");
-  assert.match(f.explanation, /cannot be decided yet/);
-  // It must NOT invent a weighted cost.
-  assert.equal("weighted_cost" in f.measurements, false);
-  assert.equal("tokens" in f.measurements, false);
+  assert.equal(f.severity, "watch", "over the PROPOSED budget is a watch, not a problem");
+  assert.equal(f.measurements.concurrent_weight, 12);
+  assert.equal(f.measurements.proposed_s5_budget, 6);
+  assert.equal(f.measurements.exceeds_proposed_s5_budget, true);
+  // The field name and the copy must both say this is not enforced.
+  assert.match(f.explanation, /does not enforce/);
+  assert.match(f.suggested_action, /no budget is enforced until S5/);
+  // Real classification now flows through.
+  assert.equal(f.evidence[0].workload_class, "heavy_test");
+  assert.equal(f.evidence[0].expected_weight, 8);
 });
 
 await test("NEGATIVE — a run is never stale by age alone", () => {
