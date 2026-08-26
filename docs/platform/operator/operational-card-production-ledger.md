@@ -1047,3 +1047,84 @@ fixture already makes, and Attendance (§B) resumes immediately against the resu
 was written, no card was placed — §19 of the prior mission and the Definition of Done both require
 real canonical data first, and building against absent data is the failure this program has avoided
 throughout.
+
+---
+
+## 20. The trusted certification runner — blocker removed (2026-08-26)
+
+Three cards were blocked on one fact: the tenant had no enrolled child. The previous stop asked an
+operator to hand-build one. **That was the wrong shape** — an autonomous lane being unable to create
+canonical state is a platform gap, not a chore to delegate.
+
+### The capability
+
+`POST /api/admin/dev/operational-cards-certification` · `{ action: "ensure" | "verify" | "reset" }`
+
+The dev server already holds the trusted environment, so the capability lives **inside the process
+that is already authorized** rather than in a credential tunnel that would defeat the boundary.
+
+**It is not a seed runner.** No script name, no SQL, no table, no payload — three fixed verbs over one
+fixture whose namespace is compiled in, so the blast radius is a property of the code rather than of
+the request.
+
+| Guard | |
+|---|---|
+| Production | 404 before anything else runs |
+| Auth | the same admin/ops gate every admin route uses |
+| Org | from the **session**, never the body — it cannot be aimed at another tenant |
+| Surface | `ensure` · `verify` · `reset`, none taking a parameter |
+| Allowlist | **no exception needed** — it resolves a principal like every other admin route (`checkServiceClientPrincipal` ✓) |
+
+### Identity resolution is not bypassed
+
+`ensure` calls the real Create Lead command and lets *it* settle identity. A reserved-namespace person
+is unique by construction, so the canonical resolver reaches `committed` on its own. If it ever
+returns `processing_review`, the runner **fails closed** — reinterpreting an ambiguous duplicate as
+"create another person" is exactly the bug that gate exists to prevent.
+
+### Two real defects found by executing it
+
+1. **`create_lead`'s `customer_id` is optional** and is not populated on every committed path. Trusting
+   it aborted *after* the household existed — reporting failure while leaving a real record behind.
+   The household is now re-resolved the same way an existing one is found, which also makes the step
+   idempotent from a partial run.
+2. **A room was chosen without regard to its site**, which would have placed a child under a campus the
+   site says they are not at.
+
+The refusal that mattered was **`missing_schedule`**: a child without one is never *expected* on any
+day, so Roster and Attendance would never see them — an "enrolled" subject useless for the very cards
+it exists to certify. The pattern now comes from the site's own active patterns.
+
+### Result — the blocker is gone
+
+| Subject | Member | Agreement | Placement | Schedule |
+|---|---|---|---|---|
+| **Certa** | `e408fa51` | `4e3aa47e` | `591280d2` | `2ebbf2f0` |
+| **Certb** | `46105cd4` | `6f409c2d` | `19aec82a` | `42982cbe` |
+
+Household `29944d3e` · person `38ef24b5`.
+
+**Idempotent:** a second `ensure` returned identical ids with `agreements: 1` each, not doubled.
+**Isolated:** `unrelatedChildren: 17` before and after — Firefly untouched.
+
+### Process certification on real two-child data
+
+`All` → Certhouse Family (row shows *Certa (5y4m) | Certb (3y10m)*):
+
+| Check | Result |
+|---|---|
+| Rail from real configured stages | ✅ Lead **(current)** · Tour · Decision · Waitlist · Enrolling · Enrolled |
+| Activity | ✅ trigger reports **5** canonical records |
+| Aligned participants quiet | ✅ markers suppressed — both children sit at the case's stage, and divergence is what the rail exists to show |
+| Page errors / duplicate keys | ✅ 0 / 0 |
+| Readiness | 11.1 s cold-compile (dev) |
+
+**Divergent state (Certa Waitlist / Certb Tour) not yet established.** It requires canonical stage
+progression, and §A forbids patching stage rows for a screenshot. Provider-level tests already cover
+the combination.
+
+### What changed for the Director
+
+Nothing about certification setup is theirs any more: no Create Lead, no seed command, no `--verify`,
+no credentials. The next Director interaction is **QA of Attendance and Financials**, which is what
+the mission asked for.
