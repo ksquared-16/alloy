@@ -230,6 +230,31 @@ await test("a push is idempotent when the remote already has the commit", () => 
   assert.equal(g.calls.some((c) => c.startsWith("push")), false, "a retry must not push again");
 });
 
+await test("a retry is idempotent even after the lane has moved on", () => {
+  // FOUND IN LIVE ACCEPTANCE. The approved commit was already on the remote,
+  // the lane had committed again since, and the retry came back `head_drift` —
+  // a refusal for work that was already done. Idempotency has to be settled
+  // before drift, because a commit that is already published cannot be stale.
+  const wt = makeWorktree({ extraCommits: 2 });
+  const g = fakeGit({ remoteSha: wt.head });
+  const out = pushBranch(
+    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { git: g },
+  );
+  assert.equal(out.ok, true, out.code || out.detail);
+  assert.equal(out.idempotent, true);
+  assert.equal(g.calls.some((c) => c.startsWith("push")), false, "nothing may be pushed twice");
+
+  // POSITIVE CONTROL: with the commit NOT on the remote, a moved branch is
+  // still refused as drift.
+  const drifted = pushBranch(
+    { repository: REPO, branch: wt.branch, expected_head_sha: wt.head, worktree_path: wt.dir },
+    { git: fakeGit() },
+  );
+  assert.equal(drifted.ok, false);
+  assert.equal(drifted.code, "head_drift");
+});
+
 await test("a push publishes exactly the approved commit to exactly one ref", () => {
   const wt = makeWorktree();
   const g = fakeGit();

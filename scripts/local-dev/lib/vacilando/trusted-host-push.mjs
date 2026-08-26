@@ -139,6 +139,22 @@ export function remoteBranchSha(normalized, { gitImpl = defaultGit } = {}) {
 export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {}) {
   const cwd = normalized.worktreePath;
 
+  // IDEMPOTENCY IS SETTLED FIRST, BEFORE DRIFT.
+  //
+  // Found in live acceptance: the approved commit was already on the remote,
+  // the lane had since committed again, and a retry was refused as `head_drift`
+  // — a refusal for work that was already done. Drift exists to stop a STALE
+  // commit being published; when the approved commit is already there, there is
+  // nothing to publish and nothing to be stale about. Asking the remote first
+  // is what makes a retry safe.
+  const already = remoteBranchSha(normalized, { gitImpl });
+  if (already.ok && already.sha
+    && (already.sha === normalized.expectedHeadSha
+      || already.sha.startsWith(normalized.expectedHeadSha)
+      || normalized.expectedHeadSha.startsWith(already.sha))) {
+    return { ok: true, idempotent: true, code: "already_pushed", remoteSha: already.sha };
+  }
+
   const head = gitImpl(["rev-parse", "HEAD"], cwd);
   if (head.status !== 0) {
     return { ok: false, code: "worktree_unreadable", detail: "could not read HEAD" };
@@ -186,15 +202,8 @@ export function evaluatePushReadiness(normalized, { gitImpl = defaultGit } = {})
     }
   }
 
-  const remote = remoteBranchSha(normalized, { gitImpl });
+  const remote = already.ok ? already : remoteBranchSha(normalized, { gitImpl });
   if (!remote.ok) return { ok: false, code: remote.code, detail: remote.detail };
-
-  if (remote.sha && (remote.sha === normalized.expectedHeadSha
-    || remote.sha.startsWith(normalized.expectedHeadSha)
-    || normalized.expectedHeadSha.startsWith(remote.sha))) {
-    // Already there. A retry must read as done.
-    return { ok: true, idempotent: true, code: "already_pushed", remoteSha: remote.sha, localHead };
-  }
 
   // NON-FAST-FORWARD. Git refuses this by default; asserted here so the refusal
   // does not depend on a default staying the default, and so the reason names
