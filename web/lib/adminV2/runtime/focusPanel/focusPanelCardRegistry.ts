@@ -175,6 +175,20 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * question.
      */
     { key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
+    /*
+     * HEALTH & SAFETY — "what do I need to know to care for this child safely right now?"
+     *
+     * ── WHY NOT THE EXISTING `health` KEY ──
+     *
+     * `health` is already taken and means ENROLLMENT HEALTH: a pipeline metric with a chip and a
+     * tone, describing how an enrolment is progressing. It has nothing to do with allergies. Reusing
+     * it would have put medical facts behind a key whose whole vocabulary is about process health,
+     * and every existing consumer of `health` would have started receiving them.
+     *
+     * CHILD GRAIN ONLY, deliberately. Health is about a person, and a case panel covering several
+     * children has no single health subject — the card refuses rather than choosing one.
+     */
+    { key: "health_safety", title: "Health & Safety", ownsOperationalTruth: true, grains: ["child"] },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *

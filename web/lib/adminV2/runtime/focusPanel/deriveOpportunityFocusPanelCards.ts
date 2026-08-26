@@ -930,6 +930,20 @@ function buildCardModels(input: {
     );
 
     map.set(
+        "health_safety",
+        card({
+            key: "health_safety",
+            title: "Health & Safety",
+            // The critical fact IS the insight, and only the composed read model knows it. The case
+            // record knows nothing about allergies, so the card fills this in from its own VM.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
         "financials",
         card({
             key: "financials",

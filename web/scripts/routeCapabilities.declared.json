@@ -1875,6 +1875,14 @@
         "status": "pending"
       }
     },
+    "app/api/admin/health/card/route.ts": {
+      "GET": {
+        "status": "declared",
+        "capability": "health.view",
+        "helper": "buildHealthSafetyCardVM",
+        "note": "D-H6. Route admission is not the boundary — the caller's grants are resolved and the read model refuses without health.view, returning 403 permission_denied rather than an empty card."
+      }
+    },
     "app/api/admin/inbox/threads/[threadId]/route.ts": {
       "PATCH": {
         "status": "pending"

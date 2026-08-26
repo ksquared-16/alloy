@@ -144,6 +144,7 @@ export const FOCUS_PANEL_CARD_KEYS = [
      */
     "attendance",
     "financials",
+    "health_safety",
     /**
      * @grain person — the employee-centric Staff card.
      *

@@ -29,6 +29,7 @@ export const SYSTEM5_CARD_ARCHETYPE: Record<FocusPanelCardKey, FocusPanelCardArc
     staff: "profile",
     attendance: "timeline",
     financials: "summary",
+    health_safety: "status",
     milestones: "summary",
     scheduling: "collection",
     tasks: "collection",

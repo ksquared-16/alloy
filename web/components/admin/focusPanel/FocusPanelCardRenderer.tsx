@@ -17,6 +17,7 @@ import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
 import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
 import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
+import HealthSafetyCard from "@/components/admin/focusPanel/cards/HealthSafetyCard";
 import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
@@ -146,6 +147,12 @@ export default function FocusPanelCardRenderer({
     if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Health & Safety reads ONE child's composed health record, permission-gated server-side.
+    if (model.key === "health_safety") {
+        return (
+            <HealthSafetyCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     // Financials reads the household's composed account; a scoped child preselects the subject
