@@ -29,6 +29,8 @@ export type ValueProductionPath =
     | "structured_collection"
     /** A document the family attaches supplies it, through extraction. */
     | "upload_extraction"
+    /** Alloy computes it from canonical truth at the moment the source means. */
+    | "derived_value_writer"
     /** The source does not require a value here. */
     | "source_requires_no_value";
 
@@ -40,6 +42,8 @@ export interface ValueProductionContext {
     sourceRequiredFieldIds?: ReadonlySet<string>;
     collectionFieldIds?: ReadonlySet<string>;
     extractionFieldIds?: ReadonlySet<string>;
+    /** Field ids that exist in this schema, so a derivation cannot cite an input that is not there. */
+    presentFieldIds?: ReadonlySet<string>;
 }
 
 export interface StrandedDestination {
@@ -84,6 +88,26 @@ export function valueProductionPathFor(
     // the box in front of the person completing the document.
     if (field.read_only !== true) return { path: "participant_interaction", basis: `the participant completes this ${field.type}` };
 
+    /*
+     * A derived writer counts — but only when its inputs actually resolve.
+     *
+     * This is the difference the timing rule turns on: publication requires that a truthful writer
+     * EXISTS, not that the value exists yet. An execution date genuinely does not exist until the
+     * family submits, and requiring it to exist beforehand would be requiring the impossible. What
+     * must not pass is a declaration with nothing behind it — an age whose as-of date is not on the
+     * artifact is a story about a value, not a value.
+     */
+    if (field.derived) {
+        const d = field.derived;
+        if (d.kind === "execution_date") return { path: "derived_value_writer", basis: "the organisation-local date this artifact is executed" };
+        const sourcePresent = d.source_key ? ctx?.presentFieldIds?.has(d.source_key) !== false : false;
+        const asOfPresent = d.as_of_key ? ctx?.presentFieldIds?.has(d.as_of_key) !== false : true;
+        if (sourcePresent && asOfPresent) {
+            return { path: "derived_value_writer", basis: `computed from ${d.source_key}${d.as_of_key ? ` as of ${d.as_of_key}` : ""}` };
+        }
+        return null;
+    }
+
     if (ctx?.collectionFieldIds?.has(field.id)) return { path: "structured_collection", basis: "supplied by a structured collection" };
     if (ctx?.extractionFieldIds?.has(field.id)) return { path: "upload_extraction", basis: "supplied by extraction from an attached document" };
 
@@ -103,16 +127,25 @@ export function assertValueProduction(schema: FormSchemaV1, ctx?: ValueProductio
     const stranded: StrandedDestination[] = [];
     let required = 0;
 
+    // A derivation may only cite inputs this schema actually carries.
+    let presentFieldIds = ctx?.presentFieldIds;
+    if (!presentFieldIds) {
+        const ids = new Set<string>();
+        walkScalarFormFields(schema, (f) => ids.add(f.id));
+        presentFieldIds = ids;
+    }
+    const withPresence: ValueProductionContext = { ...ctx, presentFieldIds };
+
     walkScalarFormFields(schema, (field) => {
         if (field.required === true || ctx?.sourceRequiredFieldIds?.has(field.id)) required += 1;
-        const verdict = valueProductionPathFor(field, ctx);
+        const verdict = valueProductionPathFor(field, withPresence);
         if (!verdict) {
             const src = field.field_source;
             stranded.push({
                 field_id: field.id,
                 label: field.label,
                 type: field.type,
-                evidence: `required at source${field.required ? "" : " (requirement relinquished)"}, read_only, binding=${src ? `${src.entity_type}.${src.field_key}` : "none"}`,
+                evidence: `required at source${field.required ? "" : " (requirement relinquished)"}, read_only, binding=${src ? `${src.entity_type}.${src.field_key}` : "none"}${field.derived ? `, derived=${field.derived.kind} (inputs unresolved)` : ""}`,
             });
             return;
         }

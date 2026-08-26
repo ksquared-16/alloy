@@ -38,6 +38,8 @@ import {
     emitOpportunityEnrollmentPacketStepCompletedSafe,
 } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+import { fetchOrgTimeZoneIana } from "@/lib/admin/orgLocalDayBounds";
 import {
     extractCollectionSubmissionEnvelope,
     validateCollectionPayloadOrgSecurity,
@@ -158,6 +160,28 @@ export async function POST(
         payloadToValidate = {
             ...payloadToValidate,
             values: filterPayloadValuesToSchemaFields(schema, (payloadToValidate.values ?? {}) as Record<string, unknown>),
+        };
+    }
+
+    /*
+     * Derived destinations are filled HERE — before validation, because this is the moment the
+     * source means.
+     *
+     * "Today's Date" beside a signature is the day the family signed, and that instant does not
+     * exist until now. Filling it after validation would reject the submission for a blank the
+     * platform was about to write itself; filling it earlier would stamp the wrong day. The
+     * organisation's own zone decides which calendar day this is — a 9pm Pacific signature is not
+     * tomorrow.
+     */
+    const derivedValues = resolveFormDerivedValues(
+        schema,
+        (payloadToValidate.values ?? {}) as Record<string, unknown>,
+        { executedAtIso: new Date().toISOString(), timeZone: await fetchOrgTimeZoneIana(supabase, ctx.orgId) },
+    );
+    if (Object.keys(derivedValues).length > 0) {
+        payloadToValidate = {
+            ...payloadToValidate,
+            values: { ...((payloadToValidate.values ?? {}) as Record<string, unknown>), ...derivedValues },
         };
     }
 

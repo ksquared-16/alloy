@@ -162,6 +162,41 @@ function facetMatchesCanonicalField(facet: string, sharedValueKey: string | unde
 
 const NOISE = /\bRow\s*\d+\b|Dosis|NúMero|Apellido|Fecha\s+De|Nombre\s+De|Segundo\s+Nombre|Primer\s+Nombre/i;
 
+
+/**
+ * Declare a derived destination, from the semantics discovery already published.
+ *
+ * Two rules, and neither reads a label. The KIND comes from `derived_kind` on the proposal, so this
+ * layer computes what discovery said to compute. The INPUTS are found by canonical identity inside
+ * the same artifact — the DOB destination and the date the artifact itself calls the child's first
+ * day — because an age is only ever an age on a date, and the date this school means is the one it
+ * asks for on the same page.
+ *
+ * Returns null when the inputs are not present. A derivation whose sources are missing is not
+ * declared, so the value-production gate still sees the destination as unfilled rather than being
+ * told a story about it.
+ */
+function declareDerived(
+    kind: string | undefined,
+    fields: DraftFormField[],
+    allFields: DraftFormField[],
+): DraftFormField["derived"] | null {
+    if (kind === "execution_date") return { kind: "execution_date" };
+    if (kind !== "age_at_date") return null;
+
+    const byIdentity = (test: (key: string) => boolean) =>
+        allFields.find((f) => {
+            const k = f.field_source?.shared_value_key ?? "";
+            const c = f.field_source ? `${f.field_source.entity_type}:${f.field_source.field_key}` : "";
+            return !f.read_only && (test(k) || test(c));
+        });
+
+    const dob = byIdentity((k) => /(^|[:_])dob$|date_of_birth/i.test(k));
+    const asOf = byIdentity((k) => /(^|[:_])start_date$/i.test(k));
+    if (!dob || !asOf) return null;
+    return { kind: "age_from_date_of_birth", source_key: dob.id, as_of_key: asOf.id };
+}
+
 export function applySemanticRefinement(input: {
     draft: StoredFormDraftPreview;
     discovery: ConfigurationDiscoveryResult;
@@ -187,6 +222,7 @@ export function applySemanticRefinement(input: {
      * three prompts. The first prompt keeps the canonical field; the others are their own facts.
      */
     const identityOwner = new Map<string, string>();
+    const pendingDerived: { kind: string; fields: DraftFormField[] }[] = [];
 
     concepts.forEach((concept, index) => {
         const proposal = proposalByCandidate.get(concept.id);
@@ -259,8 +295,20 @@ export function applySemanticRefinement(input: {
             // packet would never submit. The requirement is relinquished with the question, and
             // named in the report, because an obligation that disappears without being recorded is
             // the defect this whole pass exists to stop.
+            /*
+             * A destination Alloy fills rather than asks — resolved in a SECOND pass.
+             *
+             * A derivation cites its inputs by canonical identity, and those identities are assigned
+             * by this very loop. "Student Age Upon Enrolling" is printed before the box the school
+             * calls the child's first day, so at this moment the date it needs has no identity yet.
+             * Deferring the declaration is the difference between finding the reference date and
+             * quietly falling back to today.
+             */
+            const derivedKind = (conceptProposal as { derived_kind?: string }).derived_kind;
+            if (derivedKind) pendingDerived.push({ kind: derivedKind, fields });
             for (const field of fields) {
                 field.read_only = true;
+                if (derivedKind) continue; // requiredness decided in the second pass
                 if (field.required) {
                     field.required = false;
                     report.relinquishedRequirements.push({
@@ -373,6 +421,25 @@ export function applySemanticRefinement(input: {
         });
         }
     });
+
+    for (const { kind, fields } of pendingDerived) {
+        const derived = declareDerived(kind, fields, input.draft.fields);
+        for (const field of fields) {
+            if (derived) {
+                field.derived = derived;
+                continue; // stays required: something WILL fill it
+            }
+            if (field.required) {
+                field.required = false;
+                report.relinquishedRequirements.push({
+                    field_id: field.id,
+                    label: field.label,
+                    role: "artifact_placement_only",
+                    basis: `declared derivable (${kind}) but its inputs are not on this artifact`,
+                });
+            }
+        }
+    }
 
     for (const identity of destinationsPerIdentity.keys()) {
         report.sharedIdentities += 1;

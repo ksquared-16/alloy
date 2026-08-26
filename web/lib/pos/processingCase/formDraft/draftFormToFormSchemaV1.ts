@@ -35,6 +35,8 @@ function mapDraftField(f: DraftFormField): FormField {
         ...(field_source ? { field_source } : {}),
         // Placement without interrogation: the destination renders, the participant is not asked.
         ...(f.read_only ? { read_only: true } : {}),
+        // …and, when Alloy fills it, the declaration of what fills it.
+        ...(f.derived ? { derived: f.derived } : {}),
         // Source-declared validation travels onto the published field. `formValidateRulesSchema` is
         // the existing owner; nothing new is invented here.
         ...(f.validate && Object.keys(f.validate).length ? { validate: f.validate } : {}),

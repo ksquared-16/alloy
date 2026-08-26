@@ -23,7 +23,7 @@
  * Pure + deterministic. No I/O.
  */
 
-import type { BusinessConceptCandidate } from "./contracts";
+import type { BusinessConceptCandidate, DerivedValueKind } from "./contracts";
 import { ownershipHoldFor, type OwnershipHoldState } from "./canonicalOwnershipHolds";
 import { safeguardingConceptKind } from "./safeguardingConcepts";
 import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
@@ -53,6 +53,8 @@ export interface OwnershipRouting {
     basis: string;
     /** Present only for `CANONICAL_FIELD` and `PROCESS_PARTICIPANT` — the destination that exists. */
     destination?: FormFieldSource;
+    /** For `DERIVED_SYSTEM`: which derivation, structurally — what a consumer computes. */
+    derivedKind?: DerivedValueKind;
     /** For `DERIVED_SYSTEM`: what it is derivable from, so the operator can check the reasoning. */
     derivedFrom?: string;
     /**
@@ -258,6 +260,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
     if (AGE_AT_A_DATE.test(text)) {
         return {
             owner: "DERIVED_SYSTEM",
+            derivedKind: "age_at_date",
             derivedFrom: "date of birth and the enrolment start date",
             bulkAcceptSafe: false,
             basis:
@@ -267,6 +270,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
     if (SIBLING_EXISTENCE.test(text)) {
         return {
             owner: "DERIVED_SYSTEM",
+            derivedKind: "household_membership",
             derivedFrom: "the other children in this household",
             bulkAcceptSafe: false,
             basis:
@@ -281,6 +285,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
     if (suggestion?.special === "signature_date" || suggestion?.special === "submission_date") {
         return {
             owner: "DERIVED_SYSTEM",
+            derivedKind: "execution_date",
             derivedFrom: suggestion.special === "signature_date" ? "when the form was signed" : "when the form was submitted",
             bulkAcceptSafe: false,
             basis:

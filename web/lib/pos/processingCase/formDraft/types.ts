@@ -40,6 +40,8 @@ export interface DraftFormField {
      * It must not also become a question.
      */
     read_only?: boolean;
+    /** Alloy fills this destination from canonical truth; it is never asked. */
+    derived?: { kind: "age_from_date_of_birth" | "execution_date"; source_key?: string; as_of_key?: string };
     /** Basic layout hint: "half" pairs with the next half into a 2-up row (FormSchemaV1 layout_width). */
     layout_width?: "full" | "half" | "third" | "quarter";
     description?: string;

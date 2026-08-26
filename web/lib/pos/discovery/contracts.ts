@@ -315,6 +315,9 @@ export interface ProposalAlternative {
     confidence: Confidence;
 }
 
+/** Structured derivations discovery can declare. Prose lives in `derived_from`. */
+export type DerivedValueKind = "age_at_date" | "execution_date" | "household_membership";
+
 export interface ConfigurationProposal {
     contract_version: string;
     /** Stable id: same lineage slug as the candidate it serves. */
@@ -334,6 +337,14 @@ export interface ConfigurationProposal {
     target_safeguarding_kind?: SafeguardingRestrictionKind;
     /** Matched requirement type (upload/acknowledgement/signature). */
     target_requirement_type?: RequirementType;
+    /**
+     * For `derived_value_system`: WHICH derivation, structurally.
+     *
+     * `derived_from` explains the reasoning to an operator; this says what to compute. Realization
+     * consumes the kind, so a derived destination is filled because discovery declared its
+     * semantics — never because a downstream layer recognised a label.
+     */
+    derived_kind?: DerivedValueKind;
     /**
      * For an upload requirement: the canonical document classification the requested document
      * already has a name for. Absent means Alloy has no document type for what is being asked —

@@ -543,6 +543,7 @@ function routedProposal(
             return {
                 ...common,
                 disposition: "derived_value_system",
+                ...(routing.derivedKind ? { derived_kind: routing.derivedKind } : {}),
                 confidence: conf("high", [`Alloy derives this from ${routing.derivedFrom ?? "canonical truth"}`]),
                 explanation: `"${concept.label}" does not need a field — Alloy already knows it from ${routing.derivedFrom ?? "canonical truth"}. ${routing.basis}`,
             };
