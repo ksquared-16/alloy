@@ -256,3 +256,35 @@ describe("a required box owned elsewhere", () => {
         expect(report.relinquishedRequirements).toEqual([]);
     });
 });
+
+describe("what a packet asks of a family besides questions", () => {
+    const act = (key: string, kind: string, label: string, disposition: string, type = "text") => ({
+        c: { key, kind, labels: [label], disposition },
+        f: [{ id: "f0", label, type, required: true }] as never,
+    });
+
+    it("never hides a signature — the packet would render with nowhere to sign", () => {
+        const { c, f } = act("signature.participant", "signature", "Signature1", "signature_requirement", "signature");
+        const { draft: out, report } = applySemanticRefinement({ draft: draftOf(f), discovery: discoveryOf([c]) });
+        expect(out.fields[0]!.read_only).toBe(false);
+        expect(out.fields[0]!.type).toBe("signature");
+        expect(out.fields[0]!.required).toBe(true);
+        expect(report.relinquishedRequirements).toEqual([]);
+    });
+
+    it("keeps an acknowledgement and an upload in front of the participant", () => {
+        const ack = act("requirement.acknowledgement.x", "acknowledgement", "I have received information regarding the benefits and risk of immunizations.", "acknowledgement", "boolean");
+        const up = act("requirement.upload.y", "upload_requirement", "Immunization record", "upload_requirement", "file_ref");
+        const a = applySemanticRefinement({ draft: draftOf(ack.f), discovery: discoveryOf([ack.c]) });
+        const u = applySemanticRefinement({ draft: draftOf(up.f), discovery: discoveryOf([up.c]) });
+        expect(a.draft.fields[0]!.read_only).toBe(false);
+        expect(u.draft.fields[0]!.read_only).toBe(false);
+        expect(u.draft.fields[0]!.type).toBe("file_ref");
+    });
+
+    it("leaves an act's wording exactly as the source wrote it", () => {
+        const { c, f } = act("requirement.acknowledgement.z", "acknowledgement", "I certify that the information on the form is an accurate record of this child's immunizations.", "acknowledgement", "boolean");
+        const { draft: out } = applySemanticRefinement({ draft: draftOf(f), discovery: discoveryOf([c]) });
+        expect(out.fields[0]!.label).toBe("I certify that the information on the form is an accurate record of this child's immunizations.");
+    });
+});

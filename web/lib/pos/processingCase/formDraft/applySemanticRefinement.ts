@@ -21,7 +21,7 @@ import type { ConfigurationDiscoveryResult } from "@/lib/pos/discovery/contracts
 import { OPERATIONAL_FORM_SYSTEM_FIELDS, PHONE_PATTERN, EMAIL_PATTERN } from "@/lib/forms/systemFieldRegistry";
 import { draftFieldsForConcept } from "@/lib/pos/discovery/applyDiscovery";
 import type { StoredFormDraftPreview, DraftFormField, DraftFormFieldType } from "./types";
-import { isAsked, projectParticipantRole, semanticTypeFor, type ParticipantProjection } from "./participantQuestionEligibility";
+import { isParticipantFacing, PARTICIPANT_ACT_ROLES, projectParticipantRole, semanticTypeFor, type ParticipantProjection } from "./participantQuestionEligibility";
 
 export type SemanticRefinementReport = {
     /** Concepts by the role they resolved to. */
@@ -209,7 +209,7 @@ export function applySemanticRefinement(input: {
         report.destinationsByRole[projection.role] = (report.destinationsByRole[projection.role] ?? 0) + fields.length;
         if (projection.role === "hold_for_review") report.unresolved.push(`${concept.concept_key ?? concept.id}`);
 
-        if (!isAsked(projection.role) && projection.role !== "dependent_question" && projection.role !== "process_scoped") {
+        if (!isParticipantFacing(projection.role)) {
             // Placed, not asked. Geometry and lineage are untouched — only interrogation stops.
             //
             // A destination the SOURCE marked required cannot be both hidden and mandatory: the
@@ -247,6 +247,17 @@ export function applySemanticRefinement(input: {
         const canonicalBase =
             [...bases].find((b) => facetMatchesCanonicalField(b, projection.sharedValueKey)) ??
             (bases.size === 1 ? [...bases][0]! : null);
+
+        if (PARTICIPANT_ACT_ROLES.includes(projection.role)) {
+            // Signing, acknowledging, attaching, or ticking the exemption being claimed. The source
+            // already worded these and the reader already typed them; nothing here needs renaming,
+            // and a shared identity would be meaningless for an act.
+            for (const field of fields) {
+                field.read_only = false;
+                report.destinationsByRole[projection.role] = report.destinationsByRole[projection.role] ?? 0;
+            }
+            return;
+        }
 
         fields.forEach((field, fi) => {
             const facet = facets[fi]!;

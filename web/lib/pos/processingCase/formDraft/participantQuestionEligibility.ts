@@ -268,6 +268,34 @@ export function isAsked(role: ParticipantRole): boolean {
 }
 
 /**
+ * Roles the participant must still ACT on, question or not.
+ *
+ * Being asked a question is only one of the things a packet asks of a family. Signing is an act, so
+ * is acknowledging, so is attaching a document, and so is ticking the exemption a family is
+ * claiming. A model that recognised only questions marked all five signatures placement-only — the
+ * packet would have rendered with nowhere to sign.
+ *
+ * `dependent_question` and `process_scoped` are here because they are asked; they are simply asked
+ * conditionally, or asked without being stored durably.
+ */
+export const PARTICIPANT_FACING_ROLES: readonly ParticipantRole[] = [
+    ...ASKED_ROLES,
+    "dependent_question",
+    "process_scoped",
+    "signature",
+    "acknowledgement",
+    "upload",
+    "artifact_structured_control",
+];
+
+export function isParticipantFacing(role: ParticipantRole): boolean {
+    return PARTICIPANT_FACING_ROLES.includes(role);
+}
+
+/** Acts, not questions: the participant does something here, and the wording is already the source's. */
+export const PARTICIPANT_ACT_ROLES: readonly ParticipantRole[] = ["signature", "acknowledgement", "upload", "artifact_structured_control"];
+
+/**
  * The four settled decisions for concepts the model cannot name on its own.
  *
  * Each keys on a SEMANTIC property — the concept's grain, its artifact, its structural shape, its
