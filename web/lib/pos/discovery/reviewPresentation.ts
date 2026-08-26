@@ -91,9 +91,21 @@ export const REVIEW_SECTIONS: readonly ReviewSection[] = [
  * Everything else — a binding, a derived value, a held concept with a named owner, an obligation — is
  * a conclusion the operator can inspect rather than make.
  */
+/**
+ * Obligations that become executable requirements. One of these must be decided by SOMEBODY.
+ *
+ * The hole this closes: a clause-level upload at `review` confidence was neither bulk-safe nor
+ * claimed here, so nobody could approve it and it silently never executed — four document
+ * requirements that the review reported finding and the packet never asked for.
+ */
+const EXECUTABLE_OBLIGATIONS = new Set(["upload_requirement", "acknowledgement", "signature_requirement"]);
+
 export function needsOperatorReview(p: Pick<ConfigurationProposal,
     "disposition" | "confidence" | "validation_issues" | "ownership_routing" | "refused_binding">): boolean {
     if (p.disposition === "held_unknown_owner" || p.disposition === "unresolved") return true;
+    // An obligation that cannot be auto-accepted must be someone's decision. Conclusions the
+    // operator only inspects — held, derived, financial, reuse — are deliberately not swept in.
+    if (EXECUTABLE_OBLIGATIONS.has(p.disposition) && !isBulkAcceptSafe(p)) return true;
     if (p.disposition === "safeguarding_binding") return true;
     if (p.disposition === "create_proposed_field") return true;
     if (p.validation_issues.length > 0) return true;

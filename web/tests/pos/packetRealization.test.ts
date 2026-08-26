@@ -40,6 +40,7 @@ function harness() {
         publishVersion: async (a) => { published.add(a.versionId); },
         insertPacketDefinition: async (a) => { const r = { id: id("pkt"), ...a }; packets.push(r); return { id: r.id }; },
         insertPacketItem: async (a) => { const r = { id: id("item"), ...a }; items.push(r); return { id: r.id }; },
+        loadDiscoveryDecisions: async () => [],
         loadRealization: async () => saved,
         saveRealization: async (a) => { saved = a.realization; },
     };

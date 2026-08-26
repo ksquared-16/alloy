@@ -17,6 +17,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildPacketIntakeForCaseSafe } from "@/lib/pos/packetIntake/buildPacketIntakeForCaseSafe";
 import { dbLoadPacketReview } from "@/lib/pos/packetIntake/packetIntakeDb";
+import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
+import { fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
+import type { DiscoveryDecisionRecord } from "@/lib/pos/discovery/reconciliation";
+import type { ConfigurationDiscoveryResult, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { structureForArtifact } from "@/lib/pos/processingCase/structure/structureForArtifact";
 import { buildFormDraftFromStructure } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
@@ -68,8 +72,17 @@ export interface CreatePacketDeps {
     publishVersion(a: { orgId: string; versionId: string; userId: string }): Promise<void>;
     insertPacketDefinition(a: { orgId: string; key: string; name: string; metadata: Record<string, unknown> }): Promise<{ id: string }>;
     insertPacketItem(a: { orgId: string; packetDefinitionId: string; formDefinitionId: string; pinnedVersionId: string | null; sequenceIndex: number; metadata: Record<string, unknown> }): Promise<{ id: string }>;
+    /** The case's persisted discovery decisions — the operator's approvals, never reconstructed. */
+    loadDiscoveryDecisions(a: { orgId: string; caseId: string }): Promise<DiscoveryDecisionRecord[]>;
     loadRealization(a: { orgId: string; caseId: string }): Promise<PacketRealization | null>;
     saveRealization(a: { orgId: string; caseId: string; realization: PacketRealization }): Promise<void>;
+}
+
+/** The source's own discovery result, rebuilt from the stored packet analysis. */
+function discoveryFor(packet: { source_analysis: Record<string, { concepts: unknown[]; proposals: unknown[] }> }, documentId: string): ConfigurationDiscoveryResult | null {
+    const a = packet.source_analysis?.[documentId];
+    if (!a) return null;
+    return { contract_version: "fp16.0", concepts: a.concepts, proposals: a.proposals, summary: [], warnings: [] } as unknown as ConfigurationDiscoveryResult;
 }
 
 export async function createPacketFromProcessingAnalysis(
@@ -95,6 +108,7 @@ export async function createPacketFromProcessingAnalysis(
         for (const d of review) if (d.decision === "renamed" && d.subject === "artifact" && d.name) named.set(d.subject_id, d.name);
 
         const inputByDoc = new Map(inputs.map((i) => [i.artifact.document_id, i]));
+        const decisionRecords = await deps.loadDiscoveryDecisions(args);
         const formKeys = await deps.listFormKeys(args.orgId);
         const warnings: string[] = [];
         const realized: RealizedArtifact[] = [];
@@ -112,7 +126,7 @@ export async function createPacketFromProcessingAnalysis(
             }
 
             const name = named.get(artifact.id) ?? artifact.title;
-            const draft = buildFormDraftFromStructure({
+            const draft0 = buildFormDraftFromStructure({
                 structure: projected.structure,
                 sourceDocumentId: artifact.document_id,
                 extractedText: null,
@@ -120,7 +134,26 @@ export async function createPacketFromProcessingAnalysis(
                 fileName: null,
                 classificationKey: null,
             });
-            const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...draft, title: name, generated_form_name: name }));
+
+            // THE STEP THIS SERVICE USED TO SKIP.
+            //
+            // A clause-level upload becomes a `file_ref` only because `applyDiscovery` attaches the
+            // approved obligation to its section. Building the schema straight from the projected
+            // structure produced Forms that looked complete and asked for no documents at all — the
+            // packet would never have requested the immunization record.
+            //
+            // The decisions are the operator's, rehydrated from what the tenant stored. Because the
+            // draft holds only this artifact's sections, an obligation lands on the artifact whose
+            // clause raised it and nowhere else.
+            const discovery = discoveryFor(packet, artifact.document_id);
+            const decisions: Record<string, ProposalDecisionState> = discovery
+                ? fromDecisionRecords(discovery, decisionRecords)
+                : {};
+            const { updatedDraft } = discovery
+                ? applyDiscovery({ draft: draft0, discovery, decisions })
+                : { updatedDraft: draft0 };
+
+            const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...updatedDraft, title: name, generated_form_name: name }));
             if (!parsed.success) return { ok: false, code: "invalid_schema", message: `Artifact ${artifact.id} did not validate as a form schema.` };
 
             const key = allocateUniqueKey(slugKeyFromDisplayName(name), formKeys);
@@ -254,6 +287,11 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Crea
                 .select("id").single();
             if (error) throw new Error(error.message);
             return { id: (data as { id: string }).id };
+        },
+        async loadDiscoveryDecisions({ orgId, caseId }) {
+            const raw = (await caseMeta(orgId, caseId))["configuration_discovery_decisions"];
+            const list = raw && typeof raw === "object" ? (raw as { decisions?: unknown }).decisions : null;
+            return Array.isArray(list) ? (list as DiscoveryDecisionRecord[]) : [];
         },
         async loadRealization({ orgId, caseId }) {
             const raw = (await caseMeta(orgId, caseId))[PACKET_REALIZATION_METADATA_KEY];
