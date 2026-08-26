@@ -1937,6 +1937,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-ck-paths li{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;color:var(--ink-2);overflow-wrap:anywhere;margin:1px 0;}
 .gw-ck-paths li.gw-ck-more{font-family:inherit;font-style:italic;}
 .gw-ck-note{margin:8px 0 0;font-size:12px;color:var(--ink-3);}
+/* The answer to "did my approval actually do anything?" — one quiet line. */
+.gw-gv-outcome{display:flex;gap:8px;align-items:flex-start;margin:6px 0 0;padding:6px 10px;border-radius:8px;background:var(--card);border:1px solid var(--line);font-size:12px;}
+.gw-gv-outcome.is-ok .gw-gv-mark{color:var(--ok, #2f855a);}
+.gw-gv-outcome.is-failed .gw-gv-mark{color:var(--blocked, #c53030);}
+.gw-gv-mark{font-weight:700;line-height:1.4;}
+.gw-gv-text{color:var(--ink-2);overflow-wrap:anywhere;}
 /* Governed proposal card — the facts a Director weighs before authorizing.
    Two columns where there is room, stacked where there is not, so the same
    markup is legible on a phone without a second layout to keep in step. */

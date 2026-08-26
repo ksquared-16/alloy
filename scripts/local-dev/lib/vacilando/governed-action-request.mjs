@@ -517,6 +517,57 @@ export function pendingGovernedActionForLane(laneId, root = runtimeRoot()) {
   return newestPending(listGovernedActions({ laneId: lane, root }));
 }
 
+/**
+ * The most recently RESOLVED governed action for a lane.
+ *
+ * The approval card exists only while a request is PENDING, so the moment a
+ * Director approves, it disappears — identically whether the action succeeded
+ * or failed. Hiding a resolved card was the right fix for a stale button; it
+ * still leaves the operator with silence. "Unsure if the authorize push click
+ * actually worked" is the consequence, and the answer was in the record the
+ * whole time.
+ */
+export function lastResolvedGovernedActionForLane(laneId, root = runtimeRoot()) {
+  if (!laneId) return null;
+  const lane = canonicalLaneStoreId(laneId, root);
+  const resolved = listGovernedActions({ laneId: lane, root })
+    .filter((r) => r.status === "complete" || r.status === "failed");
+  if (!resolved.length) return null;
+  return resolved.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
+}
+
+/**
+ * What actually happened, in the terms the operator asked in.
+ *
+ * Read from the trusted-host RESULT rather than restating the request, because
+ * the question is never "what did I ask for" — it is "did it land". Bounded, and
+ * it names only identifiers that are already public.
+ */
+export function governedOutcomeFor(req) {
+  if (!req || (req.status !== "complete" && req.status !== "failed")) return null;
+  const ok = req.status === "complete";
+  const r = req.result || {};
+  let detail = null;
+  if (ok) {
+    if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH && r.pushedSha) {
+      detail = `${r.branch || "branch"} is on the remote at ${String(r.pushedSha).slice(0, 12)}${r.idempotent ? " (already there)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR && r.pullRequestNumber) {
+      detail = `pull request #${r.pullRequestNumber} into ${r.base || "staging"}${r.reused ? " (already open)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST && (r.merge_sha || r.mergeSha)) {
+      detail = `merged as ${String(r.merge_sha || r.mergeSha).slice(0, 12)}`;
+    }
+  }
+  return {
+    ok,
+    action_key: req.action_key,
+    title: req.title || req.action_key,
+    at: req.updated_at || null,
+    approved_by: req.operator_approval?.actor || null,
+    detail: detail || (ok ? "completed" : bound(req.failure_reason || req.failure_code, 240)),
+    failure_code: ok ? null : (req.failure_code || null),
+  };
+}
+
 export function latestGovernedActionForMission(missionId, root = runtimeRoot()) {
   if (!missionId) return null;
   const list = listGovernedActions({ missionId, root });
@@ -2088,11 +2139,16 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
       // snapshot. Runtime Performance's push completed; previous_run still
       // said awaiting_operator, so Authorize push stayed on screen and the
       // click looked like a no-op (already complete + "Census authorized").
+      // Hiding the resolved card stops a stale button; it does not tell the
+      // operator what happened. Report the last resolved decision alongside it,
+      // so an approval that has just vanished from the screen still has an
+      // answer on the screen.
+      const outcome = governedOutcomeFor(lastResolvedGovernedActionForLane(hydrated?.lane_id, root));
       const snapshot = hydrated.governed_action;
       if (snapshot && !isPendingGovernedStatus(snapshot.status)) {
-        return { ...hydrated, governed_action: null };
+        return { ...hydrated, governed_action: null, last_governed_outcome: outcome };
       }
-      return hydrated;
+      return outcome ? { ...hydrated, last_governed_outcome: outcome } : hydrated;
     }
     const pub = publicGovernedAction(pending);
     const withAction = (r) => (r

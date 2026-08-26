@@ -74,7 +74,7 @@ const {
 const { DIRECTOR_GOVERNED_RESOURCE_KEY, orchestrateDirectorGovernedWait, processGovernedAction } =
   await import("../lib/vacilando/governed-action-request.mjs");
 const { repositoryStorePath } = await import("../lib/vacilando/repository-registry.mjs");
-const { renderGovernedProposal, renderOperatorDecisionActions, renderOperatorDecisionBar, operatorDecisionRun } =
+const { renderGovernedProposal, renderOperatorDecisionActions, renderOperatorDecisionBar, operatorDecisionRun, renderGovernedOutcome } =
   await import("../apps/vacilando/public/gateway-view.mjs");
 const { attachLaneGovernedActions } = await import("../lib/vacilando/governed-action-request.mjs");
 
@@ -679,6 +679,54 @@ await test("nothing is widened when no approval is waiting", () => {
 await test("an active run with an approval is unchanged", () => {
   const active = { run_id: "erun_a", state: "WAITING_RESOURCE", governed_action: { status: "awaiting_operator", request_id: "gar_1" } };
   assert.equal(operatorDecisionRun({ execution_run: active, previous_run: null }), active);
+});
+
+await test("a resolved approval still says what it did", async () => {
+  // "Unsure if the authorize push click actually worked." The approval card
+  // exists only while a decision is PENDING, so approving makes it vanish — the
+  // same way whether the action succeeded or failed. Hiding a resolved card
+  // stops a stale button; it still leaves the operator with silence.
+  const { governedOutcomeFor, lastResolvedGovernedActionForLane } =
+    await import("../lib/vacilando/governed-action-request.mjs");
+
+  const pushed = {
+    status: "complete", action_key: "repository.push", title: "Push a branch",
+    updated_at: new Date().toISOString(), operator_approval: { actor: "operator" },
+    result: { branch: "agent/x/y", pushedSha: "daf798525724fb48678dcdb3f00d01313d9ab17e" },
+  };
+  const out = governedOutcomeFor(pushed);
+  assert.equal(out.ok, true);
+  assert.match(out.detail, /agent\/x\/y is on the remote at daf798525724/);
+  const html = renderGovernedOutcome({ last_governed_outcome: out });
+  assert.match(html, /data-gw-governed-outcome/);
+  assert.match(html, /daf798525724/);
+  assert.match(html, /approved by operator/);
+
+  // A failure says so, and says why.
+  const failed = governedOutcomeFor({
+    status: "failed", action_key: "repository.push", title: "Push a branch",
+    failure_code: "non_fast_forward", failure_reason: "the remote has commits this push would discard",
+  });
+  assert.equal(failed.ok, false);
+  assert.match(failed.detail, /would discard/);
+  assert.match(renderGovernedOutcome({ last_governed_outcome: failed }), /is-failed/);
+
+  // Merge and promotion read from their own results.
+  assert.match(governedOutcomeFor({ status: "complete", action_key: "promotion.open_pr",
+    result: { pullRequestNumber: 515, base: "staging" } }).detail, /pull request #515 into staging/);
+  assert.match(governedOutcomeFor({ status: "complete", action_key: "repository.merge_pull_request",
+    result: { merge_sha: "f22438b72c5f0f87ddf07b387a1419e31e48d978" } }).detail, /merged as f22438b72c5f/);
+  assert.match(governedOutcomeFor({ status: "complete", action_key: "repository.push",
+    result: { branch: "b", pushedSha: "abc1234567890", idempotent: true } }).detail, /already there/);
+
+  // POSITIVE CONTROLS. A pending decision is not an outcome — otherwise the
+  // line would appear beside the very card that is still asking. And a lane that
+  // has never had a governed decision renders nothing at all.
+  assert.equal(governedOutcomeFor({ status: "awaiting_operator", action_key: "repository.push" }), null);
+  assert.equal(governedOutcomeFor({ status: "requested", action_key: "repository.push" }), null);
+  assert.equal(governedOutcomeFor(null), null);
+  assert.equal(renderGovernedOutcome({}), "");
+  assert.equal(lastResolvedGovernedActionForLane(null, ROOT), null);
 });
 
 function readMergeSource() {
