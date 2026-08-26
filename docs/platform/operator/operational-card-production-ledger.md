@@ -1622,3 +1622,133 @@ would let one click move a child to another campus.
 
 `inspect` reports `missing: []`, `ambiguous: []`. Both children verify green with one live journey,
 one agreement and a resolvable attendance subject. Financials has not been started.
+
+---
+
+## 28. Financials production vertical (2026-08-26)
+
+### 28.1 Current-state audit — what already existed
+
+Most of this vertical was already built. The audit's job was to find that out before writing anything.
+
+| Fact | Classification | Owner |
+|---|---|---|
+| charges, charge_line_items | READY | `public.charges` |
+| charge categories | READY | `charges.charge_category`, 10-value CHECK + `CHARGE_CATEGORY_LABEL` |
+| charge templates | READY | `financial_charge_templates` + `listChargeTemplates` |
+| billable source | READY | `charges.billable_source_type/_id` (`job` \| `enrollment_agreement`) |
+| child attribution | DERIVABLE_CANONICALLY | agreement → `customer_member_id` |
+| billing period | DERIVABLE_CANONICALLY | `charges.billable_on` |
+| future dating | READY | template `billable_on_strategy`; future `billable_on` = *scheduled* |
+| credits / adjustments / funding | READY | categories `discount`, `credit`, `adjustment`, `subsidy_offset`; corrections via `source_charge_id` |
+| due / posting dates | READY | `due_date`, `posted_at`, `occurs_on`, `billable_on` |
+| GL accounts | READY | `gl_accounts` (10 configured in the cert tenant) |
+| GL mappings (write) | MISSING_CANONICAL_SEAM | read-only route; **0 mappings in the tenant** |
+| payment methods | READY (thin) | `customer_payment_methods` (Stripe, no org_id) |
+| payments for enrollment accounts | MISSING_CANONICAL_SEAM | `payments.job_id` is NOT NULL |
+| autopay | MISSING_CANONICAL_SEAM | exists only in card-lab fixtures |
+| payer responsibility (default party) | READY | `resolveChargeResponsibility` |
+| payer splits | OWNED_BY_ANOTHER_PLATFORM | Processing |
+| household billable source | MISSING_CANONICAL_SEAM | `HOUSEHOLD_BILLABLE_SOURCE = MISSING` |
+| record-level Financials read model | MISSING | built here |
+| registered financial actions | MISSING | `charge.add`, `charge.post` registered here |
+
+### 28.2 Three audit findings that changed the build
+
+1. **`payments` was never generalized.** Only `charges` and `ledger_transactions` gained
+   `billable_source_*`; `payments.job_id` is still NOT NULL. A childcare payment has no canonical
+   seam, so the read model REPORTS that as an unavailability. Summing to zero and printing
+   "$0.00 paid" would state something the platform cannot know.
+2. **The charge→GL chain is not the Tuition chain.** §9 named
+   `commercial_revenue_categories → mapped_gl_account_id → gl_accounts`; that is real and is the
+   Tuition/Catalog path. A charge carries no `revenue_category_id`, and revenue categories have no
+   key column — only a unique label — so nothing joins them. A charge travels
+   `metadata.gl_mapping_key → gl_account_mappings.key → gl_accounts`. Both end at `gl_accounts`.
+3. **The period is `billable_on`, not a new column.** Its own schema comment already defines the
+   lifecycle ("a draft with billable_on in the future is scheduled"). `posted_at` was the tempting
+   alternative and is wrong: a September charge posted in October would silently move periods and
+   change a closed period's totals.
+
+### 28.3 The financial grammar, as implemented
+
+```text
+gross (tuition · deposit · consumable_fee · late_pickup · one_time · fee)
++ discounts/credits (discount · credit)
++ funding (subsidy_offset)
++ adjustments (adjustment)
+= responsibility            ← the SUM OF EVERY OWED LINE, so it cannot drift from the rows
+− payments received         ← structurally 0; reported as unavailable, not shown
+= balance
+
+scheduled   drafts whose billable_on has not arrived   STATED BESIDE the balance, never inside it
+draft       drafts whose billable date has arrived     neither owed nor scheduled
+past due    owed · unpaid · due_date < today
+```
+
+Classification is by CATEGORY and summation is of SIGNED amounts, because the schema constrains only
+`amount_cents <> 0` and does not enforce a sign convention. The breakdown therefore reads correctly
+however a row was written, and the total still reconciles.
+
+### 28.4 Defects found by running it
+
+* **A total that did not reconcile to its rows.** The card showed `$100.00` account-wide above a
+  ledger filtered to one child's `$75`. Reconciliation is now computed per subject in the same
+  server composition — no round trip on filter change, and no second implementation of the rule.
+* **`entity_type: "child"` was rejected.** `/api/admin/actions/execute` routes to the Command Runtime
+  facade only for known Platform Capabilities; everything else falls back to `executeAdminAction`,
+  whose `mapEntityToTable` admits only opportunity/job/schedule. Registering a `RegisteredAction` is
+  not enough — the capability must be registered too. A new `financial` capability family was added.
+* **Summary and expanded rendered identically**, which made `Details →` a no-op. The ledger is now
+  the expanded representation, with a shallow one-line top.
+* **Add Charge disappeared when expanded** — it was nested inside the Current Period band, i.e.
+  absent from the density where an operator actually works the ledger.
+* **`description` was the template KEY** (`field_trip`). The tenant's configured label is resolved
+  and the key is never rendered.
+* **An unguarded `settled.context.businessProcess.stages`** crashed six child-mission guard tests.
+  The two lines above it were `??`-guarded and passed; the explicitly-named line was not. Spreading
+  preserves every field including ones added later, which is what its own comment asked for.
+
+### 28.5 A repair that made things worse, and was reverted
+
+The certification episode was restored with `work_unit_id: null` while `create_lead` resolves one, so
+the family is reachable at child grain and invisible at family grain. Binding it to the stage's own
+`lifecycle_wu_lead` looked like the faithful repair.
+
+It was not. With the episode bound, the `all` and `active-pipeline` lenses went from **one row to
+zero** — the certification case did not appear and the real family that had been there disappeared
+with it. Unbinding restored the lens. `repair` now clears the binding on every run, which also
+self-heals the run that introduced it.
+
+> A fixture may not degrade a lens that serves real records. The cost is that compact is certified on
+> a real family with nothing billable rather than on the certification family's balance.
+
+### 28.6 Browser certification — `/workspace/work-unit/enrolled-children`
+
+Zero page errors, zero failed requests.
+
+| Check | Observed |
+|---|---|
+| A · child charge | Registration fee $75.00 → Certa, via the registered action |
+| B · second child | Late pickup $25.00 → Certb |
+| C · future charge | Field trip, event date 2026-09-18, `billable_on` **2026-10-01** (next_billing_cycle) → *scheduled*; Materials, offset_days 7 → 2026-09-02 → *scheduled* |
+| D · current period | gross $100.00 = responsibility = balance; August period total $100.00 — reconciles to the two posted rows |
+| E · past due | **not reachable** — neither `writeTemplateDraftCharge` nor `postChildcareCharge` sets `due_date`, so no safe certification scenario produces one |
+| F · subject filtering | All 4 rows / 3 periods / $100.00 · Certb 2 rows / $25.00 · Certa 2 rows / $75.00 — each total reconciles to its own rows; 36–49 ms |
+| G · ledger periods | **three**: October 2026, September 2026, August 2026 |
+| H · GL | every row `Unmapped` — the tenant has 10 GL accounts and **0 mappings**, and mappings have no canonical write seam. Explicit, never blank |
+| I · Add Charge | menu offers the four configured labels with amounts (no keys) → commit → 4 → 5 rows, refreshed in place, no reload |
+| J · compact | case grain, real family, truthfully "No enrollment agreement, so there is nothing billable yet"; 368 ms |
+| K · summary | V5 **8/12** with Billing Preview as the real 4/12 companion; 143–169 ms |
+| L · expanded | shallow top + ledger-first detail; 68–99 ms |
+
+### 28.7 Surface placement
+
+Case grain went through the Surfaces builder: **v132 → v133**. A code default is invisible at that
+grain, which is why the card did not appear until it was authored. Child-in-lens placement is the
+code composition at 8/12 with Billing Preview at 4/12.
+
+### 28.8 Truthful omissions
+
+`HOUSEHOLD_BILLABLE_SOURCE = MISSING` — no Household subject option. No payer filter, no split
+percentages, no autopay state, no payments line. No `Pay now`, because nothing can take a payment.
+Each is named in the read model's `unavailable` list and rendered as absence.

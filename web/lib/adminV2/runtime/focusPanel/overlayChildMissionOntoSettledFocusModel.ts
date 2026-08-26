@@ -207,17 +207,23 @@ export function overlayChildMissionOntoSettledFocusModel(
                       stageLabel: situation?.stageLabel ?? null,
                   }
                 : settled.context.participantScope,
+            /*
+             * PRESERVED, NOT REBUILT. This overlay changes the MISSION — which stage the operator is
+             * being pointed at — and nothing else about the process.
+             *
+             * It used to rebuild the struct field by field, naming `stages` explicitly so the
+             * configured rail would survive. That was the right instinct applied the wrong way: the
+             * explicit line was the only UNGUARDED access, so a context without a business process
+             * crashed the overlay outright — six guard tests failed on
+             * "Cannot read properties of undefined (reading 'stages')" while the two lines above it,
+             * which happened to be `??`-guarded, passed. Spreading preserves EVERY field including
+             * ones added later, and is safe when there is nothing to spread.
+             */
             businessProcess: {
-                key: situation?.stageKey ?? settled.context.businessProcess.key,
-                label: situation?.stageLabel ?? settled.context.businessProcess.label,
-                stageKey: situation?.stageKey ?? settled.context.businessProcess.stageKey,
-                /*
-                 * PRESERVED, NOT REBUILT. This overlay changes the MISSION — which stage the
-                 * operator is being pointed at — and nothing about which stages the process has.
-                 * Rebuilding the struct field by field silently drops anything it does not name,
-                 * which is exactly how the configured rail vanished the first time.
-                 */
-                stages: settled.context.businessProcess.stages,
+                ...settled.context.businessProcess,
+                key: situation?.stageKey ?? settled.context.businessProcess?.key,
+                label: situation?.stageLabel ?? settled.context.businessProcess?.label,
+                stageKey: situation?.stageKey ?? settled.context.businessProcess?.stageKey,
             },
             stageWorkRuntime,
             publishedStageInputs,
