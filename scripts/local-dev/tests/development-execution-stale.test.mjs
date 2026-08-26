@@ -823,5 +823,28 @@ await test("a parked RECOVERING run stops being protected forever", async () => 
   assert.equal(classifyExecutionRunStale(parked, { ...idle, open_resource: true }).class, "active");
 });
 
+await test("recovery is not a one-way trap", async () => {
+  // THE TRAP THE OPERATOR KEPT SEEING. The governor abandons a run it cannot
+  // attribute. An operator recovery moves it to RECOVERING. The governor reaches
+  // the same conclusion again — and abandon was ILLEGAL from RECOVERING, so the
+  // transition was refused and the run could never leave. The lane card read
+  // "Recovering" permanently. Communications sat there for two hours.
+  const { isLegalRunTransition } = await import("../lib/vacilando/execution-run.mjs");
+  assert.equal(isLegalRunTransition("RECOVERING", "ABANDONED"), true,
+    "a recovered run the governor cannot attribute must have somewhere to go");
+
+  // POSITIVE CONTROLS. ABANDONED must not become cheap, and the irreversible
+  // states must stay irreversible.
+  assert.equal(isLegalRunTransition("COMPLETE", "ABANDONED"), false);
+  assert.equal(isLegalRunTransition("FAILED", "ABANDONED"), false);
+  assert.equal(isLegalRunTransition("ABANDONED", "EXECUTING"), false,
+    "RECOVERING is still the only exit from ABANDONED");
+  assert.equal(isLegalRunTransition("ABANDONED", "RECOVERING"), true);
+  // And the states a recovered run could already reach are unchanged.
+  for (const to of ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"]) {
+    assert.equal(isLegalRunTransition("RECOVERING", to), true, to);
+  }
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
