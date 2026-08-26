@@ -33,6 +33,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
 import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
+import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { addChild } from "@/lib/records/addChildService";
 import { directEnroll } from "@/lib/records/directEnrollService";
@@ -279,17 +280,37 @@ export async function ensureOperationalCardsCertification(
          * `startEnrollment` is the journey's own service and is idempotent (it reuses an open
          * instance). The stage then moves through the canonical mover rather than an insert.
          */
-        const journey = await startEnrollment(supabase, {
-            orgId,
-            customerMemberId: memberId,
-        } as Parameters<typeof startEnrollment>[1]);
-        const processInstanceId = t(journey.processInstanceId) || null;
+        /*
+         * REUSE BEFORE CREATE.
+         *
+         * `startEnrollment` reuses an OPEN instance for a live episode, but a context-free child
+         * (no opportunity resolved) gets a fresh one every call — so calling it unconditionally
+         * stacked a second instance per child on the second ensure. Checking first is what makes
+         * ensure genuinely idempotent rather than idempotent-looking.
+         */
+        const { data: existingPi } = await supabase
+            .from("process_instances")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("subject_id", memberId)
+            .limit(1)
+            .maybeSingle();
+        let processInstanceId = t((existingPi as { id?: string } | null)?.id) || null;
+        let journeyOpportunityId: string | null = null;
+        if (!processInstanceId) {
+            const journey = await startEnrollment(supabase, {
+                orgId,
+                customerMemberId: memberId,
+            } as Parameters<typeof startEnrollment>[1]);
+            processInstanceId = t(journey.processInstanceId) || null;
+            journeyOpportunityId = t(journey.opportunityId) || null;
+        }
 
         if (processInstanceId) {
-            const currentStage = journey.opportunityId
+            const currentStage = journeyOpportunityId
                 ? await readEnrollmentInstanceStageKey(supabase, {
                       orgId,
-                      opportunityId: journey.opportunityId,
+                      opportunityId: journeyOpportunityId,
                       customerMemberId: memberId,
                   }).catch(() => null)
                 : null;
@@ -306,6 +327,37 @@ export async function ensureOperationalCardsCertification(
                     state: "enrolled" as never,
                 }).catch(() => undefined);
             }
+        }
+
+        /*
+         * THE PARTICIPATION ROW IS WHAT A CHILD-GRAIN WORK VIEW SELECTS.
+         *
+         * Moving the process instance was necessary and not sufficient: a Work View filtering
+         * "Stage equals Enrolled" reads the PARTICIPATION's disposition, not the instance's stage.
+         * With the instance advanced and the row untouched the view still returned nothing — the
+         * same silent gap one layer down. This uses the canonical lifecycle writer rather than an
+         * update, so the transition emits its events like any other.
+         */
+        const { data: ocmRow } = await supabase
+            .from("opportunity_customer_members")
+            .select("id, opportunity_id, outcome_status_key")
+            .eq("org_id", orgId)
+            .eq("customer_member_id", memberId)
+            .maybeSingle();
+        const ocmId = t((ocmRow as { id?: string } | null)?.id);
+        const oppId = t((ocmRow as { opportunity_id?: string } | null)?.opportunity_id);
+        const currentDisposition = t((ocmRow as { outcome_status_key?: string } | null)?.outcome_status_key);
+        if (ocmId && oppId && currentDisposition !== ENROLLED_STAGE_KEY) {
+            await updateOpportunityCustomerMemberLifecycleStatus({
+                supabase,
+                orgId,
+                opportunityId: oppId,
+                opportunityCustomerMemberId: ocmId,
+                nextStatusKey: ENROLLED_STAGE_KEY,
+                rowGrain: "child",
+                source: "operational_cards_certification",
+                actorUserId,
+            } as Parameters<typeof updateOpportunityCustomerMemberLifecycleStatus>[0]);
         }
 
         // Idempotent: an existing open agreement is reused by the materializer rather than doubled.
@@ -436,14 +488,27 @@ export async function resetOperationalCardsCertification(
     await assertNamespaceIsolated(supabase, orgId);
     const { customerId, personId } = await findHousehold(supabase, orgId);
     const removed: string[] = [];
-    if (!customerId) return { removed, customerId: null };
 
-    const { data: members } = await supabase
+    /*
+     * TWO ANCHORS, BECAUSE ONE OF THEM GETS DELETED.
+     *
+     * The household was reached through the reserved e-mail, and reset deletes that person — so a
+     * partially failed reset left members, agreements and process instances alive with no way back
+     * to them. The reserved surname is a second anchor on the members themselves, equally namespaced
+     * and not destroyed by the first pass, so orphans stay reclaimable.
+     */
+    const byHousehold = customerId
+        ? await supabase.from("customer_members").select("id").eq("org_id", orgId).eq("customer_id", customerId)
+        : { data: [] as { id: string }[] };
+    const bySurname = await supabase
         .from("customer_members")
         .select("id")
         .eq("org_id", orgId)
-        .eq("customer_id", customerId);
-    const memberIds = (members ?? []).map((m) => m.id as string);
+        .eq("last_name", CERT_LAST_NAME);
+    const memberIds = [
+        ...new Set([...(byHousehold.data ?? []), ...(bySurname.data ?? [])].map((m) => m.id as string)),
+    ];
+    if (!customerId && memberIds.length === 0) return { removed, customerId: null };
 
     let agreementIds: string[] = [];
     if (memberIds.length) {
@@ -455,12 +520,26 @@ export async function resetOperationalCardsCertification(
         agreementIds = (ags ?? []).map((a) => a.id as string);
     }
 
+    /*
+     * A FAILED DELETE MUST BE VISIBLE.
+     *
+     * This previously pushed to `removed` only on success and said nothing otherwise, so a reset
+     * that left agreements, members and process instances behind reported a tidy list of the tables
+     * it HAD managed — and the orphans were invisible until a later count moved.
+     */
     const drop = async (table: string, column: string, ids: string[]) => {
         if (!ids.length) return;
         const { error } = await supabase.from(table).delete().eq("org_id", orgId).in(column, ids);
-        if (!error) removed.push(table);
+        removed.push(error ? `${table}: FAILED ${error.message.slice(0, 80)}` : table);
     };
 
+    /*
+     * Journey records first. The process instance is participation truth created by
+     * `startEnrollment`; leaving it behind is what let a second ensure stack a duplicate instance on
+     * the same child, which then made `maybeSingle()` reads return null and verify report "no
+     * participation" for a child that had two.
+     */
+    await drop("process_instances", "subject_id", memberIds);
     await drop("child_attendance_events", "enrollment_agreement_id", agreementIds);
     await drop("charges", "billable_source_id", agreementIds);
     await drop("schedule_assignments", "enrollment_agreement_id", agreementIds);
@@ -468,9 +547,13 @@ export async function resetOperationalCardsCertification(
     await drop("child_enrollment_agreements", "id", agreementIds);
     await drop("opportunity_customer_members", "customer_member_id", memberIds);
     await drop("customer_members", "id", memberIds);
-    await drop("opportunities", "customer_id", [customerId]);
-    await drop("customer_persons", "customer_id", [customerId]);
-    await drop("customers", "id", [customerId]);
+    if (customerId) {
+        await drop("opportunities", "customer_id", [customerId]);
+        await drop("customer_persons", "customer_id", [customerId]);
+        await drop("customers", "id", [customerId]);
+    }
+    // The person goes LAST: it is the primary namespace anchor, and deleting it first is what made
+    // an interrupted reset unrecoverable.
     if (personId) await drop("persons", "id", [personId]);
 
     return { removed, customerId };

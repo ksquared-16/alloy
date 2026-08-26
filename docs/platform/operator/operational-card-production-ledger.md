@@ -1435,3 +1435,75 @@ why Registration ("Stage equals Enrolling") has always shown 0.
 
 Everything downstream of participant scope stays blocked on it: the Certa ↔ Certb switch, command
 execution from the card face, movement overflow in the browser, and the command-chrome proof.
+
+---
+
+## 26. Fixture corrected to the journey — and a reset defect I caused (2026-08-26)
+
+### The fix that worked
+
+`directEnroll` creates durable enrolment and **skips the journey by design**, so the children had
+agreements and no process instance. The fixture now uses both owners:
+
+| Truth | Owner |
+|---|---|
+| process instance + participation | `startEnrollment` |
+| stage → `enrolled` | `moveProcessInstanceStage` / `setProcessInstanceState` |
+| participation disposition | `updateOpportunityCustomerMemberLifecycleStatus` |
+| durable trio | `directEnroll` (reuses; nothing materialised twice) |
+
+**`verify` is what makes it stick.** It previously asked only for an agreement, so it passed green
+while the children had no process instance at all. It now requires, per child: exactly one agreement,
+a process instance, stage `enrolled`, **and** a resolvable Attendance subject. Run against the old
+state it correctly failed both children (`processInstanceId: null, ok: false`); `ensure` then healed
+them to `ok: true` with instances `a4a04bb0` / `b5cde497`.
+
+### Three defects I introduced, and what each taught
+
+1. **`ensure` was not idempotent.** `startEnrollment` reuses an open instance only for a *live
+   episode*; these children resolved context-free, so every call created another instance. Two runs
+   left two instances per child — and because `verify` read with `maybeSingle()`, duplicates returned
+   *null*, reporting "no participation" for a child that had two. `ensure` now reuses before creating.
+2. **`reset` swallowed failures.** It pushed to `removed` only on success and said nothing otherwise,
+   so a reset that left agreements, members and process instances behind still reported a tidy list.
+   Failures are now reported inline.
+3. **`reset` deleted its own anchor first.** The household is found by the reserved e-mail, and reset
+   deleted that person early — so when later deletes failed, the survivors were unreachable. The
+   reserved surname is now a second anchor, and the person is deleted last.
+
+### The platform was right, and my reset design was wrong
+
+With failures visible, the real refusal appeared:
+
+```
+child_attendance_events is append-only: DELETE is not allowed.
+Record a correction/reversal instead.
+```
+
+The database enforces attendance audit doctrine directly, and that FK chain then blocks
+`child_enrollment_agreements`, `customer_members` and `process_instances`. **A fixture child who has
+recorded attendance cannot be hard-deleted** — which is exactly what §6 warned about, and exactly what
+my reset assumed it could do.
+
+### Residual state — stated plainly
+
+The certification household is **partially removed**: person, household, opportunity and
+participation rows are gone; **members, agreements, placements, attendance events and process
+instances survive**, orphaned from the namespace anchor.
+
+| | |
+|---|---|
+| `unrelatedChildren` | **19** (was 17) — the two certification members now count as unrelated |
+| Certa | member `e408fa51` · agreement `4e3aa47e` · attendance events recorded |
+| Certb | member `46105cd4` · agreement `6f409c2d` · attendance events recorded |
+| Firefly's own 17 children | **untouched** |
+
+I stopped changing shared data at this point rather than improvising further recovery.
+
+**Correct next step:** give reset the platform's own dev-certification semantics instead of deletion —
+reverse attendance through `correctAttendanceEvent` (the append-only path the error names), then
+release the FK chain — or accept that an attendance-bearing fixture child is archived rather than
+removed. That is a fixture-design decision, and it is the honest blocker, not a card defect.
+
+**Attendance certification remains blocked**: the Enrolled Work View returns 0 rows because the
+participation rows were removed by the partial reset.
