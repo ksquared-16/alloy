@@ -119,6 +119,24 @@ test("a caller cannot supply an identity, URL, storage path, slot or port", () =
     }
 });
 
+test("framework-injected fields are ignored, but caller-supplied ones are still refused", () => {
+    // validateAgainstRegistry spreads these in itself; refusing them rejected the layer's own call.
+    const ok = validateRestoreQaSessionInputs({
+        laneId: LANE,
+        queryArtifactPath: undefined,
+        databaseTarget: "alloy_deployed_primary",
+        worktreePath: "/Users/Kelly/Code/alloy-worktrees/wt5-runtime-performance-ux-completion",
+        worktree_path: "/Users/Kelly/Code/alloy-worktrees/wt5-runtime-performance-ux-completion",
+    });
+    assert.equal(ok.ok, true, "the governed layer's own injected fields must not be refused");
+    assert.deepEqual(ok.normalized, { laneId: LANE }, "injected values must be discarded, not honoured");
+    // The security property is unchanged: a caller-chosen identity or URL is still refused.
+    for (const key of ["email", "redirectUrl", "storagePath", "slot", "port", "supabaseUrl"]) {
+        const r = validateRestoreQaSessionInputs({ laneId: LANE, [key]: "x" });
+        assert.equal(r.ok, false, `${key} must still be refused`);
+    }
+});
+
 test("operatorApproved cannot be smuggled in through the request", () => {
     const r = validateRestoreQaSessionInputs({ laneId: LANE, operatorApproved: true });
     assert.equal(r.ok, false);
