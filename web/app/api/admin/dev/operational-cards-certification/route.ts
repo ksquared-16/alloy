@@ -11,6 +11,11 @@ import {
     verifyOperationalCardsCertification,
 } from "@/lib/certification/operationalCardsCertificationFixture";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    ensureCertificationHealthTruth,
+    restoreCertificationHealthTruth,
+} from "@/lib/certification/operationalCardsHealthFixture";
 
 /**
  * THE TRUSTED CERTIFICATION RUNNER — a bounded capability, not a script tunnel.
@@ -75,6 +80,27 @@ export async function POST(request: NextRequest) {
             // Read-only: reports what survives and what is missing, and claims nothing.
             return NextResponse.json({ ok: true, graph: await inspectCertificationGraph(supabase, orgId) });
         }
+        if (action === "health-ensure" || action === "health-restore") {
+            /*
+             * Health fixture facts go through H4, so the fixture meets the SAME permission check an
+             * operator does. The caller's real grants are passed — a fixture that granted itself
+             * health.manage would prove the table accepts rows and nothing about the boundary.
+             */
+            const graph = await inspectCertificationGraph(supabase, orgId);
+            const childIds = Object.fromEntries(
+                graph.members.map((m) => [m.firstName, m.customerMemberId]),
+            );
+            const accessCtx = await getAdminAccessContextCached();
+            const access = { permissionKeys: accessCtx.ok ? accessCtx.permissionKeys : null };
+            const run =
+                action === "health-ensure"
+                    ? ensureCertificationHealthTruth
+                    : restoreCertificationHealthTruth;
+            return NextResponse.json({
+                ok: true,
+                health: await run(supabase, orgId, childIds, access, actorUserId),
+            });
+        }
         if (action === "diagnose") {
             return NextResponse.json({ ok: true, diagnose: await diagnoseChildLens(supabase, orgId) });
         }
@@ -106,5 +132,5 @@ export async function POST(request: NextRequest) {
     }
 
     // Fail closed. An unrecognised verb is not a no-op that might have done something.
-    return NextResponse.json({ error: "action must be ensure | inspect | diagnose | repair | restore | verify" }, { status: 400 });
+    return NextResponse.json({ error: "action must be ensure | inspect | diagnose | repair | restore | verify | health-ensure | health-restore" }, { status: 400 });
 }

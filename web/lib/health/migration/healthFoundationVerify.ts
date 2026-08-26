@@ -12,8 +12,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { PERSON_HEALTH_FACT_SELECT } from "@/lib/health/healthFactModel";
+
 export type HealthFoundationVerification = {
-    /** H1 — does the entity exist and is it readable? */
+    /** H1 — does the entity exist and is it readable? `rowCount` is a sample, not a total. */
     personHealthFacts: { exists: boolean; rowCount: number | null; error: string | null };
     /** M1 — the registry contract, read from the shipped code rather than assumed. */
     grain: {
@@ -48,13 +50,22 @@ export async function verifyHealthFoundation(
     caller: { roleKeys: readonly string[]; permissionKeys: readonly string[] | null },
 ): Promise<HealthFoundationVerification> {
     // ── H1 ──────────────────────────────────────────────────────────────────────────────────────
+    /*
+     * A REAL READ, not a `head` count.
+     *
+     * The head-count probe reported `exists: true` for a table PostgREST could not resolve at all —
+     * the fixture then failed with "Could not find the table in the schema cache". A probe that can
+     * report success for a missing table is worse than no probe, because it is believed. This asks
+     * for actual rows and carries the error verbatim.
+     */
     const factsProbe = await supabase
         .from("person_health_facts")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId);
+        .select(PERSON_HEALTH_FACT_SELECT)
+        .eq("org_id", orgId)
+        .limit(1);
     const personHealthFacts = {
         exists: !factsProbe.error,
-        rowCount: factsProbe.error ? null : factsProbe.count ?? 0,
+        rowCount: factsProbe.error ? null : (factsProbe.data ?? []).length,
         error: factsProbe.error?.message ?? null,
     };
 
