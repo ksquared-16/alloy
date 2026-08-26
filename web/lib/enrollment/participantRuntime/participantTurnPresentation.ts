@@ -162,7 +162,30 @@ export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string
  * confusing question, so the rule is: recognise the handful of facts Enrollment actually asks about,
  * and otherwise present the operator's own words unchanged rather than mangling them.
  */
-export function naturalFieldLabel(label: string | null | undefined): string {
+/** Canonical facts Enrollment actually asks about, keyed by the fact rather than its printing. */
+const KNOWN_BY_CANONICAL_KEY: Record<string, string> = {
+    child_first_name: "first name",
+    child_last_name: "last name",
+    child_date_of_birth: "date of birth",
+    dob: "date of birth",
+    date_of_birth: "date of birth",
+    guardian_name: "name",
+    name: "name",
+    phone: "phone number",
+    guardian_phone: "phone number",
+    email: "email address",
+    guardian_email: "email address",
+    address: "address",
+    allergies: "allergies",
+    start_date: "first day",
+};
+
+export function naturalFieldLabel(label: string | null | undefined, canonicalKey?: string | null): string {
+    // The canonical key first: it names the FACT, while the label only records where it was printed.
+    // "Childs Last Name" is a bilingual column heading with its apostrophe lost to OCR; the key
+    // behind it is `child_last_name`, and that is the thing worth recognising.
+    const fromKey = canonicalKey ? KNOWN_BY_CANONICAL_KEY[canonicalKey.toLowerCase().split(":").pop() ?? ""] : undefined;
+    if (fromKey) return fromKey;
     const raw = authoredOrHumanizedLabel(label);
     if (!raw) return "this";
     const key = raw.toLowerCase().replace(/[^a-z]+/g, " ").trim();
@@ -180,6 +203,8 @@ export function naturalFieldLabel(label: string | null | undefined): string {
     };
     if (known[key]) return known[key];
     // Otherwise: the operator's label, lower-cased only when it is Title Case boilerplate.
+    // Sentence-case authored text is left exactly as written — a school's own words for its own
+    // parents are not the platform's to re-case, which is a decision this repository already made.
     return /^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(raw) ? raw.toLowerCase() : raw;
 }
 
@@ -290,14 +315,94 @@ export function participantQuestionSegments(
     return [{ text: participantQuestion(objective), emphasis: false }];
 }
 
+
+/**
+ * Whose fact is this, in the words a person would use?
+ *
+ * The subject belongs to the NEED — its grain and its canonical entity — and never to the imported
+ * label. A guardian's phone number arrives on a page headed "Parent/Guardian #1 Phone Number", under
+ * a Form built around a child, and the previous real run duly asked the parent for "Marisol's phone
+ * number". Reading the grain instead is the whole repair.
+ *
+ *  - the child            → the child's familiar name
+ *  - the responding adult → you / your
+ *  - the household        → your family's
+ *  - a signature          → you / your
+ */
+export type ConversationVoice = {
+    /** "Marisol's" / "your" / "your family's" — the possessive before a fact. */
+    possessive: string;
+    /** "Marisol" / "you" — the subject of a sentence. */
+    subject: string;
+    /** True when the person being spoken to owns the fact, so "Do you…" reads correctly. */
+    secondPerson: boolean;
+};
+
+export function conversationVoice(objective: ParticipantObjectiveWire): ConversationVoice {
+    const turn = objective.next_turn as { scope?: string | null; entity_type?: string | null };
+    const child = familiarName(objective);
+    const childPossessive = child ? `${child}'s` : "your child's";
+
+    // The canonical entity is the strongest signal, because it names the record the fact lives on.
+    switch ((turn.entity_type ?? "").toLowerCase()) {
+        case "person":
+        case "guardian":
+        case "contact":
+            return { possessive: "your", subject: "you", secondPerson: true };
+        case "customer":
+            return { possessive: "your family's", subject: "your family", secondPerson: true };
+        case "child":
+        case "customer_member":
+        // An enrolment fact is about the child being enrolled — "Marisol's first day", not the
+        // family's. The record it lives on is the enrolment; the person it describes is the child.
+        case "enrollment":
+            return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+    }
+
+    // No canonical entity — fall back to grain. `recipient` is the person signing: they are here.
+    if ((turn.scope ?? "") === "recipient") return { possessive: "your", subject: "you", secondPerson: true };
+    if ((turn.scope ?? "") === "household") return { possessive: "your family's", subject: "your family", secondPerson: true };
+    return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+}
+
+
+/**
+ * The school already asked it — ask it their way.
+ *
+ * Many destinations are not field labels at all but whole questions the school wrote: "How would you
+ * describe your child's gender?", "Does your child become tired or nap during the day?". Wrapping
+ * one in the platform's own frame produced "What is Marisol's How would you describe your child's
+ * gender??" — the wrong subject, the school's question buried inside it, and two question marks.
+ *
+ * So an authored question is asked as written, with one substitution: the school wrote "your child"
+ * because it did not know the child's name, and the specialist sitting beside the parent does.
+ */
+function authoredQuestionPrompt(label: string, child: string | null): string | null {
+    const raw = (label ?? "").trim();
+    if (raw.length < 8) return null;
+    const isQuestion = raw.endsWith("?") || /^(has|have|does|do|did|is|are|was|were|can|could|will|would|should|how|what|when|where|which|who|why)\b/i.test(raw);
+    if (!isQuestion) return null;
+    let text = raw.replace(/\s*[:?]+\s*$/, "").trim();
+    if (child) {
+        text = text
+            .replace(/\byour child's\b/gi, `${child}'s`)
+            .replace(/\byour student's\b/gi, `${child}'s`)
+            .replace(/\byour child\b/gi, child)
+            .replace(/\byour student\b/gi, child);
+    }
+    return `${text}?`;
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
     // Always `'s`, including for names ending in s — "Test Process's", the way the parent would say
     // it. The plural-possessive rule does not apply to a personal name.
-    const possessive = subject ? `${subject}'s` : "your child's";
-    const them = subject || "your child";
-    const label = naturalFieldLabel(turn.label);
+    const voice = conversationVoice(objective);
+    const possessive = voice.possessive;
+    const them = voice.subject;
+    // The canonical key names the fact; the imported label only describes where it was printed.
+    const label = naturalFieldLabel(turn.label, (turn as { canonical_key?: string | null }).canonical_key ?? null);
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
@@ -314,7 +419,10 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         if (label.includes("allerg")) {
             return `Does ${them} have any allergies we should know about?`;
         }
-        return `What is ${possessive} ${label}?`;
+        const authored = authoredQuestionPrompt(turn.label ?? "", subject);
+        if (authored) return authored;
+        // "What is your phone number?" — not "What is your your phone number?".
+        return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
     }
     if (turn.kind === "complete_artifact") {
         // The instruction lives on the [Review paperwork] action, not in the sentence — the

@@ -119,6 +119,22 @@ export type CreatePacketResult =
     | { ok: true; realization: PacketRealization }
     | { ok: false; code: "no_packet" | "no_artifacts" | "invalid_schema" | "failed"; message: string };
 
+
+/**
+ * Refuse to publish without a publisher.
+ *
+ * Thrown rather than returned: this is a boundary that must not be reachable, and there is no
+ * sensible way for a caller to carry on from it. `publish -> archive only` means the mistake is
+ * permanent once made, so it is caught before the write instead of reported after it.
+ */
+export function assertPublisherIdentity(userId: unknown): asserts userId is string {
+    if (typeof userId !== "string" || userId.trim() === "") {
+        throw new Error(
+            "Refusing to publish a Form version without a publisher identity — a published row is immutable, so an unattributed publication cannot be repaired.",
+        );
+    }
+}
+
 export interface CreatePacketDeps {
     listFormKeys(orgId: string): Promise<Set<string>>;
     listPacketKeys(orgId: string): Promise<Set<string>>;
@@ -204,6 +220,7 @@ export async function createPacketFromProcessingAnalysis(
     args: { orgId: string; caseId: string; userId: string; packetName?: string },
 ): Promise<CreatePacketResult> {
     try {
+        assertPublisherIdentity(args.userId);
         // Idempotent at the whole-realization grain: a re-run of an unchanged case returns what it
         // built before rather than a second packet.
         const prior = await deps.loadRealization(args);
@@ -519,6 +536,13 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Repr
             if (error) throw new Error(error.message);
         },
         async publishVersion({ orgId, versionId, userId }) {
+            // Publisher provenance is part of publishing, not decoration.
+            //
+            // The five certified v2 versions carry `published_by_user_id = NULL` because a caller
+            // passed an undefined id through a typed-but-unchecked boundary, and the row accepted it.
+            // A published row is immutable — `publish -> archive only` — so an unattributed
+            // publication cannot be repaired afterwards. It can only be prevented.
+            assertPublisherIdentity(userId);
             const { error } = await supabase.from("form_definition_versions")
                 .update({ status: "published", published_at: new Date().toISOString(), published_by_user_id: userId })
                 .eq("org_id", orgId).eq("id", versionId).eq("status", "draft");
@@ -606,6 +630,7 @@ export async function reprojectRealizedPacket(
     args: { orgId: string; caseId: string; userId: string; dryRun?: boolean },
 ): Promise<ReprojectResult> {
     try {
+        if (!args.dryRun) assertPublisherIdentity(args.userId);
         const prior = await deps.loadRealization(args);
         if (!prior) return { ok: false, code: "no_realization", message: "This case has no realized packet to re-project." };
 

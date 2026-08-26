@@ -9,7 +9,7 @@
  */
 
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
-import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
+import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -81,9 +81,12 @@ export function projectEnrollmentInformationNeeds(
 
     for (const form of input.forms) {
         walkScalarFormFields(form.schema, (field) => {
-            // Display-only content is not a participant need. Without this a handbook paragraph
-            // becomes an artifact-specific item called "Page 3" and counts against the parent.
-            if (!formFieldCollectsValue(field)) return;
+            // Not a participant need unless the participant is the one who supplies it. Display-only
+            // prose was the first case — without it a handbook paragraph became an artifact-specific
+            // item called "Page 3" and counted against the parent. Placed-not-asked destinations and
+            // derived values are the same mistake at scale: 100 boxes the family never fills and 7
+            // the platform writes itself were being counted as work they had to do.
+            if (!formFieldAsksParticipant(field)) return;
 
             const identity = resolveEnrollmentNeedIdentity({
                 field,

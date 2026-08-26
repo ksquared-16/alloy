@@ -58,6 +58,16 @@ export type ParticipantObjectiveWire = {
         /** The control type to render when a deterministic input is needed. */
         readonly input_type: string | null;
         readonly label: string | null;
+        /**
+         * WHOSE fact this is, and which canonical fact it is.
+         *
+         * The conversation's subject is a property of the need, never of the imported label. Without
+         * these the surface had only the child's name to reach for, and asked a guardian for
+         * "Marisol's phone number".
+         */
+        readonly scope?: string | null;
+        readonly entity_type?: string | null;
+        readonly canonical_key?: string | null;
         /** Closed option set, when the authored control has one. Empty otherwise. */
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
@@ -154,6 +164,9 @@ export function participantObjectiveWireModel(
             // unavailable — the fallback has to be renderable from this payload alone.
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
+            scope: turn.need?.identity.scope ?? null,
+            entity_type: turn.need?.identity.entity_type ?? null,
+            canonical_key: turn.need?.identity.canonical_key ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
