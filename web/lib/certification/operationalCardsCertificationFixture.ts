@@ -32,14 +32,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
+import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
 import { addChild } from "@/lib/records/addChildService";
 import { directEnroll } from "@/lib/records/directEnrollService";
+import { startEnrollment } from "@/lib/records/startEnrollmentService";
+import {
+    moveProcessInstanceStage,
+    readEnrollmentInstanceStageKey,
+    setProcessInstanceState,
+} from "@/lib/process/processInstances";
 
 /** RFC-2606 reserved: nothing real can ever live here, so the selector cannot over-match. */
 export const CERT_DOMAIN = "operational-cards-cert.alloy.invalid";
 export const CERT_PARENT_EMAIL = `guardian@${CERT_DOMAIN}`;
 const CERT_LAST_NAME = "Certhouse";
+
+/** The Enrollment template's terminal child-track stage — what a child-grain Work View filters on. */
+const ENROLLED_STAGE_KEY = "enrolled";
 
 const CERT_PARENT = { firstName: "Cert", lastName: CERT_LAST_NAME, phone: "+15555550100" };
 const CERT_CHILDREN = [
@@ -53,6 +63,9 @@ export type CertificationChildResult = {
     agreementId: string | null;
     placementId: string | null;
     scheduleAssignmentId: string | null;
+    /** Participation truth — what a child-grain Work View selects on. */
+    processInstanceId: string | null;
+    stageKey: string | null;
 };
 
 export type CertificationEnsureResult =
@@ -70,7 +83,18 @@ export type CertificationVerifyResult = {
     householdPresent: boolean;
     customerId: string | null;
     namespacedPeople: number;
-    children: Array<{ firstName: string; customerMemberId: string; agreements: number }>;
+    children: Array<{
+        firstName: string;
+        customerMemberId: string;
+        agreements: number;
+        /** PARTICIPATION truth — absent is exactly the defect this verify exists to catch. */
+        processInstanceId: string | null;
+        stageKey: string | null;
+        /** Can Attendance resolve a subject for this child? */
+        attendanceSubject: boolean;
+        /** PASS requires BOTH truth systems, never one. */
+        ok: boolean;
+    }>;
     /** Records outside the namespace, counted so a run can prove it disturbed nothing. */
     unrelatedChildren: number;
 };
@@ -244,6 +268,46 @@ export async function ensureOperationalCardsCertification(
         }
         if (!memberId) return { ok: false, reason: `could not resolve ${child.firstName}` };
 
+        /*
+         * BOTH TRUTH SYSTEMS, EACH FROM ITS OWN OWNER.
+         *
+         * A child needs durable enrolment AND participation. `directEnroll` alone produced the first
+         * and skipped the second by design — it "skips the journey" — which left the certification
+         * children with real agreements and no process instance, so no child-grain Work View could
+         * select them. That was the defect, and it was in the fixture, not in the Work View.
+         *
+         * `startEnrollment` is the journey's own service and is idempotent (it reuses an open
+         * instance). The stage then moves through the canonical mover rather than an insert.
+         */
+        const journey = await startEnrollment(supabase, {
+            orgId,
+            customerMemberId: memberId,
+        } as Parameters<typeof startEnrollment>[1]);
+        const processInstanceId = t(journey.processInstanceId) || null;
+
+        if (processInstanceId) {
+            const currentStage = journey.opportunityId
+                ? await readEnrollmentInstanceStageKey(supabase, {
+                      orgId,
+                      opportunityId: journey.opportunityId,
+                      customerMemberId: memberId,
+                  }).catch(() => null)
+                : null;
+            // Self-healing: already terminal is left alone, anything else advances to it.
+            if (t(currentStage as unknown) !== ENROLLED_STAGE_KEY) {
+                await moveProcessInstanceStage(supabase, {
+                    orgId,
+                    instanceId: processInstanceId,
+                    stageKey: ENROLLED_STAGE_KEY,
+                });
+                await setProcessInstanceState(supabase, {
+                    orgId,
+                    instanceId: processInstanceId,
+                    state: "enrolled" as never,
+                }).catch(() => undefined);
+            }
+        }
+
         // Idempotent: an existing open agreement is reused by the materializer rather than doubled.
         // The refusal carries BLOCKERS; surfacing them is the difference between "cannot enrol" and
         // a statement of what is missing.
@@ -273,6 +337,8 @@ export async function ensureOperationalCardsCertification(
             agreementId: t(enrolled.agreementId) || null,
             placementId: t(enrolled.placementId) || null,
             scheduleAssignmentId: t(enrolled.scheduleAssignmentId) || null,
+            processInstanceId,
+            stageKey: ENROLLED_STAGE_KEY,
         });
     }
 
@@ -298,15 +364,45 @@ export async function verifyOperationalCardsCertification(
             .eq("org_id", orgId)
             .eq("customer_id", customerId);
         for (const m of members ?? []) {
+            const memberId = m.id as string;
             const { data: ag } = await supabase
                 .from("child_enrollment_agreements")
                 .select("id")
                 .eq("org_id", orgId)
-                .eq("customer_member_id", m.id as string);
+                .eq("customer_member_id", memberId);
+
+            // Participation, read straight from the process instance rather than inferred.
+            const { data: pi } = await supabase
+                .from("process_instances")
+                .select("id, stage_key")
+                .eq("org_id", orgId)
+                .eq("subject_id", memberId)
+                .maybeSingle();
+
+            const subject = await resolveAttendanceSubject(supabase, orgId, memberId);
+            const agreements = (ag ?? []).length;
+            const stageKey = (pi as { stage_key?: string | null } | null)?.stage_key ?? null;
+            const processInstanceId = (pi as { id?: string } | null)?.id ?? null;
+
             children.push({
                 firstName: t(m.first_name),
-                customerMemberId: m.id as string,
-                agreements: (ag ?? []).length,
+                customerMemberId: memberId,
+                agreements,
+                processInstanceId,
+                stageKey,
+                attendanceSubject: subject.ok,
+                /*
+                 * BOTH SYSTEMS, OR IT IS NOT A PASS.
+                 *
+                 * The previous verify asked only for an agreement, so it passed green while the
+                 * children had no process instance at all — and a child-grain Work View returned
+                 * nothing. Requiring participation here is what turns that silent gap into a failure.
+                 */
+                ok:
+                    agreements === 1
+                    && Boolean(processInstanceId)
+                    && stageKey === ENROLLED_STAGE_KEY
+                    && subject.ok,
             });
         }
     }
