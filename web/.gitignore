@@ -3,3 +3,4 @@
 # Dependencies — directory OR symlink (see root .gitignore for why both forms).
 node_modules
 node_modules/
+.certrun/

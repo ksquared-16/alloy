@@ -32,6 +32,14 @@ export interface DraftFormField {
     label: string;
     type: DraftFormFieldType;
     required: boolean;
+    /**
+     * Placed on the artifact, not asked of the participant.
+     *
+     * A destination whose semantic concept is owned elsewhere — held for Health, resolved through
+     * Relationship, reproduced as static prose — still needs its page/bbox so the document renders.
+     * It must not also become a question.
+     */
+    read_only?: boolean;
     /** Basic layout hint: "half" pairs with the next half into a 2-up row (FormSchemaV1 layout_width). */
     layout_width?: "full" | "half" | "third" | "quarter";
     description?: string;

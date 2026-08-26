@@ -33,6 +33,8 @@ function mapDraftField(f: DraftFormField): FormField {
         ...(description ? { description } : {}),
         ...(f.layout_width ? { layout_width: f.layout_width } : {}),
         ...(field_source ? { field_source } : {}),
+        // Placement without interrogation: the destination renders, the participant is not asked.
+        ...(f.read_only ? { read_only: true } : {}),
         // Source-declared validation travels onto the published field. `formValidateRulesSchema` is
         // the existing owner; nothing new is invented here.
         ...(f.validate && Object.keys(f.validate).length ? { validate: f.validate } : {}),

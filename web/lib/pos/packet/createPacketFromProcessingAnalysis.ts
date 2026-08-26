@@ -23,6 +23,9 @@ import type { DiscoveryDecisionRecord } from "@/lib/pos/discovery/reconciliation
 import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { structureForArtifact } from "@/lib/pos/processingCase/structure/structureForArtifact";
 import { buildFormDraftFromStructure } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
+import { applySemanticRefinement } from "@/lib/pos/processingCase/formDraft/applySemanticRefinement";
+import { classifySelfContainedArtifact } from "./selfContainedArtifact";
+import type { ArtifactConcept } from "./paymentSetupArtifact";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
@@ -217,7 +220,40 @@ export async function createPacketFromProcessingAnalysis(
                 ? applyDiscovery({ draft: draft0, discovery, decisions })
                 : { updatedDraft: draft0 };
 
-            const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...updatedDraft, title: name, generated_form_name: name }));
+            // THE SECOND STEP THIS SERVICE USED TO SKIP.
+            //
+            // `buildFormDraftFromStructure` maps one source destination to one participant field,
+            // with the OCR string as its label and the reader's widget guess as its type. That is
+            // right for placement and wrong for interrogation, and the first published Forms show
+            // the cost: 173 fields for 86 facts, labels like "Phone Number NúMero De TeléFono Row1",
+            // a phone typed as a number, and `shared_value_key` on 5 of 173 — so a parent typed the
+            // child's name on every page.
+            //
+            // A source destination is not automatically a participant question. This pass decides
+            // which concepts are ASKED, in what words, in what semantics, under one shared identity
+            // — and leaves every field id, page and bbox exactly as the builder placed them.
+            const refined = discovery
+                ? applySemanticRefinement({
+                      draft: updatedDraft,
+                      discovery,
+                      selfContained: classifySelfContainedArtifact(
+                          (discovery.concepts as unknown as ArtifactConcept[]).filter((cc) =>
+                              artifact.section_titles.includes(cc.source?.section_title ?? ""),
+                          ),
+                      ).isSelfContained,
+                  })
+                : { draft: updatedDraft, report: null };
+            if (refined.report?.relinquishedRequirements.length) {
+                const owners = [...new Set(refined.report.relinquishedRequirements.map((r) => r.role))].join(", ");
+                warnings.push(
+                    `Artifact "${name}": ${refined.report.relinquishedRequirements.length} required box(es) are owned elsewhere (${owners}) — placed on the document, not asked of the family, and no longer mandatory.`,
+                );
+            }
+            if (refined.report?.unresolved.length) {
+                warnings.push(`Artifact ${artifact.id}: ${refined.report.unresolved.length} concept(s) have no settled participant treatment.`);
+            }
+
+            const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...refined.draft, title: name, generated_form_name: name }));
             if (!parsed.success) return { ok: false, code: "invalid_schema", message: `Artifact ${artifact.id} did not validate as a form schema.` };
 
             const key = allocateUniqueKey(slugKeyFromDisplayName(name), formKeys);

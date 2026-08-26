@@ -87,7 +87,7 @@ function conceptLabel(discovery: ConfigurationDiscoveryResult, candidateId: stri
 
 /** Draft field ids whose label matches the concept's source labels — EXCLUDING output-copy sections
  *  (a classroom/office copy reproduces earlier questions; we never bind its duplicate fields). */
-function draftFieldsForConcept(draft: StoredFormDraftPreview, discovery: ConfigurationDiscoveryResult, candidateId: string): DraftFormField[] {
+export function draftFieldsForConcept(draft: StoredFormDraftPreview, discovery: ConfigurationDiscoveryResult, candidateId: string): DraftFormField[] {
     const concept = discovery.concepts.find((c) => c.id === candidateId);
     if (!concept) return [];
     const labels = new Set(concept.source.labels.map((l) => l.trim().toLowerCase()));
