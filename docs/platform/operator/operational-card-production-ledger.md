@@ -1507,3 +1507,118 @@ removed. That is a fixture-design decision, and it is the honest blocker, not a 
 
 **Attendance certification remains blocked**: the Enrolled Work View returns 0 rows because the
 participation rows were removed by the partial reset.
+
+---
+
+## 27. Non-destructive certification, and Attendance closed at child grain (2026-08-26)
+
+### 27.1 What the previous run left behind
+
+`reset` deleted the certification subject outside-in. That worked until the children had Attendance
+history, at which point the database refused — `child_attendance_events` is append-only by DB rule —
+and the refusal cascaded to the agreement, the member and the household that history hangs off. What
+survived was worse than either end state:
+
+| Present | Gone |
+|---|---|
+| household `29944d3e`, both members, one agreement each, all attendance events, four process instances | parent person, the household link, the opportunity, participation, placements, schedule assignments |
+
+That state was **invisible to `ensure`**, which resolves the household THROUGH the parent person. With
+the person deleted it would have concluded "no household" and built a second one beside the orphans.
+
+### 27.2 The verbs now on the trusted runner
+
+`ensure · inspect · diagnose · repair · restore · verify`. There is deliberately **no destructive
+verb**: an unused one is a single call away from being used again.
+
+- **inspect** — read-only rediscovery. A member is fixture-owned only when the deterministic reserved
+  name **and** a surviving artefact agree. Ambiguity ends the operation before any write.
+- **repair** — restores the person + household link (`upsertAndLinkPersonForAdmin`), the enrollment
+  episode (the Processing identity `createLead` port, which takes an EXISTING household), reconciles
+  journeys, then delegates to `ensure`.
+- **restore** — appends a REVERSAL for every *effective* attendance event, then repairs. Idempotent
+  because the fold is: `effectiveAttendanceEvents` already answers "what is current truth", so a
+  second run finds nothing to reverse.
+
+### 27.3 The finding that mattered — context-free journeys are invisible
+
+`enrolled-children` returned **zero rows while both children verified green**. The production
+child-grain reader explains it in two lines:
+
+```ts
+const opp = pi.context_id ? refs.oppById.get(pi.context_id) : null;
+if (!opp) continue;
+```
+
+A **context-free** journey is structurally invisible to every child-grain Work View, whatever stage it
+reports. And the certification children had exactly that, because `ensure` used `startEnrollment` —
+which asks `resolveLiveEnrollmentContextForHousehold` for a live episode, and that resolver defines
+*live* as an opportunity **already containing a running child journey**. A restored or childless
+episode contains none, so the answer is always "no" and the first child can never join.
+
+**This is a chicken-and-egg in the product, not only in the fixture**: `startEnrollment` alone can
+never place the first child into an episode. `create_lead` avoids it by creating the opportunity and
+the child participation together. `ensure` now uses `createEnrollmentProcessInstance` with a
+`contextId` — the writer `create_lead`'s own child-participation path uses — so create_lead + addChild
+produces the same participation truth that one-step create_lead-with-children does.
+
+### 27.4 Two defects my own reconciliation introduced, and what they teach
+
+1. **"Close everything but the oldest" kept a corpse.** The oldest instance was frequently one the
+   fixture had already closed, so it kept that and closed the good journey.
+2. **A closed CONTEXT-BOUND journey can never be replaced.** `createEnrollmentProcessInstance` upserts
+   on `(org_id, process_key, subject_id, context_id)` with `ignoreDuplicates` and returns the existing
+   row **whatever its state**. Every later `ensure` then reported success over a journey that was not
+   running — two children, one agreement each, **zero live journeys**.
+
+The keeper is now the episode-bound journey, and one the fixture wrongly closed is **re-opened** rather
+than abandoned. Repair run 1 corrected them; run 2 changed nothing.
+
+`verify` had the matching defect: it read participation with `maybeSingle()`, so TWO journeys returned
+null and **a duplicate verified identically to an absence**.
+
+### 27.5 Three defects between a working provider and a usable card
+
+| Defect | Why it was invisible |
+|---|---|
+| **Composition** — the child composition had no Attendance entry | the published layout places Attendance at CASE grain, so certifying it there passed while the same child opened from a lens rendered no card at all |
+| **Scope** — a child-grain answer carries no `_inquiry_children` | the candidate list was empty, scope resolved to nobody, and the card asked the operator to "select a child" while displaying that child's own record |
+| **Commands** — the card face had no controls | the capabilities were registered and proven executable; nothing dispatched them |
+
+A card is only placed where a composition places it. The **durable** child composition is deliberately
+left alone: Attendance requires an enrolment, and that composition is explicitly the cards a child has
+without one.
+
+### 27.6 Browser certification — Firefly, `/workspace/work-unit/enrolled-children`
+
+Zero page errors and zero failed requests throughout.
+
+| Check | Observed |
+|---|---|
+| lens membership | `Enrolled children` renders **Certa** and **Certb** at child grain |
+| isolation | `unrelatedChildren` **17** — Firefly's own children, untouched |
+| command cycle | not arrived → **Check in** → Monkeys (the PLACEMENT's room), arrived 11:19, controls become Check out / Move room with 4 destinations → **Move** → Bears, movement row appears, EXPECTED still honestly Monkeys → **Check out** → departed 11:19, **no controls** (no transition remains) |
+| scope switching | Certa → Certb → Certa; each child's own day, correct subject id, no bleed |
+| movement overflow | 0 → none · 1–2 → shown in full · 3 → `+1 movements` · 4 → `+2` · 5 → `+3`. The **last two** always survive and NOW always matches the newest room |
+| restore visible in product | after `restore`, both children read **Not arrived** — the events are still in the table, voided by reversals |
+| card readiness | 110–922 ms; the composed VM endpoint 726–1423 ms. **`next dev` figures — not a production number**, and dev/prod has measured ~5× on this host |
+
+Check-in deliberately sends **no room**: the adapter reads it from the placement, which is the
+authority on where a child belongs. Transfers are scoped to the child's own site — an org-wide list
+would let one click move a child to another campus.
+
+### 27.7 Deliberate non-actions
+
+- **The opportunity's `work_unit_id` is null**, so the certification family does not appear in
+  family-grain lenses. Not repaired: nothing in Attendance certification needs it, and parking a
+  settled family on a stage work unit would put it back into acquisition work.
+- **An absent `opportunity_customer_members` row is not missing participation.** The platform retired
+  that bridge; reporting its absence as a defect made a correct graph read as broken and would have
+  sent a later repair off writing legacy rows the runtime does not read.
+- **No `View history` surface was built.** The card's recent-days strip is the history it carries
+  today; a deeper surface is not required by any certification item and was not invented to fill one.
+
+### 27.8 State at close
+
+`inspect` reports `missing: []`, `ambiguous: []`. Both children verify green with one live journey,
+one agreement and a resolvable attendance subject. Financials has not been started.
