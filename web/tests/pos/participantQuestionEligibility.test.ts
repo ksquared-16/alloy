@@ -17,6 +17,7 @@ import {
     projectParticipantRole,
     semanticTypeFor,
     humaniseCanonicalKey,
+    readsAsAuthoredQuestion,
 } from "@/lib/pos/processingCase/formDraft/participantQuestionEligibility";
 import type { ConfigurationProposal } from "@/lib/pos/discovery/contracts";
 
@@ -139,5 +140,56 @@ describe("the projection is deterministic", () => {
             proposal: proposal("reuse_canonical_field", { entity_type: "customer_member", field_key: "allergies" }),
         });
         expect(run()).toEqual(run());
+    });
+});
+
+describe("a held concept whose source already asks the question", () => {
+    /**
+     * `held_unknown_owner` says nobody owns the DURABLE fact — not that a family should not be asked.
+     * The Admissions Packet is a bespoke school intake form, so 15 of its held concepts already carry
+     * the school's own wording ("Is your child able to play alone?"). Asking those is honest and
+     * creates no canonical field; holding them would have stalled publication on nothing.
+     */
+    it("asks it, process-scoped, and creates no field", () => {
+        const p = projectParticipantRole({
+            concept: concept("Is your child able to play alone?", "child.is_your_child_able_to_play_alone"),
+            proposal: proposal("held_unknown_owner"),
+        });
+        expect(p.role).toBe("question");
+        expect(p.label).toBe("Is your child able to play alone?");
+        expect(p.basis).toMatch(/no durable field/);
+    });
+
+    it("refuses a heading, because the question it implies would be a guess", () => {
+        // "Developmental History:" is a section caption. What it asks is not recoverable from it.
+        for (const label of ["Developmental History:", "Social relationships:", "subject_line"]) {
+            expect(projectParticipantRole({ concept: concept(label), proposal: proposal("held_unknown_owner") }).role, label).toBe("hold_for_review");
+        }
+    });
+
+    it("refuses a checkbox caption", () => {
+        // The CIS exemption boxes: "Module", "Sp", "Polio", "Religious".
+        for (const label of ["Module", "Sp", "Polio", "Religious"]) {
+            expect(projectParticipantRole({ concept: concept(label), proposal: proposal("held_unknown_owner") }).role, label).toBe("hold_for_review");
+        }
+    });
+
+    it("refuses anything still wearing OCR noise", () => {
+        expect(readsAsAuthoredQuestion("Parents Or Guardians Names Nombre De Los Padres O Tutores")).toBe(false);
+    });
+
+    it("recognises authored questions by their own shape", () => {
+        for (const q of ["How is your child comforted?", "Does your child have any fears? (dark, spiders, etc.)", "Has your student ever participated in speech therapy"]) {
+            expect(readsAsAuthoredQuestion(q), q).toBe(true);
+        }
+        for (const notQ of ["Module", "Name:", "Sp"]) expect(readsAsAuthoredQuestion(notQ), notQ).toBe(false);
+    });
+
+    it("still holds a guardian fact — party grain is an ownership question", () => {
+        // guardian.* must resolve through the relationship/person owner, not become a child field.
+        expect(projectParticipantRole({
+            concept: concept("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"),
+            proposal: proposal("held_unknown_owner"),
+        }).role).toBe("hold_for_review");
     });
 });

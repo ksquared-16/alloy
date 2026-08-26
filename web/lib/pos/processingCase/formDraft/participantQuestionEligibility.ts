@@ -88,6 +88,21 @@ export function looksLikeSourceLabel(label: string | null | undefined): boolean 
 }
 
 /**
+ * Does this label read as a question someone actually wrote?
+ *
+ * Ends in a question mark, or opens with an interrogative. Both are properties of authored prose,
+ * which is why a bespoke school intake form has them and a scanned government grid does not. A
+ * heading ("Developmental History:") and a checkbox caption ("Module") fail deliberately — inventing
+ * the question they imply would be guessing at meaning.
+ */
+export function readsAsAuthoredQuestion(label: string | null | undefined): boolean {
+    const text = (label ?? "").trim();
+    if (text.length < 8 || looksLikeSourceLabel(text)) return false;
+    if (text.endsWith("?")) return true;
+    return /^(has|have|does|do|did|is|are|was|were|can|could|will|would|should|how|what|when|where|which|who|why)\b/i.test(text);
+}
+
+/**
  * Canonical participant copy for a bound destination.
  *
  * Registry first. Where no registry names it, the label is humanised from the CANONICAL KEY —
@@ -146,6 +161,26 @@ export function projectParticipantRole(input: {
 
     const mapped = ROLE_BY_DISPOSITION[proposal.disposition];
     if (mapped) {
+        /*
+         * `held_unknown_owner` is a statement about DURABLE ownership, not about whether a family
+         * should be asked. The Slice 7 doctrine is explicit that held means collected-but-not-durable,
+         * so a held concept whose source already carries a well-formed question — the school's own
+         * words, "Is your child able to play alone?" — can be asked as a process-scoped answer while
+         * still creating no canonical field.
+         *
+         * The guard is deliberately narrow: the label must READ as a question the school wrote, not
+         * merely be free of OCR noise. A bare noun ("Module", "Developmental History:") is a heading
+         * or a checkbox caption, and guessing what it asks is exactly the ownership inference this
+         * whole pass exists to prevent.
+         */
+        if (mapped === "hold_for_review" && readsAsAuthoredQuestion(concept.label)) {
+            return {
+                role: "question",
+                label: concept.label.trim(),
+                semanticType: semanticTypeFor(concept.concept_key ?? "", input.readerType),
+                basis: "the source already asks this in its own words; collected process-scoped, no durable field",
+            };
+        }
         return { role: mapped, basis: `disposition ${proposal.disposition}` };
     }
 
