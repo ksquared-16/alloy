@@ -26,16 +26,41 @@ import { runQaSessionMint } from "./qa-session-mint-runner.mjs";
 /** Inputs a caller may never supply. Present so the refusal is explicit rather than implied. */
 export const FORBIDDEN_RESTORE_INPUTS = Object.freeze([
     "email", "identity", "expectedIdentity", "supabaseUrl", "supabaseProject", "projectRef",
-    "serviceUrl", "redirectUrl", "redirectTo", "storagePath", "storage", "worktreePath",
+    "serviceUrl", "redirectUrl", "redirectTo", "storagePath", "storage",
     "worktree", "port", "slot", "baseUrl", "token", "password", "serviceRoleKey", "accessToken",
 ]);
+/*
+ * `worktreePath` is deliberately NOT in that list. The governed layer injects the run's own
+ * worktree into every validator, so refusing it by name would refuse the layer's own request, and a
+ * validator cannot tell an injected value from a caller's. The protection is stronger than a name
+ * check anyway: `resolveRestoreTarget` derives the worktree from the lane registry and never reads
+ * this field, so supplying one changes nothing about where a restore lands.
+ */
 
 /**
  * Validate the request shape. Only `laneId` is accepted; anything else is refused by name so a
  * caller learns the boundary rather than silently having a field ignored.
  */
-export function validateRestoreQaSessionInputs(inputs = {}) {
-    const supplied = Object.keys(inputs || {});
+/**
+ * Keys the governed layer itself adds before calling `validateInputs`.
+ *
+ * `validateAgainstRegistry` spreads `queryArtifactPath`, `databaseTarget` and — when the run knows
+ * it — `worktreePath`/`worktree_path` into every action's validator. They are the FRAMEWORK's
+ * values, not the caller's, so refusing them rejected the layer's own request. They are ignored
+ * rather than honoured: the executor resolves the worktree from the registry regardless, so
+ * accepting-and-discarding this one cannot redirect a restore anywhere.
+ */
+const FRAMEWORK_INJECTED_INPUTS = Object.freeze([
+    "queryArtifactPath", "databaseTarget", "worktreePath", "worktree_path", "artifactRoot",
+]);
+
+export function validateRestoreQaSessionInputs(rawInputs = {}) {
+    // Stripped regardless of value: the layer passes `queryArtifactPath: undefined` for actions
+    // that have no artifact, and a key present with an undefined value is still a key.
+    const inputs = Object.fromEntries(
+        Object.entries(rawInputs || {}).filter(([k]) => !FRAMEWORK_INJECTED_INPUTS.includes(k)),
+    );
+    const supplied = Object.keys(inputs);
     const offending = supplied.filter((k) => FORBIDDEN_RESTORE_INPUTS.includes(k));
     if (offending.length) {
         return { ok: false, error: "caller_supplied_forbidden_input", detail: offending.join(", ") };
