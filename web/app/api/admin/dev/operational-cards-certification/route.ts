@@ -4,7 +4,9 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import {
     ensureOperationalCardsCertification,
-    resetOperationalCardsCertification,
+    inspectCertificationGraph,
+    repairOperationalCardsCertification,
+    restoreOperationalCardsCertification,
     verifyOperationalCardsCertification,
 } from "@/lib/certification/operationalCardsCertificationFixture";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -68,13 +70,29 @@ export async function POST(request: NextRequest) {
             const verify = await verifyOperationalCardsCertification(supabase, orgId);
             return NextResponse.json({ ok: true, ensured: result, verify });
         }
+        if (action === "inspect") {
+            // Read-only: reports what survives and what is missing, and claims nothing.
+            return NextResponse.json({ ok: true, graph: await inspectCertificationGraph(supabase, orgId) });
+        }
+        if (action === "repair") {
+            return NextResponse.json({
+                ok: true,
+                repair: await repairOperationalCardsCertification(supabase, orgId, actorUserId),
+            });
+        }
         if (action === "verify") {
             return NextResponse.json({ ok: true, verify: await verifyOperationalCardsCertification(supabase, orgId) });
         }
-        if (action === "reset") {
-            const removed = await resetOperationalCardsCertification(supabase, orgId);
+        if (action === "restore") {
+            /*
+             * The non-destructive replacement for `reset`. There is deliberately NO destructive verb
+             * on this runner any more: once a certification subject has append-only Attendance
+             * history, "remove it and start again" is not an operation the platform permits, and a
+             * fixture is not the place to make an exception to that rule.
+             */
+            const restored = await restoreOperationalCardsCertification(supabase, orgId, actorUserId);
             const verify = await verifyOperationalCardsCertification(supabase, orgId);
-            return NextResponse.json({ ok: true, reset: removed, verify });
+            return NextResponse.json({ ok: true, restore: restored, verify });
         }
     } catch (e) {
         return NextResponse.json(
@@ -84,5 +102,5 @@ export async function POST(request: NextRequest) {
     }
 
     // Fail closed. An unrecognised verb is not a no-op that might have done something.
-    return NextResponse.json({ error: "action must be ensure | verify | reset" }, { status: 400 });
+    return NextResponse.json({ error: "action must be ensure | inspect | repair | restore | verify" }, { status: 400 });
 }

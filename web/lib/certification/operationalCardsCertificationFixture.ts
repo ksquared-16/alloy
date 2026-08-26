@@ -90,6 +90,8 @@ export type CertificationVerifyResult = {
         agreements: number;
         /** PARTICIPATION truth — absent is exactly the defect this verify exists to catch. */
         processInstanceId: string | null;
+        /** Live journeys for this child. Anything but 1 is a defect, and a duplicate is not an absence. */
+        processInstanceCount: number;
         stageKey: string | null;
         /** Can Attendance resolve a subject for this child? */
         attendanceSubject: boolean;
@@ -288,14 +290,24 @@ export async function ensureOperationalCardsCertification(
          * stacked a second instance per child on the second ensure. Checking first is what makes
          * ensure genuinely idempotent rather than idempotent-looking.
          */
-        const { data: existingPi } = await supabase
+        /*
+         * ORDERED, AND CLOSED JOURNEYS ARE NOT CANDIDATES.
+         *
+         * An unordered `limit(1)` picked whichever row the planner returned first, so after `repair`
+         * closed a surplus journey, the next `ensure` selected that CLOSED row and moved it back to
+         * enrolled — undoing the repair and leaving two live journeys again. Reuse must name the
+         * same instance every time, and a journey deliberately ended is not one to resume.
+         */
+        const { data: existingPis } = await supabase
             .from("process_instances")
-            .select("id")
+            .select("id, state, created_at")
             .eq("org_id", orgId)
             .eq("subject_id", memberId)
-            .limit(1)
-            .maybeSingle();
-        let processInstanceId = t((existingPi as { id?: string } | null)?.id) || null;
+            .order("created_at", { ascending: true });
+        const reusablePi = ((existingPis ?? []) as Array<{ id?: string; state?: string | null }>).find(
+            (r) => t(r.state) !== "not_enrolling",
+        );
+        let processInstanceId = t(reusablePi?.id) || null;
         let journeyOpportunityId: string | null = null;
         if (!processInstanceId) {
             const journey = await startEnrollment(supabase, {
@@ -423,13 +435,25 @@ export async function verifyOperationalCardsCertification(
                 .eq("org_id", orgId)
                 .eq("customer_member_id", memberId);
 
-            // Participation, read straight from the process instance rather than inferred.
-            const { data: pi } = await supabase
+            /*
+             * Participation, read straight from the process instance rather than inferred.
+             *
+             * ORDERED AND COUNTED, never `maybeSingle()`. A second instance made that call return
+             * null, so a child with TWO journeys verified identically to a child with NONE — the
+             * duplicate read as an absence. The oldest row is the one `ensure` selects, and the
+             * count travels with it so a duplicate is reported rather than masked.
+             */
+            const { data: piRows } = await supabase
                 .from("process_instances")
-                .select("id, stage_key")
+                .select("id, stage_key, state, created_at")
                 .eq("org_id", orgId)
                 .eq("subject_id", memberId)
-                .maybeSingle();
+                .order("created_at", { ascending: true });
+            const allInstances = (piRows ?? []) as Array<{ id: string; stage_key?: string | null; state?: string | null }>;
+            // A journey closed as not_enrolling is a record, not a competing participation.
+            const liveInstances = allInstances.filter((r) => t(r.state) !== "not_enrolling");
+            const pi = liveInstances[0] ?? null;
+            const processInstanceCount = liveInstances.length;
 
             const subject = await resolveAttendanceSubject(supabase, orgId, memberId);
             const agreements = (ag ?? []).length;
@@ -441,6 +465,7 @@ export async function verifyOperationalCardsCertification(
                 customerMemberId: memberId,
                 agreements,
                 processInstanceId,
+                processInstanceCount,
                 stageKey,
                 attendanceSubject: subject.ok,
                 /*
@@ -452,6 +477,7 @@ export async function verifyOperationalCardsCertification(
                  */
                 ok:
                     agreements === 1
+                    && processInstanceCount === 1
                     && Boolean(processInstanceId)
                     && stageKey === ENROLLED_STAGE_KEY
                     && subject.ok,
@@ -475,86 +501,442 @@ export async function verifyOperationalCardsCertification(
     };
 }
 
-/**
- * Remove the fixture, outside-in.
+/*
+ * THERE IS NO DESTRUCTIVE RESET, AND THAT IS THE DESIGN.
  *
- * Attendance events and charges reference the agreement; the trio references the member; the member
- * references the household. Every selector is anchored on ids reached from the reserved domain.
+ * `resetOperationalCardsCertification` used to live here and deleted the fixture outside-in. It is
+ * gone rather than deprecated, because a destructive verb that merely goes unused is one call away
+ * from being used again. Once a certification child has Attendance history, deleting it is not
+ * something the platform permits — `child_attendance_events` refuses DELETE by DB rule, and that
+ * refusal cascades to the agreement, the member and the household that history hangs off.
+ *
+ * Attempting it anyway is what produced a HALF-REMOVED fixture: the parent person, the household
+ * link, participation, placements and schedule assignments were gone while the members, agreements
+ * and events survived — a state `ensure` could not see, because it finds the household through the
+ * person and would have built a second one alongside the orphans.
+ *
+ * `repair` restores that graph and `restore` neutralizes the day by appending reversals. Between
+ * them they do everything reset was actually wanted for, without ever claiming that something which
+ * happened did not.
  */
-export async function resetOperationalCardsCertification(
+
+
+/**
+ * FIXTURE-OWNED IDENTITY, PROVEN RATHER THAN GUESSED.
+ *
+ * The reserved e-mail anchor was deleted by a partial reset, so the household can no longer be
+ * found the usual way. Surname alone is not authority — a real family could share it — so a member
+ * counts as fixture-owned only when the deterministic name AND a surviving fixture artefact agree:
+ * an enrollment agreement or a process instance this fixture created.
+ *
+ * Anything ambiguous fails closed. Re-attaching a real family to certification scaffolding would be
+ * far worse than leaving orphans in place.
+ */
+export type CertificationGraphMember = {
+    customerMemberId: string;
+    firstName: string;
+    customerId: string | null;
+    agreementIds: string[];
+    processInstanceIds: string[];
+    placements: number;
+    scheduleAssignments: number;
+    participations: number;
+    attendanceEvents: number;
+};
+
+export type CertificationGraph = {
+    members: CertificationGraphMember[];
+    /** Household row, if it survived. */
+    customerId: string | null;
+    customerExists: boolean;
+    personExists: boolean;
+    opportunityIds: string[];
+    /** Everything that blocks a clean verify, in plain terms. */
+    missing: string[];
+    ambiguous: string[];
+};
+
+export async function inspectCertificationGraph(
     supabase: SupabaseClient,
     orgId: string,
-): Promise<{ removed: string[]; customerId: string | null }> {
-    await assertNamespaceIsolated(supabase, orgId);
-    const { customerId, personId } = await findHousehold(supabase, orgId);
-    const removed: string[] = [];
-
-    /*
-     * TWO ANCHORS, BECAUSE ONE OF THEM GETS DELETED.
-     *
-     * The household was reached through the reserved e-mail, and reset deletes that person — so a
-     * partially failed reset left members, agreements and process instances alive with no way back
-     * to them. The reserved surname is a second anchor on the members themselves, equally namespaced
-     * and not destroyed by the first pass, so orphans stay reclaimable.
-     */
-    const byHousehold = customerId
-        ? await supabase.from("customer_members").select("id").eq("org_id", orgId).eq("customer_id", customerId)
-        : { data: [] as { id: string }[] };
-    const bySurname = await supabase
+): Promise<CertificationGraph> {
+    const expected = CERT_CHILDREN.map((c) => c.firstName);
+    const { data: candidates } = await supabase
         .from("customer_members")
-        .select("id")
+        .select("id, first_name, last_name, customer_id")
         .eq("org_id", orgId)
         .eq("last_name", CERT_LAST_NAME);
-    const memberIds = [
-        ...new Set([...(byHousehold.data ?? []), ...(bySurname.data ?? [])].map((m) => m.id as string)),
-    ];
-    if (!customerId && memberIds.length === 0) return { removed, customerId: null };
 
-    let agreementIds: string[] = [];
-    if (memberIds.length) {
-        const { data: ags } = await supabase
-            .from("child_enrollment_agreements")
-            .select("id")
-            .eq("org_id", orgId)
-            .in("customer_member_id", memberIds);
-        agreementIds = (ags ?? []).map((a) => a.id as string);
+    const members: CertificationGraphMember[] = [];
+    const ambiguous: string[] = [];
+
+    for (const firstName of expected) {
+        const matches = (candidates ?? []).filter((m) => t(m.first_name) === firstName);
+        if (matches.length > 1) {
+            ambiguous.push(`${firstName}: ${matches.length} members share the reserved identity`);
+            continue;
+        }
+        if (matches.length === 0) continue;
+        const m = matches[0]!;
+        const id = m.id as string;
+
+        const [ags, pis, plc, sch, ocm, att] = await Promise.all([
+            supabase.from("child_enrollment_agreements").select("id").eq("org_id", orgId).eq("customer_member_id", id),
+            supabase.from("process_instances").select("id").eq("org_id", orgId).eq("subject_id", id),
+            supabase.from("child_placements").select("id").eq("org_id", orgId).eq("customer_member_id", id),
+            supabase.from("schedule_assignments").select("id").eq("org_id", orgId).eq("customer_member_id", id),
+            supabase.from("opportunity_customer_members").select("id").eq("org_id", orgId).eq("customer_member_id", id),
+            supabase.from("child_attendance_events").select("id").eq("org_id", orgId).eq("customer_member_id", id),
+        ]);
+
+        const agreementIds = (ags.data ?? []).map((r) => r.id as string);
+        const processInstanceIds = (pis.data ?? []).map((r) => r.id as string);
+
+        // The corroboration rule: a reserved name alone never qualifies a member as fixture-owned.
+        if (agreementIds.length === 0 && processInstanceIds.length === 0) {
+            ambiguous.push(`${firstName}: reserved name with no fixture artefact — refusing to claim it`);
+            continue;
+        }
+
+        members.push({
+            customerMemberId: id,
+            firstName,
+            customerId: t(m.customer_id) || null,
+            agreementIds,
+            processInstanceIds,
+            placements: (plc.data ?? []).length,
+            scheduleAssignments: (sch.data ?? []).length,
+            participations: (ocm.data ?? []).length,
+            attendanceEvents: (att.data ?? []).length,
+        });
     }
 
-    /*
-     * A FAILED DELETE MUST BE VISIBLE.
-     *
-     * This previously pushed to `removed` only on success and said nothing otherwise, so a reset
-     * that left agreements, members and process instances behind reported a tidy list of the tables
-     * it HAD managed — and the orphans were invisible until a later count moved.
-     */
-    const drop = async (table: string, column: string, ids: string[]) => {
-        if (!ids.length) return;
-        const { error } = await supabase.from(table).delete().eq("org_id", orgId).in(column, ids);
-        removed.push(error ? `${table}: FAILED ${error.message.slice(0, 80)}` : table);
+    const customerId = members.find((m) => m.customerId)?.customerId ?? null;
+    const [cust, person, opps] = await Promise.all([
+        customerId
+            ? supabase.from("customers").select("id").eq("org_id", orgId).eq("id", customerId).maybeSingle()
+            : Promise.resolve({ data: null }),
+        supabase.from("persons").select("id").eq("org_id", orgId).eq("email", CERT_PARENT_EMAIL).maybeSingle(),
+        customerId
+            ? supabase.from("opportunities").select("id").eq("org_id", orgId).eq("customer_id", customerId)
+            : Promise.resolve({ data: [] as { id: string }[] }),
+    ]);
+
+    const missing: string[] = [];
+    if (!customerId || !(cust as { data?: unknown }).data) missing.push("household (customers)");
+    if (!(person as { data?: unknown }).data) missing.push("certification parent (persons)");
+    if (((opps as { data?: unknown[] }).data ?? []).length === 0) missing.push("opportunity");
+    for (const m of members) {
+        if (m.participations === 0) missing.push(`${m.firstName}: participation row`);
+        if (m.placements === 0) missing.push(`${m.firstName}: placement`);
+        if (m.scheduleAssignments === 0) missing.push(`${m.firstName}: schedule assignment`);
+        if (m.agreementIds.length !== 1) missing.push(`${m.firstName}: expected 1 agreement, found ${m.agreementIds.length}`);
+        if (m.processInstanceIds.length !== 1) missing.push(`${m.firstName}: expected 1 process instance, found ${m.processInstanceIds.length}`);
+    }
+    if (members.length !== expected.length) missing.push(`expected ${expected.length} members, resolved ${members.length}`);
+
+    return {
+        members,
+        customerId,
+        customerExists: Boolean((cust as { data?: unknown }).data),
+        personExists: Boolean((person as { data?: unknown }).data),
+        opportunityIds: (((opps as { data?: { id: string }[] }).data) ?? []).map((o) => o.id),
+        missing,
+        ambiguous,
     };
+}
+
+export type CertificationRepairResult = {
+    ok: boolean;
+    /** Everything repair did, in order, so the operator can audit it without reading the DB. */
+    actions: string[];
+    /** Why repair stopped, when it did. */
+    refusals: string[];
+    graphBefore: CertificationGraph;
+    ensure?: CertificationEnsureResult;
+};
+
+/**
+ * REPAIR — restore the certification graph to its known state without erasing anything.
+ *
+ * ── WHY THIS EXISTS, AND WHY IT IS NOT `reset` ──
+ *
+ * `reset` used to hard-delete the subject. Once a certification child has Attendance history that is
+ * no longer possible and it should not be: `child_attendance_events` is append-only by DB rule, and
+ * the platform is right to refuse. The refusal cascaded — agreements, members and process instances
+ * are all reachable from that history — and left the fixture half-removed: household and members and
+ * agreements and events survived, while the parent person, the household link, participation, the
+ * placements and the schedule assignments were gone.
+ *
+ * A half-removed fixture is worse than either end state, because `ensure` cannot see it. `ensure`
+ * finds the household THROUGH the parent person, so with the person deleted it would conclude "no
+ * household" and create a second one — leaving the surviving children orphaned under the first and
+ * duplicating them under the second. Repair exists to close exactly that gap.
+ *
+ * ── IT RESTORES; IT NEVER RE-CREATES WHAT SURVIVED ──
+ *
+ * Rediscovery is `inspectCertificationGraph`, which requires the deterministic reserved name AND a
+ * surviving fixture artefact before it will claim a member. Repair writes nothing when that is
+ * ambiguous. It then restores the two things `ensure` cannot reach on its own — the parent person
+ * and its household link — and hands everything else to `ensure`, which already reuses members,
+ * agreements and process instances and re-materializes the durable trio through `directEnroll`.
+ *
+ * ── IT DOES NOT MANUFACTURE AN OPPORTUNITY ──
+ *
+ * The opportunity is genuinely gone and repair deliberately leaves it gone. An Opportunity is an
+ * ACQUISITION EPISODE; this family is enrolled and settled. `startEnrollment` refuses to invent one
+ * for exactly this reason — "inventing an Opportunity to satisfy a helper would manufacture an
+ * acquisition episode that never happened and would put a settled family back into acquisition work
+ * views" — and a fixture that wants a tidier graph is not a better reason than a product service's.
+ * Certification does not need it: `verify` requires an agreement, a process instance at the enrolled
+ * stage, and a resolvable attendance subject, and none of those is opportunity-scoped.
+ *
+ * ── SURPLUS JOURNEYS ARE CLOSED, NOT DELETED ──
+ *
+ * Two process instances per child survive, from the runs before `ensure` reused instead of creating.
+ * The extra one is a journey that never produced an outcome, so it is CLOSED as `not_enrolling`
+ * rather than removed. Deleting it would be the same mistake as deleting the history: the row is a
+ * record that something happened, and the correction for a wrong record is a further record.
+ */
+export async function repairOperationalCardsCertification(
+    supabase: SupabaseClient,
+    orgId: string,
+    actorUserId: string | null,
+): Promise<CertificationRepairResult> {
+    await assertNamespaceIsolated(supabase, orgId);
+
+    const graphBefore = await inspectCertificationGraph(supabase, orgId);
+    const actions: string[] = [];
+    const refusals: string[] = [];
+
+    if (graphBefore.ambiguous.length > 0) {
+        // FAIL CLOSED. Re-attaching a real family to certification scaffolding is far worse than
+        // leaving orphans in place, so ambiguity ends the operation before any write.
+        return {
+            ok: false,
+            actions,
+            refusals: [`ambiguous ownership — refusing to write: ${graphBefore.ambiguous.join(" · ")}`],
+            graphBefore,
+        };
+    }
+
+    const customerId = graphBefore.customerId;
+    if (!customerId || !graphBefore.customerExists) {
+        // Nothing survived to repair. That is `ensure`'s job, not repair's, and saying so beats
+        // silently building a household from a repair verb.
+        return {
+            ok: false,
+            actions,
+            refusals: ["no surviving certification household — run ensure, which creates one canonically"],
+            graphBefore,
+        };
+    }
 
     /*
-     * Journey records first. The process instance is participation truth created by
-     * `startEnrollment`; leaving it behind is what let a second ensure stack a duplicate instance on
-     * the same child, which then made `maybeSingle()` reads return null and verify report "no
-     * participation" for a child that had two.
+     * 1 · THE PARENT PERSON AND ITS HOUSEHOLD LINK.
+     *
+     * `upsertAndLinkPersonForAdmin` is the service behind the registered `add_family_member` action:
+     * it resolves the person through `findOrCreatePersonInOrgWithMeta` and links `customer_persons`.
+     * The household is the SURVIVING one, so this reconnects rather than replaces — which is the
+     * whole difference between repair and a second `ensure`.
      */
-    await drop("process_instances", "subject_id", memberIds);
-    await drop("child_attendance_events", "enrollment_agreement_id", agreementIds);
-    await drop("charges", "billable_source_id", agreementIds);
-    await drop("schedule_assignments", "enrollment_agreement_id", agreementIds);
-    await drop("child_placements", "enrollment_agreement_id", agreementIds);
-    await drop("child_enrollment_agreements", "id", agreementIds);
-    await drop("opportunity_customer_members", "customer_member_id", memberIds);
-    await drop("customer_members", "id", memberIds);
-    if (customerId) {
-        await drop("opportunities", "customer_id", [customerId]);
-        await drop("customer_persons", "customer_id", [customerId]);
-        await drop("customers", "id", [customerId]);
+    if (!graphBefore.personExists) {
+        const { upsertAndLinkPersonForAdmin } = await import("@/lib/admin/person/upsertAndLinkPersonForAdmin");
+        const linked = await upsertAndLinkPersonForAdmin(supabase, {
+            orgId,
+            firstName: CERT_PARENT.firstName,
+            lastName: CERT_PARENT.lastName,
+            email: CERT_PARENT_EMAIL,
+            phone: CERT_PARENT.phone,
+            roleType: "primary_contact",
+            customerId,
+            opportunityId: null,
+        });
+        if (!linked.ok || !linked.result.person_id) {
+            return {
+                ok: false,
+                actions,
+                refusals: [
+                    "could not restore the certification parent person — refusing to continue"
+                    + (linked.ok ? "" : `: ${linked.error}`),
+                ],
+                graphBefore,
+            };
+        }
+        actions.push(
+            `restored parent person ${linked.result.person_id} and linked it to household ${customerId}`,
+        );
+    } else {
+        actions.push("parent person already present — left alone");
     }
-    // The person goes LAST: it is the primary namespace anchor, and deleting it first is what made
-    // an interrupted reset unrecoverable.
-    if (personId) await drop("persons", "id", [personId]);
 
-    return { removed, customerId };
+    /*
+     * 2 · SURPLUS JOURNEYS CLOSED, NEVER DELETED.
+     *
+     * The oldest instance is kept because that is the one `ensure` and `verify` select. Any other is
+     * closed as a journey that reached no outcome.
+     */
+    for (const member of graphBefore.members) {
+        if (member.processInstanceIds.length <= 1) continue;
+        const { data: ordered } = await supabase
+            .from("process_instances")
+            .select("id, created_at")
+            .eq("org_id", orgId)
+            .eq("subject_id", member.customerMemberId)
+            .order("created_at", { ascending: true });
+        const rows = (ordered ?? []) as Array<{ id: string }>;
+        for (const surplus of rows.slice(1)) {
+            const closed = await setProcessInstanceState(supabase, {
+                orgId,
+                instanceId: surplus.id,
+                state: "not_enrolling",
+                closeReasonKey: "duplicate_certification_instance",
+            });
+            if (closed.error) {
+                // The close reason may not be a configured key in this tenant. The STATE is the part
+                // that matters; retrying without the reason keeps the record honest either way.
+                const retried = await setProcessInstanceState(supabase, {
+                    orgId,
+                    instanceId: surplus.id,
+                    state: "not_enrolling",
+                });
+                if (retried.error) {
+                    refusals.push(`could not close surplus instance ${surplus.id}: ${retried.error}`);
+                    continue;
+                }
+            }
+            actions.push(`closed surplus journey ${surplus.id} for ${member.firstName} as not_enrolling`);
+        }
+    }
+
+    /*
+     * 3 · EVERYTHING ELSE IS `ensure`.
+     *
+     * With the person restored, `ensure` resolves the surviving household again and reuses what is
+     * there: members by name, the open agreement inside `directEnroll`, the kept process instance.
+     * The deleted placement and schedule assignment are re-materialized by `directEnroll`, which is
+     * the same path the product uses — repair never inserts an agreement or a placement itself.
+     *
+     * It runs twice on purpose. `ensure` reads participation BEFORE `directEnroll` writes, so a row
+     * that only comes into existence during the first pass is only reconciled on the second. Calling
+     * it twice is also the cheapest real proof that it is idempotent.
+     */
+    const first = await ensureOperationalCardsCertification(supabase, orgId, actorUserId);
+    if (!first.ok) {
+        return { ok: false, actions, refusals: [...refusals, `ensure refused: ${first.reason}`], graphBefore, ensure: first };
+    }
+    actions.push("ensure pass 1 completed");
+    const second = await ensureOperationalCardsCertification(supabase, orgId, actorUserId);
+    if (!second.ok) {
+        return { ok: false, actions, refusals: [...refusals, `ensure pass 2 refused: ${second.reason}`], graphBefore, ensure: second };
+    }
+    actions.push("ensure pass 2 completed");
+
+    if (graphBefore.opportunityIds.length === 0) {
+        // Stated, not silently skipped: an absent acquisition episode is a deliberate outcome here.
+        actions.push(
+            "opportunity NOT recreated — an Opportunity is an acquisition episode, and this household is "
+            + "enrolled; certification does not require one",
+        );
+    }
+
+    return { ok: refusals.length === 0, actions, refusals, graphBefore, ensure: second };
+}
+
+export type CertificationRestoreResult = {
+    ok: boolean;
+    /** Reversals appended, per child. Nothing is ever removed. */
+    reversals: Array<{ firstName: string; reversedEventIds: string[]; failures: string[] }>;
+    repair: CertificationRepairResult;
+};
+
+/**
+ * RESTORE TO THE KNOWN CERTIFICATION STATE — the non-destructive replacement for `reset`.
+ *
+ * ── WHY `reset` HAD TO GO ──
+ *
+ * `reset` deleted the subject so the next run could start clean. That worked exactly until the
+ * certification children had Attendance history, at which point the database refused:
+ * "child_attendance_events is append-only: DELETE is not allowed. Record a correction/reversal
+ * instead." The refusal is CORRECT — an attendance fact is a claim about a child's physical presence
+ * in a room, and a system that lets a fixture erase those cannot be trusted with the real ones. The
+ * mistake was mine, in wanting a destructive verb at all.
+ *
+ * So the baseline is restored the way the domain says a wrong fact is undone: by appending the
+ * record that voids it. Every effective event gets a REVERSAL, authored through the same
+ * `correctAttendanceEvent` an operator uses. The history still says what happened, and says that it
+ * was voided — which is more true than the history a delete would have left, not less.
+ *
+ * ── "EFFECTIVE" IS THE FOLD'S WORD, NOT MINE ──
+ *
+ * Reversing every row would try to reverse reversals, which the service rightly refuses.
+ * `effectiveAttendanceEvents` already answers "what is current truth after corrections and
+ * reversals are applied", so restore reverses that set and nothing else. Running it twice therefore
+ * appends nothing the second time — idempotent because the fold is, not because of a flag.
+ *
+ * ── AND THEN THE GRAPH ──
+ *
+ * Neutralizing the day is only half of "known state"; the other half is the enrolled graph itself,
+ * which is `repair`. Restore ends by calling it, so one verb takes the fixture from any surviving
+ * state back to the one certification expects.
+ */
+export async function restoreOperationalCardsCertification(
+    supabase: SupabaseClient,
+    orgId: string,
+    actorUserId: string | null,
+): Promise<CertificationRestoreResult> {
+    await assertNamespaceIsolated(supabase, orgId);
+
+    const { correctAttendanceEvent, listAttendanceEvents } = await import(
+        "@/lib/childcareOperational/attendance/attendanceService"
+    );
+    const { effectiveAttendanceEvents } = await import(
+        "@/lib/childcareOperational/attendance/attendanceFold"
+    );
+
+    const graph = await inspectCertificationGraph(supabase, orgId);
+    const reversals: CertificationRestoreResult["reversals"] = [];
+
+    if (graph.ambiguous.length === 0) {
+        for (const member of graph.members) {
+            const reversedEventIds: string[] = [];
+            const failures: string[] = [];
+            const events = await listAttendanceEvents(supabase, orgId, {
+                customerMemberId: member.customerMemberId,
+            });
+            for (const event of effectiveAttendanceEvents(events)) {
+                try {
+                    const written = await correctAttendanceEvent(supabase, {
+                        orgId,
+                        entryType: "reversal",
+                        correctsEventId: event.id,
+                        eventKind: event.event_kind,
+                        eventAt: event.event_at,
+                        serviceDate: event.service_date,
+                        // A reversal restates the shape of what it voids: a room-scoped kind still
+                        // needs its room, or `validateEventShape` refuses the write.
+                        roomLocationId: event.room_location_id,
+                        fromRoomLocationId: event.from_room_location_id,
+                        toRoomLocationId: event.to_room_location_id,
+                        note: "voided: operational cards certification restore",
+                        actor: {
+                            actorType: "system",
+                            actorUserId,
+                            actorLabel: "operational_cards_certification",
+                            sourceType: "system",
+                            sourceKey: "operational_cards_certification_restore",
+                        },
+                    } as Parameters<typeof correctAttendanceEvent>[1]);
+                    reversedEventIds.push(written.id);
+                } catch (e) {
+                    failures.push(`${event.id}: ${(e as Error).message}`);
+                }
+            }
+            reversals.push({ firstName: member.firstName, reversedEventIds, failures });
+        }
+    }
+
+    const repair = await repairOperationalCardsCertification(supabase, orgId, actorUserId);
+    const anyFailure = reversals.some((r) => r.failures.length > 0);
+    return { ok: repair.ok && !anyFailure, reversals, repair };
 }
