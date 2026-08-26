@@ -60,6 +60,15 @@ export type EnrollmentNeedOccurrence = {
     readonly label: string;
     readonly required: boolean;
     /**
+     * The section the school itself put this destination in.
+     *
+     * Grouping evidence the packet already carries — "Contact Information", "Emergency Contact
+     * Information & Authorized Adults", "Health Information and Developmental History" are the
+     * school's own headings, not categories Alloy invented. Carried so a conversation can ask
+     * related things together without any layer having to guess what is related.
+     */
+    readonly section_title: string | null;
+    /**
      * The AUTHORED control type — `date`, `boolean`, `select`, `text`, `signature`, …
      *
      * Carried because the conversational surface must offer the same kind of control the Form does:

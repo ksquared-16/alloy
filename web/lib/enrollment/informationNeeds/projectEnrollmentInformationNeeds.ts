@@ -80,6 +80,14 @@ export function projectEnrollmentInformationNeeds(
     const byKey = new Map<string, Accumulator>();
 
     for (const form of input.forms) {
+        // The authored section each destination sits in — read once per Form, not per field.
+        const sectionByFieldId = new Map<string, string>();
+        for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {
+            const title = (sec.title ?? "").trim();
+            if (!title) continue;
+            for (const id of sec.field_ids ?? []) if (!sectionByFieldId.has(id)) sectionByFieldId.set(id, title);
+        }
+
         walkScalarFormFields(form.schema, (field) => {
             // Not a participant need unless the participant is the one who supplies it. Display-only
             // prose was the first case — without it a handbook paragraph became an artifact-specific
@@ -105,6 +113,7 @@ export function projectEnrollmentInformationNeeds(
                 form_field_id: field.id,
                 label: field.label,
                 required: field.required === true,
+                section_title: sectionByFieldId.get(field.id) ?? null,
                 field_type: field.type,
                 options: readFieldOptions(field),
             };
