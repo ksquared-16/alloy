@@ -545,8 +545,19 @@ export function participantProgressDisplay(
     if (remaining <= 0) return { label: "Almost there", percent: work.percent };
     // Orientation, not gamification: no streaks, no celebration, no "you're doing great".
     if (remaining === 1) return { label: "One more thing", percent: work.percent };
-    if (work.percent >= 70) return { label: `Almost there · ${remaining} left`, percent: work.percent };
-    return { label: `${remaining} things left`, percent: work.percent };
+
+    /*
+     * WHERE they are, not how many are left.
+     *
+     * "41 things left" is a true number and a discouraging one, and it is the count this product
+     * has spent the whole slice refusing to show — first as "Question 17 of 92", now in its last
+     * hiding place. A parent working through a topic wants to know which topic; the percentage
+     * beside it already says how far along they are.
+     */
+    const topic = objective.next_turn.cluster?.title;
+    if (topic) return { label: topic, percent: work.percent };
+    if (work.percent >= 70) return { label: "Almost there", percent: work.percent };
+    return { label: "In progress", percent: work.percent };
 }
 
 export function progressLine(objective: ParticipantObjectiveWire): string {
