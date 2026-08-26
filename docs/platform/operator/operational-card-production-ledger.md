@@ -1867,3 +1867,106 @@ certification (§20) unreachable this run — there is no health truth to certif
 
 Health & Safety is **not** production-ready and was not registered. Safety Signals remain unstarted
 and must not ship before D-H6 (§21).
+
+---
+
+## 30. Health & Safety — A, B, D–G delivered; C pending a credentialed apply (2026-08-26)
+
+### 30.1 Sequence status
+
+| Step | Status |
+|---|---|
+| A · M1 / D-H1 grain correction | **DONE** |
+| B · D-H6 health visibility permission | **DONE**, and proven live |
+| C · apply the H1 migration | **REQUESTED** — `database.apply_migration` `gar_62f1af0052c793`, awaiting the trusted host |
+| D · H2 provider registration | **DONE** (M1 landed first, as the contract requires) |
+| E · HealthSafetyCardVM | **DONE** |
+| F · locked summary · G · locked detail | **DONE** |
+| H · fixture through H4 · I · browser certification · J · Surface registration | **BLOCKED on C** |
+
+### 30.2 A — the grain correction, with the census first
+
+The Director's condition was to identify every affected row, report counts by org and field, find any
+ambiguous enrollment → child mapping, and fail closed. A read-only dev route produced it:
+
+```text
+definitions at enrollment grain   0
+values                            0
+ambiguous                         0
+→ M1 is a REGISTRY-ONLY correction in this environment
+```
+
+`allergy_notes` moves to `child` and its `crm_mapping_key` now points at `child.allergies` — the same
+destination the profile field already uses, so **one** durable owner rather than two.
+`medication_flag` is **deprecated, not migrated** (M3): "this child takes medication" is derivable
+from the medication facts, and keeping the boolean is a second answer that stops updating the moment
+a medication is added or ended. It stays resolvable so live forms keep working, and
+`AUTHORABLE_FORM_SYSTEM_FIELDS` — what the two authoring pickers now read — no longer offers it.
+Without that split, retiring it would be advice rather than a rule.
+
+The data migration **refuses to guess**: an enrollment value hangs off an episode, an episode may
+hold several children, so it moves only where exactly one child participates and leaves the rest in
+place. The definition is re-grained only once none of its values remain behind — doing it earlier
+would orphan them, the definition saying `customer_member` while the rows said `enrollment`.
+
+### 30.3 B — the access boundary, and the proof
+
+Two keys: `health.view`, `health.manage`, granted to **admin only**. `ops` is deliberately not
+granted — an operator who works Attendance or Financials must not acquire allergies, conditions and
+medications because a card was placed on a Surface.
+
+Enforced at the provider and the mutation seam, where `access` is a **required** argument. Making it
+required rather than optional was the design decision that mattered: the compiler flagged every
+existing call site, and a future Health endpoint cannot forget the check by omission.
+
+**Proven live**: an admin/ops operator with full route admission receives
+
+```text
+403 {"permission_denied": true, "error": "You do not have permission to view health information."}
+```
+
+from `/api/admin/health/card`, because the grant is not seeded until C runs. That is the negative
+half of the required test, and it demonstrates that route admission is not the boundary.
+
+Three details kept: `health.manage` does not imply `health.view`; a **failed** grant read (`null`)
+denies, because collapsing it onto `[]` makes the failure open (W-43); and the refusal names the
+permission, never the data — an operator who may not see health information should not learn from
+the error that this child has any.
+
+### 30.4 Locks reconciled deliberately, not bumped
+
+The W-11 artifact pinned the catalogue at 57 keys. `APPROVED_ADDITIONS` now names each new key **and
+the decision behind it**, so an unapproved addition still fails; a new assertion also requires both
+health keys to have enforcement sites, because a key that is seeded but not enforced is the D-H6
+failure mode — a catalogue advertising a boundary the product does not apply.
+
+The W-14 route lock caught a genuine false claim of mine: the health route declared `health.view` and
+named a helper that never mentioned the key on an executable line. The read model now names the
+permission on the line that enforces it.
+
+Four routes were also undeclared — three left by this program's **own earlier Attendance and
+Financials runs**, which I had not caught because I never ran `tests/access`.
+
+### 30.5 Two name collisions worth remembering
+
+* **`health` was already taken** and means *Enrollment Health* — a pipeline metric with a chip and a
+  tone. Reusing it would have put medical facts behind a key whose vocabulary is about process
+  health, and every existing consumer would have started receiving them. Registered `health_safety`.
+* **`database.migration.apply` is not the governed action key**; it is `database.apply_migration`.
+  `vac governed-action --list` is the discovery contract and answers this directly.
+
+### 30.6 What is deliberately absent
+
+Physician and dentist. The Relationship platform has no canonical role key for either, and flat
+`physician_name` / `physician_phone` child fields would create the duplicate owner this vertical
+exists to prevent. The VM carries it in its own `gaps` list — a **relationship gap, not a health
+blocker**. Safety Signals remain unstarted and must not ship before the permission/context projection
+contract is proven (§21).
+
+### 30.7 Definition of Done
+
+`M1 · H2 · H3/H4 · read model · summary · detail · permission (server-enforced, refusal proven)` all
+PASS. `H1 applied · real facts through H4 · participant switching · Surface placement · browser
+certification · 0 page errors` are **not reached**, because every one of them needs the schema that
+step C applies. Health & Safety is **not** production-ready and the card is **not** placed on any
+Surface.
