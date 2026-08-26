@@ -575,7 +575,20 @@ export function canOperatorSupersedeRun(run, facts = {}) {
     if (report?.type === "needs_input" && report.blocking !== false) return false;
     return true;
   }
-  if (run.state !== "EXECUTING") return false;
+  // RECOVERING is superseded on the same terms as EXECUTING.
+  //
+  // A recovered run waits for the agent to report again. When the agent already
+  // answered BEFORE the recovery — or its reply was consumed as a delivery echo
+  // — nothing further is coming, and the run parks in RECOVERING forever. The
+  // stale governor calls that class "active", so it never collects it either.
+  // The lane is then unreachable: Send is refused, nothing closes the run, and
+  // the operator has no way back in. Communications sat exactly there for 46
+  // minutes with an idle pane.
+  //
+  // The guards above still hold — an open resource, an in-flight continuation
+  // or a busy session all still refuse — so this widens the state, never the
+  // conditions.
+  if (run.state !== "EXECUTING" && run.state !== "RECOVERING") return false;
   const delivered = facts.delivered_ms;
   if (delivered != null && (nowMs - delivered) < OPERATOR_SUPERSEDE_GRACE_MS) return false;
   return true;
