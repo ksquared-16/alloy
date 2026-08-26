@@ -13,6 +13,8 @@
  * registries, cap workers, reclaim seats or terminate anything.
  */
 import os from "node:os";
+import { createRequire } from "node:module";
+const nodeRequire = createRequire(import.meta.url);
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -26,6 +28,7 @@ import {
 import { attributionReport, parseProcessTable } from "./lib/vacilando/process-attribution.mjs";
 import { classifyWorkload } from "./lib/vacilando/workload-classification.mjs";
 import { concurrentWeightedCost } from "./lib/vacilando/workload-observation.mjs";
+import { hostCapability, computeCapacityPolicy } from "./lib/vacilando/capacity-policy.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac health [--json] [--check <name>] [--quiet]
@@ -119,6 +122,30 @@ const workloads = (attribution?.records || [])
   .map((r) => classifyWorkload({ command: r.command, pid: r.pid, attribution: r }))
   .filter((w) => w.workload_class);
 const workloadCost = concurrentWeightedCost(workloads);
+
+// ── S4: the canonical capacity policy. Health reads it; it never recomputes. ─
+const sysctlRead = (key) => {
+  try {
+    const { execFileSync } = nodeRequire("node:child_process");
+    return String(execFileSync("sysctl", ["-n", key], { encoding: "utf8", timeout: 1500 })).trim();
+  } catch { return null; }
+};
+const devServerCount = (() => {
+  try {
+    const root = process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev", "gateway");
+    const pidDir = join(root, "pids");
+    if (!existsSync(pidDir)) return 0;
+    return readdirSync(pidDir).filter((f) => f.endsWith(".pid")).filter((f) => {
+      const pid = Number(readFileSync(join(pidDir, f), "utf8").trim());
+      try { process.kill(pid, 0); return true; } catch { return false; }
+    }).length;
+  } catch { return 0; }
+})();
+
+const capability = hostCapability({
+  os, disk, memory, load, seats, devServers: devServerCount, workloads, sysctl: sysctlRead,
+});
+const capacity = computeCapacityPolicy(capability);
 
 const lanes = lanesRaw.map((l) => ({
   lane_id: l.lane_id,
@@ -214,7 +241,7 @@ const report = composeReport({
   endedAt: new Date().toISOString(),
   probeResults: {
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
-    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost,
+    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost, capacity,
     ports, worktrees, toolkit, configured_max: configuredMax,
   },
 });
@@ -241,6 +268,10 @@ if (load) w(`load       ${load.one.toFixed(2)} / ${load.five.toFixed(2)} / ${loa
 if (memory) w(`memory     ${memory.free_gb} GB free (${memory.free_pct.toFixed(1)}%) · compressor ${memory.compressor_gb} GB\n`);
 if (disk) w(`disk       ${disk.free_gb} GB free of ${disk.total_gb} GB (${disk.free_pct.toFixed(1)}%)\n`);
 w(`vacilando  ${seats.length} provider seats · ${lanes.length} lanes · ${attribution ? attribution.attributed_count : "?"} attributed processes\n`);
+const A = capacity.axes;
+w(`capacity   providers ${A.provider_capacity.current}/${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
+w(`reserves   memory ${A.memory_capacity.free_gb ?? "?"} GB free / ${A.memory_capacity.reserve_gb} GB reserve · disk ${A.disk_headroom.free_gb ?? "?"} GB free / ${A.disk_headroom.reserve_gb} GB reserve · policy ${capacity.policy_version}\n`);
+if (capacity.constrained_axes.length) w(`constrained ${capacity.constrained_axes.map((c) => c.value).join(", ")}\n`);
 w(`checks     ${report.counts.problem} problem · ${report.counts.watch} watch · ${report.counts.healthy} healthy   (${report.duration_ms} ms)\n`);
 
 const section = (title, sev) => {

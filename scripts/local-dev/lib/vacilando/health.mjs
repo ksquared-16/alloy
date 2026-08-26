@@ -100,7 +100,9 @@ export function thresholdsFor(hw) {
     disk_problem_pct: 8,
     gateway_watch_ms: 500,
     gateway_problem_ms: 3000,
-    max_active_providers: Math.max(1, Math.floor(cores / 3)),
+    // Provider, token and worker ceilings are NOT derived here. capacity-policy
+    // is their single owner; health reads them from the policy it is given.
+    // Three modules once derived this independently and could disagree.
     toolkit_keep_n: 10,
     toolkit_watch_multiple: 2,
     toolkit_problem_multiple: 4,
@@ -256,15 +258,23 @@ export function checkGatewayResponsive({ thresholds, gateway }) {
   });
 }
 
-export function checkProviderCapacity({ thresholds, seats = [], configuredMax = null }) {
-  const max = Number.isFinite(configuredMax) ? configuredMax : thresholds.max_active_providers;
+export function checkProviderCapacity({ capacity = null, seats = [], configuredMax = null }) {
+  // The ceiling comes from the canonical capacity policy; the configured
+  // operator override still wins when present.
+  const derived = capacity?.axes?.provider_capacity?.ceiling ?? null;
+  const max = Number.isFinite(configuredMax) ? configuredMax : (derived ?? 1);
   const active = seats.length;
   const sev = active > max ? "problem" : active === max ? "watch" : "healthy";
   return finding({
     check: "provider.capacity",
     severity: sev,
     owner_resource: "vacilando.provider_capacity",
-    measurements: { active_seats: active, max_active: max, derived_max: thresholds.max_active_providers },
+    measurements: {
+      active_seats: active, max_active: max, derived_max: derived,
+      bounded_by: capacity?.axes?.provider_capacity?.bounded_by ?? null,
+      remaining: capacity?.axes?.provider_capacity?.remaining ?? null,
+      capacity_policy_version: capacity?.policy_version ?? null,
+    },
     evidence: seats.map((s) => `pid ${s.pid} · ${s.provider} · ${s.lane_name || s.lane_id || "unbound"}`),
     explanation: sev === "problem"
       ? "More provider seats are live than the configured ceiling allows."
@@ -286,14 +296,14 @@ export function checkProviderCapacity({ thresholds, seats = [], configuredMax = 
  * S5 budget would have concluded, and says so in the finding. Exceeding it is
  * not a violation, because nothing has agreed to enforce it yet.
  */
-export function checkValidationCollisions({ hw, workloads = [], cost = null, proposedBudget = null }) {
+export function checkValidationCollisions({ hw, workloads = [], cost = null, capacity = null }) {
   const classified = workloads.filter((w) => w.workload_class);
   const unknown = workloads.filter((w) => !w.workload_class);
   const seats = new Set(classified.map((w) => w.root_provider_pid).filter((p) => p != null));
   const total = cost?.total_weight ?? 0;
-  const budget = Number.isFinite(proposedBudget)
-    ? proposedBudget
-    : Math.max(2, Math.floor((hw?.cores || 4) * 0.75));
+  // S4 owns the token budget. Health reads it; it does not derive it.
+  const budget = capacity?.axes?.validation_capacity?.tokens ?? 2;
+  const workerCeiling = capacity?.axes?.validation_capacity?.worker_ceiling ?? null;
 
   const exceedsProposed = total > budget || cost?.machine_exclusive_present === true;
   const sev = exceedsProposed ? "watch" : seats.size > 1 ? "watch" : "healthy";
@@ -310,8 +320,11 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, pro
       by_lane: cost?.by_lane || {},
       machine_exclusive_present: cost?.machine_exclusive_present || false,
       // Named to make its status unmistakable at every call site.
-      proposed_s5_budget: budget,
-      exceeds_proposed_s5_budget: exceedsProposed,
+      canonical_token_budget: budget,
+      worker_ceiling: workerCeiling,
+      capacity_policy_version: capacity?.policy_version ?? null,
+      bounded_by: capacity?.axes?.validation_capacity?.bounded_by ?? null,
+      exceeds_canonical_budget: exceedsProposed,
       weight_policy_version: classified[0]?.weight_policy_version || null,
     },
     evidence: classified.slice(0, 8).map((w) => ({
@@ -327,12 +340,12 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, pro
       command: String(w.command || "").slice(0, 60),
     })),
     explanation: exceedsProposed
-      ? `Concurrent validation weight is ${total} against a proposed future budget of ${budget}. S3 measures; it does not enforce.`
+      ? `Concurrent validation weight is ${total} against the canonical budget of ${budget}. Diagnostic only — S5 enforces.`
       : seats.size > 1
-        ? `Validation is running under ${seats.size} seats at once, within the proposed budget of ${budget}.`
+        ? `Validation is running under ${seats.size} seats at once, within the canonical budget of ${budget}.`
         : "No concurrent cross-seat validation detected.",
     suggested_action: exceedsProposed
-      ? "Diagnostic only — no budget is enforced until S5. Confirm the concurrent runs are intended."
+      ? "Diagnostic only — the budget is computed but not enforced until S5. Confirm the concurrent runs are intended."
       : null,
     // Classification is authoritative; the BUDGET comparison is not enforcement.
     confidence: classified.length ? "measured" : "measured",
@@ -539,12 +552,12 @@ export function composeReport({
   safe("memory.pressure", () => checkMemoryPressure({ hw, thresholds, memory: probeResults.memory }));
   safe("disk.headroom", () => checkDiskHeadroom({ thresholds, disk: probeResults.disk }));
   safe("gateway.responsive", () => checkGatewayResponsive({ thresholds, gateway: probeResults.gateway }));
-  safe("provider.capacity", () => checkProviderCapacity({ thresholds, seats: probeResults.seats || [], configuredMax: probeResults.configured_max }));
+  safe("provider.capacity", () => checkProviderCapacity({ capacity: probeResults.capacity, seats: probeResults.seats || [], configuredMax: probeResults.configured_max }));
   safe("validation.collisions", () => checkValidationCollisions({
     hw,
     workloads: probeResults.workloads || [],
     cost: probeResults.workload_cost || null,
-    proposedBudget: probeResults.proposed_budget ?? null,
+    capacity: probeResults.capacity || null,
   }));
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {} }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
@@ -567,6 +580,7 @@ export function composeReport({
     host: { hostname: hw.hostname, platform: hw.platform, uptime_seconds: hw.uptime_seconds },
     hardware: hw,
     thresholds,
+    capacity: probeResults.capacity || null,
     verdict,
     exit_code: exitCodeFor(verdict),
     started_at: startedAt,

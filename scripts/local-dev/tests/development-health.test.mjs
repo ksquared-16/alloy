@@ -52,6 +52,13 @@ const HEALTHY_PROBES = {
   worktrees: { onDisk: 3, registered: 3, unmanaged: [] },
   toolkit: { installed: 5, current: "abc" },
   configured_max: 3,
+  capacity: {
+    policy_version: "v1",
+    axes: {
+      provider_capacity: { ceiling: 3, current: 1, remaining: 2, bounded_by: "cores" },
+      validation_capacity: { tokens: 6, used: 0, remaining: 6, worker_ceiling: 2, bounded_by: "cores" },
+    },
+  },
 };
 
 const report = (over = {}, only = null) => H.composeReport({
@@ -114,6 +121,7 @@ await test("6 — dead Gateway is only called down when the retry also fails", (
 
 await test("7 — provider over-capacity", () => {
   const seats = [1, 2, 3, 4].map((pid) => ({ pid, provider: "claude", lane_id: `l${pid}`, lane_name: `L${pid}` }));
+  // The ceiling now comes from the canonical policy, not a health formula.
   assert.equal(sevOf(report({ seats, panes: seats.map((s) => ({ pid: s.pid })), configured_max: 3 }), "provider.capacity"), "problem");
   assert.equal(sevOf(report({ seats: seats.slice(0, 3), panes: seats.slice(0, 3).map((s) => ({ pid: s.pid })), configured_max: 3 }), "provider.capacity"), "watch");
 });
@@ -207,8 +215,10 @@ await test("NEGATIVE — thresholds are derived from hardware, not hardcoded", (
   const t14 = H.thresholdsFor({ cores: 14, memory_gb: 64 });
   assert.equal(t4.load_problem, 6);
   assert.equal(t14.load_problem, 21);
-  assert.equal(t4.max_active_providers, 1);
-  assert.equal(t14.max_active_providers, 4);
+  // The provider ceiling formula MOVED to capacity-policy in S4 — health must
+  // no longer own it. Its absence here is the single-owner contract holding.
+  assert.equal("max_active_providers" in t4, false,
+    "provider ceiling is capacity-policy's, not health's");
   // The SAME load is a problem on the small machine and healthy on the big one.
   const small = H.checkComputeLoad({ hw: { cores: 4 }, thresholds: t4, load: { one: 10, five: 10, fifteen: 10 } });
   const big = H.checkComputeLoad({ hw: { cores: 14 }, thresholds: t14, load: { one: 10, five: 10, fifteen: 10 } });
@@ -242,16 +252,17 @@ await test("NEGATIVE — validation.collisions reports weight but never enforces
       { pid: 2, root_provider_pid: 20, lane_id: "B", workload_class: "typecheck", expected_weight: 4, weight_policy_version: "v1", command: "tsc --noEmit" },
     ],
     workload_cost: { total_weight: 12, machine_exclusive_present: false, by_lane: { A: 8, B: 4 } },
-    proposed_budget: 6,
+    capacity: { policy_version: "v1", axes: { validation_capacity: { tokens: 6, worker_ceiling: 2, bounded_by: "cores" } } },
   });
   const f = two.findings.find((x) => x.check === "validation.collisions");
   assert.equal(f.severity, "watch", "over the PROPOSED budget is a watch, not a problem");
   assert.equal(f.measurements.concurrent_weight, 12);
-  assert.equal(f.measurements.proposed_s5_budget, 6);
-  assert.equal(f.measurements.exceeds_proposed_s5_budget, true);
+  assert.equal(f.measurements.canonical_token_budget, 6);
+  assert.equal(f.measurements.capacity_policy_version, "v1");
+  assert.equal(f.measurements.exceeds_canonical_budget, true);
   // The field name and the copy must both say this is not enforced.
-  assert.match(f.explanation, /does not enforce/);
-  assert.match(f.suggested_action, /no budget is enforced until S5/);
+  assert.match(f.explanation, /Diagnostic only/);
+  assert.match(f.suggested_action, /not enforced until S5/);
   // Real classification now flows through.
   assert.equal(f.evidence[0].workload_class, "heavy_test");
   assert.equal(f.evidence[0].expected_weight, 8);
