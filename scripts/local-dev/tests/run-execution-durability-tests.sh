@@ -53,6 +53,7 @@ SUITES=(
   "development-run-wait.test.mjs"
   "development-resource-reconciliation.test.mjs"
   "development-provider-seat-state.test.mjs"
+  "development-governed-dependency.test.mjs"
 )
 
 PASS=0

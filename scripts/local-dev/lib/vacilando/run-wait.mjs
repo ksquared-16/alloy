@@ -89,6 +89,17 @@ export const WAIT_REASONS = Object.freeze({
     // RETRYABLE; failing a run on it was the defect this slice fixes.
     bound_ms: 5 * MIN,
   },
+  waiting_for_executor_authority: {
+    resource_type: "executor_authority",
+    owner: "governed-dependency",
+    policy: "bounded",
+    // "No executor holds this capability" does not resolve by waiting — it
+    // resolves by someone provisioning one. Bounded so the dependency fails
+    // truthfully, naming what must be provisioned, instead of sitting
+    // non-terminal forever. The approval half of the same flow uses
+    // `needs_operator_input`, which is explicitly human_indefinite.
+    bound_ms: 30 * MIN,
+  },
   recovering: {
     resource_type: "session_recovery",
     owner: "execution-stale",
