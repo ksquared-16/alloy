@@ -143,7 +143,17 @@ export function projectEnrollmentInformationNeeds(
  * shape would be worse than the text box it replaced.
  */
 function readFieldOptions(field: unknown): readonly string[] {
-    const raw = (field as { options?: unknown })?.options;
+    /*
+     * `static_options` is where a realized Form actually keeps its choices.
+     *
+     * `draftFormToFormSchemaV1` publishes an authored choice list as `static_options` — the schema's
+     * own inline-choice construct — and this reader only ever looked at `options`. So every select
+     * need reached the participant with no choices at all, and any answer they gave was refused as
+     * "That is not one of the available choices". A question with no visible answers that rejects
+     * every answer is a loop with no way out; it is how a parent gets stuck.
+     */
+    const f = field as { options?: unknown; static_options?: unknown };
+    const raw = Array.isArray(f?.options) && f.options.length ? f.options : f?.static_options;
     if (!Array.isArray(raw)) return [];
     const out: string[] = [];
     for (const item of raw) {

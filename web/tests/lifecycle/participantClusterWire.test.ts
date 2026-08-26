@@ -91,3 +91,25 @@ describe("a prompt with no canonical owner claims no owner", () => {
         expect(questionForNeed(need({ label: "Regular medications?" }) as never, "Marisol")).not.toMatch(/\?\?/);
     });
 });
+
+describe("an authored choice list must reach the participant", () => {
+    it("reads choices from static_options, which is where a realized Form keeps them", async () => {
+        // A select whose choices never arrived refused every answer as "not one of the available
+        // choices" — a question with no visible answers that rejects all of them is a loop with no
+        // way out. Four needs on the certification packet were in exactly that state.
+        const { projectEnrollmentInformationNeeds } = await import("@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds");
+        const field = {
+            id: "field_6", type: "select", label: "How would you describe your child's gender?", required: true,
+            static_options: [{ label: "Male", value: "Male" }, { label: "Female", value: "Female" }],
+        };
+        const needs = projectEnrollmentInformationNeeds({
+            forms: [{
+                requirement_id: "r", form_definition_id: "d", form_definition_version_id: "v", session_item_id: "s",
+                schema: { schema_version: "v1", title: "t", fields: [field], sections: [{ id: "s1", title: "Contact Information", field_ids: ["field_6"] }] },
+            }],
+            subjectId: "c1", sharedValues: {}, confirmations: {},
+        } as never);
+        expect(needs).toHaveLength(1);
+        expect(needs[0]!.occurrences[0]!.options).toEqual(["Male", "Female"]);
+    });
+});
