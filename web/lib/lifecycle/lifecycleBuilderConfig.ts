@@ -306,6 +306,14 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             id,
             key,
             name,
+            // Read for the same reason a stage's description is read: it is an OWNED key, so the
+            // unknown-field residue deliberately excludes it. A key that is owned and never parsed
+            // is owned by nobody — it was writable through `updateProcessDescription` and deleted by
+            // the next save through any canonical path, which is every save, because every one of
+            // them round-trips the payload through this parser.
+            ...(typeof row.description === "string" && row.description.trim()
+                ? { description: row.description.trim() }
+                : {}),
             primary_entity: row.primary_entity === "opportunity" ? "opportunity" : "opportunity",
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
