@@ -198,7 +198,25 @@ const NARRATION_LINE = /^[ \t]*⏺/;
  * Leftover from the previous turn can still sit in a 48-line capture while a
  * new turn is already writing `⏺` below it — that is a live turn, not Ready.
  */
-export const TURN_FINISHED_RE = /(?:Cooked|Sautéed|Sauted|Baked)\s+for\s+/i;
+/**
+ * "The turn finished" — matched by SHAPE, not by a list of verbs.
+ *
+ * This was `/(?:Cooked|Sautéed|Sauted|Baked)\s+for\s+/i`, and Claude Code also
+ * ends turns with "Worked for 14s". A lane whose last turn used an unlisted verb
+ * never matched, so `liveNarrationIsCurrentTurn` kept reporting the leftover ⏺
+ * narration as a LIVE turn: the pane sat idle at a prompt while Vacilando called
+ * it busy, and delivery refuses a busy pane. That is what stuck the
+ * Communications lane — not the merge it was waiting on, which had already
+ * landed.
+ *
+ * A completion line is `<glyph> <Verb> for <duration>`. Matching that shape
+ * cannot be defeated by Claude Code adding another verb tomorrow. The glyph set
+ * deliberately excludes ⏺, which prefixes narration rather than completion, so
+ * "⏺ Searched for 3 files" is not a completion — and a duration needs a real
+ * unit, so "for 3 files" is not one either. Accented letters are in the verb
+ * class because one of the verbs Claude Code actually uses is "Sautéed".
+ */
+export const TURN_FINISHED_RE = /^[ \t]*(?:[✻✳✶✷✸✹✺✽*·][ \t]*)?[A-Za-z\u00C0-\u024F][a-z\u00C0-\u024F]+[ \t]+for[ \t]+\d+(?:\.\d+)?[ \t]*(?:ms|s|m|h)\b/m;
 
 export function liveNarrationIsCurrentTurn(text) {
   const lines = String(text ?? "").split("\n");
