@@ -261,8 +261,9 @@ await test("NEGATIVE — validation.collisions reports weight but never enforces
   assert.equal(f.measurements.capacity_policy_version, "v1");
   assert.equal(f.measurements.exceeds_canonical_budget, true);
   // The field name and the copy must both say this is not enforced.
-  assert.match(f.explanation, /Diagnostic only/);
-  assert.match(f.suggested_action, /not enforced until S5/);
+  // S5 ENFORCES this budget, so the copy no longer says "diagnostic".
+  assert.match(f.explanation, /enforced budget/);
+  assert.equal(f.measurements.enforced, true);
   // Real classification now flows through.
   assert.equal(f.evidence[0].workload_class, "heavy_test");
   assert.equal(f.evidence[0].expected_weight, 8);

@@ -487,10 +487,16 @@ await test("findExecutionRun uses the isolated runtime root", () => {
   assert.equal(publicExecutionRun(found.run).instruction, undefined);
 });
 
-await test("Phase 1 did not modify resource-governance files", () => {
+await test("resource-governance files stay frozen outside their owning slice", () => {
+  // Phase 1 froze these. S5 (validation admission) deliberately extends
+  // `vac-run` — the instruction was to use the EXISTING wrapper rather than
+  // invent a parallel CLI — so vac-run is no longer in the frozen set.
+  //
+  // Worth stating plainly: this guard compares the working tree to HEAD, so it
+  // only ever catches UNCOMMITTED edits. Committing would have turned it green
+  // on its own. Removing the entry deliberately is the honest form of the change.
   const files = [
     "web/package.json",
-    "scripts/local-dev/vac-run",
     "scripts/local-dev/alloy-validate",
     "scripts/local-dev/alloy-compute",
     "scripts/local-dev/lib/sprint-ops.sh",

@@ -147,6 +147,22 @@ const capability = hostCapability({
 });
 const capacity = computeCapacityPolicy(capability);
 
+// S5 enforcement state: what is actually held, queued, or running unbrokered.
+let enforcement = null;
+try {
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const store = VA.readClaimStore({});
+  const un = VA.unbrokeredPressure({ workloads, claims: store.claims });
+  const eff = VA.effectiveRemaining({ capacity, store, unbrokeredWeight: un.unbrokered_weight });
+  enforcement = {
+    ...eff,
+    queued: (store.queue || []).length,
+    reaped: (store.reaped || []).length,
+    worker_cap_drift: 0,
+    unbrokered_workloads: un.workloads,
+  };
+} catch { enforcement = null; }
+
 const lanes = lanesRaw.map((l) => ({
   lane_id: l.lane_id,
   name: l.name || l.label || null,
@@ -241,7 +257,7 @@ const report = composeReport({
   endedAt: new Date().toISOString(),
   probeResults: {
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
-    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost, capacity,
+    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, toolkit, configured_max: configuredMax,
   },
 });

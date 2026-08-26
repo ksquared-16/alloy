@@ -296,7 +296,7 @@ export function checkProviderCapacity({ capacity = null, seats = [], configuredM
  * S5 budget would have concluded, and says so in the finding. Exceeding it is
  * not a violation, because nothing has agreed to enforce it yet.
  */
-export function checkValidationCollisions({ hw, workloads = [], cost = null, capacity = null }) {
+export function checkValidationCollisions({ hw, workloads = [], cost = null, capacity = null, enforcement = null }) {
   const classified = workloads.filter((w) => w.workload_class);
   const unknown = workloads.filter((w) => !w.workload_class);
   const seats = new Set(classified.map((w) => w.root_provider_pid).filter((p) => p != null));
@@ -305,8 +305,19 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, cap
   const budget = capacity?.axes?.validation_capacity?.tokens ?? 2;
   const workerCeiling = capacity?.axes?.validation_capacity?.worker_ceiling ?? null;
 
+  // S5: the budget is ENFORCED. Health now distinguishes available capacity,
+  // at-budget, queued-by-capacity, unbrokered work, over-budget and drift.
+  const governedHeld = enforcement?.governed_held ?? 0;
+  const unbrokered = enforcement?.unbrokered_observed ?? 0;
+  const queued = enforcement?.queued ?? 0;
+  const drift = enforcement?.worker_cap_drift ?? 0;
+  const exclusiveActive = enforcement?.exclusive_held === true;
+  const overBudget = governedHeld + unbrokered > budget;
+
   const exceedsProposed = total > budget || cost?.machine_exclusive_present === true;
-  const sev = exceedsProposed ? "watch" : seats.size > 1 ? "watch" : "healthy";
+  const sev = overBudget || drift > 0 ? "problem"
+    : (unbrokered > 0 || queued > 0 || exceedsProposed) ? "watch"
+      : seats.size > 1 ? "watch" : "healthy";
 
   return finding({
     check: "validation.collisions",
@@ -325,6 +336,13 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, cap
       capacity_policy_version: capacity?.policy_version ?? null,
       bounded_by: capacity?.axes?.validation_capacity?.bounded_by ?? null,
       exceeds_canonical_budget: exceedsProposed,
+      enforced: true,
+      governed_held: governedHeld,
+      unbrokered_observed_weight: unbrokered,
+      queued_by_capacity: queued,
+      worker_cap_drift: drift,
+      machine_exclusive_active: exclusiveActive,
+      over_enforced_budget: overBudget,
       weight_policy_version: classified[0]?.weight_policy_version || null,
     },
     evidence: classified.slice(0, 8).map((w) => ({
@@ -339,8 +357,16 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, cap
       confidence: w.confidence,
       command: String(w.command || "").slice(0, 60),
     })),
-    explanation: exceedsProposed
-      ? `Concurrent validation weight is ${total} against the canonical budget of ${budget}. Diagnostic only — S5 enforces.`
+    explanation: overBudget
+      ? `Governed ${governedHeld} plus unbrokered ${unbrokered} exceeds the enforced budget of ${budget}. Unbrokered work is not admitted through the broker and is counted, not killed.`
+      : drift > 0
+        ? `${drift} workload(s) exceeded their granted worker cap. Reported and accounted conservatively; nothing was terminated.`
+      : queued > 0
+        ? `${queued} validation request(s) waiting on capacity. Waiting is not failing.`
+      : unbrokered > 0
+        ? `${unbrokered} weight of validation is running outside the broker; later admissions are constrained accordingly.`
+      : exceedsProposed
+      ? `Concurrent validation weight is ${total} against the enforced budget of ${budget}.`
       : seats.size > 1
         ? `Validation is running under ${seats.size} seats at once, within the canonical budget of ${budget}.`
         : "No concurrent cross-seat validation detected.",
@@ -558,6 +584,7 @@ export function composeReport({
     workloads: probeResults.workloads || [],
     cost: probeResults.workload_cost || null,
     capacity: probeResults.capacity || null,
+    enforcement: probeResults.enforcement || null,
   }));
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {} }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));

@@ -49,6 +49,7 @@ SUITES=(
   "development-health.test.mjs"
   "development-workload-classification.test.mjs"
   "development-capacity-policy.test.mjs"
+  "development-validation-admission.test.mjs"
 )
 
 PASS=0
