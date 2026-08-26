@@ -258,6 +258,15 @@ await test("results come back structured, so no one relays ids by hand", () => {
   assert.equal(parsed.ids.placement_ids.length, 1);
   assert.equal(parsed.ids.schedule_assignment_ids.length, 1);
 
+  // The fixture names the household two ways: `customer=<id>` on ensure and
+  // `household: <id>` on verify. Found live — a contract that caught only one
+  // would send the lane back to reading stdout for the other.
+  assert.equal(
+    parseFixtureResult("verify", "household: 29944d3e-8267-45b7-8dcb-7405060e2573\n").ids.customer_id,
+    "29944d3e-8267-45b7-8dcb-7405060e2573",
+  );
+  assert.equal(parseFixtureResult("verify", "household: absent\n").ids.customer_id, undefined);
+
   const checks = parseFixtureResult("verify", "✓ household present\n✗ agreement missing\n").checks;
   assert.deepEqual(checks.map((c) => c.ok), [true, false]);
 

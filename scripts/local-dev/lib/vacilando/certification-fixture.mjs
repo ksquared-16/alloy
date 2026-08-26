@@ -228,7 +228,12 @@ export function parseFixtureResult(operation, stdout, { limit = 20000 } = {}) {
     const m = text.match(re);
     if (m) ids[label] = m[1];
   };
+  // The fixture names the household two ways depending on the operation:
+  // `= household  customer=<id>` on ensure, `household: <id>` on verify. Both
+  // are the canonical customer id, and a contract that caught only one would
+  // send the lane back to reading stdout for the other.
   grab("customer_id", /customer=([0-9a-f-]{8,})/i);
+  if (!ids.customer_id) grab("customer_id", /household:\s*([0-9a-f-]{8,})/i);
   grab("opportunity_id", /opportunit\w*=([0-9a-f-]{8,})/i);
   const members = [...text.matchAll(/member=([0-9a-f-]{8,})/gi)].map((m) => m[1]);
   const agreements = [...text.matchAll(/agreement=([0-9a-f-]{8,})/gi)].map((m) => m[1]);
