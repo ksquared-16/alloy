@@ -280,6 +280,33 @@ await test("a failed push reports the reason and publishes nothing", () => {
   assert.equal(out.code, "non_fast_forward");
 });
 
+await test("a merge accepts every spelling of the pull request number", async () => {
+  // A lane proposed {"pull_request": 522} — an unambiguous pull request number
+  // by any reading — and got back "pull_request_number must be a positive
+  // integer", which describes a malformed VALUE rather than a field name that
+  // was not recognised. The promotion stalled on a near-miss.
+  const { validateMergeInputs } = await import("../lib/vacilando/trusted-host-merge.mjs");
+  const base = {
+    repository: REPO, target_branch: "staging",
+    expected_head_sha: SHA, merge_method: "merge",
+  };
+  for (const key of ["pull_request_number", "pullRequestNumber", "pull_request", "pullRequest", "pr"]) {
+    const v = validateMergeInputs({ ...base, [key]: 522 });
+    assert.equal(v.ok, true, `${key} was refused`);
+    assert.equal(v.normalized.pullRequestNumber, 522);
+  }
+
+  // POSITIVE CONTROLS. Only the NAMING widened; the number is validated exactly
+  // as before, and the refusal now says what actually arrived.
+  for (const bad of [0, -1, 1.5, "abc", null, ""]) {
+    const v = validateMergeInputs({ ...base, pull_request: bad });
+    assert.equal(v.ok, false, `${JSON.stringify(bad)} was accepted`);
+    assert.equal(v.code, "invalid_pull_request_number");
+  }
+  assert.match(validateMergeInputs({ ...base, pull_request: 0 }).detail, /received 0/);
+  assert.match(validateMergeInputs(base).detail, /a pull request number is required/);
+});
+
 // ------------------------------------------------------------ open PR guards
 
 function fakeGh({ headSha = SHA, existing = null, createOk = true, created = null } = {}) {
