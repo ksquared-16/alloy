@@ -211,12 +211,33 @@ describe("the four settled decisions", () => {
     const held = (label: string, concept_key: string, kind = "scalar_field") =>
         ({ concept: concept(label, concept_key, kind), proposal: proposal("held_unknown_owner") });
 
-    it("routes a guardian identity fact to Relationship + Person, never a child field", () => {
-        for (const [label, key] of [["Parent/Guardian #1 Name:", "guardian.name"], ["Mailing Address or Secondary Parent Address", "guardian.address"]] as const) {
-            const p = projectParticipantRole(held(label, key));
-            expect(p.role, label).toBe("relationship_person");
-            expect(p.label, label).toBeUndefined();
-        }
+    it("reads a guardian identity fact FROM Relationship + Person, never from a child field", () => {
+        // Owned by Person is a statement about where the truth lives, so it is a statement about
+        // where to READ it — not a reason to leave a required box on the document blank. The
+        // canonical prefill map resolves this leaf, so the box is prefilled and asked only if unknown.
+        const p = projectParticipantRole(held("Parent/Guardian #1 Name:", "guardian.name"));
+        expect(p.role).toBe("prefill_confirm");
+        expect(p.canonicalBinding).toEqual({ entity_type: "guardian", field_key: "name" });
+        expect(p.sharedValueKey).toBe("guardian_name");
+        expect(p.basis).toMatch(/person\.full_name/);
+        expect(p.label).toBe("Parent/Guardian #1 Name");
+    });
+
+    it("still holds a guardian leaf no canonical owner can resolve", () => {
+        // A guardian address has no registered prefill path, so nothing is invented for it; the
+        // value-production invariant is what catches it if the source requires a value.
+        const p = projectParticipantRole(held("Mailing Address or Secondary Parent Address", "guardian.address"));
+        expect(p.role).toBe("relationship_person");
+        expect(p.canonicalBinding).toBeUndefined();
+    });
+
+    it("reads the EMPLOYER subject from the destination's own prompt", () => {
+        // "Parent/Guardian #1 Employer Address:" arrived under the key `guardian.address`. Keyed only
+        // on the concept, the employer's address was filed as a guardian fact and hidden — while its
+        // own sibling, "Parent/Guardian #1 Employer:", was asked.
+        const p = projectParticipantRole({ ...held("Mailing Address or Secondary Parent Address", "guardian.address"), facetLabel: "Parent/Guardian #1 Employer Address:" });
+        expect(p.role).toBe("process_scoped");
+        expect(p.label).toBe("Parent/Guardian #1 Employer Address");
     });
 
     it("keeps guardian employment askable but never durable", () => {

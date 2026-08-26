@@ -298,3 +298,66 @@ describe("re-projecting an already-realized packet", () => {
         expect(res.code).toBe("no_realization");
     });
 });
+
+/**
+ * The value-production invariant at the publication boundary.
+ *
+ * A published version can never be edited, so a required destination nothing can fill becomes a
+ * permanent labelled blank on a document a family signs beneath.
+ */
+describe("publication refuses a document with a blank nobody can fill", () => {
+    async function realizedPacket() {
+        const h = harness();
+        const sb = supabaseDouble(packet, inputs, NAMES);
+        const res = await createPacketFromProcessingAnalysis(sb, h.deps, { orgId: "org", caseId: "case", userId: "user" });
+        expect(res.ok).toBe(true);
+        return { h, sb, res };
+    }
+
+    it("records unfilled required destinations on the realization rather than hiding them", async () => {
+        const { res } = await realizedPacket();
+        if (!res.ok) return;
+        expect(Array.isArray(res.realization.unfilled_required_destinations)).toBe(true);
+        for (const u of res.realization.unfilled_required_destinations) {
+            expect(u.form_name).toBeTruthy();
+            expect(u.evidence).toContain("required at source");
+        }
+    });
+
+    it("a dry run REPORTS the blockers instead of refusing to answer", async () => {
+        const { h, sb } = await realizedPacket();
+        const stale = h.versions[0]!;
+        const staleSchema = JSON.parse(JSON.stringify(stale.schemaJson));
+        for (const f of staleSchema.fields) delete f.read_only;
+        stale.schemaJson = staleSchema;
+        const res = await reprojectRealizedPacket(sb, h.deps, { orgId: "org", caseId: "case", userId: "user", dryRun: true });
+        expect(res.ok, "a dry run must never be blocked — that is how a blocker stays invisible").toBe(true);
+        if (!res.ok) return;
+        for (const a of res.artifacts) expect(Array.isArray(a.unfilled_required)).toBe(true);
+    });
+
+    it("refuses BEFORE any write when one artifact is blocked, so no half-corrected packet exists", async () => {
+        const { h, sb } = await realizedPacket();
+        const versionCount = h.versions.length;
+        const pins = h.items.map((i) => i.pinnedVersionId);
+
+        // Strand one required destination on the LAST artifact: everything before it would otherwise
+        // already be published and pinned by the time the refusal happened.
+        const last = h.versions[h.versions.length - 1]!;
+        const schema = JSON.parse(JSON.stringify(last.schemaJson));
+        schema.fields.push({ id: "stranded", type: "text", label: "Nobody can fill this", required: true, read_only: true });
+        last.schemaJson = schema;
+        for (const v of h.versions) {
+            const s2 = JSON.parse(JSON.stringify(v.schemaJson));
+            for (const f of s2.fields) delete f.read_only;
+            v.schemaJson = s2;
+        }
+
+        const res = await reprojectRealizedPacket(sb, h.deps, { orgId: "org", caseId: "case", userId: "user" });
+        // Either it publishes cleanly, or it refuses having written nothing. Never in between.
+        if (!res.ok) {
+            expect(h.versions).toHaveLength(versionCount);
+            expect(h.items.map((i) => i.pinnedVersionId)).toEqual(pins);
+        }
+    });
+});

@@ -24,6 +24,7 @@ import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecis
 import { structureForArtifact } from "@/lib/pos/processingCase/structure/structureForArtifact";
 import { buildFormDraftFromStructure } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
 import { applySemanticRefinement } from "@/lib/pos/processingCase/formDraft/applySemanticRefinement";
+import { assertValueProduction, type StrandedDestination } from "./valueProduction";
 import { classifySelfContainedArtifact } from "./selfContainedArtifact";
 import type { ArtifactConcept } from "./paymentSetupArtifact";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
@@ -99,7 +100,19 @@ export interface PacketRealization {
     deferred_capabilities: RealizedDeferredCapability[];
     /** discovered = executable + deferred + dropped. `dropped` must be 0. */
     obligation_reconciliation: { discovered: number; executable: number; deferred: number; dropped: number; summary: string };
+    /**
+     * Required destinations no mechanism can fill.
+     *
+     * Empty is the only publishable state. A non-empty list is not a warning about tidiness — it is
+     * the set of boxes a family would be asked to sign beneath while they sit blank.
+     */
+    unfilled_required_destinations: UnfilledRequiredDestination[];
     warnings: string[];
+}
+
+export interface UnfilledRequiredDestination extends StrandedDestination {
+    artifact_id: string;
+    form_name: string;
 }
 
 export type CreatePacketResult =
@@ -141,7 +154,7 @@ function projectArtifactSchema(input: {
     packet: { source_analysis: Record<string, { concepts: unknown[]; proposals: unknown[] }> };
     decisionRecords: DiscoveryDecisionRecord[];
     name: string;
-}): { ok: true; schema: unknown; relinquished: number; missingSections: number } | { ok: false; message: string } {
+}): { ok: true; schema: unknown; relinquished: number; missingSections: number; stranded: StrandedDestination[]; valueByPath: Record<string, number> } | { ok: false; message: string } {
     const projected = structureForArtifact(input.structure, input.artifact);
     const draft0 = buildFormDraftFromStructure({
         structure: projected.structure,
@@ -168,11 +181,20 @@ function projectArtifactSchema(input: {
 
     const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...refined.draft, title: input.name, generated_form_name: input.name }));
     if (!parsed.success) return { ok: false, message: `Artifact ${input.artifact.id} did not validate as a form schema.` };
+
+    // The value-production invariant. Evaluated on the FINISHED schema by a model that knows nothing
+    // about roles or ownership, and measured against the SOURCE's own requiredness — taken from the
+    // draft before refinement, so relinquishing a requirement cannot also excuse it.
+    const sourceRequiredFieldIds = new Set(draft0.fields.filter((f) => f.required).map((f) => f.id));
+    const value = assertValueProduction(parsed.data, { sourceRequiredFieldIds });
+
     return {
         ok: true,
         schema: parsed.data,
         relinquished: refined.report?.relinquishedRequirements.length ?? 0,
         missingSections: projected.missing_sections.length,
+        stranded: value.stranded,
+        valueByPath: value.byPath,
     };
 }
 
@@ -203,6 +225,7 @@ export async function createPacketFromProcessingAnalysis(
         const formKeys = await deps.listFormKeys(args.orgId);
         const warnings: string[] = [];
         const realized: RealizedArtifact[] = [];
+        const unfilledRequired: UnfilledRequiredDestination[] = [];
 
         // ── artifacts that collect only payment setup ────────────────────────────────────────────
         //
@@ -245,6 +268,20 @@ export async function createPacketFromProcessingAnalysis(
             if (projectedSchema.relinquished) {
                 warnings.push(
                     `Artifact "${name}": ${projectedSchema.relinquished} required box(es) are owned elsewhere — placed on the document, not asked of the family, and no longer mandatory.`,
+                );
+            }
+            /*
+             * Recorded, not fatal — the same treatment a deferred obligation gets, and for the same
+             * reason: a gap that is written down can be acted on, while a refused realization just
+             * hides the packet. The hard stop lives where the instruction puts it, on PUBLICATION:
+             * `reprojectRealizedPacket` will not add an immutable version while any of these stand.
+             */
+            for (const st of projectedSchema.stranded) {
+                unfilledRequired.push({ ...st, artifact_id: artifact.id, form_name: name });
+            }
+            if (projectedSchema.stranded.length) {
+                warnings.push(
+                    `Artifact "${name}": ${projectedSchema.stranded.length} required destination(s) have no mechanism that can supply a value — the document would carry a labelled blank. ${projectedSchema.stranded.map((s) => `"${s.label}"`).join(", ")}`,
                 );
             }
             const parsed = { success: true as const, data: projectedSchema.schema };
@@ -419,6 +456,7 @@ export async function createPacketFromProcessingAnalysis(
                 dropped: reconciliation.dropped.length,
                 summary: describeObligationReconciliation(reconciliation),
             },
+            unfilled_required_destinations: unfilledRequired,
             warnings,
         };
         await deps.saveRealization({ orgId: args.orgId, caseId: args.caseId, realization });
@@ -552,13 +590,15 @@ export interface ReprojectedArtifact {
     new_version_number: number | null;
     packet_item_id: string;
     changed: boolean;
+    /** Required destinations nothing can fill. Non-empty means this artifact cannot be published. */
+    unfilled_required: StrandedDestination[];
     /** What the correction did to this artifact, in counts the reader can check. */
     delta: { destinations_before: number; destinations_after: number; asked_before: number; asked_after: number; relinquished_requirements: number };
 }
 
 export type ReprojectResult =
     | { ok: true; artifacts: ReprojectedArtifact[]; warnings: string[] }
-    | { ok: false; code: "no_realization" | "no_packet" | "invalid_schema" | "failed"; message: string };
+    | { ok: false; code: "no_realization" | "no_packet" | "invalid_schema" | "unfilled_required_destination" | "failed"; message: string };
 
 export async function reprojectRealizedPacket(
     supabase: SupabaseClient,
@@ -576,6 +616,7 @@ export async function reprojectRealizedPacket(
         const decisionRecords = await deps.loadDiscoveryDecisions(args);
 
         const out: ReprojectedArtifact[] = [];
+        const pending: { entry: ReprojectedArtifact; artifact: (typeof packet.artifacts)[number]; realized: RealizedArtifact; current: { id: string }; schema: unknown }[] = [];
         const warnings: string[] = [];
 
         for (const realized of prior.artifacts) {
@@ -599,7 +640,6 @@ export async function reprojectRealizedPacket(
                 name: realized.name,
             });
             if (!projectedSchema.ok) return { ok: false, code: "invalid_schema", message: projectedSchema.message };
-
             const before = fieldCounts(current.schema_json);
             const after = fieldCounts(projectedSchema.schema);
             const changed = JSON.stringify(current.schema_json) !== JSON.stringify(projectedSchema.schema);
@@ -614,6 +654,7 @@ export async function reprojectRealizedPacket(
                 new_version_number: null,
                 packet_item_id: realized.packet_item_id,
                 changed,
+                unfilled_required: projectedSchema.stranded,
                 delta: {
                     destinations_before: before.total,
                     destinations_after: after.total,
@@ -633,13 +674,43 @@ export async function reprojectRealizedPacket(
                 };
             }
 
-            if (changed && !args.dryRun) {
+            out.push(entry);
+            pending.push({ entry, artifact, realized, current, schema: projectedSchema.schema });
+        }
+
+        /*
+         * The value-production invariant, enforced where it bites — and enforced for the WHOLE packet
+         * before a single version is written.
+         *
+         * An immutable version is a promise that this document can be completed, and it can never be
+         * edited afterwards. Checking artifact-by-artifact inside the publish loop would have made
+         * that worse rather than better: the first two Forms would already be published and pinned by
+         * the time the third one was refused, leaving a half-corrected packet that cannot be undone.
+         *
+         * A DRY RUN is exempt on purpose. Its whole job is to show what publishing would do, and
+         * refusing to answer that question is how a blocker stays invisible until someone tries to
+         * publish. The stranded set travels back in the result instead.
+         */
+        const blocked = out.filter((a) => a.changed && a.unfilled_required.length);
+        if (blocked.length && !args.dryRun) {
+            const total = blocked.reduce((n, a) => n + a.unfilled_required.length, 0);
+            const names = blocked.flatMap((a) => a.unfilled_required.map((s) => `"${s.label}" (${a.name})`)).slice(0, 5).join(", ");
+            return {
+                ok: false,
+                code: "unfilled_required_destination",
+                message: `${total} required destination(s) across ${blocked.length} artifact(s) have no mechanism that can supply a value: ${names}${total > 5 ? ", …" : ""}. Publishing would make a document with a labelled blank permanent.`,
+            };
+        }
+
+        if (!args.dryRun) {
+            for (const { entry, artifact, realized, current, schema } of pending) {
+                if (!entry.changed) continue;
                 const versionNumber = await deps.nextVersionNumber({ orgId: args.orgId, formDefinitionId: realized.form_definition_id });
                 const ver = await deps.insertVersion({
                     orgId: args.orgId,
                     formDefinitionId: realized.form_definition_id,
                     versionNumber,
-                    schemaJson: projectedSchema.schema,
+                    schemaJson: schema,
                     metadata: {
                         source: "processing_packet_artifact",
                         source_case_id: args.caseId,
@@ -653,7 +724,6 @@ export async function reprojectRealizedPacket(
                 entry.new_version_id = ver.id;
                 entry.new_version_number = versionNumber;
             }
-            out.push(entry);
         }
 
         if (!args.dryRun) {

@@ -24,6 +24,7 @@
 
 import type { BusinessConceptCandidate, ConfigurationProposal } from "@/lib/pos/discovery/contracts";
 import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
+import { canonicalPrefillPathForBinding } from "@/lib/forms/prefill/canonicalPrefillMap";
 import { CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST } from "@/lib/fields/customerMemberFieldRegistry";
 
 /** What a destination becomes for the participant. */
@@ -63,6 +64,11 @@ export type ParticipantProjection = {
     semanticType?: "text" | "phone" | "email" | "date" | "number" | "boolean" | "select";
     /** The shared identity that lets one answer populate every destination that needs it. */
     sharedValueKey?: string;
+    /**
+     * The canonical destination this box binds to when the projection — not the proposal — is what
+     * establishes it. Carries the Relationship/Person read path onto the field.
+     */
+    canonicalBinding?: { entity_type: string; field_key: string };
     /** For `dependent_question`: the concept whose answer decides whether this is asked. */
     dependsOnConceptId?: string;
     /** Why, in one clause — so a reviewer can disagree with the reasoning, not just the label. */
@@ -188,12 +194,30 @@ export function looksLikeHeading(label: string | null | undefined): boolean {
 export function projectParticipantRole(input: {
     concept: Pick<BusinessConceptCandidate, "label" | "concept_key" | "kind">;
     proposal: Pick<ConfigurationProposal, "disposition" | "target_field_source">;
+    /**
+     * The SOURCE marks at least one of this concept's destinations as a required input it authored.
+     *
+     * Not a widget default and not an importer guess: the school built these forms and marked these
+     * boxes required. It is the strongest available evidence that a prompt is addressed to the
+     * family, and it is what separates "General health:" — a required text input the school asks a
+     * parent to complete — from a caption printed above other fields.
+     */
+    sourceRequiresValue?: boolean;
     /** The reader's widget guess for the destination. Advisory only. */
     readerType?: string | null;
     /** The concept immediately preceding this one in source order, for dependent gating. */
     precedingGateConceptId?: string | null;
     /** True when this concept sits on an artifact that owns its own structured logic (the exemption). */
     onSelfContainedArtifact?: boolean;
+    /**
+     * One destination's own prompt, when the concept's label does not describe it.
+     *
+     * A concept can be mixed. `guardian.address` reaches "Mailing Address or Secondary Parent
+     * Address", "Parent/Guardian #1 Employer Address" and "#2" — a guardian fact and two employer
+     * facts under one key, and no single role is right for all three. Re-projecting a held concept
+     * against each destination's own words is how the source gets to say which subject it meant.
+     */
+    facetLabel?: string;
 }): ParticipantProjection {
     const { concept, proposal } = input;
 
@@ -215,12 +239,48 @@ export function projectParticipantRole(input: {
             const directed = applyDirectorDecisions(input);
             if (directed) return directed;
         }
-        if (mapped === "hold_for_review" && readsAsAuthoredQuestion(concept.label)) {
+        /*
+         * The same doctrine, applied to `held`.
+         *
+         * `held_for_canonical_owner` and `safeguarding_binding` say Alloy will not create a field for
+         * this fact. They do not say the family is not asked — and for these prompts the family is
+         * the ONLY possible source. Health cannot supply "has your child ever been stung by a bee or
+         * wasp?", and a safeguarding record cannot answer a yes/no the school prints on its own
+         * admissions form. Left unasked, each became a required box no mechanism could ever fill.
+         *
+         * So a held concept is asked process-scoped — no canonical field, nothing durable created,
+         * the settled ownership decision entirely intact — when the source itself shows the prompt is
+         * addressed to the family: it reads as an authored question, or the school marked it a
+         * required input in the form it built.
+         */
+        /*
+         * `derived_value_system` says Alloy already knows the value. For "Does your child have
+         * siblings?" that is only true of a household Alloy has already met — and the school wrote it
+         * as a question, addressed to the family, and marked it required. A derivation that cannot
+         * run for a new family is not a value path, it is a blank box.
+         *
+         * Narrow on purpose: the escape needs the source's own INTERROGATIVE, so "Date:" and
+         * "Student Age Upon Enrolling:" stay derived. Asking a parent for today's date, or to compute
+         * their child's age from a birthday Alloy already holds, is the form-filling drudgery this
+         * platform exists to remove — those two need the derivation to actually run.
+         */
+        if (mapped === "artifact_placement_only" && proposal.disposition === "derived_value_system" && readsAsAuthoredQuestion(concept.label)) {
             return {
-                role: "question",
-                label: concept.label.trim(),
+                role: "process_scoped",
+                label: concept.label.trim().replace(/\s*:\s*$/, ""),
                 semanticType: semanticTypeFor(concept.concept_key ?? "", input.readerType),
-                basis: "the source already asks this in its own words; collected process-scoped, no durable field",
+                basis: "derivable only for a household Alloy already knows; the source asks the family directly, so it is asked process-scoped",
+            };
+        }
+        if ((mapped === "hold_for_review" || mapped === "held") && (readsAsAuthoredQuestion(concept.label) || input.sourceRequiresValue)) {
+            return {
+                role: mapped === "held" ? "process_scoped" : "question",
+                label: concept.label.trim().replace(/\s*:\s*$/, ""),
+                semanticType: semanticTypeFor(concept.concept_key ?? "", input.readerType),
+                basis:
+                    mapped === "held"
+                        ? `${proposal.disposition} is a durable-ownership decision, not a decision to stop asking; collected process-scoped, no canonical field`
+                        : "the source already asks this in its own words; collected process-scoped, no durable field",
             };
         }
         return { role: mapped, basis: `disposition ${proposal.disposition}` };
@@ -304,12 +364,15 @@ export const PARTICIPANT_ACT_ROLES: readonly ParticipantRole[] = ["signature", "
  */
 function applyDirectorDecisions(input: {
     concept: Pick<BusinessConceptCandidate, "label" | "concept_key" | "kind">;
+    sourceRequiresValue?: boolean;
+    facetLabel?: string;
     precedingGateConceptId?: string | null;
     onSelfContainedArtifact?: boolean;
     readerType?: string | null;
 }): ParticipantProjection | null {
     const key = input.concept.concept_key ?? "";
-    const label = input.concept.label ?? "";
+    // The destination's own prompt wins when it was supplied: it is the narrower evidence.
+    const label = input.facetLabel ?? input.concept.label ?? "";
 
     // 4. Structural artifact metadata. Never asked, never stored — placement lineage only.
     if (looksLikeStructuralIdentifier(label)) {
@@ -334,12 +397,42 @@ function applyDirectorDecisions(input: {
     //    employer answers have no canonical external-person employment owner, so they are askable
     //    without creating anything durable. Keyed on the `guardian.` grain, not on the words.
     if (key.startsWith("guardian.")) {
-        if (/employer/i.test(key)) {
+        /*
+         * The subject may be named in the LABEL rather than the key, and reading it there is reading
+         * the source, not guessing from wording. "Parent/Guardian #1 Employer Address:" arrived under
+         * the concept key `guardian.address`, so a key-only test filed the EMPLOYER's address as a
+         * guardian fact — while its own sibling, "Parent/Guardian #1 Employer:", was already asked.
+         * One employer answer asked and the next one hidden is not an ownership decision, it is an
+         * inconsistency.
+         */
+        if (/employer/i.test(key) || /\bemployer\b/i.test(label)) {
             return {
                 role: "process_scoped",
                 label: label.replace(/:$/, "").trim(),
                 semanticType: semanticTypeFor(key, input.readerType),
                 basis: "no canonical external-person employment owner exists; asked, never stored durably",
+            };
+        }
+
+        /*
+         * A guardian fact is owned by Relationship + Person — which is a statement about WHERE the
+         * truth lives, and therefore about where to READ it, not a reason to leave the box blank.
+         * When the canonical prefill map already resolves this leaf, bind the destination to it: a
+         * known guardian is prefilled and never re-asked, and an unknown one is collected in the
+         * guardian's own context and written back through that owner.
+         *
+         * The map is asked rather than assumed. A leaf it does not know stays held, and the
+         * value-production invariant is what catches it if the source requires a value.
+         */
+        const leaf = key.slice("guardian.".length);
+        if (canonicalPrefillPathForBinding("guardian", leaf, { aliasOnly: true })) {
+            return {
+                role: "prefill_confirm",
+                label: label.replace(/:$/, "").trim(),
+                semanticType: semanticTypeFor(leaf, input.readerType),
+                sharedValueKey: `guardian_${leaf}`,
+                canonicalBinding: { entity_type: "guardian", field_key: leaf },
+                basis: `a guardian fact, read from Person via ${canonicalPrefillPathForBinding("guardian", leaf, { aliasOnly: true })}; asked only when unknown`,
             };
         }
         return {
@@ -355,8 +448,13 @@ function applyDirectorDecisions(input: {
      * it as a heading and silently dropped a question the school asks. A concept's grain is a
      * semantic fact; its punctuation is typography.
      */
-    // 3a. A caption over other fields is static content, not a question.
-    if (looksLikeHeading(label)) {
+    /*
+     * 3a. A caption over other fields is static content, not a question — unless the source says
+     *     otherwise. "Developmental History:" and "Social relationships:" look exactly like headings
+     *     and are both required TEXT INPUTS in the form the school built. Shape is a guess about
+     *     intent; an authored required input is a statement of it, and the statement wins.
+     */
+    if (looksLikeHeading(label) && !input.sourceRequiresValue) {
         return { role: "static_content", basis: "a heading over other fields" };
     }
 

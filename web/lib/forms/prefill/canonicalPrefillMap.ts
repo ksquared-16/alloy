@@ -92,11 +92,28 @@ export function canonicalPrefillPathForField(field: FormField): string | null {
 
     const entity = src.entity_type?.trim().toLowerCase() ?? "";
     const fieldKey = src.field_key?.trim().toLowerCase() ?? "";
-    const root = ENTITY_TO_ROOT[entity];
-    if (!root || !fieldKey) return null;
+    return canonicalPrefillPathForBinding(entity, fieldKey);
+}
 
-    const col = COLUMN_ALIASES[root][fieldKey] ?? fieldKey;
-    return `${root}.${col}`;
+/**
+ * The same answer, for a binding that is not yet a field.
+ *
+ * Realization needs to know whether a canonical owner can actually fill a destination BEFORE the
+ * field exists — a required box bound to a path nothing resolves is a blank box with a confident
+ * label on it. Asking the prefill map itself keeps one owner for that answer.
+ *
+ * `aliasOnly` is the stricter question: is this key one the map genuinely KNOWS, rather than one it
+ * would pass through unchanged? A pass-through means "there might be a column of that name", which
+ * is not evidence that a value will arrive.
+ */
+export function canonicalPrefillPathForBinding(entityType: string, fieldKey: string, opts?: { aliasOnly?: boolean }): string | null {
+    const entity = entityType.trim().toLowerCase();
+    const key = fieldKey.trim().toLowerCase();
+    const root = ENTITY_TO_ROOT[entity];
+    if (!root || !key) return null;
+    const alias = COLUMN_ALIASES[root][key];
+    if (opts?.aliasOnly && !alias) return null;
+    return `${root}.${alias ?? key}`;
 }
 
 /** Build a prefill_field_map (fieldId → "root.col") from every scalar field's field_source. */

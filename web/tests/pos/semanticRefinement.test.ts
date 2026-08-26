@@ -288,3 +288,27 @@ describe("what a packet asks of a family besides questions", () => {
         expect(out.fields[0]!.label).toBe("I certify that the information on the form is an accurate record of this child's immunizations.");
     });
 });
+
+describe("two questions must not share one canonical field", () => {
+    it("gives the second prompt its own identity when both bind to the same field", () => {
+        const target = { entity_type: "customer_member", field_key: "toileting_routine" };
+        const a = { key: "child.toilet_habits", kind: "scalar_field", labels: ["Toilet habits"], disposition: "reuse_canonical_field", target };
+        const b = { key: "child.toileting_needs", kind: "scalar_field", labels: ["Any specific toileting needs we need to know?"], disposition: "reuse_canonical_field", target };
+        const fields = [{ id: "f0", label: "Toilet habits", type: "text", required: false }, { id: "f1", label: "Any specific toileting needs we need to know?", type: "text", required: false }] as never;
+        const { draft: out } = applySemanticRefinement({ draft: draftOf(fields), discovery: discoveryOf([a, b]) });
+        const k0 = out.fields[0]!.field_source?.shared_value_key;
+        const k1 = out.fields[1]!.field_source?.shared_value_key;
+        expect(k0).toBeTruthy();
+        // One answer must not be printed under both prompts.
+        expect(k1).not.toBe(k0);
+        expect(out.fields[1]!.field_source?.field_key).not.toBe("toileting_routine");
+    });
+
+    it("still shares when the SAME prompt appears twice", () => {
+        const target = { entity_type: "customer_member", field_key: "nap_routine" };
+        const c = { key: "child.nap", kind: "scalar_field", labels: ["Nap Routine"], disposition: "reuse_canonical_field", target };
+        const fields = [{ id: "f0", label: "Nap Routine", type: "text", required: false }, { id: "f1", label: "Nap Routine", type: "text", required: false }] as never;
+        const { draft: out } = applySemanticRefinement({ draft: draftOf(fields), discovery: discoveryOf([c]) });
+        expect(out.fields[0]!.field_source?.shared_value_key).toBe(out.fields[1]!.field_source?.shared_value_key);
+    });
+});

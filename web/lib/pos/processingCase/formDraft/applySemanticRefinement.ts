@@ -177,6 +177,16 @@ export function applySemanticRefinement(input: {
     };
     const claimed = new Set<string>();
     const destinationsPerIdentity = new Map<string, number>();
+    /**
+     * Which prompt already owns each canonical identity.
+     *
+     * The facet rule stops ONE concept's destinations from collapsing. This stops the same collapse
+     * one level up, between concepts: three different questions — "Toilet habits", "How does your
+     * child indicate their needs", "Any specific toileting needs we need to know?" — all bound to
+     * `customer_member.toileting_routine`, so a single answer would have been printed under all
+     * three prompts. The first prompt keeps the canonical field; the others are their own facts.
+     */
+    const identityOwner = new Map<string, string>();
 
     concepts.forEach((concept, index) => {
         const proposal = proposalByCandidate.get(concept.id);
@@ -190,21 +200,54 @@ export function applySemanticRefinement(input: {
             if (concepts[j]!.kind === "choice_field") { gate = concepts[j]!.id; break; }
         }
 
+        // Destinations first: the source's own requiredness is evidence the projection needs.
+        const fields = draftFieldsForConcept(input.draft, input.discovery, concept.id);
+        if (!fields.length) return;
+        for (const field of fields) claimed.add(field.id);
+
         const projection = projectParticipantRole({
             concept,
             proposal,
             readerType: (concept as { suggestedDataType?: string }).suggestedDataType ?? null,
             precedingGateConceptId: gate,
+            sourceRequiresValue: fields.some((f) => f.required),
             ...(input.selfContained ? { onSelfContainedArtifact: true } : {}),
         });
 
         // A discovery result covers the whole SOURCE; a draft covers one artifact. A concept with no
         // destination here belongs to another artifact of the same document, and reporting it as
-        // this artifact's unresolved hold would be a false alarm.
-        const fields = draftFieldsForConcept(input.draft, input.discovery, concept.id);
-        if (!fields.length) return;
-        for (const field of fields) claimed.add(field.id);
+        // this artifact's unresolved hold would be a false alarm — handled above, before projecting.
+        // A concept can be mixed. When its own label does not put the destinations in front of a
+        // participant, ask the source again, one prompt at a time — a held `guardian.address` that
+        // reaches two "Employer Address" boxes is two employer facts and one guardian fact.
+        const conceptProposal = proposal;
+        const groups = new Map<string, { projection: ParticipantProjection; fields: DraftFormField[] }>();
+        if (isParticipantFacing(projection.role)) {
+            groups.set("*", { projection, fields });
+        } else {
+            for (const field of fields) {
+                const facet = facetOf(field.label);
+                const perFacet = projectParticipantRole({
+                    concept,
+                    proposal,
+                    readerType: (concept as { suggestedDataType?: string }).suggestedDataType ?? null,
+                    precedingGateConceptId: gate,
+                    sourceRequiresValue: field.required,
+                    facetLabel: facet,
+                    ...(input.selfContained ? { onSelfContainedArtifact: true } : {}),
+                });
+                const chosen = isParticipantFacing(perFacet.role) ? perFacet : projection;
+                const key = `${chosen.role}|${chosen.basis}|${chosen.sharedValueKey ?? ""}`;
+                const g = groups.get(key) ?? { projection: chosen, fields: [] };
+                g.fields.push(field);
+                groups.set(key, g);
+            }
+        }
 
+        for (const { projection: p, fields: fs } of groups.values()) applyGroup(p, fs);
+        return;
+
+        function applyGroup(projection: ParticipantProjection, fields: DraftFormField[]) {
         report.roles[projection.role] = (report.roles[projection.role] ?? 0) + 1;
         report.destinationsByRole[projection.role] = (report.destinationsByRole[projection.role] ?? 0) + fields.length;
         if (projection.role === "hold_for_review") report.unresolved.push(`${concept.concept_key ?? concept.id}`);
@@ -267,8 +310,13 @@ export function applySemanticRefinement(input: {
             // The concept's canonical binding belongs to ONE of its facet families, and inside that
             // family to the ordinal the source numbered first. Everything else is a different fact:
             // the second guardian's phone is not the first guardian's phone.
-            const canonical =
+            let canonical =
                 factBase === canonicalBase && (ordinal === null || ordinal === (minOrdinal.get(factBase) ?? ordinal));
+            if (canonical) {
+                const owner = identityOwner.get(base);
+                if (owner === undefined) identityOwner.set(base, factBase);
+                else if (owner !== factBase) canonical = false;
+            }
             const identity = canonical ? base : `${base}#${slug(factBase)}${ordinal !== null ? `_${ordinal}` : ""}`;
 
             // The source's own English prompt beats a key-derived word: "Birth Date" over "Dob".
@@ -299,7 +347,8 @@ export function applySemanticRefinement(input: {
             // `shared_value_key` rides on `field_source`, which asserts WHICH canonical field this
             // box is. So ask-once is available exactly where a true binding exists — and a facet the
             // concept's binding does not describe must SHED that binding rather than inherit it.
-            const target = proposal.target_field_source as { entity_type?: string; field_key?: string; shared_value_key?: string } | null | undefined;
+            const target = (projection.canonicalBinding ?? conceptProposal.target_field_source) as
+                { entity_type?: string; field_key?: string; shared_value_key?: string } | null | undefined;
             if (canonical && target?.entity_type && target?.field_key) {
                 field.field_source = { entity_type: target.entity_type, field_key: target.field_key, shared_value_key: identity };
             } else if (canonical && field.field_source?.entity_type && field.field_source?.field_key) {
@@ -322,6 +371,7 @@ export function applySemanticRefinement(input: {
             if (finalKey) destinationsPerIdentity.set(finalKey, (destinationsPerIdentity.get(finalKey) ?? 0) + 1);
             if (NOISE.test(label)) report.noisyAskedLabels.push(label);
         });
+        }
     });
 
     for (const identity of destinationsPerIdentity.keys()) {
