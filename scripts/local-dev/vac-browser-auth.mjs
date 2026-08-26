@@ -29,11 +29,16 @@ import {
   verifyBrowserAuth,
 } from "./lib/vacilando/browser-auth.mjs";
 import { getDurableLane } from "./lib/vacilando/development-lane.mjs";
+import { publicBootstrapOutcome } from "./lib/vacilando/qa-session-bootstrap.mjs";
+import { ACTION_TYPES } from "./lib/vacilando/trusted-host-action-registry.mjs";
+import { requestTrustedHostAction } from "./lib/vacilando/trusted-host-actions.mjs";
 
 function usage(code = 2) {
-  process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
+  process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify|restore> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
 
 sign-in opens an isolated browser for that slot and waits for you to sign in.
+restore bootstraps the slot's REGISTERED QA identity with a single-use link, for
+machine identities no human should hold a password for.
 Credentials never reach the agent, the prompt, the logs or the result.
 `);
   process.exit(code);
@@ -42,7 +47,7 @@ Credentials never reach the agent, the prompt, the logs or the result.
 const args = process.argv.slice(2);
 if (!args.length || args[0] === "-h" || args[0] === "--help") usage(args.length ? 0 : 2);
 const op = args.shift();
-if (!["status", "sign-in", "verify"].includes(op)) usage();
+if (!["status", "sign-in", "verify", "restore"].includes(op)) usage();
 
 let laneId = null;
 let slot = null;
@@ -128,6 +133,49 @@ if (op === "verify") {
     if (out.detail) process.stdout.write(`  ${out.detail}\n`);
   });
   process.exit(v.ok ? 0 : 6);
+}
+
+if (op === "restore") {
+  /*
+   * Restore QA session — the branch for identities no human should hold a password for.
+   *
+   * The agent starts it and can cancel it. It never sees the link, the token, the session or the
+   * cookie: the minting child does that work inside the trusted boundary and writes the storage
+   * file itself. `restored` is still reachable ONLY through the fresh-context live check below,
+   * exactly as for an interactive sign-in — a mint that "looked fine" proves nothing on its own.
+   */
+  /*
+   * This CLI REQUESTS a restore. It does not perform one.
+   *
+   * It used to call `authorizeQaBootstrap({ operatorApproved: true })` itself, which is an agent
+   * approving its own privileged service-role action — governance in name only. The approval now
+   * comes from an operator grant on `environment.restore_qa_session`, and the trusted executor is
+   * the only caller that may set that flag. Nothing privileged runs here: no link is minted, no
+   * Supabase client is constructed, and the mint child is never spawned on this path.
+   */
+  const requested = requestTrustedHostAction({
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+    inputs: { laneId: validated.lane_id },
+    requestedBy: "worker",
+    executionSessionId: process.env.VACILANDO_RUN_ID || null,
+    reasonWorkerCannotExecute:
+      "Restoring a QA session mints a Supabase session from the service-role boundary. A worker may request it; only the operator may approve it.",
+  });
+  const out = publicBootstrapOutcome({
+    validated,
+    state: requested?.ok === false ? "refused" : "awaiting_operator_approval",
+    detail: requested?.ok === false ? (requested.error || "request_refused") : null,
+  });
+  emit(out, () => {
+    if (requested?.ok === false) {
+      process.stdout.write(`Restore could not be requested: ${requested.error}\n`);
+      return;
+    }
+    process.stdout.write(`Restore requested for slot ${validated.slot} (${validated.expected_identity}).\n`);
+    process.stdout.write(`Awaiting operator approval — nothing privileged runs until it is granted.\n`);
+    process.stdout.write(`  Director surface: Restore QA session for ${validated.expected_identity} on slot ${validated.slot}\n`);
+  });
+  process.exit(requested?.ok === false ? 4 : 0);
 }
 
 // sign-in

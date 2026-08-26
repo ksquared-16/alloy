@@ -11,6 +11,7 @@ import { validateMergeInputs } from "./trusted-host-merge.mjs";
 import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
+import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -18,6 +19,7 @@ export const ACTION_TYPES = Object.freeze({
   REPOSITORY_PUSH: "repository.push",
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
+  ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -300,8 +302,37 @@ function defineDatabaseApplyMigration() {
   };
 }
 
+/**
+ * Restore a managed slot's QA browser session.
+ *
+ * The request carries a lane id and nothing else. Slot, worktree, port, base URL, Supabase project,
+ * storage path and the QA identity are all resolved by the trusted executor from the canonical
+ * registries, so there is no input through which a caller could aim this at another identity, tenant
+ * or host. It always requires an operator grant: this is a service-role action, and an agent that
+ * could approve its own is not governed at all.
+ */
+function defineEnvironmentRestoreQaSession() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+    version: 1,
+    title: "Restore a managed slot's QA browser session",
+    requiredCapability: "trusted_host.environment.restore_qa_session",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 240_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", verified: "boolean", verified_at: "string" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "storage_written", "verified", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateRestoreQaSessionInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
+  [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
