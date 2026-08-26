@@ -22,6 +22,10 @@
 #   alloy-toolkit list            installed versions
 #   alloy-toolkit verify          assert nothing resolves through a worktree
 #   alloy-toolkit rollback <sha>  flip 'current' back to a previous version
+#   alloy-toolkit prune           PLAN a retention prune (deletes nothing)
+#   alloy-toolkit prune --yes     execute the plan after recomputing live state
+#   alloy-toolkit pin <sha>       protect a version from pruning, permanently
+#   alloy-toolkit unpin <sha>     release an explicit pin
 #
 # Idempotent: installing a ref that resolves to the already-current commit is a
 # no-op. Self-contained — it must run before the toolkit it installs exists.
@@ -227,14 +231,65 @@ cmd_rollback() {
   local sha="${1:-}"
   [[ -n "$sha" ]] || die "usage: alloy-toolkit rollback <sha>"
   [[ -d "${ROOT}/${sha}" ]] || die "no installed version '${sha}' (see: alloy-toolkit list)"
-  ln -sfn "${ROOT}/${sha}" "${ROOT}/.current.tmp"
-  mv -f "${ROOT}/.current.tmp" "${ROOT}/current"
+
+  # Same trap the install path documents, which rollback never got fixed for:
+  # `mv` FOLLOWS an existing symlink-to-directory, so staging a temp link and
+  # moving it over `current` dropped the temp link INSIDE the old version and
+  # left `current` pointing exactly where it was. Rollback reported success and
+  # changed nothing — proven on this host: after the mv, `current` still
+  # resolved to the old version and a stray `.current.tmp` sat inside it.
+  # `ln -sfn` replaces the link itself. Retaining ten versions for a rollback
+  # that silently no-ops is retention theatre, which is why S9 fixes it here.
+  rm -f "${ROOT}/.current.tmp"
+  ln -sfn "${ROOT}/${sha}" "${ROOT}/current"
+
+  # Assert the flip took, so a silent no-op can never be reported as a rollback.
+  local resolved
+  resolved="$(readlink -f "${ROOT}/current" 2>/dev/null || echo "")"
+  [[ "$resolved" == "$(readlink -f "${ROOT}/${sha}")" ]] \
+    || die "rollback did not take effect: current resolves to ${resolved:-nothing}, expected ${ROOT}/${sha}"
+
   ok "rolled back to ${sha}"
   cmd_verify
 }
 
+# ---------------------------------------------------------------------------
+# Retention (S9). Plan is the default; `--yes` is the only thing that deletes.
+#
+# The retention model lives in the toolkit's own lib so that `vac health` and
+# this command read ONE owner. Prune needs node, which bootstrap does not — so a
+# missing node degrades prune, never install.
+# ---------------------------------------------------------------------------
+cmd_prune() {
+  local here impl
+  here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+  impl="${here}/vac-toolkit-prune.mjs"
+  [[ -f "$impl" ]] || impl="${ROOT}/current/vac-toolkit-prune.mjs"
+  [[ -f "$impl" ]] || die "prune requires vac-toolkit-prune.mjs from an installed toolkit"
+  command -v node >/dev/null 2>&1 || die "prune requires node; install and rollback do not"
+  ALLOY_TOOLKIT_ROOT="$ROOT" node "$impl" "$@"
+}
+
+cmd_pin() {
+  local sha="${1:-}"
+  [[ -n "$sha" ]] || die "usage: alloy-toolkit pin <sha>"
+  [[ -d "${ROOT}/${sha}" ]] || die "no installed version '${sha}'"
+  touch "${ROOT}/PINNED"
+  grep -qxF "$sha" "${ROOT}/PINNED" || printf '%s\n' "$sha" >>"${ROOT}/PINNED"
+  ok "pinned ${sha} — it will never be proposed for prune"
+}
+
+cmd_unpin() {
+  local sha="${1:-}"
+  [[ -n "$sha" ]] || die "usage: alloy-toolkit unpin <sha>"
+  [[ -f "${ROOT}/PINNED" ]] || { warn "no pins recorded"; return 0; }
+  grep -vxF "$sha" "${ROOT}/PINNED" >"${ROOT}/.PINNED.tmp" || true
+  mv -f "${ROOT}/.PINNED.tmp" "${ROOT}/PINNED"
+  ok "unpinned ${sha} — other retention reasons may still protect it"
+}
+
 usage() {
-  sed -n '2,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,34p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 main() {
@@ -246,6 +301,9 @@ main() {
     list)           cmd_list ;;
     verify)         cmd_verify ;;
     rollback)       cmd_rollback "$@" ;;
+    prune)          cmd_prune "$@" ;;
+    pin)            cmd_pin "$@" ;;
+    unpin)          cmd_unpin "$@" ;;
     -h|--help|help) usage ;;
     *) usage >&2; exit 2 ;;
   esac

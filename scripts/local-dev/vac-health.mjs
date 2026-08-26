@@ -16,7 +16,8 @@ import os from "node:os";
 import { createRequire } from "node:module";
 const nodeRequire = createRequire(import.meta.url);
 import { readdirSync, readFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import "./lib/vacilando/bind-worker-cli-gateway-root.mjs";
 
@@ -292,18 +293,28 @@ const worktrees = await safely(async () => {
   return { onDisk: onDisk.length, registered: registered.length, unmanaged };
 }, { onDisk: 0, registered: 0, unmanaged: [] });
 
-const toolkit = await safely(async () => {
-  const dir = join(homedir(), ".local", "share", "alloy", "toolkit");
-  if (!existsSync(dir)) return { installed: 0, current: null };
-  const entries = readdirSync(dir).filter((n) => n !== "current");
-  let current = null;
-  try { current = readFileSync(join(dir, "current"), "utf8").trim(); } catch { /* symlink */ }
-  try {
-    const { readlinkSync } = await import("node:fs");
-    current = readlinkSync(join(dir, "current")).split("/").pop();
-  } catch { /* keep */ }
-  return { installed: entries.length, current };
-}, { installed: 0, current: null });
+// ── S9: toolkit retention, from the canonical owner ──────────────────────────
+//
+// Health does NOT count directories any more. It asks the retention owner for a
+// plan and reports what the plan says. A second opinion about what may be
+// deleted is exactly the drift this consolidates away — and `vac health` never
+// prunes, whatever severity it reports.
+const toolkitState = await safely(async () => {
+  const { execFileSync } = nodeRequire("node:child_process");
+  const here = dirname(fileURLToPath(import.meta.url));
+  const impl = join(here, "vac-toolkit-prune.mjs");
+  if (!existsSync(impl)) return null;
+  const out = execFileSync(process.execPath, [impl, "--json", "--quiet"], {
+    encoding: "utf8", timeout: 90_000, maxBuffer: 32 * 1024 * 1024,
+  });
+  return JSON.parse(out);
+}, null);
+
+const toolkitSeverity = await safely(async () => {
+  if (!toolkitState) return null;
+  const { retentionSeverity } = await import("./lib/vacilando/toolkit-retention.mjs");
+  return retentionSeverity(toolkitState, { diskPressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10) });
+}, null);
 
 const report = composeReport({
   hw, thresholds, only, startedAt,
@@ -311,7 +322,9 @@ const report = composeReport({
   probeResults: {
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
-    ports, worktrees, toolkit, configured_max: configuredMax,
+    ports, worktrees, configured_max: configuredMax,
+    toolkit_plan: toolkitState, toolkit_severity: toolkitSeverity,
+    disk_pressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10),
     seat_states: seatStates, seat_summary: seatSummary, idle_grace_policy: idleGracePolicy,
     provider_capacity_waits: providerCapacityWaits, reclaims_in_flight: reclaimsInFlight,
   },

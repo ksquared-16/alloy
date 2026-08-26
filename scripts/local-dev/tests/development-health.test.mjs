@@ -35,6 +35,20 @@ function test(name, fn) {
 const HW8 = { cores: 8, memory_gb: 24, hostname: "test-host", platform: "darwin", uptime_seconds: 100 };
 const T8 = H.thresholdsFor(HW8);
 
+/** A retention plan in the owner's shape, for health fixtures. */
+function toolkitPlan({ total, retained, prunable, keep = 10 }) {
+  return {
+    total_installed: total, retained_count: retained, prunable_count: prunable,
+    current: "abc", keep_n: keep, policy_version: "v1",
+    bytes_retained: retained * 1048576, bytes_reclaimable: prunable * 1048576,
+    execution_blocked: false, unresolved_pins: [],
+    retained_detail: Array.from({ length: retained }, (_, i) => ({
+      version: `v${i}`, reasons: i === 0 ? ["current"] : ["rollback_window"], disk_bytes: 1048576, live_pids: [],
+    })),
+    prune: Array.from({ length: prunable }, (_, i) => ({ version: `p${i}`, path: `/t/p${i}`, disk_bytes: 1048576 })),
+  };
+}
+
 const HEALTHY_PROBES = {
   load: { one: 2, five: 2, fifteen: 2 },
   memory: { free_gb: 8, free_pct: 33, compressor_gb: 1, swapouts_delta: 0, swap_rate_known: true },
@@ -50,7 +64,10 @@ const HEALTHY_PROBES = {
   workload_cost: { total_weight: 0, machine_exclusive_present: false, by_lane: {} },
   ports: [{ port: 3011, verdict: "matched" }],
   worktrees: { onDisk: 3, registered: 3, unmanaged: [] },
-  toolkit: { installed: 5, current: "abc" },
+  // S9: health reads the retention OWNER's plan; it no longer counts
+  // directories. A fixture with no plan is deliberately INCOMPLETE.
+  toolkit_plan: toolkitPlan({ total: 5, retained: 5, prunable: 0 }),
+  toolkit_severity: { severity: "healthy", why: "toolkit retention is within the configured envelope" },
   configured_max: 3,
   capacity: {
     policy_version: "v1",
@@ -195,10 +212,26 @@ await test("13 — unmanaged worktree", () => {
   assert.match(r.findings.find((f) => f.check === "worktrees.registry").suggested_action, /never delete/);
 });
 
-await test("14 — excessive toolkit retention", () => {
-  assert.equal(sevOf(report({ toolkit: { installed: 71, current: "x" } }), "toolkit.retention"), "problem");
-  assert.equal(sevOf(report({ toolkit: { installed: 25, current: "x" } }), "toolkit.retention"), "watch");
-  assert.equal(sevOf(report({ toolkit: { installed: 8, current: "x" } }), "toolkit.retention"), "healthy");
+await test("14 — toolkit retention reports UNMANAGED ACCUMULATION, not a version count", async () => {
+  const { retentionSeverity } = await import("../lib/vacilando/toolkit-retention.mjs");
+  const graded = (total, prunable) => {
+    const plan = toolkitPlan({ total, retained: total - prunable, prunable });
+    return sevOf(report({ toolkit_plan: plan, toolkit_severity: retentionSeverity(plan) }), "toolkit.retention");
+  };
+  // 71 installs where 69 are protected is HEALTHY — the old count-based check
+  // called this a problem, which is exactly the behaviour S9 removes.
+  assert.equal(graded(71, 2), "healthy");
+  assert.equal(graded(30, 6), "watch");
+  assert.equal(graded(20, 18), "problem");
+  // A retention state that cannot be determined is a problem, never a licence to prune.
+  const blocked = { ...toolkitPlan({ total: 20, retained: 20, prunable: 0 }), execution_blocked: true, blocked_reason: "a live pin is unresolved" };
+  assert.equal(sevOf(report({ toolkit_plan: blocked, toolkit_severity: retentionSeverity(blocked) }), "toolkit.retention"), "problem");
+});
+
+await test("14b — without the retention owner, health declines to answer", () => {
+  const f = report({ toolkit_plan: null, toolkit_severity: null }).findings.find((x) => x.check === "toolkit.retention");
+  assert.equal(f.incomplete, true);
+  assert.match(f.evidence[0], /does not recompute retention itself/);
 });
 
 await test("15 — one failed probe leaves the rest of the report intact", () => {

@@ -703,19 +703,58 @@ export function checkWorktreesRegistry({ onDisk = 0, registered = 0, unmanaged =
   });
 }
 
-export function checkToolkitRetention({ thresholds, installed = 0, current = null }) {
-  const keep = thresholds.toolkit_keep_n;
-  const sev = installed > keep * thresholds.toolkit_problem_multiple ? "problem"
-    : installed > keep * thresholds.toolkit_watch_multiple ? "watch" : "healthy";
+/**
+ * S9 — toolkit retention, read from the canonical owner.
+ *
+ * WHAT CHANGED AND WHY IT MATTERS. This check used to count directories and
+ * compare the number against a multiple of keep_n. That made 74 versions look
+ * identical whether 70 of them were protected or 70 were dead weight, and it
+ * was a SECOND opinion about retention sitting beside the toolkit's own. It now
+ * consumes the retention plan; when no plan is supplied the finding is
+ * INCOMPLETE rather than recomputed here, because a health check that can still
+ * answer without the owner is a health check that will drift from it.
+ *
+ * SEVERITY IS ABOUT UNMANAGED ACCUMULATION. Prunable versions relative to the
+ * retention depth, not installed versions relative to anything. And a retention
+ * state that cannot be safely determined — an unresolved live pin — is a
+ * PROBLEM, because the honest reading of "we cannot tell" here is that nothing
+ * can be safely reclaimed.
+ */
+export function checkToolkitRetention({ plan = null, severity = null, diskPressure = false }) {
+  if (!plan) {
+    return incompleteFinding("toolkit.retention",
+      "the toolkit retention owner did not return a plan; health does not recompute retention itself");
+  }
+  const sev = severity || { severity: "problem", why: "retention severity was not resolved" };
+  const reclaimable = plan.bytes_reclaimable || 0;
   return finding({
     check: "toolkit.retention",
-    severity: sev,
+    severity: sev.severity,
     owner_resource: "vacilando.toolkit",
-    measurements: { installed, keep_n: keep, watch_above: keep * thresholds.toolkit_watch_multiple, problem_above: keep * thresholds.toolkit_problem_multiple, current },
-    evidence: [`${installed} installed versions; current ${current || "unknown"}`],
-    explanation: sev === "healthy" ? "Toolkit retention is within policy."
-      : "Toolkit versions have accumulated well past the retention target; no prune capability exists yet.",
-    suggested_action: sev === "healthy" ? null : "Pruning is S9 and must stay explicit — the toolkit is the machine's recovery path.",
+    measurements: {
+      total_installed: plan.total_installed,
+      current: plan.current,
+      retained: plan.retained_count,
+      pinned_by_live_process: (plan.retained_detail || []).filter((r) => r.reasons.includes("live_process")).length,
+      explicitly_pinned: (plan.retained_detail || []).filter((r) => r.reasons.includes("explicitly_pinned")).length,
+      rollback_retained: (plan.retained_detail || []).filter((r) => r.reasons.includes("rollback_window")).length,
+      protected_unknown: (plan.retained_detail || []).filter((r) => r.reasons.some((x) => x.startsWith("unknown_"))).length,
+      prunable: plan.prunable_count,
+      bytes_retained: plan.bytes_retained,
+      bytes_reclaimable: reclaimable,
+      keep_n: plan.keep_n,
+      policy_version: plan.policy_version,
+      execution_blocked: plan.execution_blocked,
+    },
+    evidence: [
+      `${plan.total_installed} installed · current ${plan.current || "unresolved"} · ${plan.retained_count} retained · ${plan.prunable_count} prunable`,
+      ...(plan.unresolved_pins || []).map((u) => `unresolved pin: pid ${u.pid ?? "?"} — ${u.reason}`),
+    ],
+    explanation: sev.why,
+    suggested_action: sev.severity === "healthy" ? null
+      : plan.execution_blocked
+        ? "Resolve the live-process pin before any prune; nothing may be reclaimed while a running version is unknown."
+        : `Review the plan with \`alloy-toolkit prune\`; it deletes nothing. Execution is explicit and reclaims ${plan.bytes_reclaimable} bytes.`,
   });
 }
 
@@ -767,7 +806,11 @@ export function composeReport({
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
   safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
-  safe("toolkit.retention", () => checkToolkitRetention({ thresholds, ...(probeResults.toolkit || {}) }));
+  safe("toolkit.retention", () => checkToolkitRetention({
+    plan: probeResults.toolkit_plan || null,
+    severity: probeResults.toolkit_severity || null,
+    diskPressure: probeResults.disk_pressure === true,
+  }));
 
   const counts = { healthy: 0, watch: 0, problem: 0 };
   for (const f of findings) counts[f.severity] = (counts[f.severity] || 0) + 1;
