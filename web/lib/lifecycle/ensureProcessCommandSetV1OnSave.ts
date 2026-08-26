@@ -120,11 +120,36 @@ export function ensureBuilderCommandSetsOnSave(
     };
 }
 
+/**
+ * Has this process restricted itself to a set of commands, and is this one of them?
+ *
+ * Three states, and the middle one used to be read as the last:
+ *
+ *   absent      no selection has been authored → NO restriction. Everything otherwise valid passes.
+ *   `[]`        the operator deliberately selected none → nothing passes.
+ *   populated   only what was selected passes.
+ *
+ * Absence used to fall through to `migrateLegacyProcessCommands`, which in a tenant with no stage
+ * action catalogs returns an empty list — so "nobody has chosen yet" denied every capability, and the
+ * Direct Command and Helpful Action pickers rendered empty with nothing wrong with the configuration.
+ * The publish validator had always read absence the other way and skipped it entirely, so the two
+ * canonical readers disagreed about the same fact. The guard even disagreed with itself: a null
+ * PROCESS returned unrestricted while a process with no selection returned fully restricted.
+ *
+ * The migration is still consulted, because a legacy process that never wrote `command_set_v1` can
+ * still have a real selection derivable from its stage catalogs. What changed is what an EMPTY
+ * derivation means: nothing was authored, so nothing is restricted.
+ */
 export function isCapabilityInProcessSelection(
     process: LifecycleBuilderProcessRecord | null | undefined,
     capabilityKey: string
 ): boolean {
     if (!process) return true;
+    // Explicit empty is authoritative and must keep denying — only ABSENCE is permissive.
+    if (!process.command_set_v1) {
+        const derived = migrateLegacyProcessCommands({ process }).commands;
+        if (!listEnabledCommandKeys(derived, resolveCanon).length) return true;
+    }
     const selectionKeys = listEnabledCommandKeys(
         process.command_set_v1 ??
             migrateLegacyProcessCommands({ process }).commands,

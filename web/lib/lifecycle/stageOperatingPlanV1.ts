@@ -554,7 +554,13 @@ function parseParticipantDecisionInput(raw: unknown): StageParticipantDecisionIn
  * half-parsed decision would render as an operator button that cannot execute, which is worse than
  * a decision that is visibly absent from the surface.
  */
-function parseParticipantDecision(raw: unknown): StageWorkParticipantDecisionV1 | null {
+/**
+ * Exported so the authoring route can delegate to the ONE parser the runtime already reads with.
+ *
+ * A configuration action that re-implemented this would be a second definition of what a decision is
+ * — and the two would drift the first time either changed.
+ */
+export function parseParticipantDecision(raw: unknown): StageWorkParticipantDecisionV1 | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
     const decision_key = trimNonEmpty(o.decision_key);

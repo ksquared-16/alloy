@@ -32,6 +32,7 @@ import {
     setStageRequirements,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { isProcessEntryIntent, PROCESS_ENTRY_INTENTS } from "@/lib/lifecycle/processEntryPointsV1";
+import { parseParticipantDecision } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     isAuthorableRequirementKind,
     parseStageRequirementsV1,
@@ -299,6 +300,87 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     );
                 }
                 config = setProcessEntryPoint(config, processId, intentRaw, stageKey);
+                break;
+            }
+            case "set_work_template_participant_decisions": {
+                /*
+                 * Per-child paths out of a family-grain stage.
+                 *
+                 * A participant decision is child-grain BY DEFINITION on a template that may sit on a
+                 * family stage — that asymmetry is the point: the family stays on the family track
+                 * while each child moves on its own. It was fully consumed (parsed, validated,
+                 * projected, executed) and authorable nowhere, which is why six legitimate
+                 * family→child paths were configured as stage transitions the grain rule correctly
+                 * refuses.
+                 *
+                 * Replaces the template's set intentionally, for the same reason
+                 * `set_stage_requirements` does: row-merging would make removal inexpressible.
+                 */
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const templateKey = typeof body.template_key === "string" ? body.template_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!templateKey) return NextResponse.json({ error: "template_key is required" }, { status: 400 });
+                if (!Array.isArray(body.decisions)) {
+                    return NextResponse.json({ error: "decisions must be an array" }, { status: 400 });
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                const targetStage = targetProcess.stages.find((st) => st.key === stageKey);
+                if (!targetStage) return NextResponse.json({ error: `Unknown stage "${stageKey}"` }, { status: 404 });
+                const plan = targetStage.stage_operating_plan_v1;
+                const template = plan?.work_templates?.find((w) => w.template_key === templateKey);
+                if (!plan || !template) {
+                    return NextResponse.json({ error: `Unknown work template "${templateKey}" on "${stageKey}"` }, { status: 404 });
+                }
+
+                // Delegate to the ONE parser the runtime reads with — never a second definition.
+                const parsedDecisions = (body.decisions as unknown[]).map((row) => parseParticipantDecision(row));
+                if (parsedDecisions.some((d) => d === null)) {
+                    return NextResponse.json(
+                        {
+                            error:
+                                "One or more per-child paths are not readable — each needs a decision key, an action, "
+                                + "a child subject and at least one target.",
+                        },
+                        { status: 400 },
+                    );
+                }
+                const decisions = parsedDecisions as NonNullable<(typeof parsedDecisions)[number]>[];
+                // A duplicate identity collides in audit, idempotency and the operator row key at
+                // once, and the canonical parser drops the second silently — which for AUTHORING
+                // would store fewer paths than the operator wrote.
+                const keys = new Set(decisions.map((d) => d.decision_key));
+                if (keys.size !== decisions.length) {
+                    return NextResponse.json({ error: "Two per-child paths share the same key." }, { status: 400 });
+                }
+
+                config = {
+                    ...config,
+                    processes: config.processes.map((p) =>
+                        p.id !== processId
+                            ? p
+                            : {
+                                  ...p,
+                                  stages: p.stages.map((st) =>
+                                      st.key !== stageKey
+                                          ? st
+                                          : {
+                                                ...st,
+                                                stage_operating_plan_v1: {
+                                                    ...plan,
+                                                    work_templates: plan.work_templates.map((w) =>
+                                                        w.template_key !== templateKey
+                                                            ? w
+                                                            : { ...w, participant_decisions: decisions },
+                                                    ),
+                                                },
+                                            },
+                                  ),
+                              },
+                    ),
+                };
                 break;
             }
             case "set_stage_requirements": {

@@ -7,7 +7,7 @@
  *           Operational Requirements · Possible Outcomes
  */
 
-import { useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, useMemo } from "react";
 import type { ReactNode } from "react";
 import {
     Tag,
@@ -27,6 +27,7 @@ import {
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
 import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
+import StagePerChildPathsEditor from "@/components/adminV2/settings/lifecycle/StagePerChildPathsEditor";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
@@ -653,6 +654,19 @@ export default function StageEditorV2({
         requirements: true,
         outcomes: true,
     });
+    /**
+     * Child-grain stages of this process — the only destinations a per-child path may target.
+     * Derived from configuration rather than named here: the validator refuses a decision whose
+     * movement lands on a family stage, and a picker that offered one would author a known error.
+     */
+    const perChildDestinations = useMemo(
+        () =>
+            (process?.stages ?? [])
+                .filter((s) => s.is_active && s.grain === "child")
+                .map((s) => ({ key: s.key, label: s.label })),
+        [process],
+    );
+
     const toggleSection = useCallback((id: string) => {
         setCollapsed((prev) => ({ ...prev, [id]: !prev[id] }));
     }, []);
@@ -879,6 +893,31 @@ export default function StageEditorV2({
                     collapsed={!!collapsed.experience}
                     onToggle={() => toggleSection("experience")}
                 >
+                    {/*
+                     * Per-child paths belong with the stage's ways out, because that is what they
+                     * are: the way a CHILD leaves a family stage. Only rendered on a family-grain
+                     * stage with child-grain destinations — on a child stage the concept is
+                     * meaningless and offering it would invite a nonsense configuration.
+                     */}
+                    {stageKey.trim() && stageRecord?.grain === "family" && perChildDestinations.length
+                        ? (stageRecord?.stage_operating_plan_v1?.work_templates ?? []).map((template) => (
+                              <StagePerChildPathsEditor
+                                  key={template.template_key}
+                                  departmentId={departmentId}
+                                  stageKey={stageKey}
+                                  stageLabel={stageLabel}
+                                  templateKey={template.template_key}
+                                  templateLabel={template.label ?? template.template_key}
+                                  decisions={template.participant_decisions ?? []}
+                                  process={process ?? null}
+                                  childStages={perChildDestinations}
+                                  childStatuses={(bootstrap?.record_status_vocabulary ?? [])
+                                      .filter((r) => r.is_active !== false && /member|child/i.test(r.entity_type))
+                                      .map((r) => ({ status_key: r.status_key, status_label: r.status_label }))}
+                                  onSaved={onReloadConfiguration}
+                              />
+                          ))
+                        : null}
                     {stageKey.trim() ? (
                         <>
                             <LifecycleStageOperatingPlanEditor
