@@ -310,7 +310,7 @@ export function deliveryNotice(result) {
 export function deliveryErrorText(error) {
   switch (error) {
     case "current_run_active":
-      return "This lane still has an open run. If the agent already finished, send again in a moment — a leftover heartbeat should not block a new instruction.";
+      return "This lane still has an open run. If the agent already finished, send again — or tap Close stale run and continue.";
     case "duplicate_send":
       return "Same instruction was just sent. Wait a moment before sending it again.";
     case "send_in_progress":
@@ -2126,7 +2126,7 @@ export function renderGovernedProposal(proposal) {
     </div>`;
 }
 
-export function renderOperatorDecisionActions(run) {
+export function renderOperatorDecisionActions(run, { activity = null } = {}) {
   const ga = run?.governed_action;
   if (ga?.status === "awaiting_operator") {
     const proposal = renderGovernedProposal(ga.proposal);
@@ -2140,9 +2140,15 @@ export function renderOperatorDecisionActions(run) {
     </div>`;
   }
   const lifecycle = run?.run_lifecycle?.class || run?.run_lifecycle?.class;
-  if (lifecycle === "ambiguous" || lifecycle === "stale") {
+  const leakedGrant = run?.run_lifecycle?.reason === "open_resource"
+    && activity === "ready"
+    && !run?.resource_wait?.resuming;
+  if (lifecycle === "ambiguous" || lifecycle === "stale" || leakedGrant) {
+    const copy = leakedGrant
+      ? "This run is holding a shared lock after the agent finished. Close it so you can send again."
+      : "Previous work may not have completed.";
     return `<div class="gw-work-stale">
-    <p class="gw-work-stale-copy">Previous work may not have completed.</p>
+    <p class="gw-work-stale-copy">${esc(copy)}</p>
     <div class="gw-work-stale-actions">
       <button type="button" class="btn primary" data-gw-close-stale data-run-id="${esc(run.run_id || "")}">Close stale run and continue</button>
       <button type="button" class="btn" data-gw-review-run>Review run</button>
@@ -2180,6 +2186,37 @@ export function renderOperatorDecisionActions(run) {
  * Deliberately quiet: one line, no controls, and nothing at all when there has
  * never been a governed decision on this lane.
  */
+/**
+ * Browser-session recovery, where the Director is already looking.
+ *
+ * A lane whose Playwright session has gone stale used to show nothing at all —
+ * the run simply failed somewhere with `refresh_token_not_found` and the only
+ * way back was a terminal. This is the status and the one action that replaces
+ * that: the Director signs in through a browser Vacilando opens, and nothing
+ * they type passes through the agent.
+ */
+export function renderBrowserAuthRecovery(lane) {
+  const a = lane?.browser_auth;
+  if (!a || !a.blocks_execution) return "";
+  return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="auth">
+    <div class="gw-decision-h">Browser session</div>
+    <div class="gw-work-stale" data-gw-browser-auth>
+      <p class="gw-work-stale-copy">${esc(a.headline)}</p>
+      <dl class="gw-kv">
+        <dt>Slot</dt><dd>${esc(String(a.slot ?? "—"))}</dd>
+        <dt>Address</dt><dd>${esc(a.base_url || "—")}</dd>
+        <dt>Sign in as</dt><dd>${esc(a.expected_identity || "—")}</dd>
+        ${a.storage_captured_at ? `<dt>Last captured</dt><dd>${esc(ago(Date.parse(a.storage_captured_at)))} ago</dd>` : ""}
+      </dl>
+      <p class="gw-gv-text">A browser opens on this machine. What you type goes to the app and nowhere else — not to the agent, not into the run, not into any log.</p>
+      <div class="gw-work-stale-actions">
+        <button type="button" class="btn primary" data-gw-browser-auth-signin data-lane-id="${esc(lane.lane_id || "")}" data-slot="${esc(String(a.slot ?? ""))}">Sign in</button>
+        <button type="button" class="btn" data-gw-browser-auth-recheck data-lane-id="${esc(lane.lane_id || "")}">Re-check</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 export function renderGovernedOutcome(lane) {
   const o = lane?.last_governed_outcome;
   if (!o) return "";
@@ -2235,8 +2272,8 @@ export function governedDecisionNotice({
   return { kind: "ok", text: `${what} authorized. Director is executing.` };
 }
 
-export function renderOperatorDecisionBar(run) {
-  const inner = renderOperatorDecisionActions(run);
+export function renderOperatorDecisionBar(run, extras = {}) {
+  const inner = renderOperatorDecisionActions(run, extras);
   if (!inner) return "";
   const awaiting = run?.governed_action?.status === "awaiting_operator";
   return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="${awaiting ? "approval" : "stale"}">
@@ -2326,11 +2363,16 @@ export function renderCurrentWork(run, nowMs = Date.now(), { cancelPending = fal
     const startedMs = run.started_at ? Date.parse(run.started_at) : NaN;
     const started = Number.isFinite(startedMs) ? ago(startedMs, nowMs) : null;
     const instruction = run.instruction ? String(run.instruction) : "";
+    const leaked = run.resource_wait?.request_state === "GRANTED" && !run.resource_wait?.resuming;
+    const closeRun = leaked
+      ? { ...run, run_lifecycle: { class: "active", reason: "open_resource" } }
+      : run;
     return `<aside class="gw-work" data-gw-work data-run-state="EXECUTING" data-agent-idle="1">
     <span class="gw-work-h">Current work</span>
     <span class="gw-work-state">At a prompt</span>
     ${instruction ? `<span class="gw-work-text">${esc(instruction)}</span>` : ""}
     <span class="gw-work-meta">The agent finished this turn. The run is still open${started ? ` · started ${esc(started)} ago` : ""}.</span>
+    ${renderOperatorDecisionActions(closeRun, { activity: "ready" })}
     ${renderCancelControl(run, { pending: cancelPending })}
   </aside>`;
   }
@@ -4594,7 +4636,8 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderOperatorDecisionBar(operatorDecisionRun(lane))}
+        ${renderBrowserAuthRecovery(lane)}
+        ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}

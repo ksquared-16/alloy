@@ -83,6 +83,7 @@ export const FIXTURE_REFUSALS = Object.freeze({
   WORKTREE_MISSING: "worktree_missing",
   SCRIPT_MISSING: "fixture_script_not_present",
   NOT_LOCAL: "non_local_environment_refused",
+  TARGET_UNKNOWN: "certification_target_unknown",
   RUNNER_MISSING: "trusted_runner_missing",
 });
 
@@ -132,30 +133,47 @@ export function validateFixtureRequest({ fixture, operation, identityDecision = 
 }
 
 /**
- * Local development only.
+ * Refuse a runtime this process can actually judge.
  *
- * Reuses the same reading the trusted env loader uses: a Supabase URL that is
- * not loopback is not this machine's stack. The refusal is on the URL rather
- * than on a mode flag, because a flag can be set by whoever is asking and a
- * hostname cannot.
+ * THE CORRECTION. This used to read `process.env.SUPABASE_URL` and report
+ * "not this machine's local stack" when it disagreed. In the real path that
+ * variable is never set here: the CLI runs BEFORE the trusted env is loaded, so
+ * the URL branch could only ever pass. A check that cannot see the thing it
+ * judges is not a lenient check, it is a decorative one, and reporting it as
+ * proven was wrong.
+ *
+ * The split is now honest. This function judges only what the CLI genuinely
+ * knows — the Node runtime it is executing in. The TARGET is judged by
+ * alloy-certify-fixture, which is the first point in the whole path where the
+ * Supabase URL exists, using the toolkit's own alloy_is_production_supabase_url
+ * so there is one definition of "prohibited target" on this machine.
+ *
+ * A caller may still supply a URL explicitly, and then it IS judged here — but
+ * an absent URL is now `target_unknown` rather than silent approval, so this can
+ * never again pass vacuously and be mistaken for enforcement.
  */
-export function assertLocalEnvironment({ env = process.env } = {}) {
-  const url = String(
-    env.SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || env.ALLOY_SUPABASE_URL || "",
-  ).trim();
+export function assertLocalEnvironment({ env = process.env, supabaseUrl = undefined } = {}) {
   const nodeEnv = String(env.NODE_ENV || "").toLowerCase();
   if (nodeEnv === "production" || String(env.VERCEL || "") === "1") {
     return { ok: false, error: FIXTURE_REFUSALS.NOT_LOCAL, detail: "production runtime refused" };
   }
-  if (url && !/localhost|127\.0\.0\.1|:55321|local\.supabase/i.test(url)) {
+  if (supabaseUrl === undefined) {
+    // Not judged here, and said so. The runner enforces the target.
+    return { ok: true, target_judged: false, enforced_by: "alloy-certify-fixture" };
+  }
+  const url = String(supabaseUrl || "").trim();
+  if (!url) {
+    return { ok: false, error: FIXTURE_REFUSALS.TARGET_UNKNOWN, detail: "no Supabase target was supplied" };
+  }
+  if (!/localhost|127\.0\.0\.1|:55321|local\.supabase/i.test(url)) {
     return {
       ok: false,
       error: FIXTURE_REFUSALS.NOT_LOCAL,
       // The host, never the key.
-      detail: "the configured Supabase URL is not this machine's local stack",
+      detail: "the supplied Supabase URL is not this machine's local stack",
     };
   }
-  return { ok: true };
+  return { ok: true, target_judged: true };
 }
 
 function contained(child, parent) {

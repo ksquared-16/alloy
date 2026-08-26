@@ -94,6 +94,31 @@ alloy_trusted_server_env_preflight
 alloy_load_trusted_server_env_exports \
   || die "trusted server env could not be loaded" 4
 
+# ── the target is only knowable HERE ─────────────────────────────────────────
+# The Node entry point cannot enforce this: it runs before the trusted env is
+# loaded and never sees SUPABASE_URL, so a check there passes vacuously no matter
+# what it says. This is the first line in the whole path where the real target is
+# known, so this is where a prohibited target has to be refused.
+#
+# alloy_is_production_supabase_url is the toolkit's own predicate — an
+# operator-linked project is permitted unless ALLOY_BLOCK_REMOTE_SUPABASE says
+# otherwise, and a plainly production host never is. Reusing it keeps one
+# definition of "prohibited target" on this machine.
+CERT_TARGET_URL="${SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}"
+[[ -n "$CERT_TARGET_URL" ]] || die "certification_target_unknown: no Supabase URL in the trusted env" 5
+if alloy_is_production_supabase_url "$CERT_TARGET_URL"; then
+  # The host, never a key.
+  die "certification_target_prohibited: ${CERT_TARGET_URL%%\?*} is not permitted for fixture execution" 5
+fi
+case "$CERT_TARGET_URL" in
+  *.supabase.co*|*.supabase.in*)
+    # A hosted project is allowed only because the operator configured it. Say so
+    # out loud rather than letting a remote target look like a local one.
+    printf 'certification_target=hosted url=%s\n' "${CERT_TARGET_URL%%\?*}"
+    ;;
+  *) printf 'certification_target=local url=%s\n' "${CERT_TARGET_URL%%\?*}" ;;
+esac
+
 printf 'fixture=%s operation=%s worktree=%s trusted_env_names=%s\n' \
   "$FIXTURE" "$OPERATION" "$WORKTREE" "${ALLOY_TRUSTED_ENV_LOADED_COUNT:-0}"
 [[ -n "$IDENTITY_DECISION" ]] && printf 'identity_decision=%s\n' "$IDENTITY_DECISION"

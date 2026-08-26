@@ -1287,6 +1287,87 @@ export function orchestrateDirectorGovernedWait({
   return requestGovernedAction(request, { nowMs, root, processNow: false });
 }
 
+/**
+ * What a Decision is ABOUT, as a comparable key.
+ *
+ * A Decision for a merge is not a standing permission to merge; it names one
+ * pull request at one head SHA. Reuse therefore has to be scoped to the
+ * subject, not merely to the action type — see openApprovalDecision.
+ *
+ * Returns null when the action has no identifiable subject, and a null subject
+ * never matches another null: unknown is not the same as equal.
+ */
+export function governedActionSubjectKey(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").toLowerCase();
+    if (n == null) return null;
+    return `merge:#${n}@${sha.slice(0, 40)}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    const versions = Array.isArray(inputs.migrations)
+      ? inputs.migrations.map((m) => String(m?.version || m)).filter(Boolean).sort()
+      : [];
+    if (!versions.length) return null;
+    return `migration:${versions.join(",")}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const artifact = artifactPathFrom(rec.artifact_refs) || "";
+    if (!rec.target) return null;
+    return `census:${rec.target}:${artifact.split("/").pop()}`;
+  }
+  return null;
+}
+
+/**
+ * The subject an EXISTING decision was opened for.
+ *
+ * Prefers the structured marker written below. Decisions created before that
+ * marker existed are read from the situation text this same function composes,
+ * so an already-open decision is still matched correctly rather than being
+ * treated as subject-less and reused for anything.
+ */
+export function decisionSubjectKey(decision) {
+  if (!decision) return null;
+  const marked = (Array.isArray(decision.evidence) ? decision.evidence : [])
+    .find((e) => e && typeof e === "object" && e.governed_action_subject);
+  if (marked) return String(marked.governed_action_subject);
+
+  const text = String(decision.situation || "");
+  const pr = text.match(/^PR: #(\d+)\s*$/m);
+  if (pr) {
+    const sha = text.match(/^Expected SHA: ([0-9a-fA-F]{7,40})\s*$/m);
+    return `merge:#${pr[1]}@${String(sha ? sha[1] : "").toLowerCase()}`;
+  }
+  return null;
+}
+
+/**
+ * Evidence plus a structural record of what this decision is about, so matching
+ * never has to depend on parsing the prose above it.
+ */
+function decisionEvidenceWithSubject(rec) {
+  const base = Array.isArray(rec?.artifact_refs) ? rec.artifact_refs.slice() : [];
+  const subject = governedActionSubjectKey(rec);
+  if (!subject) return base;
+  base.push({
+    governed_action_subject: subject,
+    action_key: rec.action_key,
+    request_id: rec.request_id,
+  });
+  return base;
+}
+
+function subjectsMatch(decision, rec) {
+  const want = governedActionSubjectKey(rec);
+  const have = decisionSubjectKey(decision);
+  // Unknown on either side is not a match. Reusing a decision whose subject we
+  // cannot read is exactly the failure this guards against.
+  return Boolean(want) && Boolean(have) && want === have;
+}
+
 function openApprovalDecision(rec, { nowMs, root } = {}) {
   const presentation = presentationForGovernedAction(rec);
 
@@ -1314,16 +1395,30 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
   }
 
   const isCensus = rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS;
+  // A DECISION IS ABOUT A SUBJECT, NOT ABOUT A CAPABILITY.
+  //
+  // This used to reuse any open decision of the right action type. Within one
+  // mission that meant a second merge request adopted the first one's decision:
+  // PR #531 bound itself to the open decision titled "Merge PR #529", and #529
+  // was already merged. The Director was shown an approval labelled for a
+  // finished PR, approving it could not produce the #531 merge, and the stale
+  // request sat on the shared decision indefinitely. Three approvals failed to
+  // land that way.
+  //
+  // Reuse now requires the same subject — same PR at the same head SHA, same
+  // migration set, same census artifact. A different SHA is a different
+  // decision, exactly as the single-use grant already treats it.
   const open = listDecisions(rec.mission_id, { status: "open" })
     .find((d) => {
-      if (isCensus) return d.defaultAction === "approve_governed_census" || /census/i.test(d.title || "");
-      if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-        return d.defaultAction === "approve_governed_merge" || /merge pr/i.test(d.title || "");
-      }
-      if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-        return d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "");
-      }
-      return d.title === rec.title;
+      const typeMatches = isCensus
+        ? d.defaultAction === "approve_governed_census" || /census/i.test(d.title || "")
+        : rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+          ? d.defaultAction === "approve_governed_merge" || /merge pr/i.test(d.title || "")
+          : rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+            ? d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "")
+            : d.title === rec.title;
+      if (!typeMatches) return false;
+      return subjectsMatch(d, rec);
     });
   if (open) {
     rec.decision_id = open.decisionId;
@@ -1376,7 +1471,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
       defaultAction: "approve_governed_census",
       actor: "director",
       nowMs,
-      evidence: rec.artifact_refs || [],
+      evidence: decisionEvidenceWithSubject(rec),
     });
     rec.decision_id = decision.decisionId;
     emitNotification("governed_action_approval_required", rec, {
@@ -1432,7 +1527,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
     defaultAction: isMerge ? "approve_governed_merge" : "approve_governed_migration",
     actor: "director",
     nowMs,
-    evidence: rec.artifact_refs || [],
+    evidence: decisionEvidenceWithSubject(rec),
   });
   rec.decision_id = decision.decisionId;
   emitNotification("governed_action_approval_required", rec, {
@@ -1751,6 +1846,137 @@ export function executeGovernedAction(requestId, {
     applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
   }
   return applied;
+}
+
+/**
+ * Repair approval records that reality or a mislabelled decision has stranded.
+ *
+ * TWO THINGS STRAND A GOVERNED MERGE.
+ *
+ * The first is that the merge already happened. A request pinned to a PR that
+ * is now merged at the expected head has nothing left to authorize — the state
+ * the Director would be approving already exists. Leaving it `awaiting_operator`
+ * is not caution, it is a queue entry that can never be satisfied, and while it
+ * shares a decision it blocks the requests behind it. It is resolved here as
+ * complete/idempotent, WITHOUT minting a grant: no privileged mutation is
+ * performed, so no authorization is created.
+ *
+ * The second is a decision that names a different subject, from the reuse bug
+ * openApprovalDecision now prevents. Records already written that way are
+ * detached and given a decision that names what they actually are.
+ *
+ * Deliberately NOT done here: denying anything. A merge that already landed is
+ * satisfied, not refused, and recording it as denied would be false.
+ */
+export async function reconcileGovernedApprovals({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  inspect = null,
+  laneId = null,
+} = {}) {
+  const store = readGovernedActionStore(root);
+  const pending = store.requests.filter((r) => {
+    if (r.status !== "awaiting_operator" && r.status !== "awaiting_director") return false;
+    if (laneId && canonicalLaneStoreId(r.lane_id, root) !== canonicalLaneStoreId(laneId, root)) return false;
+    return true;
+  });
+
+  const satisfied = [];
+  const rebound = [];
+  const unchanged = [];
+
+  let inspectFn = inspect;
+  if (!inspectFn) {
+    const mod = await import("./trusted-host-merge.mjs");
+    inspectFn = (inputs) => {
+      const seen = mod.inspectPullRequest(inputs);
+      return mod.evaluateMergeReadiness(seen);
+    };
+  }
+
+  for (const rec of pending) {
+    if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+      let verdict = null;
+      try {
+        verdict = inspectFn(rec.inputs || {});
+      } catch (err) {
+        // An unreachable remote is not evidence of anything; leave the record be.
+        unchanged.push({ request_id: rec.request_id, reason: "inspect_failed", detail: String(err?.message || err) });
+        continue;
+      }
+      if (verdict?.ok && verdict.idempotent && verdict.code === "already_merged") {
+        rec.status = "complete";
+        rec.operator_approval_required = false;
+        rec.policy_decision = "already_satisfied";
+        rec.result = {
+          ...(rec.result || {}),
+          idempotent: true,
+          code: "already_merged",
+          merge_sha: verdict.mergeSha || null,
+          staging_sha: verdict.stagingSha || null,
+        };
+        rec.updated_at = iso(nowMs);
+        // Close the decision only when it actually described THIS request.
+        if (rec.decision_id && rec.mission_id) {
+          const d = listDecisions(rec.mission_id, { status: "open" })
+            .find((x) => x.decisionId === rec.decision_id);
+          if (d && subjectsMatch(d, rec)) {
+            try {
+              answerDecision({
+                missionId: rec.mission_id,
+                decisionId: rec.decision_id,
+                chosenOptionId: "authorize_staging_merge",
+                response: `Already merged as ${verdict.mergeSha || "the recorded merge commit"}; no action was required.`,
+                actor: "system",
+                nowMs,
+              });
+            } catch { /* decision close is best-effort */ }
+          } else if (d) {
+            // The decision belongs to a different subject. Releasing it is the
+            // whole point; closing it would answer someone else's question.
+            rec.decision_id = null;
+          }
+        }
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_already_merged", { nowMs, merge_sha: verdict.mergeSha || null }, root);
+        satisfied.push({ request_id: rec.request_id, merge_sha: verdict.mergeSha || null });
+        continue;
+      }
+    }
+
+    // Still live: make sure the decision bound to it names the right subject.
+    //
+    // Searched across ALL decisions, not just open ones: reconciling an earlier
+    // request in this same pass can close the very decision this one is wrongly
+    // bound to, and a binding to a CLOSED decision that was never about this
+    // request is no better than a binding to an open one.
+    if (rec.decision_id && rec.mission_id) {
+      const d = listDecisions(rec.mission_id)
+        .find((x) => x.decisionId === rec.decision_id);
+      if (!d || !subjectsMatch(d, rec)) {
+        const wrong = rec.decision_id;
+        rec.decision_id = null;
+        const opened = openApprovalDecision(rec, { nowMs, root });
+        rec.updated_at = iso(nowMs);
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_decision_rebound", {
+          nowMs,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+          subject: governedActionSubjectKey(rec),
+        }, root);
+        rebound.push({
+          request_id: rec.request_id,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+        });
+        continue;
+      }
+    }
+    unchanged.push({ request_id: rec.request_id, reason: "no_repair_needed" });
+  }
+
+  return { ok: true, satisfied, rebound, unchanged };
 }
 
 export async function approveGovernedAction(requestId, {

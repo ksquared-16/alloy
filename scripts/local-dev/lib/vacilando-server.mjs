@@ -96,6 +96,7 @@ import { attachLaneAdmissions, prioritizeAdmission } from "./vacilando/execution
 import { attachLaneSourceControl } from "./vacilando/source-control.mjs";
 import { attachLaneResourceWaits, developmentResourceSnapshot, prioritizeResourceRequest } from "./vacilando/execution-resource.mjs";
 import { attachLaneGovernedActions } from "./vacilando/governed-action-request.mjs";
+import { attachLaneBrowserAuth } from "./vacilando/browser-auth.mjs";
 import { attachLaneRecovery } from "./vacilando/execution-recovery.mjs";
 import { attachLaneAgentSessions, acceptHandoffReport, acceptOrientationReport, requestSessionRotation, maybeAdvanceSessionRotation } from "./vacilando/agent-session-lifecycle.mjs";
 import { maybeReconcileGovernor, reconcileGovernor } from "./vacilando/execution-reconcile.mjs";
@@ -1933,7 +1934,7 @@ export function createVacilandoServer() {
         try { evaluateExclusiveWindow(); } catch { /* exclusive tick must not fail discovery */ }
         try { await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" }); } catch { /* */ }
         const out = await listDevelopmentLanes();
-        const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false }))))))));
+        const lanes = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))))));
         const development_resources = developmentResourceSnapshot();
         let execution_capacity = null;
         try {
@@ -2209,7 +2210,7 @@ export function createVacilandoServer() {
           const out = await getDevelopmentLane(laneId);
           if (out.lane) {
             try { await maybeAdvanceSessionRotation(out.lane); } catch { /* planned rotation advance must not fail inspect */ }
-            out.lane = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true }))))))))[0];
+            out.lane = attachLaneBrowserAuth(attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneGovernedActions(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions([out.lane]), undefined, { includeInstruction: true })))))))))[0];
             try {
               const { attachLaneProviderActivity } = await import("./vacilando/lane-provider-activity.mjs");
               const [withActivity] = await attachLaneProviderActivity([out.lane]);
