@@ -67,6 +67,14 @@ type Props = {
     onDismissPanel?: () => void;
     actionPanel: React.ReactNode;
     /**
+     * The COMMAND's own operator label — "Tour invitation", "Add charge", "Correct attendance".
+     *
+     * A command workspace should say which command is being performed, not restate the card and
+     * stage that launched it: both are still on screen behind the scrim, and repeating them pushed
+     * the first editable control down the page for no added meaning.
+     */
+    panelTitle?: string | null;
+    /**
      * Per-child paths for a template configuring `participant_decisions`.
      *
      * Rendered as persistent context for the open work rather than inside outcome mode, because
@@ -96,6 +104,7 @@ export default function CurrentWorkFocusedSurface({
     onClose,
     onDismissPanel,
     actionPanel,
+    panelTitle,
     participantDecisions,
 }: Props) {
     // Record-outcome is a dedicated decision MODE, not a section shown next to the commands.
@@ -155,7 +164,7 @@ export default function CurrentWorkFocusedSurface({
             data-has-panel={hasPanel ? "true" : undefined}
             data-outcome-mode={inOutcomeMode && !hasPanel ? "true" : undefined}
             role="group"
-            aria-label="What's Next"
+            aria-label={hasPanel ? panelTitle?.trim() || "Action" : "What's Next"}
         >
             {/* The topbar is the card's only always-present exit, so it renders in EVERY mode.
                 In capability mode it collapses to a single compact row and trades the reason for
@@ -168,15 +177,13 @@ export default function CurrentWorkFocusedSurface({
                 className="alloy-os-currentwork__focused-topbar"
                 data-work-topbar-mode={hasPanel ? "panel" : "default"}
             >
-                {hasPanel && onDismissPanel ?
-                    <button
-                        type="button"
-                        className="alloy-os-currentwork__focused-back"
-                        data-work-action="back-to-actions"
-                        onClick={onDismissPanel}
+                {hasPanel ?
+                    <p
+                        className="alloy-os-currentwork__focused-command-title"
+                        data-work-command-title="true"
                     >
-                        ← Back to actions
-                    </button>
+                        {panelTitle?.trim() || "Action"}
+                    </p>
                 : reason ?
                     <p className="alloy-os-currentwork__focused-reason" data-work-focused-reason="true">{reason}</p>
                 :   <span />}

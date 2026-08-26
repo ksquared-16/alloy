@@ -6674,6 +6674,20 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   align-items: center;
   min-height: 24px;
 }
+/* The command's name, at the weight of a surface title rather than a section label: it is the only
+   thing identifying what the operator is doing, now that the card and stage behind the scrim are no
+   longer repeated here. */
+.alloy-os-currentwork__focused-command-title {
+  margin: 0;
+  min-width: 0;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--alloy-os-midnight, #273f52);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .alloy-os-currentwork__focused-close {
   flex-shrink: 0;
   border: 0;
