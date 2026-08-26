@@ -2318,12 +2318,33 @@ export function renderBlockingScreen(screen, { pending = null } = {}) {
 }
 
 /** When there is a blocker but nothing selectable, say so honestly. */
-export function renderUnanswerableScreen(screen) {
+/**
+ * Blockers whose cancel key is known to be Escape. Mirrors
+ * DISMISSIBLE_BLOCKER_KINDS in prompt-block-dismiss.mjs; the server re-checks
+ * before sending anything, so this list only decides whether to OFFER the way
+ * out. Deliberately excludes permission/trust/onboarding/login/update: those ask
+ * a real question, and dismissing one is answering it.
+ */
+export const DISMISSIBLE_SCREEN_KINDS = Object.freeze(["selection", "resume_picker", "error_modal"]);
+
+export function renderUnanswerableScreen(screen, { laneId = null, pending = false } = {}) {
   if (!screen || screen.answerable !== false || !screen.needs_terminal) return "";
+  const kind = screen.blocker?.kind || null;
+  // "It has to be answered in the agent's terminal" was the whole problem: Trust
+  // Runtime sat in a Rewind picker and the Director had no way to clear it.
+  const dismissible = DISMISSIBLE_SCREEN_KINDS.includes(kind);
+  const action = dismissible
+    ? `<div class="gw-work-stale-actions">
+        <button type="button" class="btn primary" data-gw-dismiss-block
+          data-lane-id="${esc(laneId || "")}" ${pending ? "disabled" : ""}>
+          ${pending ? "Closing\u2026" : "Close this screen"}</button>
+      </div>
+      <div class="gw-screen-note">Sends Escape and nothing else. It cannot answer a question or pick an entry.</div>`
+    : `<div class="gw-screen-note">This one has no choices to pick, so it has to be answered in the agent's terminal.</div>`;
   return `<aside class="gw-screen is-terminal" data-gw-screen-terminal>
     <div class="gw-screen-h">${esc(screen.blocker?.title || "The agent is waiting")}</div>
     <div class="gw-screen-q">${esc(screen.blocker?.signal || "")}</div>
-    <div class="gw-screen-note">This one has no choices to pick, so it has to be answered in the agent's terminal.</div>
+    ${action}
   </aside>`;
 }
 
@@ -4598,6 +4619,24 @@ export function renderGatewayShell({
             ${renderLaneRepository(lane, repositories)}
           </div>
           ${renderNotificationControls(notify || {})}
+          ${renderBrowserAuthRecovery(lane)}
+          ${/*
+            ONE runtime section, directly below the conversation. These were three
+            separate cards stacked in sequence, which read as three unrelated
+            things; they are one subject — whether this lane can keep working.
+          */ ""}
+          ${(() => {
+            const parts = [
+              renderLaneSessionCallout(lane, { executionCapacity }),
+              renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity }),
+              renderContextRefreshButton(lane),
+            ].filter((html) => String(html || "").trim());
+            if (!parts.length) return "";
+            return `<section class="gw-runtime-section" data-gw-runtime-section>
+              <h2 class="gw-runtime-section-h">Runtime</h2>
+              ${parts.join("\n")}
+            </section>`;
+          })()}
           ${renderLaneLocalhost(lane)}
           ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
@@ -4641,7 +4680,6 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderBrowserAuthRecovery(lane)}
         ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
         ${/*
           ACTIONS BELONG WHERE THE CONVERSATION IS.
@@ -4653,12 +4691,9 @@ export function renderGatewayShell({
           and while it was inert it could not be scrolled or clicked at all. An
           action the operator cannot reach is the same as no action.
         */ ""}
-        ${renderLaneSessionCallout(lane, { executionCapacity })}
-        ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
-        ${renderContextRefreshButton(lane)}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
-        ${renderUnanswerableScreen(blockingScreen)}
+        ${renderUnanswerableScreen(blockingScreen, { laneId: lane?.lane_id || selectedId })}
         ${renderComposer({
           ...(composer || {}),
           idleStart: cap.state === "IDLE",

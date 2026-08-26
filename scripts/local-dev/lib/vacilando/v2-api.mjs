@@ -184,6 +184,24 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   const actorDefault = gate.actor || v.actor || "operator";
   const idempotencyKey = v.idempotency_key || v.idempotencyKey || headers["x-idempotency-key"] || headers["X-Idempotency-Key"] || null;
 
+  // Clear a RECOGNISED modal the agent must never type into.
+  //
+  // Trust Runtime sat in Claude's Rewind picker while the lane reported
+  // "Working": the picker's row cursor is the same glyph as the input prompt, so
+  // the pane read READY. The only way out was a person at a terminal, which is
+  // exactly what the Director should never need. This does not let the agent
+  // answer modals — it can send Escape and nothing else, only for blocker kinds
+  // whose cancel key is known, and only when an operator asks.
+  if (path === "/api/v2/lanes/prompt-block/dismiss") {
+    const { dismissPromptBlock } = await import("./prompt-block-dismiss.mjs");
+    const laneId = v.lane_id || v.laneId;
+    if (!laneId) return { status: 400, body: { ok: false, error: "missing_lane_id" } };
+    const out = await dismissPromptBlock(laneId);
+    return {
+      status: out.ok ? 200 : (out.error === "lane_not_found" ? 404 : 409),
+      body: out,
+    };
+  }
   // Browser-session recovery. THE AGENT MAY START A SIGN-IN AND MAY ABANDON ONE;
   // IT MAY NEVER COMPLETE ONE. A person types the password into a browser this
   // opens on the slot's own loopback base. Nothing typed reaches the agent, the

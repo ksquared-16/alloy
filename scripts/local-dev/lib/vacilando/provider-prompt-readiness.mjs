@@ -129,6 +129,13 @@ const BLOCKER_SIGNATURES = Object.freeze([
     kind: "selection",
     provider: null,
     patterns: [
+      // THE REWIND PICKER. It reported READY, not blocked: its row cursor is the
+      // same `❯` glyph as the input prompt, so the prompt affordance matched and
+      // Vacilando would have typed an instruction into a restore-point list.
+      // Trust Runtime sat in exactly this screen while the Director was told the
+      // lane was working. Anchored on the picker's own sentence, which no
+      // ordinary output produces.
+      /restore the code and\/or conversation to the point before/i,
       // A cursor-marked numbered menu awaiting a choice. Anchored on the
       // selection caret so ordinary numbered prose never matches.
       /(^|\n)\s*[❯>▶]\s*\d+\.\s+\S[^\n]{0,80}(\n\s*\d+\.\s+\S)/,
@@ -218,13 +225,30 @@ const NARRATION_LINE = /^[ \t]*⏺/;
  */
 export const TURN_FINISHED_RE = /^[ \t]*(?:[✻✳✶✷✸✹✺✽*·][ \t]*)?[A-Za-z\u00C0-\u024F][a-z\u00C0-\u024F]+[ \t]+for[ \t]+\d+(?:\.\d+)?[ \t]*(?:ms|s|m|h)\b/m;
 
+/**
+ * An interruption ends a turn as surely as a completion does.
+ *
+ * Only the "Thinking for 12s" shape counted as a terminator, so a pane whose
+ * last turn was INTERRUPTED still read as mid-turn: the `⏺` narration above the
+ * interruption was newer than any completion marker, `detectProviderBusy`
+ * returned it, and delivery refused with provider_prompt_not_ready. Trust
+ * Runtime sat that way for 72 minutes at a live `❯` prompt with an instruction
+ * queued behind it.
+ */
+export const TURN_INTERRUPTED_RE = /(?:^|[\s⎿])Interrupted(?:\s*[·:]|\s*$|\s+by\b)/m;
+
+/** A turn is over when it completed OR when it was interrupted. */
+function turnTerminatorAt(line) {
+  return TURN_FINISHED_RE.test(line) || TURN_INTERRUPTED_RE.test(line);
+}
+
 export function liveNarrationIsCurrentTurn(text) {
   const lines = String(text ?? "").split("\n");
   let lastNarr = -1;
   let lastCooked = -1;
   for (let i = 0; i < lines.length; i += 1) {
     if (NARRATION_LINE.test(lines[i])) lastNarr = i;
-    if (TURN_FINISHED_RE.test(lines[i])) lastCooked = i;
+    if (turnTerminatorAt(lines[i])) lastCooked = i;
   }
   return lastNarr >= 0 && lastNarr > lastCooked;
 }
@@ -233,7 +257,7 @@ function lastLiveNarrationSignal(text) {
   const lines = String(text ?? "").split("\n");
   let lastCooked = -1;
   for (let i = 0; i < lines.length; i += 1) {
-    if (TURN_FINISHED_RE.test(lines[i])) lastCooked = i;
+    if (turnTerminatorAt(lines[i])) lastCooked = i;
   }
   let last = "";
   for (let i = lastCooked + 1; i < lines.length; i += 1) {

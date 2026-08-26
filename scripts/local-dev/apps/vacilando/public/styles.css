@@ -1966,6 +1966,11 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
    It is now always shown, and it can scroll: a long proposal must never push its
    own buttons out of reach, which is what happened on mobile at 390x844 where
    the button sat at y=933 with no scrollable ancestor. */
+/* One runtime section below the conversation. These were three separate cards
+   in sequence; they are one subject — whether this lane can keep working. */
+.gw-runtime-section{flex:0 0 auto;display:flex;flex-direction:column;gap:8px;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-height:min(48vh, 440px);overflow-y:auto;overscroll-behavior:contain;}
+.gw-runtime-section-h{margin:0;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted, #6b7a70);}
+.gw-runtime-section > *{margin:0;}
 .gw-decision-bar{display:block;flex:0 0 auto;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-height:min(62vh, 560px);overflow-y:auto;overscroll-behavior:contain;}
 /* The actions stay put while the facts above them scroll. */
 .gw-decision-bar .gw-work-stale-actions{position:sticky;bottom:0;background:var(--card);padding-top:8px;margin-top:4px;}
