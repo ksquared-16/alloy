@@ -56,6 +56,13 @@ export async function getAgreementById(
 }
 
 /** Operational (non-terminal) agreement for child × site, if any. */
+/**
+ * The statuses that make an agreement OPERATIONAL for scheduling. Exported so the bulk owner filters
+ * on exactly this set — a second literal here is how the plural and singular paths would silently
+ * come to disagree about which agreements count.
+ */
+export const OPERATIONAL_AGREEMENT_STATUSES = ["pending_start", "active", "ending"] as const;
+
 export async function getOperationalAgreementForMemberSite(
     supabase: SupabaseClient,
     orgId: string,
@@ -68,7 +75,7 @@ export async function getOperationalAgreementForMemberSite(
         .eq("org_id", orgId)
         .eq("customer_member_id", customerMemberId)
         .eq("site_location_id", siteLocationId)
-        .in("status", ["pending_start", "active", "ending"])
+        .in("status", OPERATIONAL_AGREEMENT_STATUSES)
         .maybeSingle();
 
     if (error) {
