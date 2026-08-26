@@ -198,7 +198,19 @@ export function PacketBuilderWorkspaceLayout({
 
                 {pipelinePreview.length > 0 ?
                     <section className={opRegionSeparator}>
-                        <IntakeWorkspaceRegion title="Saved pipeline" lead="Current step order on the server.">
+                        {/*
+                         * "Included forms", not "Saved pipeline".
+                         *
+                         * The operator's question here is which artifacts make up this packet — the
+                         * old title answered a question about server state instead. The ORDER is
+                         * kept and still numbered, because it is not cosmetic: the runtime advances
+                         * through `current_sequence_index`, and review renders in the same order.
+                         */}
+                        <IntakeWorkspaceRegion
+                            title="Included forms"
+                            lead={`${pipelinePreview.length} form${pipelinePreview.length === 1 ? "" : "s"} · the order a family meets them, and the order they are reviewed in.`}
+                            data-testid="packet-region-included-forms"
+                        >
                             <ol className={opGroupedSurface}>
                                 {pipelinePreview.map((step) => (
                                     <li key={`${step.sequence_index}-${step.form_definition_id}`} className={opGroupedRowInner}>

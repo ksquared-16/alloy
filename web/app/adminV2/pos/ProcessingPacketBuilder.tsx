@@ -308,7 +308,6 @@ export default function ProcessingPacketBuilder({
                                 </button>
                             </div>
                         ) : null}
-                        <PacketDeferredCapabilities items={deferred} />
                         <PacketBuilderWorkspaceLayout
                             packetDefId={packetDefId}
                             defName={defName}
@@ -341,6 +340,15 @@ export default function ProcessingPacketBuilder({
                                 dispatchAdminV2OpenProcessingModal({ mode: "work", workView: "work" })
                             }
                         />
+                        {/*
+                         * Provenance, not headline.
+                         *
+                         * The Financials hold is real and must stay provable, but it is a statement
+                         * about what this packet deliberately does NOT ask for — which is not the
+                         * first thing an operator opening a packet needs. It sits after the packet
+                         * itself and stays collapsed until asked for.
+                         */}
+                        <PacketDeferredCapabilities items={deferred} />
                     </>
                 )}
             </div>

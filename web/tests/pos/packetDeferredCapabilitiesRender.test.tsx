@@ -45,6 +45,15 @@ describe("the deferred-capability panel", () => {
         expect(renderToStaticMarkup(<PacketDeferredCapabilities items={[]} />)).toBe("");
     });
 
+    it("sits collapsed as provenance, not as a headline", () => {
+        // It is a statement about what this packet deliberately does NOT ask for — real, provable,
+        // and not the first thing an operator opening a packet needs.
+        const html = renderToStaticMarkup(<PacketDeferredCapabilities items={[RECORDED]} />);
+        expect(html).toContain("<details");
+        expect(html).toContain("<summary");
+        expect(html).not.toContain("open=");
+    });
+
     it("does not read as an error", () => {
         const html = renderToStaticMarkup(<PacketDeferredCapabilities items={[RECORDED]} />);
         expect(html).not.toMatch(/error|failed|missing|warning/i);

@@ -31,18 +31,18 @@ const OBLIGATION_LABELS: Record<string, string> = {
 export default function PacketDeferredCapabilities({ items }: { items: PacketDeferredCapability[] }) {
     if (!items.length) return null;
     return (
-        <section
+        <details
             data-testid="packet-deferred-capabilities"
-            className="mb-4 rounded-[14px] border border-alloy-stone/20 bg-white p-4"
+            className="mt-5 rounded-[14px] border border-alloy-stone/20 bg-white p-4"
             aria-label="Deferred capabilities"
         >
-            <div className="flex items-center gap-2">
+            <summary className="flex cursor-pointer list-none items-center gap-2">
                 <PauseCircle aria-hidden className="h-4 w-4 text-alloy-midnight/45" />
                 <h3 className="text-[13px] font-semibold text-alloy-midnight">Held for another area</h3>
                 <span className="text-[12px] text-alloy-midnight/45">
                     {items.length} {items.length === 1 ? "requirement" : "requirements"} this packet does not ask for
                 </span>
-            </div>
+            </summary>
             <ul className="mt-3 space-y-3">
                 {items.map((c, i) => (
                     <li key={`${c.obligation ?? "deferred"}-${i}`} className="rounded-[10px] bg-alloy-stone/[0.35] p-3">
@@ -75,6 +75,6 @@ export default function PacketDeferredCapabilities({ items }: { items: PacketDef
                     </li>
                 ))}
             </ul>
-        </section>
+        </details>
     );
 }
