@@ -27,15 +27,24 @@
 import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+
+import { resolveCanonicalRepoRoot } from "./lib/vacilando/trusted-host-action-registry.mjs";
 
 function fail(code, detail) {
     process.stdout.write(`${JSON.stringify({ ok: false, error: code, detail: detail ? String(detail).slice(0, 300) : null })}\n`);
     process.exit(1);
 }
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = join(HERE, "..", "..");
+/*
+ * The repo root is RESOLVED, not derived from this file's location.
+ *
+ * `alloy-toolkit install` flattens `scripts/local-dev/*` to the toolkit root, so once installed
+ * `../..` from here is `~/.local/share/alloy` — which has no `web/`. Deriving the path worked in the
+ * worktree and would have failed only when run from the installed toolkit, i.e. after the operator
+ * had already approved the restore. `resolveCanonicalRepoRoot` consults the canonical-root env vars
+ * and confirms `web/package.json` actually exists before returning.
+ */
+const REPO_ROOT = resolveCanonicalRepoRoot();
 const webRequire = createRequire(join(REPO_ROOT, "web", "package.json"));
 
 let createClient;
