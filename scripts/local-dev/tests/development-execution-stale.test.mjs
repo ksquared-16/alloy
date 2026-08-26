@@ -759,12 +759,15 @@ await test("operator Send can supersede a parked RECOVERING run", async () => {
   const idle = { session_state: "IDLE", now_ms: Date.now(), delivered_ms: delivered };
   assert.equal(canOperatorSupersedeRun(recovering, idle), true);
 
-  // POSITIVE CONTROLS. This widens the STATE, never the conditions — every
-  // existing guard must still refuse, or the fix is a hole rather than a door.
+  // POSITIVE CONTROLS. Busy sessions, in-flight continuations and the grace
+  // window still refuse. A leaked GRANTED lock is no longer a trap: completing
+  // the turn releases it, and that is the only way the operator gets the lane
+  // back when the pane is already idle.
   for (const busy of ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]) {
     assert.equal(canOperatorSupersedeRun(recovering, { ...idle, session_state: busy }), false, busy);
   }
-  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, open_resource: true }), false);
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, open_resource: true }), true,
+    "a leaked grant must not block operator Send");
   assert.equal(canOperatorSupersedeRun(recovering, { ...idle, in_flight_continuation: true }), false);
   assert.equal(canOperatorSupersedeRun(recovering, { ...idle, delivered_ms: Date.now() - 1000 }), false,
     "the grace window still protects a delivery that is still landing");
@@ -844,6 +847,78 @@ await test("recovery is not a one-way trap", async () => {
   for (const to of ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"]) {
     assert.equal(isLegalRunTransition("RECOVERING", to), true, to);
   }
+});
+
+await test("a leaked grant does not trap the operator", async () => {
+  // THE VACILANDO DEAD END. The pane was idle at a prompt. The run was still
+  // EXECUTING because it held gateway_host_mutation GRANTED with no
+  // continuation in flight. Classify called that "active", so Close returned
+  // run_still_active; Send refused current_run_active; the governor would not
+  // collect it. There was no operator path back in.
+  const start = Date.now() - 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const req = ensureResourceRequest({
+    runId: run.run_id,
+    laneId: LANE,
+    resourceKey: "gateway_host_mutation",
+    origin: "agent",
+    nowMs: start + 10 * 60 * 1000,
+    root: ROOT,
+  });
+  patchResourceRequest(req.request.request_id, {
+    state: "GRANTED",
+    continuation: { delivery_state: "DELIVERED" },
+  }, { root: ROOT });
+  const facts = collectStaleRunFacts(run, { root: ROOT, nowMs: now });
+  assert.equal(facts.open_resource, true);
+  assert.equal(facts.in_flight_continuation, false);
+  const cls = classifyExecutionRunStale(run, facts);
+  assert.equal(cls.class, "active");
+  assert.equal(cls.reason, "open_resource");
+  assert.equal(reconcileStaleExecutionRuns({ root: ROOT, nowMs: now, laneId: LANE }).count, 0,
+    "the governor still must not auto-collect a grant holder");
+  assert.equal(canOperatorSupersedeRun(run, facts), true);
+  const next = await deliverManagedLaneInstruction(LANE, "New instruction after the leaked grant", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: now + 1_000,
+  });
+  assert.equal(next.ok, true, next.error);
+  assert.equal(next.execution_run.state, "EXECUTING");
+  assert.notEqual(next.execution_run.run_id, run.run_id);
+  const leftover = (readResourceRequestStore(ROOT).requests || [])
+    .find((r) => r.request_id === req.request.request_id);
+  assert.ok(!leftover || leftover.state === "RELEASED");
+});
+
+await test("operator Close releases a leaked grant without Send", async () => {
+  const start = Date.now() - 2 * 60 * 60 * 1000;
+  const now = Date.now();
+  const run = seedExecuting({ instruction: PRODUCT, startMs: start });
+  seedSend(PRODUCT, start, start + 9_000);
+  const req = ensureResourceRequest({
+    runId: run.run_id,
+    laneId: LANE,
+    resourceKey: "gateway_host_mutation",
+    origin: "agent",
+    nowMs: start + 10 * 60 * 1000,
+    root: ROOT,
+  });
+  patchResourceRequest(req.request.request_id, {
+    state: "GRANTED",
+    continuation: { delivery_state: "DELIVERED" },
+  }, { root: ROOT });
+  const governor = closeStaleExecutionRun(run.run_id, { root: ROOT, nowMs: now, origin: "governor" });
+  assert.equal(governor.ok, false);
+  assert.equal(governor.error, "run_still_active");
+  const closed = closeStaleExecutionRun(run.run_id, { root: ROOT, nowMs: now, origin: "operator" });
+  assert.equal(closed.ok, true, closed.error || closed.reason);
+  assert.equal(closed.run.state, "ABANDONED");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

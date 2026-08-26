@@ -2048,7 +2048,8 @@ document.addEventListener("click", async (e) => {
     // Interrupting real work needs an explicit yes; taking back something the
     // agent never received does not.
     const delivered = cancelRun.getAttribute("data-gw-cancel-delivered") === "1";
-    if (delivered && !window.confirm(View.cancelConfirmCopy(run))) return;
+    const idle = G.lane?.provider_activity?.activity === "ready";
+    if (delivered && !idle && !window.confirm(View.cancelConfirmCopy(run))) return;
     G.cancelPending = true;
     paint();
     try {

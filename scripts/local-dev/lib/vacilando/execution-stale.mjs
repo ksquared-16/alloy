@@ -601,7 +601,12 @@ export async function applyIdleTurnCompletions(lanes, { root, nowMs = Date.now()
  */
 export function canOperatorSupersedeRun(run, facts = {}) {
   if (!run) return false;
-  if (facts.open_resource || facts.in_flight_continuation) return false;
+  // An in-flight continuation is a resume being pasted into the pane.
+  // A GRANTED exclusive lock with no continuation is not: Vacilando sat
+  // EXECUTING with gateway_host_mutation granted, the pane idle at a prompt,
+  // and Send / Close / stale-governor all refused. Completing the turn
+  // releases the grant (cleanupRunResources). Operator Send is the way out.
+  if (facts.in_flight_continuation) return false;
   if (SESSION_BUSY.has(facts.session_state)) return false;
   const nowMs = facts.now_ms || Date.now();
   if (run.state === "NEEDS_INPUT") {
@@ -781,7 +786,29 @@ export function closeStaleExecutionRun(runId, {
   const facts = collectStaleRunFacts(run, { root, nowMs });
   const cls = classifyExecutionRunStale(run, facts);
   if (cls.class === "active") {
-    return { ok: false, error: "run_still_active", reason: cls.reason, run: publicExecutionRun(run) };
+    // Governor must not auto-collect a grant holder (exclusive install can
+    // look idle). The operator still has to be able to close it: a leaked
+    // GRANTED lock with no in-flight continuation is how Vacilando became
+    // unreachable — Close returned run_still_active, Send returned
+    // current_run_active, and the decision bar never appeared.
+    const operatorCloseLeakedGrant = origin === "operator"
+      && cls.reason === "open_resource"
+      && !facts.in_flight_continuation;
+    if (!operatorCloseLeakedGrant) {
+      return { ok: false, error: "run_still_active", reason: cls.reason, run: publicExecutionRun(run) };
+    }
+    const out = closeClassifiedRun(run, {
+      class: "stale",
+      reason: "operator_closed_leaked_grant",
+      evidence: cls.evidence,
+      summary: "Abandoned: the run was holding a shared lock after the agent had already finished.",
+    }, {
+      root,
+      nowMs,
+      origin: "operator",
+    });
+    if (!out.ok) return out;
+    return { ok: true, run: publicExecutionRun(out.run, { includeInstruction: true, includeTransitions: true }) };
   }
   const out = closeClassifiedRun(run, cls, {
     root,

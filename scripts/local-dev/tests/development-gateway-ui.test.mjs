@@ -1677,6 +1677,23 @@ await test("ambiguous stale run offers close without claiming active-work refusa
   assert.match(notice.text, /Previous run was stale and was closed/);
 });
 
+await test("idle EXECUTING with a leaked grant offers Close", () => {
+  const html = renderCurrentWork({
+    state: "EXECUTING",
+    run_id: "erun_leak",
+    instruction: "Install the merged toolkit",
+    resource_wait: {
+      request_state: "GRANTED",
+      resuming: null,
+      resource_key: "gateway_host_mutation",
+      label: "Gateway host mutation",
+    },
+  }, Date.now(), { activity: "ready" });
+  assert.match(html, /At a prompt/);
+  assert.match(html, /holding a shared lock/);
+  assert.match(html, /data-gw-close-stale/);
+});
+
 await test("recent output chrome is honest; latest response is a separate loaded model", () => {
   const viewport = outputReviewHint({
     ok: true,
