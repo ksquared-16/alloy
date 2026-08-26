@@ -41,6 +41,12 @@ export type SystemFieldRegistryEntry = {
     select_options_lines?: string;
     /** Org option set for select fields — preferred over placeholder static_options_lines. */
     default_option_set_key?: string;
+    /**
+     * Superseded by a canonical owner. The entry stays so existing forms keep resolving, but nothing
+     * offers it for NEW authoring — deleting it would break a form that already binds it, while
+     * keeping it offerable would let an operator recreate the duplicate owner it was retired for.
+     */
+    deprecated_reason?: string;
 };
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
@@ -137,11 +143,24 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         public_intake_safe: true,
     },
     {
+        /*
+         * M1 / D-H1 — RE-BOUND FROM `enrollment` TO THE CHILD.
+         *
+         * An allergy is a property of a CHILD, not of an enrolment episode. Bound to the episode it
+         * did not follow the child into next year's re-enrolment, and two of the three Forms
+         * subsystems already disagreed with the shipped grain: `canonicalBindingSuggestions`
+         * suggests `customer_member` for allergy text, and `sharedValuesToFieldIds`'s canonical
+         * example is literally `customer_member:allergies`.
+         *
+         * `crm_mapping_key` now points at the SAME destination the child profile field already uses,
+         * so there is ONE durable owner rather than `health.allergy_notes` and `child.allergies`
+         * both claiming to be the answer.
+         */
         id: "allergy_notes",
-        entity_type: "enrollment",
+        entity_type: "child",
         field_key: "allergy_notes",
         shared_value_key: "allergy_notes",
-        crm_mapping_key: "health.allergy_notes",
+        crm_mapping_key: "child.allergies",
         default_label: "Allergy notes",
         default_description: "Food or environmental allergies staff should know about.",
         default_required: false,
@@ -149,16 +168,28 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         public_intake_safe: true,
     },
     {
+        /*
+         * M3 — DEPRECATED, NOT MIGRATED.
+         *
+         * "This child takes medication" is DERIVABLE from the medication facts once H1 lands, and
+         * keeping both creates two answers to one question — one of which no longer updates when a
+         * medication is added or ended. So the boolean is retired rather than re-bound: it is
+         * re-grained to the child so any existing form keeps resolving, and marked deprecated so
+         * nothing offers it for new authoring.
+         */
         id: "medication_flag",
-        entity_type: "enrollment",
+        entity_type: "child",
         field_key: "medication_flag",
         shared_value_key: "medication_flag",
-        crm_mapping_key: "health.medication_flag",
+        crm_mapping_key: "child.medication_flag",
         default_label: "Medication during care",
         default_description: "Whether the child takes medication while in care.",
         default_required: false,
         suggested_kind: "checkbox",
         public_intake_safe: true,
+        deprecated_reason:
+            "Superseded by canonical medication facts (person_health_facts, fact_kind = medication). "
+            + "Derive it from the medication collection instead of storing a second answer.",
     },
     {
         id: "program_room_preference",
@@ -271,6 +302,21 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
 export const SYSTEM_FIELD_BY_ID: ReadonlyMap<string, SystemFieldRegistryEntry> = new Map(
     OPERATIONAL_FORM_SYSTEM_FIELDS.map((e) => [e.id, e])
 );
+
+/**
+ * The fields an operator may bind on a NEW form.
+ *
+ * Deprecated entries stay in `OPERATIONAL_FORM_SYSTEM_FIELDS` so a form that already binds one keeps
+ * resolving — removing them would break live forms — but they are not offered again. Without this
+ * split, retiring `medication_flag` would be advice rather than a rule, and the next operator would
+ * recreate the second answer it was retired for.
+ */
+export const AUTHORABLE_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[] =
+    OPERATIONAL_FORM_SYSTEM_FIELDS.filter((e) => !e.deprecated_reason);
+
+export function isDeprecatedSystemField(id: string): boolean {
+    return Boolean(SYSTEM_FIELD_BY_ID.get(id.trim())?.deprecated_reason);
+}
 
 export function linesToStaticOptions(raw: string): { value: string; label: string }[] {
     const lines = raw
