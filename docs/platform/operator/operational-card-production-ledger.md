@@ -1970,3 +1970,77 @@ PASS. `H1 applied · real facts through H4 · participant switching · Surface p
 certification · 0 page errors` are **not reached**, because every one of them needs the schema that
 step C applies. Health & Safety is **not** production-ready and the card is **not** placed on any
 Surface.
+
+---
+
+## 31. Health & Safety — the apply did not take effect (2026-08-26)
+
+### 31.1 A correction I have to lead with
+
+I reported mid-run that **H1 had landed and only D-H6 was missing**. That was wrong, and the way it
+was wrong is worth recording.
+
+The verification probed the table with `.select("id", { count: "exact", head: true })`. That call
+returned **no error for a table PostgREST cannot resolve at all**, so `exists: !error` read `true`
+for a table that does not exist. The certification fixture found it immediately on a real read:
+
+```text
+Could not find the table 'public.person_health_facts' in the schema cache
+```
+
+> A probe that can report success for a missing thing is worse than no probe, because it is believed.
+> It turned "nothing has been applied" into "H1 landed, D-H6 did not", and sent me to re-request the
+> wrong scope.
+
+The probe now performs a real read and carries the error verbatim.
+
+### 31.2 The actual state
+
+| Fact | Evidence |
+|---|---|
+| `person_health_facts` | **absent** — not in the schema cache |
+| permission catalogue | **exactly 57 keys**, the pre-D-H6 width |
+| `health.view` / `health.manage` | not defined, no grants |
+| caller | `roleKeys: ["admin"]`, holds neither key |
+| M1 registry contract | correct in code — `allergy_notes` → `child` / `child.allergies`, `medication_flag` deprecated, 0 definitions left at enrollment grain |
+
+**None of the three approved migrations has taken effect.** `gar_62f1af0052c793` did not reach the
+database, and the re-request `gar_d7851e4470865e` has not either. This lane holds no `DATABASE_URL`
+or service-role credential by design, so it cannot apply schema itself and did not try.
+
+### 31.3 What was built anyway, and is ready
+
+* **Read-only foundation verification** (§1's checklist as code): entity, grain contract, both keys,
+  grants by role, admin-holds-both, ops-holds-none, and the caller's own grants — so a 403 can be
+  told apart from an unapplied migration.
+* **The certification Health fixture, through H4.** Every fact goes through `healthFactService`, so
+  it meets the same permission check, validation, provenance requirement and supersession lineage an
+  operator does. A test runs it without `health.manage` and asserts **zero inserts, refused**.
+* **Contrasting specimens.** Certa: severe peanut allergy with reaction, action instruction, and the
+  EpiPen that answers it. Certb: mild asthma. Asserted as a contrast, because if both children
+  rendered the same shape, participant switching would look correct while proving nothing.
+* **Idempotent without a flag** — a deterministic `source_ref` per fact. Two active peanut allergies
+  on a health card read as two separate allergies.
+* **Restore ENDS, never deletes**, medications before what they treat.
+
+### 31.4 §14 proven without the database
+
+Registration is not placement, and placement is not access:
+
+* `health_safety` is registered and is placed by **no** composition at any grain — so a user holding
+  `health.view` sees no card until a Surface places one.
+* The access decision takes only the caller's grants and never consults the Surface.
+* The existing `health` key is untouched and still means *Enrollment Health*.
+
+### 31.5 Tests
+
+`tests/health` 36 · `tests/access` 783 · `tests/focusPanel` 128 — all pass. The 16 failures under
+`tests/fields` are the pre-existing 10-file/16-test baseline, verified in a scratch worktree at the
+pre-run commit.
+
+### 31.6 Definition of Done
+
+Unchanged from §30 and gated on the same single step: `H1 applied · real facts through H4 ·
+participant switching · positive health.view proof · Surface placement · browser certification ·
+0 page errors` are all **not reached**, because every one needs the schema. Health & Safety is
+**not** production-ready and the card is on **no** Surface. Safety Signals remain out of scope.
