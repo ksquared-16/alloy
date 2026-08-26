@@ -475,7 +475,7 @@ export async function buildFinancialsCardVM(
 
 
 /** THE reconciliation rule, in one place so no scope can compute it differently. */
-function reconcileRows(
+export function reconcileRows(
     rows: readonly FinancialsLedgerRow[],
     periodKey: string,
     _today: string,
@@ -506,7 +506,7 @@ function reconcileRows(
 }
 
 /** Past due over owed, unpaid rows whose due date has passed. */
-function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string): FinancialsPastDue | null {
+export function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string): FinancialsPastDue | null {
     const overdue = rows.filter(
         (r) => OWED_STATUSES.has(r.status) && r.status !== "paid" && r.dueDate != null && r.dueDate < today,
     );
