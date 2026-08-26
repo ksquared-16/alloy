@@ -95,15 +95,24 @@ const htmlSrc = readFileSync(join(HERE, "../apps/vacilando/public/index.html"), 
 
 let pass = 0;
 let fail = 0;
-async function test(name, fn) {
-  try {
-    await fn();
-    pass += 1;
-    process.stdout.write(`ok  - ${name}\n`);
-  } catch (e) {
-    fail += 1;
-    process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
-  }
+// Every started test is tracked, because `test` is async: a call that is not
+// awaited settles in a microtask AFTER the synchronous tally at the bottom of
+// this file, so it was neither counted nor able to fail the run. Four tests were
+// silently invisible that way — a test that cannot fail is worse than no test.
+const started = [];
+function test(name, fn) {
+  const p = (async () => {
+    try {
+      await fn();
+      pass += 1;
+      process.stdout.write(`ok  - ${name}\n`);
+    } catch (e) {
+      fail += 1;
+      process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
+    }
+  })();
+  started.push(p);
+  return p;
 }
 
 const identity = {
@@ -2246,5 +2255,35 @@ test("the desktop details pane is never inert", () => {
   assert.doesNotMatch(view, /\$\{asideOpen \? "" : ' aria-hidden="true" inert'\}/);
 });
 
+test("controls that gate progress live in the conversation, not the rail", () => {
+  // THE FAILURE THIS ENCODES. The session callout, the runtime keep/release
+  // controls and the context refresh sat in the details rail. The rail is a
+  // reference column: the Director can collapse it, it is the first thing to run
+  // out of room, and while it was inert it could not be scrolled or clicked at
+  // all — so every one of these actions was unreachable exactly when it mattered.
+  // An action the operator cannot reach is the same as no action.
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  const railStart = view.indexOf("const detailsPanel = ");
+  assert.ok(railStart > 0, "details rail template must exist");
+  const railEnd = view.indexOf("</aside>`;", railStart);
+  assert.ok(railEnd > railStart, "details rail template must terminate");
+  const rail = view.slice(railStart, railEnd);
+
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    assert.equal(rail.includes(`${fn}(`), false, `${fn} must not be rendered inside the details rail`);
+    assert.ok(view.includes(`${fn}(`), `${fn} must still be rendered somewhere`);
+  }
+
+  // They belong beside the approval cards, above the composer.
+  const bar = view.indexOf("renderOperatorDecisionBar(operatorDecisionRun(lane)");
+  const composer = view.indexOf("${renderComposer({", bar);
+  assert.ok(bar > 0 && composer > bar, "decision bar precedes the composer");
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    const at = view.indexOf(`${fn}(`, bar);
+    assert.ok(at > bar && at < composer, `${fn} must render in the conversation column`);
+  }
+});
+
+await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

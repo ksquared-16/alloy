@@ -4600,13 +4600,10 @@ export function renderGatewayShell({
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}
           ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
-          ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}
           ${renderProviderHealth(output?.provider_health)}
           ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
-          ${renderLaneSessionCallout(lane, { executionCapacity })}
           ${renderRecentSystemActivity(lane?.recent_system_activity)}
           ${renderTerminalDiagnostics(bodyText, { pending, output })}
           ${statusHtml}
@@ -4646,6 +4643,19 @@ export function renderGatewayShell({
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderBrowserAuthRecovery(lane)}
         ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
+        ${/*
+          ACTIONS BELONG WHERE THE CONVERSATION IS.
+          These three were in the details rail: the session callout that says
+          Claude's session failed, the runtime controls that keep or release the
+          lane, and the context refresh. Each one gates progress, and the rail is
+          the wrong home for anything that does — it is a reference column the
+          Director may have collapsed, it is the first thing to run out of room,
+          and while it was inert it could not be scrolled or clicked at all. An
+          action the operator cannot reach is the same as no action.
+        */ ""}
+        ${renderLaneSessionCallout(lane, { executionCapacity })}
+        ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
+        ${renderContextRefreshButton(lane)}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}
