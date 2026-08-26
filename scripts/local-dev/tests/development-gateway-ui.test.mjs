@@ -2183,5 +2183,68 @@ test("the sign-in route exists and the agent cannot complete one", () => {
   assert.doesNotMatch(api, /storage-state\.json["']?\s*\)?\s*,\s*["']utf8/);
 });
 
+// ── The recovery flow must be REACHABLE BY THE METHOD THE UI USES ────────────
+//
+// THE FAILURE THIS ENCODES. The routes were registered inside handleV2Get while
+// the card's buttons POST, so no request ever matched them and the button did
+// nothing at all. A GET could not work either: the handler reads `v`, the POST
+// body, which does not exist there. Asserting that the route STRINGS were
+// present in the file proved nothing — that is how this shipped twice.
+
+await test("browser-auth routes answer POST, which is what the buttons send", async () => {
+  const prevAuth = process.env.VACILANDO_REQUIRE_API_AUTH;
+  process.env.VACILANDO_REQUIRE_API_AUTH = "0";
+  try {
+    const api = await import("../lib/vacilando/v2-api.mjs");
+    for (const route of ["status", "sign-in", "verify"]) {
+      const out = await api.handleV2Post(`/api/v2/browser-auth/${route}`,
+        { lane_id: "lane_does_not_exist" }, { headers: { host: "127.0.0.1:3020" } });
+      // Unmatched routes return null. A registered route answers — here 404,
+      // because the lane is unknown, which is a REAL answer.
+      assert.ok(out, `${route} must be registered for POST`);
+      assert.equal(out.status, 404);
+      assert.equal(out.body.error, "lane_not_registered");
+    }
+  } finally {
+    if (prevAuth === undefined) delete process.env.VACILANDO_REQUIRE_API_AUTH;
+    else process.env.VACILANDO_REQUIRE_API_AUTH = prevAuth;
+  }
+});
+
+test("sign-in starts the capture without waiting for the person", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // Awaiting the capture held the HTTP response open for the whole sign-in
+  // window, so the button looked dead and proxies timed the request out.
+  assert.doesNotMatch(api, /await\s+beginBrowserAuthCapture\(/);
+  assert.match(api, /const\s+capture\s*=\s*beginBrowserAuthCapture\(/);
+  // An abandoned capture must never become an unhandled rejection.
+  assert.match(api, /capture\.catch\(/);
+});
+
+test("sign-in says whose screen the browser opens on", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // The Gateway answers on loopback AND over the tailnet. A Director reading
+  // this from a phone cannot see a window that opens on the host, and saying
+  // nothing about that is what "it did not navigate anywhere" was.
+  assert.match(api, /viewer_is_on_host/);
+  assert.match(api, /browser_opens_on/);
+  assert.match(api, /function requestIsFromGatewayHost/);
+  // Helpers must exist, not merely be called — a called-but-undefined helper
+  // throws only on the path that reaches it.
+  assert.match(api, /function laneSlotFromPath/);
+  assert.match(api, /function gatewayHostLabel/);
+});
+
+test("the desktop details pane is never inert", () => {
+  // INERT IS NOT CLOSED. On desktop the pane is a permanent column that no rule
+  // hides; marking it inert left it fully visible and completely dead — the
+  // wheel fell through to an overflow:hidden ancestor and nothing scrolled.
+  assert.match(gwSrc, /asideInert:\s*isMobileWidth\(\)\s*&&\s*!asideOpenNow\(\)/);
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  assert.match(view, /\$\{asideInert \? ' aria-hidden="true" inert' : ""\}/);
+  // The old form keyed inert off asideOpen; it must not come back.
+  assert.doesNotMatch(view, /\$\{asideOpen \? "" : ' aria-hidden="true" inert'\}/);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

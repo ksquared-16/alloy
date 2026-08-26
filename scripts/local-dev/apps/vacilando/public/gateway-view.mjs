@@ -4444,6 +4444,14 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
+  // grid column — no rule hides it, and the fold preference changes nothing you
+  // can see. Marking it inert whenever it was "closed" therefore left a pane
+  // that was fully visible and completely dead: Chromium does not hit-test an
+  // inert subtree, so the wheel fell through to an ancestor with overflow:hidden
+  // and nothing scrolled, while every control inside it silently ignored clicks.
+  // Only the mobile drawer is ever genuinely hidden, so only it may be inert.
+  asideInert = !asideOpen,
   userMessageExpanded = false,
   folders = [],
   collapsedFolders,
@@ -4576,7 +4584,7 @@ export function renderGatewayShell({
   // used to be split between an inline <details> under the thread and a second
   // "Lane details" fold in the aside, so the same lane facts appeared twice and
   // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideOpen ? "" : ' aria-hidden="true" inert'}>
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
         <div class="gw-aside-head">
           <div class="gw-aside-title">Details</div>
           <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>

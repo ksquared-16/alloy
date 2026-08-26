@@ -990,6 +990,9 @@ function paint() {
     lastInstruction: lastInstructionFor(G.selected),
     statusOpen: statusOpenNow(),
     asideOpen: asideOpenNow(),
+    // Only the mobile drawer is ever actually hidden; the desktop pane is a
+    // permanent column, so it must never be inert.
+    asideInert: isMobileWidth() && !asideOpenNow(),
     userMessageExpanded: G.userMessageExpanded,
     attentionByLane: map,
     telemetry: G.telemetry?.lane_id === G.selected ? G.telemetry : null,
