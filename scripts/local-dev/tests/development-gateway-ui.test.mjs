@@ -2147,5 +2147,41 @@ await test("governed approval copy is the action, not census", () => {
   assert.match(gwSrc, /governedDecisionNotice/);
 });
 
+// ── Browser-auth recovery must be REACHABLE, not merely rendered ─────────────
+//
+// THE FAILURE THIS ENCODES. The recovery card existed and was rendered, the
+// module and CLI shipped, and the flow was still dead on the live Gateway: the
+// API never attached `browser_auth` to a lane, so the card never appeared, and
+// gateway.js had no handler for its buttons, so Sign in did nothing. Every piece
+// present, nothing connected. Rendering is not delivery.
+
+test("the lanes endpoint attaches browser_auth to lanes", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  assert.match(api, /attachLaneBrowserAuth/);
+  // Identity comes from the toolkit, not from a second definition here.
+  assert.match(api, /qaIdentityFor:\s*qaIdentityForSlot/);
+});
+
+test("the Sign in and Re-check buttons have handlers", () => {
+  // The card's buttons carry these hooks; without a listener they are decoration.
+  assert.match(gwSrc, /data-gw-browser-auth-signin/);
+  assert.match(gwSrc, /data-gw-browser-auth-recheck/);
+  // The path is built from the action, so assert the endpoint and both actions
+  // rather than a literal URL that never appears in the source.
+  assert.match(gwSrc, /\/api\/v2\/browser-auth\/\$\{action\}/);
+  assert.match(gwSrc, /runBrowserAuthAction\(signIn, "sign-in"\)/);
+  assert.match(gwSrc, /runBrowserAuthAction\(recheck, "verify"\)/);
+});
+
+test("the sign-in route exists and the agent cannot complete one", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  assert.match(api, /\/api\/v2\/browser-auth\/sign-in/);
+  assert.match(api, /\/api\/v2\/browser-auth\/verify/);
+  // The response is a state name. Nothing that could authenticate anyone may
+  // cross this boundary.
+  assert.match(api, /publicAuthOutcome/);
+  assert.doesNotMatch(api, /storage-state\.json["']?\s*\)?\s*,\s*["']utf8/);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
