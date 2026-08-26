@@ -15,6 +15,7 @@ import CommunicationsCard from "@/components/admin/focusPanel/cards/Communicatio
 import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPreviewCard";
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
+import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
 import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
@@ -144,6 +145,12 @@ export default function FocusPanelCardRenderer({
     if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Attendance reads its own composed VM for the SCOPED participant; the panel stays case-grain.
+    if (model.key === "attendance") {
+        return (
+            <AttendanceCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     if (model.key === "scheduling") {

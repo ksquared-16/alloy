@@ -1246,3 +1246,59 @@ baselining the **wrong file**; the correct baseline showed 2 failed / 6 passed b
 the change, so both are pre-existing (`resolveCurrentWorkActionSurface` is absent from
 `CurrentWorkCard.tsx` independently of this work). Commit before probing, and baseline the file that
 actually failed.
+
+---
+
+## 23. Attendance card — provider and card built; placement is tenant configuration (2026-08-26)
+
+### Provider (§1) — done, verified on real events
+
+`buildAttendanceCardVM` composes in **one server pass** from the canonical owners:
+`fetchScheduleExpectations` (expected day) · `listAttendanceEvents` (record) ·
+`buildChildAttendanceReadModel` (fold) · `resolveAttendanceSubject` (subject, fails closed).
+
+Verified against Certa's real day:
+
+```
+expected  Monkeys      state  checked_out
+arrived   15:05        movement  Monkeys → Giraffe   corrected: true
+```
+
+Served by one endpoint (`/api/admin/attendance/card`) rather than five client calls — schedule,
+presence, movements, history and corrections would otherwise assemble on screen and pay again on
+every participant switch. The principal check passes with no allowlist exception.
+
+**The provider never truncates.** `movements` is complete and ordered; bounding is the card's job,
+because truncating server-side would make "+N movements" a claim nobody could verify.
+
+`not_arrived` is separated from the fold's `no_record`: "due and not here yet" and "nothing to say"
+are different answers the fold represents identically.
+
+### Card (§2, §3, §4) — built
+
+Registered through the full chain — key · registry (`grains: ["opportunity","child"]`) · catalog ·
+archetype/icon · renderer · card model · default composition (full row, `colSpan: 12`).
+
+- **Participant-scoped:** reads `context.participantScope`. With several children and none scoped it
+  renders *"Select a child to see their day"* and **no controls** — a card that quietly picked the
+  first child would answer confidently about the wrong one.
+- **No stale sibling state:** the VM is cleared before each load, and a response is accepted only if
+  its `participant.customerMemberId` matches the member the request was for, so a slow answer for the
+  child the operator just left cannot paint over the child they are looking at.
+- **Bounded movements:** the last two transfers keep their identity, the middle collapses to
+  `+N movements`, and arrival / current room / departure always survive.
+
+### Blocked here — placement is tenant configuration, not code (§8)
+
+The card does not appear in the certification case, and the reason is not the card: the rendered
+composition is `business_process · billing_preview · children · household`, which matches **neither**
+the code default nor the keys list. This tenant has a **published Surface layout** stored in
+configuration, and a published layout wins over the code default by design.
+
+So placement is a Surfaces **authoring** act against this tenant's published layout — which is
+exactly the "normal Surface path" §8 requires, and equally is configuration rather than code. I did
+not hand-edit published tenant configuration to make a card appear.
+
+**Not yet certified, and honestly outstanding:** the card in the real Focus Panel, the Certa ↔ Certb
+scope switch, movement overflow at 5 and 8+, command wiring in the card face, the command-chrome
+proof (§6), performance (§10), and Surface registration (§8). The provider beneath them is proven.

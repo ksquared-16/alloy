@@ -123,6 +123,16 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
     { key: "tour_summary", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
     { key: "communications", tier: "reference", visibility: "linked", encodedSpan: 1, encodedDensity: "standard" },
     { key: "milestones", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
+    {
+        key: "attendance",
+        tier: "work",
+        visibility: "visible",
+        // A full row of its own beneath the family cards: the day reads left to right, and sharing a
+        // lane would force the movement sequence to wrap.
+        area: { colStart: 1, colSpan: 12, rowStart: 8, rowSpan: 2 },
+        encodedSpan: "row",
+        encodedDensity: "compact",
+    },
 ];
 
 /**

@@ -161,6 +161,7 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      * (when and where are they scheduled), and is deliberately NOT folded in here.
      */
     { key: "staff", title: "Staff", grains: ["person"] },
+    { key: "attendance", title: "Attendance", grains: ["opportunity", "child"] },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *

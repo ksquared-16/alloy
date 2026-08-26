@@ -135,6 +135,15 @@ export const FOCUS_PANEL_CARD_KEYS = [
      * for them. Employment facts are never authored here.
      */
     /**
+     * @grain case — the child's operating day: expected window, arrival, room movements, current
+     * location, departure, and the commands that change them.
+     *
+     * Case grain with a PARTICIPANT SCOPE: the panel subject stays the family, and the card answers
+     * about the scoped child. With several children and none scoped it renders no controls rather
+     * than picking one.
+     */
+    "attendance",
+    /**
      * @grain person — the employee-centric Staff card.
      *
      * Successor to the person-grain `employment` presentation, reading the SAME

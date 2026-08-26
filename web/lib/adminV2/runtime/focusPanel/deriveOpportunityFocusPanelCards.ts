@@ -916,6 +916,20 @@ function buildCardModels(input: {
     );
 
     map.set(
+        "attendance",
+        card({
+            key: "attendance",
+            title: "Attendance",
+            // The day itself is the insight, and only the scoped child has one — the card fills this
+            // in from its own VM rather than the case record, which knows nothing about who is scoped.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
         "billing_preview",
         card({
             key: "billing_preview",

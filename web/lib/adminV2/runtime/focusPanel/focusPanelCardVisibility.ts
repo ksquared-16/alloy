@@ -35,6 +35,9 @@ export const ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS: readonly FocusPanelCardKey[] 
     "scheduling",
     "billing_preview",
     "employment",
+    // The operating day. It renders against the SCOPED participant and stays quiet when none is
+    // selected, so it earns a full row rather than competing with the family-level cards above.
+    "attendance",
 ];
 
 export const ENROLLMENT_DEFAULT_LINKED_CARD_KEYS: readonly FocusPanelCardKey[] = [
