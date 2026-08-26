@@ -393,6 +393,45 @@ function authoredQuestionPrompt(label: string, child: string | null): string | n
     return `${text}?`;
 }
 
+
+/**
+ * The participant-facing question for a need that is NOT the current turn.
+ *
+ * A cluster shows its siblings, and they must be worded exactly as they will be when their turn
+ * comes — same grain, same voice, same authored-question handling. So this composes the minimal
+ * turn shape and asks the one function that already knows how to say it, rather than growing a
+ * second wording path that would drift from the first.
+ */
+export function questionForNeed(
+    need: {
+        identity: { scope?: string | null; entity_type?: string | null; canonical_key?: string | null };
+        state: string;
+        current_value: unknown;
+        occurrence_count: number;
+        occurrences: readonly { label: string }[];
+    },
+    subjectDisplayName: string | null,
+): string {
+    const confirming = need.state === "known_requires_confirmation";
+    return participantQuestion({
+        subject_display_name: subjectDisplayName,
+        next_turn: {
+            kind: confirming ? "confirm_known_value" : "collect_missing_value",
+            prompt: "",
+            proposed_value: confirming ? need.current_value : null,
+            resolves_occurrences: need.occurrence_count,
+            input_type: null,
+            label: need.occurrences[0]?.label ?? null,
+            options: [],
+            optional: false,
+            field_ids: [],
+            scope: need.identity.scope ?? null,
+            entity_type: need.identity.entity_type ?? null,
+            canonical_key: need.identity.canonical_key ?? null,
+        },
+    } as unknown as ParticipantObjectiveWire);
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
@@ -421,6 +460,22 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         }
         const authored = authoredQuestionPrompt(turn.label ?? "", subject);
         if (authored) return authored;
+
+        /*
+         * NO CANONICAL OWNER, SO NO POSSESSIVE.
+         *
+         * A bespoke school prompt — "General health:", "Primary Physician Name:" — binds to nothing,
+         * so there is no record to say whose it is. The household fallback filled that silence with
+         * "your family's", and produced "What is your family's General health?": a claim of ownership
+         * the platform cannot support, wrapped around wording the school already got right.
+         *
+         * These prompts are the school's own, and the topic heading above them supplies the context
+         * a possessive was standing in for. So they are asked as written.
+         */
+        if (!(turn as { entity_type?: string | null }).entity_type) {
+            const own = (turn.label ?? "").trim().replace(/\s*[:?]+\s*$/, "");
+            if (own.length >= 2) return `${own}?`;
+        }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
     }

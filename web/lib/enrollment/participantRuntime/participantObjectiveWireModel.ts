@@ -13,6 +13,9 @@
  */
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
+import { packageOutstandingNeeds } from "@/lib/enrollment/participantRuntime/conversationalPackage";
+import { turnIsEligibleForProviderInterpretation } from "@/lib/enrollment/participantRuntime/turnInterpretationEligibility";
+import { questionForNeed } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -68,6 +71,23 @@ export type ParticipantObjectiveWire = {
         readonly scope?: string | null;
         readonly entity_type?: string | null;
         readonly canonical_key?: string | null;
+        /**
+         * The conversational topic this question belongs to, when it has siblings.
+         *
+         * A cluster is presentation over needs the objective already resolved — the grouping comes
+         * from `packageOutstandingNeeds`, never from the component, so the surface cannot invent a
+         * relationship the packet did not evidence. Exactly one member is `active`: the turn the
+         * runtime selected, and the only one the composer is answering.
+         */
+        readonly cluster?: {
+            readonly title: string | null;
+            readonly questions: readonly {
+                readonly need_key: string;
+                readonly question: string;
+                readonly state: "settled" | "active" | "upcoming";
+                readonly answer: string | null;
+            }[];
+        } | null;
         /** Closed option set, when the authored control has one. Empty otherwise. */
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
@@ -113,6 +133,51 @@ function resolvedSubjectDisplayName(
     return resolved || ((fallback ?? "").trim() || null);
 }
 
+
+/**
+ * The topic the current question sits in, or null when it stands alone.
+ *
+ * Only a `deterministic_cluster` produces one. A single deterministic turn is a question, not a
+ * topic, and a `conversational_free_text` package is answered as one paragraph — neither is helped
+ * by a list of siblings, and showing one would misdescribe what the parent is being asked for.
+ */
+function activeCluster(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["next_turn"]["cluster"] {
+    const activeKey = objective.next_turn.need?.identity.key ?? null;
+    if (!activeKey) return null;
+
+    const packages = packageOutstandingNeeds(objective.needs.needs, {
+        // Settled members stay in the topic so the parent watches it fill in, not shrink.
+        includeSettled: true,
+        providerEligible: (need) =>
+            turnIsEligibleForProviderInterpretation({
+                kind: "collect_missing_value",
+                need,
+                prompt: "",
+                proposed_value: null,
+                resolves_occurrences: need.occurrence_count,
+            }).eligible,
+    });
+    const pkg = packages.find((p) => p.need_keys.includes(activeKey));
+    if (!pkg || pkg.interaction !== "deterministic_cluster" || pkg.need_keys.length < 2) return null;
+
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    const questions = pkg.need_keys.flatMap((key) => {
+        const need = byKey.get(key);
+        if (!need) return [];
+        const settled = !need.requires_participant_action && need.state !== "known_requires_confirmation";
+        return [{
+            need_key: key,
+            question: questionForNeed(need, subjectName),
+            state: (key === activeKey ? "active" : settled ? "settled" : "upcoming") as "settled" | "active" | "upcoming",
+            answer: settled && need.has_value ? String(need.current_value ?? "") : null,
+        }];
+    });
+    return { title: pkg.section_title, questions };
+}
+
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
     context?: {
@@ -123,6 +188,7 @@ export function participantObjectiveWireModel(
 ): ParticipantObjectiveWire {
     const turn = objective.next_turn;
     const firstOccurrence = turn.need?.occurrences[0] ?? null;
+    const subjectName = resolvedSubjectDisplayName(objective, context?.subjectDisplayName);
 
     /**
      * PHASE IS DERIVED FROM THE TURN — one authority, not two.
@@ -164,6 +230,7 @@ export function participantObjectiveWireModel(
             // unavailable — the fallback has to be renderable from this payload alone.
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
+            cluster: activeCluster(objective, subjectName),
             scope: turn.need?.identity.scope ?? null,
             entity_type: turn.need?.identity.entity_type ?? null,
             canonical_key: turn.need?.identity.canonical_key ?? null,

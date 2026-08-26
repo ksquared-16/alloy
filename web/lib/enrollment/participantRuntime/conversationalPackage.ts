@@ -106,6 +106,15 @@ export function packageOutstandingNeeds(
          * Absent, nothing is treated as interpretable — the safe direction.
          */
         providerEligible?: (need: EnrollmentInformationNeed) => boolean;
+        /**
+         * Keep already-settled needs in their topic, for DISPLAY.
+         *
+         * Turn planning must skip them — a settled need is not a turn. But a parent working through
+         * "Health information" should see the two questions they have already answered recede above
+         * the one they are on, rather than watching the topic silently shrink. Same grouping owner,
+         * two views: nothing re-derives which needs belong together.
+         */
+        includeSettled?: boolean;
     },
 ): ConversationalPackage[] {
     const max = Math.max(1, opts?.maxSize ?? MAX_PACKAGE_SIZE);
@@ -125,7 +134,8 @@ export function packageOutstandingNeeds(
     };
 
     for (const need of needs) {
-        if (!need.requires_participant_action && need.state !== "known_requires_confirmation") continue;
+        const outstanding = need.requires_participant_action || need.state === "known_requires_confirmation";
+        if (!outstanding && !opts?.includeSettled) continue;
         if (!run.length) { run = [need]; continue; }
         const head = run[0]!;
         /*
