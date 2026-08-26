@@ -57,7 +57,18 @@ const LEGAL = Object.freeze({
   VALIDATING: ["EXECUTING", "WAITING_RESOURCE", "RECOVERING", "NEEDS_INPUT", "COMPLETE", "FAILED"],
   // COMPLETE is reachable from RECOVERING: work that finished must never be
   // impossible to close merely because Vacilando abandoned the run mid-sprint.
-  RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED"],
+  //
+  // ABANDONED is reachable for the mirror-image reason, and its absence was a
+  // ONE-WAY TRAP. The governor abandons a run it cannot attribute; an operator
+  // recovery moves it to RECOVERING; the governor reaches the same conclusion
+  // again and its only available conclusion — abandon — was illegal from here.
+  // The run could then never leave RECOVERING by any path, and the lane card
+  // read "Recovering" permanently. Communications sat in exactly that trap.
+  //
+  // This does not make ABANDONED cheap: it stays terminal for scheduling and
+  // recoverable, and RECOVERING is still reachable only through
+  // recoverExecutionRun() with proven ownership.
+  RECOVERING: ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "COMPLETE", "FAILED", "ABANDONED"],
   NEEDS_INPUT: ["EXECUTING", "WAITING_RESOURCE", "COMPLETE", "FAILED"],
   COMPLETE: [],
   FAILED: [],
