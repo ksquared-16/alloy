@@ -1377,3 +1377,61 @@ Work View authoring act, distinct from the Focus Panel surface just published.
 
 Attendance is **not** yet production-ready by §12, and the remaining items are named rather than
 rounded up.
+
+---
+
+## 25. Child-grain Work View authored — and the real root cause found (2026-08-26)
+
+### The authoring path works, and I used it
+
+`Organization → Processes → Enrollment → Work Views` is the canonical owner: `+ Add Work View`, a
+row-type declaration (`Family | Child`), stage/field conditions, presentation bindings, then
+**Save Work Views → Apply changes**.
+
+I authored **"Enrolled children"** through it — row type `Child`, *Stage equals Enrolled*, bound to
+**Enrollment Focus Panel Summary · V132** — saved and applied it live (6 → 7 configured). The view
+appeared in the workspace immediately.
+
+**It returned 0 rows.**
+
+### Why — the finding this run actually produced
+
+`Stage equals Enrolled` yields Child rows exactly as Waitlist does (`Stage equals Waitlist` → 17
+children), so the configuration shape was right. The rows were missing because **no participation
+sits at that stage**.
+
+`enrollment.direct` says so in its own contract:
+
+> `enrollment.start` — run the governed journey → one process_instance, no durable facts
+> `enrollment.direct` — **skip the journey** → the durable trio, no process_instance
+
+So the certification children have **real enrollment agreements and no participation state**. That is
+not a bug — it is the documented difference between the two intents — but it means *no child-grain
+Work View filter can surface them*, because every such filter matches on stage or disposition, and
+they have neither.
+
+Switching the condition to `child_enrollment_status equals enrolled` proved it from the other side:
+17 rows returned, **none of them Certa or Certb** — the existing children matched, the fixture's did
+not.
+
+### The tenant is left clean
+
+The view claimed "Enrolled children" while listing 17 children who are not the fixture's, which is
+exactly the accidental product configuration §2 warns against. **Deleted and applied — back to 6
+configured, `Changes applied`.** The Focus Panel surface stays at **v132** with Attendance placed,
+which is the intended QA configuration.
+
+### What this means for closing Attendance
+
+The blocker moved one layer down, and is now specific:
+
+> The fixture enrolls through `enrollment.direct`, which deliberately creates no participation state.
+> A child-grain Work View can only select a participation. So participant scope cannot be exercised
+> for these children until they are enrolled through the **journey** path (`enrollment.start` +
+> completion), or their participation disposition is set canonically.
+
+That is a **fixture** change, not a card, Work View, or scope-architecture change. It also explains
+why Registration ("Stage equals Enrolling") has always shown 0.
+
+Everything downstream of participant scope stays blocked on it: the Certa ↔ Certb switch, command
+execution from the card face, movement overflow in the browser, and the command-chrome proof.
