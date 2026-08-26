@@ -974,3 +974,76 @@ room from today, and prints the resulting agreement / placement / schedule ids.
 
 Nothing was built against fixtures in the meantime, and no UI shell was created against absent data
 (§19). Attendance and Financials remain exactly as audited.
+
+---
+
+## 19. Fixture execution attempted from both paths — still requires an operator (2026-08-26)
+
+The mission's prerequisite is the fixture invocation. **It did not succeed**, and the reason is worth
+recording precisely, because one half of it is a safety mechanism rather than an obstacle.
+
+### Path 1 — the script: no credentials, by design
+
+`npm run dev:seed:operational-cards-certification -- --verify` fails at `Supabase URL is not set`.
+Privileged values never enter the worktree; `alloy-dev-start` injects them "into the owned process
+only". I checked the toolkit for a sanctioned trusted-env runner before concluding: `alloy-ro` is
+read-only inspection, `alloy-dev-start` only starts the server, and `vac run` accepts a fixed set of
+validation kinds. **No sanctioned path exists**, and the boundary is deliberate.
+
+### Path 2 — the product UI: blocked by identity resolution, which is correct
+
+Step 1 says to create the household through the registered Create Lead flow, so I drove it: Actions →
+Create Lead → **Form** tab (a `role="tab"`, which is why an earlier attempt missed it) → the four
+fields (first, last, email, phone) filled and valid.
+
+**Review stays disabled.** The reason:
+
+```
+canReview = controller.resolution.readyForPreview || readyToExecute
+```
+
+`resolution` is the identity pass — the "Checking for existing records…" step. Create Lead will not
+build a preview until identity resolution settles, because **creating a second household for a
+family that already exists is precisely what it exists to prevent** — the same gate `addStaff`
+enforces with `StaffIdentityChoiceRequiredError`. Driving past it would defeat a safety mechanism,
+not automate a chore. It wants an operator to make an identity decision.
+
+### A near miss that argues for stopping
+
+Typing the address character-by-character produced
+`guardian@operational-cards-cert.alloy.invald` — a dropped `i`. On a shared stack a **typo'd
+namespace is unrecoverable by the fixture's own selector**: `--remove` matches the reserved domain
+alone, so a near-miss record would be permanently un-cleanable. That is exactly the leak the
+namespace exists to prevent, and it is a second reason not to keep retrying unattended.
+
+### The tenant is untouched — verified, not assumed
+
+| Check | Result |
+|---|---|
+| All Children | **17** — unchanged |
+| `Certhouse` present | **no** |
+| Staff certification fixture | intact, 4 `Certified` rows |
+
+No partial household, no orphan person, no half-created lead.
+
+### What is actually needed
+
+One operator action, then the script:
+
+```
+1.  Actions → Create Lead → Form
+    Cert · Certhouse · guardian@operational-cards-cert.alloy.invalid · +15555550100
+    resolve identity ("create new person") → Review → Confirm
+
+2.  from web/, with SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY:
+    npm run dev:seed:operational-cards-certification
+    npm run dev:seed:operational-cards-certification -- --verify
+```
+
+Everything after that is unattended: `addChild` ×2 and `directEnroll` ×2 are plain service calls the
+fixture already makes, and Attendance (§B) resumes immediately against the resulting agreements.
+
+**Nothing downstream was started.** No Attendance commands were registered, no Financials read model
+was written, no card was placed — §19 of the prior mission and the Definition of Done both require
+real canonical data first, and building against absent data is the failure this program has avoided
+throughout.
