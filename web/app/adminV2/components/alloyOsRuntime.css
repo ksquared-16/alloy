@@ -9848,3 +9848,27 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
 .alloy-os-financials__cell--desc {
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+/* The expanded view's shallow top: one line, so the ledger keeps the surface. */
+.alloy-os-financials__shallow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+}
+.alloy-os-financials__shallow-value {
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--alloy-os-text-primary, #1f2937);
+}
+.alloy-os-financials__shallow-label {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}

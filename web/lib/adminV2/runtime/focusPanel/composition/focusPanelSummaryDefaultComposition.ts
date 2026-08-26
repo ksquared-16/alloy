@@ -133,6 +133,23 @@ export const FOCUS_PANEL_SUMMARY_DEFAULT_COMPOSITION: readonly SummaryCompositio
         encodedSpan: "row",
         encodedDensity: "compact",
     },
+    {
+        /*
+         * FINANCIALS AS SUPPORTING CONTEXT — the COMPACT density, deliberately.
+         *
+         * A family case panel is an acquisition/enrollment process, and money is context inside it
+         * rather than its subject: what is owed and whether anything is overdue, with the way in. The
+         * full period breakdown belongs to the child panel's V5 summary, where the account IS the
+         * subject. Attempting the reconciliation here would spend half a case panel on a half-stated
+         * total, which is more misleading than a balance and a link.
+         */
+        key: "financials",
+        tier: "context",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 12, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
 ];
 
 /**
@@ -231,6 +248,8 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *                    subject is a reason to scope this card, never to remove it.
  *   household        family/relationship context, and honestly family-scoped — it does not claim to
  *                    be child-owned.
+ *   financials       what is owed and what happened on the family account, at the locked V5 8/12
+ *                    footprint with Billing Preview as its real 4/12 companion.
  *   billing_preview  family-scoped contextual information, placed last and compact precisely
  *                    because it is not child-owned. Its priority differs from Current Work.
  *
@@ -294,19 +313,45 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         // Assignment affordance rendering but inert: `navigateIdentityFieldLink` refuses a card
         // absent from `focusTargets` and returns `destination_unavailable`, silently.
         //
-        // Moved down a row to make room for Attendance above; nothing else about it changed.
+        // Beside Attendance rather than under it: the day and the assignments are the same band of
+        // operating context, and pairing them frees the bottom row for the Financials pair below.
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 10, rowSpan: 2 },
+        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },
     {
+        /*
+         * FINANCIALS — the locked V5 footprint: EIGHT of twelve columns, with a real companion in the
+         * remaining four. Not the stretched full-row default, which left the reconciliation floating
+         * in whitespace, and not a 12-column card — that forces `planPublishedLayout` from `lanes` to
+         * `grid` for the whole panel, the trap documented on the case composition's Employment entry.
+         *
+         * `Details →` expands it to a full row in place; the ledger is the expanded representation and
+         * needs the width, but it earns that width only when the operator asks for it.
+         */
+        key: "financials",
+        tier: "work",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 8, rowStart: 10, rowSpan: 2 },
+        encodedSpan: 1,
+        // `standard` IS the V5 summary. The compact density is a different placement — supporting
+        // financial context inside another process — and states the balance without the breakdown.
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * The 4/12 companion, and a genuine one rather than filler. Billing Preview answers "is
+         * billing CONFIGURED?" while Financials answers "what is owed?" — the readiness of the
+         * arrangement beside the state of the account, which is the pairing an operator actually
+         * reads together.
+         */
         key: "billing_preview",
         tier: "context",
         visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        area: { colStart: 9, colSpan: 4, rowStart: 10, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },

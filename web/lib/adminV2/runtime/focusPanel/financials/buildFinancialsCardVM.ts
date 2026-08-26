@@ -141,7 +141,10 @@ export type FinancialsCardVM = {
     rows: FinancialsLedgerRow[];
     /** The CURRENT period only. */
     reconciliation: FinancialsReconciliation;
+    /** The same reconciliation, narrowed per child — keyed by `customer_members.id`. */
+    reconciliationBySubject: Record<string, FinancialsReconciliation>;
     pastDue: FinancialsPastDue | null;
+    pastDueBySubject: Record<string, FinancialsPastDue | null>;
     ledgerPeriods: FinancialsPeriodGroup[];
     chargeTemplates: FinancialsChargeTemplateOption[];
     unavailable: FinancialsUnavailable[];
@@ -178,7 +181,9 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         subjects: [],
         rows: [],
         reconciliation: emptyReconciliation(),
+        reconciliationBySubject: {},
         pastDue: null,
+        pastDueBySubject: {},
         ledgerPeriods: [],
         chargeTemplates: [],
         unavailable: [],
@@ -386,65 +391,47 @@ export async function buildFinancialsCardVM(
             dueDate: t(c.due_date) || null,
             glCode: account?.code ?? null,
             glAccountName: account?.name ?? null,
-            source: t(metadata.charge_template_key) || t(metadata.source) || null,
+            /*
+             * PROVENANCE, not a key. `metadata.charge_template_key` is `field_trip`; the operator
+             * configured that template and already sees its LABEL in the description, so this column
+             * says HOW the row came to exist rather than repeating an identifier.
+             */
+            source: t(metadata.source) === "charge_template" ? "Template" : t(metadata.source) ? "Import" : "Manual",
         };
     });
     // Newest first inside a period; the ledger reads downward through time.
     rows.sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "") || a.chargeId.localeCompare(b.chargeId));
     vm.rows = rows;
 
-    // ── RECONCILIATION over the CURRENT period ───────────────────────────────────────────────────
-    const reconciliation = emptyReconciliation();
-    for (const row of rows) {
-        if (row.periodKey !== period.key) continue;
-        if (row.lifecycleStatus === "scheduled" || row.lifecycleStatus === "draft") {
-            if (row.lifecycleStatus === "scheduled") reconciliation.scheduledCents += row.amountCents;
-            else reconciliation.draftCents += row.amountCents;
-            continue;
-        }
-        if (!OWED_STATUSES.has(row.status)) continue;
-        if (FUNDING_CATEGORIES.has(row.categoryKey)) reconciliation.fundingCents += row.amountCents;
-        else if (REDUCTION_CATEGORIES.has(row.categoryKey)) reconciliation.discountsCents += row.amountCents;
-        else if (ADJUSTMENT_CATEGORIES.has(row.categoryKey)) reconciliation.adjustmentsCents += row.amountCents;
-        else reconciliation.grossCents += row.amountCents;
-    }
-    reconciliation.responsibilityCents =
-        reconciliation.grossCents
-        + reconciliation.discountsCents
-        + reconciliation.fundingCents
-        + reconciliation.adjustmentsCents;
-
     /*
-     * PAYMENTS ARE STRUCTURALLY ZERO, and that is reported rather than shown.
+     * RECONCILIATION, ONCE PER SCOPE.
      *
-     * `payment_allocations` can target a charge, but every allocation hangs off a `payments` row and
-     * that table still requires a `job_id`. A childcare family therefore cannot have one. Summing to
-     * zero and printing "$0.00 paid" would state something the platform cannot know; the
-     * `unavailable` entry says why instead, and the balance below is the RESPONSIBILITY.
+     * Computed for the whole account AND for each child, because the card's subject filter narrows
+     * the LEDGER and a total that did not narrow with it would sit above rows that do not add up to
+     * it — the exact defect the browser found: "$100.00" over a filtered ledger showing $75. Doing it
+     * here rather than in the card keeps the rule in one place; doing it per subject rather than
+     * re-fetching keeps the filter free of a network round trip.
      */
-    reconciliation.paymentsCents = 0;
-    reconciliation.balanceCents = reconciliation.responsibilityCents - reconciliation.paymentsCents;
-    vm.reconciliation = reconciliation;
+    vm.reconciliation = reconcileRows(rows, period.key, today);
+    vm.reconciliationBySubject = Object.fromEntries(
+        vm.subjects.map((s) => [
+            s.customerMemberId,
+            reconcileRows(
+                rows.filter((r) => r.subjectMemberId === s.customerMemberId),
+                period.key,
+                today,
+            ),
+        ]),
+    );
 
     // ── PAST DUE: real due-date semantics, over owed rows only ───────────────────────────────────
-    const overdue = rows.filter(
-        (r) => OWED_STATUSES.has(r.status) && r.status !== "paid" && r.dueDate != null && r.dueDate < today,
+    vm.pastDue = pastDueFor(rows, today);
+    vm.pastDueBySubject = Object.fromEntries(
+        vm.subjects.map((s) => [
+            s.customerMemberId,
+            pastDueFor(rows.filter((r) => r.subjectMemberId === s.customerMemberId), today),
+        ]),
     );
-    if (overdue.length > 0) {
-        const oldest = overdue.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
-        const oldestDueDate = oldest.dueDate as string;
-        const agingDays = Math.max(
-            0,
-            Math.round(
-                (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${oldestDueDate}T00:00:00Z`)) / 86_400_000,
-            ),
-        );
-        vm.pastDue = {
-            amountCents: overdue.reduce((sum, r) => sum + r.amountCents, 0),
-            oldestDueDate,
-            agingDays,
-        };
-    }
 
     // ── LEDGER, grouped by billing period ────────────────────────────────────────────────────────
     const byPeriod = new Map<string, FinancialsLedgerRow[]>();
@@ -484,4 +471,54 @@ export async function buildFinancialsCardVM(
         }));
 
     return vm;
+}
+
+
+/** THE reconciliation rule, in one place so no scope can compute it differently. */
+function reconcileRows(
+    rows: readonly FinancialsLedgerRow[],
+    periodKey: string,
+    _today: string,
+): FinancialsReconciliation {
+    const out = emptyReconciliation();
+    for (const row of rows) {
+        if (row.periodKey !== periodKey) continue;
+        if (row.lifecycleStatus === "scheduled") {
+            out.scheduledCents += row.amountCents;
+            continue;
+        }
+        if (row.lifecycleStatus === "draft") {
+            out.draftCents += row.amountCents;
+            continue;
+        }
+        if (!OWED_STATUSES.has(row.status)) continue;
+        if (FUNDING_CATEGORIES.has(row.categoryKey)) out.fundingCents += row.amountCents;
+        else if (REDUCTION_CATEGORIES.has(row.categoryKey)) out.discountsCents += row.amountCents;
+        else if (ADJUSTMENT_CATEGORIES.has(row.categoryKey)) out.adjustmentsCents += row.amountCents;
+        else out.grossCents += row.amountCents;
+    }
+    // Responsibility is the SUM OF EVERY OWED LINE, so it cannot drift from the rows beneath it.
+    out.responsibilityCents =
+        out.grossCents + out.discountsCents + out.fundingCents + out.adjustmentsCents;
+    out.paymentsCents = 0;
+    out.balanceCents = out.responsibilityCents - out.paymentsCents;
+    return out;
+}
+
+/** Past due over owed, unpaid rows whose due date has passed. */
+function pastDueFor(rows: readonly FinancialsLedgerRow[], today: string): FinancialsPastDue | null {
+    const overdue = rows.filter(
+        (r) => OWED_STATUSES.has(r.status) && r.status !== "paid" && r.dueDate != null && r.dueDate < today,
+    );
+    if (overdue.length === 0) return null;
+    const oldest = overdue.reduce((acc, r) => ((r.dueDate ?? "") < (acc.dueDate ?? "") ? r : acc));
+    const oldestDueDate = oldest.dueDate as string;
+    return {
+        amountCents: overdue.reduce((sum, r) => sum + r.amountCents, 0),
+        oldestDueDate,
+        agingDays: Math.max(
+            0,
+            Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${oldestDueDate}T00:00:00Z`)) / 86_400_000),
+        ),
+    };
 }

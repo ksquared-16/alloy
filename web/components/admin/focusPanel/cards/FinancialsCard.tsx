@@ -143,13 +143,53 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     );
 
     const currency = vm?.rows[0]?.currencyCode ?? "USD";
-    const compact = model.density === "compact" && !expanded;
+    /*
+     * THE TOTALS FOLLOW THE FILTER.
+     *
+     * The subject filter narrows the ledger, so the reconciliation above it must narrow too — a
+     * "$100.00" account total sitting over a filtered ledger showing $75 is precisely the "every
+     * total reconciles to authoritative rows" rule broken, and it is what the first browser pass
+     * found. The narrowed figures are the SERVER's, computed per subject in the same composition, so
+     * switching subjects costs nothing and cannot compute the rule a second way.
+     */
+    const reconciliation =
+        vm == null
+            ? null
+            : subjectFilter === "all"
+              ? vm.reconciliation
+              : vm.reconciliationBySubject[subjectFilter] ?? vm.reconciliation;
+    const pastDue =
+        vm == null
+            ? null
+            : subjectFilter === "all"
+              ? vm.pastDue
+              : vm.pastDueBySubject[subjectFilter] ?? null;
+    /*
+     * DENSITY IS A REAL DISTINCTION, not a label.
+     *
+     * `compact` is supporting financial context inside another operating process — the balance, what
+     * is next, and the way in. It deliberately does NOT attempt the reconciliation: a half-stated
+     * breakdown is more misleading than none. `standard` is the V5 summary and states the period in
+     * full. Expanded is either of them plus the ledger.
+     */
+    const isCompact = model.density === "compact" && !expanded;
+    /*
+     * THE LEDGER IS THE EXPANDED REPRESENTATION, and only that.
+     *
+     * Summary and expanded rendered identically at first, which made `Details →` a no-op and left the
+     * summary carrying a ledger it has no room for. The summary states the period; the expanded view
+     * keeps a SHALLOW top — balance and past due in one line — and gives the rest of the surface to
+     * the ledger, because re-rendering a larger copy of the summary above it would spend the width
+     * the ledger exists to use.
+     */
+    const showBands = !expanded;
+    const showLedger = expanded;
 
     return (
         <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>
             <UniversalCard
                 title={model.title}
-                insight={insightFor(vm, loading, currency)}
+                insight={insightFor(vm, reconciliation, loading, currency)}
                 iconName={model.iconName}
                 tier={model.tier}
                 archetype={model.archetype}
@@ -170,101 +210,101 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 ) : (
                     <>
                         {/* ── CURRENT PERIOD · PAST DUE / PAYMENT ─────────────────────────────── */}
-                        <div className="alloy-os-financials__bands">
+                        {showBands ? (
+                        <div
+                            className="alloy-os-financials__bands"
+                            data-financials-density={isCompact ? "compact" : expanded ? "expanded" : "summary"}
+                        >
                             <section className="alloy-os-financials__band" data-financials-band="current-period">
                                 <p className="alloy-os-financials__band-label">
                                     Current period · {vm.period.label}
                                 </p>
+                                {isCompact ? (
+                                    /* Supporting context: what is owed, and whether anything is
+                                       overdue. The breakdown belongs to the summary density. */
+                                    <>
+                                        <Line
+                                            label="Balance"
+                                            cents={reconciliation!.balanceCents}
+                                            currency={currency}
+                                            strong
+                                            testId="balance"
+                                        />
+                                        {reconciliation!.scheduledCents !== 0 ? (
+                                            <Line
+                                                label="Scheduled"
+                                                cents={reconciliation!.scheduledCents}
+                                                currency={currency}
+                                                muted
+                                                testId="scheduled"
+                                            />
+                                        ) : null}
+                                        {pastDue ? (
+                                            <p className="alloy-os-financials__note">
+                                                {money(pastDue.amountCents, currency)} past due ·{" "}
+                                                {pastDue.agingDays} days
+                                            </p>
+                                        ) : null}
+                                    </>
+                                ) : (
+                                <>
                                 {/* Individual dollar rows stay regular and tabular; only the total
                                     earns stronger type. */}
-                                <Line label="Charges" cents={vm.reconciliation.grossCents} currency={currency} />
-                                {vm.reconciliation.discountsCents !== 0 ? (
+                                <Line label="Charges" cents={reconciliation!.grossCents} currency={currency} />
+                                {reconciliation!.discountsCents !== 0 ? (
                                     <Line
                                         label="Discounts & credits"
-                                        cents={vm.reconciliation.discountsCents}
+                                        cents={reconciliation!.discountsCents}
                                         currency={currency}
                                     />
                                 ) : null}
-                                {vm.reconciliation.fundingCents !== 0 ? (
-                                    <Line label="Funding" cents={vm.reconciliation.fundingCents} currency={currency} />
+                                {reconciliation!.fundingCents !== 0 ? (
+                                    <Line label="Funding" cents={reconciliation!.fundingCents} currency={currency} />
                                 ) : null}
-                                {vm.reconciliation.adjustmentsCents !== 0 ? (
+                                {reconciliation!.adjustmentsCents !== 0 ? (
                                     <Line
                                         label="Adjustments"
-                                        cents={vm.reconciliation.adjustmentsCents}
+                                        cents={reconciliation!.adjustmentsCents}
                                         currency={currency}
                                     />
                                 ) : null}
                                 <Line
                                     label="Responsibility"
-                                    cents={vm.reconciliation.responsibilityCents}
+                                    cents={reconciliation!.responsibilityCents}
                                     currency={currency}
                                     strong
                                     testId="responsibility"
                                 />
-                                {vm.reconciliation.scheduledCents !== 0 ? (
+                                {reconciliation!.scheduledCents !== 0 ? (
                                     /* STATED BESIDE the balance, never inside it: a scheduled charge
                                        is not yet owed, and folding it in would overstate the debt. */
                                     <Line
                                         label="Scheduled"
-                                        cents={vm.reconciliation.scheduledCents}
+                                        cents={reconciliation!.scheduledCents}
                                         currency={currency}
                                         muted
                                         testId="scheduled"
                                     />
                                 ) : null}
-                                {vm.chargeTemplates.length > 0 ? (
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <button
-                                                type="button"
-                                                className="alloy-os-financials__action"
-                                                data-financials-command="charge.add"
-                                                disabled={running}
-                                            >
-                                                Add charge →
-                                            </button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
-                                            {vm.chargeTemplates.map((tpl) => (
-                                                <DropdownMenuItem
-                                                    key={tpl.id}
-                                                    data-financials-charge-template={tpl.id}
-                                                    onSelect={() => void run(tpl.id)}
-                                                >
-                                                    {/* The tenant's own label. Never `template_key`. */}
-                                                    {tpl.label}
-                                                    {tpl.amountCents != null ? (
-                                                        <span className="alloy-os-financials__menu-amount">
-                                                            {money(tpl.amountCents, tpl.currencyCode)}
-                                                        </span>
-                                                    ) : null}
-                                                </DropdownMenuItem>
-                                            ))}
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                ) : null}
-                                {commandError ? (
-                                    <span className="alloy-os-financials__error" data-financials-command-error="true">
-                                        {commandError}
-                                    </span>
-                                ) : null}
+                                </>
+                                )}
                             </section>
 
+                            {isCompact ? null : (
                             <div className="alloy-os-financials__side">
                                 <section className="alloy-os-financials__band" data-financials-band="past-due">
                                     <p className="alloy-os-financials__band-label">Past due</p>
-                                    {vm.pastDue ? (
+                                    {pastDue ? (
                                         <>
                                             <Line
-                                                label={`${vm.pastDue.agingDays} days`}
-                                                cents={vm.pastDue.amountCents}
+                                                label={`${pastDue.agingDays} days`}
+                                                cents={pastDue.amountCents}
                                                 currency={currency}
                                                 strong
                                                 testId="past-due"
                                             />
                                             <p className="alloy-os-financials__note">
-                                                Oldest unpaid {vm.pastDue.oldestDueDate}
+                                                Oldest unpaid {pastDue.oldestDueDate}
                                             </p>
                                         </>
                                     ) : (
@@ -287,10 +327,76 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     ))}
                                 </section>
                             </div>
+                            )}
+                        </div>
+                        ) : (
+                            /* The shallow top of the expanded view: what is owed, and whether
+                               anything is overdue. Everything else is a row in the ledger below. */
+                            <p className="alloy-os-financials__shallow" data-financials-shallow="true">
+                                <span className="alloy-os-financials__shallow-value">
+                                    {money(reconciliation!.balanceCents, currency)}
+                                </span>
+                                <span className="alloy-os-financials__shallow-label">
+                                    owed · {vm.period.label}
+                                </span>
+                                {pastDue ? (
+                                    <span className="alloy-os-financials__shallow-label">
+                                        · {money(pastDue.amountCents, currency)} past due
+                                    </span>
+                                ) : null}
+                                {reconciliation!.scheduledCents !== 0 ? (
+                                    <span className="alloy-os-financials__shallow-label">
+                                        · {money(reconciliation!.scheduledCents, currency)} scheduled
+                                    </span>
+                                ) : null}
+                            </p>
+                        )}
+
+                        {/* THE COMMAND BELONGS TO THE CARD, not to one band.
+                            It lived inside Current Period, so expanding the card — the density where
+                            an operator is actually working the ledger — removed the only way to add
+                            a charge. */}
+                        <div className="alloy-os-financials__actions" data-financials-actions="true">
+                        {vm.chargeTemplates.length > 0 ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-command="charge.add"
+                                        disabled={running}
+                                    >
+                                        Add charge →
+                                    </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
+                                    {vm.chargeTemplates.map((tpl) => (
+                                        <DropdownMenuItem
+                                            key={tpl.id}
+                                            data-financials-charge-template={tpl.id}
+                                            onSelect={() => void run(tpl.id)}
+                                        >
+                                            {/* The tenant's own label. Never `template_key`. */}
+                                            {tpl.label}
+                                            {tpl.amountCents != null ? (
+                                                <span className="alloy-os-financials__menu-amount">
+                                                    {money(tpl.amountCents, tpl.currencyCode)}
+                                                </span>
+                                            ) : null}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        ) : null}
+                        {commandError ? (
+                            <span className="alloy-os-financials__error" data-financials-command-error="true">
+                                {commandError}
+                            </span>
+                        ) : null}
                         </div>
 
                         {/* ── SUBJECT FILTER + LEDGER ─────────────────────────────────────────── */}
-                        {!compact ? (
+                        {showLedger ? (
                             <>
                                 {vm.subjects.length > 1 ? (
                                     <div className="alloy-os-financials__filters" data-financials-filters="true">
@@ -430,10 +536,22 @@ function unavailableLabel(fact: string): string {
     }
 }
 
-function insightFor(vm: FinancialsCardVM | null, loading: boolean, currency: string): string {
+/**
+ * The header answer, in the SAME scope as the body.
+ *
+ * It read `vm.reconciliation` — the whole account — while the body could be filtered to one child, so
+ * the card announced $100.00 above a $75.00 breakdown. The scoped figure is passed in rather than
+ * re-derived, so the two cannot disagree again.
+ */
+function insightFor(
+    vm: FinancialsCardVM | null,
+    reconciliation: { balanceCents: number } | null,
+    loading: boolean,
+    currency: string,
+): string {
     if (loading && !vm) return "";
-    if (!vm || vm.unavailableReason) return "";
-    return `${money(vm.reconciliation.balanceCents, currency)} · ${vm.period.label}`;
+    if (!vm || vm.unavailableReason || !reconciliation) return "";
+    return `${money(reconciliation.balanceCents, currency)} · ${vm.period.label}`;
 }
 
 function Line(props: {

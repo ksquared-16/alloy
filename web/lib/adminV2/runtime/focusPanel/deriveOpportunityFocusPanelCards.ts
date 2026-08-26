@@ -939,7 +939,9 @@ function buildCardModels(input: {
             insight: "",
             tier: "work",
             span: 2,
-            density: "compact",
+            // The V5 summary is this card's canonical presentation. A placement that wants supporting
+            // context declares `compact` and the card states the balance without the breakdown.
+            density: "standard",
         }),
     );
 

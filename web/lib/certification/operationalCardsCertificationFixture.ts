@@ -931,6 +931,46 @@ export async function repairOperationalCardsCertification(
     }
 
     /*
+     * THE EPISODE STAYS UNBOUND FROM ANY WORK UNIT — and that is now a finding, not an omission.
+     *
+     * `create_lead` resolves a work unit, this restore passed null, and family-grain lenses are
+     * work-unit scoped, so the certification family is reachable at child grain and invisible at
+     * family grain. Binding it to the stage's own `lifecycle_wu_lead` looked like the faithful repair.
+     *
+     * It was not: with the episode bound, the `all` and `active-pipeline` lenses went from one row to
+     * ZERO — the certification case did not appear and the real family that had been there
+     * disappeared with it. Whatever the queue does with a lead-stage opportunity carrying an enrolled
+     * child's journeys, it is not "show one more row", and a fixture may not degrade a lens that
+     * serves real records.
+     *
+     * So the binding is reverted to null on every repair, which is also self-healing for the run that
+     * introduced it. The cost is that Financials compact is certified at case grain on a real family
+     * with nothing billable rather than on the certification family's balance — a smaller loss than a
+     * broken operator lens.
+     */
+    const { data: episodeRow, error: episodeError } = await supabase
+        .from("opportunities")
+        // Only columns `opportunities` actually has. Selecting one it does not returns an ERROR and a
+        // null row, which read exactly like "already bound" and made this step skip in silence.
+        .select("id, stage_key, work_unit_id")
+        .eq("org_id", orgId)
+        .eq("id", episodeId)
+        .maybeSingle();
+    if (episodeError) refusals.push(`could not read the episode: ${episodeError.message}`);
+    const episode = episodeRow as { stage_key?: string | null; work_unit_id?: string | null } | null;
+    if (episode && t(episode.work_unit_id)) {
+        const { createDefaultIdentityCommandPorts } = await import(
+            "@/lib/pos/processingIdentity/commands/ports"
+        );
+        const cleared = await createDefaultIdentityCommandPorts().updateLead(
+            { supabase, orgId, actorId: actorUserId },
+            { lead_id: episodeId, patch: { work_unit_id: null } },
+        );
+        if (cleared.ok) actions.push(`unbound episode ${episodeId} from its work unit — it degraded family lenses`);
+        else refusals.push(`could not unbind the episode: ${cleared.error}`);
+    }
+
+    /*
      * 3 · ONE LIVE JOURNEY PER CHILD, INSIDE THE EPISODE.
      *
      * ── WHY THIS IS NOT "CLOSE EVERYTHING BUT THE OLDEST" ──
