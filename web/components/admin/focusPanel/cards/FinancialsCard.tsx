@@ -55,6 +55,12 @@ export default function FinancialsCard({ model, context, receded = false, coordi
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
     const [commandError, setCommandError] = useState<string | null>(null);
+    const [pending, setPending] = useState<{
+        templateId: string;
+        label: string;
+        summary: string;
+        changes: string[];
+    } | null>(null);
 
     /*
      * The card asks for the WHOLE account and filters in the client.
@@ -108,10 +114,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             : vm.rows.filter((r) => r.subjectMemberId === subjectFilter);
     }, [vm, subjectFilter]);
 
-    const run = useCallback(
-        async (templateId: string) => {
-            const target = subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId;
-            if (!target || running) return;
+    /** The child a charge would apply to — the filter's subject, else the panel's. */
+    const chargeTarget =
+        subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId ?? null;
+
+    /**
+     * PREVIEW FIRST, and the preview is the DOMAIN's.
+     *
+     * `mode: "preview"` runs `previewTemplateCharge` — the same resolver the write uses — so the
+     * amount, the dates and the scheduled-vs-draft verdict shown to the operator are the ones that
+     * will be persisted. Nothing is computed on this side, which is why the preview cannot drift from
+     * the commit that follows it.
+     */
+    const preview = useCallback(
+        async (templateId: string, label: string) => {
+            if (!chargeTarget || running) return;
             setRunning(true);
             setCommandError(null);
             try {
@@ -122,25 +139,76 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     body: JSON.stringify({
                         action_key: "charge.add",
                         entity_type: "child",
-                        entity_id: target,
-                        mode: "execute",
-                        confirmation: { confirmed: true },
-                        payload: { customer_member_id: target, template_id: templateId },
+                        entity_id: chargeTarget,
+                        mode: "preview",
+                        payload: {
+                            customer_member_id: chargeTarget,
+                            template_id: templateId,
+                            child_label: vm?.subjects.find((s) => s.customerMemberId === chargeTarget)
+                                ?.displayName,
+                        },
                     }),
                 });
-                const json = (await res.json()) as { ok?: boolean; error?: string };
-                // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
-                if (!json?.ok) setCommandError(json?.error || "The charge was refused.");
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    error?: string | { message?: string };
+                    data?: { execution_result?: { preview?: { summary?: string; changes?: string[] } } };
+                };
+                const p = json?.data?.execution_result?.preview;
+                if (!json?.ok || !p) {
+                    const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                    setCommandError(err || "This charge cannot be previewed.");
+                    return;
+                }
+                setPending({
+                    templateId,
+                    label,
+                    summary: p.summary ?? "",
+                    changes: Array.isArray(p.changes) ? p.changes : [],
+                });
             } catch {
-                setCommandError("The charge could not be sent.");
+                setCommandError("The preview could not be requested.");
             } finally {
                 setRunning(false);
-                // The card REFRESHES from the read model; it never inserts the row it just created.
-                await load();
             }
         },
-        [load, running, scopedMemberId, subjectFilter, vm],
+        [chargeTarget, running, vm],
     );
+
+    const commit = useCallback(async () => {
+        if (!pending || !chargeTarget || running) return;
+        setRunning(true);
+        setCommandError(null);
+        try {
+            const res = await fetch("/api/admin/actions/execute", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    action_key: "charge.add",
+                    entity_type: "child",
+                    entity_id: chargeTarget,
+                    mode: "execute",
+                    confirmation: { confirmed: true },
+                    payload: { customer_member_id: chargeTarget, template_id: pending.templateId },
+                }),
+            });
+            const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
+            if (!json?.ok) {
+                const err = typeof json?.error === "string" ? json.error : json?.error?.message;
+                // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
+                setCommandError(err || "The charge was refused.");
+                return;
+            }
+            setPending(null);
+        } catch {
+            setCommandError("The charge could not be sent.");
+        } finally {
+            setRunning(false);
+            // The card REFRESHES from the read model; it never inserts the row it just created.
+            await load();
+        }
+    }, [chargeTarget, load, pending, running]);
 
     const currency = vm?.rows[0]?.currencyCode ?? "USD";
     /*
@@ -374,7 +442,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                         <DropdownMenuItem
                                             key={tpl.id}
                                             data-financials-charge-template={tpl.id}
-                                            onSelect={() => void run(tpl.id)}
+                                            onSelect={() => void preview(tpl.id, tpl.label)}
                                         >
                                             {/* The tenant's own label. Never `template_key`. */}
                                             {tpl.label}
@@ -387,6 +455,46 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                                     ))}
                                 </DropdownMenuContent>
                             </DropdownMenu>
+                        ) : null}
+                        {pending ? (
+                            <div className="alloy-os-financials__preview" data-financials-preview="true">
+                                <p className="alloy-os-financials__preview-summary">{pending.label}</p>
+                                {pending.changes.map((ch) => (
+                                    <p key={ch} className="alloy-os-financials__note">
+                                        {ch}
+                                    </p>
+                                ))}
+                                {/*
+                                    THE HONEST BALANCE IMPACT.
+                                    The design showed "$255 → $295". Add Charge creates a DRAFT, and a
+                                    draft is not owed — so the current balance does not move until the
+                                    charge is posted. Printing an arrow between two balances would
+                                    assert a change the backend does not make.
+                                */}
+                                <p className="alloy-os-financials__note" data-financials-preview-impact="true">
+                                    Creates a draft · the balance changes when it is posted
+                                </p>
+                                <span className="alloy-os-financials__preview-actions">
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-preview-commit="true"
+                                        disabled={running}
+                                        onClick={() => void commit()}
+                                    >
+                                        Add charge
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-financials__action"
+                                        data-financials-preview-cancel="true"
+                                        disabled={running}
+                                        onClick={() => setPending(null)}
+                                    >
+                                        Cancel
+                                    </button>
+                                </span>
+                            </div>
                         ) : null}
                         {commandError ? (
                             <span className="alloy-os-financials__error" data-financials-command-error="true">

@@ -1736,10 +1736,29 @@ Zero page errors, zero failed requests.
 | F · subject filtering | All 4 rows / 3 periods / $100.00 · Certb 2 rows / $25.00 · Certa 2 rows / $75.00 — each total reconciles to its own rows; 36–49 ms |
 | G · ledger periods | **three**: October 2026, September 2026, August 2026 |
 | H · GL | every row `Unmapped` — the tenant has 10 GL accounts and **0 mappings**, and mappings have no canonical write seam. Explicit, never blank |
-| I · Add Charge | menu offers the four configured labels with amounts (no keys) → commit → 4 → 5 rows, refreshed in place, no reload |
+| I · Add Charge | menu offers the four configured labels with amounts (no keys) → **authoritative preview** → commit → rows 3 → 4, refreshed in place, no reload. Preview 1.7 s, commit → refresh 472 ms |
 | J · compact | case grain, real family, truthfully "No enrollment agreement, so there is nothing billable yet"; 368 ms |
 | K · summary | V5 **8/12** with Billing Preview as the real 4/12 companion; 143–169 ms |
 | L · expanded | shallow top + ledger-first detail; 68–99 ms |
+
+### 28.6a The preview, and the balance arrow that would have been a lie
+
+The design showed `Current balance $255 → $295`. Add Charge creates a **draft**, and a draft is not
+owed, so the current balance does not move until the charge is posted. An arrow between two balances
+would assert a change the backend does not make. The preview states what is true instead:
+
+```text
+Materials
+Applies to · Certa Certhouse
+Occurs 2026-08-26
+Billable 2026-09-02
+Scheduled — a future billing context
+Creates a draft · the balance changes when it is posted
+```
+
+Every line comes from `previewTemplateCharge` — the same resolver the write uses — so the preview
+cannot drift from the commit. After committing, the balance stayed at `$75.00` and the row count went
+3 → 4, which is the correct pair of observations.
 
 ### 28.7 Surface placement
 
@@ -1750,5 +1769,7 @@ code composition at 8/12 with Billing Preview at 4/12.
 ### 28.8 Truthful omissions
 
 `HOUSEHOLD_BILLABLE_SOURCE = MISSING` — no Household subject option. No payer filter, no split
-percentages, no autopay state, no payments line. No `Pay now`, because nothing can take a payment.
+percentages, no autopay state, no payments line. No `Pay now`, because nothing can take a payment. No command-workspace chrome case: Add Charge is a
+direct command with a template choice and an inline preview, not a workspace, so there is no root
+command title or `Back to actions` to verify (§24).
 Each is named in the read model's `unavailable` list and rendered as absence.
