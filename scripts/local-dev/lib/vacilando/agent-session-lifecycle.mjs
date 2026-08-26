@@ -1246,6 +1246,33 @@ export async function startLaneAgentSession({
   }
 }
 
+/**
+ * S8 — try to free ONE seat because this lane is waiting for provider capacity.
+ *
+ * Called only from the two places where the ceiling has already refused, so the
+ * contention is real rather than predicted. The decision about which seat (if
+ * any) may be released belongs to provider-capacity and the seat-state model;
+ * this is the caller that supplies the waiting admission.
+ *
+ * Failure is never fatal: a reclaim that cannot happen leaves the lane on the
+ * ordinary queue-or-refuse path it took before S8 existed.
+ */
+async function reclaimSeatForWaitingLane({ laneId, root, nowMs }) {
+  try {
+    const { reclaimForWaitingAdmission } = await import("./provider-capacity.mjs");
+    const run = activeRunForLane(laneId, root);
+    return await reclaimForWaitingAdmission({
+      waiting: [{ lane_id: laneId, run_id: run?.run_id || null, admission_id: null }],
+      availableSeats: 0,
+      root,
+      nowMs,
+      origin: "agent-session-lifecycle",
+    });
+  } catch (err) {
+    return { ok: false, reclaimed: [], refused: [], plan: { reason: "reclaim_unavailable" }, error: err?.message || String(err) };
+  }
+}
+
 function occupyingLaneSummaries(cap, root) {
   const live = Array.isArray(cap?.occupying) ? cap.occupying : [];
   const lanes = listDurableLanes(root);
@@ -1381,7 +1408,15 @@ async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root
   let createdRuntime = null;
   if (!hasPane) {
     const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
-    const cap = await assessSessionStartCapacity({ root });
+    let cap = await assessSessionStartCapacity({ root });
+    let seatReclaim = null;
+    if (!cap.ok) {
+      // S8. The ceiling has actually bound and THIS lane is what is waiting for
+      // it — that is contention, and contention is the only thing permitted to
+      // reclaim a seat. Nothing here runs on a timer or on a sweep.
+      seatReclaim = await reclaimSeatForWaitingLane({ laneId: found.lane_id, root, nowMs });
+      if (seatReclaim?.reclaimed?.length) cap = await assessSessionStartCapacity({ root });
+    }
     if (!cap.ok) {
       const occupying = occupyingLaneSummaries(cap, root);
       if (origin === "operator") {
@@ -1394,6 +1429,9 @@ async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root
           occupying,
           occupying_names: occupying.map((o) => o.name),
           capacity: cap,
+          // What the reclaim attempt concluded, so a refusal can say whether a
+          // seat could have been freed and why it was not.
+          seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
         };
       }
       const run = activeRunForLane(found.lane_id, root);
@@ -1414,6 +1452,7 @@ async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root
         occupying,
         occupying_names: occupying.map((o) => o.name),
         capacity: cap,
+        seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
       };
     }
     let started;
@@ -1633,7 +1672,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
   const hasPane = Boolean(lane.tmux?.pane_id) && lane.tmux?.alive !== false;
   if (!hasPane) {
     const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
-    const cap = await assessSessionStartCapacity({ root });
+    let cap = await assessSessionStartCapacity({ root });
+    let seatReclaim = null;
+    if (!cap.ok) {
+      // S8. The ceiling has actually bound and THIS lane is what is waiting for
+      // it — that is contention, and contention is the only thing permitted to
+      // reclaim a seat. Nothing here runs on a timer or on a sweep.
+      seatReclaim = await reclaimSeatForWaitingLane({ laneId: found.lane_id, root, nowMs });
+      if (seatReclaim?.reclaimed?.length) cap = await assessSessionStartCapacity({ root });
+    }
     if (!cap.ok) {
       const occupying = occupyingLaneSummaries(cap, root);
       if (origin === "operator") {
@@ -1646,6 +1693,9 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
           occupying,
           occupying_names: occupying.map((o) => o.name),
           capacity: cap,
+          // What the reclaim attempt concluded, so a refusal can say whether a
+          // seat could have been freed and why it was not.
+          seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
         };
       }
       const run = activeRunForLane(found.lane_id, root);
@@ -1666,6 +1716,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "ad
         occupying,
         occupying_names: occupying.map((o) => o.name),
         capacity: cap,
+        seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
       };
     }
     const started = startRuntimeImpl

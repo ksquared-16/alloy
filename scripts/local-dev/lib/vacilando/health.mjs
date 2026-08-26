@@ -35,6 +35,7 @@ export const CHECKS = Object.freeze([
   "disk.headroom",
   "gateway.responsive",
   "provider.capacity",
+  "provider.seats",
   "validation.collisions",
   "runs.stale",
   "providers.orphaned",
@@ -280,6 +281,90 @@ export function checkProviderCapacity({ capacity = null, seats = [], configuredM
       ? "More provider seats are live than the configured ceiling allows."
       : sev === "watch" ? "Provider seats are at the ceiling." : "Provider seats are within the ceiling.",
     suggested_action: sev === "healthy" ? null : "Seats are counted, not gated at spawn; release an idle seat or raise the ceiling deliberately.",
+  });
+}
+
+/**
+ * S8 — provider seat state.
+ *
+ * WHAT THIS CHECK IS FOR. `provider.capacity` counts seats against a ceiling.
+ * This one says what those seats ARE DOING, because the two failure modes that
+ * matter are invisible to a count: capacity refused while a reclaimable idle
+ * seat sits there, and a lane left claiming a live provider that is gone.
+ *
+ * AN IDLE RECLAIMABLE SEAT IS NOT A DEFECT. Nobody is waiting for it. It is
+ * reported at the policy's `idle_severity` so an operator can see spare
+ * capacity exists — never as a problem, because reporting it as one would
+ * pressure a future reader into building the timer this slice exists to forbid.
+ *
+ * THE REAL PROBLEM IS THE PAIR. A run blocked on provider capacity WHILE
+ * reclaimable seats exist and nothing is reclaiming means the yield path is not
+ * working, and that is worth waking someone for.
+ */
+export function checkProviderSeats({
+  seats = [],
+  summary = null,
+  waitingOnProviderCapacity = [],
+  reclaimsInFlight = [],
+  ceiling = null,
+  policy = null,
+}) {
+  const idleSeverity = policy?.idle_severity || "watch";
+  const counts = summary?.counts || {};
+  const idleReclaimable = summary?.idle_reclaimable ?? seats.filter((s) => s.state === "idle" && s.reclaimable).length;
+  const holding = summary?.holding_capacity ?? seats.filter((s) => s.holds_capacity).length;
+  const resumeFailures = seats.filter((s) => s.state === "dormant" && s.last_resume_result && s.last_resume_result.ok === false);
+  const waiting = waitingOnProviderCapacity.length;
+
+  const problems = [];
+  if (waiting > 0 && idleReclaimable > 0 && reclaimsInFlight.length === 0) {
+    problems.push(`${waiting} admission(s) blocked on provider capacity while ${idleReclaimable} reclaimable idle seat(s) exist and no reclaim is running`);
+  }
+  if (Number.isFinite(ceiling) && holding > ceiling) {
+    problems.push(`${holding} seats hold capacity against a ceiling of ${ceiling}`);
+  }
+  if (resumeFailures.length) {
+    problems.push(`${resumeFailures.length} dormant lane(s) failed to resume`);
+  }
+
+  const severity = problems.length ? "problem"
+    : (reclaimsInFlight.length || idleReclaimable) ? (reclaimsInFlight.length ? "watch" : idleSeverity)
+      : "healthy";
+
+  return finding({
+    check: "provider.seats",
+    severity,
+    owner_resource: "vacilando.provider_capacity",
+    measurements: {
+      active: counts.active || 0,
+      attentive: counts.attentive || 0,
+      idle_reclaimable: idleReclaimable,
+      dormant: counts.dormant || 0,
+      blocked: counts.blocked || 0,
+      holding_capacity: holding,
+      ceiling,
+      over_capacity: Number.isFinite(ceiling) ? Math.max(0, holding - ceiling) : null,
+      provider_admission_waiting: waiting,
+      reclaims_in_flight: reclaimsInFlight.length,
+      resume_failures: resumeFailures.length,
+      longest_idle_ms: summary?.longest_idle_ms ?? null,
+      idle_grace_policy: policy?.version ?? null,
+    },
+    evidence: seats.map((s) => {
+      const bits = [`${s.lane_name || s.lane_id || "unbound"} · ${s.state}`];
+      if (s.state === "idle") bits.push(`idle ${Math.round((s.idle_ms || 0) / 60000)}m · reclaimable`);
+      if (s.state === "dormant") bits.push(`resume available · resumed ${s.resume_count || 0}×`);
+      if (s.state === "blocked") bits.push(`blocked on ${s.blocker_kind}`);
+      if (s.state_reason && s.state !== "idle") bits.push(s.state_reason);
+      return bits.join(" · ");
+    }),
+    explanation: problems.length ? problems.join("; ")
+      : idleReclaimable
+        ? `${idleReclaimable} idle seat(s) are reclaimable; nothing is waiting for them, so they stay live.`
+        : "Every provider seat is doing work, attentive, blocked on a named condition, or dormant.",
+    suggested_action: problems.length
+      ? "Seats only yield under contention; check that the admission path is calling the reclaim, and that the candidates still pass their final eligibility recheck."
+      : null,
   });
 }
 
@@ -661,6 +746,14 @@ export function composeReport({
   safe("disk.headroom", () => checkDiskHeadroom({ thresholds, disk: probeResults.disk }));
   safe("gateway.responsive", () => checkGatewayResponsive({ thresholds, gateway: probeResults.gateway }));
   safe("provider.capacity", () => checkProviderCapacity({ capacity: probeResults.capacity, seats: probeResults.seats || [], configuredMax: probeResults.configured_max }));
+  safe("provider.seats", () => checkProviderSeats({
+    seats: probeResults.seat_states || [],
+    summary: probeResults.seat_summary || null,
+    waitingOnProviderCapacity: probeResults.provider_capacity_waits || [],
+    reclaimsInFlight: probeResults.reclaims_in_flight || [],
+    ceiling: probeResults.capacity?.axes?.provider_capacity?.ceiling ?? probeResults.configured_max ?? null,
+    policy: probeResults.idle_grace_policy || null,
+  }));
   safe("validation.collisions", () => checkValidationCollisions({
     hw,
     workloads: probeResults.workloads || [],

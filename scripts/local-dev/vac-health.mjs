@@ -216,6 +216,30 @@ try {
   waits = RW.summarizeWaits(descriptors);
 } catch { waits = null; }
 
+// ── S8: canonical provider seat state ────────────────────────────────────────
+//
+// Read-only, like everything else here. `vac health` classifies seats and says
+// what would be reclaimable; it never reclaims one. The reclaim lives on the
+// admission path, where a real waiting admission exists to justify it.
+let seatStates = [];
+let seatSummary = null;
+let idleGracePolicy = null;
+let providerCapacityWaits = [];
+try {
+  const PC = await import("./lib/vacilando/provider-capacity.mjs");
+  const SS = await import("./lib/vacilando/provider-seat-state.mjs");
+  idleGracePolicy = SS.IDLE_GRACE_POLICY_V1;
+  seatStates = await PC.observeLiveSeats({});
+  seatSummary = SS.summarizeSeats(seatStates);
+  providerCapacityWaits = runs.filter((r) =>
+    r.state === "QUEUED" && r.state_reason === SS.PROVIDER_CAPACITY_WAIT_REASON);
+} catch { seatStates = []; seatSummary = null; }
+
+// A reclaim is in flight when a lane has been chosen but the provider has not
+// gone down yet. Nothing writes this today beyond the reclaim itself, so an
+// empty list is the honest answer rather than an assumed zero.
+const reclaimsInFlight = seatStates.filter((s) => s.reclaim_in_progress === true);
+
 const RUN_BOUNDS = {
   instruction_delivered: 6 * 60 * 60 * 1000,
   admission_delivered: 6 * 60 * 60 * 1000,
@@ -288,6 +312,8 @@ const report = composeReport({
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, toolkit, configured_max: configuredMax,
+    seat_states: seatStates, seat_summary: seatSummary, idle_grace_policy: idleGracePolicy,
+    provider_capacity_waits: providerCapacityWaits, reclaims_in_flight: reclaimsInFlight,
   },
 });
 
@@ -313,6 +339,10 @@ if (load) w(`load       ${load.one.toFixed(2)} / ${load.five.toFixed(2)} / ${loa
 if (memory) w(`memory     ${memory.free_gb} GB free (${memory.free_pct.toFixed(1)}%) · compressor ${memory.compressor_gb} GB\n`);
 if (disk) w(`disk       ${disk.free_gb} GB free of ${disk.total_gb} GB (${disk.free_pct.toFixed(1)}%)\n`);
 w(`vacilando  ${seats.length} provider seats · ${lanes.length} lanes · ${attribution ? attribution.attributed_count : "?"} attributed processes\n`);
+if (seatSummary) {
+  const c = seatSummary.counts;
+  w(`seats      ${c.active} active · ${c.attentive} attentive · ${c.idle} idle (${seatSummary.idle_reclaimable} reclaimable) · ${c.blocked} blocked · ${c.dormant} dormant   (grace ${Math.round((idleGracePolicy?.grace_ms || 0) / 60000)}m, policy ${idleGracePolicy?.version})\n`);
+}
 const A = capacity.axes;
 w(`capacity   providers ${A.provider_capacity.current}/${A.provider_capacity.ceiling} (by ${A.provider_capacity.bounded_by}) · tokens ${A.validation_capacity.used}/${A.validation_capacity.tokens} (by ${A.validation_capacity.bounded_by}) · workers ≤${A.validation_capacity.worker_ceiling} · dev servers ${A.dev_server_capacity.current}/${A.dev_server_capacity.ceiling}\n`);
 w(`reserves   memory ${A.memory_capacity.free_gb ?? "?"} GB free / ${A.memory_capacity.reserve_gb} GB reserve · disk ${A.disk_headroom.free_gb ?? "?"} GB free / ${A.disk_headroom.reserve_gb} GB reserve · policy ${capacity.policy_version}\n`);

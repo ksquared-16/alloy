@@ -52,6 +52,7 @@ SUITES=(
   "development-validation-admission.test.mjs"
   "development-run-wait.test.mjs"
   "development-resource-reconciliation.test.mjs"
+  "development-provider-seat-state.test.mjs"
 )
 
 PASS=0
