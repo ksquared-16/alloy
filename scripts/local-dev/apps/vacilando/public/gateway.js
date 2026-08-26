@@ -1693,9 +1693,59 @@ document.addEventListener("toggle", (e) => {
   View.writeStatusOpen(details.open, storage());
 }, true);
 
+// Browser-session recovery. The button STARTS a sign-in; a person completes it.
+// Nothing typed into that browser comes back through here — the response carries
+// a state name and never credential material.
+async function runBrowserAuthAction(btn, action) {
+  const laneId = btn.getAttribute("data-lane-id") || "";
+  if (!laneId) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = action === "sign-in" ? "Waiting for you to sign in…" : "Checking…";
+  try {
+    const r = await gwFetch(`/api/v2/browser-auth/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ lane_id: laneId, slot: btn.getAttribute("data-slot") || undefined }),
+    });
+    const body = await r.json().catch(() => ({}));
+    const host = btn.closest("[data-gw-browser-auth]");
+    const copy = host?.querySelector(".gw-work-stale-copy");
+    if (copy && body?.headline) copy.textContent = body.headline;
+    if (copy && body?.detail) copy.title = body.detail;
+  } catch (err) {
+    if (err?.status !== 401) {
+      const host = btn.closest("[data-gw-browser-auth]");
+      const copy = host?.querySelector(".gw-work-stale-copy");
+      // Say what happened. A silent failure here is what sent the Director to a
+      // terminal in the first place.
+      if (copy) copy.textContent = "Sign-in could not be started on this machine.";
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+    // The lane poll repaints the card from the server's own state; updating the
+    // headline here only keeps the button honest while the request is in flight.
+  }
+}
+
 document.addEventListener("click", async (e) => {
   if (e.target?.closest?.("#gw-login")) {
     e.stopPropagation();
+    return;
+  }
+  const signIn = e.target?.closest?.("[data-gw-browser-auth-signin]");
+  if (signIn) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!signIn.disabled) await runBrowserAuthAction(signIn, "sign-in");
+    return;
+  }
+  const recheck = e.target?.closest?.("[data-gw-browser-auth-recheck]");
+  if (recheck) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!recheck.disabled) await runBrowserAuthAction(recheck, "verify");
     return;
   }
   const enable = e.target?.closest?.("[data-gw-notify-enable]");

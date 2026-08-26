@@ -27,7 +27,7 @@
  * metadata — names, counts, expiry timestamps, file mode — which is what a
  * status display actually needs.
  */
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -91,6 +91,33 @@ function legacyStateRoot() {
 export function legacySlotAuthStoragePath(slot) {
   const root = legacyStateRoot();
   return root ? join(root, "auth", `slot${slot}`, "storage-state.json") : null;
+}
+
+/**
+ * The QA identity a slot signs in as.
+ *
+ * Asked of the TOOLKIT, which owns it: it resolves operator config and shipped
+ * defaults in the right order, and parsing those files here would be a second
+ * definition that could disagree with the first. Never invented, and never
+ * silently substituted with another account — a null identity is displayed as
+ * unknown rather than guessed.
+ */
+export function qaIdentityForSlot(slot) {
+  const n = Number(slot);
+  if (!Number.isInteger(n)) return null;
+  const fromEnv = process.env[`ALLOY_SLOT_${n}_QA_IDENTITY`];
+  if (fromEnv && fromEnv.trim()) return fromEnv.trim();
+  try {
+    const toolkit = join(homedir(), ".local", "share", "alloy", "toolkit", "current");
+    const out = execFileSync("bash", ["-lc",
+      `source "${toolkit}/lib/common.sh"; source "${toolkit}/lib/verify.sh"; ` +
+      `alloy_load_config >/dev/null 2>&1; alloy_slot_qa_identity ${n}`,
+    ], { encoding: "utf8", timeout: 15000 });
+    const v = String(out || "").trim();
+    return v || null;
+  } catch {
+    return null;
+  }
 }
 
 export function slotAuthStoragePath(slot, { root = stateRoot() } = {}) {

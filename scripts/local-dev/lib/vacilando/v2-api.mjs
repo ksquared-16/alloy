@@ -1480,13 +1480,79 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
       await maybeReconcileGovernor({ reason: "lanes_poll", depth: "cheap" });
     } catch { /* */ }
     const out = await listDevelopmentLanes();
-    const lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    let lanes = attachLaneRunLifecycle(attachLaneSourceControl(attachLaneAdmissions(attachLaneAgentSessions(attachLaneRecovery(attachLaneResourceWaits(attachLaneRuns(attachLaneInstructions(out.lanes || []), undefined, { includeInstruction: false })))))));
+    // A lane whose browser session is dead cannot execute, and until this was
+    // attached the Director had no way to see that or fix it. The recovery card
+    // is already rendered by the view; without this the data never arrives, so
+    // the card never appears and the flow looks undeployed.
+    try {
+      const { attachLaneBrowserAuth, qaIdentityForSlot } = await import("./browser-auth.mjs");
+      lanes = attachLaneBrowserAuth(lanes, { qaIdentityFor: qaIdentityForSlot });
+    } catch { /* auth recovery is additive; lane discovery must still answer */ }
     let folders = [];
     try {
       const { listLaneFolders } = await import("./lane-folders.mjs");
       folders = listLaneFolders();
     } catch { /* organisation must never fail discovery */ }
     return { status: out.ok ? 200 : 503, body: { ...out, lanes, folders, development_resources: developmentResourceSnapshot() } };
+  }
+  // Browser-session recovery. THE AGENT MAY START A SIGN-IN AND MAY ABANDON ONE;
+  // IT MAY NEVER COMPLETE ONE. A person types the password into a browser this
+  // opens on the slot's own loopback base. Nothing typed reaches the agent, the
+  // request, the response or any durable record — the only thing that crosses
+  // this boundary is a state name.
+  if (path === "/api/v2/browser-auth/status"
+    || path === "/api/v2/browser-auth/sign-in"
+    || path === "/api/v2/browser-auth/verify") {
+    const {
+      validateBrowserAuthRequest, readSlotAuthStatus, verifyBrowserAuth,
+      beginBrowserAuthCapture, recordSlotVerification, publicAuthOutcome,
+      qaIdentityForSlot,
+    } = await import("./browser-auth.mjs");
+    const { getDurableLane } = await import("./development-lane.mjs");
+    const laneId = v.lane_id || v.laneId;
+    const lane = laneId ? getDurableLane(laneId) : null;
+    if (!lane) return { status: 404, body: { ok: false, error: "lane_not_registered" } };
+    const slot = v.slot ?? lane.binding?.slot ?? null;
+    const validated = validateBrowserAuthRequest({
+      lane,
+      slot,
+      expectedIdentity: qaIdentityForSlot(slot ?? laneSlotFromPath(lane)),
+    });
+    if (!validated.ok) return { status: 409, body: validated };
+
+    const status = readSlotAuthStatus(validated.slot);
+    if (path === "/api/v2/browser-auth/status") {
+      return { status: 200, body: publicAuthOutcome({ validated, state: status.state, status, detail: status.detail }) };
+    }
+    if (path === "/api/v2/browser-auth/verify") {
+      const verdict = await verifyBrowserAuth(validated);
+      recordSlotVerification(validated.slot, {
+        state: verdict.state, expectedIdentity: validated.expected_identity,
+        actualIdentity: verdict.actual_identity, detail: verdict.detail,
+      });
+      return {
+        status: verdict.ok ? 200 : 409,
+        body: publicAuthOutcome({ validated, state: verdict.state, status, detail: verdict.detail }),
+      };
+    }
+    // sign-in: opens the headed browser and waits for the PERSON.
+    const began = await beginBrowserAuthCapture(validated, {
+      timeoutMs: Number.isFinite(Number(v.timeout_ms)) ? Number(v.timeout_ms) : undefined,
+    });
+    if (!began.ok) {
+      return { status: 409, body: publicAuthOutcome({ validated, state: began.state, status, detail: began.detail }) };
+    }
+    const after = readSlotAuthStatus(validated.slot);
+    const verdict = await verifyBrowserAuth(validated);
+    recordSlotVerification(validated.slot, {
+      state: verdict.state, expectedIdentity: validated.expected_identity,
+      actualIdentity: verdict.actual_identity, detail: verdict.detail,
+    });
+    return {
+      status: verdict.ok ? 200 : 409,
+      body: publicAuthOutcome({ validated, state: verdict.state, status: after, detail: verdict.detail }),
+    };
   }
   if (path === "/api/v2/lane-folders") {
     const { listLaneFolders } = await import("./lane-folders.mjs");
