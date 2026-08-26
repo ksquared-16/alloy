@@ -36,16 +36,18 @@ review decisions were not touched** — 3 sources still attached.
 
 **`320b8c0b-c661-4242-9f44-f37390f3ff42`** — *School of Enrichment — Enrollment Packet*
 
-| # | Item | Form definition | Pinned version | Label | Uploads | Sigs |
-|---|---|---|---|---|---|---|
-| 0 | `bb4b7c05…` | `2ee88ba9…` | pinned | Oregon Certificate of Immunization Status | **1** | **2** |
-| 1 | `4e4bcd0e…` | `31b2e2fd…` | pinned | Oregon Nonmedical Exemption | **2** | 1 |
-| 2 | `39b8a4a3…` | `08e0f9c7…` | pinned | School of Enrichment Admissions Packet | 0 | 0 |
-| 3 | `9bbf3a12…` | `9d19b1cb…` | pinned | Tuition & Enrollment Agreement | 0 | 1 |
-| 4 | `4b32e5b1…` | `19c1b7bb…` | pinned | Parent Handbook Acknowledgement | 0 | 1 |
-| 5 | `8c9ef0d0…` | `f1b0c46a…` | pinned | Direct Payment Authorization | 0 | 1 |
+| # | Packet item id | Form definition id | Pinned version id | Label |
+|---|---|---|---|---|
+| 0 | `747b7793-25f2-4a41-abe9-3119eb6f4cf3` | `96fad240-e6ef-4d9a-8be1-4ab8b7e049dd` | `0600c060-4380-424e-a6f4-f8ad2cabdac9` | Oregon Certificate of Immunization Status |
+| 1 | `a70d488f-29b5-438e-a1e7-cd2408abd2b4` | `6fa91f1d-ba1f-46a1-977a-906d5c750f82` | `ea9b6acb-eaaa-4313-9177-038207baf403` | Oregon Nonmedical Exemption |
+| 2 | `57c71883-1af6-4f2a-b0e8-d4712226ab1c` | `ea12e361-d9d7-4123-af69-ba22131623bb` | `8f9e512e-ef53-42a1-a662-297498f6b662` | School of Enrichment Admissions Packet |
+| 3 | `7b88ca39-a7cf-4f2c-94ed-62b0226349ed` | `abd4e96d-3f6d-47ca-8a2e-5083820bd794` | `cbdbbd80-1302-4a58-80f1-8a7cb5fd4e91` | Tuition & Enrollment Agreement |
+| 4 | `39013ba9-e3ee-41c0-a737-17ff6525fa13` | `a9a8780c-577c-452a-bea0-4b9786eb818a` | `39d23215-f6b6-4745-81f5-6d9a8fa79da9` | Parent Handbook Acknowledgement |
+| 5 | `967d76ca-c07e-4aa3-b5bd-52b133fd5d7b` | `ba3e4b36-8451-4a7f-af88-41e9bcdda3ce` | `9f0500e3-552e-4285-9f28-46b3ef0c8307` | Direct Payment Authorization |
 
-Exact ids in `/tmp/items.txt` and in the realization stored on the case. **6 Forms, 6 published
+Uploads/signatures per Form: Certificate **1 upload / 2 signatures** · Nonmedical Exemption **2 uploads / 1** · Admissions Packet 0 / 0 (unsigned, still executable) · Tuition 0 / 1 · Handbook Acknowledgement 0 / 1 · Direct Payment 0 / 1.
+
+**6 Forms, 6 published
 versions, 1 packet, 6 items, 0 unpinned.**
 
 ## Before → after
