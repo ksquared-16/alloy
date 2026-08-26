@@ -1957,7 +1957,18 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-gp-conseq{margin-top:8px;}
 .gw-gp-conseq ul{margin:4px 0 0;padding-left:18px;}
 .gw-gp-conseq li{font-size:12px;color:var(--ink-2);margin:2px 0;}
-.gw-decision-bar{display:none;flex:0 0 auto;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);}
+/* THE APPROVAL SURFACE IS NOT A MOBILE FEATURE.
+   This was display:none with display:block only under max-width:860px, so on a
+   desktop the authorize button had no box at all — measured at height 0. The
+   only desktop surface left was renderCurrentWork inside the details rail, a
+   collapsible reference column that was itself inert, so there was no reachable
+   way to approve a governed action on a desktop at all.
+   It is now always shown, and it can scroll: a long proposal must never push its
+   own buttons out of reach, which is what happened on mobile at 390x844 where
+   the button sat at y=933 with no scrollable ancestor. */
+.gw-decision-bar{display:block;flex:0 0 auto;padding:10px 12px 12px;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);max-height:min(62vh, 560px);overflow-y:auto;overscroll-behavior:contain;}
+/* The actions stay put while the facts above them scroll. */
+.gw-decision-bar .gw-work-stale-actions{position:sticky;bottom:0;background:var(--card);padding-top:8px;margin-top:4px;}
 .gw-decision-h{margin:0 0 6px;font-size:11px;letter-spacing:.11em;text-transform:uppercase;color:var(--review);font-weight:700;}
 .gw-decision-bar .gw-work-stale{margin-top:0;padding:0;border:0;background:transparent;box-shadow:none;}
 .gw-work.is-run .gw-work-state{color:var(--run);}
@@ -2135,7 +2146,7 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .view:has(.gw.is-detail){padding-top:2px;}
   .gw-lane-stage{flex:1 1 auto;min-height:0;overflow:hidden;}
   .gw-claude-run{display:none;}
-  .gw-decision-bar{display:block;}
+  .gw-decision-bar{display:block;max-height:min(70vh, 620px);}
   .gw-decision-bar .gw-work-stale-actions{flex-direction:column;}
   /* A phone shows fewer paths and a bigger tap target on the disclosure. */
   .gw-ck-paths{max-height:160px;}

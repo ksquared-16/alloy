@@ -1522,7 +1522,7 @@ await test("governed operator wait shows Needs approval and Authorize merge", ()
   assert.match(cap.headline, /Needs approval/);
 });
 
-await test("mobile detail keeps Authorize and Deny above the composer", () => {
+await test("Authorize and Deny sit above the composer on every screen", () => {
   const run = {
     state: "WAITING_RESOURCE",
     resource_wait: {
@@ -1563,8 +1563,14 @@ await test("mobile detail keeps Authorize and Deny above the composer", () => {
   assert.equal(decisionAt >= 0 && approveAt >= 0 && composerAt >= 0, true);
   assert.equal(decisionAt < composerAt, true);
   assert.equal(approveAt < composerAt, true);
-  assert.match(css, /\.gw-decision-bar\{display:none/);
-  assert.match(css, /\.gw-decision-bar\{display:block;\}/);
+  // These once asserted display:none by default with display:block only under
+  // max-width:860px — encoding the defect as intent. That is why a desktop had
+  // no authorize button: the bar had no box, and the only other surface was
+  // renderCurrentWork inside the collapsible, inert details rail. The bar is a
+  // primary approval surface on every screen; the mobile rule now only adjusts
+  // its height budget.
+  assert.doesNotMatch(css, /\.gw-decision-bar\{display:none/);
+  assert.match(css, /\.gw-decision-bar\{display:block/);
   assert.match(css, /\.gw-decision-bar \.btn\{width:100%;min-height:44px/);
   assert.match(css, /\.gw-send\{min-height:44px;min-width:88px;width:auto/);
   assert.ok(css.includes(".gw-claude-run{display:none;}"));
@@ -2282,6 +2288,26 @@ test("controls that gate progress live in the conversation, not the rail", () =>
     const at = view.indexOf(`${fn}(`, bar);
     assert.ok(at > bar && at < composer, `${fn} must render in the conversation column`);
   }
+});
+
+test("the authorize button exists on every screen, not just mobile", () => {
+  // THE FAILURE THIS ENCODES. .gw-decision-bar was display:none by default and
+  // display:block only under max-width:860px, so on a desktop the approve button
+  // had no box at all — measured at height 0, top 0, bottom 0. The only other
+  // desktop surface was renderCurrentWork inside the details rail, a collapsible
+  // reference column that was itself inert. There was no reachable way to
+  // authorize a governed action on a desktop.
+  const css = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "styles.css"), "utf8");
+  const base = css.match(/^\.gw-decision-bar\{[^}]*\}/m);
+  assert.ok(base, "the decision bar must have a base rule");
+  assert.doesNotMatch(base[0], /display:\s*none/, "the approval surface must never default to display:none");
+  assert.match(base[0], /display:\s*block/);
+  // A long proposal must not push its own buttons out of reach: at 390x844 the
+  // button sat at y=933 with no scrollable ancestor.
+  assert.match(base[0], /max-height:/);
+  assert.match(base[0], /overflow-y:\s*auto/);
+  // And the actions stay reachable while the facts scroll.
+  assert.match(css, /\.gw-decision-bar \.gw-work-stale-actions\{[^}]*position:\s*sticky/);
 });
 
 await Promise.all(started);
