@@ -241,6 +241,24 @@ try {
 // empty list is the honest answer rather than an assumed zero.
 const reclaimsInFlight = seatStates.filter((s) => s.reclaim_in_progress === true);
 
+// ── Validation routing: did heavy work go through the single authority? ─────
+let validationRouting = null;
+let validationBypasses = [];
+try {
+  const VR = await import("./lib/vacilando/validation-routing.mjs");
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const claims = VA.readClaimStore({}).claims || [];
+  const unbrokered = VR.classifyUnbrokered(workloads, { claims });
+  const bypassPath = join(process.env.ALLOY_RUNTIME_ROOT || join(homedir(), ".local", "state", "alloy-dev"),
+    "vacilando", "validation-bypass", "events.jsonl");
+  if (existsSync(bypassPath)) {
+    // Bounded: only today's tail matters for a health verdict.
+    validationBypasses = readFileSync(bypassPath, "utf8").trim().split("\n").slice(-200)
+      .map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+  }
+  validationRouting = VR.summarizeRouting({ claims, unbrokered, bypasses: validationBypasses });
+} catch { validationRouting = null; }
+
 const RUN_BOUNDS = {
   instruction_delivered: 6 * 60 * 60 * 1000,
   admission_delivered: 6 * 60 * 60 * 1000,
@@ -323,6 +341,7 @@ const report = composeReport({
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
     run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, configured_max: configuredMax,
+    validation_routing: validationRouting, validation_bypasses: validationBypasses,
     toolkit_plan: toolkitState, toolkit_severity: toolkitSeverity,
     disk_pressure: Boolean(disk && disk.free_pct != null && disk.free_pct < 10),
     seat_states: seatStates, seat_summary: seatSummary, idle_grace_policy: idleGracePolicy,

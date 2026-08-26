@@ -66,6 +66,13 @@ const HEALTHY_PROBES = {
   worktrees: { onDisk: 3, registered: 3, unmanaged: [] },
   // S9: health reads the retention OWNER's plan; it no longer counts
   // directories. A fixture with no plan is deliberately INCOMPLETE.
+  // Validation routing: every heavy workload went through the one authority.
+  validation_routing: {
+    governed_claims: 1, escaped: 0, external: 0,
+    bypass_events: { routed: 0, ambiguous: 0, unclassifiable: 0, escaped: 0, external: 0 },
+    capacity_authority: ["validation-admission"],
+  },
+  validation_bypasses: [],
   toolkit_plan: toolkitPlan({ total: 5, retained: 5, prunable: 0 }),
   toolkit_severity: { severity: "healthy", why: "toolkit retention is within the configured envelope" },
   configured_max: 3,

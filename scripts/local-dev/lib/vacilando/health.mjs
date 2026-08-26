@@ -37,6 +37,7 @@ export const CHECKS = Object.freeze([
   "provider.capacity",
   "provider.seats",
   "validation.collisions",
+  "validation.routing",
   "runs.stale",
   "providers.orphaned",
   "subprocess.ancestry",
@@ -470,6 +471,61 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, cap
  * machine wait past its bound is not. A wait nobody defined is invalid and is
  * surfaced rather than kept alive.
  */
+/**
+ * Validation routing — is the broker actually the only way in?
+ *
+ * `validation.collisions` reports COST. This reports OWNERSHIP: whether heavy
+ * work on this host went through the single capacity authority, and where it
+ * did not, whose it was.
+ *
+ * THE DISTINCTION THAT DECIDES SEVERITY. Heavy work owned by a MANAGED provider
+ * running unbrokered is an ESCAPE — the routing this slice installed did not
+ * hold, and that is a problem. Heavy work with no managed owner is a person in
+ * their own shell: observed, never governed, never killed, and not a defect.
+ * Collapsing the two would either cry wolf about every terminal on the machine
+ * or hide the one case that matters.
+ */
+export function checkValidationRouting({ routing = null, bypasses = [] }) {
+  if (!routing) {
+    return incompleteFinding("validation.routing", "the routing owner did not report; health does not re-derive it");
+  }
+  const escaped = routing.escaped || 0;
+  const external = routing.external || 0;
+  const ambiguous = (routing.bypass_events?.ambiguous || 0) + (routing.bypass_events?.unclassifiable || 0);
+  const routed = routing.bypass_events?.routed || 0;
+
+  const severity = escaped > 0 ? "problem"
+    : ambiguous > 0 ? "watch"
+      : external > 0 ? "watch" : "healthy";
+
+  return finding({
+    check: "validation.routing",
+    severity,
+    owner_resource: "vacilando.validation_capacity",
+    measurements: {
+      governed_claims: routing.governed_claims || 0,
+      managed_provider_escapes: escaped,
+      external_unbrokered: external,
+      routed_to_broker: routed,
+      unresolved_bypasses: ambiguous,
+      capacity_authority: routing.capacity_authority,
+    },
+    evidence: [
+      ...bypasses.slice(-6).map((b) => `${b.kind}: ${b.detail || b.command || ""}`.slice(0, 160)),
+    ],
+    explanation: escaped > 0
+      ? `${escaped} heavy workload(s) owned by a managed provider are running outside the broker.`
+      : ambiguous > 0
+        ? `${ambiguous} command(s) looked expensive but could not be governed safely; they ran and were recorded.`
+        : external > 0
+          ? `${external} unbrokered heavy workload(s) have no managed owner — observed, not governed.`
+          : "All heavy validation on this host went through the single capacity authority.",
+    suggested_action: escaped > 0
+      ? "A managed provider bypassed its own broker. Check that the PreToolUse routing hook is installed for that provider; nothing is killed to correct this."
+      : null,
+  });
+}
+
 export function checkRunsStale({ runs = [], bounds = {}, waits = null }) {
   if (waits) {
     const { counts, expired, invalid } = waits;
@@ -799,6 +855,10 @@ export function composeReport({
     cost: probeResults.workload_cost || null,
     capacity: probeResults.capacity || null,
     enforcement: probeResults.enforcement || null,
+  }));
+  safe("validation.routing", () => checkValidationRouting({
+    routing: probeResults.validation_routing || null,
+    bypasses: probeResults.validation_bypasses || [],
   }));
   safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {}, waits: probeResults.waits || null }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));

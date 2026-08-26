@@ -56,6 +56,7 @@ SUITES=(
   "development-governed-dependency.test.mjs"
   "development-toolkit-retention.test.mjs"
   "development-governed-dependency-runtime.test.mjs"
+  "development-validation-convergence.test.mjs"
 )
 
 PASS=0

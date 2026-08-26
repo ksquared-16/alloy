@@ -95,13 +95,26 @@ export function readClaimStore({ root = null, path = null, pidAlive = defaultPid
   }
   store.claims = live;
   store.reaped = reaped;
+
+  // The same recovery for WAITERS. A queued entry whose waiter has died is a
+  // phantom: it blocks nothing, but it is reported as contention and it
+  // survives forever, because nothing else ever removes it. Entries from before
+  // waiter_pid existed carry none, and are left alone rather than guessed at.
+  const liveQueue = [];
+  const abandoned = [];
+  for (const q of store.queue || []) {
+    if (q?.waiter_pid && !pidAlive(q.waiter_pid)) abandoned.push(q);
+    else liveQueue.push(q);
+  }
+  store.queue = liveQueue;
+  store.abandoned_waiters = abandoned;
   return store;
 }
 
 function writeClaimStore(store, { root = null, path = null } = {}) {
   const file = path || defaultStorePath(root);
   mkdirSync(dirname(file), { recursive: true });
-  const { reaped, ...persist } = store;
+  const { reaped, abandoned_waiters, ...persist } = store;
   // Write-then-rename: a crash mid-write must not leave a half-parsed ledger.
   const tmp = `${file}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(persist, null, 2)}\n`);
@@ -264,8 +277,37 @@ export function acquireCapacity({
   }
 
   if (!decision.admit) {
+    // A WAITER RE-ACQUIRES; IT DOES NOT RE-QUEUE.
+    //
+    // The waiting loops in vac-governed-validate and vac-validate-admit call
+    // this again on every retry. Appending each time left FOURTEEN queue rows
+    // for one waiter inside a minute — observed live under real memory
+    // pressure — so status and health would report fourteen blocked workloads
+    // where there was one. Worse, each new row carried a FRESH wait_deadline,
+    // so the S6-shaped bound could never be reached: a wait that renews its own
+    // deadline is an unbounded wait wearing a bound.
+    //
+    // The existing row is updated in place and keeps its original
+    // waiting_since, wait_deadline and request_id.
+    const priorIndex = (store.queue || []).findIndex((q) => q.workload_id === workload.workload_id);
+    if (priorIndex >= 0) {
+      const prior = store.queue[priorIndex];
+      const updated = {
+        ...prior,
+        blocked_by: decision.blocked_by,
+        current_held: decision.held ?? heldWeight(store),
+        budget: decision.budget ?? prior.budget ?? null,
+        observations: Number(prior.observations || 0) + 1,
+        last_observed_at: now,
+      };
+      store.queue[priorIndex] = updated;
+      writeClaimStore(store, { root, path });
+      return { ...decision, claim: null, queued: true, queue_entry: updated, requeued: false, store_reaped: store.reaped?.length || 0 };
+    }
     const entry = {
       request_id: `vq_${now.toString(36)}_${(store.queue?.length || 0) + 1}`,
+      // So a waiter that dies can be reaped, exactly as a dead claim is.
+      waiter_pid: pid ?? null,
       workload_id: workload.workload_id,
       lane_id: workload.lane_id ?? null,
       execution_run_id: workload.execution_run_id ?? null,
