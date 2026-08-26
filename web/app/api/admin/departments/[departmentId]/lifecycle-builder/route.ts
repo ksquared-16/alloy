@@ -28,7 +28,15 @@ import {
     updateProcessCommandSet,
     parseLifecycleBuilderV1,
     type LifecycleBuilderV1,
+    setProcessEntryPoint,
+    setStageRequirements,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { isProcessEntryIntent, PROCESS_ENTRY_INTENTS } from "@/lib/lifecycle/processEntryPointsV1";
+import {
+    isAuthorableRequirementKind,
+    parseStageRequirementsV1,
+    REQUIREMENT_KIND_UNSUPPORTED_REASON_V1,
+} from "@/lib/lifecycle/stageRequirementsV1";
 import { loadBusinessProcessEditorState } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
 import {
     draftBuilder,
@@ -262,6 +270,78 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 );
                 if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
                 config = updateProcessDescription(config, processId, description);
+                break;
+            }
+            case "set_process_entry_point": {
+                // D-103. One intent, one stage, authored explicitly — the stage is never inferred,
+                // because inferring it would make "which stage does a journey start in" a thing the
+                // platform decided rather than a thing configuration says.
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const intentRaw = typeof body.intent === "string" ? body.intent.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!isProcessEntryIntent(intentRaw)) {
+                    return NextResponse.json(
+                        { error: `"${intentRaw}" is not an initiation this platform can supply.`, known_intents: [...PROCESS_ENTRY_INTENTS] },
+                        { status: 400 }
+                    );
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                // Active, not merely present: publish refuses an entry stage that is not active, and
+                // catching it here means the operator hears it now instead of at publication.
+                const entryStage = targetProcess.stages.find((st) => st.key === stageKey && st.is_active);
+                if (!entryStage) {
+                    return NextResponse.json(
+                        { error: `Stage "${stageKey}" is not an active stage of this process.` },
+                        { status: 400 }
+                    );
+                }
+                config = setProcessEntryPoint(config, processId, intentRaw, stageKey);
+                break;
+            }
+            case "set_stage_requirements": {
+                // Replaces the whole authored section for one stage. An authored empty array is a
+                // legitimate statement ("this stage requires nothing") and stays distinct from a
+                // stage that never authored one, where the legacy projection still answers.
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                if (!processId) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                if (!stageKey) return NextResponse.json({ error: "stage_key is required" }, { status: 400 });
+                if (!Array.isArray(body.requirements)) {
+                    return NextResponse.json({ error: "requirements must be an array" }, { status: 400 });
+                }
+                const targetProcess = config.processes.find((p) => p.id === processId);
+                if (!targetProcess) return NextResponse.json({ error: "Unknown process" }, { status: 404 });
+                if (!targetProcess.stages.some((st) => st.key === stageKey)) {
+                    return NextResponse.json({ error: `Unknown stage "${stageKey}"` }, { status: 404 });
+                }
+                const parsed = parseStageRequirementsV1({ version: 1, requirements: body.requirements });
+                if (!parsed) return NextResponse.json({ error: "requirements could not be read" }, { status: 400 });
+                // The canonical parser SKIPS a row it cannot read. That is right for reading stored
+                // configuration and wrong for authoring: silently accepting four of five would tell
+                // the operator their fifth requirement exists when it does not.
+                if (parsed.requirements.length !== body.requirements.length) {
+                    return NextResponse.json(
+                        { error: "One or more requirements are not readable — each needs a unique requirement_id, a known kind with its reference, and a level." },
+                        { status: 400 }
+                    );
+                }
+                for (const requirement of parsed.requirements) {
+                    if (isAuthorableRequirementKind(requirement.ref.kind)) continue;
+                    return NextResponse.json(
+                        {
+                            error: `Requirements of kind "${requirement.ref.kind}" cannot be authored yet.`,
+                            reason: REQUIREMENT_KIND_UNSUPPORTED_REASON_V1[
+                                requirement.ref.kind as keyof typeof REQUIREMENT_KIND_UNSUPPORTED_REASON_V1
+                            ],
+                            requirement_id: requirement.requirement_id,
+                        },
+                        { status: 400 }
+                    );
+                }
+                config = setStageRequirements(config, processId, stageKey, parsed);
                 break;
             }
             case "set_active_process": {

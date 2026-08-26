@@ -38,6 +38,7 @@ import {
 } from "@/lib/lifecycle/processCommandSetV1";
 import { tryResolvePlatformCapability } from "@/lib/platform/commands/capabilityRegistry";
 import { parseParticipationConfigV1, type ParticipationConfigV1 } from "@/lib/process/participationConfig";
+import type { ProcessEntryIntentV1 } from "@/lib/lifecycle/processEntryPointsV1";
 import {
     parseProcessEntryPointsV1,
     serializeProcessEntryPointsV1,
@@ -486,6 +487,76 @@ export function updateProcessDescription(
         ...config,
         processes: config.processes.map((p) =>
             p.id === processId ? { ...p, description: trimmed || undefined } : p
+        ),
+    };
+}
+
+/**
+ * Map one entry INTENT to one stage (D-103).
+ *
+ * Merges into `by_intent` rather than replacing it: the two intents are independent statements, and
+ * authoring one must never silently retract the other.
+ *
+ * Pure. Validation — that the intent is known and the stage is an active stage of this process —
+ * belongs to the caller, which is where a bad value can be reported as a bad request rather than
+ * disappearing into a no-op.
+ */
+export function setProcessEntryPoint(
+    config: LifecycleBuilderV1,
+    processId: string,
+    intent: ProcessEntryIntentV1,
+    stageKey: string
+): LifecycleBuilderV1 {
+    return {
+        ...config,
+        processes: config.processes.map((p) =>
+            p.id === processId
+                ? {
+                      ...p,
+                      entry_points_v1: {
+                          version: 1,
+                          by_intent: { ...(p.entry_points_v1?.by_intent ?? {}), [intent]: stageKey },
+                      },
+                  }
+                : p
+        ),
+    };
+}
+
+/**
+ * Replace the authored requirements section of exactly ONE stage.
+ *
+ * Replace, never merge: `requirements_v1` is a whole authored statement, and row-merging would make
+ * a removal impossible to express — the operator would have no way to say "this stage requires
+ * nothing" that the next save could distinguish from "nothing was authored".
+ *
+ * That distinction is the reason the section is set unconditionally rather than only when non-empty.
+ * Presence IS authority (D-90): an authored `[]` means canonical has spoken and requires nothing,
+ * while absence means canonical is silent and the legacy projection still answers. Materializing an
+ * empty section where one was never authored would silently switch a stage's authority; dropping an
+ * authored empty one would silently switch it back.
+ *
+ * Pure. Nothing here validates a requirement — `parseStageRequirementsV1` and
+ * `isAuthorableRequirementKind` already own that, and a second copy would be the parallel requirement
+ * engine the doctrine forbids.
+ */
+export function setStageRequirements(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageKey: string,
+    requirements: StageRequirementsV1
+): LifecycleBuilderV1 {
+    return {
+        ...config,
+        processes: config.processes.map((p) =>
+            p.id === processId
+                ? {
+                      ...p,
+                      stages: p.stages.map((s) =>
+                          s.key === stageKey ? { ...s, requirements_v1: requirements } : s
+                      ),
+                  }
+                : p
         ),
     };
 }
