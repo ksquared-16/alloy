@@ -30,6 +30,9 @@ function StageConfigStatus({ stage }: { stage: LifecycleBuilderStageRecord }) {
     return null;
 }
 
+/** The rail's "no filter" option. Not a track — the absence of one. */
+export const ALL_TRACKS_KEY = "__all__" as const;
+
 export default function BusinessProcessStagesListColumn({
     stages,
     activeStageKey,
@@ -53,7 +56,12 @@ export default function BusinessProcessStagesListColumn({
     // One track is not a choice, and rendering a switcher for it would imply stages are hidden when
     // none are.
     const showTracks = Boolean(tracks && tracks.length > 1 && onSelectTrack);
+    // "All" is the process itself, so it carries no track key. It is first because it is the honest
+    // default view of a process: a filter should be something you choose, not something you are
+    // silently already inside.
+    const options = showTracks ? [{ key: ALL_TRACKS_KEY, label: "All" }, ...tracks!] : [];
     const activeTrackLabel = tracks?.find((t) => t.key === activeTrackKey)?.label ?? null;
+    const scopeLabel = activeTrackKey === ALL_TRACKS_KEY ? "the whole process" : activeTrackLabel;
 
     return (
         <div className="space-y-3" data-testid="business-process-stages-list-column">
@@ -69,8 +77,8 @@ export default function BusinessProcessStagesListColumn({
                      * disappeared from the product without anything looking broken.
                      */}
                     <p className="text-[10px] text-alloy-midnight/45" data-testid="business-process-stages-count">
-                        {showTracks && activeTrackLabel
-                            ? `${stages.length} stage${stages.length === 1 ? "" : "s"} in ${activeTrackLabel}`
+                        {showTracks && scopeLabel
+                            ? `${stages.length} stage${stages.length === 1 ? "" : "s"} in ${scopeLabel}`
                             : `${stages.length} configured`}
                     </p>
                 </div>
@@ -90,7 +98,7 @@ export default function BusinessProcessStagesListColumn({
                     aria-label="Stage track"
                     data-testid="business-process-track-switcher"
                 >
-                    {tracks!.map((track) => {
+                    {options.map((track) => {
                         const active = track.key === activeTrackKey;
                         return (
                             <button
@@ -100,10 +108,13 @@ export default function BusinessProcessStagesListColumn({
                                 aria-selected={active}
                                 data-testid={`business-process-track-${track.key}`}
                                 onClick={() => onSelectTrack!(track.key)}
+                                // Selected state is Alloy pine, per the Configuration Mode doctrine
+                                // in configurationRuntime.css: "selected state uses Alloy pine —
+                                // never blue/slate admin".
                                 className={
                                     active
-                                        ? "rounded-full bg-alloy-midnight px-2.5 py-1 text-[10px] font-semibold text-white"
-                                        : "rounded-full bg-alloy-midnight/[0.06] px-2.5 py-1 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-midnight/10"
+                                        ? "rounded-full bg-alloy-bend-pine/10 px-2.5 py-1 text-[10px] font-semibold text-alloy-bend-pine ring-1 ring-alloy-bend-pine/28"
+                                        : "rounded-full bg-alloy-forge/[0.06] px-2.5 py-1 text-[10px] font-medium text-alloy-forge/70 hover:bg-alloy-bend-pine/[0.06] hover:text-alloy-bend-pine"
                                 }
                             >
                                 {track.label}

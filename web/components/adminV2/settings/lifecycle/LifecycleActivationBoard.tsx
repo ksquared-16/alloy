@@ -28,7 +28,7 @@ import {
     BUSINESS_PROCESS_HISTORY_TITLE,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import BusinessProcessConfigurationShell from "@/components/adminV2/settings/businessProcess/BusinessProcessConfigurationShell";
-import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
+import BusinessProcessStagesListColumn, { ALL_TRACKS_KEY } from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
 import BusinessProcessWorkViewsListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsListColumn";
 import BusinessProcessWorkViewsSetupWorkspace from "@/components/adminV2/settings/businessProcess/BusinessProcessWorkViewsSetupWorkspace";
 import BusinessProcessParticipationCard from "@/components/adminV2/settings/businessProcess/BusinessProcessParticipationCard";
@@ -1247,6 +1247,8 @@ export default function LifecycleActivationBoard({
 
     const navStages = useMemo(() => {
         if (!processTracks || !builderProcess) return builderStages;
+        // "All" is the process in its canonical order — the same list Overview and Journey count.
+        if (activeTrackKey === ALL_TRACKS_KEY) return activeStagesForProcess(builderProcess);
         return stagesForTrack(builderProcess, activeTrackKey);
     }, [activeTrackKey, builderProcess, builderStages, processTracks]);
 
@@ -1346,7 +1348,9 @@ export default function LifecycleActivationBoard({
             setProcessTracks(tracks);
             if (tracks?.tracks.length) {
                 setActiveTrackKey((prev) =>
-                    tracks.tracks.some((t) => t.key === prev) ? prev : tracks.tracks[0]!.key,
+                    prev === ALL_TRACKS_KEY || tracks.tracks.some((t) => t.key === prev)
+                        ? prev
+                        : tracks.tracks[0]!.key,
                 );
             }
             if (process) {
@@ -1459,7 +1463,8 @@ export default function LifecycleActivationBoard({
             if (!key || key === activeTrackKey) return;
             setActiveTrackKey(key);
             if (!builderProcess) return;
-            const next = stagesForTrack(builderProcess, key);
+            const next =
+                key === ALL_TRACKS_KEY ? activeStagesForProcess(builderProcess) : stagesForTrack(builderProcess, key);
             if (!next.length) return;
             // Keep the current stage when it belongs to the track being opened; otherwise open the
             // first stage of that track so the editor always points at something the rail shows.

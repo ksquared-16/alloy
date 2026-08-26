@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import BusinessProcessPublicationBar from "@/components/adminV2/settings/lifecycle/BusinessProcessPublicationBar";
 import StageFormRequirementsEditor from "@/components/adminV2/settings/lifecycle/StageFormRequirementsEditor";
+import StagePaperworkCard from "@/components/adminV2/settings/lifecycle/StagePaperworkCard";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
@@ -957,9 +958,14 @@ export default function StageEditorV2({
                                 entityDisplayLabels={entityDisplayLabels ?? bootstrap?.entity_display_labels ?? undefined}
                                 onDirtyChange={setFieldDirty}
                             />
-                            {/* Form requirements sit beside field requirements because they answer the
-                                same operator question — what this stage requires — and differ only in
-                                what the requirement references. */}
+                            {/* The director's sentence first; the canonical rows underneath it. */}
+                            <StagePaperworkCard
+                                departmentId={departmentId}
+                                stageKey={stageKey}
+                                stageRecord={stageRecord ?? null}
+                                process={process ?? null}
+                                onSaved={onReloadConfiguration}
+                            />
                             <StageFormRequirementsEditor
                                 departmentId={departmentId}
                                 stageKey={stageKey}

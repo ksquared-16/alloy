@@ -170,10 +170,11 @@ export default function StageFormRequirementsEditor({
         <div data-testid="stage-form-requirements" className="mt-4 border-t border-alloy-midnight/8 pt-4">
             <div className="mb-2 flex items-center gap-1.5">
                 <ClipboardList size={13} className="text-alloy-midnight/45" />
-                <h4 className="text-[0.8125rem] font-semibold text-alloy-midnight">Forms this stage requires</h4>
+                <h4 className="text-[0.8125rem] font-semibold text-alloy-midnight">Advanced · individual requirements</h4>
             </div>
             <p className="stage-field__hint mb-3">
-                The packet a family is given is built from these, in this order. Nothing is asked of a family until you publish.
+                The rows behind “Enrollment paperwork”. Edit here to set a level or enforcement per form; most
+                directors should choose a packet above instead.
             </p>
 
             {rows.length === 0 ? (
@@ -202,7 +203,7 @@ export default function StageFormRequirementsEditor({
                                 <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/55">
                                     Level
                                     <select
-                                        className="rounded border border-alloy-midnight/15 bg-white px-1.5 py-0.5 text-[0.6875rem]"
+                                        className="rounded border border-alloy-forge/20 bg-white px-1.5 py-0.5 text-[0.6875rem]"
                                         value={row.level}
                                         onChange={(e) =>
                                             setRows((prev) => prev.map((r) => (r.requirement_id === row.requirement_id ? { ...r, level: e.target.value as PersistedRequirementLevel } : r)))
@@ -214,7 +215,7 @@ export default function StageFormRequirementsEditor({
                                 <label className="flex items-center gap-1 text-[0.6875rem] text-alloy-midnight/55">
                                     Enforcement
                                     <select
-                                        className="rounded border border-alloy-midnight/15 bg-white px-1.5 py-0.5 text-[0.6875rem]"
+                                        className="rounded border border-alloy-forge/20 bg-white px-1.5 py-0.5 text-[0.6875rem]"
                                         value={row.enforcement}
                                         onChange={(e) =>
                                             setRows((prev) => prev.map((r) => (r.requirement_id === row.requirement_id ? { ...r, enforcement: e.target.value as RequirementEnforcement } : r)))
@@ -238,7 +239,7 @@ export default function StageFormRequirementsEditor({
                     <Plus size={12} />
                     <select
                         data-testid="stage-form-requirements-add"
-                        className="rounded-lg border border-alloy-midnight/15 bg-white px-2 py-1 text-[0.75rem]"
+                        className="rounded-lg border border-alloy-forge/20 bg-white px-2 py-1 text-[0.75rem]"
                         value=""
                         disabled={busy || addable.length === 0}
                         onChange={(e) => {
@@ -257,7 +258,7 @@ export default function StageFormRequirementsEditor({
                 <button
                     type="button"
                     data-testid="stage-form-requirements-save"
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-midnight px-3 py-1.5 text-[0.75rem] font-semibold text-white disabled:opacity-40"
+                    className="config-primary-btn config-primary-btn--sm gap-1.5"
                     disabled={busy}
                     onClick={() => void saveRequirements()}
                 >
@@ -281,7 +282,7 @@ export default function StageFormRequirementsEditor({
                 <button
                     type="button"
                     data-testid="stage-entry-point-set"
-                    className="rounded-lg border border-alloy-midnight/15 px-3 py-1.5 text-[0.75rem] font-semibold text-alloy-midnight disabled:opacity-40"
+                    className="config-secondary-btn config-secondary-btn--sm"
                     disabled={busy || isEntryStage}
                     onClick={() => void setEntryPoint()}
                 >

@@ -78,7 +78,8 @@ describe("what it puts on screen", () => {
             ]),
             process: process(),
         });
-        expect(html).toContain("Forms this stage requires");
+        // Demoted: the primary surface is now StagePaperworkCard; this is the advanced detail.
+        expect(html).toContain("Advanced · individual requirements");
         expect(html).toContain(FORM); // no forms list loaded server-side, so the id is the fallback label
         expect(html).toContain("Save requirements");
     });

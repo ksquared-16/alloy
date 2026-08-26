@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import BusinessProcessStagesListColumn from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
+import BusinessProcessStagesListColumn, { ALL_TRACKS_KEY } from "@/components/adminV2/settings/businessProcess/BusinessProcessStagesListColumn";
 import { stagesForTrack } from "@/lib/businessProcesses/businessProcessConfigReader";
 import { activeStagesForProcess, type LifecycleBuilderProcessRecord, type LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
 
@@ -47,10 +47,13 @@ const PROCESS = {
     sort_order: 0, is_active: true, stages: STAGES,
 } as LifecycleBuilderProcessRecord;
 
+const listFor = (trackKey: string) =>
+    trackKey === ALL_TRACKS_KEY ? activeStagesForProcess(PROCESS) : stagesForTrack(PROCESS, trackKey);
+
 const render = (trackKey: string) =>
     renderToStaticMarkup(
         <BusinessProcessStagesListColumn
-            stages={stagesForTrack(PROCESS, trackKey)}
+            stages={listFor(trackKey)}
             activeStageKey=""
             onSelect={() => {}}
             onAddStageClick={() => {}}
@@ -137,5 +140,48 @@ describe("switching tracks moves the selection with it", () => {
         expect(BOARD).toContain("tracks={processTracks?.tracks}");
         expect(BOARD).toContain("activeTrackKey={activeTrackKey}");
         expect(BOARD).toContain("onSelectTrack={selectTrack}");
+    });
+});
+
+describe("the All view", () => {
+    it("offers All first, before the tracks", () => {
+        const html = render(ALL_TRACKS_KEY);
+        expect(html).toContain(`data-testid="business-process-track-${ALL_TRACKS_KEY}"`);
+        // First, because a filter should be something you choose rather than something you are
+        // silently already inside — which is how four stages went missing.
+        expect(html.indexOf(`business-process-track-${ALL_TRACKS_KEY}`)).toBeLessThan(
+            html.indexOf("business-process-track-family_track"),
+        );
+    });
+
+    it("lists all eight stages in canonical process order", () => {
+        expect(listFor(ALL_TRACKS_KEY).map((s) => s.key)).toEqual([
+            "lead", "tour", "decision", "closed", "waitlist", "enrolling", "enrolled", "closed_withdrawn",
+        ]);
+    });
+
+    it("counts the whole process, and says so", () => {
+        expect(render(ALL_TRACKS_KEY)).toContain("8 stages in the whole process");
+    });
+
+    it("agrees with the process-level count Overview shows", () => {
+        expect(listFor(ALL_TRACKS_KEY)).toHaveLength(activeStagesForProcess(PROCESS).length);
+    });
+
+    it("is honoured by the board, and survives a reload", () => {
+        expect(BOARD).toContain("if (activeTrackKey === ALL_TRACKS_KEY) return activeStagesForProcess(builderProcess);");
+        // The load path used to fall back to tracks[0]; an operator viewing All must not be silently
+        // pushed back into the Family track by a refresh.
+        expect(BOARD).toContain("prev === ALL_TRACKS_KEY || tracks.tracks.some((t) => t.key === prev)");
+    });
+});
+
+describe("visual language", () => {
+    it("uses Alloy pine for the selected track, not a dark admin fill", () => {
+        // configurationRuntime.css states the doctrine: "selected state uses Alloy pine — never
+        // blue/slate admin".
+        const html = render("family_track");
+        expect(html).toContain("text-alloy-bend-pine");
+        expect(html).not.toContain("bg-alloy-midnight");
     });
 });
