@@ -4444,6 +4444,14 @@ export function renderGatewayShell({
   latestResponse = null,
   newUpdate = false,
   asideOpen = false,
+  // INERT IS NOT THE SAME AS CLOSED. On desktop the details pane is a permanent
+  // grid column — no rule hides it, and the fold preference changes nothing you
+  // can see. Marking it inert whenever it was "closed" therefore left a pane
+  // that was fully visible and completely dead: Chromium does not hit-test an
+  // inert subtree, so the wheel fell through to an ancestor with overflow:hidden
+  // and nothing scrolled, while every control inside it silently ignored clicks.
+  // Only the mobile drawer is ever genuinely hidden, so only it may be inert.
+  asideInert = !asideOpen,
   userMessageExpanded = false,
   folders = [],
   collapsedFolders,
@@ -4576,7 +4584,7 @@ export function renderGatewayShell({
   // used to be split between an inline <details> under the thread and a second
   // "Lane details" fold in the aside, so the same lane facts appeared twice and
   // neither place was complete.
-  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideOpen ? "" : ' aria-hidden="true" inert'}>
+  const detailsPanel = `<aside class="gw-lane-aside" data-gw-aside id="gw-details-panel"${asideInert ? ' aria-hidden="true" inert' : ""}>
         <div class="gw-aside-head">
           <div class="gw-aside-title">Details</div>
           <button type="button" class="btn sm gw-aside-close" data-gw-aside-close aria-label="Close details">Close</button>
@@ -4592,13 +4600,10 @@ export function renderGatewayShell({
           ${renderNotificationControls(notify || {})}
           ${renderLaneLocalhost(lane)}
           ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
-          ${renderContextRefreshButton(lane)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
           ${renderClaudeRunStatus(lane, telemetry)}
           ${renderProviderHealth(output?.provider_health)}
           ${ctxLine ? `<p class="gw-context" data-gw-context>${esc(ctxLine)}</p>` : ""}
-          ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
-          ${renderLaneSessionCallout(lane, { executionCapacity })}
           ${renderRecentSystemActivity(lane?.recent_system_activity)}
           ${renderTerminalDiagnostics(bodyText, { pending, output })}
           ${statusHtml}
@@ -4638,6 +4643,19 @@ export function renderGatewayShell({
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderBrowserAuthRecovery(lane)}
         ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
+        ${/*
+          ACTIONS BELONG WHERE THE CONVERSATION IS.
+          These three were in the details rail: the session callout that says
+          Claude's session failed, the runtime controls that keep or release the
+          lane, and the context refresh. Each one gates progress, and the rail is
+          the wrong home for anything that does — it is a reference column the
+          Director may have collapsed, it is the first thing to run out of room,
+          and while it was inert it could not be scrolled or clicked at all. An
+          action the operator cannot reach is the same as no action.
+        */ ""}
+        ${renderLaneSessionCallout(lane, { executionCapacity })}
+        ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
+        ${renderContextRefreshButton(lane)}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}

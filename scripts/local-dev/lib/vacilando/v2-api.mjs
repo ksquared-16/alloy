@@ -8,6 +8,7 @@ import {
   approveMissionExecution,
   getKickoffState,
 } from "./mission-kickoff.mjs";
+import { hostname as osHostname } from "node:os";
 import { getBrief, getBriefVersion, listBriefVersions, proposeBriefRevision, createBrief } from "./mission-brief.mjs";
 import { readTimelineSummary, summarizeFromTimeline, readTimeline } from "./timeline.mjs";
 import {
@@ -150,6 +151,32 @@ function authGate(path, method, headers) {
   return { ok: true, actor: auth.actor };
 }
 
+/** Slot from a worktree path, for a lane whose binding has not recorded one. */
+function laneSlotFromPath(lane) {
+  const m = String(lane?.binding?.worktree_path || "").match(/\/wt(\d)-/);
+  return m ? Number(m[1]) : null;
+}
+
+function gatewayHostLabel() {
+  try { return osHostname(); } catch { return "the Gateway host"; }
+}
+
+/**
+ * Whether the Director is reading this UI ON the Gateway host.
+ *
+ * Judged from the Host header, because that is what separates a loopback visit
+ * from a tailnet one: the Gateway answers at both 127.0.0.1:3020 and
+ * <machine>.<tailnet>.ts.net:3020, and only the first can see a window that
+ * opens on this machine's screen. Returns null when it cannot tell, so the copy
+ * stays honest instead of asserting the wrong one.
+ */
+function requestIsFromGatewayHost(headers = {}) {
+  const host = String(headers.host || headers.Host || "").trim().toLowerCase();
+  if (!host) return null;
+  const name = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  return name === "127.0.0.1" || name === "localhost" || name === "::1";
+}
+
 export async function handleV2Post(path, body, { headers = {} } = {}) {
   const v = body || {};
   const gate = authGate(path, "POST", headers);
@@ -157,6 +184,87 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
   const actorDefault = gate.actor || v.actor || "operator";
   const idempotencyKey = v.idempotency_key || v.idempotencyKey || headers["x-idempotency-key"] || headers["X-Idempotency-Key"] || null;
 
+  // Browser-session recovery. THE AGENT MAY START A SIGN-IN AND MAY ABANDON ONE;
+  // IT MAY NEVER COMPLETE ONE. A person types the password into a browser this
+  // opens on the slot's own loopback base. Nothing typed reaches the agent, the
+  // request, the response or any durable record — the only thing that crosses
+  // this boundary is a state name.
+  if (path === "/api/v2/browser-auth/status"
+    || path === "/api/v2/browser-auth/sign-in"
+    || path === "/api/v2/browser-auth/verify") {
+    const {
+      validateBrowserAuthRequest, readSlotAuthStatus, verifyBrowserAuth,
+      beginBrowserAuthCapture, recordSlotVerification, publicAuthOutcome,
+      qaIdentityForSlot, BROWSER_AUTH_STATES,
+    } = await import("./browser-auth.mjs");
+    const { getDurableLane } = await import("./development-lane.mjs");
+    const laneId = v.lane_id || v.laneId;
+    const lane = laneId ? getDurableLane(laneId) : null;
+    if (!lane) return { status: 404, body: { ok: false, error: "lane_not_registered" } };
+    const slot = v.slot ?? lane.binding?.slot ?? null;
+    const validated = validateBrowserAuthRequest({
+      lane,
+      slot,
+      expectedIdentity: qaIdentityForSlot(slot ?? laneSlotFromPath(lane)),
+    });
+    if (!validated.ok) return { status: 409, body: validated };
+
+    const status = readSlotAuthStatus(validated.slot);
+    if (path === "/api/v2/browser-auth/status") {
+      return { status: 200, body: publicAuthOutcome({ validated, state: status.state, status, detail: status.detail }) };
+    }
+    if (path === "/api/v2/browser-auth/verify") {
+      const verdict = await verifyBrowserAuth(validated);
+      recordSlotVerification(validated.slot, {
+        state: verdict.state, expectedIdentity: validated.expected_identity,
+        actualIdentity: verdict.actual_identity, detail: verdict.detail,
+      });
+      return {
+        status: verdict.ok ? 200 : 409,
+        body: publicAuthOutcome({ validated, state: verdict.state, status, detail: verdict.detail }),
+      };
+    }
+    // sign-in: START the capture and answer immediately.
+    //
+    // WHY THIS DOES NOT WAIT. The capture is only finished when a person has
+    // typed a password, which can be minutes away. Awaiting it held the HTTP
+    // response open for the whole capture window, so the button sat on
+    // "Waiting for you to sign in…" with no other signal and looked broken —
+    // and any proxy between the operator and the Gateway would time the request
+    // out before the person ever finished.
+    //
+    // WHERE THE BROWSER APPEARS. On the Gateway HOST, because that is where the
+    // Playwright profile and the loopback base live. A Director reading this UI
+    // from a phone or another machine over the tailnet will see nothing happen,
+    // which is exactly what "the sign in link did not navigate anywhere" was.
+    // The response now says whose screen to look at, and whether this request
+    // came from that machine.
+    const capture = beginBrowserAuthCapture(validated, {
+      timeoutMs: Number.isFinite(Number(v.timeout_ms)) ? Number(v.timeout_ms) : undefined,
+    });
+    // Never let an abandoned capture surface as an unhandled rejection.
+    capture.catch(() => {});
+    const outcome = publicAuthOutcome({
+      validated,
+      state: BROWSER_AUTH_STATES.AWAITING_OPERATOR,
+      status,
+    });
+    const local = requestIsFromGatewayHost(headers);
+    return {
+      status: 202,
+      body: {
+        ...outcome,
+        capture_started: true,
+        browser_opens_on: gatewayHostLabel(),
+        viewer_is_on_host: local,
+        next_step: local === true
+          ? "A browser window is opening on this machine. Sign in there, then press Re-check."
+          : local === false
+            ? `The browser opens on ${gatewayHostLabel()}, not on this device. Sign in at that machine's screen, then press Re-check here.`
+            : `The browser opens on ${gatewayHostLabel()}. Sign in at that machine's screen, then press Re-check here.`,
+      },
+    };
+  }
   if (path === "/api/v2/lanes/create" || path === "/api/v2/lane/create") {
     const { createNewLaneRequest } = await import("./lane-identity-api.mjs");
     return createNewLaneRequest(v, { actor: actorDefault });
@@ -1495,64 +1603,6 @@ ${view.type ? `<div class="meta">${esc(view.type)}</div>` : ""}
       folders = listLaneFolders();
     } catch { /* organisation must never fail discovery */ }
     return { status: out.ok ? 200 : 503, body: { ...out, lanes, folders, development_resources: developmentResourceSnapshot() } };
-  }
-  // Browser-session recovery. THE AGENT MAY START A SIGN-IN AND MAY ABANDON ONE;
-  // IT MAY NEVER COMPLETE ONE. A person types the password into a browser this
-  // opens on the slot's own loopback base. Nothing typed reaches the agent, the
-  // request, the response or any durable record — the only thing that crosses
-  // this boundary is a state name.
-  if (path === "/api/v2/browser-auth/status"
-    || path === "/api/v2/browser-auth/sign-in"
-    || path === "/api/v2/browser-auth/verify") {
-    const {
-      validateBrowserAuthRequest, readSlotAuthStatus, verifyBrowserAuth,
-      beginBrowserAuthCapture, recordSlotVerification, publicAuthOutcome,
-      qaIdentityForSlot,
-    } = await import("./browser-auth.mjs");
-    const { getDurableLane } = await import("./development-lane.mjs");
-    const laneId = v.lane_id || v.laneId;
-    const lane = laneId ? getDurableLane(laneId) : null;
-    if (!lane) return { status: 404, body: { ok: false, error: "lane_not_registered" } };
-    const slot = v.slot ?? lane.binding?.slot ?? null;
-    const validated = validateBrowserAuthRequest({
-      lane,
-      slot,
-      expectedIdentity: qaIdentityForSlot(slot ?? laneSlotFromPath(lane)),
-    });
-    if (!validated.ok) return { status: 409, body: validated };
-
-    const status = readSlotAuthStatus(validated.slot);
-    if (path === "/api/v2/browser-auth/status") {
-      return { status: 200, body: publicAuthOutcome({ validated, state: status.state, status, detail: status.detail }) };
-    }
-    if (path === "/api/v2/browser-auth/verify") {
-      const verdict = await verifyBrowserAuth(validated);
-      recordSlotVerification(validated.slot, {
-        state: verdict.state, expectedIdentity: validated.expected_identity,
-        actualIdentity: verdict.actual_identity, detail: verdict.detail,
-      });
-      return {
-        status: verdict.ok ? 200 : 409,
-        body: publicAuthOutcome({ validated, state: verdict.state, status, detail: verdict.detail }),
-      };
-    }
-    // sign-in: opens the headed browser and waits for the PERSON.
-    const began = await beginBrowserAuthCapture(validated, {
-      timeoutMs: Number.isFinite(Number(v.timeout_ms)) ? Number(v.timeout_ms) : undefined,
-    });
-    if (!began.ok) {
-      return { status: 409, body: publicAuthOutcome({ validated, state: began.state, status, detail: began.detail }) };
-    }
-    const after = readSlotAuthStatus(validated.slot);
-    const verdict = await verifyBrowserAuth(validated);
-    recordSlotVerification(validated.slot, {
-      state: verdict.state, expectedIdentity: validated.expected_identity,
-      actualIdentity: verdict.actual_identity, detail: verdict.detail,
-    });
-    return {
-      status: verdict.ok ? 200 : 409,
-      body: publicAuthOutcome({ validated, state: verdict.state, status: after, detail: verdict.detail }),
-    };
   }
   if (path === "/api/v2/lane-folders") {
     const { listLaneFolders } = await import("./lane-folders.mjs");

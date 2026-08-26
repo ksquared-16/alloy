@@ -95,15 +95,24 @@ const htmlSrc = readFileSync(join(HERE, "../apps/vacilando/public/index.html"), 
 
 let pass = 0;
 let fail = 0;
-async function test(name, fn) {
-  try {
-    await fn();
-    pass += 1;
-    process.stdout.write(`ok  - ${name}\n`);
-  } catch (e) {
-    fail += 1;
-    process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
-  }
+// Every started test is tracked, because `test` is async: a call that is not
+// awaited settles in a microtask AFTER the synchronous tally at the bottom of
+// this file, so it was neither counted nor able to fail the run. Four tests were
+// silently invisible that way — a test that cannot fail is worse than no test.
+const started = [];
+function test(name, fn) {
+  const p = (async () => {
+    try {
+      await fn();
+      pass += 1;
+      process.stdout.write(`ok  - ${name}\n`);
+    } catch (e) {
+      fail += 1;
+      process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
+    }
+  })();
+  started.push(p);
+  return p;
 }
 
 const identity = {
@@ -1513,7 +1522,7 @@ await test("governed operator wait shows Needs approval and Authorize merge", ()
   assert.match(cap.headline, /Needs approval/);
 });
 
-await test("mobile detail keeps Authorize and Deny above the composer", () => {
+await test("Authorize and Deny sit above the composer on every screen", () => {
   const run = {
     state: "WAITING_RESOURCE",
     resource_wait: {
@@ -1554,8 +1563,14 @@ await test("mobile detail keeps Authorize and Deny above the composer", () => {
   assert.equal(decisionAt >= 0 && approveAt >= 0 && composerAt >= 0, true);
   assert.equal(decisionAt < composerAt, true);
   assert.equal(approveAt < composerAt, true);
-  assert.match(css, /\.gw-decision-bar\{display:none/);
-  assert.match(css, /\.gw-decision-bar\{display:block;\}/);
+  // These once asserted display:none by default with display:block only under
+  // max-width:860px — encoding the defect as intent. That is why a desktop had
+  // no authorize button: the bar had no box, and the only other surface was
+  // renderCurrentWork inside the collapsible, inert details rail. The bar is a
+  // primary approval surface on every screen; the mobile rule now only adjusts
+  // its height budget.
+  assert.doesNotMatch(css, /\.gw-decision-bar\{display:none/);
+  assert.match(css, /\.gw-decision-bar\{display:block/);
   assert.match(css, /\.gw-decision-bar \.btn\{width:100%;min-height:44px/);
   assert.match(css, /\.gw-send\{min-height:44px;min-width:88px;width:auto/);
   assert.ok(css.includes(".gw-claude-run{display:none;}"));
@@ -2183,5 +2198,118 @@ test("the sign-in route exists and the agent cannot complete one", () => {
   assert.doesNotMatch(api, /storage-state\.json["']?\s*\)?\s*,\s*["']utf8/);
 });
 
+// ── The recovery flow must be REACHABLE BY THE METHOD THE UI USES ────────────
+//
+// THE FAILURE THIS ENCODES. The routes were registered inside handleV2Get while
+// the card's buttons POST, so no request ever matched them and the button did
+// nothing at all. A GET could not work either: the handler reads `v`, the POST
+// body, which does not exist there. Asserting that the route STRINGS were
+// present in the file proved nothing — that is how this shipped twice.
+
+await test("browser-auth routes answer POST, which is what the buttons send", async () => {
+  const prevAuth = process.env.VACILANDO_REQUIRE_API_AUTH;
+  process.env.VACILANDO_REQUIRE_API_AUTH = "0";
+  try {
+    const api = await import("../lib/vacilando/v2-api.mjs");
+    for (const route of ["status", "sign-in", "verify"]) {
+      const out = await api.handleV2Post(`/api/v2/browser-auth/${route}`,
+        { lane_id: "lane_does_not_exist" }, { headers: { host: "127.0.0.1:3020" } });
+      // Unmatched routes return null. A registered route answers — here 404,
+      // because the lane is unknown, which is a REAL answer.
+      assert.ok(out, `${route} must be registered for POST`);
+      assert.equal(out.status, 404);
+      assert.equal(out.body.error, "lane_not_registered");
+    }
+  } finally {
+    if (prevAuth === undefined) delete process.env.VACILANDO_REQUIRE_API_AUTH;
+    else process.env.VACILANDO_REQUIRE_API_AUTH = prevAuth;
+  }
+});
+
+test("sign-in starts the capture without waiting for the person", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // Awaiting the capture held the HTTP response open for the whole sign-in
+  // window, so the button looked dead and proxies timed the request out.
+  assert.doesNotMatch(api, /await\s+beginBrowserAuthCapture\(/);
+  assert.match(api, /const\s+capture\s*=\s*beginBrowserAuthCapture\(/);
+  // An abandoned capture must never become an unhandled rejection.
+  assert.match(api, /capture\.catch\(/);
+});
+
+test("sign-in says whose screen the browser opens on", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // The Gateway answers on loopback AND over the tailnet. A Director reading
+  // this from a phone cannot see a window that opens on the host, and saying
+  // nothing about that is what "it did not navigate anywhere" was.
+  assert.match(api, /viewer_is_on_host/);
+  assert.match(api, /browser_opens_on/);
+  assert.match(api, /function requestIsFromGatewayHost/);
+  // Helpers must exist, not merely be called — a called-but-undefined helper
+  // throws only on the path that reaches it.
+  assert.match(api, /function laneSlotFromPath/);
+  assert.match(api, /function gatewayHostLabel/);
+});
+
+test("the desktop details pane is never inert", () => {
+  // INERT IS NOT CLOSED. On desktop the pane is a permanent column that no rule
+  // hides; marking it inert left it fully visible and completely dead — the
+  // wheel fell through to an overflow:hidden ancestor and nothing scrolled.
+  assert.match(gwSrc, /asideInert:\s*isMobileWidth\(\)\s*&&\s*!asideOpenNow\(\)/);
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  assert.match(view, /\$\{asideInert \? ' aria-hidden="true" inert' : ""\}/);
+  // The old form keyed inert off asideOpen; it must not come back.
+  assert.doesNotMatch(view, /\$\{asideOpen \? "" : ' aria-hidden="true" inert'\}/);
+});
+
+test("controls that gate progress live in the conversation, not the rail", () => {
+  // THE FAILURE THIS ENCODES. The session callout, the runtime keep/release
+  // controls and the context refresh sat in the details rail. The rail is a
+  // reference column: the Director can collapse it, it is the first thing to run
+  // out of room, and while it was inert it could not be scrolled or clicked at
+  // all — so every one of these actions was unreachable exactly when it mattered.
+  // An action the operator cannot reach is the same as no action.
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  const railStart = view.indexOf("const detailsPanel = ");
+  assert.ok(railStart > 0, "details rail template must exist");
+  const railEnd = view.indexOf("</aside>`;", railStart);
+  assert.ok(railEnd > railStart, "details rail template must terminate");
+  const rail = view.slice(railStart, railEnd);
+
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    assert.equal(rail.includes(`${fn}(`), false, `${fn} must not be rendered inside the details rail`);
+    assert.ok(view.includes(`${fn}(`), `${fn} must still be rendered somewhere`);
+  }
+
+  // They belong beside the approval cards, above the composer.
+  const bar = view.indexOf("renderOperatorDecisionBar(operatorDecisionRun(lane)");
+  const composer = view.indexOf("${renderComposer({", bar);
+  assert.ok(bar > 0 && composer > bar, "decision bar precedes the composer");
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    const at = view.indexOf(`${fn}(`, bar);
+    assert.ok(at > bar && at < composer, `${fn} must render in the conversation column`);
+  }
+});
+
+test("the authorize button exists on every screen, not just mobile", () => {
+  // THE FAILURE THIS ENCODES. .gw-decision-bar was display:none by default and
+  // display:block only under max-width:860px, so on a desktop the approve button
+  // had no box at all — measured at height 0, top 0, bottom 0. The only other
+  // desktop surface was renderCurrentWork inside the details rail, a collapsible
+  // reference column that was itself inert. There was no reachable way to
+  // authorize a governed action on a desktop.
+  const css = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "styles.css"), "utf8");
+  const base = css.match(/^\.gw-decision-bar\{[^}]*\}/m);
+  assert.ok(base, "the decision bar must have a base rule");
+  assert.doesNotMatch(base[0], /display:\s*none/, "the approval surface must never default to display:none");
+  assert.match(base[0], /display:\s*block/);
+  // A long proposal must not push its own buttons out of reach: at 390x844 the
+  // button sat at y=933 with no scrollable ancestor.
+  assert.match(base[0], /max-height:/);
+  assert.match(base[0], /overflow-y:\s*auto/);
+  // And the actions stay reachable while the facts scroll.
+  assert.match(css, /\.gw-decision-bar \.gw-work-stale-actions\{[^}]*position:\s*sticky/);
+});
+
+await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
