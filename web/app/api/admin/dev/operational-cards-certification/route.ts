@@ -5,6 +5,7 @@ import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import {
     ensureOperationalCardsCertification,
     inspectCertificationGraph,
+    diagnoseChildLens,
     repairOperationalCardsCertification,
     restoreOperationalCardsCertification,
     verifyOperationalCardsCertification,
@@ -74,6 +75,9 @@ export async function POST(request: NextRequest) {
             // Read-only: reports what survives and what is missing, and claims nothing.
             return NextResponse.json({ ok: true, graph: await inspectCertificationGraph(supabase, orgId) });
         }
+        if (action === "diagnose") {
+            return NextResponse.json({ ok: true, diagnose: await diagnoseChildLens(supabase, orgId) });
+        }
         if (action === "repair") {
             return NextResponse.json({
                 ok: true,
@@ -102,5 +106,5 @@ export async function POST(request: NextRequest) {
     }
 
     // Fail closed. An unrecognised verb is not a no-op that might have done something.
-    return NextResponse.json({ error: "action must be ensure | inspect | repair | restore | verify" }, { status: 400 });
+    return NextResponse.json({ error: "action must be ensure | inspect | diagnose | repair | restore | verify" }, { status: 400 });
 }

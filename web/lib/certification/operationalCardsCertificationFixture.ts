@@ -39,6 +39,7 @@ import { addChild } from "@/lib/records/addChildService";
 import { directEnroll } from "@/lib/records/directEnrollService";
 import { startEnrollment } from "@/lib/records/startEnrollmentService";
 import {
+    createEnrollmentProcessInstance,
     moveProcessInstanceStage,
     readEnrollmentInstanceStageKey,
     setProcessInstanceState,
@@ -246,6 +247,26 @@ export async function ensureOperationalCardsCertification(
         };
     }
 
+    /*
+     * THE HOUSEHOLD'S ENROLLMENT EPISODE.
+     *
+     * Resolved for the REUSE path too, not only when `create_lead` just returned one. Every child's
+     * journey has to be created inside it — see the context note in the loop below — and on a reused
+     * household the id was simply never looked up, which is how the certification children ended up
+     * with journeys that no child-grain Work View could ever contain.
+     */
+    if (!opportunityId) {
+        const { data: oppRow } = await supabase
+            .from("opportunities")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("customer_id", customerId)
+            .order("created_at", { ascending: true })
+            .limit(1)
+            .maybeSingle();
+        opportunityId = t((oppRow as { id?: string } | null)?.id) || null;
+    }
+
     const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, orgId);
     const children: CertificationChildResult[] = [];
 
@@ -310,12 +331,51 @@ export async function ensureOperationalCardsCertification(
         let processInstanceId = t(reusablePi?.id) || null;
         let journeyOpportunityId: string | null = null;
         if (!processInstanceId) {
-            const journey = await startEnrollment(supabase, {
-                orgId,
-                customerMemberId: memberId,
-            } as Parameters<typeof startEnrollment>[1]);
-            processInstanceId = t(journey.processInstanceId) || null;
-            journeyOpportunityId = t(journey.opportunityId) || null;
+            /*
+             * THE JOURNEY MUST BE CREATED INSIDE THE HOUSEHOLD'S EPISODE.
+             *
+             * `startEnrollment` was the obvious door and it is the wrong one here, for a structural
+             * reason rather than a preference. It asks `resolveLiveEnrollmentContextForHousehold`
+             * whether the household has a live episode, and that resolver defines "live" as an
+             * opportunity that ALREADY CONTAINS a running child journey. A restored — or simply
+             * childless — episode contains none, so the answer is always "no" and every journey it
+             * creates is context-free.
+             *
+             * Context-free is not a cosmetic difference. `queryEnrollmentProcessInstanceTrackRows`,
+             * the production child-grain reader, resolves `context_id` to an opportunity and SKIPS
+             * the row when it cannot, so a context-free journey is invisible to EVERY child-grain
+             * Work View no matter what stage it reports. The `enrolled-children` lens read zero
+             * members while both children verified green, which is exactly that gap.
+             *
+             * `createEnrollmentProcessInstance` with a `contextId` is the same writer `create_lead`
+             * uses for a child it already knows about (`applyCreateLeadChildParticipationFromIdentity`
+             * → "process_instances is the runtime owner of child participation"). Using it here makes
+             * the two-step create_lead + addChild sequence produce the same participation truth that
+             * one-step create_lead-with-children does.
+             */
+            if (opportunityId) {
+                const created = await createEnrollmentProcessInstance(supabase, {
+                    orgId,
+                    subjectId: memberId,
+                    contextId: opportunityId,
+                    // Rides the family track until the stage move below decides the child journey —
+                    // the same shape Create Lead writes at intake.
+                    stageKey: null,
+                    state: null,
+                } as Parameters<typeof createEnrollmentProcessInstance>[1]);
+                if (created.error) return { ok: false, reason: `journey create failed: ${created.error}` };
+                processInstanceId = t(created.id) || null;
+                journeyOpportunityId = opportunityId;
+            } else {
+                // No episode at all: a context-free journey is the honest outcome, and the platform
+                // permits it. The child simply will not appear in a child-grain lens.
+                const journey = await startEnrollment(supabase, {
+                    orgId,
+                    customerMemberId: memberId,
+                } as Parameters<typeof startEnrollment>[1]);
+                processInstanceId = t(journey.processInstanceId) || null;
+                journeyOpportunityId = t(journey.opportunityId) || null;
+            }
         }
 
         if (processInstanceId) {
@@ -538,6 +598,8 @@ export type CertificationGraphMember = {
     customerId: string | null;
     agreementIds: string[];
     processInstanceIds: string[];
+    /** Journeys still running — a closed one is history, never a duplicate. */
+    liveProcessInstanceIds: string[];
     placements: number;
     scheduleAssignments: number;
     participations: number;
@@ -590,7 +652,14 @@ export async function inspectCertificationGraph(
         ]);
 
         const agreementIds = (ags.data ?? []).map((r) => r.id as string);
-        const processInstanceIds = (pis.data ?? []).map((r) => r.id as string);
+        const allInstanceRows = (pis.data ?? []) as Array<{ id: string; state?: string | null }>;
+        const processInstanceIds = allInstanceRows.map((r) => r.id);
+        /*
+         * LIVE journeys, separately from all of them. A deliberately closed journey is a record, not
+         * a duplicate, and counting the raw rows reported "expected 1, found 3" against a child whose
+         * single running journey was exactly right.
+         */
+        const liveInstanceIds = allInstanceRows.filter((r) => t(r.state) !== "not_enrolling").map((r) => r.id);
 
         // The corroboration rule: a reserved name alone never qualifies a member as fixture-owned.
         if (agreementIds.length === 0 && processInstanceIds.length === 0) {
@@ -604,6 +673,7 @@ export async function inspectCertificationGraph(
             customerId: t(m.customer_id) || null,
             agreementIds,
             processInstanceIds,
+            liveProcessInstanceIds: liveInstanceIds,
             placements: (plc.data ?? []).length,
             scheduleAssignments: (sch.data ?? []).length,
             participations: (ocm.data ?? []).length,
@@ -631,7 +701,11 @@ export async function inspectCertificationGraph(
         if (m.placements === 0) missing.push(`${m.firstName}: placement`);
         if (m.scheduleAssignments === 0) missing.push(`${m.firstName}: schedule assignment`);
         if (m.agreementIds.length !== 1) missing.push(`${m.firstName}: expected 1 agreement, found ${m.agreementIds.length}`);
-        if (m.processInstanceIds.length !== 1) missing.push(`${m.firstName}: expected 1 process instance, found ${m.processInstanceIds.length}`);
+        if (m.liveProcessInstanceIds.length !== 1) {
+            missing.push(
+                `${m.firstName}: expected 1 live journey, found ${m.liveProcessInstanceIds.length}`,
+            );
+        }
     }
     if (members.length !== expected.length) missing.push(`expected ${expected.length} members, resolved ${members.length}`);
 
@@ -771,46 +845,149 @@ export async function repairOperationalCardsCertification(
     }
 
     /*
-     * 2 · SURPLUS JOURNEYS CLOSED, NEVER DELETED.
+     * 2 · THE ENROLLMENT EPISODE.
      *
-     * The oldest instance is kept because that is the one `ensure` and `verify` select. Any other is
-     * closed as a journey that reached no outcome.
+     * ── WHY THIS IS RESTORATION AND NOT INVENTION ──
+     *
+     * My first pass left the opportunity out, reasoning that an Opportunity is an ACQUISITION EPISODE
+     * and this household is already enrolled. That reasoning was wrong here, and the Work View proved
+     * it: `enrolled-children` returned zero rows with both children verifying green.
+     *
+     * `queryEnrollmentProcessInstanceTrackRows` — the production child-grain reader — resolves each
+     * instance's `context_id` to an opportunity and SKIPS the row when it cannot:
+     *
+     *     const opp = pi.context_id ? refs.oppById.get(pi.context_id) : null;
+     *     if (!opp) continue;
+     *
+     * So a context-free journey is structurally invisible to every child-grain lens, whatever its
+     * stage says. And this household's episode was not absent by design: `create_lead` created one,
+     * and the botched reset deleted it. Restoring it restores what the canonical path built.
+     *
+     * ── THE DOOR ──
+     *
+     * `executeCreateLeadAction` cannot be re-run: the parent person now exists, so identity
+     * resolution requires review and the command correctly refuses to auto-commit. The canonical
+     * writer underneath it takes an EXISTING household — `createLead` on the Processing identity
+     * command ports — so that is what this calls. It deliberately does not go through the full
+     * command handler, which also spawns stage-entry work ("Contact Family"): that work belongs to a
+     * family being acquired, and inventing it for a family already in care would be the fabrication
+     * this section is otherwise avoiding.
+     */
+    let episodeId: string | null = graphBefore.opportunityIds[0] ?? null;
+    if (!episodeId) {
+        const { data: personRow } = await supabase
+            .from("persons")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("email", CERT_PARENT_EMAIL)
+            .maybeSingle();
+        const primaryPersonId = t((personRow as { id?: string } | null)?.id);
+        if (!primaryPersonId) {
+            return {
+                ok: false,
+                actions,
+                refusals: [...refusals, "no certification parent person to own the enrollment episode"],
+                graphBefore,
+            };
+        }
+        const { createDefaultIdentityCommandPorts } = await import(
+            "@/lib/pos/processingIdentity/commands/ports"
+        );
+        const { NEW_LEAD_STATUS_KEY } = await import("@/lib/admin/actions/createLeadActionConstants");
+        const created = await createDefaultIdentityCommandPorts().createLead(
+            { supabase, orgId, actorId: actorUserId },
+            {
+                household_id: customerId,
+                primary_person_id: primaryPersonId,
+                name: `${CERT_PARENT.firstName} ${CERT_PARENT.lastName}`,
+                status_key: NEW_LEAD_STATUS_KEY,
+                // The lane a child sits in is its OWN instance stage; the episode only has to exist
+                // and resolve, so it stays at the stage a new episode legitimately starts on.
+                stage_key: "lead",
+                work_unit_id: null,
+            },
+        );
+        episodeId = t(created.id) || null;
+        if (!episodeId) {
+            return {
+                ok: false,
+                actions,
+                refusals: [...refusals, "could not restore the enrollment episode"],
+                graphBefore,
+            };
+        }
+        actions.push(`restored enrollment episode ${episodeId} on household ${customerId}`);
+    } else {
+        actions.push(`enrollment episode ${episodeId} already present — left alone`);
+    }
+
+    /*
+     * 3 · ONE LIVE JOURNEY PER CHILD, INSIDE THE EPISODE.
+     *
+     * ── WHY THIS IS NOT "CLOSE EVERYTHING BUT THE OLDEST" ──
+     *
+     * It was, and that was wrong twice over. The oldest instance is frequently one this fixture
+     * already closed, so keeping it kept a corpse and closed the good journey; and a closed
+     * CONTEXT-BOUND journey cannot be replaced at all, because `createEnrollmentProcessInstance`
+     * upserts on `(org_id, process_key, subject_id, context_id)` with `ignoreDuplicates` and hands
+     * back the existing row WHATEVER ITS STATE. Close that row and every later `ensure` receives the
+     * same closed row and reports success over a journey that is not running. Verify caught it: two
+     * children, one agreement each, zero live journeys.
+     *
+     * So the keeper is chosen by what makes a child appear in a child-grain lens — a journey bound to
+     * the household's episode — and a keeper this fixture wrongly closed is RE-OPENED rather than
+     * abandoned. Re-opening is the correction for a wrong state write, and it is the same canonical
+     * writer that made the wrong one.
      */
     for (const member of graphBefore.members) {
-        if (member.processInstanceIds.length <= 1) continue;
-        const { data: ordered } = await supabase
+        const { data: piRows } = await supabase
             .from("process_instances")
-            .select("id, created_at")
+            .select("id, context_id, state, created_at")
             .eq("org_id", orgId)
             .eq("subject_id", member.customerMemberId)
             .order("created_at", { ascending: true });
-        const rows = (ordered ?? []) as Array<{ id: string }>;
-        for (const surplus of rows.slice(1)) {
+        const rows = (piRows ?? []) as Array<{ id: string; context_id?: string | null; state?: string | null }>;
+        const keeper = rows.find((r) => t(r.context_id) === episodeId) ?? null;
+
+        if (keeper && t(keeper.state) === "not_enrolling") {
+            // `enrolling` — live and non-terminal. `ensure` advances it to the enrolled outcome; this
+            // only has to make it a journey again, and never asserts the outcome itself.
+            const reopened = await setProcessInstanceState(supabase, {
+                orgId,
+                instanceId: keeper.id,
+                state: "enrolling",
+                closeReasonKey: null,
+            });
+            if (reopened.error) {
+                refusals.push(`could not re-open journey ${keeper.id}: ${reopened.error}`);
+            } else {
+                actions.push(`re-opened episode journey ${keeper.id} for ${member.firstName}`);
+            }
+        }
+
+        for (const row of rows) {
+            if (keeper && row.id === keeper.id) continue;
+            if (t(row.state) === "not_enrolling") continue;
             const closed = await setProcessInstanceState(supabase, {
                 orgId,
-                instanceId: surplus.id,
+                instanceId: row.id,
                 state: "not_enrolling",
-                closeReasonKey: "duplicate_certification_instance",
             });
             if (closed.error) {
-                // The close reason may not be a configured key in this tenant. The STATE is the part
-                // that matters; retrying without the reason keeps the record honest either way.
-                const retried = await setProcessInstanceState(supabase, {
-                    orgId,
-                    instanceId: surplus.id,
-                    state: "not_enrolling",
-                });
-                if (retried.error) {
-                    refusals.push(`could not close surplus instance ${surplus.id}: ${retried.error}`);
-                    continue;
-                }
+                refusals.push(`could not close journey ${row.id}: ${closed.error}`);
+                continue;
             }
-            actions.push(`closed surplus journey ${surplus.id} for ${member.firstName} as not_enrolling`);
+            actions.push(
+                t(row.context_id)
+                    ? `closed duplicate journey ${row.id} for ${member.firstName}`
+                    : `closed context-free journey ${row.id} for ${member.firstName} — it can never appear `
+                      + "in a child-grain Work View",
+            );
         }
     }
 
     /*
-     * 3 · EVERYTHING ELSE IS `ensure`.
+     * 4 · EVERYTHING ELSE IS `ensure`.
      *
      * With the person restored, `ensure` resolves the surviving household again and reuses what is
      * there: members by name, the open agreement inside `directEnroll`, the kept process instance.
@@ -831,14 +1008,6 @@ export async function repairOperationalCardsCertification(
         return { ok: false, actions, refusals: [...refusals, `ensure pass 2 refused: ${second.reason}`], graphBefore, ensure: second };
     }
     actions.push("ensure pass 2 completed");
-
-    if (graphBefore.opportunityIds.length === 0) {
-        // Stated, not silently skipped: an absent acquisition episode is a deliberate outcome here.
-        actions.push(
-            "opportunity NOT recreated — an Opportunity is an acquisition episode, and this household is "
-            + "enrolled; certification does not require one",
-        );
-    }
 
     return { ok: refusals.length === 0, actions, refusals, graphBefore, ensure: second };
 }
@@ -939,4 +1108,78 @@ export async function restoreOperationalCardsCertification(
     const repair = await repairOperationalCardsCertification(supabase, orgId, actorUserId);
     const anyFailure = reversals.some((r) => r.failures.length > 0);
     return { ok: repair.ok && !anyFailure, reversals, repair };
+}
+
+/**
+ * WHY A CHILD-GRAIN LENS DOES OR DOES NOT CONTAIN THE CERTIFICATION CHILDREN — read-only.
+ *
+ * The `enrolled-children` lens read zero members while both children verified green, and the two
+ * possible causes are indistinguishable from outside: a lens that is stage-scoped and matching the
+ * wrong key, or a lens the runtime reads as stage-INDEPENDENT, which selects by live participation
+ * and therefore excludes `enrolled` — a TERMINAL enrollment state — by design.
+ *
+ * This reports what each production reader actually returns rather than re-deriving any of it, so the
+ * answer is the runtime's own, not a second opinion about it.
+ */
+export async function diagnoseChildLens(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<Record<string, unknown>> {
+    const { savedWorkViewsFromDepartmentMetadata } = await import(
+        "@/lib/lifecycle/resolveWorkViewRuntimeContext"
+    );
+    const { lensStageKeys } = await import("@/lib/lifecycle/lensStageKeys");
+    const { childRowMembershipForLens, loadChildGrainMembersForLens } = await import(
+        "@/lib/runtime/provisioning/childGrainMembership"
+    );
+
+    const { data: depts } = await supabase
+        .from("departments")
+        .select("id, name, metadata")
+        .eq("org_id", orgId);
+
+    const lenses: Array<Record<string, unknown>> = [];
+    for (const dept of (depts ?? []) as Array<{ id: string; name?: string; metadata?: unknown }>) {
+        const views = savedWorkViewsFromDepartmentMetadata(dept.metadata);
+        for (const view of views) {
+            const membership = childRowMembershipForLens(view);
+            let members: number | string;
+            try {
+                members = (
+                    await loadChildGrainMembersForLens({ supabase, orgId, workUnitId: "", view })
+                ).length;
+            } catch (e) {
+                members = `error: ${(e as Error).message}`;
+            }
+            lenses.push({
+                department: dept.name ?? dept.id,
+                id: view.id,
+                label: view.label,
+                rowGrain: (view as { row_grain?: unknown }).row_grain ?? null,
+                filters: (view.filters_v1 ?? []).map((f) => ({ field: f.field_key, op: f.operator, value: f.value })),
+                stageKeys: lensStageKeys(view),
+                membershipMode: membership.mode,
+                members,
+            });
+        }
+    }
+
+    const graph = await inspectCertificationGraph(supabase, orgId);
+    const memberIds = graph.members.map((m) => m.customerMemberId);
+    const { data: pis } = memberIds.length
+        ? await supabase
+              .from("process_instances")
+              .select("id, process_key, subject_type, subject_id, context_id, stage_key, state")
+              .eq("org_id", orgId)
+              .in("subject_id", memberIds)
+        : { data: [] };
+    const { data: opps } = graph.opportunityIds.length
+        ? await supabase
+              .from("opportunities")
+              .select("id, stage_key, status_key, work_unit_id, customer_id")
+              .eq("org_id", orgId)
+              .in("id", graph.opportunityIds)
+        : { data: [] };
+
+    return { lenses, processInstances: pis ?? [], opportunities: opps ?? [] };
 }
