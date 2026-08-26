@@ -44,6 +44,14 @@ export type ParticipantRole =
     | "artifact_placement_only"
     /** Owned by a platform area that cannot take it yet. */
     | "held"
+    /** A guardian/party fact — resolved through the Relationship + Person owners, never a child field. */
+    | "relationship_person"
+    /** Askable, but no durable Alloy field or entity is created for the answer. */
+    | "process_scoped"
+    /** A control belonging to one artifact's own logic, not a packet-wide question. */
+    | "artifact_structured_control"
+    /** Asked only when its parent gate makes it applicable. */
+    | "dependent_question"
     /** No safe participant question exists. An operator decides; nothing is published. */
     | "hold_for_review";
 
@@ -55,6 +63,8 @@ export type ParticipantProjection = {
     semanticType?: "text" | "phone" | "email" | "date" | "number" | "boolean" | "select";
     /** The shared identity that lets one answer populate every destination that needs it. */
     sharedValueKey?: string;
+    /** For `dependent_question`: the concept whose answer decides whether this is asked. */
+    dependsOnConceptId?: string;
     /** Why, in one clause — so a reviewer can disagree with the reasoning, not just the label. */
     basis: string;
 };
@@ -151,11 +161,39 @@ export function semanticTypeFor(fieldKey: string, readerType: string | null | un
     }
 }
 
+/**
+ * A dependent fragment: "If yes, their relationship to your child:".
+ *
+ * The source pairs a gate with the fragment that follows it — the certified structure shows
+ * `choice_field` at 13 followed by a `conditional_explanation` at 14, and the same shape at 15/16.
+ * Recovering the parent is reading that pairing, not guessing at meaning: the fragment is asked only
+ * when the nearest preceding gate in its own section says it applies.
+ */
+export function looksLikeDependentFragment(label: string | null | undefined): boolean {
+    return /^\s*if\s+(yes|so|applicable)\b/i.test(label ?? "");
+}
+
+/** A snake_case identifier is document plumbing — `subject_line` is not a thing to ask anyone. */
+export function looksLikeStructuralIdentifier(label: string | null | undefined): boolean {
+    const text = (label ?? "").trim();
+    return text.length > 0 && /^[a-z][a-z0-9_]*$/.test(text);
+}
+
+/** A caption over other fields — "Developmental History:", "Social relationships:". */
+export function looksLikeHeading(label: string | null | undefined): boolean {
+    const text = (label ?? "").trim();
+    return text.endsWith(":") && !readsAsAuthoredQuestion(text) && text.split(/\s+/).length <= 4;
+}
+
 export function projectParticipantRole(input: {
     concept: Pick<BusinessConceptCandidate, "label" | "concept_key" | "kind">;
     proposal: Pick<ConfigurationProposal, "disposition" | "target_field_source">;
     /** The reader's widget guess for the destination. Advisory only. */
     readerType?: string | null;
+    /** The concept immediately preceding this one in source order, for dependent gating. */
+    precedingGateConceptId?: string | null;
+    /** True when this concept sits on an artifact that owns its own structured logic (the exemption). */
+    onSelfContainedArtifact?: boolean;
 }): ParticipantProjection {
     const { concept, proposal } = input;
 
@@ -173,6 +211,10 @@ export function projectParticipantRole(input: {
          * or a checkbox caption, and guessing what it asks is exactly the ownership inference this
          * whole pass exists to prevent.
          */
+        if (mapped === "hold_for_review") {
+            const directed = applyDirectorDecisions(input);
+            if (directed) return directed;
+        }
         if (mapped === "hold_for_review" && readsAsAuthoredQuestion(concept.label)) {
             return {
                 role: "question",
@@ -223,4 +265,81 @@ export const ASKED_ROLES: readonly ParticipantRole[] = ["question", "prefill_con
 
 export function isAsked(role: ParticipantRole): boolean {
     return ASKED_ROLES.includes(role);
+}
+
+/**
+ * The four settled decisions for concepts the model cannot name on its own.
+ *
+ * Each keys on a SEMANTIC property — the concept's grain, its artifact, its structural shape, its
+ * gate — never on wording similarity, because "it sounds like an employer field" is exactly the
+ * inference that manufactures false ownership.
+ */
+function applyDirectorDecisions(input: {
+    concept: Pick<BusinessConceptCandidate, "label" | "concept_key" | "kind">;
+    precedingGateConceptId?: string | null;
+    onSelfContainedArtifact?: boolean;
+    readerType?: string | null;
+}): ParticipantProjection | null {
+    const key = input.concept.concept_key ?? "";
+    const label = input.concept.label ?? "";
+
+    // 4. Structural artifact metadata. Never asked, never stored — placement lineage only.
+    if (looksLikeStructuralIdentifier(label)) {
+        return { role: "artifact_placement_only", basis: "structural artifact metadata, not a prompt" };
+    }
+
+    // 3b. A dependent fragment is asked only when its gate applies. Without a recoverable gate it
+    //     stays held — an unconditioned "If yes…" asked of everyone is a worse defect than a hold.
+    if (looksLikeDependentFragment(label)) {
+        return input.precedingGateConceptId
+            ? {
+                  role: "dependent_question",
+                  label: label.replace(/:$/, "").trim(),
+                  semanticType: semanticTypeFor(key, input.readerType),
+                  dependsOnConceptId: input.precedingGateConceptId,
+                  basis: "dependent on the preceding gate in its own section",
+              }
+            : { role: "hold_for_review", basis: "dependent fragment whose gate cannot be recovered" };
+    }
+
+    // 1. Guardian/party grain. Identity and contact resolve through Relationship + Person; the two
+    //    employer answers have no canonical external-person employment owner, so they are askable
+    //    without creating anything durable. Keyed on the `guardian.` grain, not on the words.
+    if (key.startsWith("guardian.")) {
+        if (/employer/i.test(key)) {
+            return {
+                role: "process_scoped",
+                label: label.replace(/:$/, "").trim(),
+                semanticType: semanticTypeFor(key, input.readerType),
+                basis: "no canonical external-person employment owner exists; asked, never stored durably",
+            };
+        }
+        return {
+            role: "relationship_person",
+            basis: "a guardian fact — owned by Relationship + Person, never a child field",
+        };
+    }
+
+    /*
+     * Grain is checked BEFORE label shape, and that order is load-bearing.
+     *
+     * "Parent/Guardian #1 Employer:" ends in a colon and is three words, so a shape-first rule filed
+     * it as a heading and silently dropped a question the school asks. A concept's grain is a
+     * semantic fact; its punctuation is typography.
+     */
+    // 3a. A caption over other fields is static content, not a question.
+    if (looksLikeHeading(label)) {
+        return { role: "static_content", basis: "a heading over other fields" };
+    }
+
+    // 2. An artifact that owns its own logic keeps its controls. The exemption's boxes are that
+    //    artifact's structure; as packet-wide questions they would be meaningless captions.
+    if (input.onSelfContainedArtifact && input.concept.kind === "choice_field") {
+        return {
+            role: "artifact_structured_control",
+            basis: "a control belonging to this artifact's own logic, not a packet-wide question",
+        };
+    }
+
+    return null;
 }

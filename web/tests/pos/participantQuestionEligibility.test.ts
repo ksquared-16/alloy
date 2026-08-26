@@ -18,6 +18,9 @@ import {
     semanticTypeFor,
     humaniseCanonicalKey,
     readsAsAuthoredQuestion,
+    looksLikeDependentFragment,
+    looksLikeHeading,
+    looksLikeStructuralIdentifier,
 } from "@/lib/pos/processingCase/formDraft/participantQuestionEligibility";
 import type { ConfigurationProposal } from "@/lib/pos/discovery/contracts";
 
@@ -160,10 +163,16 @@ describe("a held concept whose source already asks the question", () => {
         expect(p.basis).toMatch(/no durable field/);
     });
 
-    it("refuses a heading, because the question it implies would be a guess", () => {
-        // "Developmental History:" is a section caption. What it asks is not recoverable from it.
+    it("never turns a heading or a structural identifier into a question", () => {
+        /*
+         * These once held for review; the settled decisions then classified them — headings as
+         * static content, `subject_line` as placement-only. What must never change is the part that
+         * matters: none of them becomes something a family is asked.
+         */
         for (const label of ["Developmental History:", "Social relationships:", "subject_line"]) {
-            expect(projectParticipantRole({ concept: concept(label), proposal: proposal("held_unknown_owner") }).role, label).toBe("hold_for_review");
+            const p = projectParticipantRole({ concept: concept(label), proposal: proposal("held_unknown_owner") });
+            expect(isAsked(p.role), label).toBe(false);
+            expect(p.label, label).toBeUndefined();
         }
     });
 
@@ -185,11 +194,91 @@ describe("a held concept whose source already asks the question", () => {
         for (const notQ of ["Module", "Name:", "Sp"]) expect(readsAsAuthoredQuestion(notQ), notQ).toBe(false);
     });
 
-    it("still holds a guardian fact — party grain is an ownership question", () => {
-        // guardian.* must resolve through the relationship/person owner, not become a child field.
-        expect(projectParticipantRole({
+    it("never lets a guardian fact become a child field", () => {
+        // Once held; now settled as process-scoped. The invariant that survives both is that party
+        // grain is never flattened onto the child.
+        const p = projectParticipantRole({
             concept: concept("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"),
             proposal: proposal("held_unknown_owner"),
-        }).role).toBe("hold_for_review");
+        });
+        expect(p.role).toBe("process_scoped");
+        expect(p.role).not.toBe("prefill_confirm");
+        expect(p.sharedValueKey).toBeUndefined();
+    });
+});
+
+describe("the four settled decisions", () => {
+    const held = (label: string, concept_key: string, kind = "scalar_field") =>
+        ({ concept: concept(label, concept_key, kind), proposal: proposal("held_unknown_owner") });
+
+    it("routes a guardian identity fact to Relationship + Person, never a child field", () => {
+        for (const [label, key] of [["Parent/Guardian #1 Name:", "guardian.name"], ["Mailing Address or Secondary Parent Address", "guardian.address"]] as const) {
+            const p = projectParticipantRole(held(label, key));
+            expect(p.role, label).toBe("relationship_person");
+            expect(p.label, label).toBeUndefined();
+        }
+    });
+
+    it("keeps guardian employment askable but never durable", () => {
+        // No canonical external-person employment owner exists, and this slice does not invent one.
+        const p = projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer"));
+        expect(p.role).toBe("process_scoped");
+        expect(p.label).toBe("Parent/Guardian #1 Employer");
+        expect(p.basis).toMatch(/never stored durably/);
+    });
+
+    it("checks grain BEFORE label shape", () => {
+        /*
+         * The ordering bug this pins: "Parent/Guardian #1 Employer:" ends in a colon and is three
+         * words, so a shape-first rule filed it as a heading and silently dropped a question the
+         * school asks. Grain is a semantic fact; punctuation is typography.
+         */
+        expect(looksLikeHeading("Parent/Guardian #1 Employer:")).toBe(true);
+        expect(projectParticipantRole(held("Parent/Guardian #1 Employer:", "guardian.parent_guardian_1_employer")).role).toBe("process_scoped");
+    });
+
+    it("keeps the exemption controls with the artifact that owns them", () => {
+        for (const label of ["Module", "Sp", "Polio", "Religious"]) {
+            const p = projectParticipantRole({ ...held(label, `child.${label.toLowerCase()}`, "choice_field"), onSelfContainedArtifact: true });
+            expect(p.role, label).toBe("artifact_structured_control");
+        }
+    });
+
+    it("does not turn those captions into packet-wide questions elsewhere", () => {
+        // Off their own artifact they are meaningless captions, and holding is the honest answer.
+        expect(projectParticipantRole({ ...held("Polio", "child.polio", "choice_field"), onSelfContainedArtifact: false }).role).toBe("hold_for_review");
+    });
+
+    it("makes a heading static content and never a question", () => {
+        for (const label of ["Developmental History:", "Social relationships:"]) {
+            expect(projectParticipantRole(held(label, "child.x")).role, label).toBe("static_content");
+        }
+    });
+
+    it("asks a dependent fragment only behind its gate", () => {
+        const p = projectParticipantRole({ ...held("If yes, their relationship to your child:", "child.if_yes_rel"), precedingGateConceptId: "gate-15" });
+        expect(p.role).toBe("dependent_question");
+        expect(p.dependsOnConceptId).toBe("gate-15");
+        expect(p.label).toBe("If yes, their relationship to your child");
+    });
+
+    it("holds a dependent fragment whose gate cannot be recovered", () => {
+        // An unconditioned "If yes…" asked of everyone is worse than a hold.
+        const p = projectParticipantRole(held("If yes, their relationship to your child:", "child.if_yes_rel"));
+        expect(p.role).toBe("hold_for_review");
+    });
+
+    it("keeps structural metadata out of the questionnaire entirely", () => {
+        expect(looksLikeStructuralIdentifier("subject_line")).toBe(true);
+        expect(looksLikeStructuralIdentifier("Is your child able to play alone?")).toBe(false);
+        const p = projectParticipantRole(held("subject_line", "child.subject_line"));
+        expect(p.role).toBe("artifact_placement_only");
+        expect(p.label).toBeUndefined();
+    });
+
+    it("recognises a dependent fragment by its opening, not its content", () => {
+        expect(looksLikeDependentFragment("If yes, please explain")).toBe(true);
+        expect(looksLikeDependentFragment("If so, describe")).toBe(true);
+        expect(looksLikeDependentFragment("Is your child able to play alone?")).toBe(false);
     });
 });
