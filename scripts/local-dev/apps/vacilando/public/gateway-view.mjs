@@ -2169,6 +2169,27 @@ export function renderOperatorDecisionActions(run) {
  * waiting. With nothing pending this returns exactly what it returned before,
  * so the stale-run branch below cannot start firing on finished runs.
  */
+/**
+ * What the last governed decision actually did.
+ *
+ * The approval card is only present while a decision is PENDING, so approving
+ * makes it vanish — the same way whether the action worked or failed. The
+ * operator clicks "Authorize push", the card disappears, and nothing says what
+ * happened. This is the answer, in the place the question was asked.
+ *
+ * Deliberately quiet: one line, no controls, and nothing at all when there has
+ * never been a governed decision on this lane.
+ */
+export function renderGovernedOutcome(lane) {
+  const o = lane?.last_governed_outcome;
+  if (!o) return "";
+  const when = o.at ? ago(Date.parse(o.at)) : null;
+  return `<p class="gw-gv-outcome ${o.ok ? "is-ok" : "is-failed"}" data-gw-governed-outcome>
+    <span class="gw-gv-mark">${o.ok ? "✓" : "✕"}</span>
+    <span class="gw-gv-text">${esc(o.title)} — ${esc(o.detail)}${when ? ` · ${esc(when)} ago` : ""}${o.approved_by ? ` · approved by ${esc(o.approved_by)}` : ""}</span>
+  </p>`;
+}
+
 export function operatorDecisionRun(lane) {
   const active = lane?.execution_run || null;
   if (active?.governed_action?.status === "awaiting_operator") return active;
@@ -4574,6 +4595,7 @@ export function renderGatewayShell({
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
         ${renderOperatorDecisionBar(operatorDecisionRun(lane))}
+        ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}
         ${renderComposer({
