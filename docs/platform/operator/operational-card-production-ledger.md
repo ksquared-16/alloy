@@ -1187,3 +1187,62 @@ the same way to a direct call.
 
 The card provider, participant-scoped rendering, movement overflow and browser certification remain.
 The commands they will call now exist and are proven against canonical truth.
+
+---
+
+## 22. Compact command-workspace chrome (2026-08-26)
+
+A command workspace now names **the command**, not the card and stage that launched it.
+
+### What was removed, and what replaced it
+
+| Before | After |
+|---|---|
+| `WHAT'S NEXT` (card title) | — suppressed while a capability owns the surface |
+| stage label + status chip | — suppressed likewise |
+| `← Back to actions` (root) | **the command's own title** — "Tour invitation", "Add charge", "Correct attendance" |
+| `✕` | `✕`, unchanged — the single exit |
+
+Applied at the **shared** owner (`CurrentWorkFocusedSurface` + `CurrentWorkCard`), driven by
+`capabilityActive` and `activePanelAction.label`. No action-name branching: every command that
+resolves to the shared `activePanelAction` slot — Message, Send form, every Tour ▾ item, and the new
+Attendance commands — inherits the same grammar.
+
+The title comes from the **registered action's operator label**, which is the priority the amendment
+asks for; the card label is not consulted.
+
+### The trade-off I made, stated plainly
+
+`tests/focusPanel/currentWorkCommandReturnGrammar.test.ts` locked **R-014**, which had two halves:
+
+1. a command destination must be dismissable — *unchanged, still locked*;
+2. dismissing it must not collapse the card — **superseded by this amendment**.
+
+`✕` returns to the Focus Panel (what the amendment defines as the return path) but *does* collapse
+the focused workspace, whereas the removed control returned to the launcher list while keeping it.
+Those were genuinely two different destinations, not one exit with two buttons. The amendment's
+judgment is that the intermediate step did not earn a permanent row above every command; that is a
+product call, and it is recorded here rather than buried, so it is one line to restore if QA
+disagrees.
+
+`onDismissPanel` / `closeActionPanel` are **retained** — nested steps and completion handlers still
+return to the launchers without collapsing. Only the root affordance is gone. Outcome mode keeps its
+Back, because actions → outcome is genuine nesting.
+
+9 guards pass against the revised contract.
+
+### Not browser-measured
+
+The pixel measurement was not taken: reaching a live command workspace needs a case with an
+actionable Current Work item, and the certification household's case has none. The change is
+structural — three suppressed elements replaced by one title row — and is asserted by test rather
+than by a screenshot. **Recorded as outstanding rather than implied.**
+
+### A process note
+
+I destroyed my own uncommitted work mid-run with `git checkout HEAD -- web/` while restoring from a
+baseline probe, and had to redo it. I also first attributed two test failures to this change by
+baselining the **wrong file**; the correct baseline showed 2 failed / 6 passed both with and without
+the change, so both are pre-existing (`resolveCurrentWorkActionSurface` is absent from
+`CurrentWorkCard.tsx` independently of this work). Commit before probing, and baseline the file that
+actually failed.
