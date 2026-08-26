@@ -46,3 +46,28 @@ describe("one response model", () => {
         }
     });
 });
+
+describe("a cluster reads as a topic, not a card of fields", () => {
+    it("speaks the topic once and lists what it will ask", () => {
+        expect(CODE).toContain("data-participant-topic");
+        expect(CODE).toContain("data-participant-topic-settled");
+        expect(CODE).toContain("data-participant-topic-upcoming");
+    });
+
+    it("gives only the ACTIVE question an answer surface", () => {
+        // Three inputs with three buttons is the shape this slice replaced. The composer below the
+        // topic answers the one active question, so "which am I answering?" is never ambiguous.
+        const inputs = CODE.match(/<input\b/g) ?? [];
+        const textareas = CODE.match(/<textarea\b/g) ?? [];
+        expect(inputs.length + textareas.length, "one typed control at most, for date/number").toBeLessThanOrEqual(2);
+    });
+
+    it("recedes settled questions and marks them in Bend Pine", () => {
+        expect(CODE).toMatch(/text-alloy-midnight\/45/);
+        expect(CODE).toContain("text-alloy-bend-pine");
+    });
+
+    it("renders a topic only when the wire supplies one", () => {
+        expect(CODE).toContain("objective.next_turn.cluster ?");
+    });
+});

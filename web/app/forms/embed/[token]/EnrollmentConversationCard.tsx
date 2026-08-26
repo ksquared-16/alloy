@@ -103,6 +103,55 @@ type TurnResponse = {
 /** One settled exchange, held locally for this sitting only. */
 type Exchange = { said: string; answered: string };
 
+
+/**
+ * One topic, with the questions it asks.
+ *
+ * A cluster is a conversation about a subject, not a card full of fields. So the topic is spoken
+ * once, the question being answered right now is the prominent one, the questions already answered
+ * recede beneath their own answers, and what is still to come is listed quietly so a parent can see
+ * where the topic ends. Only the active question has an answer surface — the composer below — which
+ * is what keeps "which question am I answering?" from ever being ambiguous.
+ *
+ * Deliberately NOT three inputs with three buttons. That is the shape this whole slice replaced.
+ */
+function ConversationTopic({
+    cluster,
+}: {
+    cluster: NonNullable<ParticipantObjectiveWire["next_turn"]["cluster"]>;
+}) {
+    const settled = cluster.questions.filter((q) => q.state === "settled");
+    const upcoming = cluster.questions.filter((q) => q.state === "upcoming");
+    return (
+        <div className="mb-3" data-participant-topic={cluster.title ?? "topic"}>
+            {cluster.title ? (
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40">
+                    {cluster.title}
+                </p>
+            ) : null}
+            {settled.length > 0 ? (
+                <ul className="mb-2 space-y-1" data-participant-topic-settled={settled.length}>
+                    {settled.map((q) => (
+                        <li key={q.need_key} className="flex gap-2 text-[13px] leading-snug text-alloy-midnight/45">
+                            <span aria-hidden className="text-alloy-bend-pine">✓</span>
+                            <span>
+                                {q.question}
+                                {q.answer ? <span className="text-alloy-midnight/60"> — {q.answer}</span> : null}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            {upcoming.length > 0 ? (
+                <p className="text-[12px] leading-snug text-alloy-midnight/35" data-participant-topic-upcoming={upcoming.length}>
+                    {upcoming.length === 1 ? "Then: " : `Then ${upcoming.length} more: `}
+                    {upcoming.map((q) => q.question.replace(/\?$/, "")).join(" · ")}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 export function EnrollmentConversationCard({
     token,
     initialObjective,
@@ -431,6 +480,9 @@ export function EnrollmentConversationCard({
                         while its own answer is still in flight above it. */}
                     {awaitingTurn ? null : (
                         <ThreadTurn who="alloy" depth="current">
+                            {objective.next_turn.cluster ? (
+                                <ConversationTopic cluster={objective.next_turn.cluster} />
+                            ) : null}
                             <ThreadSaid who="alloy" depth="current">
                                 {participantQuestionSegments(objective).map((segment, i) =>
                                     segment.emphasis ? (
