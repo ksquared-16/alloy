@@ -668,3 +668,24 @@ made worse.
 | **Readiness projection** | `stillNeeded` is composed but empty — the Readiness owner's still-needed list is not yet mapped |
 | **Person photo image case** | Deferred by Director decision; initials fallback certified |
 | **Ended employment** | Deferred to `employment.end` |
+
+### Test coverage boundary, stated plainly
+
+`tests/adminV2/runtime` holds **177 files** and does not complete inside this lane's per-command
+budget — two attempts at the whole directory and one at a 60-file batch each exceeded 10 minutes.
+Rather than claim coverage that was never run, the sweep was narrowed to the **59 files that
+reference the seams this run touched** (`OperationalContext`, `businessProcess`, children evidence,
+inquiry-child drawer rows, the mission overlays, the card renderer) and run in baselined batches.
+
+| Scope | With changes | Baseline (`d86226522`) | New |
+|---|---|---|---|
+| Affected runtime batch (20 files) | 17 failed / 132 passed | 17 failed / 127 passed | **0** |
+| Remaining failing runtime files (8) | 17 failed / 77 passed | 17 failed / 77 passed | **0** |
+| `tests/operator` + `tests/admin/drawer` (69 files) | 15 failed / 451 passed | 15 failed / 451 passed | **0** |
+| New + directly-affected suites (8 files) | **71 passed** | — | — |
+
+Every failure observed is present without this run's changes. `system5CardArchetypes` was the one
+worth checking closely — new card keys land in its map — and it fails identically at baseline.
+
+**Not run to completion:** the ~118 runtime files that reference none of the touched seams. That is a
+budget limit of this lane, not a claim about them.
