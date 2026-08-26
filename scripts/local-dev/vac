@@ -17,6 +17,7 @@ Usage:
   vac run-status <run_id> <state>   Report Execution Run state (not the validation broker)
   vac checkpoint-create <run_id>    Commit ONLY the named paths (never a broad add)
   vac certify-fixture <name> <op>   Run an allowlisted certification fixture (credentials stay trusted)
+  vac browser-auth <status|sign-in> Recover a lane's browser session (you sign in; the agent cannot)
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
                            conversation: progress | needs-input | completion | failure
@@ -54,6 +55,10 @@ case "${1:-}" in
   certify-fixture)
     shift
     exec node "$SCRIPT_DIR/vac-certify-fixture.mjs" "$@"
+    ;;
+  browser-auth)
+    shift
+    exec node "$SCRIPT_DIR/vac-browser-auth.mjs" "$@"
     ;;
   governed-action)
     shift

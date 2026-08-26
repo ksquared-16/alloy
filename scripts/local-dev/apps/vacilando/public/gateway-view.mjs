@@ -2180,6 +2180,37 @@ export function renderOperatorDecisionActions(run) {
  * Deliberately quiet: one line, no controls, and nothing at all when there has
  * never been a governed decision on this lane.
  */
+/**
+ * Browser-session recovery, where the Director is already looking.
+ *
+ * A lane whose Playwright session has gone stale used to show nothing at all —
+ * the run simply failed somewhere with `refresh_token_not_found` and the only
+ * way back was a terminal. This is the status and the one action that replaces
+ * that: the Director signs in through a browser Vacilando opens, and nothing
+ * they type passes through the agent.
+ */
+export function renderBrowserAuthRecovery(lane) {
+  const a = lane?.browser_auth;
+  if (!a || !a.blocks_execution) return "";
+  return `<div class="gw-decision-bar" data-gw-decision-bar data-kind="auth">
+    <div class="gw-decision-h">Browser session</div>
+    <div class="gw-work-stale" data-gw-browser-auth>
+      <p class="gw-work-stale-copy">${esc(a.headline)}</p>
+      <dl class="gw-kv">
+        <dt>Slot</dt><dd>${esc(String(a.slot ?? "—"))}</dd>
+        <dt>Address</dt><dd>${esc(a.base_url || "—")}</dd>
+        <dt>Sign in as</dt><dd>${esc(a.expected_identity || "—")}</dd>
+        ${a.storage_captured_at ? `<dt>Last captured</dt><dd>${esc(ago(Date.parse(a.storage_captured_at)))} ago</dd>` : ""}
+      </dl>
+      <p class="gw-gv-text">A browser opens on this machine. What you type goes to the app and nowhere else — not to the agent, not into the run, not into any log.</p>
+      <div class="gw-work-stale-actions">
+        <button type="button" class="btn primary" data-gw-browser-auth-signin data-lane-id="${esc(lane.lane_id || "")}" data-slot="${esc(String(a.slot ?? ""))}">Sign in</button>
+        <button type="button" class="btn" data-gw-browser-auth-recheck data-lane-id="${esc(lane.lane_id || "")}">Re-check</button>
+      </div>
+    </div>
+  </div>`;
+}
+
 export function renderGovernedOutcome(lane) {
   const o = lane?.last_governed_outcome;
   if (!o) return "";
@@ -4594,6 +4625,7 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
+        ${renderBrowserAuthRecovery(lane)}
         ${renderOperatorDecisionBar(operatorDecisionRun(lane))}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
