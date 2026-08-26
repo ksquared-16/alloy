@@ -75,3 +75,48 @@ export function resolveParticipantScope(args: {
     // operator cannot see.
     return { scope: null, reason: args.participants.length > 1 ? "ambiguous" : "none_selected" };
 }
+
+/**
+ * THE SCOPE WHEN THE PANEL'S SUBJECT IS ITSELF A CHILD — no selection, and nothing to guess.
+ *
+ * Everything above resolves a selection against a CASE's several children, where refusing is the
+ * whole point. This answers a different situation: a child opened from a child-grain lens, where the
+ * record of attention IS the participant. The runtime already states that identity canonically —
+ * `subjectIdentityTruth` carries `child.customer_member_id`, `child.display_name` and
+ * `child.process_instance_id`, merged onto truth by `mergeSubjectIdentityTruthOntoSettled` — so this
+ * reads it rather than inferring anything.
+ *
+ * It exists because a child-grain answer carries NO `_inquiry_children` collection. The candidate
+ * list was therefore empty, the scope resolved to nobody, and the Attendance card asked the operator
+ * to "select a child" while displaying that child's own record. The panel stays case-grain; what
+ * changes is only that a stated subject is recognised as the participant it already is.
+ */
+export function participantScopeFromChildSubjectTruth(
+    truth: Record<string, unknown>,
+): OperationalParticipantScope | null {
+    const str = (v: unknown): string | null => {
+        const s = v != null ? String(v).trim() : "";
+        return s || null;
+    };
+    const customerMemberId = str(truth["child.customer_member_id"]);
+    // The durable child subject is the identity Attendance resolves against. Without it there is no
+    // participant, whatever else the payload says.
+    if (!customerMemberId) return null;
+    /*
+     * `participationId` is REQUIRED by the type, and rightly: a scope with no participation identity
+     * is not a participation. On a child-grain subject the journey IS that identity, and when truth
+     * does not state one there is no participation to scope to — so this refuses rather than
+     * inventing an id or widening the contract to admit a scope that cannot be identified.
+     */
+    const participationId = str(truth["child.process_instance_id"]);
+    if (!participationId) return null;
+    return {
+        participationId,
+        customerMemberId,
+        personId: str(truth["child.person_id"]),
+        displayName: str(truth["child.display_name"]),
+        imageUrl: str(truth["child.photo_url"]) ?? str(truth["child.image_url"]),
+        stageKey: str(truth["child.stage_key"]),
+        stageLabel: str(truth["child.outcome_status_label"]),
+    };
+}

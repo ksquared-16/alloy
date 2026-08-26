@@ -9681,3 +9681,35 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   font-size: 0.82rem;
   color: var(--alloy-os-text-secondary, #4b5563);
 }
+
+/* The registered commands. Quiet by default — the day is the card's subject, and the controls are
+   what an operator does about it, not what they read first. */
+.alloy-os-attendance__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.alloy-os-attendance__action {
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--alloy-os-text-primary, #1f2937);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 13%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.alloy-os-attendance__action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 8%, transparent);
+}
+.alloy-os-attendance__action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+/* A refusal is the domain speaking, so it reads as a statement rather than an alarm. */
+.alloy-os-attendance__error {
+  font-size: 11.5px;
+  color: var(--alloy-os-danger, #b42318);
+}

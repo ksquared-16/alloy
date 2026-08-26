@@ -3,6 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { AttendanceCardVM } from "@/lib/adminV2/runtime/focusPanel/attendance/buildAttendanceCardVM";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -43,6 +49,8 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
     const memberId = scope?.customerMemberId ?? null;
     const [vm, setVm] = useState<AttendanceCardVM | null>(null);
     const [loading, setLoading] = useState(false);
+    const [running, setRunning] = useState<string | null>(null);
+    const [commandError, setCommandError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!memberId) {
@@ -65,6 +73,54 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
             setLoading(false);
         }
     }, [memberId]);
+
+    /**
+     * RUN A REGISTERED COMMAND, then re-read the day.
+     *
+     * Nothing here writes attendance. Each control dispatches the REGISTERED action of the same name
+     * (`attendance.check_in` and its four siblings), which is a thin adapter over the invariant-owning
+     * service — so the append-only rule, the agreement gate, the service-date derivation and the room
+     * requirement are all enforced where they already live, not restated on a card face.
+     *
+     * The room is deliberately NOT sent for check-in: the adapter reads it from the PLACEMENT,
+     * because the placement is the authority on which room a child belongs in and the card is only
+     * showing what it was told. A transfer is the exception, and the one command that genuinely needs
+     * an operator decision.
+     *
+     * The day is re-read rather than patched locally: the fold owns what the events mean, and a card
+     * that guessed the new state would be a second answer to a question the provider already answers.
+     */
+    const run = useCallback(
+        async (actionKey: string, payload: Record<string, unknown> = {}) => {
+            if (!memberId || running) return;
+            setRunning(actionKey);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: actionKey,
+                        entity_type: "child",
+                        entity_id: memberId,
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: { customer_member_id: memberId, ...payload },
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string };
+                // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
+                if (!json?.ok) setCommandError(json?.error || "The command was refused.");
+            } catch {
+                setCommandError("The command could not be sent.");
+            } finally {
+                setRunning(null);
+                await load();
+            }
+        },
+        [load, memberId, running],
+    );
 
     useEffect(() => {
         // Clear FIRST: the previous child's day must not linger while the next one resolves.
@@ -120,6 +176,84 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                             ) : null}
                             <Slot label="Now" value={stateLabel(vm)} />
                             <Slot label="Departed" value={timeOf(vm.checkOutAt)} />
+                        </div>
+
+                        {/* THE REGISTERED COMMANDS, offered only where the day admits them. A control
+                            for an impossible transition is a promise the domain would refuse — check-in
+                            on a child already present, or a transfer for a child who has not arrived. */}
+                        <div className="alloy-os-attendance__actions" data-attendance-actions="true">
+                            {vm.state === "not_arrived" || vm.state === "no_record" ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-attendance__action"
+                                        data-attendance-command="attendance.check_in"
+                                        disabled={Boolean(running)}
+                                        onClick={() => void run("attendance.check_in")}
+                                    >
+                                        Check in
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-attendance__action"
+                                        data-attendance-command="attendance.mark_absent"
+                                        disabled={Boolean(running)}
+                                        onClick={() => void run("attendance.mark_absent")}
+                                    >
+                                        Mark absent
+                                    </button>
+                                </>
+                            ) : null}
+                            {vm.state === "present" ? (
+                                <>
+                                    <button
+                                        type="button"
+                                        className="alloy-os-attendance__action"
+                                        data-attendance-command="attendance.check_out"
+                                        disabled={Boolean(running)}
+                                        onClick={() => void run("attendance.check_out")}
+                                    >
+                                        Check out
+                                    </button>
+                                    {vm.siteRooms.length > 0 ? (
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="alloy-os-attendance__action"
+                                                    data-attendance-command="attendance.move"
+                                                    disabled={Boolean(running)}
+                                                >
+                                                    Move room ▾
+                                                </button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="start" sideOffset={4} data-attendance-move-menu="true">
+                                                {vm.siteRooms
+                                                    // The room they are already in is not a destination.
+                                                    .filter((r) => r.id !== vm.currentRoomLocationId)
+                                                    .map((r) => (
+                                                        <DropdownMenuItem
+                                                            key={r.id}
+                                                            data-attendance-move-room={r.id}
+                                                            onSelect={() =>
+                                                                void run("attendance.move", {
+                                                                    to_room_location_id: r.id,
+                                                                })
+                                                            }
+                                                        >
+                                                            {r.label}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    ) : null}
+                                </>
+                            ) : null}
+                            {commandError ? (
+                                <span className="alloy-os-attendance__error" data-attendance-command-error="true">
+                                    {commandError}
+                                </span>
+                            ) : null}
                         </div>
 
                         {vm.recentDays.length > 0 ? (

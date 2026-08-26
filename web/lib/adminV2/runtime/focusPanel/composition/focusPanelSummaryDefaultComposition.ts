@@ -224,6 +224,9 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *                    card would be a third place presenting the same facts, and a second product
  *                    surface for a child the runtime already identifies. It belongs to the DURABLE
  *                    composition, where there is no header subject and no Children card to carry it.
+ *   attendance       the child's operating day. This is the composition where the card's subject is
+ *                    unambiguous — the child IS the record of attention — so it never has to ask the
+ *                    operator to scope it.
  *   children         kept, with the focused child active; siblings are supporting context. A child
  *                    subject is a reason to scope this card, never to remove it.
  *   household        family/relationship context, and honestly family-scoped — it does not claim to
@@ -261,15 +264,41 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         encodedDensity: "standard",
     },
     {
+        /*
+         * THE OPERATING DAY, and the one composition where this card has an unambiguous subject.
+         *
+         * On the case surface Attendance renders against `participantScope` and says "Select a child
+         * to see their day" when a family has several children and none is scoped — the honest answer
+         * there. Here the child IS the record of attention, so the day is simply about them.
+         *
+         * It was absent, and the gap was invisible from the case surface: the published layout places
+         * Attendance at case grain, so certifying it there passed while opening the SAME child from
+         * the Enrolled children lens composed this list instead and rendered no Attendance card at
+         * all. A card is only placed where a composition places it.
+         *
+         * Six columns, directly under What's Next: the day outranks Assignments for an enrolled
+         * child, and a 12-column card would force `planPublishedLayout` from `lanes` to `grid` for
+         * the whole panel — the trap documented on the case composition's Employment entry.
+         */
+        key: "attendance",
+        tier: "work",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
+    {
         // Assignments. Placement IS child-scoped, and this card is also the DESTINATION the
         // Children card's placement field links resolve to — `DEFAULT_LINK_DESTINATIONS` maps
         // `inquiry_child.program` / schedule / start_date to `scheduling`. Omitting it left the
         // Assignment affordance rendering but inert: `navigateIdentityFieldLink` refuses a card
         // absent from `focusTargets` and returns `destination_unavailable`, silently.
+        //
+        // Moved down a row to make room for Attendance above; nothing else about it changed.
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 6, rowStart: 10, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },

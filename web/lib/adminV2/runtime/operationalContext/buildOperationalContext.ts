@@ -18,6 +18,7 @@
  */
 
 import {
+    participantScopeFromChildSubjectTruth,
     resolveParticipantScope,
     type ParticipantScopeCandidate,
 } from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
@@ -366,10 +367,19 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
          * — and `resolveParticipantScope` refuses to guess, so an id from the case the operator just
          * left resolves to nobody instead of to whoever happens to be first here.
          */
-        participantScope: resolveParticipantScope({
-            selectedParticipationId: input.selectedParticipationId ?? null,
-            participants: participantCandidatesFromTruth(truth),
-        }).scope,
+        /*
+         * A stated child subject wins over a selection lookup, because it is not a lookup: a
+         * child-grain answer carries no `_inquiry_children` collection to search, and the child it
+         * is ABOUT is named directly in truth. Consulting the candidate list first found nothing and
+         * resolved to nobody, so the Attendance card asked the operator to select a child while
+         * showing that child's own record.
+         */
+        participantScope:
+            participantScopeFromChildSubjectTruth(truth)
+            ?? resolveParticipantScope({
+                selectedParticipationId: input.selectedParticipationId ?? null,
+                participants: participantCandidatesFromTruth(truth),
+            }).scope,
         stageWorkRuntime: subjectVm.workspace.stage_work_runtime ?? null,
         stageWorkPending: subjectVm.workspace.stage_work?.status === "pending",
         recordHeaderActions: subjectVm.actions.record_header ?? null,

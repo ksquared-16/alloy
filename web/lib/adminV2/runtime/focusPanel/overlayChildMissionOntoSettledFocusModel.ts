@@ -183,6 +183,30 @@ export function overlayChildMissionOntoSettledFocusModel(
                 id: commitCritical.subjectId,
                 label: subjectLabel,
             },
+            /*
+             * THE FOCUSED CHILD IS THE SCOPED PARTICIPANT.
+             *
+             * The settled context resolves `participantScope` by matching a selection against the
+             * FAMILY's children — the right rule for a case panel, and no rule at all here: this
+             * overlay already knows which child it is about, because that is what it exists to say.
+             * Leaving the settled answer in place meant a child-grain panel carried NO scope, and
+             * the Attendance card asked the operator to "select a child" on that child's own record.
+             *
+             * `childMemberId` comes from `subjectIdentityTruth`, the same binding this overlay uses
+             * for the identity card, so the participant and the subject can never disagree. Stated
+             * rather than resolved: there is nothing ambiguous about the record of attention.
+             */
+            participantScope: childMemberId
+                ? {
+                      participationId: commitCritical.subjectId,
+                      customerMemberId: childMemberId,
+                      personId: null,
+                      displayName: subjectLabel,
+                      imageUrl: trimOrNull(childRow?.photo_url) ?? null,
+                      stageKey: situation?.stageKey ?? null,
+                      stageLabel: situation?.stageLabel ?? null,
+                  }
+                : settled.context.participantScope,
             businessProcess: {
                 key: situation?.stageKey ?? settled.context.businessProcess.key,
                 label: situation?.stageLabel ?? settled.context.businessProcess.label,

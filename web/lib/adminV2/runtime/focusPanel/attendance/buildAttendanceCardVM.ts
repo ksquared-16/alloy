@@ -65,6 +65,15 @@ export type AttendanceCardVM = {
     recentDays: AttendanceDayVM[];
     /** True when today's record carries a correction or reversal. */
     corrected: boolean;
+    /**
+     * The rooms a transfer can target — the child's OWN site, never the org.
+     *
+     * `attendance.move` is the one command that cannot be issued without a destination, and the
+     * adapter refuses without `to_room_location_id`. Offering the org's rooms would let an operator
+     * move a child to another campus in one click, so the list is scoped to the site their placement
+     * already names.
+     */
+    siteRooms: Array<{ id: string; label: string }>;
     /** Absent when the child has no attendable enrolment — the card then renders no controls. */
     unavailableReason: string | null;
 };
@@ -99,6 +108,7 @@ export async function buildAttendanceCardVM(
         participant: { customerMemberId: args.customerMemberId, displayName: args.displayName ?? null },
         date,
         expected: { expected: false, roomLocationId: null, roomLabel: null },
+        siteRooms: [],
         state: "no_record",
         checkInAt: null,
         checkOutAt: null,
@@ -141,6 +151,11 @@ export async function buildAttendanceCardVM(
         asOfDate: date,
     });
 
+    // The transfer destinations, from the child's own site. One query, alongside the label read.
+    const siteRooms = subject.subject.siteLocationId
+        ? await siteRoomsFor(supabase, args.orgId, subject.subject.siteLocationId)
+        : [];
+
     const roomLabels = await roomLabelsFor(supabase, args.orgId, [
         expectedToday?.roomLocationId ?? null,
         read.currentPresenceState.roomLocationId,
@@ -170,6 +185,7 @@ export async function buildAttendanceCardVM(
 
     return {
         ...base,
+        siteRooms,
         expected: {
             expected: Boolean(expectedToday),
             roomLocationId: expectedToday?.roomLocationId ?? null,
@@ -221,4 +237,29 @@ async function roomLabelsFor(
             .map((r) => [r.id as string, String(r.label ?? "").trim()] as const)
             .filter(([, label]) => label.length > 0),
     );
+}
+
+/**
+ * The rooms at ONE site, for transfer destinations.
+ *
+ * Scoped to the site rather than the org for the same reason the check-in room comes from the
+ * placement: a destination list that spans campuses turns a mis-click into a child recorded at a
+ * building they are not in. `label` is the operator-facing column on `locations`; there is no
+ * `name`, and selecting one returns rows whose label is silently undefined.
+ */
+async function siteRoomsFor(
+    supabase: SupabaseClient,
+    orgId: string,
+    siteLocationId: string,
+): Promise<Array<{ id: string; label: string }>> {
+    const { data } = await supabase
+        .from("locations")
+        .select("id, label")
+        .eq("org_id", orgId)
+        .eq("location_type", "unit")
+        .eq("parent_location_id", siteLocationId)
+        .order("label", { ascending: true });
+    return ((data ?? []) as Array<{ id: string; label: unknown }>)
+        .map((r) => ({ id: r.id, label: String(r.label ?? "").trim() }))
+        .filter((r) => r.label.length > 0);
 }
