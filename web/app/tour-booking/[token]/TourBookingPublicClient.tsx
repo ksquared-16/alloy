@@ -13,7 +13,7 @@
  */
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
 import type { TourParentAction, TourParentView } from "@/lib/tours/public/tourParentView";
 import {
@@ -21,6 +21,11 @@ import {
     formatParentDayLabel,
     formatParentMonthLabel,
     formatParentTimeOnly,
+    isTourMonthInPast,
+    shiftTourMonthKey,
+    tourMonthAnchorDay,
+    tourMonthKeyOf,
+    tourMonthSlotsWindow,
     tourSlotDayKey,
 } from "@/lib/tours/public/tourParentView";
 
@@ -47,6 +52,18 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     const [busy, setBusy] = useState(false);
     const [loaded, setLoaded] = useState(false);
     const [day, setDay] = useState<string | null>(null);
+    /**
+     * The month the calendar is SHOWING. Deliberately separate from `day`.
+     *
+     * The month used to be derived from the selected day, which is why there was nothing to
+     * navigate: with no month state, "next month" had nothing to change. Browsing a month is
+     * a viewing act — it never touches `day` or `pick`, so moving around the calendar cannot
+     * select a date and cannot mutate the tour.
+     */
+    const [month, setMonth] = useState<string | null>(null);
+    /** Months already fetched, so re-visiting one does not re-query. */
+    const [loadedMonths, setLoadedMonths] = useState<string[]>([]);
+    const [monthBusy, setMonthBusy] = useState(false);
     /** Bounded cancellation: the parent has chosen Cancel and must confirm. */
     const [confirmingCancel, setConfirmingCancel] = useState(false);
 
@@ -102,6 +119,104 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
     useEffect(() => {
         void load();
     }, [load]);
+
+    /**
+     * Availability grouped by the CENTRE's calendar day.
+     *
+     * Lifted out of the render so the month effect below can reason about it. This is the
+     * same grouping the calendar always used — one availability model, not a second one.
+     */
+    const byDay = useMemo(() => {
+        const m = new Map<string, AvailableTourSlot[]>();
+        for (const s of slots) {
+            const k = tourSlotDayKey(s.startAt, s.timezone);
+            if (!k) continue;
+            const list = m.get(k) ?? [];
+            list.push(s);
+            m.set(k, list);
+        }
+        for (const list of m.values()) list.sort((a, b) => a.startAt.localeCompare(b.startAt));
+        return m;
+    }, [slots]);
+
+    const availableDays = useMemo(() => [...byDay.keys()].sort(), [byDay]);
+
+    /**
+     * Which month the grid shows.
+     *
+     * Falls back to the first day that actually has availability, which is what the surface
+     * did before month navigation existed — so first paint is unchanged, including the case
+     * where the soonest opening is already in the next month.
+     */
+    const displayedMonth =
+        month
+        ?? (day ? tourMonthKeyOf(day) : null)
+        ?? (availableDays.length ? tourMonthKeyOf(availableDays[0]!) : null)
+        ?? tourMonthKeyOf(new Date().toISOString().slice(0, 10));
+
+    /**
+     * Fetch a whole month of availability the first time it is shown.
+     *
+     * The initial load asks for a rolling 21-day window, which is what the invitation offers
+     * from — it is NOT a month, so the back half of the displayed month was always blank even
+     * when times existed there. Loading the month the visitor is actually looking at makes the
+     * grid truthful, and it is what makes navigating to September show September's real
+     * availability rather than an empty grid.
+     */
+    const loadMonth = useCallback(
+        async (monthKey: string) => {
+            const { from, to } = tourMonthSlotsWindow(monthKey);
+            setMonthBusy(true);
+            try {
+                const r = await fetch(
+                    api(`/slots?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
+                );
+                if (r.ok) {
+                    const j = (await r.json()) as SlotsJson;
+                    const incoming = j.slots ?? [];
+                    setSlots((prev) => {
+                        const seen = new Set(prev.map((x) => `${x.startAt}|${x.ruleId}`));
+                        const merged = [...prev];
+                        for (const x of incoming) {
+                            const k = `${x.startAt}|${x.ruleId}`;
+                            if (seen.has(k)) continue;
+                            seen.add(k);
+                            merged.push(x);
+                        }
+                        return merged;
+                    });
+                }
+                // A month that fails to load is marked loaded anyway: retrying on every render
+                // would hammer the route, and the empty state already tells the truth.
+                setLoadedMonths((prev) => (prev.includes(monthKey) ? prev : [...prev, monthKey]));
+            } catch {
+                setLoadedMonths((prev) => (prev.includes(monthKey) ? prev : [...prev, monthKey]));
+            } finally {
+                setMonthBusy(false);
+            }
+        },
+        [api]
+    );
+
+    /**
+     * Preselect the soonest available day exactly once.
+     *
+     * Before month navigation the grid always had a day selected, because it fell back to the
+     * first available one on every render. Doing it once here keeps that first impression and
+     * makes the difference explicit: navigating months afterwards must NOT select anything.
+     */
+    const preselected = useRef(false);
+    useEffect(() => {
+        if (preselected.current || day || !availableDays.length) return;
+        preselected.current = true;
+        setDay(availableDays[0]!);
+    }, [availableDays, day]);
+
+    useEffect(() => {
+        if (!loaded || !view?.showsOptions || !displayedMonth) return;
+        if (loadedMonths.includes(displayedMonth)) return;
+        void loadMonth(displayedMonth);
+    }, [loaded, view?.showsOptions, displayedMonth, loadedMonths, loadMonth]);
 
     const act = async (action: TourParentAction) => {
         if (busy) return;
@@ -303,76 +418,105 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
             ) : null}
 
             {view.showsOptions ? (
-                slots.length ? (
-                    (() => {
-                        // Group by the CENTRE's calendar day, not the device's.
-                        const byDay = new Map<string, AvailableTourSlot[]>();
-                        for (const s of slots) {
-                            const k = tourSlotDayKey(s.startAt, s.timezone);
-                            if (!k) continue;
-                            const list = byDay.get(k) ?? [];
-                            list.push(s);
-                            byDay.set(k, list);
-                        }
-                        const available = [...byDay.keys()].sort();
-                        if (!available.length) return null;
-                        const activeDay = day && byDay.has(day) ? day : available[0];
-                        const weeks = buildTourCalendarWeeks(activeDay);
+                (() => {
+                    // The month the grid draws. `day` is the parent's SELECTION and is
+                    // deliberately independent — browsing months never changes it.
+                    const activeDay = day && byDay.has(day) ? day : null;
+                    const weeks = buildTourCalendarWeeks(tourMonthAnchorDay(displayedMonth));
+                    const prevMonth = shiftTourMonthKey(displayedMonth, -1);
+                    // The booking boundary: a parent cannot tour in a month that has ended.
+                    // There is no canonical FORWARD horizon in the platform — the only
+                    // canonical bound is the 45-day span cap on a single availability query,
+                    // which one month can never exceed — so forward stays open.
+                    const canGoBack = !isTourMonthInPast(prevMonth);
+                    const monthLoaded = loadedMonths.includes(displayedMonth);
+                    const monthHasTimes = availableDays.some((d) => tourMonthKeyOf(d) === displayedMonth);
+                    const times = activeDay ? (byDay.get(activeDay) ?? []) : [];
 
-                        return (
-                            <div className="space-y-4">
-                                <div className="rounded-2xl border border-alloy-midnight/10 bg-white p-3 shadow-sm">
-                                    <p className="pb-2 text-center text-[14px] font-semibold text-alloy-midnight">
-                                        {formatParentMonthLabel(activeDay)}
+                    return (
+                        <div className="space-y-4">
+                            <div className="rounded-2xl border border-alloy-midnight/10 bg-white p-3 shadow-sm">
+                                <div className="flex items-center justify-between pb-2">
+                                    <button
+                                        type="button"
+                                        disabled={!canGoBack}
+                                        aria-label="Previous month"
+                                        onClick={() => setMonth(prevMonth)}
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-alloy-bend-pine/[0.10] disabled:pointer-events-none disabled:text-alloy-midnight/20"
+                                    >
+                                        <span aria-hidden>&lsaquo;</span>
+                                    </button>
+                                    <p aria-live="polite" className="text-center text-[14px] font-semibold text-alloy-midnight">
+                                        {formatParentMonthLabel(tourMonthAnchorDay(displayedMonth))}
                                     </p>
-                                    <div className="grid grid-cols-7 gap-1 pb-1" aria-hidden>
-                                        {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
-                                            <div key={`${d}-${i}`} className="text-center text-[11px] font-medium text-alloy-midnight/40">
-                                                {d}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="space-y-1">
-                                        {weeks.map((week, wi) => (
-                                            <div key={wi} className="grid grid-cols-7 gap-1">
-                                                {week.map((key, di) => {
-                                                    if (!key) return <div key={di} />;
-                                                    const has = byDay.has(key);
-                                                    const isActive = key === activeDay;
-                                                    const dayNum = Number(key.slice(8));
-                                                    return (
-                                                        <button
-                                                            key={key}
-                                                            type="button"
-                                                            disabled={!has}
-                                                            aria-pressed={isActive}
-                                                            aria-label={formatParentDayLabel(key)}
-                                                            onClick={() => {
-                                                                setDay(key);
-                                                                setPick(null);
-                                                            }}
-                                                            // 44px tap target — thumb-sized on a phone.
-                                                            className={`flex h-11 w-full items-center justify-center rounded-xl text-[15px] transition ${
-                                                                isActive
-                                                                    ? "bg-alloy-bend-pine font-semibold text-white"
-                                                                    : has
-                                                                      ? "font-medium text-alloy-midnight hover:bg-alloy-bend-pine/[0.10]"
-                                                                      : "text-alloy-midnight/25"
-                                                            }`}
-                                                        >
-                                                            {dayNum}
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        ))}
-                                    </div>
+                                    <button
+                                        type="button"
+                                        aria-label="Next month"
+                                        onClick={() => setMonth(shiftTourMonthKey(displayedMonth, 1))}
+                                        className="flex h-11 w-11 items-center justify-center rounded-xl text-[18px] leading-none text-alloy-midnight transition hover:bg-alloy-bend-pine/[0.10]"
+                                    >
+                                        <span aria-hidden>&rsaquo;</span>
+                                    </button>
                                 </div>
+                                <div className="grid grid-cols-7 gap-1 pb-1" aria-hidden>
+                                    {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+                                        <div key={`${d}-${i}`} className="text-center text-[11px] font-medium text-alloy-midnight/40">
+                                            {d}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="space-y-1">
+                                    {weeks.map((week, wi) => (
+                                        <div key={wi} className="grid grid-cols-7 gap-1">
+                                            {week.map((key, di) => {
+                                                if (!key) return <div key={di} />;
+                                                const has = byDay.has(key);
+                                                const isActive = key === activeDay;
+                                                const dayNum = Number(key.slice(8));
+                                                return (
+                                                    <button
+                                                        key={key}
+                                                        type="button"
+                                                        disabled={!has}
+                                                        aria-pressed={isActive}
+                                                        aria-label={formatParentDayLabel(key)}
+                                                        onClick={() => {
+                                                            setDay(key);
+                                                            setPick(null);
+                                                        }}
+                                                        // 44px tap target — thumb-sized on a phone.
+                                                        className={`flex h-11 w-full items-center justify-center rounded-xl text-[15px] transition ${
+                                                            isActive
+                                                                ? "bg-alloy-bend-pine font-semibold text-white"
+                                                                : has
+                                                                  ? "font-medium text-alloy-midnight hover:bg-alloy-bend-pine/[0.10]"
+                                                                  : "text-alloy-midnight/25"
+                                                        }`}
+                                                    >
+                                                        {dayNum}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                                {monthLoaded && !monthHasTimes ? (
+                                    // Truthful, not fabricated: this month really has no
+                                    // configured availability, and the parent can keep looking.
+                                    <p className="pt-2 text-center text-[13px] leading-relaxed text-alloy-midnight/55">
+                                        No times available this month. Try another month.
+                                    </p>
+                                ) : null}
+                                {monthBusy && !monthLoaded ? (
+                                    <p className="pt-2 text-center text-[13px] text-alloy-midnight/45">Loading times…</p>
+                                ) : null}
+                            </div>
 
+                            {activeDay ? (
                                 <div className="space-y-2">
                                     <p className="text-[15px] font-medium text-alloy-midnight">{formatParentDayLabel(activeDay)}</p>
                                     <div className="grid grid-cols-2 gap-2">
-                                        {(byDay.get(activeDay) ?? []).map((s) => {
+                                        {times.map((s) => {
                                             const chosen = pick?.startAt === s.startAt && pick?.ruleId === s.ruleId;
                                             return (
                                                 <button
@@ -392,36 +536,36 @@ export default function TourBookingPublicClient({ token }: { token: string }) {
                                         })}
                                     </div>
                                 </div>
+                            ) : loaded && !availableDays.length && loadedMonths.length ? (
+                                <p className="text-[15px] leading-relaxed text-alloy-midnight/70">
+                                    We don&rsquo;t have times available right now. Reply to our message and we&rsquo;ll find one for you.
+                                </p>
+                            ) : null}
 
-                                {pick && bookAction ? (
-                                    <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
-                                        <div className="space-y-0.5">
-                                            <p className="text-[15px] font-semibold text-alloy-midnight">
-                                                {formatParentDayLabel(tourSlotDayKey(pick.startAt, pick.timezone) ?? activeDay)}
-                                            </p>
-                                            <p className="text-[15px] text-alloy-midnight/80">
-                                                {formatParentTimeOnly(pick.startAt, pick.timezone)}
-                                            </p>
-                                            <p className="text-[15px] text-alloy-midnight/70">{view.locationLine}</p>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            disabled={busy}
-                                            onClick={() => void act(bookAction)}
-                                            className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
-                                        >
-                                            {bookAction.label}
-                                        </button>
+                            {pick && bookAction ? (
+                                <div className="space-y-3 rounded-2xl border border-alloy-midnight/10 bg-white p-4 shadow-sm">
+                                    <div className="space-y-0.5">
+                                        <p className="text-[15px] font-semibold text-alloy-midnight">
+                                            {formatParentDayLabel(tourSlotDayKey(pick.startAt, pick.timezone) ?? activeDay ?? "")}
+                                        </p>
+                                        <p className="text-[15px] text-alloy-midnight/80">
+                                            {formatParentTimeOnly(pick.startAt, pick.timezone)}
+                                        </p>
+                                        <p className="text-[15px] text-alloy-midnight/70">{view.locationLine}</p>
                                     </div>
-                                ) : null}
-                            </div>
-                        );
-                    })()
-                ) : (
-                    <p className="text-[15px] leading-relaxed text-alloy-midnight/70">
-                        We don&rsquo;t have times available right now. Reply to our message and we&rsquo;ll find one for you.
-                    </p>
-                )
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        onClick={() => void act(bookAction)}
+                                        className="w-full rounded-xl bg-alloy-bend-pine px-4 py-3.5 text-[15px] font-semibold text-white transition disabled:opacity-40"
+                                    >
+                                        {bookAction.label}
+                                    </button>
+                                </div>
+                            ) : null}
+                        </div>
+                    );
+                })()
             ) : null}
 
             {confirmingCancel ? (

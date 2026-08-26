@@ -330,6 +330,57 @@ export function formatParentMonthLabel(dayKey: string): string {
  * Build the weeks of a month grid for `dayKeys`, padded to whole Sunday-start weeks.
  * Empty string means "no cell" (leading/trailing padding).
  */
+/**
+ * Month navigation for the parent calendar.
+ *
+ * The displayed month used to be a pure function of the selected day — there was no month
+ * state at all, so there was nothing a visitor could move. These helpers give the month its
+ * own identity WITHOUT introducing a second calendar model: the grid is still built by
+ * {@link buildTourCalendarWeeks}, availability is still grouped by {@link tourSlotDayKey},
+ * and a month key is just the first day of that month.
+ */
+
+/** `2026-08-14` → `2026-08`. */
+export function tourMonthKeyOf(dayKey: string): string {
+    return String(dayKey ?? "").slice(0, 7);
+}
+
+/** A month key as the day key of its first day, which is what the grid builder consumes. */
+export function tourMonthAnchorDay(monthKey: string): string {
+    return `${monthKey}-01`;
+}
+
+/** Move a `YYYY-MM` key by whole months, rolling the year correctly. */
+export function shiftTourMonthKey(monthKey: string, delta: number): string {
+    const [y, m] = String(monthKey ?? "").split("-").map((n) => Number(n));
+    if (!y || !m) return monthKey;
+    const zero = (y * 12 + (m - 1)) + delta;
+    const ny = Math.floor(zero / 12);
+    const nm = (zero % 12) + 1;
+    return `${ny}-${String(nm).padStart(2, "0")}`;
+}
+
+/**
+ * The instant window to ask the availability route for, to cover one month.
+ *
+ * Padded a day on each side because slots are grouped by the CENTRE's local day while the
+ * route takes instants — without the pad, a centre east or west of UTC loses its first or
+ * last day of the month. The padded span is at most 33 days, comfortably inside
+ * `TOUR_PUBLIC_SLOTS_MAX_RANGE_MS` (45 days), so this can never trip the abuse guard.
+ */
+export function tourMonthSlotsWindow(monthKey: string): { from: Date; to: Date } {
+    const [y, m] = monthKey.split("-").map((n) => Number(n));
+    const from = new Date(Date.UTC(y, m - 1, 1) - 24 * 60 * 60 * 1000);
+    const to = new Date(Date.UTC(y, m, 1) + 24 * 60 * 60 * 1000);
+    return { from, to };
+}
+
+/** `true` when `monthKey` is strictly before the month containing `now`. */
+export function isTourMonthInPast(monthKey: string, now: Date = new Date()): boolean {
+    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    return monthKey < current;
+}
+
 export function buildTourCalendarWeeks(monthOfDayKey: string): string[][] {
     const [y, m] = monthOfDayKey.split("-").map((n) => Number(n));
     if (!y || !m) return [];
