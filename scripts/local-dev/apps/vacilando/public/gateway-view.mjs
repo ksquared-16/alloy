@@ -2181,6 +2181,39 @@ export function operatorDecisionRun(lane) {
   return { ...(active || lane?.previous_run || {}), governed_action: pending };
 }
 
+/** Operator-facing result of Authorize / Deny. Never says "census" for a push. */
+export function governedDecisionNotice({
+  approve = true,
+  already = false,
+  error = null,
+  actionKey = null,
+  title = null,
+  approveLabel = null,
+} = {}) {
+  if (error) {
+    if (error === "self_approval_refused") {
+      return { kind: "err", text: "This lane cannot approve its own request." };
+    }
+    if (error === "request_not_found") {
+      return { kind: "err", text: "That approval is no longer available." };
+    }
+    if (error === "unreachable") {
+      return { kind: "err", text: "Could not reach the Gateway. The decision was not sent." };
+    }
+    return { kind: "err", text: `Could not resolve that decision (${error}).` };
+  }
+  if (already) return { kind: "ok", text: "Already resolved." };
+  if (!approve) return { kind: "ok", text: "Denied." };
+  const what = approveLabel
+    ? String(approveLabel).replace(/^Authorize\s+/i, "")
+    : (actionKey === "repository.push" ? "Push"
+      : actionKey === "repository.merge_pull_request" ? "Merge"
+      : actionKey === "promotion.open_pr" ? "Pull request"
+      : actionKey === "database.read_census" ? "Census"
+      : (title || "Action"));
+  return { kind: "ok", text: `${what} authorized. Director is executing.` };
+}
+
 export function renderOperatorDecisionBar(run) {
   const inner = renderOperatorDecisionActions(run);
   if (!inner) return "";

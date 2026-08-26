@@ -245,9 +245,14 @@ await test("the approval card carries the facts a Director needs", () => {
   }
   assert.ok(p.consequences.length >= 1, "the card must say what approving does");
   assert.match(p.authorization_note, /single-use/i);
-  // No live GitHub read happens under the test runner, and the card says so
-  // rather than showing gaps that read as zeroes.
-  assert.equal(p.snapshot_available, false);
+  // GitHub snapshot is best-effort. When gh can inspect PR #508 the card
+  // carries live facts; when it cannot, snapshot_available is false so the
+  // card does not invent zeroes. Either is honest.
+  assert.equal(typeof p.snapshot_available, "boolean");
+  if (!p.snapshot_available) {
+    const ci = p.facts.find((f) => f.label === "Continuous integration");
+    assert.equal(ci?.value, "not checked at proposal time");
+  }
 });
 
 await test("the card renders, and stacks its own facts", () => {
@@ -625,6 +630,36 @@ await test("an approval stays reachable after its run completes", async () => {
   assert.match(html, /Needs approval/);
   // And it is attached to previous_run in the payload, not only at lane level.
   assert.equal(lane.previous_run.governed_action.request_id, made.request.request_id);
+});
+
+await test("a completed approval does not keep Authorize push on a frozen run snapshot", async () => {
+  const { laneId, runId } = blockedRunIn("repo_alloy");
+  const made = orchestrateDirectorGovernedWait({ run: getExecutionRun(runId, ROOT), root: ROOT });
+  processGovernedAction(made.request.request_id, { root: ROOT });
+  assert.equal(transitionExecutionRun(runId, "NEEDS_INPUT", {
+    origin: "agent", root: ROOT, reason: "awaiting operator",
+  }).ok, true);
+  assert.equal(transitionExecutionRun(runId, "COMPLETE", {
+    origin: "agent", root: ROOT, reason: "turn_finished",
+    completion_report: { summary: "Waiting on operator for the push." },
+  }).ok, true);
+  setGovernedActionExecuteImplForTests(() => ({
+    ok: true,
+    action: {
+      id: "tha_push", state: "completed", actionType: "repository.push",
+      inputs: {}, result: { pushedSha: "abc", evidencePath: join(ROOT, "p.json") },
+    },
+  }));
+  const approved = await approveGovernedAction(made.request.request_id, { actor: "kelly", root: ROOT });
+  assert.equal(approved.ok, true, approved.error);
+  assert.equal(getGovernedAction(made.request.request_id, ROOT).status, "complete");
+
+  const [lane] = attachLaneGovernedActions(attachLaneRuns([{ lane_id: laneId }], ROOT), ROOT);
+  assert.equal(lane.execution_run, null);
+  assert.equal(lane.previous_run.governed_action.status, "complete");
+  assert.notEqual(lane.governed_action?.status, "awaiting_operator");
+  const decision = operatorDecisionRun(lane);
+  assert.equal(renderOperatorDecisionBar(decision).includes("data-gw-governed-approve"), false);
 });
 
 await test("nothing is widened when no approval is waiting", () => {

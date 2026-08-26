@@ -2076,9 +2076,24 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
   const list = Array.isArray(lanes) ? lanes : [];
   if (!list.length) return list;
   return list.map((lane) => {
-    const pending = pendingGovernedActionForLane(lane?.lane_id, root)
-      || pendingGovernedActionForRun(lane?.execution_run?.run_id, root);
-    if (!pending) return lane;
+    const hydrated = {
+      ...lane,
+      execution_run: hydrateGovernedOnRun(lane.execution_run, root),
+      previous_run: hydrateGovernedOnRun(lane.previous_run, root),
+    };
+    const pending = pendingGovernedActionForLane(hydrated?.lane_id, root)
+      || pendingGovernedActionForRun(hydrated?.execution_run?.run_id, root);
+    if (!pending) {
+      // A resolved approval must not keep advertising itself from the run
+      // snapshot. Runtime Performance's push completed; previous_run still
+      // said awaiting_operator, so Authorize push stayed on screen and the
+      // click looked like a no-op (already complete + "Census authorized").
+      const snapshot = hydrated.governed_action;
+      if (snapshot && !isPendingGovernedStatus(snapshot.status)) {
+        return { ...hydrated, governed_action: null };
+      }
+      return hydrated;
+    }
     const pub = publicGovernedAction(pending);
     const withAction = (r) => (r
       ? {
@@ -2099,26 +2114,37 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
     // turn, and the Director had a decision to make with no card to make it on.
     // The request is the LANE's, so it is attached wherever the lane's run is.
     return {
-      ...lane,
+      ...hydrated,
       governed_action: pub,
-      execution_run: withAction(lane.execution_run),
-      previous_run: lane.execution_run ? lane.previous_run : withAction(lane.previous_run),
+      execution_run: withAction(hydrated.execution_run),
+      previous_run: hydrated.execution_run ? hydrated.previous_run : withAction(hydrated.previous_run),
     };
   });
 }
 
+function hydrateGovernedOnRun(run, root) {
+  if (!run?.governed_action?.request_id) return run || null;
+  const rec = getGovernedAction(run.governed_action.request_id, root);
+  if (!rec) return run;
+  return { ...run, governed_action: publicGovernedAction(rec) };
+}
+
 export function applyGovernedActionToPublicRun(run, root = runtimeRoot()) {
   if (!run?.run_id && !run?.lane_id) return run;
-  const pending = pendingGovernedActionForRun(run.run_id, root)
-    || pendingGovernedActionForLane(run.lane_id, root);
+  const hydrated = hydrateGovernedOnRun(run, root);
+  const pending = pendingGovernedActionForRun(hydrated?.run_id, root)
+    || pendingGovernedActionForLane(hydrated?.lane_id, root);
   if (!pending) {
-    return run.governed_action ? run : { ...run, governed_action: run.governed_action || null };
+    if (hydrated?.governed_action && !isPendingGovernedStatus(hydrated.governed_action.status)) {
+      return { ...hydrated, governed_action: null };
+    }
+    return hydrated;
   }
   return {
-    ...run,
+    ...hydrated,
     governed_action: publicGovernedAction(pending),
     resource_wait: {
-      ...(run.resource_wait || {}),
+      ...(hydrated.resource_wait || {}),
       ...waitProjection(pending),
     },
   };

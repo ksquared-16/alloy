@@ -26,6 +26,7 @@ const {
   PROMPT_NOT_READY_ERROR,
   assessPanePromptReadiness,
   detectPromptBlocker,
+  detectProviderBusy,
   promptReadinessAllowsSend,
 } = await import("../lib/vacilando/provider-prompt-readiness.mjs");
 const viewModule = await import("../apps/vacilando/public/gateway-view.mjs");
@@ -274,6 +275,27 @@ await test("a composer holding typed text is READY — the footer varies", () =>
   // the live Runtime Performance false positive. A Thinking… line is a turn.
   assert.equal(assessPanePromptReadiness("❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "ready");
   assert.equal(assessPanePromptReadiness("Thinking… (12s · esc to interrupt)\n❯ \n  ⏵⏵ auto mode on · esc to interrupt", { provider: "claude" }).state, "busy");
+});
+
+await test("prose containing 'working.' is not a spinner", () => {
+  // Vacilando sat QUEUED waiting_for_ready_prompt because
+  // TURN_SPINNER_LINE's ellipsis class included ASCII ".", so
+  // "they're actively working. Each can" matched as mid-turn. Send, cancel
+  // retry, and refresh all refused a pane that was idle at a prompt.
+  const pane = [
+    "  with no PR. I haven't touched them — they're actively working. Each can",
+    "  propose its own promotion through the governed chain now.",
+    "",
+    "✻ Brewed for 14m 6s",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "❯ promote surfaces",
+    "────────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+  assert.equal(detectProviderBusy(pane), null);
+  const a = assessPanePromptReadiness(pane, { provider: "claude" });
+  assert.equal(a.state, "ready", a.summary);
+  assert.equal(promptReadinessAllowsSend(a).allow, true);
 });
 
 await test("live narration after leftover Cooked is busy, so Send does not paste into the turn", () => {

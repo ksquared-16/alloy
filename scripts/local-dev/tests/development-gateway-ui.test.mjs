@@ -68,6 +68,7 @@ import {
   renderCurrentWork,
   renderPreviousWork,
   renderLaneRuntimeControls,
+  governedDecisionNotice,
   renderExecutionCapacity,
   summarizeExecutionCapacity,
   renderDevelopmentResources,
@@ -2114,6 +2115,19 @@ await test("Gateway settings renders Claude and Cursor connect cards", () => {
   });
   assert.match(section, /data-gw-provider-card="claude"/);
   assert.equal(section.includes("OpenAI"), false);
+});
+
+await test("governed approval copy is the action, not census", () => {
+  const push = governedDecisionNotice({
+    approve: true, actionKey: "repository.push", approveLabel: "Authorize push",
+  });
+  assert.match(push.text, /push/i);
+  assert.equal(push.text.includes("Census"), false);
+  const already = governedDecisionNotice({ approve: true, already: true, actionKey: "repository.push" });
+  assert.match(already.text, /Already resolved/);
+  const census = governedDecisionNotice({ approve: true, actionKey: "database.read_census" });
+  assert.match(census.text, /Census/);
+  assert.match(gwSrc, /governedDecisionNotice/);
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

@@ -512,6 +512,10 @@ export async function maybeCompleteIdleTurnFromLastOutput(lane, {
   if (lane?.provider_activity?.live_progress?.idle_result !== true) {
     return { ok: true, completed: false, skipped: "turn_not_finished" };
   }
+  const ga = lane?.governed_action || run?.governed_action;
+  if (ga && ["requested", "awaiting_director", "awaiting_control_plane_refresh", "awaiting_operator", "executing"].includes(ga.status)) {
+    return { ok: true, completed: false, skipped: "governed_action_pending" };
+  }
   const started = parseMs(run.started_at);
   if (started != null && (nowMs - started) < IDLE_TURN_COMPLETE_GRACE_MS) {
     return { ok: true, completed: false, skipped: "grace" };

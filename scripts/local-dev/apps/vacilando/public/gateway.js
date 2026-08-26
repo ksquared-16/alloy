@@ -1880,9 +1880,10 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     const btn = governedApprove || governedDeny;
     if (btn.disabled) return;
-    const requestId = btn.getAttribute("data-request-id")
-      || G.lane?.governed_action?.request_id
-      || G.lane?.execution_run?.governed_action?.request_id;
+    const ga = G.lane?.governed_action
+      || G.lane?.execution_run?.governed_action
+      || G.lane?.previous_run?.governed_action;
+    const requestId = btn.getAttribute("data-request-id") || ga?.request_id;
     if (!requestId) return;
     btn.disabled = true;
     try {
@@ -1893,16 +1894,25 @@ document.addEventListener("click", async (e) => {
         body: JSON.stringify({ request_id: requestId }),
       });
       const out = await r.json().catch(() => ({}));
-      G.notice = out.ok
-        ? { kind: "ok", text: governedApprove ? "Census authorized. Director is executing." : "Census denied." }
-        : { kind: "err", text: out.error || "Could not resolve the census decision." };
+      G.notice = View.governedDecisionNotice({
+        approve: Boolean(governedApprove),
+        already: out.already === true,
+        error: out.ok ? null : (out.error || "approve_failed"),
+        actionKey: ga?.action_key,
+        title: ga?.title,
+        approveLabel: ga?.approve_label,
+      });
       const laneId = G.selected || G.lane?.lane_id;
       await fetchLanes();
       if (laneId) await fetchLane(laneId);
       paint();
     } catch {
       btn.disabled = false;
-      G.notice = { kind: "err", text: "Could not resolve the census decision." };
+      G.notice = View.governedDecisionNotice({
+        approve: Boolean(governedApprove),
+        error: "unreachable",
+        actionKey: ga?.action_key,
+      });
       paint();
     }
     return;
