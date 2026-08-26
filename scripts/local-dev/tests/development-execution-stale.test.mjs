@@ -23,6 +23,8 @@ import {
 } from "../lib/vacilando/execution-run.mjs";
 import { deliverManagedLaneInstruction } from "../lib/vacilando/execution-run-send.mjs";
 import {
+  canOperatorSupersedeRun,
+  OPERATOR_SUPERSEDE_GRACE_MS,
   classifyExecutionRunStale,
   closeStaleExecutionRun,
   collectStaleRunFacts,
@@ -742,6 +744,40 @@ await test("a leftover Cooked pane does not complete a run whose transcript is a
   assert.equal(out.completed, false);
   assert.equal(out.skipped, "last_output_mismatch");
   assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+});
+
+await test("operator Send can supersede a parked RECOVERING run", async () => {
+  // THE COMMUNICATIONS DEAD END. A recovered run waits for the agent to report
+  // again. When the agent already answered BEFORE the recovery — or its reply
+  // was consumed as a delivery echo — nothing further arrives, and the run parks
+  // in RECOVERING. The stale governor calls that class "active" so it never
+  // collects it, and Send was refused for anything that was not EXECUTING or
+  // NEEDS_INPUT. The lane became unreachable: it sat there 46 minutes with an
+  // idle pane and no way back in.
+  const delivered = Date.now() - (OPERATOR_SUPERSEDE_GRACE_MS + 60_000);
+  const recovering = { state: "RECOVERING", started_at: new Date(delivered).toISOString() };
+  const idle = { session_state: "IDLE", now_ms: Date.now(), delivered_ms: delivered };
+  assert.equal(canOperatorSupersedeRun(recovering, idle), true);
+
+  // POSITIVE CONTROLS. This widens the STATE, never the conditions — every
+  // existing guard must still refuse, or the fix is a hole rather than a door.
+  for (const busy of ["STARTING", "RESTARTING", "VERIFYING", "HANDOFF"]) {
+    assert.equal(canOperatorSupersedeRun(recovering, { ...idle, session_state: busy }), false, busy);
+  }
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, open_resource: true }), false);
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, in_flight_continuation: true }), false);
+  assert.equal(canOperatorSupersedeRun(recovering, { ...idle, delivered_ms: Date.now() - 1000 }), false,
+    "the grace window still protects a delivery that is still landing");
+
+  // And states that were never supersedable still are not.
+  for (const state of ["QUEUED", "VALIDATING", "WAITING_RESOURCE", "COMPLETE"]) {
+    assert.equal(canOperatorSupersedeRun({ ...recovering, state }, idle), false, state);
+  }
+  // EXECUTING and NEEDS_INPUT are unchanged.
+  assert.equal(canOperatorSupersedeRun({ ...recovering, state: "EXECUTING" }, idle), true);
+  assert.equal(canOperatorSupersedeRun({ state: "NEEDS_INPUT" }, idle), true);
+  assert.equal(canOperatorSupersedeRun({ state: "NEEDS_INPUT", agent_report: { type: "needs_input" } }, idle), false,
+    "a real blocking question is still an operator decision, not a stale turn");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
