@@ -156,6 +156,13 @@ export default function StagePaperworkCard({
                               ? "No paperwork required — an authored decision"
                               : "No paperwork chosen yet"}
                     </p>
+                    {required.length ? (
+                        // Same rule as the advanced rows: state what is configured, never imply an
+                        // enforcement the platform does not perform yet.
+                        <p className="mt-0.5 text-[0.6875rem] text-alloy-midnight/45" data-testid="stage-paperwork-enforcement-note">
+                            Configured blocking; transition enforcement pending Form-requirement preflight adoption.
+                        </p>
+                    ) : null}
                     {summary ? (
                         <p className="mt-0.5 truncate text-[0.6875rem] text-alloy-midnight/45">
                             {summary}

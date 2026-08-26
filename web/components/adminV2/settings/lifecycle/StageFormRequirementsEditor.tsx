@@ -228,6 +228,24 @@ export default function StageFormRequirementsEditor({
                                     the readiness evaluators implement today, and these forms are the work
                                     of this stage. */}
                                 <span className="text-[0.6875rem] text-alloy-midnight/35">on this record · due before leaving the stage</span>
+                                {/*
+                                 * The claim this control must NOT make.
+                                 *
+                                 * `evaluateTransitionRequirementPreflight` reads field rule ids and does
+                                 * not yet read `requirements_v1`, so a form requirement marked blocking
+                                 * does not currently stop a stage-changing outcome. Saying "blocking"
+                                 * with nothing beside it would describe behaviour the platform does not
+                                 * have — and an operator would reasonably rely on it.
+                                 */}
+                                {row.enforcement === "blocking" ? (
+                                    <span
+                                        className="text-[0.6875rem] text-alloy-midnight/45"
+                                        data-testid="form-requirement-enforcement-pending"
+                                        title="Form requirements do not yet participate in transition requirement preflight."
+                                    >
+                                        · configured blocking; transition enforcement pending
+                                    </span>
+                                ) : null}
                             </div>
                         </li>
                     ))}

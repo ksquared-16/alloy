@@ -143,3 +143,59 @@ describe("the compact surface reads as the director's sentence", () => {
         expect(CARD).not.toContain("bg-alloy-midnight");
     });
 });
+
+describe("the enforcement claim stays truthful", () => {
+    /**
+     * The five requirements are authored `blocking` because that is their intended configuration.
+     * They do not block anything yet: `evaluateTransitionRequirementPreflight` reads field rule ids
+     * and does not read `requirements_v1`. A surface that says "blocking" with nothing beside it
+     * describes behaviour the platform does not have, and an operator would reasonably rely on it.
+     *
+     * The rule this pins: state what is CONFIGURED, disclose what is not yet ENFORCED, and never
+     * close the gap by marking a requirement satisfied.
+     */
+    const EDITOR = readFileSync(
+        resolve(__dirname, "../../components/adminV2/settings/lifecycle/StageFormRequirementsEditor.tsx"),
+        "utf8",
+    );
+
+    it("discloses pending enforcement wherever paperwork is summarised", () => {
+        const html = renderToStaticMarkup(
+            <StagePaperworkCard
+                departmentId="d1"
+                stageKey="enrolling"
+                stageRecord={{
+                    id: "s1", key: "enrolling", label: "Enrolling", sort_order: 0, is_active: true,
+                    requirements_v1: parseStageRequirementsV1({ version: 1, requirements: compilePacketToStageRequirements(ITEMS) })!,
+                } as LifecycleBuilderStageRecord}
+                process={{ id: "p1", key: "enrollment", name: "Enrollment", primary_entity: "opportunity", sort_order: 0, is_active: true, stages: [] } as LifecycleBuilderProcessRecord}
+            />,
+        );
+        expect(html).toContain("Configured blocking; transition enforcement pending");
+    });
+
+    it("says nothing about enforcement when no paperwork is configured", () => {
+        const html = renderToStaticMarkup(
+            <StagePaperworkCard
+                departmentId="d1"
+                stageKey="enrolling"
+                stageRecord={{ id: "s1", key: "enrolling", label: "Enrolling", sort_order: 0, is_active: true } as LifecycleBuilderStageRecord}
+                process={{ id: "p1", key: "enrollment", name: "Enrollment", primary_entity: "opportunity", sort_order: 0, is_active: true, stages: [] } as LifecycleBuilderProcessRecord}
+            />,
+        );
+        expect(html).not.toContain("transition enforcement pending");
+    });
+
+    it("discloses it on the advanced rows too, only where blocking is chosen", () => {
+        expect(EDITOR).toContain('row.enforcement === "blocking" ?');
+        expect(EDITOR).toContain("configured blocking; transition enforcement pending");
+    });
+
+    it("never offers a way to mark a requirement satisfied", () => {
+        // The forbidden shortcut: simulating enforcement by manufacturing satisfaction.
+        for (const src of [EDITOR, CARD]) {
+            expect(src).not.toContain("satisfied");
+            expect(src).not.toContain("form_submissions");
+        }
+    });
+});
