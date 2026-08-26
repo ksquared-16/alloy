@@ -868,7 +868,10 @@ function defaultModeForAction(actionKey, requested) {
    * which reads as "the operator's policy forbids this" rather than "nobody assigned it a mode".
    * That cost a full delivery cycle to diagnose once; the fallthrough is the hazard, not this line.
    */
-  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "qa_session_restore";
+  // "other" is the existing GOVERNED_MODES member for a privileged action that is neither a
+  // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
+  // enum would add governance vocabulary for one action that already has a home.
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
   return "read_only";
 }
 
