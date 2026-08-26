@@ -24,6 +24,11 @@ import type {
 } from "@/lib/adminV2/runtime/focusPanel/focusPanelWorkModeModel";
 
 export type FocusPanelWorkModeFromDrawerVmInput = {
+    /**
+     * The participation attention is currently on, when the runtime selected one. The panel stays
+     * CASE grain; this is only which participant the operator is presently concerned with.
+     */
+    selectedParticipationId?: string | null;
     mode: FocusPanelMode;
     displayVm: OpportunityDrawerViewModel;
     record: Record<string, unknown>;
@@ -55,6 +60,7 @@ export function focusPanelWorkModeModelFromDrawerVm(
         perspective,
         statusLabel,
         canMutate,
+        selectedParticipationId: input.selectedParticipationId ?? null,
     });
 
     const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>();

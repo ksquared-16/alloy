@@ -100,6 +100,14 @@ export default function OpportunityFocusPanelBody({
     const model = useMemo(() => {
         if (enriched) {
             const settled = focusPanelWorkModeModelFromDrawerVm({
+                /*
+                 * ATTENTION'S CURRENT SUBJECT IS THE CARRIER. For a child-grain lens the Work View
+                 * selects a participation, and that id rides here beside the case the panel still
+                 * composes against. The resolver decides whether it names somebody on THIS case, so
+                 * an id left over from the previous row resolves to nobody rather than to whoever
+                 * happens to be first.
+                 */
+                selectedParticipationId: attentionSubjectId ?? null,
                 mode,
                 displayVm: enriched.displayVm,
                 record: enriched.record,

@@ -17,6 +17,10 @@
  * @see docs/platform/operator/operational-context-boundary.md
  */
 
+import {
+    resolveParticipantScope,
+    type ParticipantScopeCandidate,
+} from "@/lib/adminV2/runtime/operationalContext/resolveParticipantScope";
 import type { OperationalSubjectViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import type { StageWorkItemProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
@@ -50,6 +54,12 @@ export type BuildOperationalContextInput = {
     perspective: RuntimePerspective | null;
     statusLabel: string | null;
     canMutate: boolean;
+    /**
+     * The participation the runtime has explicitly selected, travelling from navigation. A stable
+     * id, never a label. Absent means no participant is scoped — which is ordinary, and is a real
+     * answer rather than an instruction to resolve one.
+     */
+    selectedParticipationId?: string | null;
     /** Optional overrides; default `ready` (cards mount only when ready). */
     status?: OperationalContextStatus;
     maskedChannels?: boolean;
@@ -293,6 +303,35 @@ function buildCommunicationsSignal(
  * Project the composed subject payload into an `OperationalContext`. Pure; safe
  * inside `useMemo`. Performs no I/O — `truth` is already composed upstream.
  */
+/**
+ * Participation candidates, read from the case's own children rows. Identity only — this decides
+ * nothing about a child beyond "is this who the selection names".
+ */
+function participantCandidatesFromTruth(truth: Record<string, unknown>): ParticipantScopeCandidate[] {
+    const rows = Array.isArray((truth as { _inquiry_children?: unknown })._inquiry_children)
+        ? ((truth as { _inquiry_children: unknown[] })._inquiry_children as Array<Record<string, unknown>>)
+        : [];
+    return rows
+        .map((r) => {
+            const id = typeof r.id === "string" ? r.id.trim() : "";
+            if (!id) return null;
+            const str = (v: unknown): string | null => {
+                const s = v != null ? String(v).trim() : "";
+                return s || null;
+            };
+            return {
+                id,
+                customerMemberId: str(r.customer_member_id),
+                personId: str(r.person_id),
+                name: str(r.child_name) ?? str(r.display_name) ?? str(r.name),
+                imageUrl: str(r.photo_url) ?? str(r.image_url),
+                stageKey: str(r.stage_key),
+                stageLabel: str(r.outcome_status_label),
+            } as ParticipantScopeCandidate;
+        })
+        .filter((c): c is NonNullable<typeof c> => c !== null);
+}
+
 export function buildOperationalContext(input: BuildOperationalContextInput): OperationalContext {
     const { subjectVm, truth, perspective, statusLabel, canMutate } = input;
 
@@ -319,6 +358,18 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         truth,
         grain: "case",
         signals: buildOperationalContextSignals(subjectVm, truth, new Date()),
+        /*
+         * THE SCOPED PARTICIPANT, resolved once here rather than by each card.
+         *
+         * The selection is a stable id travelling from navigation; this only decides whether it
+         * names somebody on THIS case. It never changes grain — the subject above is still the case
+         * — and `resolveParticipantScope` refuses to guess, so an id from the case the operator just
+         * left resolves to nobody instead of to whoever happens to be first here.
+         */
+        participantScope: resolveParticipantScope({
+            selectedParticipationId: input.selectedParticipationId ?? null,
+            participants: participantCandidatesFromTruth(truth),
+        }).scope,
         stageWorkRuntime: subjectVm.workspace.stage_work_runtime ?? null,
         stageWorkPending: subjectVm.workspace.stage_work?.status === "pending",
         recordHeaderActions: subjectVm.actions.record_header ?? null,
