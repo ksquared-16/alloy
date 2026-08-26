@@ -46,6 +46,7 @@ SUITES=(
   "development-certification-fixture.test.mjs"
   "development-browser-auth.test.mjs"
   "development-process-attribution.test.mjs"
+  "development-health.test.mjs"
 )
 
 PASS=0

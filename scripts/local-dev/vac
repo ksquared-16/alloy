@@ -18,6 +18,7 @@ Usage:
   vac checkpoint-create <run_id>    Commit ONLY the named paths (never a broad add)
   vac certify-fixture <name> <op>   Run an allowlisted certification fixture (credentials stay trusted)
   vac browser-auth <status|sign-in> Recover a lane's browser session (you sign in; the agent cannot)
+  vac health [--json|--check N]     Host and Vacilando runtime health (read-only)
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
                            conversation: progress | needs-input | completion | failure
@@ -55,6 +56,10 @@ case "${1:-}" in
   certify-fixture)
     shift
     exec node "$SCRIPT_DIR/vac-certify-fixture.mjs" "$@"
+    ;;
+  health)
+    shift
+    exec node "$SCRIPT_DIR/vac-health.mjs" "$@"
     ;;
   browser-auth)
     shift
