@@ -187,6 +187,35 @@ const runs = lanesRaw.map((l) => {
  * the doctrine's "unbounded state" problem, and runs.stale reports it as such
  * rather than inventing a deadline.
  */
+// S6: express every non-terminal run's wait in the canonical contract.
+let waits = null;
+try {
+  const RW = await import("./lib/vacilando/run-wait.mjs");
+  const VA = await import("./lib/vacilando/validation-admission.mjs");
+  const descriptors = [];
+  // Only genuinely WAITING states produce a wait. An EXECUTING run with reason
+  // `instruction_delivered` is working, not waiting — treating its reason as a
+  // wait reason reported three healthy runs as invalid on the first live run.
+  const WAITING_STATES = new Set(["QUEUED", "NEEDS_INPUT", "WAITING_RESOURCE", "RECOVERING"]);
+  for (const l of lanesRaw) {
+    const r = runFor(l.lane_id);
+    if (!r || !WAITING_STATES.has(r.state)) continue;
+    const since = Date.parse(r.updated_at || r.created_at || "") || Date.now();
+    const reason = r.state === "NEEDS_INPUT" ? "needs_operator_input"
+      : r.state === "RECOVERING" ? "recovering"
+      : (r.state_reason || null);
+    descriptors.push(RW.describeWait({
+      reason, resource_id: r.run_id, waiting_since: since,
+      context: { no_session_binding: !l.binding?.worktree_path },
+    }));
+  }
+  for (const e of VA.readClaimStore({}).queue || []) {
+    const d = RW.waitFromValidationQueueEntry(e);
+    if (d) descriptors.push(d);
+  }
+  waits = RW.summarizeWaits(descriptors);
+} catch { waits = null; }
+
 const RUN_BOUNDS = {
   instruction_delivered: 6 * 60 * 60 * 1000,
   admission_delivered: 6 * 60 * 60 * 1000,
@@ -257,7 +286,7 @@ const report = composeReport({
   endedAt: new Date().toISOString(),
   probeResults: {
     load, memory, disk, gateway, seats, panes: panes || [], lanes, runs,
-    run_bounds: RUN_BOUNDS, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
+    run_bounds: RUN_BOUNDS, waits, attribution, workloads, workload_cost: workloadCost, capacity, enforcement,
     ports, worktrees, toolkit, configured_max: configuredMax,
   },
 });

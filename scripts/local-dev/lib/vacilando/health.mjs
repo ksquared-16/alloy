@@ -378,7 +378,47 @@ export function checkValidationCollisions({ hw, workloads = [], cost = null, cap
   });
 }
 
-export function checkRunsStale({ runs = [], bounds = {} }) {
+/**
+ * S6: run waits, judged by POLICY and DEADLINE — never by age.
+ *
+ * A five-day NEEDS_INPUT is healthy because its policy says so. A five-minute
+ * machine wait past its bound is not. A wait nobody defined is invalid and is
+ * surfaced rather than kept alive.
+ */
+export function checkRunsStale({ runs = [], bounds = {}, waits = null }) {
+  if (waits) {
+    const { counts, expired, invalid } = waits;
+    const sev = counts.expired > 0 || counts.invalid > 0 ? "problem"
+      : counts.near_deadline > 0 ? "watch" : "healthy";
+    return finding({
+      check: "runs.stale",
+      severity: sev,
+      owner_resource: "vacilando.execution_run",
+      measurements: {
+        total_waits: waits.total,
+        waiting: counts.waiting, near_deadline: counts.near_deadline,
+        expired: counts.expired, invalid: counts.invalid,
+        indefinite_human: counts.indefinite_human,
+      },
+      evidence: [...expired, ...invalid].slice(0, 6).map((d) => ({
+        reason: d.reason, owner: d.owner, resource_type: d.resource_type,
+        resource_id: d.resource_id, waiting_since: d.waiting_since, deadline: d.deadline,
+        bound_policy: d.bound_policy,
+      })),
+      explanation: counts.invalid > 0
+        ? "A run is waiting on a reason no policy defines, so nothing owns it and nothing can end it."
+        : counts.expired > 0
+          ? "A run has waited past its bound without resolving and must become terminal."
+          : counts.near_deadline > 0
+            ? "A run is approaching its wait bound."
+            : `Every wait is within its bound${counts.indefinite_human ? `, and ${counts.indefinite_human} are explicit human waits` : ""}.`,
+      suggested_action: sev === "healthy" ? null : "Reconcile through the canonical run path; do not terminate the provider.",
+    });
+  }
+  return checkRunsStaleLegacy({ runs, bounds });
+}
+
+function checkRunsStaleLegacy({ runs = [], bounds = {} }) {
   const unbounded = [];
   const breached = [];
   for (const r of runs) {
@@ -586,7 +626,7 @@ export function composeReport({
     capacity: probeResults.capacity || null,
     enforcement: probeResults.enforcement || null,
   }));
-  safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {} }));
+  safe("runs.stale", () => checkRunsStale({ runs: probeResults.runs || [], bounds: probeResults.run_bounds || {}, waits: probeResults.waits || null }));
   safe("providers.orphaned", () => checkProvidersOrphaned({ seats: probeResults.seats || [], panes: probeResults.panes || [] }));
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
