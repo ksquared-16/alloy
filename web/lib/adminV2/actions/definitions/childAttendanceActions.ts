@@ -22,7 +22,10 @@
 import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
-import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
+import {
+    resolveAttendanceSubject,
+    resolveCurrentRoom,
+} from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import {
     correctAttendanceEvent,
     recordAttendanceEvent,
@@ -155,16 +158,41 @@ function recordAction(args: {
                 if (!resolved.ok) {
                     return { ok: false, correlationId, status: 409, error: resolved.message };
                 }
+                const eventAt = t(payload.event_at) || new Date().toISOString();
+                const serviceDate = t(payload.service_date) || eventAt.slice(0, 10);
+                /*
+                 * THE SOURCE ROOM IS THE DOMAIN'S, NOT THE CALLER'S.
+                 *
+                 * A transfer's "from" is where the child actually is, decided by the attendance
+                 * fold. Accepting a client-supplied source would let a stale screen rewrite where a
+                 * child was. Only a transfer needs it, so only a transfer resolves it.
+                 */
+                const fromRoom =
+                    args.eventKind === "room_transfer"
+                        ? await resolveCurrentRoom(supabase, ctx.orgId, resolved.subject, serviceDate)
+                        : null;
+                if (args.eventKind === "room_transfer" && !fromRoom) {
+                    return {
+                        ok: false,
+                        correlationId,
+                        status: 409,
+                        error: "This child is not in a room yet, so there is nothing to move them from.",
+                    };
+                }
+
                 const row = await recordAttendanceEvent(supabase, {
                     orgId: ctx.orgId,
                     enrollmentAgreementId: resolved.subject.enrollmentAgreementId,
                     eventKind: args.eventKind,
-                    eventAt: t(payload.event_at) || new Date().toISOString(),
+                    eventAt,
                     timeZone: t(payload.time_zone) || "UTC",
-                    roomLocationId: t(payload.room_location_id) || null,
+                    // The PLACEMENT is the authority on which room, not whatever the card was
+                    // showing. An explicit payload room still wins for a deliberate override.
+                    roomLocationId:
+                        t(payload.room_location_id) || resolved.subject.placementRoomLocationId || null,
                     // The domain owns the source room; a client-supplied "from" is only a hint and is
                     // ignored when the fold already knows where the child is.
-                    fromRoomLocationId: t(payload.from_room_location_id) || null,
+                    fromRoomLocationId: fromRoom,
                     toRoomLocationId: t(payload.to_room_location_id) || null,
                     reasonKey: t(payload.reason_key) || null,
                     note: t(payload.note) || null,

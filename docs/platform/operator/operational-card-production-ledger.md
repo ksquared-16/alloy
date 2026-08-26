@@ -1128,3 +1128,62 @@ the combination.
 Nothing about certification setup is theirs any more: no Create Lead, no seed command, no `--verify`,
 no credentials. The next Director interaction is **QA of Attendance and Financials**, which is what
 the mission asked for.
+
+---
+
+## 21. Attendance commands — five capabilities, executing against real canonical truth (2026-08-26)
+
+### Registered, delegating, no new rules
+
+`attendance.check_in · check_out · move · correct · mark_absent` — registered in the action registry
+and the platform capability spine (`capabilityRegistry` 17/17 green, which enforces that every
+registered action has an executable `registered_action` capability).
+
+The domain already owned every rule. These adapters add the two things it deliberately lacks — an
+operator-facing **subject** and an operator-facing **intent** — and delegate the rest to
+`recordAttendanceEvent` / `correctAttendanceEvent`.
+
+### Subject: child in, agreement out
+
+`resolveAttendanceSubject` is the one place a child is joined to their enrolment, so
+`enrollmentAgreementId` never reaches the card or the operator and the invariant is untouched. It
+**fails closed** — no agreement, or two live ones, is a refusal rather than a guess. Attendance
+landing on the wrong agreement is worse than attendance not recorded: it lands on a real enrolment,
+silently, with nothing for the operator to see.
+
+Two authorities the *server* owns, not the caller:
+
+| Fact | Resolved from | Why not the client |
+|---|---|---|
+| Check-in room | the canonical **placement** | the placement is where the child is *meant* to be, not whatever room a card was showing |
+| Transfer source room | the **attendance fold** (last effective room-bearing event, else placement) | accepting a client "from" would let a stale screen rewrite where a child *was* |
+
+### Executed end to end — real events, not fixtures
+
+| Intent | Event | Id |
+|---|---|---|
+| check_in (Certa) | `check_in` | `cccfb54a` |
+| move (Certa) | **`room_transfer`** | `14c349cb` |
+| check_out (Certa) | `check_out` | `755024f2` |
+| mark_absent (Certb) | `absence` | `9b9cf666` |
+| correct (Certa) | `correction` → `cccfb54a` | `0eefb8dd` |
+
+**Move is one transfer, not check-out plus check-in.** Two events would fabricate a departure that
+never happened, split the day into two presences, and make "how long were they in that room"
+unanswerable. The correction **references** the original, which is preserved — the audit lineage is
+the point, not merely that the table refuses edits.
+
+The domain's own guards fired and were honoured rather than worked around: `check_in requires
+roomLocationId`, then `room_transfer requires fromRoomLocationId and toRoomLocationId`. Each one sent
+the resolution to its rightful owner.
+
+### Fail-closed proof (§16)
+
+A child with no active enrolment — including an id that does not exist — is refused server-side with
+`no_agreement`, before any event is written. Not a hidden button: the capability evaluator answers
+the same way to a direct call.
+
+### Outstanding for Attendance
+
+The card provider, participant-scoped rendering, movement overflow and browser certification remain.
+The commands they will call now exist and are proven against canonical truth.
