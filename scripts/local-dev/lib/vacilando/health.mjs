@@ -546,22 +546,64 @@ export function checkLanesConsistency({ lanes = [], seats = [] }) {
 }
 
 export function checkPortsRegistry({ ports = [] }) {
-  const foreign = ports.filter((p) => p.verdict === "foreign-owner" || p.verdict === "unregistered-server");
-  const stale = ports.filter((p) => p.verdict === "stale-record");
-  const sev = foreign.length ? "problem" : stale.length ? "watch" : "healthy";
+  // S7 verdicts. `foreign_owner` is a problem because the registry is wrong
+  // about WHO owns a live port; `ambiguous` is a watch because we refused to
+  // guess, which is correct behaviour rather than a fault.
+  const foreign = ports.filter((p) => p.verdict === "foreign_owner" || p.verdict === "foreign-owner");
+  const unregistered = ports.filter((p) => p.verdict === "unregistered_server" || p.verdict === "unregistered-server");
+  const stale = ports.filter((p) => p.verdict === "stale_record" || p.verdict === "stale-record");
+  const ambiguous = ports.filter((p) => p.verdict === "ambiguous");
+  const sev = foreign.length ? "problem"
+    : (unregistered.length || stale.length || ambiguous.length) ? "watch" : "healthy";
   return finding({
     check: "ports.registry",
     severity: sev,
     owner_resource: "vacilando.slot_registry",
-    measurements: { inspected: ports.length, matched: ports.filter((p) => p.verdict === "matched").length, stale: stale.length, foreign: foreign.length },
-    evidence: [...foreign, ...stale].map((p) => `port ${p.port}: ${p.verdict} · registered ${p.registered || "none"} · serving ${p.serving || "nothing"}`),
-    explanation: foreign.length ? "A port is served by something the registry does not record as its owner."
-      : stale.length ? "The registry records a server that is not running." : "Registry and observed ports agree.",
-    suggested_action: sev === "healthy" ? null : "S2 observes only. Reconciliation is S7; do not stop a working server to match a file.",
+    measurements: {
+      inspected: ports.length,
+      matched: ports.filter((p) => p.verdict === "matched").length,
+      stale_record: stale.length, unregistered_server: unregistered.length,
+      foreign_owner: foreign.length, ambiguous: ambiguous.length,
+      free: ports.filter((p) => p.verdict === "free").length,
+    },
+    evidence: [...foreign, ...unregistered, ...stale, ...ambiguous].slice(0, 8).map((p) =>
+      `port ${p.port}: ${p.verdict} · ${p.reason || `registered ${p.recorded_worktree || p.registered || "none"}`}`),
+    explanation: foreign.length
+      ? "A live server owns a port the registry assigns elsewhere. The registry is corrected; the server is not touched."
+      : unregistered.length ? "A valid server is running that the registry does not describe."
+      : stale.length ? "The registry records a server that is not running."
+      : ambiguous.length ? "A port is served by a process whose owner could not be proven; no correction may be derived from a guess."
+      : "Registry and observed ports agree.",
+    suggested_action: sev === "healthy" ? null : "Reality corrects metadata. Never stop a working server to match a record.",
   });
 }
 
-export function checkWorktreesRegistry({ onDisk = 0, registered = 0, unmanaged = [] }) {
+export function checkWorktreesRegistry({ onDisk = 0, registered = 0, unmanaged = [], states = null }) {
+  if (states) {
+    // A retirable worktree is a tidy-up opportunity, not a fault. Live work that
+    // Vacilando does not know about is the finding that matters.
+    const liveUnregistered = states.live_but_unregistered || 0;
+    const sev = liveUnregistered > 0 ? "problem" : (states.worktrees.unmanaged > 0 ? "watch" : "healthy");
+    return finding({
+      check: "worktrees.registry",
+      severity: sev,
+      owner_resource: "vacilando.repository_worktree",
+      measurements: {
+        total: states.total_worktrees, managed: states.managed, unmanaged: states.unmanaged,
+        active: states.worktrees.active, dormant: states.worktrees.dormant,
+        retirable: states.worktrees.retirable, protected: states.worktrees.protected,
+        live_but_unregistered: liveUnregistered,
+      },
+      evidence: [`${states.total_worktrees} git worktrees · ${states.managed} managed · ${states.unmanaged} unmanaged`],
+      explanation: liveUnregistered > 0
+        ? "Live work is running in a worktree Vacilando has no registration for, so it is invisible to capacity accounting."
+        : states.worktrees.unmanaged > 0
+          ? `${states.worktrees.unmanaged} worktrees exist in git with no registration. They are adopted as discovered, never treated as garbage.`
+          : "Every git worktree is registered.",
+      suggested_action: sev === "healthy" ? null
+        : "Adopt as discovered metadata. Retirement is classified only and stays an operator decision.",
+    });
+  }
   const sev = unmanaged.length > 0 ? "watch" : "healthy";
   return finding({
     check: "worktrees.registry",
@@ -631,7 +673,7 @@ export function composeReport({
   safe("subprocess.ancestry", () => checkSubprocessAncestry({ attribution: probeResults.attribution }));
   safe("lanes.consistency", () => checkLanesConsistency({ lanes: probeResults.lanes || [], seats: probeResults.seats || [] }));
   safe("ports.registry", () => checkPortsRegistry({ ports: probeResults.ports || [] }));
-  safe("worktrees.registry", () => checkWorktreesRegistry(probeResults.worktrees || {}));
+  safe("worktrees.registry", () => checkWorktreesRegistry({ ...(probeResults.worktrees || {}), states: probeResults.reconciliation || null }));
   safe("toolkit.retention", () => checkToolkitRetention({ thresholds, ...(probeResults.toolkit || {}) }));
 
   const counts = { healthy: 0, watch: 0, problem: 0 };

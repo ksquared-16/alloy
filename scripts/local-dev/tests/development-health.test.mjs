@@ -176,11 +176,17 @@ await test("11 — unattributed heavy subprocess stays visible", () => {
 });
 
 await test("12 — port registry mismatch", () => {
-  assert.equal(sevOf(report({ ports: [{ port: 3011, verdict: "unregistered-server", registered: "wtA", serving: "pid 428" }] }), "ports.registry"), "problem");
-  assert.equal(sevOf(report({ ports: [{ port: 3012, verdict: "stale-record", registered: "wtB", serving: null }] }), "ports.registry"), "watch");
-  // S2 observes only.
-  assert.match(report({ ports: [{ port: 3012, verdict: "stale-record" }] })
-    .findings.find((f) => f.check === "ports.registry").suggested_action, /observes only/);
+  // S7 verdicts. foreign_owner is the PROBLEM case: the registry is wrong about
+  // who owns a live port. unregistered/stale/ambiguous are watch — a running
+  // server is not a fault, and refusing to guess is correct behaviour.
+  assert.equal(sevOf(report({ ports: [{ port: 3011, verdict: "foreign_owner", recorded_worktree: "wtA", reason: "x" }] }), "ports.registry"), "problem");
+  assert.equal(sevOf(report({ ports: [{ port: 3011, verdict: "unregistered_server", reason: "x" }] }), "ports.registry"), "watch");
+  assert.equal(sevOf(report({ ports: [{ port: 3012, verdict: "stale_record", reason: "x" }] }), "ports.registry"), "watch");
+  assert.equal(sevOf(report({ ports: [{ port: 3011, verdict: "ambiguous", reason: "x" }] }), "ports.registry"), "watch");
+  assert.equal(sevOf(report({ ports: [{ port: 3014, verdict: "matched" }] }), "ports.registry"), "healthy");
+  // Reality corrects metadata, never the reverse.
+  assert.match(report({ ports: [{ port: 3012, verdict: "stale_record" }] })
+    .findings.find((f) => f.check === "ports.registry").suggested_action, /Never stop a working server/);
 });
 
 await test("13 — unmanaged worktree", () => {
