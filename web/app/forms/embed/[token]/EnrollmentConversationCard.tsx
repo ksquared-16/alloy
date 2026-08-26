@@ -371,13 +371,18 @@ export function EnrollmentConversationCard({
     }
 
     /**
-     * The typed control, shown only when a keyboard answer alone would not do.
+     * The typed control — shown ONLY where a keyboard answer alone genuinely would not do.
      *
      * A date is the reference case: the deterministic path has to work with the provider disabled,
-     * so a date of birth gets a real date picker beside the composer rather than instructions about
-     * how to phrase one.
+     * so a date of birth gets a real date picker rather than instructions about how to phrase one.
+     *
+     * ORDINARY TEXT NO LONGER GETS ONE. The parent used to face three ways to answer the same
+     * question at once — a generic text box with a "Use this" button, quiet reply pills, and a
+     * composer saying "Message Alloy…" — and had to work out which of them Alloy was listening to.
+     * There is one conversation: for text, the composer IS the answer surface, and a second text box
+     * above it was never a control, only a competing paradigm.
      */
-    const typed: ParticipantValueControl | null =
+    const typedCandidate: ParticipantValueControl | null =
         control.kind === "choice_or_text"
             ? correcting
                 ? control.correction
@@ -385,6 +390,12 @@ export function EnrollmentConversationCard({
             : control.kind === "value" && !optionalUnanswered
               ? control
               : null;
+    /** Input types whose answer a keyboard alone cannot supply well: a picker earns its place. */
+    const NEEDS_ITS_OWN_CONTROL = new Set(["date", "number"]);
+    const typed: ParticipantValueControl | null =
+        typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
+            ? typedCandidate
+            : null;
 
     return (
         <ConversationViewport
@@ -489,7 +500,7 @@ export function EnrollmentConversationCard({
                     <SuggestedReplies replies={suggestions} busy={busy} controlKind={suggestionKind} />
                     <Composer
                         busy={busy}
-                        placeholder="Message Alloy…"
+                        placeholder={typed ? "Or tell me in your own words…" : "Type your answer…"}
                         focusSignal={participantQuestion(objective)}
                         onSend={(words) => void submit({ text: words, settledAs: words })}
                     />
@@ -585,9 +596,9 @@ function TypedAnswer({
                 type="button"
                 disabled={busy || !ready}
                 onClick={() => onSubmit(text.trim(), shown)}
-                className="min-h-[44px] rounded-xl bg-alloy-midnight px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper disabled:opacity-40"
+                className="min-h-[44px] rounded-xl bg-alloy-bend-pine px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine disabled:opacity-40"
             >
-                Use this
+                Done
             </button>
         </div>
     );

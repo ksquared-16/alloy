@@ -278,7 +278,16 @@ describe("the participant surface is a thread with an anchored composer", () => 
     });
 
     it("has one persistent composer, with Enter to send and Shift+Enter for a newline", () => {
-        expect(CARD).toContain("Message Alloy");
+        /**
+         * The composer is the answer surface, and now says so.
+         *
+         * "Message Alloy…" described a chat box sitting beside a text field and a "Use this" button,
+         * which left the parent to guess which one Alloy was listening to. With the competing field
+         * gone, the placeholder names what it is for — and says "or" only when a real control (a
+         * date picker) is genuinely offered alongside it.
+         */
+        expect(CARD).toContain("Type your answer…");
+        expect(CARD).toContain("Or tell me in your own words…");
         expect(COMPOSER).toMatch(/e\.key === "Enter" && !e\.shiftKey/);
         expect(COMPOSER).toContain("textarea");
         // Never the old form-input caption.
