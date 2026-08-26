@@ -45,6 +45,7 @@ SUITES=(
   "development-governed-promotion-chain.test.mjs"
   "development-certification-fixture.test.mjs"
   "development-browser-auth.test.mjs"
+  "development-process-attribution.test.mjs"
 )
 
 PASS=0
