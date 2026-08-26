@@ -39,6 +39,8 @@ import {
   grantMissionAuthorization,
 } from "./trusted-host-authz.mjs";
 import {
+  fulfillRepositoryPushForMission,
+  fulfillPromotionOpenPrForMission,
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
@@ -212,6 +214,29 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Merge PR #${n} into staging · expected SHA ${sha || "—"} · method ${inputs.merge_method || inputs.mergeMethod || "merge"}`,
     };
   }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize push",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — branch push",
+      mission_need: `Needs approval — Push ${b || "a reviewed branch"}`,
+      detail: `Push ${b} at ${sha || "—"} to the remote · non-force · single ref`,
+    };
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = inputs.head_branch || inputs.headBranch || inputs.branch || "";
+    const base = inputs.base || req.target || "staging";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize pull request",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — promotion pull request",
+      mission_need: `Needs approval — Open ${b} → ${base}`,
+      detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
+    };
+  }
   if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const n = list.length || (inputs.expected_version ? 1 : 0);
@@ -261,7 +286,77 @@ function factRow(label, value) {
   return { label, value: String(value) };
 }
 
+const PUSH_CONSEQUENCES = Object.freeze([
+  "The named commit is published to the remote branch, visible to everyone.",
+  "Nothing is force-pushed and no other branch is touched.",
+  "The branch can be moved again afterwards, but this commit cannot be unpublished.",
+]);
+
+const OPEN_PR_CONSEQUENCES = Object.freeze([
+  "A pull request is opened against the canonical promotion branch.",
+  "It does not merge anything — merging is a separate decision.",
+  "An open pull request for the same branch is reused rather than duplicated.",
+]);
+
+/** The facts a Director weighs before authorizing a push. */
+function pushProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const branch = i.branch || i.head_branch || i.headBranch || null;
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("Branch", branch),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Remote ref", branch ? `refs/heads/${branch}` : null),
+    factRow("Force", "no — non-fast-forward is refused"),
+    factRow("Commits reviewed", Array.isArray(i.expected_commits || i.expectedCommits)
+      ? (i.expected_commits || i.expectedCommits).length : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "repository_push",
+    headline: branch ? `Push ${branch} to the remote` : "Push a reviewed branch",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...PUSH_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
+/** The facts a Director weighs before opening a promotion pull request. */
+function openPrProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const head = i.head_branch || i.headBranch || i.branch || null;
+  const base = i.base || req.target || "staging";
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("From", head),
+    factRow("Into", base),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Title", i.title || null),
+    factRow("Merges anything", "no — opening a pull request only"),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "promotion_open_pr",
+    headline: head ? `Open ${head} → ${base}` : "Open a promotion pull request",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...OPEN_PR_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
 export function governedProposalFor(req = {}) {
+  if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH) return pushProposal(req);
+  if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) return openPrProposal(req);
   if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
   const i = req.inputs || {};
   const snap = req.proposal_snapshot || null;
@@ -700,6 +795,8 @@ function sanitizeActionInputs(raw) {
 function defaultModeForAction(actionKey, requested) {
   if (requested) return requested;
   if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return "promotion";
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) return "promotion";
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) return "promotion";
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
   return "read_only";
 }
@@ -760,6 +857,8 @@ function validateRequestShape(input, { root } = {}) {
   const purpose = bound(input.purpose, 1000) || "Governed capability required";
   const defaultTarget = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
     || actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+    || actionKey === ACTION_TYPES.REPOSITORY_PUSH
+    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
     ? "staging"
     : DEFAULT_TARGET;
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
@@ -803,8 +902,10 @@ function validateAgainstRegistry(actionKey, target, artifactRefs, mode, { worktr
       ...(inputs || {}),
       queryArtifactPath: artifactPathFrom(artifactRefs),
       databaseTarget: target,
-      worktreePath,
-      worktree_path: worktreePath,
+      // Only override when the RUN actually knows its worktree. Spreading
+      // `undefined` here erased a path the caller had supplied in `inputs`,
+      // which surfaced as `invalid_worktree_path` on a perfectly valid request.
+      ...(worktreePath ? { worktreePath, worktree_path: worktreePath } : {}),
     });
     if (!validated.ok) {
       const readonlyFail = new Set([
@@ -827,6 +928,12 @@ function validateAgainstRegistry(actionKey, target, artifactRefs, mode, { worktr
 }
 
 function actionQueryHash(rec) {
+  if (rec?.action_key === ACTION_TYPES.REPOSITORY_PUSH
+    || rec?.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    // A push or a promotion is a decision about one COMMIT. Keying on the head
+    // SHA is what makes an approval stop applying the moment the branch moves.
+    return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null;
+  }
   if (rec?.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || rec.inputs?.head_sha || null;
   }
@@ -874,6 +981,14 @@ function requestTitle(rec) {
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     const n = rec.inputs?.pull_request_number || rec.inputs?.pullRequestNumber || "";
     return n ? `Merge PR #${n} into staging` : "Merge pull request into staging";
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
+    return b ? `Push ${b} to the remote` : "Push a reviewed branch";
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = rec.inputs?.head_branch || rec.inputs?.headBranch || rec.inputs?.branch || "";
+    return b ? `Open a staging pull request for ${b}` : "Open a promotion pull request";
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return "Apply Access & Identity staging migrations";
@@ -1290,6 +1405,9 @@ function proposalForRequest(rec) {
     // grant look stale.
     target_branch: rec.target || "staging",
     merge_method: rec.inputs?.merge_method || rec.inputs?.mergeMethod || "merge",
+    // Present for a push or a promotion; null for a merge, whose identity is
+    // the pull request number rather than a branch name.
+    branch: rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || null,
     run_id: rec.run_id || null,
     lane_id: rec.lane_id || null,
     requested_by: rec.requesting_worker || null,
@@ -1304,6 +1422,26 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
 
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     return fulfillRepositoryMergeForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    return fulfillRepositoryPushForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return fulfillPromotionOpenPrForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},

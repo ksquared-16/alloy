@@ -157,6 +157,9 @@ export function proposalFingerprint(proposal = {}) {
     proposal.expected_head_sha,
     proposal.target_branch,
     proposal.merge_method,
+    // The branch a push publishes to, and the head of a promotion. Without it
+    // one approval could be replayed against a different branch at the same SHA.
+    proposal.branch,
     proposal.run_id,
   ].map((v) => String(v ?? ""));
   return createHash("sha256").update(parts.join("|"), "utf8").digest("hex");
@@ -194,6 +197,7 @@ export function mintGrant({
     expected_head_sha: proposal.expected_head_sha || null,
     target_branch: proposal.target_branch || null,
     merge_method: proposal.merge_method || null,
+    branch: proposal.branch || null,
     run_id: proposal.run_id || null,
     lane_id: proposal.lane_id || null,
     approved_by: approvedBy,
@@ -284,6 +288,7 @@ export function grantAuditFields(g) {
     pull_request_number: g.pull_request_number,
     expected_head_sha: g.expected_head_sha,
     target_branch: g.target_branch,
+    branch: g.branch,
     run_id: g.run_id,
     approved_by: g.approved_by,
     status: g.status,

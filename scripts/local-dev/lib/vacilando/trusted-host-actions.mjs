@@ -42,6 +42,8 @@ import {
   mergePullRequest,
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
+import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -291,6 +293,22 @@ export function grantAuthorizesAction(grant, action, { nowMs = Date.now() } = {}
     return { ok: false, error: "grant_run_mismatch" };
   }
   const i = action.inputs || {};
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH
+    || action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    // The commit is the decision. A branch that moved is a different question.
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    const branch = i.branch || i.headBranch || null;
+    if (String(grant.branch || "") !== String(branch || "")) {
+      return { ok: false, error: "grant_branch_mismatch" };
+    }
+    if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR
+      && String(grant.target_branch || "") !== String(i.base || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    return { ok: true };
+  }
   if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     if (Number(grant.pull_request_number) !== Number(i.pullRequestNumber)) {
       return { ok: false, error: "grant_pull_request_mismatch" };
@@ -385,6 +403,12 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return executeMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
+    return executePushTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return executeOpenPrTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -781,6 +805,19 @@ export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
 }
 
 let mergeGhForTests = null;
+// Injection seams for the two remote actions added alongside merge. The guard
+// in trusted-host-remote-guard treats an injected client as simulated, so a
+// test that forgets one is refused rather than reaching the real remote.
+let pushGitForTests = null;
+let openPrGhForTests = null;
+
+export function setPushGitForTests(fn) {
+  pushGitForTests = typeof fn === "function" ? fn : null;
+}
+export function setOpenPrGhForTests(fn) {
+  openPrGhForTests = typeof fn === "function" ? fn : null;
+}
+
 let migrationRunnersForTests = null;
 
 export function setTrustedHostMergeGhForTests(fn) {
@@ -950,6 +987,87 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
   const result = { ...publicMigrationResult(out), ok: true };
   action.result = result;
   return completeTrustedAction(action, result, { nowMs });
+}
+
+/**
+ * Push a reviewed branch. Re-authorized here on purpose: execution must never
+ * trust that an earlier call in this same flow already checked.
+ */
+export function executePushTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = pushBranch(action.inputs, pushGitForTests ? { git: pushGitForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Push result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "push_failed", out?.detail || "Push failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicPushResult(out), { nowMs });
+}
+
+/** Open the promotion pull request, or report the one that already exists. */
+export function executeOpenPrTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = openPullRequest(action.inputs, openPrGhForTests ? { gh: openPrGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Pull request result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "open_pr_failed", out?.detail || "Opening the pull request failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicOpenPrResult(out), { nowMs });
+}
+
+export function fulfillRepositoryPushForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PUSH, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillPromotionOpenPrForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PROMOTION_OPEN_PR, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillRepositoryMergeForMission(missionId, {
