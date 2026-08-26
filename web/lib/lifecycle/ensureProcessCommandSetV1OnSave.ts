@@ -86,6 +86,21 @@ export function ensureProcessCommandSetV1OnSave(
         process,
         lifecycleConfiguredActions: opts?.lifecycleConfiguredActions,
     });
+    /**
+     * A migration that found nothing to migrate must leave the section ABSENT.
+     *
+     * Stamping `{ version: 1, commands: [] }` here converts "nobody has selected commands yet" into
+     * "the operator selected none" — and the guard above then treats that as intentional forever.
+     * The two states are not the same to any reader: `validateProcessCommandSetsForPublish` skips an
+     * absent section and reports every Work Template action as un-selected against an empty one.
+     *
+     * That is exactly what happened to the certification tenant. Both migration inputs were empty —
+     * no stage carries `action_catalog_v1`, and the save path passes no configured-action rows — so
+     * the first save of the packet selection stamped an empty set and turned a clean draft into
+     * eleven "not process-selected" errors, without anyone choosing anything. Presence is authority
+     * here for the same reason it is for `requirements_v1` (D-90).
+     */
+    if (!migrated.commands.commands.length) return process;
     return { ...process, command_set_v1: migrated.commands };
 }
 
