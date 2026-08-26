@@ -39,6 +39,7 @@ import {
     staffPresenceCorrectAction,
     staffPresenceRecordAction,
 } from "@/lib/adminV2/actions/definitions/staffPresenceActions";
+import { childAttendanceActions } from "@/lib/adminV2/actions/definitions/childAttendanceActions";
 
 /** Actions with fully code-owned, executable handlers. */
 const REGISTERED_ACTION_LIST: RegisteredAction[] = [
@@ -61,6 +62,8 @@ const REGISTERED_ACTION_LIST: RegisteredAction[] = [
     employmentEndAction,
     staffPresenceRecordAction,
     staffPresenceCorrectAction,
+    // Child attendance: five operator intents over the existing invariant-owning services.
+    ...childAttendanceActions,
 ];
 
 const REGISTERED_ACTIONS: Map<string, RegisteredAction> = new Map(
