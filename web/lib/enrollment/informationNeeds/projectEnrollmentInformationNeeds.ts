@@ -91,6 +91,7 @@ export function projectEnrollmentInformationNeeds(
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
+                formDefinitionId: form.form_definition_id,
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
@@ -157,10 +158,18 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         requirement_ids: [...acc.requirementIds],
     } as const;
 
-    if (identity.artifact_specific || !identity.shared_value_key) {
-        // Never reads or writes the shared namespace, so it has no shared value and cannot be
-        // confirmed as one. Whether the participant must act on it is the Form's own business —
-        // reported here as artifact-specific rather than folded into a datum it is not.
+    /*
+     * Whether a value may be REUSED and whether it is ASKED are different questions.
+     *
+     * This branch used to answer both: no canonical identity meant `artifact_specific`, and
+     * `artifact_specific` meant the conversation skipped it. Sixty-four questions the school
+     * actually asks were therefore never asked out loud — the parent answered twenty turns and was
+     * then handed the raw controls.
+     *
+     * A need with no place to keep an answer is still artifact work. A need with a session key is a
+     * question, whether or not its answer may ever be reused.
+     */
+    if (!identity.session_value_key) {
         return {
             ...base,
             state: "artifact_specific",
@@ -173,8 +182,10 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
 
     // Precedence mirrors `mergeFormPrefillPayload`: the session's own shared value outranks canonical
     // record prefill. Anything else would let a stale record overwrite what the parent just typed.
-    const sessionValue = input.sharedValues[identity.shared_value_key];
-    const canonicalValue = input.canonicalValues?.[identity.shared_value_key];
+    const sessionValue = input.sharedValues[identity.session_value_key];
+    // Canonical prefill can only speak for a canonical datum. A process-scoped answer has no record
+    // behind it by construction, so there is nothing for a record to prefill.
+    const canonicalValue = identity.shared_value_key ? input.canonicalValues?.[identity.shared_value_key] : undefined;
 
     let current_value: unknown = null;
     let value_source: EnrollmentNeedValueSource = "none";
@@ -219,8 +230,10 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         input.confirmations[identity.key],
         current_value,
     );
-    const mustConfirm =
-        input.requiresConfirmation?.has(identity.canonical_key ?? identity.shared_value_key) === true;
+    // Confirmation policy names canonical data. A process-scoped answer has no canonical key, so
+    // nothing can require its confirmation — it is simply asked.
+    const confirmationKey = identity.canonical_key ?? identity.shared_value_key;
+    const mustConfirm = confirmationKey !== null && input.requiresConfirmation?.has(confirmationKey) === true;
 
     let state: EnrollmentNeedState;
     if (confirmed) state = "confirmed";

@@ -36,7 +36,7 @@ import {
 } from "@/lib/forms/pdf/fidelityMappingContract";
 import { loadPublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { participantPrefillValues } from "@/lib/public/forms/resolvePublicFormEmbedContext";
-import { sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
+import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
 
 export type ParticipantDocumentRenderResult =
@@ -66,6 +66,8 @@ async function resolveActiveArtifact(
           ok: true;
           envelope: { schemaJson: unknown; pdfMappingJson: unknown | null };
           formSubmissionId: string | null;
+          /** Which Form this artifact is — the home of any process-scoped answer it carries. */
+          formDefinitionId: string;
       }
     | { ok: false; detail: string }
 > {
@@ -96,7 +98,7 @@ async function resolveActiveArtifact(
     );
     if (!envelope) return { ok: false, detail: "Pinned version unavailable." };
 
-    return { ok: true, envelope, formSubmissionId: row.form_submission_id ?? null };
+    return { ok: true, envelope, formSubmissionId: row.form_submission_id ?? null, formDefinitionId };
 }
 
 export async function renderParticipantEnrollmentDocument(
@@ -159,6 +161,9 @@ export async function renderParticipantEnrollmentDocument(
     const values: Record<string, unknown> = {
         ...draftValues,
         ...sharedValuesToFieldIds(schema, prefill),
+        // A process-scoped answer belongs to exactly one destination on exactly this Form. It fills
+        // that box and nothing else — the reason it can be collected without becoming canonical.
+        ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
     };
     if (!source.ok) return { ok: false, code: "unavailable", detail: source.detail };
 

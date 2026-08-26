@@ -153,7 +153,15 @@ export async function applyParticipantTurnResponse(
 
     const sessionId = before.value.session_id;
     const needKey = turn.need?.identity.key ?? null;
-    const sharedKey = turn.need?.identity.shared_value_key ?? null;
+    /*
+     * Where this session keeps the answer — which is not the same as what the answer IS.
+     *
+     * A canonical datum keeps its `shared_value_key` and reaches every destination that claims it.
+     * A process-scoped question keeps a key naming its one destination, so a resumed session
+     * remembers it without any canonical consumer being able to match it. Reading the session key
+     * here is what lets the conversation settle both kinds through one path.
+     */
+    const sharedKey = turn.need?.identity.session_value_key ?? null;
     /** The session as it stands AFTER this turn's write — the pure recompute's one moving input. */
     let postWrite: { shared_values: Record<string, unknown>; metadata: Record<string, unknown> } | null = null;
 

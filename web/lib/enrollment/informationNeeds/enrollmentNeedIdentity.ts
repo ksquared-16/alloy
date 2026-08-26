@@ -43,6 +43,12 @@
 
 import { classifyFieldScope, type FieldScope } from "@/lib/forms/fieldScope";
 import type { FormField } from "@/lib/forms/schema";
+import {
+    collectionModeIsConversational,
+    participantCollectionMode,
+    processScopedAnswerKey,
+    type ParticipantCollectionMode,
+} from "./participantCollectionMode";
 
 /** How the canonical key was resolved — the same three bases the packet planner reports. */
 export type EnrollmentNeedDedupeBasis = "shared_alias" | "canonical" | "unbound";
@@ -65,10 +71,29 @@ export type EnrollmentNeedIdentity = {
      * recipient-scoped field, an unbound field, or a field inside a collection-bound repeat group.
      */
     readonly artifact_specific: boolean;
+    /**
+     * Does the PARTICIPANT supply this, and how? Independent of everything above.
+     *
+     * `artifact_specific` answers whether a value may be REUSED. This answers whether it is ASKED.
+     * A bespoke school question is `artifact_specific` — it has no canonical identity to collapse
+     * on — and `conversational` all the same.
+     */
+    readonly collection_mode: ParticipantCollectionMode;
+    /**
+     * The `shared_values` key this need reads and writes, INCLUDING process-scoped answers.
+     *
+     * Separate from `shared_value_key` on purpose. That one asserts a canonical datum other
+     * destinations may claim; this one is only "where the session keeps this answer". For a
+     * process-scoped question it is a key naming one destination, which no canonical consumer can
+     * match — so the answer survives a resume without ever becoming durable truth.
+     */
+    readonly session_value_key: string | null;
 };
 
 export type NeedIdentityInput = {
     readonly field: FormField;
+    /** The Form definition this occurrence belongs to — names a process-scoped answer's home. */
+    readonly formDefinitionId?: string;
     /** The Enrollment journey's subject — `process_instances.subject_id`. */
     readonly subjectId: string | null;
     /** From `fieldIsInsideCollectionBoundGroup`: repeats never join shared_values dedupe. */
@@ -141,6 +166,25 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
 
     const artifact_specific =
         scope === "recipient" || input.insideCollectionBoundGroup || parts.basis === "unbound";
+    const collection_mode = participantCollectionMode(field);
+
+    /*
+     * A question with no canonical identity is still a question.
+     *
+     * It cannot join shared-value dedupe — nothing to collapse on — so it keeps a per-occurrence key
+     * and `shared_value_key` stays null. What changes is that the conversation can now reach it: the
+     * session remembers the answer under a key naming this one destination, which is not a claim of
+     * canonical authority and cannot be matched by any canonical consumer.
+     *
+     * Signatures and collection repeats are excluded deliberately. A signature belongs to the
+     * artifact it signs, and a repeat's identity is its collection item.
+     */
+    const processScoped =
+        artifact_specific &&
+        parts.basis === "unbound" &&
+        scope !== "recipient" &&
+        !input.insideCollectionBoundGroup &&
+        collectionModeIsConversational(collection_mode);
 
     if (artifact_specific) {
         // Keyed by the exact occurrence, so two artifact-specific fields can never share a need —
@@ -157,6 +201,11 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
             field_key: parts.field_key,
             basis: parts.basis,
             artifact_specific: true,
+            collection_mode,
+            session_value_key:
+                processScoped && input.formDefinitionId
+                    ? processScopedAnswerKey(input.formDefinitionId, field.id)
+                    : null,
         };
     }
 
@@ -174,5 +223,13 @@ export function resolveEnrollmentNeedIdentity(input: NeedIdentityInput): Enrollm
         field_key: parts.field_key,
         basis: parts.basis,
         artifact_specific: false,
+        collection_mode,
+        /*
+         * Where the session keeps the PARTICIPANT's answer — so there is none when the participant
+         * never answers. A placement-only destination carries a real canonical binding and is filled
+         * from it for rendering; that is the fill path's business, and giving it a session key here
+         * would make it a question the moment its value happened to be absent.
+         */
+        session_value_key: collection_mode === "system" ? null : parts.shared_value_key,
     };
 }
