@@ -31,7 +31,6 @@ import {
 import { getDurableLane } from "./lib/vacilando/development-lane.mjs";
 import { publicBootstrapOutcome } from "./lib/vacilando/qa-session-bootstrap.mjs";
 import { ACTION_TYPES } from "./lib/vacilando/trusted-host-action-registry.mjs";
-import { requestTrustedHostAction } from "./lib/vacilando/trusted-host-actions.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify|restore> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
@@ -153,14 +152,27 @@ if (op === "restore") {
    * the only caller that may set that flag. Nothing privileged runs here: no link is minted, no
    * Supabase client is constructed, and the mint child is never spawned on this path.
    */
-  const requested = requestTrustedHostAction({
-    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
-    inputs: { laneId: validated.lane_id },
-    requestedBy: "worker",
-    executionSessionId: process.env.VACILANDO_RUN_ID || null,
-    reasonWorkerCannotExecute:
+  /*
+   * Goes through `requestGovernedAction`, the same entry point `vac governed-action` uses — not
+   * `requestTrustedHostAction`, which is the layer beneath it. That layer demands a missionId and
+   * returns `missing_fields` without one, and a lane with no mission is not automatically
+   * ungoverned: `resolveGovernedAuthority` lets its repository profile vouch for the proposal so
+   * the Director gets something to approve. Calling the lower layer directly produced a request
+   * that could not be created at all, which is how this was caught on the live installation.
+   */
+  const { resolveGovernedAuthority } = await import("./lib/vacilando/governed-repository-authority.mjs");
+  const { requestGovernedAction } = await import("./lib/vacilando/governed-action-request.mjs");
+  const authority = await resolveGovernedAuthority(validated.lane_id);
+  const asked = requestGovernedAction({
+    action_key: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+    run_id: process.env.VACILANDO_RUN_ID || null,
+    lane_id: validated.lane_id,
+    reason_worker_cannot_execute:
       "Restoring a QA session mints a Supabase session from the service-role boundary. A worker may request it; only the operator may approve it.",
-  });
+    inputs: { laneId: validated.lane_id },
+    __authority: authority,
+  }, { processNow: false });
+  const requested = asked?.ok ? { ok: true, requestId: asked.request?.request_id || null } : { ok: false, error: asked?.error || "request_refused" };
   const out = publicBootstrapOutcome({
     validated,
     state: requested?.ok === false ? "refused" : "awaiting_operator_approval",

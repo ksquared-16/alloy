@@ -861,6 +861,14 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) return "promotion";
   if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) return "promotion";
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
+  /*
+   * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
+   * refuses any non-read risk class in read_only mode, so an action added to the registry without
+   * a mode here is registered, discoverable, proposable — and then denied with `policy_denied`,
+   * which reads as "the operator's policy forbids this" rather than "nobody assigned it a mode".
+   * That cost a full delivery cycle to diagnose once; the fallthrough is the hazard, not this line.
+   */
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "qa_session_restore";
   return "read_only";
 }
 
