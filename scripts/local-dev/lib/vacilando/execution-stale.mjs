@@ -253,6 +253,19 @@ function pastSettle(run, facts) {
 /**
  * @returns {{ class: "active"|"stale"|"ambiguous", reason: string, evidence: object, summary?: string }}
  */
+/**
+ * Has the settle window passed since this run was recovered?
+ *
+ * A recovery that has produced nothing for a full settle window is not in
+ * flight. With no timestamp to judge by, it is treated as still settling —
+ * unknown timing must not become a licence to collect.
+ */
+function recoverySettled(run, nowMs) {
+  const recoveredAt = parseMs(run?.recovery_state?.recovered_at) ?? parseMs(run?.updated_at);
+  if (recoveredAt == null) return false;
+  return (nowMs - recoveredAt) >= STALE_SETTLE_MS;
+}
+
 export function classifyExecutionRunStale(run, facts = {}) {
   const nowMs = facts.now_ms || Date.now();
   const merged = { ...facts, now_ms: nowMs };
@@ -279,7 +292,22 @@ export function classifyExecutionRunStale(run, facts = {}) {
     return { class: "active", reason: "terminal", evidence };
   }
   if (PROTECTIVE_STATES.has(run.state)) {
-    return { class: "active", reason: `protective_state_${run.state.toLowerCase()}`, evidence };
+    // RECOVERING is protective only while a recovery could still be IN FLIGHT.
+    //
+    // It was protective unconditionally, and a recovered run that never reports
+    // again therefore sat in RECOVERING forever: the governor would not collect
+    // it and the lane card read "Recovering" permanently. Communications sat
+    // there for nearly two hours with an idle pane, past settle, no progress and
+    // no agent report — nothing about that is a recovery in flight.
+    //
+    // The other protective states keep their unconditional protection: they wait
+    // on a person or on a governed decision, and time alone does not resolve
+    // either.
+    if (run.state === "RECOVERING" && recoverySettled(run, nowMs)) {
+      // fall through to the ordinary evaluation below
+    } else {
+      return { class: "active", reason: `protective_state_${run.state.toLowerCase()}`, evidence };
+    }
   }
   const governedPending = run.state === "WAITING_RESOURCE" && (
     run.resource_wait?.resource_key === "director_governed_action"
@@ -298,10 +326,14 @@ export function classifyExecutionRunStale(run, facts = {}) {
       return { class: "active", reason: "governed_action_resumed", evidence };
     }
   }
-  if (run.state !== "EXECUTING") {
+  if (run.state !== "EXECUTING" && run.state !== "RECOVERING") {
     return { class: "active", reason: "not_executing", evidence };
   }
-  if (run.recovery_state) {
+  // `recovery_state` is the RECORD of a past recovery, not a live flag. Read as
+  // "a recovery is happening" it never cleared, so any run that had ever been
+  // recovered became permanently uncollectable. It protects the settle window
+  // after the recovery, and no longer.
+  if (run.recovery_state && !recoverySettled(run, nowMs)) {
     return { class: "active", reason: "recovery_in_flight", evidence };
   }
   if (evidence.open_resource) {

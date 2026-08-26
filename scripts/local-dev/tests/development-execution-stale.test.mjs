@@ -780,5 +780,48 @@ await test("operator Send can supersede a parked RECOVERING run", async () => {
     "a real blocking question is still an operator decision, not a stale turn");
 });
 
+await test("a parked RECOVERING run stops being protected forever", async () => {
+  // WHAT THE OPERATOR SAW. The Communications lane card read "Recovering" and
+  // never changed. RECOVERING was in PROTECTIVE_STATES unconditionally, and
+  // `recovery_state` — a RECORD of a past recovery — was read as "a recovery is
+  // in flight" and never cleared. So a recovered run that never reported again
+  // could not be collected by anything, ever. It sat there 116 minutes with an
+  // idle pane, past settle, no progress and no agent report.
+  const longAgo = new Date(Date.now() - (STALE_SETTLE_MS + 60 * 60 * 1000)).toISOString();
+  const parked = {
+    run_id: "erun_parked", state: "RECOVERING", instruction: "Are you stuck?",
+    started_at: longAgo, updated_at: longAgo,
+    recovery_state: { recovered_at: longAgo, abandoned_reason: "completion_not_attributable" },
+  };
+  const idle = { now_ms: Date.now(), session_state: "IDLE", session_alive: true };
+  const parkedClass = classifyExecutionRunStale(parked, idle);
+  assert.notEqual(parkedClass.class, "active", "a two-hour-old recovery is not in flight");
+  assert.notEqual(parkedClass.reason, "protective_state_recovering");
+
+  // POSITIVE CONTROL 1: a recovery that JUST happened is still protected. If
+  // this ever fails, the fix has become a licence to collect live recoveries.
+  const fresh = { ...parked, recovery_state: { recovered_at: new Date(Date.now() - 60_000).toISOString() } };
+  assert.equal(classifyExecutionRunStale(fresh, idle).class, "active");
+  assert.equal(classifyExecutionRunStale(fresh, idle).reason, "protective_state_recovering");
+
+  // POSITIVE CONTROL 2: with no timestamp to judge by, it stays protected —
+  // unknown timing must never become permission to collect.
+  const undated = { ...parked, recovery_state: { abandoned_reason: "x" }, updated_at: null };
+  assert.equal(classifyExecutionRunStale(undated, idle).class, "active");
+
+  // POSITIVE CONTROL 3: the other protective states are untouched. They wait on
+  // a person or a governed decision, and time alone does not resolve either.
+  for (const state of ["VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT"]) {
+    const c = classifyExecutionRunStale({ ...parked, state }, idle);
+    assert.equal(c.class, "active", state);
+    assert.equal(c.reason, `protective_state_${state.toLowerCase()}`, state);
+  }
+
+  // POSITIVE CONTROL 4: a settled recovery with a BUSY session is still active —
+  // falling through to the ordinary evaluation must not skip the live checks.
+  assert.equal(classifyExecutionRunStale(parked, { ...idle, session_state: "STARTING" }).class, "active");
+  assert.equal(classifyExecutionRunStale(parked, { ...idle, open_resource: true }).class, "active");
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
