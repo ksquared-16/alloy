@@ -894,3 +894,83 @@ reversible enrolled-child fixture exists.
 
 **Two cards are production-ready. Every remaining card is gated by one fact**, not by its own design
 or its backend: the certification tenant has no post-enrollment operational data.
+
+---
+
+## 18. Operational Cards certification fixture — built, not executable from this lane (2026-08-26)
+
+### The fixture
+
+`web/scripts/seedOperationalCardsCertification.ts`
+→ `npm run dev:seed:operational-cards-certification [-- --remove | --verify | --customer <id>]`
+
+**One household for every vertical.** Process, Attendance and Financials all need the same thing —
+two genuinely enrolled children — so there is one fixture and one cleanup rather than three that
+drift apart and each solve reversal separately.
+
+**It goes through the product, not around it.** Every write is a canonical service a registered
+action already calls:
+
+```
+addChild        →  the durable child (customer_members)
+directEnroll    →  materializeChildEnrollment  →  child_enrollment_agreements
+                                                →  child_placements
+                                                →  schedule_assignments
+```
+
+Inserting an agreement directly would be faster and would also be a lie: *an agreement is
+materialized, not authored* is precisely the invariant Attendance depends on. `directEnroll` is the
+registered `enrollment.direct` capability's own service, so fixture and operator take one path.
+
+**The namespace is the safety.** Everything is reachable from `operational-cards-cert.alloy.invalid`
+— RFC-2606 reserved, so it cannot collide with a real address. `--remove` matches on that domain
+alone, never a name or a timestamp, and `assertNamespaceIsolated()` proves the selector cannot
+over-match **before the first write**. The 17 Firefly children are not read, matched or touched.
+
+**Reversal is ordered by dependency**, outside-in: attendance events → charges → schedule
+assignments → placements → agreements → participations → members → opportunity → household links →
+household → people.
+
+### The household is the operator's one step — deliberately
+
+`create_lead` is a multi-stage **command** (intake → commit selection → household member commit),
+not a callable service; there is no `createLead(supabase, input)` to delegate to. Writing
+`customers` + `persons` + `opportunities` directly would reproduce that command's decisions outside
+it — the bypass §1 forbids. So the household comes from the registered command, and everything
+downstream of it is canonical service delegation.
+
+### It cannot execute from this lane
+
+Confirmed again, not assumed: `--verify` fails at `Supabase URL is not set`. Privileged values never
+enter the worktree by design, `vac governed-action` returns `missing_mission_binding`, and §6
+forbids falling back to mutating an existing Firefly child. §19 therefore applies: the tooling is
+built, its logic typechecks, and this is the invocation.
+
+### Exact invocation required from an authorized environment
+
+```bash
+# 1 — once, through the product UI (registered create_lead command):
+#     parent  Cert Certhouse
+#     email   guardian@operational-cards-cert.alloy.invalid
+#     phone   +15555550100
+#
+# 2 — from web/, with SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY present:
+npm run dev:seed:operational-cards-certification
+npm run dev:seed:operational-cards-certification -- --verify
+# reversal, matching the reserved namespace only:
+npm run dev:seed:operational-cards-certification -- --remove
+```
+
+It creates children **Certa** and **Certb** Certhouse, enrols both at the first configured site and
+room from today, and prints the resulting agreement / placement / schedule ids.
+
+### What this unblocks, in one step
+
+| Vertical | Unblocked by |
+|---|---|
+| **Attendance** | the enrollment agreement its every event requires |
+| **Financials** | `billable_source_id` → agreement → child, so charges become child-attributable |
+| **Process** | the remaining divergent-children and 5+ participant scenarios |
+
+Nothing was built against fixtures in the meantime, and no UI shell was created against absent data
+(§19). Attendance and Financials remain exactly as audited.
