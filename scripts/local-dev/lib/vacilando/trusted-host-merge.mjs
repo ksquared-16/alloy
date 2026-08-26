@@ -54,9 +54,26 @@ export function validateMergeInputs(inputs = {}) {
   if (!allowlistedRepositories().includes(repository)) {
     return { ok: false, code: "repository_not_allowlisted", detail: `Repository ${repository} is not allowlisted` };
   }
-  const pullRequestNumber = Number(inputs.pull_request_number || inputs.pullRequestNumber || inputs.pr);
+  // `pull_request` is accepted alongside the other spellings. A lane proposed
+  // `{"pull_request": 522}` — an unambiguous pull request number by any reading —
+  // and got `pull_request_number must be a positive integer`, which describes a
+  // malformed value rather than a field name it did not recognise. The number is
+  // still validated exactly as before; only the ways of naming it widened.
+  const rawPullRequest = inputs.pull_request_number
+    ?? inputs.pullRequestNumber
+    ?? inputs.pull_request
+    ?? inputs.pullRequest
+    ?? inputs.pr;
+  const pullRequestNumber = Number(rawPullRequest);
   if (!Number.isInteger(pullRequestNumber) || pullRequestNumber < 1) {
-    return { ok: false, code: "invalid_pull_request_number", detail: "pull_request_number must be a positive integer" };
+    return {
+      ok: false,
+      code: "invalid_pull_request_number",
+      // Say what arrived, so a near-miss reads as a near-miss.
+      detail: rawPullRequest === undefined
+        ? "a pull request number is required (pull_request_number, pullRequestNumber, pull_request or pr)"
+        : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
+    };
   }
   const targetBranch = String(inputs.target_branch || inputs.targetBranch || "staging").trim();
   if (BLOCKED_TARGET_BRANCHES.includes(targetBranch) || targetBranch === "production") {
