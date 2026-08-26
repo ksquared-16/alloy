@@ -187,8 +187,8 @@ const PROMPT_AFFORDANCES = Object.freeze([
  * or "esc to interrupt" on a line that is not the mode footer.
  */
 const FOOTER_LINE = /\? for shortcuts|auto mode|\bshift\s*\+\s*tab to cycle\b|\bfor agents\b|\bto manage\b/i;
-const TURN_SPINNER_LINE = /(?:Thinking|Tinkering|Doodling|Forging|Booping|Working)\s*[….…]{1,3}/i;
-const TURN_GLYPH_SPINNER = /[✶✽✢●⏺✱✧⚒⚙]\s+\S+[….…]{1,3}\s*\(\s*\d/;
+const TURN_SPINNER_LINE = /^(?:[✶✽✢●✱✧⚒⚙·]\s*)?(?:Thinking|Tinkering|Doodling|Forging|Booping|Working)\s*(?:\.{2,3}|[…⋯]{1,3})/i;
+const TURN_GLYPH_SPINNER = /[✶✽✢●⏺✱✧⚒⚙]\s+\S+(?:\.{2,3}|[…⋯]{1,3})\s*\(\s*\d/;
 const TURN_ESC_LINE = /esc to interrupt|\(esc to (stop|cancel)\)|\btokens?\s*·\s*esc\b/i;
 const GENERATING_LINE = /generating[.…]{1,3}\s*$/i;
 const NARRATION_LINE = /^[ \t]*⏺/;
