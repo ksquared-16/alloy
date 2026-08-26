@@ -1302,3 +1302,78 @@ not hand-edit published tenant configuration to make a card appear.
 **Not yet certified, and honestly outstanding:** the card in the real Focus Panel, the Certa ↔ Certb
 scope switch, movement overflow at 5 and 8+, command wiring in the card face, the command-chrome
 proof (§6), performance (§10), and Surface registration (§8). The provider beneath them is proven.
+
+---
+
+## 24. Attendance placed through canonical Surface authoring (2026-08-26)
+
+### §2 — the owner, identified before changing anything
+
+| | |
+|---|---|
+| Surface | **Enrollment Focus Panel** (`layout=enrollment-focus-panel-summary`) |
+| State before | **Published v131**, Visible Cards 4 |
+| Composition | `business_process · billing_preview · children · household` — exactly the live panel |
+| Why it differs from code | a published layout is stored in doc metadata and **wins over the code default by design** |
+| Authoring path | the Surfaces builder → Add card → **Publish** (`focusPanelPublishedLayoutOps` writes the layout into doc metadata) |
+
+`Attendance` already appeared in the builder's **Add card** library, which confirms the registration
+chain reached the catalog before any layout change.
+
+### §3 — placed and published
+
+Added through the builder and published: **v131 → v132**. No database hand-edit, no code-default
+change pretending to be tenant configuration, no renderer hardcoding, and no existing card removed
+to make room.
+
+### §5 — certified in the real Focus Panel
+
+```
+cards: business_process · billing_preview · attendance · children · household
+readiness 9.1 s · 0 page errors · 0 duplicate-key warnings
+```
+
+**Attendance appears because published configuration includes it** — the same panel showed four cards
+minutes earlier with identical code.
+
+The card renders `empty="no-participant"`: Certhouse has two children and none is scoped, so it shows
+no day and no controls. **That is the intended refusal**, certified live rather than argued — a card
+that picked a child here would answer confidently about the wrong one.
+
+### The scope switch cannot be exercised on this tenant
+
+Certa ↔ Certb needs a **child-grain Work View row**, because the scope carrier is attention's subject
+and only a child-grain lens selects a participation. Measured across every configured view:
+
+| View | Rows | Certhouse |
+|---|---|---|
+| `new` / `all` | 1 / 2 | **the family, as one case row** |
+| `waitlist` | 17 | other children only |
+| `registration` | 0 | none |
+
+The certification children are **enrolled**, and no configured child-grain view contains enrolled
+children. So this is a Work View **configuration gap**, not a card defect: the carrier itself is
+proven by 8 guards through the real context builder, and the card's no-scope refusal is proven in the
+browser.
+
+Closing it means authoring a child-grain Work View that includes enrolled children — a Queue Rows /
+Work View authoring act, distinct from the Focus Panel surface just published.
+
+### Attendance status — honest scorecard
+
+| Item | |
+|---|---|
+| canonical provider | **PASS** — verified on real events |
+| real card | **PASS** — renders in the live panel |
+| registered capabilities | **PASS** — all five execute |
+| published Surface placement | **PASS** — v132, through the builder |
+| ambiguous multi-child refusal | **PASS** — certified live |
+| participant switching | **BLOCKED** — no child-grain view holds enrolled children |
+| command execution *from the card face* | not certified — commands proven via the runtime, not the card's controls |
+| movement overflow browser proof | not certified |
+| command chrome browser proof | not certified |
+| performance | partial — 9.1 s panel readiness with Attendance placed |
+| 0 page errors | **PASS** |
+
+Attendance is **not** yet production-ready by §12, and the remaining items are named rather than
+rounded up.
