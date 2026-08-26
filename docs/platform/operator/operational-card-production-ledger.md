@@ -864,3 +864,33 @@ scenarios (divergent children, 5+ participants) at once.
 
 This lane cannot do it: it holds no database credentials, `vac governed-action` returns
 `missing_mission_binding`, and §21 forbids irreversible mutation of shared demo families.
+
+### §24 Attendance ledger status — corrected wording
+
+| Dimension | Status |
+|---|---|
+| Architecture / read truth | **READY** |
+| Canonical event / correction / movement owners | **READY** — `recordAttendanceEvent`, `correctAttendanceEvent` (non-destructive `correction`/`reversal`), `room_transfer` with from/to rooms |
+| Operational command implementation | **IMPLEMENTATION-READY** — thin delegations, no new business logic |
+| Browser / action certification | **BLOCKED** — no safely enrolled certification subject |
+| Production registration | **BLOCKED** |
+
+The Attendance domain is **not missing**. `enrollmentAgreementId` stays required — the invariant is
+correct and is not weakened to unblock a card. Attendance resumes the moment a deterministic,
+reversible enrolled-child fixture exists.
+
+### Implementation ledger — current
+
+| Capability | UI | Read truth | Actions | Config | Browser proof | Production-ready |
+|---|---|---|---|---|---|---|
+| **Staff** | ✅ | ✅ | n/a — informational | ✅ | ✅ | **YES** |
+| **Business Process** | ✅ | ✅ | existing Current Work | ✅ | ✅ A/B/G | **YES** |
+| Participant scope (runtime seam) | n/a | ✅ | n/a | n/a | ✅ via Process | **YES** |
+| Attendance | ✅ locked | ✅ READY | IMPLEMENTATION-READY | pending | ⛔ no subject | **NO** |
+| Financials | ✅ locked | ⚠ owners READY, **no data** | F5 absent; payer owned by Processing | pending | ⛔ no charges | **NO** |
+| Care Team | ✅ locked | ⛔ resolver missing | n/a | pending | ⛔ | **NO** |
+| Health & Safety | ✅ locked | ⛔ B1 | ⛔ | pending | ⛔ | **NO** |
+| Safety Signals | ✅ locked | ⛔ B1 | n/a | ⛔ S2 | ⛔ | **NO** |
+
+**Two cards are production-ready. Every remaining card is gated by one fact**, not by its own design
+or its backend: the certification tenant has no post-enrollment operational data.
