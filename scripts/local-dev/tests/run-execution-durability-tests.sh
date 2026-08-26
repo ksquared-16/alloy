@@ -55,6 +55,7 @@ SUITES=(
   "development-provider-seat-state.test.mjs"
   "development-governed-dependency.test.mjs"
   "development-toolkit-retention.test.mjs"
+  "development-governed-dependency-runtime.test.mjs"
 )
 
 PASS=0

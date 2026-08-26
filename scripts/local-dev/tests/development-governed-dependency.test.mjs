@@ -298,7 +298,18 @@ await test("13 — each boundary is a DIFFERENT state, not one generic refusal",
 
 // ── Verification and continuation ────────────────────────────────────────────
 
-const presentAll = async (c) => ({ present: true, source: `read:${c.subject}` });
+/**
+ * A REAL read. S2 tightened the contract: a database fact must say how it was
+ * obtained and carry the rows it read, because a count probe answers the same
+ * for a present and an absent relation — which is how a Director was told H1
+ * had landed when nothing had.
+ */
+const realRead = (rows = 1) => async (c) => ({
+  method: "real_read",
+  rows: Array.from({ length: rows }, (_, i) => ({ subject: c.subject, ordinal: i })),
+  source: `select:${c.subject}`,
+});
+const presentAll = realRead(1);
 
 await test("14 — verified evidence for all three conditions resumes the originating run", async () => {
   const dep = healthDependency();
@@ -314,7 +325,7 @@ await test("14 — verified evidence for all three conditions resumes the origin
 await test("15 — a SUCCESSFUL child with an unmet condition does NOT resume the parent", async () => {
   const dep = healthDependency();
   const v = await G.verifyResumeConditions(dep, {
-    readEvidence: async (c) => ({ present: c.subject === "person_health_facts" }),
+    readEvidence: async (c) => ({ method: "real_read", rows: c.subject === "person_health_facts" ? [{ ok: 1 }] : [] }),
     now: NOW,
   });
   assert.equal(v.verified, false);
@@ -328,7 +339,9 @@ await test("15 — a SUCCESSFUL child with an unmet condition does NOT resume th
 await test("16 — evidence that could not be READ costs the same as evidence that came back false", async () => {
   const dep = healthDependency();
   const v = await G.verifyResumeConditions(dep, {
-    readEvidence: async (c) => (c.subject === "health.manage" ? { present: null, error: "probe unavailable" } : { present: true }),
+    readEvidence: async (c) => (c.subject === "health.manage"
+      ? { present: null, error: "probe unavailable" }
+      : { method: "real_read", rows: [{ ok: 1 }] }),
     now: NOW,
   });
   assert.equal(v.verified, false);

@@ -675,6 +675,77 @@ function publicExecutor(c) {
  * `unverified`, which is NOT satisfied — the parent stays blocked, because
  * "we could not check" has to cost the same as "it is not there".
  */
+/**
+ * What counts as PROOF, per condition kind.
+ *
+ * S1 accepted any `{ present }` verdict. That was the loophole the Health &
+ * Safety incident walked through: a `head: true` count probe reported a MISSING
+ * table as PRESENT, and a Director was told H1 had landed. The probe answered
+ * confidently without reading a single row.
+ *
+ * So for database facts the verdict must now carry HOW it was obtained and WHAT
+ * came back. A method that is structurally incapable of proving existence is
+ * rejected outright — its `present: true` is discarded and the condition reads
+ * as unverified, which keeps the parent blocked.
+ */
+export const PROOF_REQUIRED_KINDS = Object.freeze(["relation_exists", "permission_exists", "column_exists", "grant_exists"]);
+
+/** Methods that cannot prove existence, whatever they claim. */
+export const REJECTED_EVIDENCE_METHODS = Object.freeze([
+  "head_count", "head", "count_only", "exists_probe", "select_count", "estimate",
+]);
+
+export const ACCEPTED_EVIDENCE_METHOD = "real_read";
+
+/**
+ * Normalise one evidence verdict against the contract.
+ *
+ * Returns three-valued presence. `null` means unproven — which is deliberately
+ * the same outcome as a probe that could not run, because "we asked something
+ * that cannot answer" and "we could not ask" are equally not-evidence.
+ */
+export function normalizeEvidenceVerdict(condition, verdict) {
+  const kind = condition?.kind || "assertion";
+  const method = verdict?.method ?? null;
+
+  if (method && REJECTED_EVIDENCE_METHODS.includes(String(method))) {
+    return {
+      present: null,
+      method,
+      rejected: true,
+      detail: `\`${method}\` cannot prove existence; a count answers the same for a present and an absent relation`,
+    };
+  }
+
+  if (PROOF_REQUIRED_KINDS.includes(kind)) {
+    // A probe that FAILED is unreadable, not rejected. Both leave the fact
+    // unproven and both keep the parent blocked, but they are different
+    // problems: one needs the probe fixed, the other needs a probe that is
+    // capable of answering at all.
+    if (!method && (verdict?.error || verdict?.present == null) && !("rows" in (verdict || {}))) {
+      return { present: null, method: null, rejected: false, unreadable: true, detail: verdict?.detail ?? verdict?.error ?? "evidence could not be read" };
+    }
+    if (method !== ACCEPTED_EVIDENCE_METHOD) {
+      return { present: null, method, rejected: true, detail: `${kind} requires a ${ACCEPTED_EVIDENCE_METHOD}; got ${method || "no stated method"}` };
+    }
+    // A real read that returned nothing is a NEGATIVE, not an unknown — the
+    // read happened and the row was not there.
+    const rows = Array.isArray(verdict?.rows) ? verdict.rows : null;
+    if (rows == null) {
+      return { present: null, method, rejected: true, detail: "a real read must carry the rows it read" };
+    }
+    return { present: rows.length > 0, method, rows_read: rows.length, source: verdict?.source ?? null, detail: verdict?.detail ?? null };
+  }
+
+  const p = verdict?.present;
+  return {
+    present: p === true ? true : p === false ? false : null,
+    method: method ?? null,
+    source: verdict?.source ?? null,
+    detail: verdict?.detail ?? verdict?.error ?? null,
+  };
+}
+
 export async function verifyResumeConditions(dependency, { readEvidence = null, now = Date.now() } = {}) {
   const conditions = dependency.resume_conditions || [];
   if (!conditions.length) {
@@ -691,27 +762,35 @@ export async function verifyResumeConditions(dependency, { readEvidence = null, 
     } catch (err) {
       verdict = { present: null, error: err?.message || String(err) };
     }
-    const present = verdict?.present;
+    // Three-valued on purpose: true, false, and "could not be proven" — and
+    // the contract decides which, not the probe's own opinion of itself.
+    const normalized = normalizeEvidenceVerdict(condition, verdict);
     checked.push({
       id: condition.id,
       kind: condition.kind,
       subject: condition.subject,
-      // Three-valued on purpose: true, false, and "could not be read".
-      present: present === true ? true : present === false ? false : null,
-      source: verdict?.source ?? null,
-      detail: verdict?.detail ?? verdict?.error ?? null,
+      present: normalized.present,
+      method: normalized.method,
+      evidence_unreadable: normalized.unreadable === true,
+      rows_read: normalized.rows_read ?? null,
+      evidence_rejected: normalized.rejected === true,
+      source: normalized.source ?? null,
+      detail: normalized.detail ?? null,
     });
   }
   const allTrue = checked.every((c) => c.present === true);
   const unreadable = checked.filter((c) => c.present === null);
+  const rejected = checked.filter((c) => c.evidence_rejected);
   return {
     ok: true,
     verified: allTrue,
     reason: allTrue ? "all_conditions_verified"
-      : unreadable.length ? "evidence_unreadable"
-        : "conditions_not_met",
+      : rejected.length ? "evidence_does_not_prove"
+        : unreadable.length ? "evidence_unreadable"
+          : "conditions_not_met",
     checked,
     unreadable: unreadable.map((c) => c.id),
+    rejected_evidence: rejected.map((c) => ({ id: c.id, method: c.method, detail: c.detail })),
     verified_at: now,
   };
 }
@@ -965,6 +1044,20 @@ export async function trustedHostEnvironmentsFor(actionKey) {
  * an explicit operator approval counts. A request that merely EXISTS approves
  * nothing: both Health & Safety requests exist, and neither was ever approved.
  */
+/**
+ * When a governed request was filed.
+ *
+ * The store's field is `created_at`. S1 sorted on `requested_at`, which does
+ * not exist on a real record — so every comparison saw "" and "latest" fell
+ * back to whatever order the file happened to be in. Supersession is decided by
+ * this ordering, so on the live store it was being decided by luck. The live
+ * run is what exposed it; no fixture would have, because the fixtures carried
+ * the field the code was looking for.
+ */
+export function requestFiledAt(request) {
+  return String(request?.created_at || request?.requested_at || request?.updated_at || "");
+}
+
 export function resolveApprovalFromStore(dependency, requests = []) {
   const wantSubject = dependencySubjectKey({
     action_key: dependency.governed_action_key,
@@ -987,7 +1080,7 @@ export function resolveApprovalFromStore(dependency, requests = []) {
   // path let an exact-but-superseded approval through, which is the quietest
   // possible way to execute the wrong version.
   const latest = [...withHash]
-    .sort((a, b) => String(b.requested_at || "").localeCompare(String(a.requested_at || "")))[0] || null;
+    .sort((a, b) => requestFiledAt(b).localeCompare(requestFiledAt(a)))[0] || null;
   const supersedes = (approval) => (approval && latest
     && latest.request_id !== approval.request_id
     && latest.content_hash !== approval.content_hash
@@ -1002,6 +1095,6 @@ export function resolveApprovalFromStore(dependency, requests = []) {
   // to choose a lane.
   const approvedAny = withHash
     .filter(isApproved)
-    .sort((a, b) => String(b.updated_at || b.requested_at || "").localeCompare(String(a.updated_at || a.requested_at || "")))[0] || null;
+    .sort((a, b) => requestFiledAt(b).localeCompare(requestFiledAt(a)))[0] || null;
   return { approval: approvedAny, supersededBy: supersedes(approvedAny) };
 }

@@ -778,6 +778,19 @@ export function patchRunFields(runId, fields = {}, { nowMs = Date.now(), root = 
     if (fields.agent_reports !== undefined) {
       found.agent_reports = Array.isArray(fields.agent_reports) ? fields.agent_reports : [];
     }
+    // Governed dependency routing. `governed_dependency` is the projection the
+    // ORIGINATING run carries while it waits on required capability it cannot
+    // reach itself; `governed_dependency_parent` is the pointer a DEPENDENT run
+    // carries back to the run it was created for. Allowlisted like everything
+    // else here — an un-allowlisted field is dropped in silence, which is how
+    // the first wiring pass produced a run that knew nothing about the
+    // dependency blocking it.
+    if (fields.governed_dependency !== undefined) {
+      found.governed_dependency = fields.governed_dependency || null;
+    }
+    if (fields.governed_dependency_parent !== undefined) {
+      found.governed_dependency_parent = fields.governed_dependency_parent || null;
+    }
     found.updated_at = iso(nowMs);
     writeStore(putRun(store, found), root);
     return { ok: true, run: found };
