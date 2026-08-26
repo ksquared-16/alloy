@@ -17,6 +17,10 @@
  * be replaced wholesale when that lands, not extended.
  */
 
+import {
+    groupPublicationErrors,
+    summarizePublicationErrors,
+} from "@/lib/businessProcesses/configuration/groupPublicationErrors";
 import { AlertCircle, AlertTriangle, CheckCircle2, RefreshCw, Upload } from "lucide-react";
 
 import type { BusinessProcessPublicationSummary } from "@/lib/businessProcesses/configuration/businessProcessEditorState";
@@ -145,22 +149,36 @@ export default function BusinessProcessPublicationBar({
             </div>
 
             {state.blocking_errors.length ? (
-                <ul className="space-y-0.5" data-testid="bp-publication-errors">
-                    {state.blocking_errors.map((e, i) => (
-                        <li
-                            key={`${e.code}-${e.path ?? i}`}
-                            className="flex items-start gap-1 text-[11px] text-alloy-ember"
-                        >
-                            <AlertTriangle size={11} className="mt-0.5 shrink-0" />
-                            <span>
-                                {e.message}
-                                {e.path ? (
-                                    <span className="ml-1 font-mono text-[10px] opacity-60">{e.path}</span>
-                                ) : null}
-                            </span>
-                        </li>
+                // Grouped by the configuration area an operator would go and fix. Twenty flat
+                // messages read as twenty defects; in the certification tenant they were three
+                // problems. Nothing is hidden — every error, code and path is still here, one
+                // disclosure away.
+                <div className="space-y-1" data-testid="bp-publication-errors">
+                    <p className="text-[11px] font-semibold text-alloy-ember">
+                        {summarizePublicationErrors(state.blocking_errors)}
+                    </p>
+                    {groupPublicationErrors(state.blocking_errors).map((group) => (
+                        <details key={group.area} className="text-[11px] text-alloy-ember">
+                            <summary className="flex cursor-pointer list-none items-center gap-1">
+                                <AlertTriangle size={11} className="shrink-0" />
+                                <span className="font-medium">{group.label}</span>
+                                <span className="opacity-70">
+                                    {group.errors.length} {group.errors.length === 1 ? "issue" : "issues"}
+                                </span>
+                            </summary>
+                            <ul className="ml-4 mt-0.5 space-y-0.5">
+                                {group.errors.map((e: (typeof group.errors)[number], i: number) => (
+                                    <li key={`${e.code}-${e.path ?? i}`}>
+                                        {e.message}
+                                        {e.path ? (
+                                            <span className="ml-1 font-mono text-[10px] opacity-60">{e.path}</span>
+                                        ) : null}
+                                    </li>
+                                ))}
+                            </ul>
+                        </details>
                     ))}
-                </ul>
+                </div>
             ) : null}
 
             {state.warnings.length ? (
