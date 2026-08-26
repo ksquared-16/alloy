@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { censusHealthGrainM1 } from "@/lib/health/migration/healthGrainM1";
+import { verifyHealthFoundation } from "@/lib/health/migration/healthFoundationVerify";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -39,6 +41,17 @@ export async function POST(request: NextRequest) {
         if (action === "census") {
             return NextResponse.json({ ok: true, census: await censusHealthGrainM1(createAdminClient()) });
         }
+        if (action === "verify") {
+            // Read-only. Exists so a 403 can be told apart from an unapplied migration.
+            const access = await getAdminAccessContextCached();
+            return NextResponse.json({
+                ok: true,
+                verification: await verifyHealthFoundation(createAdminClient(), ctx.orgId, {
+                    roleKeys: access.ok ? access.roleKeys : [],
+                    permissionKeys: access.ok ? access.permissionKeys : null,
+                }),
+            });
+        }
     } catch (e) {
         return NextResponse.json(
             { ok: false, error: e instanceof Error ? e.message : String(e) },
@@ -47,5 +60,5 @@ export async function POST(request: NextRequest) {
     }
 
     // Fail closed. An unrecognised verb is not a no-op that might have moved data.
-    return NextResponse.json({ error: "action must be census" }, { status: 400 });
+    return NextResponse.json({ error: "action must be census | verify" }, { status: 400 });
 }
