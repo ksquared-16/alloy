@@ -44,6 +44,8 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.move",
     "attendance.correct",
     "attendance.mark_absent",
+    "charge.add",
+    "charge.post",
 ] as const;
 
 function def(
@@ -135,6 +137,44 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // Five operator intents over the existing invariant-owning Attendance services. The operator
     // acts on a CHILD; the adapter resolves the enrolment agreement the domain requires, and fails
     // closed when none resolves.
+    // ── Financials ─────────────────────────────────────────────────────────
+    // One operator intent over the existing charge-lifecycle service. The adapter resolves the
+    // enrollment agreement the domain requires from the CHILD the operator names, and fails closed
+    // when none resolves. It creates a draft; posting stays a separate, authoritative step.
+    def({
+        capabilityKey: "charge.add",
+        canonicalCommandKey: "charge.add",
+        operatorLabel: "Add charge",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "charge.add",
+        implementationStatus: "production",
+        reason:
+            "Creates a DRAFT charge from a configured Charge Template. Amount, dates and GL mapping "
+            + "are resolved by the template, never by the caller; an enrollment agreement is required.",
+    }),
+    def({
+        capabilityKey: "charge.post",
+        canonicalCommandKey: "charge.post",
+        operatorLabel: "Post charge",
+        family: "financial",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "charge.post",
+        implementationStatus: "production",
+        reason:
+            "Makes a draft charge OWED. The result is immutable by DB rule — a posted childcare charge "
+            + "cannot be deleted or edited in place, only corrected through source_charge_id.",
+    }),
     def({
         capabilityKey: "attendance.check_in",
         canonicalCommandKey: "attendance.check_in",

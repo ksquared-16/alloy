@@ -94,6 +94,14 @@ export type FinancialsReconciliation = {
     balanceCents: number;
     /** Drafts whose billable date has not arrived. STATED beside the balance, never inside it. */
     scheduledCents: number;
+    /**
+     * Drafts whose billable date HAS arrived but which have not been posted.
+     *
+     * Neither owed nor scheduled, and previously counted in neither — so a period holding only
+     * unposted drafts reconciled to zero with nothing on the card explaining where the money went.
+     * A draft is not a debt; it is also not nothing.
+     */
+    draftCents: number;
 };
 
 export type FinancialsPastDue = {
@@ -159,6 +167,7 @@ function emptyReconciliation(): FinancialsReconciliation {
         paymentsCents: 0,
         balanceCents: 0,
         scheduledCents: 0,
+        draftCents: 0,
     };
 }
 
@@ -278,7 +287,7 @@ export async function buildFinancialsCardVM(
         supabase
             .from("charges")
             .select(
-                "id, billable_source_id, charge_category, charge_type, status, amount_cents, currency_code, "
+                "id, billable_source_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
                 + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
             )
             .eq("org_id", args.orgId)
@@ -323,6 +332,22 @@ export async function buildFinancialsCardVM(
         if (account) accountByMappingKey.set(t(raw.key), account);
     }
 
+    /*
+     * THE OPERATOR-FACING LABEL, not the template key.
+     *
+     * `writeTemplateDraftCharge` writes `description: intent.templateKey`, so a charge's stored
+     * description is `field_trip` — an internal key. The tenant already configured "Field trip" as
+     * the template's label, and that is what an operator named it, so the label is resolved here and
+     * the key is never rendered. A charge whose template has since been retired keeps its stored
+     * description rather than losing its identity.
+     */
+    const labelByTemplateId = new Map(
+        ((templateResult.data ?? []) as unknown as Array<Record<string, unknown>>).map((row) => [
+            t(row.id),
+            t(row.label),
+        ]),
+    );
+
     const charges = (chargeResult.data ?? []) as unknown as Array<Record<string, unknown>>;
     const rows: FinancialsLedgerRow[] = charges.map((c) => {
         const categoryKey = t(c.charge_category) || t(c.charge_type) || "one_time";
@@ -346,7 +371,7 @@ export async function buildFinancialsCardVM(
             subjectName: subjectMemberId ? nameByMember.get(subjectMemberId) ?? null : null,
             categoryKey,
             categoryLabel: chargeCategoryLabel(categoryKey),
-            description: t(c.description) || null,
+            description: labelByTemplateId.get(t(c.charge_template_id)) || t(c.description) || null,
             amountCents: Number(c.amount_cents ?? 0),
             currencyCode: t(c.currency_code) || "USD",
             status,
@@ -374,6 +399,7 @@ export async function buildFinancialsCardVM(
         if (row.periodKey !== period.key) continue;
         if (row.lifecycleStatus === "scheduled" || row.lifecycleStatus === "draft") {
             if (row.lifecycleStatus === "scheduled") reconciliation.scheduledCents += row.amountCents;
+            else reconciliation.draftCents += row.amountCents;
             continue;
         }
         if (!OWED_STATUSES.has(row.status)) continue;

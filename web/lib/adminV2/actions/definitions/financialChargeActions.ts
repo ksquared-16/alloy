@@ -38,10 +38,12 @@ import {
     previewTemplateCharge,
     writeTemplateDraftCharge,
 } from "@/lib/financials/chargeLifecycle/chargeLifecycleService";
+import { postChildcareCharge } from "@/lib/financials/childcareChargeService";
 import { OperationalEnrollmentServiceError } from "@/lib/childcareOperational/operationalEnrollmentErrors";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const CHARGE_ADD_ACTION_KEY = "charge.add";
+export const CHARGE_POST_ACTION_KEY = "charge.post";
 
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -233,4 +235,79 @@ const addCharge: RegisteredAction = {
     },
 };
 
-export const financialChargeActions: RegisteredAction[] = [addCharge];
+/**
+ * POST A DRAFT CHARGE — the step that makes a charge OWED.
+ *
+ * Add Charge deliberately creates a draft: `writeTemplateDraftCharge` "never posts", because posting
+ * is a separate authoritative decision the platform keeps apart from resolution. Without a registered
+ * post intent, though, nothing an operator can reach ever turns a draft into a balance, and the
+ * Financials card's central question — what is owed — could only ever answer zero.
+ *
+ * It adds no rules. `postChildcareCharge` owns the transition, refuses an already-posted charge, and
+ * the DB trigger makes the result immutable: a posted childcare charge cannot be deleted or edited in
+ * place, only corrected through `source_charge_id`. That is the same append-only shape Attendance has.
+ */
+const postCharge: RegisteredAction = {
+    actionKey: CHARGE_POST_ACTION_KEY,
+    defaultLabel: "Post charge",
+    description: "Post a draft charge so it becomes owed.",
+    supportedEntityTypes: ["opportunity_customer_member", "child", "person", "opportunity"],
+    supportedProcessKeys: [],
+    requiredContext: { requiresEntityId: true, requiresOpportunity: false, requiresCustomer: false },
+    audit: { eventType: "action_executed", category: "record", mutates: true },
+    bosProposalSupport: false,
+    confirmationPolicy: "none",
+
+    validatePayload(payload) {
+        const src = payload ?? {};
+        if (!t(src.charge_id)) {
+            return {
+                ok: false,
+                blockers: [{ code: "missing_charge", message: "A charge is required.", field: "charge_id" }],
+            };
+        }
+        return { ok: true, value: src };
+    },
+
+    async resolveEligibility({ payload }) {
+        const chargeId = t(payload?.charge_id);
+        return {
+            eligible: Boolean(chargeId),
+            blockers: chargeId ? [] : [{ code: "missing_charge", message: "A charge is required." }],
+            availableTransitions: [],
+            requiredInputs: [],
+        };
+    },
+
+    async buildPreview({ payload }) {
+        return {
+            summary: `Post charge ${t(payload?.charge_label) || t(payload?.charge_id)}`,
+            changes: ["The charge becomes owed and can no longer be edited in place."],
+        };
+    },
+
+    async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
+        const correlationId = randomUUID();
+        try {
+            const row = await postChildcareCharge(supabase as SupabaseClient, {
+                orgId: ctx.orgId,
+                chargeId: t(payload.charge_id),
+            });
+            return {
+                ok: true,
+                correlationId,
+                result: {
+                    actionKey: CHARGE_POST_ACTION_KEY,
+                    entityType: invocation.entityType,
+                    entityId: t(invocation.entityId),
+                    affectedId: String((row as { id?: unknown }).id ?? ""),
+                    detail: { status: (row as { status?: unknown }).status },
+                },
+            };
+        } catch (err) {
+            return mapError(err, correlationId);
+        }
+    },
+};
+
+export const financialChargeActions: RegisteredAction[] = [addCharge, postCharge];

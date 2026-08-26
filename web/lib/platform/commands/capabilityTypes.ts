@@ -73,6 +73,9 @@ export type CapabilityFamily =
     | "communications"
     | "documents"
     | "scheduling"
+    // Money: what is owed and what is charged. Distinct from `scheduling`, which owns time, and from
+    // `administration`, which owns configuration — a charge is neither.
+    | "financial"
     | "destructive"
     | "administration"
     | "navigation"
