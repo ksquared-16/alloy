@@ -1737,6 +1737,26 @@ document.addEventListener("click", async (e) => {
     e.stopPropagation();
     return;
   }
+  const dismissBlock = e.target?.closest?.("[data-gw-dismiss-block]");
+  if (dismissBlock) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!dismissBlock.disabled) {
+      dismissBlock.disabled = true;
+      const label = dismissBlock.textContent;
+      dismissBlock.textContent = "Closing\u2026";
+      try {
+        await gwFetch("/api/v2/lanes/prompt-block/dismiss", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ lane_id: dismissBlock.getAttribute("data-lane-id") || "" }),
+        });
+      } catch { /* the lane poll reports the real state */ }
+      dismissBlock.disabled = false;
+      dismissBlock.textContent = label;
+    }
+    return;
+  }
   const signIn = e.target?.closest?.("[data-gw-browser-auth-signin]");
   if (signIn) {
     e.preventDefault();

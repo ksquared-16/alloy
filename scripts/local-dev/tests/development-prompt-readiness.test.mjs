@@ -572,5 +572,56 @@ await test("an interrupted turn is over, so the pane is deliverable", async () =
   assert.equal(P.detectProviderBusy(`${interrupted}\nThinking for 3s`), null);
 });
 
+await test("the Rewind picker is a blocker, not a ready prompt", async () => {
+  const P = await import("../lib/vacilando/provider-prompt-readiness.mjs");
+  const D = await import("../lib/vacilando/prompt-block-dismiss.mjs");
+  // Trust Runtime sat in this screen while the lane reported "Working". The
+  // picker's row cursor is the SAME `❯` glyph as the input prompt, so the prompt
+  // affordance matched and the pane read READY — an instruction would have been
+  // typed into a restore-point list.
+  const rewind = [
+    "  ⎿  Interrupted · What should Claude do instead?",
+    "────────────────────────────────────────────────────────────────",
+    "  Rewind",
+    "",
+    "  Restore the code and/or conversation to the point before…",
+    "",
+    "   ↑ 47 more above",
+    "",
+    "    You are executing Vacilando run erun_1a80b279d1130f22.…",
+    "    No code changes",
+    "",
+    "  ❯ (current)",
+  ].join("\n");
+  const a = P.assessPanePromptReadiness(rewind);
+  assert.equal(a.state, "blocked");
+  assert.equal(a.blocker.kind, "selection");
+  assert.equal(P.promptReadinessAllowsSend(a).allow, false);
+  assert.equal(P.promptBlockNeedsTerminalOperator(a), true);
+  // It is dismissible, because we recognised it and know Escape cancels it.
+  assert.equal(D.blockerIsDismissible(a), true);
+
+  // POSITIVE CONTROL: an ordinary prompt is NOT blocked and NOT dismissible —
+  // Escape must never be sent to a healthy pane.
+  const ok = ["⏺ done", "Thinking for 3s", "────────", "❯", "────────"].join("\n");
+  const b = P.assessPanePromptReadiness(ok);
+  assert.equal(b.state, "ready");
+  assert.equal(D.blockerIsDismissible(b), false);
+
+  // A permission dialog is blocked but NOT dismissible: dismissing it answers it.
+  assert.equal(D.DISMISSIBLE_BLOCKER_KINDS.includes("permission"), false);
+  assert.equal(D.DISMISSIBLE_BLOCKER_KINDS.includes("trust"), false);
+  assert.equal(D.DISMISSIBLE_BLOCKER_KINDS.includes("login"), false);
+});
+
+await test("dismiss sends Escape only, and refuses a pane it did not recognise", async () => {
+  const D = await import("../lib/vacilando/prompt-block-dismiss.mjs");
+  assert.deepEqual(D.dismissKeysArgv("%9"), ["send-keys", "-t", "%9", "Escape", "Escape"]);
+  // No key that could ANSWER anything is reachable from here.
+  const argv = D.dismissKeysArgv("%9");
+  assert.equal(argv.includes("Enter"), false);
+  assert.equal(argv.some((k) => /^\d+$/.test(String(k))), false);
+});
+
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
 process.exit(fail === 0 ? 0 : 1);

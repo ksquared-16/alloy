@@ -129,6 +129,13 @@ const BLOCKER_SIGNATURES = Object.freeze([
     kind: "selection",
     provider: null,
     patterns: [
+      // THE REWIND PICKER. It reported READY, not blocked: its row cursor is the
+      // same `❯` glyph as the input prompt, so the prompt affordance matched and
+      // Vacilando would have typed an instruction into a restore-point list.
+      // Trust Runtime sat in exactly this screen while the Director was told the
+      // lane was working. Anchored on the picker's own sentence, which no
+      // ordinary output produces.
+      /restore the code and\/or conversation to the point before/i,
       // A cursor-marked numbered menu awaiting a choice. Anchored on the
       // selection caret so ordinary numbered prose never matches.
       /(^|\n)\s*[❯>▶]\s*\d+\.\s+\S[^\n]{0,80}(\n\s*\d+\.\s+\S)/,

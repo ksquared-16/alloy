@@ -2275,8 +2275,9 @@ test("controls that gate progress live in the conversation, not the rail", () =>
   assert.ok(railEnd > railStart, "details rail template must terminate");
   const rail = view.slice(railStart, railEnd);
 
+  // The conversation column carries approvals and the composer, and nothing that
+  // merely reports state — those pushed the chat off the screen entirely.
   for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
-    assert.equal(rail.includes(`${fn}(`), false, `${fn} must not be rendered inside the details rail`);
     assert.ok(view.includes(`${fn}(`), `${fn} must still be rendered somewhere`);
   }
 
@@ -2285,13 +2286,15 @@ test("controls that gate progress live in the conversation, not the rail", () =>
   const composer = view.indexOf("${renderComposer({", bar);
   assert.ok(bar > 0 && composer > bar, "decision bar precedes the composer");
   for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
-    const at = view.indexOf(`${fn}(`, bar);
-    assert.ok(at > bar && at < composer, `${fn} must render in the conversation column`);
+    assert.ok(rail.includes(`${fn}(`), `${fn} belongs in the rail`);
   }
 
   // They are ONE subject — whether this lane can keep working — so they render
-  // as one section rather than three unrelated cards in sequence.
-  assert.ok(view.slice(bar, composer).includes("gw-runtime-section"));
+  // as one section, and that section lives in the rail: stacked in the
+  // conversation it pushed the chat itself off the screen.
+  assert.ok(rail.includes("gw-runtime-section"), "runtime section belongs in the rail");
+  assert.equal(view.slice(bar, composer).includes("gw-runtime-section"), false,
+    "the runtime section must not block the conversation");
 
   // The browser session card is reference state, not a progress gate: it belongs
   // in the rail, directly under the folder and notification controls.
@@ -2329,6 +2332,20 @@ test("the authorize button exists on every screen, not just mobile", () => {
   assert.match(base[0], /overflow-y:\s*auto/);
   // And the actions stay reachable while the facts scroll.
   assert.match(css, /\.gw-decision-bar \.gw-work-stale-actions\{[^}]*position:\s*sticky/);
+});
+
+test("a recognised modal offers the operator a way out", () => {
+  // "It has to be answered in the agent's terminal" WAS the failure: Trust
+  // Runtime sat in a Rewind picker and the Director had no reachable action.
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  assert.match(view, /data-gw-dismiss-block/);
+  assert.match(view, /DISMISSIBLE_SCREEN_KINDS/);
+  // Never offered for a question only a person can answer.
+  const list = view.match(/DISMISSIBLE_SCREEN_KINDS = Object\.freeze\(\[[^\]]*\]/)[0];
+  for (const forbidden of ["permission", "trust", "onboarding", "login", "update"]) {
+    assert.equal(list.includes(`"${forbidden}"`), false, `${forbidden} must never be dismissible`);
+  }
+  assert.match(gwSrc, /lanes\/prompt-block\/dismiss/);
 });
 
 await Promise.all(started);
