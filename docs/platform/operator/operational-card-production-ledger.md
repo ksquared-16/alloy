@@ -772,3 +772,95 @@ The five child-attendance capabilities were **not registered**. Registering comm
 executed, previewed or certified against any subject in this tenant would produce exactly what the
 instruction forbids — buttons that do not run — and the Definition of Done requires "card buttons
 execute those real commands". The audit above is what makes them a thin slice once a subject exists.
+
+---
+
+## 17. Participant scope closed · Financials audited (2026-08-26)
+
+### Step 0 — participant scope, navigation → context: DONE
+
+The carrier existed at both ends and nowhere in between. **Attention's current subject is the join:**
+for a child-grain lens the Work View selects a participation, and that id already rides in attention
+beside the case the panel composes against — the child-mission overlay was already using it to refuse
+a mission built for a child the operator had left.
+
+`OpportunityFocusPanelBody` now hands it to the settled producer; `buildOperationalContext` resolves
+the scope once, from the case's own children rows. **8 guards** cover the Director's seven cases
+through the real context builder (not the resolver alone), because the thing that breaks is the
+wiring: a selection that never arrives, or one that arrives and is never cleared. Process
+re-certified unregressed; 36 tests green across six suites.
+
+**Participant-scope plumbing is complete.**
+
+### §2 Collision check — clean
+
+`git diff` between my base and `origin/staging` (24 commits) over `web/lib/financials`,
+`web/lib/childcareOperational` and `supabase/migrations` returns **zero changed files**. No other lane
+has landed Financials backend work. No overlap; no coordination required.
+
+### §1 Financials owner inventory
+
+| Fact | Owner | Class |
+|---|---|---|
+| Charge row | `charges` (`20260331120000`) | READY |
+| Rich taxonomy | `charge_category` — canonical 10 values (`20260630120000` P3.1) | READY |
+| Legacy type | `charge_type` **frozen** at `service\|fee\|adjustment` | READY |
+| Operator labels | `chargeCategoryLabel()` / `CHARGE_CATEGORY_LABEL` | READY |
+| **Subject attribution** | **`billable_source_type` + `billable_source_id`** — polymorphic, `["job","enrollment_agreement"]`, "neither is privileged" | **READY (corrected — see below)** |
+| Charge templates | `financial_charge_templates` — config only, posts nothing | READY |
+| Childcare charge writes | `createChildcareDraftCharge` · `recalculateDraftCharge` · `postChildcareCharge` | READY |
+| Payments / allocations | `payments`, `payment_allocations` (`20260329210000`) | READY |
+| GL chain | `commercial_revenue_categories → mapped_gl_account_id → gl_accounts` (`glConfigService`, `glCodeOptions`) | READY |
+| **Payer responsibility** | **Owned by Processing, not Financials** — the Funding chapter states it: "Who pays remains owned by Processing… Owned by Processing — not Financials config" | **OWNED_BY_OTHER** |
+| Billing period | no resolver | MISSING_SEAM (F0) |
+| Registered financial actions | none of the 21 keys | MISSING_SEAM (F5) |
+
+### F7 — my Phase 0 claim was wrong, and the correction matters
+
+Phase 0 recorded "`charges` has no subject column, F7 required". That is true of a *column* and
+misleading as a conclusion. **The polymorphic subject already exists**, added by the same P3.1
+migration as `charge_category`, and it is exactly the platform-shaped mechanism §5 asks for — not a
+childcare-specific `child_id`.
+
+For childcare the source is an **`enrollment_agreement`**, which belongs to exactly one child, so a
+childcare charge is **already child-attributable by derivation** (`billable_source_id` →
+`child_enrollment_agreements.customer_member_id`).
+
+What is genuinely missing is narrower than F7 as designed: the vocabulary has **no household-level
+source**, so "Household — family-level fee" cannot be expressed distinctly from a child's agreement.
+That is the smallest real extension — one additional billable-source kind — not a new column.
+
+### THE BLOCKER — the same root cause, for the third time
+
+`createChildcareDraftCharge` **requires `enrollmentAgreementId`**. Firefly has 17 children, all "In
+process", **zero enrolled** — so there are no enrollment agreements, therefore no childcare charges,
+no balance, no ledger, no period to reconcile.
+
+This is the same root cause that gates Attendance, and it gated Staff until a fixture was seeded:
+
+> **The certification tenant holds no post-enrollment operational data.** Leads and a waitlist exist;
+> everything downstream of enrolment — attendance, charges, balances, payments — does not.
+
+A production-enabled Financials card here would be exactly the visual shell §20 forbids: every value
+would have no owner to read from. So the read model was **not** built against fixtures and the card
+was **not** registered.
+
+### §18 `billing_preview` — distinct, not superseded
+
+Repository evidence: `billing_preview` is titled "Billing Preview" and answers *is billing
+configured* (`billing_configured`, `tuition_rate_label`, resolved by
+`buildBillingPreviewCardEvidence` from the financial-config API). The approved Financials card
+answers *what is owed, by whom, and what happened*. **Configuration ≠ account truth**, so these are
+distinct capabilities and no supersession is applied. `billing_preview` is also live in the published
+composition, so superseding it on a weaker reading would remove a configured tenant card.
+
+### Unblock — one decision covers three cards
+
+Authorize a **deterministic, reversible, namespaced enrolled-child certification fixture** (the Staff
+fixture pattern, one level deeper). `materializeChildEnrollment` is idempotent and creates the
+durable trio agreements → placements → schedule assignments. That single fixture unblocks
+**Attendance** (its subject), **Financials** (charges and balances) and the remaining **Process**
+scenarios (divergent children, 5+ participants) at once.
+
+This lane cannot do it: it holds no database credentials, `vac governed-action` returns
+`missing_mission_binding`, and §21 forbids irreversible mutation of shared demo families.
