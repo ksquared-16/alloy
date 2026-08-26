@@ -24,6 +24,7 @@ import { checkBindingParty, partyHasNoCanonicalHome, type ConceptParty } from ".
 import { ownershipHoldFor } from "./canonicalOwnershipHolds";
 import { safeguardingConceptKind, SAFEGUARDING_KIND_LABELS } from "./safeguardingConcepts";
 import { routeOwnership, type OwnershipRouting } from "./ownershipRouting";
+import { deferredCapabilityFor } from "./deferredCapabilities";
 import { classifyNonFormSource } from "@/lib/pos/processingCase/classification/classifyNonFormSource";
 import { CLASSIFICATION_KEY_LABELS } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
@@ -275,6 +276,45 @@ export function matchConcept(concept: BusinessConceptCandidate): ConfigurationPr
             ]),
             alternatives: [],
             explanation: `"${concept.label}" records a ${SAFEGUARDING_KIND_LABELS[safeguardingKind].toLowerCase()} on this child. It is stored as a restriction — with its own dates, evidence and approval — not as text on the child's profile, so that a later question like "may this person collect her today" can actually consult it. Nothing becomes active until someone approves it.`,
+            validation_issues: [],
+        };
+    }
+
+    // ── an obligation whose owner Alloy has not built yet ──
+    // Ahead of the upload branch on purpose, and for the same reason safeguarding sits ahead of
+    // field matching: a reader that only knows "this clause asks for a form" would turn payment
+    // setup into a file upload, and the family would be asked to attach bank paperwork Alloy must
+    // never hold. Payment setup is an obligation with an owner — Financials/Payments — that has no
+    // contract yet. It is recorded and held, never executed and never dropped.
+    const deferred = deferredCapabilityFor({
+        label: concept.label,
+        ...(concept.concept_key ? { concept_key: concept.concept_key } : {}),
+        concept_id: concept.id,
+        ...(concept.source?.section_title ? { section_title: concept.source.section_title } : {}),
+        ...(typeof concept.source?.page === "number" ? { page: concept.source.page } : {}),
+    });
+    // Only an UPLOAD obligation defers. The admissions packet also carries the school's own ACH
+    // authorization paragraph and its signature — that pair IS the legacy paper artifact, and
+    // deferring the paragraph would leave a signature line agreeing to nothing. The artifact stays
+    // exactly as the school wrote it; what defers is the obligation to SET UP payment.
+    if (deferred && concept.kind === "upload_requirement") {
+        return {
+            ...base,
+            disposition: "financial_payment",
+            deferred_capability: deferred,
+            ownership_routing: {
+                owner: "FINANCIAL_PAYMENT",
+                holdState: "HELD_PENDING_FINANCIALS",
+                financialKind: "method_setup",
+                bulkAcceptSafe: false,
+                basis: deferred.reason,
+            },
+            confidence: conf("review", [
+                "payment setup, not a document",
+                "held for Financials / Payments",
+            ]),
+            alternatives: [],
+            explanation: `"${concept.label}" is a payment-setup obligation. ${deferred.reason} It stays on this packet's record as a deferred capability with its source clause, so it reads as held rather than missing — nothing is asked of the family here, and no account detail becomes a field.`,
             validation_issues: [],
         };
     }

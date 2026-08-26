@@ -260,6 +260,14 @@ export function conciseRow(p: ConfigurationProposal): ConciseRow {
  */
 function financialRow(p: ConfigurationProposal): ConciseRow {
     const basis = p.ownership_routing?.basis ?? "";
+    if (p.deferred_capability) {
+        // Never "families provide": nobody is asked for this today, and saying otherwise would put a
+        // promise on the screen that the packet cannot keep.
+        return {
+            ownership: `Deferred · ${p.deferred_capability.owner_label}`,
+            consequence: "Payment setup is not built yet. Kept on this packet with its source clause so it stays visible, and nobody is asked for it here.",
+        };
+    }
     if (/routing or account number|protected/i.test(basis)) {
         return {
             ownership: "Families provide",

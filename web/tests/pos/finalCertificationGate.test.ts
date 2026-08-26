@@ -17,6 +17,7 @@ import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
 import { enumerateRequirementsFromForm, refKey } from "@/lib/pos/packet/requirementResponsibility";
 import { classifyForPublish, ownerlessCount } from "@/lib/pos/discovery/publishOwnershipClassification";
 import { isBulkAcceptSafe } from "@/lib/pos/discovery/bulkAcceptSafety";
+import { reconcileDocumentObligations } from "@/lib/pos/packet/obligationReconciliation";
 import type { PacketIntakeInput, PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
 import type { ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 
@@ -29,6 +30,7 @@ beforeAll(async () => {
 }, 300_000);
 
 const all = () => inputs.flatMap((i) => i.discovery.proposals);
+const allConcepts = () => inputs.flatMap((i) => i.discovery.concepts);
 
 /** The publish as proposed: accept the bindings and obligations, leave everything held. */
 function publishDecisions(i: PacketIntakeInput): Record<string, ProposalDecisionState> {
@@ -90,7 +92,9 @@ describe("ownership holds from the earlier slices", () => {
     it("keeps safeguarding, Financials, Health and derived where they belong", () => {
         const by = (d: string) => all().filter((p) => p.disposition === d);
         expect(by("safeguarding_binding")).toHaveLength(3);
-        expect(by("financial_payment")).toHaveLength(6);
+        // Seven, not six: the handbook's ACH-update clause joined them. It is document-SHAPED and
+        // payment-OWNED, and shape does not settle ownership.
+        expect(by("financial_payment")).toHaveLength(7);
         expect(by("held_for_canonical_owner")).toHaveLength(14);
         expect(by("derived_value_system")).toHaveLength(8);
         expect(by("relationship_binding")).toHaveLength(5);
@@ -109,11 +113,42 @@ describe("ownership holds from the earlier slices", () => {
 });
 
 describe("the obligation matrix", () => {
-    it("projects uploads 4/4 — the blocker this slice existed to clear", () => {
-        const discovered = all().filter((p) => p.disposition === "upload_requirement").length;
-        const published = inputs.flatMap((i) => project(i).requirements).filter((r) => r.type === "upload").length;
-        expect(discovered).toBe(4);
-        expect(published).toBe(4);
+    it("reconciles every discovered obligation — 3 executable, 1 deferred, 0 dropped", () => {
+        // The old assertion here read `discovered === published === 4`, and it was arithmetic
+        // standing in for a conclusion: it assumed the SHAPE of a clause settles its OWNER. Three of
+        // the four are documents. The fourth is payment setup, whose owner is Financials/Payments —
+        // a program Alloy has planned and not built. Satisfying the old count would have asked a
+        // family to upload bank paperwork.
+        const r = reconcileDocumentObligations(all(), allConcepts());
+        expect(r.discovered).toBe(4);
+        expect(r.executable).toHaveLength(3);
+        expect(r.deferred).toHaveLength(1);
+        // The load-bearing one. An obligation that is neither executable nor deferred is lost.
+        expect(r.dropped).toHaveLength(0);
+        expect(r.ok).toBe(true);
+
+        const published = inputs.flatMap((i) => project(i).requirements).filter((req) => req.type === "upload").length;
+        expect(published).toBe(r.executable.length);
+    });
+
+    it("names the deferred obligation, its owner and its clause — never a silent omission", () => {
+        const [deferred] = reconcileDocumentObligations(all(), allConcepts()).deferred;
+        expect(deferred).toBeDefined();
+        const cap = deferred!.deferred_capability;
+        expect(cap.obligation).toBe("PAYMENT_SETUP_REQUIRED");
+        expect(cap.intended_owner).toBe("FINANCIAL_PAYMENT");
+        // Reuses the hold vocabulary that already existed rather than inventing a second one.
+        expect(cap.hold_state).toBe("HELD_PENDING_FINANCIALS");
+        expect(cap.clause).toMatch(/\bACH\b/i);
+        expect(cap.reason.length).toBeGreaterThan(40);
+    });
+
+    it("asks for no bank credential and creates no payment field", () => {
+        // The reason the deferral exists rather than a fourth upload.
+        const reqs = inputs.flatMap((i) => project(i).requirements);
+        const banky = /routing|account number|bank account/i;
+        expect(reqs.filter((req) => banky.test(req.label ?? ""))).toHaveLength(0);
+        expect(all().filter((p) => p.disposition === "financial_payment" && p.proposed_field)).toHaveLength(0);
     });
 
     it("projects signatures and static content, as the earlier preflight found", () => {

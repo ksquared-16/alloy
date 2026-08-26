@@ -343,6 +343,21 @@ export function applyDiscovery(input: ApplyInput): ApplyOutput {
                 break;
             }
 
+            case "financial_payment": {
+                // Deliberately terminal, and deliberately NOT `requires_confirmation`. There is
+                // nothing to confirm: the obligation is held for an owner Alloy has not built. The
+                // ledger says so in words, because a reader who finds no requirement and no reason
+                // cannot tell a deferral from a bug.
+                ledger.add(identity);
+                record(
+                    "skipped",
+                    p.deferred_capability
+                        ? `Held for ${p.deferred_capability.owner_label} — ${p.deferred_capability.obligation}. No requirement is configured here, and nothing was dropped.`
+                        : "Payment detail — owned by Financials. Nothing durable is configured here.",
+                );
+                break;
+            }
+
             case "acknowledgement":
             case "signature_requirement":
             case "static_content":

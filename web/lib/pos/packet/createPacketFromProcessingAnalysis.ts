@@ -20,12 +20,16 @@ import { dbLoadPacketReview } from "@/lib/pos/packetIntake/packetIntakeDb";
 import { applyDiscovery } from "@/lib/pos/discovery/applyDiscovery";
 import { fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import type { DiscoveryDecisionRecord } from "@/lib/pos/discovery/reconciliation";
-import type { ConfigurationDiscoveryResult, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
+import type { ConfigurationDiscoveryResult, ConfigurationProposal, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { structureForArtifact } from "@/lib/pos/processingCase/structure/structureForArtifact";
 import { buildFormDraftFromStructure } from "@/lib/pos/processingCase/formDraft/buildFormDraftFromStructure";
 import { draftFormToFormSchemaV1 } from "@/lib/pos/processingCase/formDraft/draftFormToFormSchemaV1";
 import { safeParseFormSchema } from "@/lib/forms/schema";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
+import { reconcileDocumentObligations, describeObligationReconciliation, type ObligationConcept } from "./obligationReconciliation";
+import type { DeferredCapability } from "@/lib/pos/discovery/contracts";
+import { deferredCapabilityFor, PAYMENT_SETUP_REQUIRED, DEFERRED_OWNER_LABEL } from "@/lib/pos/discovery/deferredCapabilities";
+import { classifyPaymentSetupArtifact } from "./paymentSetupArtifact";
 
 /**
  * The durable identity of one artifact's realization.
@@ -53,10 +57,45 @@ export interface RealizedArtifact {
     already_existed: boolean;
 }
 
+/**
+ * A deferred obligation with its full lineage, as the packet records it.
+ *
+ * Concept-grain lineage rides on the proposal; this adds what only the packet knows — which source
+ * document said it, that document's bytes, and which executable artifact expresses the same
+ * obligation on paper. The relationship matters: an operator looking at the Direct Payment
+ * Authorization needs to see that the deferred capability is about the very thing that artifact is.
+ */
+export interface RealizedDeferredCapability extends DeferredCapability {
+    source_document_id: string;
+    source_document_title: string | null;
+    source_checksum_sha256: string | null;
+    /** Artifacts that express the same obligation as legacy paperwork. */
+    related_artifact_ids: string[];
+    /**
+     * Artifacts NOT realized as executable Forms because they collect only payment setup.
+     *
+     * The school's Direct Payment Authorization is one. Its boxes are a routing number and an
+     * account number, and a Form is built from a source's destinations rather than from its
+     * proposals — so realizing it would have asked a parent for a bank credential inside Alloy even
+     * though every proposal correctly refused to store one.
+     */
+    deferred_artifact_ids: string[];
+    certification: "REAL_ENROLLMENT_CERTIFICATION_V1";
+}
+
 export interface PacketRealization {
     packet_definition_id: string;
     packet_already_existed: boolean;
     artifacts: RealizedArtifact[];
+    /**
+     * Obligations recorded and NOT built, with the owner that will build them.
+     *
+     * Empty means nothing was deferred. It never means "nothing was found" — that is the whole
+     * reason this is a first-class field on the realization instead of a warning string.
+     */
+    deferred_capabilities: RealizedDeferredCapability[];
+    /** discovered = executable + deferred + dropped. `dropped` must be 0. */
+    obligation_reconciliation: { discovered: number; executable: number; deferred: number; dropped: number; summary: string };
     warnings: string[];
 }
 
@@ -113,8 +152,33 @@ export async function createPacketFromProcessingAnalysis(
         const warnings: string[] = [];
         const realized: RealizedArtifact[] = [];
 
+        // ── artifacts that collect only payment setup ────────────────────────────────────────────
+        //
+        // Decided BEFORE the loop, because the answer changes what the packet is rather than what
+        // one Form contains. See `paymentSetupArtifact` for why an artifact whose proposals all
+        // refuse to store a bank credential can still ASK for one.
+        const paymentSetupArtifactIds = new Set(
+            packet.artifacts
+                .filter((a) =>
+                    classifyPaymentSetupArtifact(
+                        a,
+                        (packet.source_analysis?.[a.document_id]?.concepts ?? []) as { id: string; kind: string; label: string; source?: { section_title?: string } }[],
+                        (packet.source_analysis?.[a.document_id]?.proposals ?? []) as ConfigurationProposal[],
+                    ).isPaymentSetup,
+                )
+                .map((a) => a.id),
+        );
+
         // Artifact order IS the certified order. The packet's items must read as the family reads.
-        for (const [index, artifact] of packet.artifacts.entries()) {
+        // `sequence` counts REALIZED items, so a deferred artifact leaves no gap in what the family
+        // is walked through.
+        let sequence = 0;
+        for (const artifact of packet.artifacts) {
+            if (paymentSetupArtifactIds.has(artifact.id)) {
+                warnings.push(`Artifact "${artifact.title}" collects only payment setup — held for ${DEFERRED_OWNER_LABEL} and not realized as a Form.`);
+                continue;
+            }
+            const index = sequence;
             const input = inputByDoc.get(artifact.document_id);
             if (!input) {
                 warnings.push(`Artifact ${artifact.id} has no readable source — skipped.`);
@@ -184,6 +248,7 @@ export async function createPacketFromProcessingAnalysis(
             // Pinned items must point at a PUBLISHED version — a draft is not executable.
             await deps.publishVersion({ orgId: args.orgId, versionId: ver.id, userId: args.userId });
 
+            sequence += 1;
             realized.push({
                 artifact_id: artifact.id,
                 document_id: artifact.document_id,
@@ -195,6 +260,81 @@ export async function createPacketFromProcessingAnalysis(
                 sequence_index: index,
                 already_existed: false,
             });
+        }
+
+        // ── obligations held for an owner Alloy has not built ────────────────────────────────────
+        //
+        // Scanned across EVERY source, not only the ones that produced artifacts. That is not a
+        // detail: the clause that raised this obligation lives in the family handbook, which is a
+        // reference document with no executable artifact at all. A loop over artifacts would have
+        // walked straight past it — and the obligation would have vanished with no reader ever
+        // being in a position to notice.
+        const deferredCapabilities: RealizedDeferredCapability[] = [];
+        const obligationProposals: ConfigurationProposal[] = [];
+        const obligationConcepts: ObligationConcept[] = [];
+
+        // Artifacts expressing the same obligation as paperwork. Answered structurally — an artifact
+        // whose own concepts the same classifiers recognise — never by matching a title.
+        const relatedArtifactIds = packet.artifacts
+            .filter((artifact) => {
+                if (paymentSetupArtifactIds.has(artifact.id)) return true;
+                const own = (packet.source_analysis?.[artifact.document_id]?.concepts ?? []) as { id: string; label: string; concept_key?: string; source?: { section_title?: string } }[];
+                return own.some(
+                    (c) =>
+                        c.source?.section_title &&
+                        artifact.section_titles.includes(c.source.section_title) &&
+                        deferredCapabilityFor({ label: c.label, ...(c.concept_key ? { concept_key: c.concept_key } : {}), concept_id: c.id }) !== null,
+                );
+            })
+            .map((artifact) => artifact.id);
+
+        for (const [documentId, analysis] of Object.entries(packet.source_analysis ?? {})) {
+            const proposals = (analysis?.proposals ?? []) as ConfigurationProposal[];
+            const concepts = (analysis?.concepts ?? []) as { id: string; kind: string; label: string; concept_key?: string; source?: { section_title?: string } }[];
+            for (const c of concepts) obligationConcepts.push({ id: c.id, kind: c.kind, label: c.label });
+            obligationProposals.push(...proposals);
+            const src = packet.sources.find((x) => x.document_id === documentId);
+            for (const proposal of proposals) {
+                if (!proposal.deferred_capability) continue;
+                deferredCapabilities.push({
+                    ...proposal.deferred_capability,
+                    source_document_id: documentId,
+                    source_document_title: src?.title ?? null,
+                    source_checksum_sha256: src?.checksum_sha256 ?? null,
+                    related_artifact_ids: relatedArtifactIds,
+                    deferred_artifact_ids: [...paymentSetupArtifactIds],
+                    certification: "REAL_ENROLLMENT_CERTIFICATION_V1",
+                });
+            }
+        }
+
+        // A packet could hold the paper authorization and no clause about it. The obligation is just
+        // as real, so it gets its own record rather than living only in a skipped-artifact warning.
+        if (!deferredCapabilities.length && paymentSetupArtifactIds.size) {
+            const first = packet.artifacts.find((a) => paymentSetupArtifactIds.has(a.id))!;
+            const src = packet.sources.find((x) => x.document_id === first.document_id);
+            deferredCapabilities.push({
+                obligation: PAYMENT_SETUP_REQUIRED,
+                hold_state: "HELD_PENDING_FINANCIALS",
+                intended_owner: "FINANCIAL_PAYMENT",
+                owner_label: DEFERRED_OWNER_LABEL,
+                reason: `"${first.title}" collects only payment setup. The family authorizes a payment method with the payment provider and Alloy keeps the authorization that comes back, so the account details on this paper form never become Alloy fields — and are never asked for here. Financials/Payments owns that experience and does not define it yet.`,
+                clause: first.title,
+                concept_id: first.id,
+                source_document_id: first.document_id,
+                source_document_title: src?.title ?? null,
+                source_checksum_sha256: src?.checksum_sha256 ?? null,
+                related_artifact_ids: relatedArtifactIds,
+                deferred_artifact_ids: [...paymentSetupArtifactIds],
+                certification: "REAL_ENROLLMENT_CERTIFICATION_V1",
+            });
+        }
+
+        const reconciliation = reconcileDocumentObligations(obligationProposals, obligationConcepts);
+        // Loud, not fatal: a dropped obligation is a defect in the reader, and the packet that
+        // exposes it is more useful than a failure that hides which one was lost.
+        for (const lost of reconciliation.dropped) {
+            warnings.push(`Obligation "${lost.clause}" is neither executable nor deferred — it would be lost.`);
         }
 
         const packetName = args.packetName?.trim() || "School of Enrichment — Enrollment Packet";
@@ -210,6 +350,17 @@ export async function createPacketFromProcessingAnalysis(
                 logical_artifact_ids: packet.artifacts.map((a) => a.id),
                 destinations: packet.destinations.length,
                 obligations: packet.obligations.length,
+                // Read by Studio. Stored on the packet rather than only on the case because the
+                // packet is what an operator opens, and "what is knowingly not here" is part of
+                // what a packet is.
+                deferred_capabilities: deferredCapabilities,
+                obligation_reconciliation: {
+                    discovered: reconciliation.discovered,
+                    executable: reconciliation.executable.length,
+                    deferred: reconciliation.deferred.length,
+                    dropped: reconciliation.dropped.length,
+                    summary: describeObligationReconciliation(reconciliation),
+                },
             },
         });
 
@@ -227,7 +378,20 @@ export async function createPacketFromProcessingAnalysis(
             r.packet_item_id = item.id;
         }
 
-        const realization: PacketRealization = { packet_definition_id: pkt.id, packet_already_existed: false, artifacts: realized, warnings };
+        const realization: PacketRealization = {
+            packet_definition_id: pkt.id,
+            packet_already_existed: false,
+            artifacts: realized,
+            deferred_capabilities: deferredCapabilities,
+            obligation_reconciliation: {
+                discovered: reconciliation.discovered,
+                executable: reconciliation.executable.length,
+                deferred: reconciliation.deferred.length,
+                dropped: reconciliation.dropped.length,
+                summary: describeObligationReconciliation(reconciliation),
+            },
+            warnings,
+        };
         await deps.saveRealization({ orgId: args.orgId, caseId: args.caseId, realization });
         return { ok: true, realization };
     } catch (e) {

@@ -68,18 +68,24 @@ const NAMES = [
     { subject: "artifact", subject_id: "2:page_2", decision: "renamed", name: "Oregon Nonmedical Exemption" },
 ];
 
-describe("six artifacts realize six Forms and one packet", () => {
-    it("creates 6 forms, 6 published versions, 1 packet, 6 ordered items", async () => {
+describe("six artifacts realize five Forms and one packet", () => {
+    it("creates 5 forms, 5 published versions, 1 packet, 5 ordered items", async () => {
         const h = harness();
         const res = await createPacketFromProcessingAnalysis(supabaseDouble(packet, inputs, NAMES), h.deps, { orgId: "org", caseId: "case", userId: "user" });
         expect(res.ok).toBe(true);
         if (!res.ok) return;
-        expect(h.forms).toHaveLength(6);
-        expect(h.versions).toHaveLength(6);
+        // Five, from six artifacts. The Direct Payment Authorization is held for Financials: its
+        // boxes are a routing number and an account number, and a Form built from a source's
+        // destinations would have asked a parent for them inside Alloy even though every proposal
+        // correctly refused to store one.
+        expect(h.forms).toHaveLength(5);
+        expect(h.versions).toHaveLength(5);
         expect(h.packets).toHaveLength(1);
-        expect(h.items).toHaveLength(6);
-        expect(h.published.size, "every pinned version must be published — a draft is not executable").toBe(6);
-        expect(h.items.map((i) => i.sequenceIndex)).toEqual([0, 1, 2, 3, 4, 5]);
+        expect(h.items).toHaveLength(5);
+        expect(h.published.size, "every pinned version must be published — a draft is not executable").toBe(5);
+        // Contiguous: a held artifact leaves no gap in what the family is walked through.
+        expect(h.items.map((i) => i.sequenceIndex)).toEqual([0, 1, 2, 3, 4]);
+        expect(h.forms.map((f) => f.name)).not.toContain("Direct Payment Authorization");
         // Every item pins the exact version this run published, never "latest".
         for (const i of h.items) expect(i.pinnedVersionId).toBeTruthy();
     });
@@ -121,10 +127,42 @@ describe("provenance travels with every artifact", () => {
         const meta = h.packets[0].metadata;
         expect(meta.created_via).toBe("pos_packet_from_analysis");
         expect(meta.source_documents).toHaveLength(3);
+        // The ANALYSIS still knows six artifacts; the packet executes five. A held artifact is
+        // recorded, never erased from the packet's account of its own sources.
         expect(meta.logical_artifact_ids).toHaveLength(6);
         // Multiple Forms legitimately share a source hash — the document is not duplicated.
         const hashes = (meta.source_documents as any[]).map((d) => d.checksum_sha256);
         expect(new Set(hashes).size).toBe(3);
+    });
+});
+
+describe("what the packet records about what it did not build", () => {
+    it("carries the deferred obligation, its owner and the artifact it held", async () => {
+        const h = harness();
+        const res = await createPacketFromProcessingAnalysis(supabaseDouble(packet, inputs, NAMES), h.deps, { orgId: "org", caseId: "case", userId: "user" });
+        expect(res.ok).toBe(true);
+        if (!res.ok) return;
+        const [cap] = res.realization.deferred_capabilities;
+        expect(cap, "a deferral that is not recorded is a silent omission").toBeDefined();
+        expect(cap!.obligation).toBe("PAYMENT_SETUP_REQUIRED");
+        expect(cap!.owner_label).toBe("Financials / Payments");
+        expect(cap!.source_document_title).toMatch(/handbook/i);
+        expect(cap!.deferred_artifact_ids).toHaveLength(1);
+        expect(cap!.related_artifact_ids).toContain(cap!.deferred_artifact_ids[0]);
+
+        // Studio reads the packet, not the case — so the record has to be on the packet too.
+        const meta = h.packets[0].metadata as Record<string, any>;
+        expect(meta.deferred_capabilities).toHaveLength(1);
+        expect(meta.obligation_reconciliation.summary).toBe(
+            "4 document/payment-like obligations discovered → 3 Enrollment document-upload obligations → 1 deferred Financials/Payments obligation → 0 dropped",
+        );
+        expect(meta.obligation_reconciliation.dropped).toBe(0);
+    });
+
+    it("says in the warnings which artifact it held and why", async () => {
+        const h = harness();
+        const res = await createPacketFromProcessingAnalysis(supabaseDouble(packet, inputs, NAMES), h.deps, { orgId: "org", caseId: "case", userId: "user" });
+        expect(res.ok && res.realization.warnings.join(" ")).toMatch(/Direct Payment Authorization.*payment setup/i);
     });
 });
 
@@ -137,10 +175,10 @@ describe("idempotency — running it twice changes nothing", () => {
         if (!first.ok || !second.ok) return;
         expect(second.realization.packet_definition_id).toBe(first.realization.packet_definition_id);
         // No duplicates of anything.
-        expect(h.forms).toHaveLength(6);
-        expect(h.versions).toHaveLength(6);
+        expect(h.forms).toHaveLength(5);
+        expect(h.versions).toHaveLength(5);
         expect(h.packets).toHaveLength(1);
-        expect(h.items).toHaveLength(6);
+        expect(h.items).toHaveLength(5);
         expect(second.realization.warnings.join(" ")).toMatch(/already realized/i);
     });
 

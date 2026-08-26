@@ -64,6 +64,15 @@ export interface OwnershipRouting {
      * pass exists to prevent — a "bedtime" that accepts "whenever".
      */
     blockedOn?: "TIME_ADOPTION";
+    /**
+     * Which KIND of financial thing, for `FINANCIAL_PAYMENT`.
+     *
+     * "It is financial" is not one fact. A routing number is a credential the family holds; a
+     * tuition amount is configuration the school holds. Collapsing them cost a real judgment: an
+     * artifact was held as payment setup because it carried a single material-fee line, which would
+     * have stopped a signed tuition agreement from executing.
+     */
+    financialKind?: "credential" | "method_setup" | "billing_configuration";
     /** For held owners, the state the certification record uses. */
     holdState?: OwnershipHoldState | "HELD_PENDING_FINANCIALS" | "HELD_UNKNOWN_OWNER";
     /**
@@ -190,6 +199,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
         return {
             owner: "FINANCIAL_PAYMENT",
             holdState: "HELD_PENDING_FINANCIALS",
+            financialKind: "credential",
             bulkAcceptSafe: false,
             basis:
                 "A bank routing or account number. Alloy has no destination for one and must not gain one — payment setup hands the raw number to the payment provider, and what comes back is a token plus the last four digits.",
@@ -201,6 +211,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
         return {
             owner: "FINANCIAL_PAYMENT",
             holdState: "HELD_PENDING_FINANCIALS",
+            financialKind: "method_setup",
             bulkAcceptSafe: false,
             basis:
                 "Payment-method setup detail. It exists while the provider is being set up and is not durable Alloy truth; the signed authorization is kept as a document instead.",
@@ -210,6 +221,7 @@ export function routeOwnership(concept: RouteOwnershipInput): OwnershipRouting {
         return {
             owner: "FINANCIAL_PAYMENT",
             holdState: "HELD_PENDING_FINANCIALS",
+            financialKind: "billing_configuration",
             bulkAcceptSafe: false,
             basis:
                 "An amount the school charges — billing configuration, owned by rate plans. It is not a fact about this child, and storing it on the child would make every family's copy drift from the school's.",

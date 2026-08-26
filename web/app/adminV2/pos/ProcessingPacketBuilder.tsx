@@ -10,6 +10,7 @@ import { trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentForm
 import { countSessionsByPacketDefinition } from "@/lib/forms/packets/packetOrchestrationPresentation";
 import { opMetadata } from "@/lib/operational/ui/operationalVisualTokens";
 import { dispatchAdminV2OpenProcessingModal } from "@/lib/adminV2/workspaceModalEvents";
+import PacketDeferredCapabilities, { type PacketDeferredCapability } from "./PacketDeferredCapabilities";
 
 type PacketItem = {
     id: string;
@@ -44,6 +45,7 @@ export default function ProcessingPacketBuilder({
     const [steps, setSteps] = useState<StepDraft[]>([{ form_definition_id: "", step_label: "" }]);
     const [links, setLinks] = useState<PacketPublicLinkRow[]>([]);
     const [sessionCount, setSessionCount] = useState(0);
+    const [deferred, setDeferred] = useState<PacketDeferredCapability[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -75,12 +77,15 @@ export default function ProcessingPacketBuilder({
             const lj = await lRes.json().catch(() => ({}));
             const sj = await sRes.json().catch(() => ({}));
             if (!pRes.ok) throw new Error((pj as { error?: string }).error ?? "Failed to load packet");
-            const def = (pj as { data?: { definition?: { name: string; key: string; description: string | null; is_active: boolean }; items?: PacketItem[] } }).data;
+            const def = (pj as { data?: { definition?: { name: string; key: string; description: string | null; is_active: boolean; metadata?: Record<string, unknown> }; items?: PacketItem[] } }).data;
             if (!def?.definition) throw new Error("Invalid response");
             setDefName(def.definition.name);
             setDefKey(def.definition.key);
             setDefDesc(def.definition.description ?? "");
             setDefActive(def.definition.is_active);
+            // What the packet knowingly does not ask for, recorded when it was realized.
+            const dc = def.definition.metadata?.deferred_capabilities;
+            setDeferred(Array.isArray(dc) ? (dc as PacketDeferredCapability[]) : []);
             const it = def.items ?? [];
             setItems(it);
 
@@ -303,6 +308,7 @@ export default function ProcessingPacketBuilder({
                                 </button>
                             </div>
                         ) : null}
+                        <PacketDeferredCapabilities items={deferred} />
                         <PacketBuilderWorkspaceLayout
                             packetDefId={packetDefId}
                             defName={defName}

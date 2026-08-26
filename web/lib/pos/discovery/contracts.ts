@@ -256,6 +256,35 @@ export type ProposalDisposition =
     | "held_unknown_owner" // ownership not established — reviewable, never silently a field
     | "unresolved"; // manual classification required
 
+/**
+ * An obligation intentionally held because its canonical owner is not implemented yet.
+ *
+ * The distinction this type exists to make durable:
+ *
+ *     requirement intentionally deferred, owner named    ≠    requirement accidentally missing
+ *
+ * A silent omission looks identical to a bug from every surface that reads a packet. This record is
+ * what makes the two readable apart — in review, in the realized packet's metadata, and in Studio.
+ *
+ * `hold_state` and `intended_owner` reuse the vocabulary `ownershipRouting` already owns; only
+ * `obligation` is new, and it names WHAT was asked for rather than who owns it.
+ */
+export interface DeferredCapability {
+    obligation: "PAYMENT_SETUP_REQUIRED";
+    hold_state: "HELD_PENDING_FINANCIALS";
+    intended_owner: "FINANCIAL_PAYMENT";
+    /** The owning program, in operator language — what Studio prints. */
+    owner_label: string;
+    /** Why it is deferred rather than built. Operator language, no ontology. */
+    reason: string;
+    /** The exact sentence that raised it. Lineage, not decoration: it is how an operator recognises it. */
+    clause: string;
+    /** Obligation identity — the discovery concept this came from. */
+    concept_id: string;
+    section_title?: string;
+    page?: number;
+}
+
 /** A proposed NEW configurable field — never persisted until the operator explicitly approves. */
 export interface ProposedFieldDefinition {
     operator_label: string;
@@ -336,6 +365,15 @@ export interface ConfigurationProposal {
      * than the residue of failed matching.
      */
     ownership_routing?: OwnershipRouting;
+    /**
+     * Present when this obligation is intentionally held for an owner Alloy has not built yet.
+     *
+     * It rides on the proposal rather than a side table so that every reader of the analysis — the
+     * review UI, the apply pass, the packet realization — sees the deferral without having to know
+     * to look for it. Nothing downstream may turn a proposal carrying this into an executable
+     * requirement.
+     */
+    deferred_capability?: DeferredCapability;
     /** Validation problems that would block application (e.g. new field needs a key). */
     validation_issues: string[];
     explanation: string;
