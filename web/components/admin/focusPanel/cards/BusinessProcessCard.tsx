@@ -53,16 +53,10 @@ export default function BusinessProcessCard({ model, context, receded = false, c
     const evidence = useMemo(
         () =>
             buildBusinessProcessCardEvidence(context, {
-                /*
-                 * NO CANONICAL CARRIER REACHES THE CARD YET.
-                 *
-                 * Participant scope exists at the navigation layer — `operatorFocusSelection`
-                 * carries `operational_member_id` — but nothing places it on the panel's VM or
-                 * operational context, so no card can read "the queue scoped this case to Avery".
-                 * The provider already accepts the id; passing a fabricated one would emphasise a
-                 * participant the runtime never selected, which is worse than emphasising none.
-                 */
-                selectedParticipantId: null,
+                // THE CANONICAL CARRIER. The case remains the panel subject; this only says which
+                // participant is the operator's current concern. Absent is ordinary and means no
+                // emphasis — never "pick one".
+                selectedParticipantId: context.participantScope?.participationId ?? null,
             }),
         [context],
     );

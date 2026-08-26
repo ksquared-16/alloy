@@ -52,6 +52,43 @@ export type OperationalBusinessProcess = {
     }>;
 };
 
+/**
+ * THE PARTICIPANT SCOPE — contextual, never a change of grain.
+ *
+ * The Focus Panel subject stays the CASE. This says only "of the participants on that case, one is
+ * the operator's current concern", which several cards legitimately consume: the Process rail
+ * emphasises them, Attendance resolves its child, Health and Financials filter by subject.
+ *
+ * ── WHY A SHARED CARRIER AND NOT A FIELD PER CARD ──
+ *
+ * Without it every card re-resolves the same child from whatever it can reach, and they drift: one
+ * reads a display name, another the first row, a third a card-local selection. One carrier means one
+ * answer, and the identity is STABLE — ids, never labels.
+ *
+ * ── THE RULES ARE THE POINT ──
+ *
+ * Optional. Explicit. Never inferred from a display label. Never a silent fall back to the first
+ * child of a multi-child family — a wrong child is worse than no child, because the operator cannot
+ * see that the card answered about someone else. Absent means absent, and a card that needs a
+ * participant must say so rather than guess one.
+ */
+export type OperationalParticipantScope = {
+    /** The participation row — `opportunity_customer_members.id`. The stable identity of record. */
+    participationId: string;
+    /** The durable child — `customer_members.id`, when the participation names one. */
+    customerMemberId: string | null;
+    /** The person behind the child, when one exists. A child may have no `persons` row. */
+    personId: string | null;
+    /** Operator-facing name, for presentation only. Never used to resolve or match. */
+    displayName: string | null;
+    /** Canonical avatar reference, already authorized. Null renders initials. */
+    imageUrl: string | null;
+    /** The participant's own stage identity, when already composed. Placement is by this, not by a label. */
+    stageKey: string | null;
+    /** Presentation label for that stage. */
+    stageLabel: string | null;
+};
+
 export type OperationalContextPerspective = {
     /** Mission line for the active operational view, when known. */
     missionLabel: string | null;
@@ -273,6 +310,12 @@ export type OperationalContext = {
      * answer is not a flat record field. @see OperationalContextSignals.
      */
     signals: OperationalContextSignals;
+    /**
+     * The scoped participant, when the runtime has explicitly selected one. ABSENT IS THE ORDINARY
+     * CASE and is a real answer: it means no participant is scoped, never "resolve one yourself".
+     * @see OperationalParticipantScope
+     */
+    participantScope?: OperationalParticipantScope | null;
     /**
      * Stage operating-plan runtime projection — read-only source for Current Work.
      * Populated by `buildOperationalContext`; cards never fetch this separately.

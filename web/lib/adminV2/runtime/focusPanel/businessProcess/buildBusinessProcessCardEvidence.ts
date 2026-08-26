@@ -168,7 +168,12 @@ export function buildBusinessProcessCardEvidence(
             imageUrl: child.imageUrl ?? null,
             stageKey,
             stageLabel: child.status ?? null,
-            scoped: !!options?.selectedParticipantId && child.id === options.selectedParticipantId,
+            // Either stable identity may name the participant — the participation row or the
+            // durable child. Never the display name.
+            scoped:
+                !!options?.selectedParticipantId
+                && (child.id === options.selectedParticipantId
+                    || (child.customerMemberId ?? null) === options.selectedParticipantId),
         });
     }
 

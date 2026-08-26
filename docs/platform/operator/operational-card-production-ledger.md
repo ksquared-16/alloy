@@ -689,3 +689,86 @@ worth checking closely — new card keys land in its map — and it fails identi
 
 **Not run to completion:** the ~118 runtime files that reference none of the touched seams. That is a
 budget limit of this lane, not a claim about them.
+
+---
+
+## 16. Attendance vertical — audit, scope carrier, and a hard data blocker (2026-08-26)
+
+### §5 Attendance canonical truth — the audit
+
+Every owner exists. **No second ledger is needed, and none was built.**
+
+| Concern | Canonical owner |
+|---|---|
+| Event record | `child_attendance_events` (migration `20260629120000_childcare_attendance_facts_p2`) |
+| Write | `recordAttendanceEvent()` — validates shape, asserts the agreement, emits |
+| Correct / reverse | `correctAttendanceEvent()` — `entry_type` `correction` \| `reversal`, **never a destructive UPDATE** |
+| Read | `listAttendanceEvents()`, `attendanceFold`, `buildChildAttendanceReadModel` |
+| Expected vs actual | `expectedVsActual`, `fetchExpectedVsActual`, `actualCompliance` |
+| Service day | `attendanceServiceDate` (org/location-local, derived from `eventAt` + timezone) |
+| Event kinds | `check_in` · `check_out` · `absence` · `present` · `room_transfer` · `schedule_override` |
+| Events emitted | `attendance_event_recorded` / `_corrected` / `_reversed` → `workflow_events` |
+| Actor attribution | `AttendanceActorContext` (`actorType`, `actorUserId`) |
+
+**Room movement is already first-class** (`room_transfer`, with `fromRoomLocationId` /
+`toRoomLocationId` and a shape validator). Correction doctrine is already non-destructive. The five
+target capabilities would be thin registrations delegating to this module — no new business logic.
+
+### THE BLOCKER — attendance's subject is an agreement, and this tenant has none
+
+`RecordAttendanceEventInput.enrollmentAgreementId` is **required and non-nullable**, and
+`assertAgreementAllowsAttendance` throws `not_found` without a real agreement. So:
+
+> **Attendance's subject is not "a child". It is an enrollment agreement.**
+
+Firefly has **17 children, every one "In process" — zero Enrolled.** Operations → Attendance reports
+`CHILDREN PRESENT 0/0`, `NOT ARRIVED 0`, and "No one expected" in all seven rooms.
+
+Consequently **no attendance event can be recorded, corrected or read for any child in this tenant**,
+and none of §20's scenarios A–K or §21's action certification can execute. This is not a rendering
+gap and not something a card fixture can paper over: the writer refuses at the agreement gate.
+
+**The seeding path is known and idempotent** — `materializeChildEnrollment` creates the durable trio
+(`child_enrollment_agreements` → `child_placements` → `schedule_assignments`), reached canonically by
+completing an enrollment process instance. Driving it means running a real enrollment to completion
+for a child on the shared demo tenant, which creates durable placements and schedule assignments.
+§21 forbids destructive mutation of shared demo families without a reversible strategy, and this lane
+holds no database credentials, so it cannot seed or unwind outside the product UI.
+
+**Director decision required:** authorize enrolling a namespaced certification child (mirroring the
+Staff fixture) so agreements, expected schedule and attendance events become reachable.
+
+### §1 Participant scope carrier — delivered
+
+`OperationalParticipantScope` on `OperationalContext`: `participationId` · `customerMemberId` ·
+`personId` · `displayName` · `imageUrl` · `stageKey` · `stageLabel`. Optional, case-scoped, and it
+does **not** change grain — the case remains the panel subject.
+
+`resolveParticipantScope()` is the one place the decision is made, and its refusals are the point:
+
+| Input | Result |
+|---|---|
+| Explicit id (participation **or** durable child) | `explicit` |
+| A display **name** | **null** — a name is not an identity |
+| Several eligible, none selected | **null, `ambiguous`** — never the first child |
+| Exactly one eligible | `sole_participant` — no ambiguity to resolve, so a fact not a guess |
+| Selection from a case the operator just left | **null, `not_found`** — stale scope refused, not laundered into a plausible child |
+
+7 guards passing. **§2 done:** the Process card now reads `context.participantScope` instead of its
+local placeholder, matching on either stable id and never a name. Process re-certified unregressed —
+Tour vs All still identical stage, rail, work and activity count; 0 page errors; 0 duplicate-key
+warnings; 28 tests green across its five suites.
+
+**Remaining link:** navigation → panel context. `dispatchOperatorFocusSelection` already carries
+`operational_member_id` beside the case (documented there as "the ROW travels beside it, so the
+listener can select a participation without the panel losing the case"), and
+`OperatorFocusAttentionListener` consumes it as the Work-View **row subject**. Nothing yet threads it
+into the panel VM as a scope. The contract and every consumer are now in place; that one thread
+remains.
+
+### Not built, and why
+
+The five child-attendance capabilities were **not registered**. Registering commands that cannot be
+executed, previewed or certified against any subject in this tenant would produce exactly what the
+instruction forbids — buttons that do not run — and the Definition of Done requires "card buttons
+execute those real commands". The audit above is what makes them a thin slice once a subject exists.
