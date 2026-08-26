@@ -62,12 +62,35 @@ export const SLOT_PORTS = Object.freeze({ 1: 3011, 2: 3012, 3: 3013, 4: 3014, 5:
 
 export const DEFAULT_CAPTURE_TIMEOUT_MS = 10 * 60 * 1000;
 
+// The toolkit resolves slot auth as `$ALLOY_RUNTIME_ROOT/auth/slot<N>` and does
+// not special-case the gateway root. `alloy-agent-verify` therefore reads
+// whatever root it is invoked with, and that read is the one that decides
+// whether verification can happen at all.
+//
+// This used to strip a trailing `/gateway`, on the assumption that auth storage
+// is machine-scoped. That made the lane report a session the verifier would
+// never consult: slot 5 showed `authentication_valid` from a capture under the
+// base root while `alloy-agent-verify`, running gateway-rooted, said `missing`.
+// A status that disagrees with the verifier is worse than no status, so this
+// now resolves exactly as the toolkit does.
 function stateRoot() {
   const configured = process.env.ALLOY_RUNTIME_ROOT?.trim();
-  // Auth storage is machine-scoped, not gateway-scoped: alloy-agent-login writes
-  // it under the base runtime root, so a gateway-rooted process must step up.
-  const base = configured ? configured.replace(/\/gateway$/, "") : join(homedir(), ".local", "state", "alloy-dev");
-  return base;
+  return configured || join(homedir(), ".local", "state", "alloy-dev");
+}
+
+// Where a capture taken under the base root would sit. Consulted only to
+// explain a missing session — never treated as usable, because the verifier
+// cannot see it.
+function legacyStateRoot() {
+  const configured = process.env.ALLOY_RUNTIME_ROOT?.trim();
+  if (!configured) return null;
+  const stripped = configured.replace(/\/gateway$/, "");
+  return stripped === configured ? null : stripped;
+}
+
+export function legacySlotAuthStoragePath(slot) {
+  const root = legacyStateRoot();
+  return root ? join(root, "auth", `slot${slot}`, "storage-state.json") : null;
 }
 
 export function slotAuthStoragePath(slot, { root = stateRoot() } = {}) {
@@ -144,7 +167,23 @@ export function isLoopbackBase(baseUrl) {
 export function readSlotAuthStatus(slot, { root = stateRoot(), nowMs = Date.now() } = {}) {
   const path = slotAuthStoragePath(slot, { root });
   if (!existsSync(path)) {
-    return { state: BROWSER_AUTH_STATES.MISSING, slot, storage_path: path, exists: false };
+    // A capture under the base root is a real session, but not one the verifier
+    // can reach. Name it, so the operator is told to sign in rather than left
+    // wondering why a file they can see is called missing.
+    const legacy = legacySlotAuthStoragePath(slot);
+    const strandedAt = legacy && existsSync(legacy) ? legacy : null;
+    return {
+      state: BROWSER_AUTH_STATES.MISSING,
+      slot,
+      storage_path: path,
+      exists: false,
+      ...(strandedAt
+        ? {
+            stranded_storage_path: strandedAt,
+            detail: "a session exists under the base runtime root, which alloy-agent-verify does not read; sign in again to capture it where the verifier looks",
+          }
+        : {}),
+    };
   }
   let stat = null;
   let parsed = null;
@@ -511,6 +550,10 @@ export function attachLaneBrowserAuth(lanes, { root = stateRoot(), qaIdentityFor
         expected_identity: identity,
         storage_captured_at: status.captured_at || null,
         earliest_expiry: status.earliest_expiry || null,
+        // Explains a state the operator can otherwise see contradicted on disk,
+        // e.g. a session captured under the base runtime root that the verifier
+        // does not read.
+        detail: status.detail || verdict?.detail || null,
         secrets_recorded: false,
       },
     };

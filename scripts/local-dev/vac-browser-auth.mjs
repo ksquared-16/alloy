@@ -100,12 +100,15 @@ if (!validated.ok) {
 const status = readSlotAuthStatus(validated.slot);
 
 if (op === "status") {
-  const out = publicAuthOutcome({ validated, state: status.state, status });
+  // status carries its own explanation (e.g. a session stranded under the base
+  // runtime root); dropping it left the operator with a bare "missing".
+  const out = publicAuthOutcome({ validated, state: status.state, status, detail: status.detail });
   emit(out, () => {
     process.stdout.write(`${out.headline}\n`);
     process.stdout.write(`  slot ${out.slot} · ${out.base_url} · expected ${out.expected_identity}\n`);
     process.stdout.write(`  storage: ${status.exists ? `captured ${out.storage_captured_at} mode ${out.storage_mode}` : "absent"}\n`);
     process.stdout.write(`  blocks execution: ${blocksExecution(status.state)}\n`);
+    if (out.detail) process.stdout.write(`  ${out.detail}\n`);
   });
   process.exit(blocksExecution(status.state) ? 6 : 0);
 }

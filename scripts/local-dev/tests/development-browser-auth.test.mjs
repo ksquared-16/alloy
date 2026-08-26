@@ -30,6 +30,7 @@ const {
   blocksExecution, redactAuthText, beginBrowserAuthCapture,
   captureInFlight, resetCapturesForTests, slotAuthStoragePath,
   attachLaneBrowserAuth, recordSlotVerification, readSlotVerification, laneSlot,
+  legacySlotAuthStoragePath,
 } = await import("../lib/vacilando/browser-auth.mjs");
 
 let pass = 0;
@@ -282,9 +283,12 @@ await test("no credential material can reach a log or a durable result", () => {
 await test("storage cannot reach Git", () => {
   // It lives under the machine state root, not any repository, so exclusion is
   // structural rather than a .gitignore entry someone can delete.
+  // Asserted by intent, not by literal directory: the path follows whichever
+  // runtime root the verifier reads (base or gateway), and pinning the literal
+  // string made this fail on a correct change rather than on a leak.
   const p = slotAuthStoragePath(5);
   assert.doesNotMatch(p, /alloy-worktrees/);
-  assert.match(p, /\.local\/state\/alloy-dev\/auth\/slot5\//);
+  assert.match(p, /\.local\/state\/alloy-dev(\/gateway)?\/auth\/slot5\//);
   assert.equal(readSlotAuthStatus(5, { root: makeRoot() }).outside_worktree, true);
 });
 
@@ -324,6 +328,63 @@ await test("a lane with no slot has no browser session to recover", () => {
   assert.equal(laneSlot({ binding: { slot: 3 } }), 3);
   const untouched = attachLaneBrowserAuth([{ lane_id: "x", binding: { worktree_path: "/tmp/none" } }]);
   assert.equal(untouched[0].browser_auth, undefined);
+});
+
+await test("storage resolves under the runtime root the verifier reads", () => {
+  // `alloy-agent-verify` reads `$ALLOY_RUNTIME_ROOT/auth/slot<N>` and does not
+  // special-case the gateway root. Stripping `/gateway` here pointed the status
+  // at a file the verifier never opens, so slot 5 reported a valid session while
+  // verification said `missing` — the exact disagreement this flow exists to end.
+  const prev = process.env.ALLOY_RUNTIME_ROOT;
+  try {
+    process.env.ALLOY_RUNTIME_ROOT = "/tmp/alloy-root-probe/gateway";
+    assert.equal(
+      slotAuthStoragePath(5),
+      "/tmp/alloy-root-probe/gateway/auth/slot5/storage-state.json",
+    );
+    assert.equal(
+      legacySlotAuthStoragePath(5),
+      "/tmp/alloy-root-probe/auth/slot5/storage-state.json",
+    );
+  } finally {
+    if (prev === undefined) delete process.env.ALLOY_RUNTIME_ROOT;
+    else process.env.ALLOY_RUNTIME_ROOT = prev;
+  }
+});
+
+await test("a session stranded under the base root is missing, and says why", () => {
+  const prev = process.env.ALLOY_RUNTIME_ROOT;
+  const base = mkdtempSync(join(tmpdir(), "alloy-stranded-"));
+  try {
+    process.env.ALLOY_RUNTIME_ROOT = join(base, "gateway");
+    // A real capture, but under the base root — the verifier cannot reach it.
+    mkdirSync(join(base, "auth", "slot5"), { recursive: true });
+    writeFileSync(
+      join(base, "auth", "slot5", "storage-state.json"),
+      JSON.stringify({ cookies: [{ name: "sb", expires: 4102444800 }] }),
+      { mode: 0o600 },
+    );
+
+    const status = readSlotAuthStatus(5);
+    // Not valid: presence somewhere else is not presence where it counts.
+    assert.equal(status.state, BROWSER_AUTH_STATES.MISSING);
+    assert.equal(status.exists, false);
+    assert.equal(status.stranded_storage_path, join(base, "auth", "slot5", "storage-state.json"));
+    assert.match(status.detail, /base runtime root/);
+    assert.equal(blocksExecution(status.state), true);
+    // The explanation must survive into what the Director actually sees.
+    const lanes = attachLaneBrowserAuth([{ lane_id: "l", binding: { slot: 5 } }]);
+    assert.match(lanes[0].browser_auth.detail, /base runtime root/);
+    // And it must still never carry credential material.
+    assert.equal(lanes[0].browser_auth.secrets_recorded, false);
+    // The missing branch reports no cookie data at all, so there is nothing in
+    // it that could describe the stranded session's contents.
+    assert.equal(status.cookie_count, undefined);
+    assert.equal(status.cookie_names, undefined);
+  } finally {
+    if (prev === undefined) delete process.env.ALLOY_RUNTIME_ROOT;
+    else process.env.ALLOY_RUNTIME_ROOT = prev;
+  }
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
