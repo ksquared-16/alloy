@@ -21,6 +21,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+    assertHealthAccess,
+    HEALTH_VIEW_PERMISSION,
+    type HealthAccessSubject,
+} from "@/lib/health/healthAccess";
+import {
     PERSON_HEALTH_FACTS_TABLE,
     PERSON_HEALTH_FACT_SELECT,
     type HealthFactKind,
@@ -30,6 +35,12 @@ import {
 
 export type HealthFactQuery = {
     orgId: string;
+    /**
+     * D-H6. REQUIRED, and deliberately not optional: an optional access argument is a check every
+     * future caller may forget, and the forgetting is silent. Passing it is the only way to get
+     * health data out of this module.
+     */
+    access: HealthAccessSubject;
     subjectEntityId: string;
     subjectEntityType?: HealthSubjectType;
     /** Omit for every kind — the four provider refs each pass exactly one. */
@@ -54,6 +65,9 @@ export async function resolveActiveHealthFacts(
     supabase: SupabaseClient,
     query: HealthFactQuery,
 ): Promise<PersonHealthFactRow[]> {
+    // The permission is checked BEFORE the arguments are validated, so a caller without access
+    // cannot probe for a valid subject id by watching which inputs change the error.
+    assertHealthAccess(query.access, HEALTH_VIEW_PERMISSION);
     const orgId = (query.orgId ?? "").trim();
     const subjectId = (query.subjectEntityId ?? "").trim();
     if (!orgId || !subjectId) return [];
@@ -97,7 +111,10 @@ export async function resolveHealthFactLineage(
     supabase: SupabaseClient,
     orgId: string,
     factId: string,
+    access: HealthAccessSubject,
 ): Promise<PersonHealthFactRow[]> {
+    // Provenance is health data too — the lineage carries every prior payload.
+    assertHealthAccess(access, HEALTH_VIEW_PERMISSION);
     const lineage: PersonHealthFactRow[] = [];
     let cursor: string | null = (factId ?? "").trim() || null;
     // Bounded: a lineage longer than this is a data defect, and following it forever would hang the

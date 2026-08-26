@@ -41,6 +41,15 @@ export const CAPABILITY_AREAS: readonly CapabilityArea[] = Object.freeze([
     { key: "scheduling", label: "Scheduling", description: "Schedules and calendars.", order: 30 },
     { key: "communications", label: "Communications", description: "Messages to families and contacts.", order: 40 },
     { key: "documents", label: "Documents", description: "Documents and forms on a record.", order: 50 },
+    /*
+     * Health is its OWN area, not a corner of Families or Documents.
+     *
+     * That is the D-H6 decision expressed in the operator's vocabulary: someone granting family
+     * access must not sweep allergies, conditions and medications along with it, and an area is the
+     * unit a preset applies to. Filing health under an existing area would make the two grantable
+     * only together, which is the outcome the boundary exists to prevent.
+     */
+    { key: "health", label: "Health", description: "Allergies, conditions, medications and health documents.", order: 55 },
     { key: "billing", label: "Billing", description: "Billing and payments.", order: 60 },
     { key: "reports", label: "Reports", description: "Reports and analytics.", order: 70 },
     { key: "workflows", label: "Workflows", description: "Operational workflows.", order: 80 },
@@ -71,6 +80,7 @@ const GROUP_TO_AREA: Readonly<Record<string, string>> = Object.freeze({
     billing: "billing",
     communications: "communications",
     documents: "documents",
+    health: "health",
     reports: "reports",
     scheduling: "scheduling",
     settings: "settings",

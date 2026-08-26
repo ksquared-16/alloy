@@ -521,6 +521,12 @@
         "status": "pending"
       }
     },
+    "app/api/admin/attendance/card/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Composed Attendance VM for one child. Gated by requireAdminOrOps with the org taken from the session; no attendance-specific catalog capability exists."
+      }
+    },
     "app/api/admin/business-process-layout-assignments/route.ts": {
       "GET": {
         "status": "pending"
@@ -1266,6 +1272,18 @@
         "status": "pending"
       }
     },
+    "app/api/admin/dev/health-m1/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Dev/certification only — 404 in production, requireAdminOrOps, org from session. Read-only M1 census; writes nothing and returns no health facts."
+      }
+    },
+    "app/api/admin/dev/operational-cards-certification/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "Dev/certification only — 404 in production, requireAdminOrOps, org from session, fixed verbs and no payload-controlled ids. Operates the Operational Cards fixture, not tenant-facing data."
+      }
+    },
     "app/api/admin/discount-code-options/route.ts": {
       "GET": {
         "status": "pending"
@@ -1617,6 +1635,12 @@
       },
       "POST": {
         "status": "pending"
+      }
+    },
+    "app/api/admin/financials/card/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "Composed Financials VM for one household. Gated by requireAdminOrOps with the org taken from the session; fin.read is a Financials-workspace capability, not this projection's."
       }
     },
     "app/api/admin/financials/job/[id]/route.ts": {

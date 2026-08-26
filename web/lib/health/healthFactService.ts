@@ -24,6 +24,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+    assertHealthAccess,
+    HEALTH_MANAGE_PERMISSION,
+    type HealthAccessSubject,
+} from "@/lib/health/healthAccess";
+import {
     PERSON_HEALTH_FACTS_TABLE,
     PERSON_HEALTH_FACT_SELECT,
     isHealthFactKind,
@@ -53,6 +58,8 @@ function todayYmd(): string {
 
 export type AddHealthFactInput = {
     orgId: string;
+    /** D-H6. Required — see the note on HealthFactQuery.access. */
+    access: HealthAccessSubject;
     subjectEntityType: HealthSubjectType;
     subjectEntityId: string;
     factKind: HealthFactKind;
@@ -67,6 +74,7 @@ export type AddHealthFactInput = {
 };
 
 function assertAddInput(input: AddHealthFactInput): void {
+    assertHealthAccess(input.access, HEALTH_MANAGE_PERMISSION);
     if (!t(input.orgId)) throw new HealthFactError("invalid_input", "orgId is required");
     if (!t(input.subjectEntityId)) {
         throw new HealthFactError("invalid_input", "a subject is required");
@@ -135,6 +143,8 @@ async function loadFact(
 
 export type EditHealthFactInput = {
     orgId: string;
+    /** D-H6. Required — see the note on HealthFactQuery.access. */
+    access: HealthAccessSubject;
     factId: string;
     /** The corrected payload IN FULL — a partial patch would make the new row an incomplete fact. */
     payload: Record<string, unknown>;
@@ -158,6 +168,7 @@ export async function editHealthFact(
     supabase: SupabaseClient,
     input: EditHealthFactInput,
 ): Promise<{ superseded: PersonHealthFactRow; created: PersonHealthFactRow }> {
+    assertHealthAccess(input.access, HEALTH_MANAGE_PERMISSION);
     const original = await loadFact(supabase, input.orgId, t(input.factId));
     if (original.status !== "active") {
         throw new HealthFactError(
@@ -216,6 +227,8 @@ export async function editHealthFact(
 
 export type EndHealthFactInput = {
     orgId: string;
+    /** D-H6. Required — see the note on HealthFactQuery.access. */
+    access: HealthAccessSubject;
     factId: string;
     /** The day it stopped being true. Defaults to today; never in the future by accident. */
     effectiveTo?: string | null;
@@ -228,6 +241,7 @@ export async function endHealthFact(
     supabase: SupabaseClient,
     input: EndHealthFactInput,
 ): Promise<PersonHealthFactRow> {
+    assertHealthAccess(input.access, HEALTH_MANAGE_PERMISSION);
     const original = await loadFact(supabase, input.orgId, t(input.factId));
     if (original.status !== "active") {
         throw new HealthFactError("invalid_state", `this health fact is already ${original.status}`);
