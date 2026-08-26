@@ -302,11 +302,18 @@ describe("Slice 4 — ownership, and what approval means", () => {
                 }
             }
         }
-        // Obligations never became text fields.
+        // Obligations never became text fields. `financial_payment` joins the list because an
+        // obligation may be HELD for an owner Alloy has not built — payment setup is one — and a
+        // held obligation is still an obligation: it carries its clause and its owner, and the one
+        // thing it must never do is quietly become a field.
         const obligations = concepts.filter((c) => ["acknowledgement", "signature", "upload_requirement"].includes(c.kind));
         for (const o of obligations) {
             const p = proposals.find((x) => x.candidate_id === o.id)!;
-            expect(["acknowledgement", "signature_requirement", "upload_requirement"]).toContain(p.disposition);
+            expect(["acknowledgement", "signature_requirement", "upload_requirement", "financial_payment"]).toContain(p.disposition);
+            if (p.disposition === "financial_payment") {
+                expect(p.deferred_capability, `${o.id} lost the record of why it is held`).toBeDefined();
+                expect(p.proposed_field).toBeUndefined();
+            }
         }
     });
 
