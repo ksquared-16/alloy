@@ -778,9 +778,21 @@ function resolveWorktreePath(input, laneId, run, root) {
     || null;
 }
 
-function sanitizeActionInputs(raw) {
+/**
+ * Strip anything that looks like an arbitrary payload.
+ *
+ * `body` is on the blanket reject list because it is how a SQL or HTTP payload
+ * would arrive. A promotion pull request legitimately HAS a body — its
+ * description — so the exception is granted to that one action and nowhere
+ * else, and the text is still bounded and secret-scanned by
+ * validateOpenPrInputs before it reaches GitHub. Widening the blanket rule for
+ * everyone would have been the easy fix and the wrong one.
+ */
+function sanitizeActionInputs(raw, actionKey = null) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  if (raw.sql || raw.statement || raw.body || raw.database_url || raw.databaseUrl || raw.token || raw.argv || raw.shell) {
+  const bodyAllowed = actionKey === ACTION_TYPES.PROMOTION_OPEN_PR;
+  if (raw.sql || raw.statement || (raw.body && !bodyAllowed)
+    || raw.database_url || raw.databaseUrl || raw.token || raw.argv || raw.shell) {
     return { __rejected: "arbitrary_sql_rejected" };
   }
   const out = {};
@@ -865,7 +877,7 @@ function validateRequestShape(input, { root } = {}) {
   const artifactRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
     ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
     : (input.artifact ? [String(input.artifact)] : []);
-  const inputs = sanitizeActionInputs(input.inputs || {});
+  const inputs = sanitizeActionInputs(input.inputs || {}, actionKey);
   if (inputs.__rejected) return { ok: false, error: inputs.__rejected, failure_code: "policy_denied" };
   return {
     ok: true,

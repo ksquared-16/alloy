@@ -484,6 +484,36 @@ await test("the requesting lane cannot approve its own push", () => {
   });
 });
 
+await test("a promotion may carry a body; nothing else may", () => {
+  // `body` is on the blanket arbitrary-payload reject list because that is how
+  // a SQL or HTTP payload would arrive. A promotion pull request legitimately
+  // has one — its description — so the exception is granted to that one action.
+  // Widening the rule for everyone would have been the easy fix and the wrong
+  // one, and this is the control that keeps it narrow.
+  const laneId = laneWithRepo();
+  const ok = requestGovernedAction({
+    ...pushRequest(laneId),
+    action_key: "promotion.open_pr",
+    inputs: {
+      repository: REPO, base: "staging", head_branch: BRANCH, expected_head_sha: SHA,
+      title: "Promote", body: "why this change is safe",
+    },
+  }, { root: ROOT, processNow: true });
+  assert.equal(ok.ok, true, ok.error || ok.detail || "");
+  assert.equal(ok.request.inputs.body, "why this change is safe");
+
+  // POSITIVE CONTROL: every other action still refuses a body outright.
+  for (const key of ["repository.push", "repository.merge_pull_request", "database.read_census"]) {
+    const out = requestGovernedAction({
+      ...pushRequest(laneId),
+      action_key: key,
+      inputs: { ...pushRequest(laneId).inputs, body: "select * from anything" },
+    }, { root: ROOT, processNow: true });
+    assert.equal(out.ok, false, `${key} accepted a body`);
+    assert.equal(out.error, "arbitrary_sql_rejected", `${key} gave ${out.error}`);
+  }
+});
+
 await test("a generic repository still cannot push or promote", () => {
   writeFileSync(repositoryStorePath(ROOT), `${JSON.stringify({
     schema_version: "vacilando.repository.v1",
