@@ -29,11 +29,20 @@ import {
   verifyBrowserAuth,
 } from "./lib/vacilando/browser-auth.mjs";
 import { getDurableLane } from "./lib/vacilando/development-lane.mjs";
+import {
+  authorizeQaBootstrap,
+  consumeQaBootstrap,
+  openQaBootstrap,
+  publicBootstrapOutcome,
+} from "./lib/vacilando/qa-session-bootstrap.mjs";
+import { runQaSessionMint } from "./lib/vacilando/qa-session-mint-runner.mjs";
 
 function usage(code = 2) {
-  process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
+  process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify|restore> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
 
 sign-in opens an isolated browser for that slot and waits for you to sign in.
+restore bootstraps the slot's REGISTERED QA identity with a single-use link, for
+machine identities no human should hold a password for.
 Credentials never reach the agent, the prompt, the logs or the result.
 `);
   process.exit(code);
@@ -42,7 +51,7 @@ Credentials never reach the agent, the prompt, the logs or the result.
 const args = process.argv.slice(2);
 if (!args.length || args[0] === "-h" || args[0] === "--help") usage(args.length ? 0 : 2);
 const op = args.shift();
-if (!["status", "sign-in", "verify"].includes(op)) usage();
+if (!["status", "sign-in", "verify", "restore"].includes(op)) usage();
 
 let laneId = null;
 let slot = null;
@@ -122,6 +131,54 @@ if (op === "verify") {
     actualIdentity: v.actual_identity, detail: v.detail,
   });
   const out = publicAuthOutcome({ validated, state: v.state, status, detail: v.detail });
+  emit(out, () => {
+    process.stdout.write(`${out.headline}\n`);
+    if (v.actual_identity) process.stdout.write(`  signed in as ${v.actual_identity}\n`);
+    if (out.detail) process.stdout.write(`  ${out.detail}\n`);
+  });
+  process.exit(v.ok ? 0 : 6);
+}
+
+if (op === "restore") {
+  /*
+   * Restore QA session — the branch for identities no human should hold a password for.
+   *
+   * The agent starts it and can cancel it. It never sees the link, the token, the session or the
+   * cookie: the minting child does that work inside the trusted boundary and writes the storage
+   * file itself. `restored` is still reachable ONLY through the fresh-context live check below,
+   * exactly as for an interactive sign-in — a mint that "looked fine" proves nothing on its own.
+   */
+  const auth = authorizeQaBootstrap({
+    validated,
+    requestedIdentity: null,
+    operatorApproved: true,
+    repositoryProfile: "alloy",
+  });
+  if (!auth.ok) {
+    const out = publicBootstrapOutcome({ validated, state: "refused", detail: auth.error });
+    emit(out, () => process.stdout.write(`Restore refused: ${auth.error}\n`));
+    process.exit(4);
+  }
+  openQaBootstrap({ slot: validated.slot });
+  process.stdout.write(`Restoring the QA session for slot ${validated.slot} (${validated.expected_identity}).\n`);
+  process.stdout.write(`A single-use link is minted and consumed inside the trusted host. No password is created or shown.\n`);
+
+  const mint = await runQaSessionMint(validated);
+  const consumed = consumeQaBootstrap({ slot: validated.slot });
+  if (!mint.ok || !consumed.ok) {
+    const detail = mint.ok ? consumed.error : `${mint.error}${mint.detail ? `: ${mint.detail}` : ""}`;
+    const out = publicBootstrapOutcome({ validated, state: BROWSER_AUTH_STATES.VERIFICATION_FAILED, detail });
+    emit(out, () => process.stdout.write(`Restore failed: ${detail}\n`));
+    process.exit(6);
+  }
+
+  const v = await verifyBrowserAuth(validated);
+  recordSlotVerification(validated.slot, {
+    state: v.state, expectedIdentity: validated.expected_identity,
+    actualIdentity: v.actual_identity, detail: v.detail,
+  });
+  const after = readSlotAuthStatus(validated.slot);
+  const out = publicAuthOutcome({ validated, state: v.state, status: after, detail: v.detail });
   emit(out, () => {
     process.stdout.write(`${out.headline}\n`);
     if (v.actual_identity) process.stdout.write(`  signed in as ${v.actual_identity}\n`);
