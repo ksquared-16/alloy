@@ -127,6 +127,55 @@ function discoveryFor(packet: { source_analysis: Record<string, { concepts: unkn
     return { contract_version: "fp16.0", concepts: a.concepts, proposals: a.proposals, summary: [], warnings: [] } as unknown as ConfigurationDiscoveryResult;
 }
 
+
+/**
+ * One artifact, from source structure to a validated FormSchemaV1.
+ *
+ * Extracted so that first realization and later re-projection are the SAME chain. Two copies of this
+ * would drift, and the drift would only be visible as a difference between what a family was shown
+ * and what the packet says it was shown.
+ */
+function projectArtifactSchema(input: {
+    artifact: Parameters<typeof structureForArtifact>[1] & { document_id: string };
+    structure: Parameters<typeof structureForArtifact>[0];
+    packet: { source_analysis: Record<string, { concepts: unknown[]; proposals: unknown[] }> };
+    decisionRecords: DiscoveryDecisionRecord[];
+    name: string;
+}): { ok: true; schema: unknown; relinquished: number; missingSections: number } | { ok: false; message: string } {
+    const projected = structureForArtifact(input.structure, input.artifact);
+    const draft0 = buildFormDraftFromStructure({
+        structure: projected.structure,
+        sourceDocumentId: input.artifact.document_id,
+        extractedText: null,
+        extractedTextAvailable: false,
+        fileName: null,
+        classificationKey: null,
+    });
+    const discovery = discoveryFor(input.packet, input.artifact.document_id);
+    const decisions: Record<string, ProposalDecisionState> = discovery ? fromDecisionRecords(discovery, input.decisionRecords) : {};
+    const { updatedDraft } = discovery ? applyDiscovery({ draft: draft0, discovery, decisions }) : { updatedDraft: draft0 };
+    const refined = discovery
+        ? applySemanticRefinement({
+              draft: updatedDraft,
+              discovery,
+              selfContained: classifySelfContainedArtifact(
+                  (discovery.concepts as unknown as ArtifactConcept[]).filter((cc) =>
+                      input.artifact.section_titles.includes(cc.source?.section_title ?? ""),
+                  ),
+              ).isSelfContained,
+          })
+        : { draft: updatedDraft, report: null };
+
+    const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...refined.draft, title: input.name, generated_form_name: input.name }));
+    if (!parsed.success) return { ok: false, message: `Artifact ${input.artifact.id} did not validate as a form schema.` };
+    return {
+        ok: true,
+        schema: parsed.data,
+        relinquished: refined.report?.relinquishedRequirements.length ?? 0,
+        missingSections: projected.missing_sections.length,
+    };
+}
+
 export async function createPacketFromProcessingAnalysis(
     supabase: SupabaseClient,
     deps: CreatePacketDeps,
@@ -187,74 +236,18 @@ export async function createPacketFromProcessingAnalysis(
                 warnings.push(`Artifact ${artifact.id} has no readable source — skipped.`);
                 continue;
             }
-            const projected = structureForArtifact(input.structure, artifact);
-            if (projected.missing_sections.length) {
-                warnings.push(`Artifact ${artifact.id}: ${projected.missing_sections.length} claimed section(s) missing from the source.`);
-            }
-
             const name = named.get(artifact.id) ?? artifact.title;
-            const draft0 = buildFormDraftFromStructure({
-                structure: projected.structure,
-                sourceDocumentId: artifact.document_id,
-                extractedText: null,
-                extractedTextAvailable: false,
-                fileName: null,
-                classificationKey: null,
-            });
-
-            // THE STEP THIS SERVICE USED TO SKIP.
-            //
-            // A clause-level upload becomes a `file_ref` only because `applyDiscovery` attaches the
-            // approved obligation to its section. Building the schema straight from the projected
-            // structure produced Forms that looked complete and asked for no documents at all — the
-            // packet would never have requested the immunization record.
-            //
-            // The decisions are the operator's, rehydrated from what the tenant stored. Because the
-            // draft holds only this artifact's sections, an obligation lands on the artifact whose
-            // clause raised it and nowhere else.
-            const discovery = discoveryFor(packet, artifact.document_id);
-            const decisions: Record<string, ProposalDecisionState> = discovery
-                ? fromDecisionRecords(discovery, decisionRecords)
-                : {};
-            const { updatedDraft } = discovery
-                ? applyDiscovery({ draft: draft0, discovery, decisions })
-                : { updatedDraft: draft0 };
-
-            // THE SECOND STEP THIS SERVICE USED TO SKIP.
-            //
-            // `buildFormDraftFromStructure` maps one source destination to one participant field,
-            // with the OCR string as its label and the reader's widget guess as its type. That is
-            // right for placement and wrong for interrogation, and the first published Forms show
-            // the cost: 173 fields for 86 facts, labels like "Phone Number NúMero De TeléFono Row1",
-            // a phone typed as a number, and `shared_value_key` on 5 of 173 — so a parent typed the
-            // child's name on every page.
-            //
-            // A source destination is not automatically a participant question. This pass decides
-            // which concepts are ASKED, in what words, in what semantics, under one shared identity
-            // — and leaves every field id, page and bbox exactly as the builder placed them.
-            const refined = discovery
-                ? applySemanticRefinement({
-                      draft: updatedDraft,
-                      discovery,
-                      selfContained: classifySelfContainedArtifact(
-                          (discovery.concepts as unknown as ArtifactConcept[]).filter((cc) =>
-                              artifact.section_titles.includes(cc.source?.section_title ?? ""),
-                          ),
-                      ).isSelfContained,
-                  })
-                : { draft: updatedDraft, report: null };
-            if (refined.report?.relinquishedRequirements.length) {
-                const owners = [...new Set(refined.report.relinquishedRequirements.map((r) => r.role))].join(", ");
+            const projectedSchema = projectArtifactSchema({ artifact, structure: input.structure, packet, decisionRecords, name });
+            if (!projectedSchema.ok) return { ok: false, code: "invalid_schema", message: projectedSchema.message };
+            if (projectedSchema.missingSections) {
+                warnings.push(`Artifact ${artifact.id}: ${projectedSchema.missingSections} claimed section(s) missing from the source.`);
+            }
+            if (projectedSchema.relinquished) {
                 warnings.push(
-                    `Artifact "${name}": ${refined.report.relinquishedRequirements.length} required box(es) are owned elsewhere (${owners}) — placed on the document, not asked of the family, and no longer mandatory.`,
+                    `Artifact "${name}": ${projectedSchema.relinquished} required box(es) are owned elsewhere — placed on the document, not asked of the family, and no longer mandatory.`,
                 );
             }
-            if (refined.report?.unresolved.length) {
-                warnings.push(`Artifact ${artifact.id}: ${refined.report.unresolved.length} concept(s) have no settled participant treatment.`);
-            }
-
-            const parsed = safeParseFormSchema(draftFormToFormSchemaV1({ ...refined.draft, title: name, generated_form_name: name }));
-            if (!parsed.success) return { ok: false, code: "invalid_schema", message: `Artifact ${artifact.id} did not validate as a form schema.` };
+            const parsed = { success: true as const, data: projectedSchema.schema };
 
             const key = allocateUniqueKey(slugKeyFromDisplayName(name), formKeys);
             formKeys.add(key);
@@ -439,7 +432,7 @@ export async function createPacketFromProcessingAnalysis(
  * Supabase-backed deps. Every writer here already existed — this only wires them together at
  * artifact grain, and stores the realization link on the case so a re-run finds its own work.
  */
-export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): CreatePacketDeps {
+export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): ReprojectDeps {
     const caseMeta = async (orgId: string, caseId: string): Promise<Record<string, unknown>> => {
         const { data } = await supabase.from("processing_cases").select("metadata").eq("org_id", orgId).eq("id", caseId).maybeSingle();
         const m = (data as { metadata?: unknown } | null)?.metadata;
@@ -467,6 +460,25 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Crea
                 .select("id").single();
             if (error) throw new Error(error.message);
             return { id: (data as { id: string }).id };
+        },
+        async loadVersion({ orgId, versionId }) {
+            const { data } = await supabase.from("form_definition_versions")
+                .select("id, version_number, schema_json, form_definition_id")
+                .eq("org_id", orgId).eq("id", versionId).maybeSingle();
+            return (data as { id: string; version_number: number; schema_json: unknown; form_definition_id: string } | null) ?? null;
+        },
+        async nextVersionNumber({ orgId, formDefinitionId }) {
+            const { data } = await supabase.from("form_definition_versions")
+                .select("version_number").eq("org_id", orgId).eq("form_definition_id", formDefinitionId)
+                .order("version_number", { ascending: false }).limit(1);
+            const top = ((data ?? []) as { version_number: number }[])[0]?.version_number ?? 0;
+            return top + 1;
+        },
+        async repinPacketItem({ orgId, packetItemId, pinnedVersionId }) {
+            const { error } = await supabase.from("form_packet_items")
+                .update({ pinned_form_definition_version_id: pinnedVersionId })
+                .eq("org_id", orgId).eq("id", packetItemId);
+            if (error) throw new Error(error.message);
         },
         async publishVersion({ orgId, versionId, userId }) {
             const { error } = await supabase.from("form_definition_versions")
@@ -505,4 +517,167 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Crea
             if (error) throw new Error(error.message);
         },
     };
+}
+
+/**
+ * Publish CORRECTED versions of an already-realized packet.
+ *
+ * Realization is idempotent at the whole-packet grain, which is right: re-running it must not build
+ * a second packet. But when the projection itself is corrected — as it was when a source destination
+ * stopped being automatically a participant question — the five Forms already published are wrong
+ * and cannot be edited. A published version is immutable, and the certification session that resolved
+ * it must keep resolving exactly what the family was shown.
+ *
+ * So this adds a version rather than changing one: for each realized artifact it re-projects through
+ * the SAME chain, and only where the schema actually differs does it write the next version number,
+ * publish it, and re-pin the packet item. Where nothing changed, nothing is published — an empty
+ * version is noise in a certification record.
+ *
+ * Everything else stays untouched: form definitions, keys, packet identity, sequence, and every
+ * version that already exists.
+ */
+export interface ReprojectDeps extends CreatePacketDeps {
+    loadVersion(a: { orgId: string; versionId: string }): Promise<{ id: string; version_number: number; schema_json: unknown; form_definition_id: string } | null>;
+    nextVersionNumber(a: { orgId: string; formDefinitionId: string }): Promise<number>;
+    repinPacketItem(a: { orgId: string; packetItemId: string; pinnedVersionId: string }): Promise<void>;
+}
+
+export interface ReprojectedArtifact {
+    artifact_id: string;
+    name: string;
+    form_definition_id: string;
+    previous_version_id: string;
+    previous_version_number: number;
+    new_version_id: string | null;
+    new_version_number: number | null;
+    packet_item_id: string;
+    changed: boolean;
+    /** What the correction did to this artifact, in counts the reader can check. */
+    delta: { destinations_before: number; destinations_after: number; asked_before: number; asked_after: number; relinquished_requirements: number };
+}
+
+export type ReprojectResult =
+    | { ok: true; artifacts: ReprojectedArtifact[]; warnings: string[] }
+    | { ok: false; code: "no_realization" | "no_packet" | "invalid_schema" | "failed"; message: string };
+
+export async function reprojectRealizedPacket(
+    supabase: SupabaseClient,
+    deps: ReprojectDeps,
+    args: { orgId: string; caseId: string; userId: string; dryRun?: boolean },
+): Promise<ReprojectResult> {
+    try {
+        const prior = await deps.loadRealization(args);
+        if (!prior) return { ok: false, code: "no_realization", message: "This case has no realized packet to re-project." };
+
+        const built = await buildPacketIntakeForCaseSafe(supabase, args);
+        if (!built) return { ok: false, code: "no_packet", message: "No packet analysis for this case." };
+        const { packet, inputs } = built;
+        const inputByDoc = new Map(inputs.map((i) => [i.artifact.document_id, i]));
+        const decisionRecords = await deps.loadDiscoveryDecisions(args);
+
+        const out: ReprojectedArtifact[] = [];
+        const warnings: string[] = [];
+
+        for (const realized of prior.artifacts) {
+            const artifact = packet.artifacts.find((a) => a.id === realized.artifact_id);
+            const input = artifact ? inputByDoc.get(artifact.document_id) : undefined;
+            if (!artifact || !input) {
+                warnings.push(`Realized artifact ${realized.artifact_id} is no longer in the packet analysis — left exactly as published.`);
+                continue;
+            }
+            const current = await deps.loadVersion({ orgId: args.orgId, versionId: realized.form_version_id });
+            if (!current) {
+                warnings.push(`Artifact "${realized.name}" points at a version that no longer exists — left alone.`);
+                continue;
+            }
+
+            const projectedSchema = projectArtifactSchema({
+                artifact,
+                structure: input.structure,
+                packet,
+                decisionRecords,
+                name: realized.name,
+            });
+            if (!projectedSchema.ok) return { ok: false, code: "invalid_schema", message: projectedSchema.message };
+
+            const before = fieldCounts(current.schema_json);
+            const after = fieldCounts(projectedSchema.schema);
+            const changed = JSON.stringify(current.schema_json) !== JSON.stringify(projectedSchema.schema);
+
+            const entry: ReprojectedArtifact = {
+                artifact_id: realized.artifact_id,
+                name: realized.name,
+                form_definition_id: realized.form_definition_id,
+                previous_version_id: current.id,
+                previous_version_number: current.version_number,
+                new_version_id: null,
+                new_version_number: null,
+                packet_item_id: realized.packet_item_id,
+                changed,
+                delta: {
+                    destinations_before: before.total,
+                    destinations_after: after.total,
+                    asked_before: before.asked,
+                    asked_after: after.asked,
+                    relinquished_requirements: projectedSchema.relinquished,
+                },
+            };
+
+            // Placement is the artifact's identity. A re-projection that changes how many boxes the
+            // document has is not a correction, it is a different document — refuse it.
+            if (before.total !== after.total) {
+                return {
+                    ok: false,
+                    code: "invalid_schema",
+                    message: `Artifact "${realized.name}" would change from ${before.total} to ${after.total} destinations. A correction may change what is ASKED, never what the document contains.`,
+                };
+            }
+
+            if (changed && !args.dryRun) {
+                const versionNumber = await deps.nextVersionNumber({ orgId: args.orgId, formDefinitionId: realized.form_definition_id });
+                const ver = await deps.insertVersion({
+                    orgId: args.orgId,
+                    formDefinitionId: realized.form_definition_id,
+                    versionNumber,
+                    schemaJson: projectedSchema.schema,
+                    metadata: {
+                        source: "processing_packet_artifact",
+                        source_case_id: args.caseId,
+                        logical_artifact_id: artifact.id,
+                        supersedes_version_id: current.id,
+                        correction: "participant_question_eligibility",
+                    },
+                });
+                await deps.publishVersion({ orgId: args.orgId, versionId: ver.id, userId: args.userId });
+                await deps.repinPacketItem({ orgId: args.orgId, packetItemId: realized.packet_item_id, pinnedVersionId: ver.id });
+                entry.new_version_id = ver.id;
+                entry.new_version_number = versionNumber;
+            }
+            out.push(entry);
+        }
+
+        if (!args.dryRun) {
+            const updated: PacketRealization = {
+                ...prior,
+                artifacts: prior.artifacts.map((a) => {
+                    const r = out.find((x) => x.artifact_id === a.artifact_id);
+                    return r?.new_version_id ? { ...a, form_version_id: r.new_version_id } : a;
+                }),
+                warnings: [
+                    ...prior.warnings,
+                    `Re-projected ${out.filter((a) => a.changed).length} of ${out.length} artifact(s) onto new published versions; superseded versions remain intact.`,
+                ],
+            };
+            await deps.saveRealization({ orgId: args.orgId, caseId: args.caseId, realization: updated });
+        }
+
+        return { ok: true, artifacts: out, warnings };
+    } catch (e) {
+        return { ok: false, code: "failed", message: e instanceof Error ? e.message : "Re-projection failed." };
+    }
+}
+
+function fieldCounts(schema: unknown): { total: number; asked: number } {
+    const fields = ((schema as { fields?: { read_only?: boolean }[] })?.fields ?? []);
+    return { total: fields.length, asked: fields.filter((f) => !f.read_only).length };
 }
