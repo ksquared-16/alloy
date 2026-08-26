@@ -46,6 +46,9 @@ export const REGISTERED_ACTION_CAPABILITY_KEYS = [
     "attendance.mark_absent",
     "charge.add",
     "charge.post",
+    "health_fact.add",
+    "health_fact.edit",
+    "health_fact.end",
 ] as const;
 
 function def(
@@ -137,6 +140,54 @@ const CAPABILITY_DEFINITIONS: readonly PlatformCapabilityDefinition[] = [
     // Five operator intents over the existing invariant-owning Attendance services. The operator
     // acts on a CHILD; the adapter resolves the enrolment agreement the domain requires, and fails
     // closed when none resolves.
+    // ── Health ─────────────────────────────────────────────────────────────
+    // Three operator intents over the one canonical Health mutation seam. Each refuses without
+    // `health.manage` (D-H6) — route admission is not authorization for structured health data.
+    def({
+        capabilityKey: "health_fact.add",
+        canonicalCommandKey: "health_fact.add",
+        operatorLabel: "Add health fact",
+        family: "health",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "health_fact.add",
+        implementationStatus: "production",
+        reason: "Asserts a durable health fact with required provenance. Overwrites nothing.",
+    }),
+    def({
+        capabilityKey: "health_fact.edit",
+        canonicalCommandKey: "health_fact.edit",
+        operatorLabel: "Correct health fact",
+        family: "health",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "health_fact.edit",
+        implementationStatus: "production",
+        reason: "Records a corrected fact and supersedes the original. The history survives.",
+    }),
+    def({
+        capabilityKey: "health_fact.end",
+        canonicalCommandKey: "health_fact.end",
+        operatorLabel: "End health fact",
+        family: "health",
+        maturity: "executable",
+        executionOwner: "registered_action",
+        catalogVisibility: "organization_command_catalog",
+        supportedSubjects: ["child"],
+        supportsPreview: true,
+        confirmationPolicy: "none",
+        registeredActionKey: "health_fact.end",
+        implementationStatus: "production",
+        reason: "Closes a fact with an end date. Never a deletion — the record says when it stopped applying.",
+    }),
     // ── Financials ─────────────────────────────────────────────────────────
     // One operator intent over the existing charge-lifecycle service. The adapter resolves the
     // enrollment agreement the domain requires from the CHILD the operator names, and fails closed

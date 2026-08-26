@@ -76,6 +76,9 @@ export type CapabilityFamily =
     // Money: what is owed and what is charged. Distinct from `scheduling`, which owns time, and from
     // `administration`, which owns configuration — a charge is neither.
     | "financial"
+    // Medical facts about a person. Separate from `record` because access to it is separately
+    // granted (D-H6) — a family with the same audience is exactly what that boundary rejects.
+    | "health"
     | "destructive"
     | "administration"
     | "navigation"

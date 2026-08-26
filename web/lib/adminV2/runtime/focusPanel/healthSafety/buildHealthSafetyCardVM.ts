@@ -30,7 +30,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
-    canViewHealth,
+    evaluateHealthAccess,
     HEALTH_VIEW_PERMISSION,
     type HealthAccessSubject,
 } from "@/lib/health/healthAccess";
@@ -191,7 +191,10 @@ export async function buildHealthSafetyCardVM(
      * An unauthorized caller must not receive an EMPTY health card — empty reads as "this child has
      * no allergies", which is the most dangerous sentence this surface could imply.
      */
-    if (!canViewHealth(args.access)) {
+    // The key is named HERE, on the line that enforces it, so the declared route capability is bound
+    // to its source rather than merely asserted — a declaration naming a helper that never mentions
+    // the key is exactly the false claim the W-14 lock exists to convict.
+    if (!evaluateHealthAccess(args.access, "health.view").allowed) {
         return {
             ...vm,
             permissionDenied: true,
