@@ -59,5 +59,69 @@ grep -q 'alloy_pid_path' "$ROOT/lib/common.sh" \
   && ok "9. pid path helper exists in common.sh" \
   || bad "9. pid path helper missing"
 
+# ── Live ownership judgement (regression: supervisor PIDs on lsof-less hosts) ──
+#
+# `alloy-dev-start` records the PID of `npm run dev`, and that command line names
+# no path. The cwd signal that would settle it needs lsof, which is absent on
+# some hosts, so ownership was decided by the wrapper's command line alone and a
+# healthy toolkit-owned server was reported `stale` — `alloy-agent-verify` then
+# refused to run against it. Ownership must follow the process tree.
+
+source "$ROOT/lib/common.sh"
+
+TMPD="$(mktemp -d 2>/dev/null || mktemp -d -t alloywt)"
+MARK="$TMPD/serves-this-worktree"
+: > "$MARK"
+
+# Only the innermost shell expands MARKPATH, so the literal path exists at depth
+# 2 and nowhere above it. Without that isolation the root matches on its own
+# command line and the depth walk is never exercised.
+export MARKPATH="$MARK"
+bash -c 'bash -c "tail -f \$MARKPATH ; true" ; true' &
+ROOTPID=$!
+sleep 2
+D1="$(ps -eo pid=,ppid= | awk -v r="$ROOTPID" '$2==r{print $1; exit}')"
+D2="$(ps -eo pid=,ppid= | awk -v c="$D1" '$2==c{print $1; exit}')"
+
+if [[ -n "$D2" ]] && ! ps -o command= -p "$ROOTPID" 2>/dev/null | grep -qF "$MARK" \
+   && ps -o command= -p "$D2" 2>/dev/null | grep -qF "$MARK"; then
+  if alloy_pid_belongs_to_worktree "$ROOTPID" "$MARK"; then
+    ok "10. supervisor PID owns the worktree its descendant serves"
+  else
+    bad "10. supervisor PID not recognised through the process tree"
+  fi
+
+  if alloy_pid_belongs_to_worktree "$ROOTPID" "${MARK}-other"; then
+    bad "11. claimed ownership of an unrelated path"
+  else
+    ok "11. refuses a worktree no descendant serves"
+  fi
+else
+  bad "10. depth-2 fixture did not build (cannot judge)"
+  bad "11. depth-2 fixture did not build (cannot judge)"
+fi
+
+# No `wait` here: bash re-raises a background job's fatal signal in the calling
+# shell, so waiting on a job we just SIGTERM'd ends the suite with 143 after the
+# assertions have already passed.
+kill "$D2" "$D1" "$ROOTPID" 2>/dev/null
+rm -rf "$TMPD"
+
+# A dead PID owns nothing, tree or no tree.
+DEADPID="$(bash -c 'echo $$')"
+sleep 1
+if alloy_pid_belongs_to_worktree "$DEADPID" "/nonexistent/worktree"; then
+  bad "12. a dead PID claimed ownership"
+else
+  ok "12. dead PID owns nothing"
+fi
+
+# The walk must terminate even when the tree is deep or malformed.
+if alloy_pid_tree_serves_worktree "$$" "/definitely/not/a/worktree/path"; then
+  bad "13. matched a path nothing serves"
+else
+  ok "13. bounded walk terminates and refuses"
+fi
+
 printf '\n==== dev-server-ownership: %s passed, %s failed ====\n' "$PASS" "$FAIL"
 [[ "$FAIL" -eq 0 ]]

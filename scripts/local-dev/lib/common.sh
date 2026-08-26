@@ -469,6 +469,20 @@ alloy_process_cwd() {
 }
 
 # Returns 0 when PID appears to belong to the given worktree path.
+# True when a process serves a worktree.
+#
+# Three signals, cheapest first. `alloy_process_cwd` needs lsof, and lsof is not
+# present on every host we run on — when it is missing the cwd signal silently
+# yields nothing, so the command-line signal has to carry the judgement. That is
+# where the npm wrapper defeats it: `alloy-dev-start` records the PID of
+# `npm run dev`, whose command line names no path at all, while the child it
+# spawns (`next dev` under the worktree's own node_modules) names the worktree
+# in full. Judging the wrapper alone therefore reported a healthy, toolkit-owned
+# server as `stale` and `alloy-agent-verify` refused to run against it.
+#
+# So the third signal asks the process tree: a supervisor belongs to the
+# worktree its children serve. Descendants only — a parent shell's cwd says
+# nothing about what this process is running.
 alloy_pid_belongs_to_worktree() {
   local pid="$1"
   local worktree_path="$2"
@@ -486,6 +500,37 @@ alloy_pid_belongs_to_worktree() {
   if [[ "$cmd" == *"$worktree_path"* || "$cmd" == *"$resolved_wt"* ]]; then
     return 0
   fi
+  alloy_pid_tree_serves_worktree "$pid" "$worktree_path" "$resolved_wt"
+}
+
+# Depth-bounded descendant walk. The bound is not decoration: a cycle in a
+# malformed ps table would otherwise spin forever, and a real supervisor chain
+# (npm -> node -> next-server) is three deep.
+alloy_pid_tree_serves_worktree() {
+  local root="$1"
+  local worktree_path="$2"
+  local resolved_wt="${3:-$worktree_path}"
+  local table frontier depth next child ppid ccmd
+
+  table="$(ps -eo pid=,ppid=,command= 2>/dev/null || true)"
+  [[ -n "$table" ]] || return 1
+
+  frontier=" $root "
+  for depth in 1 2 3 4; do
+    next=""
+    # `read` splits on IFS and discards the column padding ps emits; parsing the
+    # line by hand mistook that padding for an empty first field.
+    while read -r child ppid ccmd; do
+      [[ -n "$child" && -n "$ppid" ]] || continue
+      [[ "$frontier" == *" $ppid "* ]] || continue
+      if [[ "$ccmd" == *"$worktree_path"* || "$ccmd" == *"$resolved_wt"* ]]; then
+        return 0
+      fi
+      next="$next$child "
+    done <<< "$table"
+    [[ -n "${next// /}" ]] || return 1
+    frontier=" $next"
+  done
   return 1
 }
 
