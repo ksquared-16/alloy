@@ -41,6 +41,7 @@ const {
   governedProposalFor, presentationForGovernedAction,
   resetGovernedActionsForTests, setGovernedActionExecuteImplForTests,
   setGovernedActionResumeImplForTests,
+  governedActionSubjectKey, decisionSubjectKey, reconcileGovernedApprovals,
 } = await import("../lib/vacilando/governed-action-request.mjs");
 const { grantAuthorizesAction } = await import("../lib/vacilando/trusted-host-actions.mjs");
 const { mintGrant, getGrant, resetGovernedGrantsForTests } =
@@ -644,6 +645,137 @@ await test("a generic repository still cannot push or promote", () => {
     assert.equal(out.ok, false, `${key} was accepted for a generic repository`);
     assert.equal(out.error, "repository_profile_forbids_governed_action");
   }
+});
+
+// ── Decision collision: one decision must never speak for two subjects ───────
+//
+// THE FAILURE THIS ENCODES. Two governed merge requests in one mission —
+// gar_34d898a2376afe (PR #529) and gar_17ebfc5fbac24e (PR #531) — both bound to
+// decision dec_be6a37cc7bda45, titled "Merge PR #529". #529 was already merged,
+// so the Director was shown an approval for finished work, approving it could
+// not produce the #531 merge, and the stale request squatted on the shared
+// decision. Three approvals failed to land.
+
+await test("a decision's subject is the PR at its head SHA, read from prose or marker", () => {
+  const req = (n, sha) => ({
+    action_key: "repository.merge_pull_request",
+    inputs: { pullRequestNumber: n, expectedHeadSha: sha, repository: REPO },
+  });
+  assert.equal(governedActionSubjectKey(req(529, "6b3a907f8a76acb75b8ba7783686fabc16e7e35f")),
+    "merge:#529@6b3a907f8a76acb75b8ba7783686fabc16e7e35f");
+  // Same PR, different head, is a different subject — as the single-use grant
+  // already treats it.
+  assert.notEqual(
+    governedActionSubjectKey(req(531, SHA)),
+    governedActionSubjectKey(req(531, OTHER)),
+  );
+  // A decision written before the structured marker existed still reads.
+  assert.equal(
+    decisionSubjectKey({ situation: "Merge PR #529 into staging\n\nPR: #529\nExpected SHA: 6b3a907f8a76acb75b8ba7783686fabc16e7e35f\n" }),
+    "merge:#529@6b3a907f8a76acb75b8ba7783686fabc16e7e35f",
+  );
+  // The marker wins when present.
+  assert.equal(
+    decisionSubjectKey({ evidence: [{ governed_action_subject: "merge:#900@abc" }], situation: "PR: #529\n" }),
+    "merge:#900@abc",
+  );
+  // Unknown is not equal to unknown: a subject-less decision matches nothing.
+  assert.equal(decisionSubjectKey({ situation: "no subject here" }), null);
+  assert.equal(governedActionSubjectKey({ action_key: "repository.merge_pull_request", inputs: {} }), null);
+});
+
+await test("a second merge request does not adopt the first PR's open decision", async () => {
+  const made = createDurableLane({ name: "communications", repository_id: "repo_alloy", root: ROOT });
+  const lane = made.lane;
+  const mission = "msn_collision";
+  const mk = async (n, sha) => {
+    const out = await requestGovernedAction({
+      actionKey: "repository.merge_pull_request",
+      laneId: lane.lane_id,
+      missionId: mission,
+      title: `Merge PR #${n}`,
+      purpose: "promote",
+      reasonWorkerCannotExecute: "merge is Director-owned",
+      inputs: {
+        repository: REPO, pullRequestNumber: n, targetBranch: "staging",
+        expectedHeadSha: sha, mergeMethod: "merge",
+      },
+      root: ROOT,
+    });
+    return out;
+  };
+  const a = await mk(529, "6b3a907f8a76acb75b8ba7783686fabc16e7e35f");
+  const b = await mk(531, SHA);
+  const recA = getGovernedAction(a.request?.request_id || a.request_id, ROOT);
+  const recB = getGovernedAction(b.request?.request_id || b.request_id, ROOT);
+  assert.ok(recA?.decision_id, "first request opened a decision");
+  assert.ok(recB?.decision_id, "second request opened a decision");
+  // THE REGRESSION: these were the same id.
+  assert.notEqual(recA.decision_id, recB.decision_id);
+  assert.equal(governedActionSubjectKey(recA) === governedActionSubjectKey(recB), false);
+});
+
+await test("an already-merged request is reconciled as satisfied, never denied", async () => {
+  const made = createDurableLane({ name: "communications", repository_id: "repo_alloy", root: ROOT });
+  const lane = made.lane;
+  const out = await requestGovernedAction({
+    actionKey: "repository.merge_pull_request",
+    laneId: lane.lane_id,
+    missionId: "msn_reconcile",
+    title: "Merge PR #529",
+    purpose: "promote",
+    reasonWorkerCannotExecute: "merge is Director-owned",
+    inputs: {
+      repository: REPO, pullRequestNumber: 529, targetBranch: "staging",
+      expectedHeadSha: SHA, mergeMethod: "merge",
+    },
+    root: ROOT,
+  });
+  const id = out.request?.request_id || out.request_id;
+  assert.equal(getGovernedAction(id, ROOT).status, "awaiting_operator");
+
+  const res = await reconcileGovernedApprovals({
+    root: ROOT,
+    // The remote is never reached: readiness is injected, exactly as the merge
+    // guards require.
+    inspect: () => ({ ok: true, idempotent: true, code: "already_merged", mergeSha: OTHER, stagingSha: OTHER }),
+  });
+  assert.equal(res.satisfied.length, 1);
+  const rec = getGovernedAction(id, ROOT);
+  assert.equal(rec.status, "complete");
+  // Satisfied, not refused — recording a landed merge as denied would be false.
+  assert.equal(rec.policy_decision, "already_satisfied");
+  assert.equal(rec.result.code, "already_merged");
+  assert.equal(rec.result.merge_sha, OTHER);
+  // No authorization was created, because no privileged mutation was performed.
+  assert.equal(rec.grant_id, undefined);
+});
+
+await test("an unreachable remote reconciles nothing", async () => {
+  const made = createDurableLane({ name: "communications", repository_id: "repo_alloy", root: ROOT });
+  const lane = made.lane;
+  const out = await requestGovernedAction({
+    actionKey: "repository.merge_pull_request",
+    laneId: lane.lane_id,
+    missionId: "msn_offline",
+    title: "Merge PR #531",
+    purpose: "promote",
+    reasonWorkerCannotExecute: "merge is Director-owned",
+    inputs: {
+      repository: REPO, pullRequestNumber: 531, targetBranch: "staging",
+      expectedHeadSha: SHA, mergeMethod: "merge",
+    },
+    root: ROOT,
+  });
+  const id = out.request?.request_id || out.request_id;
+  const res = await reconcileGovernedApprovals({
+    root: ROOT,
+    inspect: () => { throw new Error("network unreachable"); },
+  });
+  // A remote we cannot read is not evidence that anything landed.
+  assert.equal(res.satisfied.length, 0);
+  assert.equal(getGovernedAction(id, ROOT).status, "awaiting_operator");
+  assert.equal(res.unchanged[0].reason, "inspect_failed");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
