@@ -50,15 +50,36 @@ describe("POS-FP17 — relationship collection provider derivation", () => {
         }
     });
 
-    it("registry = native structural + derived relationship providers (5 total, order stable)", () => {
+    it("registry = native structural + derived relationship providers (order stable)", () => {
         const all = listCanonicalCollectionProviders();
         expect(all.map((p) => p.refKey)).toEqual([
             "children",
             "household.members",
+            // H2 — four health-fact refs, native structural like `children`. FOUR and not one
+            // because a Forms group binds to exactly ONE collection, so an operator authoring an
+            // allergy section must not receive medications.
+            "health.allergies",
+            "health.conditions",
+            "health.medications",
+            "health.immunizations",
             "person.contact_role.parents",
             "person.contact_role.emergency_contacts",
             "person.contact_role.authorized_pickups",
         ]);
+    });
+
+    it("H2 — every health ref keeps the guarantees Enrollment plans against", () => {
+        // These are the four promises the H1–H4 contract makes to the Enrollment lane. Breaking any
+        // of them breaks bindings authored against them.
+        for (const ref of ["health.allergies", "health.conditions", "health.medications", "health.immunizations"]) {
+            const p = listCanonicalCollectionProviders().find((x) => x.refKey === ref);
+            expect(p, `${ref} is not registered`).toBeTruthy();
+            expect(p!.itemEntityType).toBe("person_health_fact");
+            expect(p!.requiredContextKeys).toEqual(["customer_member_id"]);
+            expect(p!.sourceEntityType).toBe("customer_member");
+            // Superseded facts are history, never a current answer.
+            expect(p!.activeOnly).toBe(true);
+        }
     });
 
     it("classifies providers: children/household.members native, the rest configured", () => {
