@@ -1773,3 +1773,97 @@ percentages, no autopay state, no payments line. No `Pay now`, because nothing c
 direct command with a template choice and an inline preview, not a workspace, so there is no root
 command title or `Back to actions` to verify (§24).
 Each is named in the read model's `unavailable` list and rendered as absence.
+
+---
+
+## 29. Health & Safety — foundation built, card BLOCKED (2026-08-26)
+
+### 29.1 The reconciliation §1 asked for — the contracts exist and were found
+
+Two ratified artifacts govern this work, and both were reconciled against staging before anything
+was written:
+
+* [`health-foundation-h1-h4-contract.md`](./health-foundation-h1-h4-contract.md) — H1–H4, the
+  Director-requested contract the Enrollment lane builds against.
+* [`health-ownership-cross-sprint-contract.md`](./health-ownership-cross-sprint-contract.md) —
+  ownership, the READY NOW list, and the migrations M1–M3.
+
+Both carry `status: draft`, and the ownership contract's §9 still lists **M1 as a decision
+required**. That matters: M1 is the stated prerequisite for H2.
+
+### 29.2 Current-state audit (§2)
+
+| Concept | Classification | Evidence |
+|---|---|---|
+| `child.allergies`, `child.medical_notes`, `child.special_instructions` | READY, **correct child grain** | config field values keyed on `customer_members.id`, read via `/api/admin/customer-members/[id]`; already composed into the Children card |
+| `allergy_notes`, `medication_flag` (Forms system fields) | **INCORRECT_GRAIN** | still `entity_type: "enrollment"` in `lib/forms/systemFieldRegistry.ts` — M1 has NOT landed |
+| structured allergy / condition / medication | HEALTH_FOUNDATION_REQUIRED | no table existed; built here as H1 |
+| immunization structures | HEALTH_FOUNDATION_REQUIRED | no table; only requirement KEYS (`immunization`, `immunization_record`, `immunization_date`) |
+| documents, document field definitions | DOCUMENT_OWNED | `documents` polymorphic at `customer_member` |
+| physician / pediatrician, dentist | RELATIONSHIP_OWNED — **role keys absent** | only `emergency_contact` exists in the shipped role vocabulary |
+| emergency contacts | RELATIONSHIP_OWNED (READY) | `emergency_contact` role |
+| Processing proposals / Trust adapters | PROCESSING/TRUST_OWNED | collection-provider proposal contract |
+| enrollment requirement kinds | BUSINESS_PROCESS_OWNED (READY) | `immunization`, `physical`, `health_care_plan`, `medication_authorization_demo` |
+| medication authorization, health care plan | BUSINESS_PROCESS_OWNED + DOCUMENT_OWNED | requirement + document evidence, per §7 |
+| requirement satisfaction | NOT_HEALTH_TRUTH | evaluated at read time, never stored |
+| custody, pickup restrictions, safeguarding, naps, toileting, temperament | NOT_HEALTH_TRUTH | excluded per §9; left to their owners |
+| **health visibility permission** | **MISSING** | permission catalogue frozen at 57 keys; **zero** health or medical keys |
+
+### 29.3 What was built
+
+`person_health_facts` (H1), `healthFactCollectionResolver` (H3) and `healthFactService` (H4:
+add / edit / end). Design notes live in the modules; the three decisions worth repeating:
+
+1. **One entity, not three.** Immunization is one fact per vaccine with its dose series in the
+   payload — nothing references a single dose, so the collection grain stays uniform.
+2. **Append-only in the database.** DELETE refused; what a fact *says* cannot change in place; a
+   closed fact never reopens. Corrections supersede.
+3. **Edit writes the successor before closing the original.** A crash between the two leaves a
+   visible duplicate rather than a silent absence. Between those two failures, health takes the
+   duplicate.
+
+### 29.4 Three blockers, each with evidence
+
+**B1 · M1 / D-H1 — the grain migration is unapproved and has not landed.**
+`allergy_notes` and `medication_flag` are still `entity_type: "enrollment"`. The H1–H4 contract is
+explicit: *"M1 (D-H1) lands first. The health grain must be `customer_member` before H2 registers a
+provider whose `sourceEntityType` is `customer_member`, or the two disagree from day one."* The
+migration moves tenant `field_values` rows between grains, which is why the ownership contract lists
+it as a decision rather than a task. **H2 is therefore not registered** — registering it would create
+the day-one disagreement the contract exists to prevent.
+
+**B2 · D-H6 — there is no health visibility permission.**
+The catalogue is the frozen 57-key set and contains no health or medical key. Field-level
+`fieldPolicies` (`editable | read-only | hidden`) is *surface configuration* keyed on
+surface + group + field + tier — uniform across roles, not an access control. The admin surface is
+gated to `admin`/`ops`, so the card would not leak to arbitrary users, but the platform cannot
+express *"this ops user may see attendance and not medical conditions"*. The H1–H4 contract itself
+lists D-H6 as **not in scope**, and §17 of this instruction says to name the blocker and stop
+registration. **The card is not registered and no Surface placement was authored.**
+
+> Worth stating plainly: `child.allergies` and `child.medical_notes` are **already displayed** on
+> this surface under this same gate. The new exposure would be *structured* conditions and
+> medications — the same audience, materially more detail. Whether admin/ops is a sufficient gate for
+> that is a policy decision, not an engineering one.
+
+**B3 · The migration cannot be applied from this lane.**
+This slot targets a hosted Supabase project (`NEXT_PUBLIC_SUPABASE_URL=https://…supabase.co`), so
+applying schema is a promotion action requiring explicit authorization. `person_health_facts` does
+not exist in any reachable database, which makes the certification fixture (§19) and browser
+certification (§20) unreachable this run — there is no health truth to certify against.
+
+### 29.5 Definition of Done — honest status
+
+| §23 gate | Status |
+|---|---|
+| canonical Health owner | PASS — H1 authored to the ratified contract |
+| cross-sprint ownership reconciled | PASS — §29.2 |
+| correct child grain | **BLOCKED** — B1, M1 unapproved |
+| structured Health facts | PASS as code; unverifiable until B3 |
+| Documents / requirements / relationships boundaries | PASS — nothing duplicated |
+| canonical read model, summary, expanded, participant scope | NOT STARTED — gated on B2 |
+| permissions | **FAIL** — B2 |
+| Surface placement, browser certification, 0 page errors | NOT REACHED — B2, B3 |
+
+Health & Safety is **not** production-ready and was not registered. Safety Signals remain unstarted
+and must not ship before D-H6 (§21).
