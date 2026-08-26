@@ -1445,6 +1445,30 @@ export default function LifecycleActivationBoard({
         [statusesPayload, syncStatusKeysFromPayload, loadStatusStages]
     );
 
+    /**
+     * Switch which track the stage rail lists.
+     *
+     * Selection has to move with the filter. Leaving `stageKey` pointing at a stage the rail no
+     * longer lists would put the editor on a stage the operator cannot see or navigate back to —
+     * the same class of invisibility this switcher exists to fix. Nothing is written: changing which
+     * stages you are LOOKING at is not a configuration change.
+     */
+    const selectTrack = useCallback(
+        (trackKey: string) => {
+            const key = trackKey.trim();
+            if (!key || key === activeTrackKey) return;
+            setActiveTrackKey(key);
+            if (!builderProcess) return;
+            const next = stagesForTrack(builderProcess, key);
+            if (!next.length) return;
+            // Keep the current stage when it belongs to the track being opened; otherwise open the
+            // first stage of that track so the editor always points at something the rail shows.
+            if (next.some((st) => st.key === stageKeyRef.current)) return;
+            void selectStage(next[0]!);
+        },
+        [activeTrackKey, builderProcess, selectStage],
+    );
+
     const renameLifecycle = useCallback(
         async (values: { name: string; description: string }) => {
             if (!runtimeDepartmentId || !processId || !values.name.trim()) return;
@@ -2007,6 +2031,9 @@ export default function LifecycleActivationBoard({
                                     onSelect={(s) => void selectStage(s)}
                                     onAddStageClick={() => setShowAddStage((v) => !v)}
                                     addingStage={showAddStage}
+                                    tracks={processTracks?.tracks}
+                                    activeTrackKey={activeTrackKey}
+                                    onSelectTrack={selectTrack}
                                 />
                             : processSection === "actions" ?
                                 <BusinessProcessActionsListColumn

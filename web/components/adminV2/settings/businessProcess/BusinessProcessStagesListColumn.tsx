@@ -36,19 +36,43 @@ export default function BusinessProcessStagesListColumn({
     onSelect,
     onAddStageClick,
     addingStage,
+    tracks,
+    activeTrackKey,
+    onSelectTrack,
 }: {
     stages: LifecycleBuilderStageRecord[];
     activeStageKey: string;
     onSelect: (stage: LifecycleBuilderStageRecord) => void;
     onAddStageClick: () => void;
     addingStage?: boolean;
+    /** Present when the process has tracks. Absent means this list is the whole process. */
+    tracks?: readonly { key: string; label: string }[];
+    activeTrackKey?: string;
+    onSelectTrack?: (trackKey: string) => void;
 }) {
+    // One track is not a choice, and rendering a switcher for it would imply stages are hidden when
+    // none are.
+    const showTracks = Boolean(tracks && tracks.length > 1 && onSelectTrack);
+    const activeTrackLabel = tracks?.find((t) => t.key === activeTrackKey)?.label ?? null;
+
     return (
         <div className="space-y-3" data-testid="business-process-stages-list-column">
             <div className="flex items-start justify-between gap-2">
                 <div>
                     <h4 className="text-[12px] font-semibold text-alloy-midnight">Stages</h4>
-                    <p className="text-[10px] text-alloy-midnight/45">{stages.length} configured</p>
+                    {/*
+                     * The count says WHICH stages it counted.
+                     *
+                     * It used to read "4 configured" while the process Overview said "8 stages", and
+                     * both were reading the same authority — this list is filtered to one track and
+                     * never said so. An unqualified count on a filtered list is how four stages
+                     * disappeared from the product without anything looking broken.
+                     */}
+                    <p className="text-[10px] text-alloy-midnight/45" data-testid="business-process-stages-count">
+                        {showTracks && activeTrackLabel
+                            ? `${stages.length} stage${stages.length === 1 ? "" : "s"} in ${activeTrackLabel}`
+                            : `${stages.length} configured`}
+                    </p>
                 </div>
                 <button
                     type="button"
@@ -59,6 +83,35 @@ export default function BusinessProcessStagesListColumn({
                     {addingStage ? "Adding…" : "+ Add"}
                 </button>
             </div>
+            {showTracks ? (
+                <div
+                    className="flex flex-wrap gap-1"
+                    role="tablist"
+                    aria-label="Stage track"
+                    data-testid="business-process-track-switcher"
+                >
+                    {tracks!.map((track) => {
+                        const active = track.key === activeTrackKey;
+                        return (
+                            <button
+                                key={track.key}
+                                type="button"
+                                role="tab"
+                                aria-selected={active}
+                                data-testid={`business-process-track-${track.key}`}
+                                onClick={() => onSelectTrack!(track.key)}
+                                className={
+                                    active
+                                        ? "rounded-full bg-alloy-midnight px-2.5 py-1 text-[10px] font-semibold text-white"
+                                        : "rounded-full bg-alloy-midnight/[0.06] px-2.5 py-1 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-midnight/10"
+                                }
+                            >
+                                {track.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : null}
             <div className="space-y-1">
                 {stages.map((stage, idx) => {
                     const active = stage.key === activeStageKey;
