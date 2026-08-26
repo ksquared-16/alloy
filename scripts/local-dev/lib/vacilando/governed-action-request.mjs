@@ -1940,15 +1940,133 @@ export function tickGovernedActions({
   return out;
 }
 
+/**
+ * The result envelope for ONE action type.
+ *
+ * THE DEFECT THIS REPLACES. This was hardcoded to the census shape: it read
+ * `action.result.census` whatever the action was, so a completed
+ * `repository.push` reported itself back to the lane as
+ *
+ *   { census_run_at: null, org_count: null, question_ids: null, keys: [] }
+ *
+ * — a null-filled census envelope for an action that had just published a
+ * commit, under the instruction "Do not retry the census from this lane". Every
+ * field the lane needed (the ref, the SHA, whether it was already there) was
+ * absent, and every field present was meaningless.
+ *
+ * A MISMATCH IS AN ERROR, NOT A BLANK. When the result does not carry the shape
+ * its action type requires, this says so. Rendering nulls turns a wiring fault
+ * into something that merely looks like nothing happened, which is how the
+ * original defect survived a successful push.
+ */
+export function governedResultEnvelope(actionKey, result = {}) {
+  const r = result && typeof result === "object" ? result : {};
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    const sha = r.pushedSha || r.pushed_sha || null;
+    const ref = r.remoteRef || r.remote_ref || (r.branch ? `refs/heads/${r.branch}` : null);
+    if (!sha || !ref) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.push", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        remote_ref: ref,
+        pushed_sha: sha,
+        state: r.idempotent ? "already_present" : "pushed",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const n = r.pullRequestNumber ?? r.pull_request_number ?? null;
+    if (!n) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "promotion.open_pr", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: n,
+        url: r.url || null,
+        base: r.base || null,
+        head_branch: r.headBranch || r.head_branch || null,
+        state: r.reused ? "already_open" : "opened",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const sha = r.merge_sha || r.mergeSha || null;
+    if (!sha) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.merge_pull_request", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: r.pull_request_number ?? r.pullRequestNumber ?? null,
+        merge_sha: sha,
+        staging_sha: r.staging_sha || r.stagingSha || null,
+        state: r.idempotent ? "already_merged" : "merged",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const census = r.census && typeof r.census === "object" ? r.census : null;
+    if (!census) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "database.read_census", got: Object.keys(r).slice(0, 12) };
+    }
+    const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
+    return {
+      ok: true,
+      summary: {
+        census_run_at: census.census_run_at || null,
+        format: census.format || null,
+        org_count: census.org_count ?? null,
+        database: census.database || null,
+        question_ids: census.question_ids || null,
+        question_row_counts: questions
+          ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
+          : null,
+        keys: Object.keys(census).slice(0, 20),
+      },
+    };
+  }
+  return { ok: true, summary: { note: "completed", keys: Object.keys(r).slice(0, 12) } };
+}
+
+/**
+ * Which credentials the lane did NOT receive, named for the action that ran.
+ *
+ * A push never involves database credentials, and saying so is not merely
+ * imprecise — the sentence exists to tell the lane exactly what it still does
+ * not hold, so naming the wrong secret weakens it.
+ */
+function credentialIsolationLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH
+    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
+    || actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "You did NOT receive GitHub credentials or any privileged secret.";
+  }
+  return "You did NOT receive hosted database credentials or any privileged secret.";
+}
+
+/** What a lane must NOT do again, phrased for the action that actually ran. */
+function doNotRetryLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    return "Do not push from this lane. The commit is already on the remote.";
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return "Do not open another pull request from this lane. The one below is the promotion.";
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "Do not retry the merge from this lane. It already landed.";
+  }
+  return "Do not retry the census from this lane. Read the result file and continue.";
+}
+
 export function continuationTextForGovernedAction(rec, action = null) {
-  const census = action?.result?.census || {};
-  const evidencePath = rec.result_ref
-    || action?.result?.evidencePath
-    || null;
-  const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
-  const rowCounts = questions
-    ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
-    : null;
+  const evidencePath = rec.result_ref || action?.result?.evidencePath || null;
+  const envelope = governedResultEnvelope(rec.action_key, action?.result || rec.result || {});
   return redact([
     "[VACILANDO GOVERNED ACTION COMPLETE]",
     `Request: ${rec.request_id}`,
@@ -1958,20 +2076,12 @@ export function continuationTextForGovernedAction(rec, action = null) {
     evidencePath ? `Result file (read this in the current worktree): ${evidencePath}` : null,
     "",
     "Director executed this on the trusted host.",
-    "You did NOT receive hosted database credentials or any privileged secret.",
-    "Do not retry the census from this lane. Read the result file and continue.",
+    credentialIsolationLine(rec.action_key),
+    doNotRetryLine(rec.action_key),
     rec.run_id ? `When this assignment is finished, report: vac run-status ${rec.run_id} complete --summary "..."${rec.lane_id ? ` --lane ${rec.lane_id}` : ""}` : null,
     "",
-    "Bounded result summary:",
-    JSON.stringify({
-      census_run_at: census.census_run_at || null,
-      format: census.format || null,
-      org_count: census.org_count ?? null,
-      database: census.database || null,
-      question_ids: census.question_ids || null,
-      question_row_counts: rowCounts,
-      keys: Object.keys(census).slice(0, 20),
-    }, null, 2),
+    envelope.ok ? "Bounded result summary:" : "RESULT ENVELOPE MISMATCH — the trusted-host result did not carry the shape this action produces. Report this rather than acting on it:",
+    JSON.stringify(envelope.ok ? envelope.summary : envelope, null, 2),
     "",
     rec.continuation_intent || "Continue the current assignment using this evidence.",
   ].filter((line) => line != null).join("\n"));
