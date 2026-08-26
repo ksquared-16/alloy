@@ -633,18 +633,20 @@ export async function loadSchedulingProjectionForChild(
         return buildSchedulingProjectionForChild(child, todayYmd, computedAt);
     }
 
-    const patterns = await loadPatterns(
-        supabase,
-        orgId,
-        assignmentRows.map((a) => a.schedule_pattern_id)
-    );
-    const assignmentTypes = await loadAssignmentTypes(
-        supabase,
-        orgId,
-        assignmentRows
-            .map((a) => a.operational_assignment_type_id)
-            .filter((id): id is string => Boolean(id))
-    );
+    /**
+     * Independent of one another: the pattern ids and the assignment-type ids both come from
+     * `assignmentRows`, which is already in hand. They were awaited in sequence, so every child paid
+     * two round trips where one would do — and this loader runs ONCE PER INQUIRY CHILD (17 times on
+     * the certification tenant), so the sequence was paid seventeen times over.
+     */
+    const [patterns, assignmentTypes] = await Promise.all([
+        loadPatterns(supabase, orgId, assignmentRows.map((a) => a.schedule_pattern_id)),
+        loadAssignmentTypes(
+            supabase,
+            orgId,
+            assignmentRows.map((a) => a.operational_assignment_type_id).filter((id): id is string => Boolean(id)),
+        ),
+    ]);
 
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
@@ -765,18 +767,17 @@ export async function loadSchedulingProjectionForStaff(
         subjectType: "staff",
     });
 
-    const patterns = await loadPatterns(
-        supabase,
-        orgId,
-        assignmentRows.map((a) => a.schedule_pattern_id)
-    );
-    const assignmentTypes = await loadAssignmentTypes(
-        supabase,
-        orgId,
-        assignmentRows
-            .map((a) => a.operational_assignment_type_id)
-            .filter((id): id is string => Boolean(id))
-    );
+    // Same independence as the child loader above: both id sets come from `assignmentRows`. Not on
+    // the drawer-VM critical path, so unmeasured here — corrected together because leaving one half
+    // of an identical shape sequential is how the next reader learns the wrong lesson.
+    const [patterns, assignmentTypes] = await Promise.all([
+        loadPatterns(supabase, orgId, assignmentRows.map((a) => a.schedule_pattern_id)),
+        loadAssignmentTypes(
+            supabase,
+            orgId,
+            assignmentRows.map((a) => a.operational_assignment_type_id).filter((id): id is string => Boolean(id)),
+        ),
+    ]);
 
     const assignments: AssignmentInput[] = [];
     for (const row of assignmentRows) {
