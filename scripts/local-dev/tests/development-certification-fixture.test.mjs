@@ -17,7 +17,7 @@
  */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -162,22 +162,47 @@ await test("the org id is a bounded parameter, not forwarded environment", () =>
 
 // ------------------------------------------------- 10. no production
 
-await test("production and non-local invocation fail closed", () => {
+await test("the runtime check judges only what it can see, and says so", () => {
+  // THE CORRECTION. This check used to read process.env.SUPABASE_URL and report
+  // a verdict on the target. In the real path that variable is never set here —
+  // the CLI runs before the trusted env is loaded — so the URL branch could only
+  // ever pass. A check that cannot see the thing it judges is decorative, and
+  // calling it proven was wrong.
+  const unjudged = assertLocalEnvironment();
+  assert.equal(unjudged.ok, true);
+  assert.equal(unjudged.target_judged, false, "it must not claim to have judged a target it never saw");
+  assert.equal(unjudged.enforced_by, "alloy-certify-fixture");
+
+  // What it CAN see, it still refuses.
   assert.equal(assertLocalEnvironment({ env: { NODE_ENV: "production" } }).error, FIXTURE_REFUSALS.NOT_LOCAL);
   assert.equal(assertLocalEnvironment({ env: { VERCEL: "1" } }).error, FIXTURE_REFUSALS.NOT_LOCAL);
-  assert.equal(assertLocalEnvironment({
-    env: { SUPABASE_URL: "https://abcdefgh.supabase.co" },
-  }).error, FIXTURE_REFUSALS.NOT_LOCAL);
-  assert.equal(assertLocalEnvironment({
-    env: { NEXT_PUBLIC_SUPABASE_URL: "https://prod.example.com" },
-  }).error, FIXTURE_REFUSALS.NOT_LOCAL);
 
-  // POSITIVE CONTROLS: this machine's own stack is permitted, in each of the
-  // forms it legitimately takes.
-  for (const url of ["http://127.0.0.1:55321", "http://localhost:55321", "https://local.supabase.test"]) {
-    assert.equal(assertLocalEnvironment({ env: { SUPABASE_URL: url } }).ok, true, url);
+  // Given a target explicitly, it judges it — and an EMPTY one is unknown
+  // rather than approved, so it can never pass vacuously again.
+  assert.equal(assertLocalEnvironment({ supabaseUrl: "" }).error, FIXTURE_REFUSALS.TARGET_UNKNOWN);
+  for (const bad of ["https://abcdefgh.supabase.co", "https://prod.example.com", "https://tenant.supabase.in"]) {
+    assert.equal(assertLocalEnvironment({ supabaseUrl: bad }).error, FIXTURE_REFUSALS.NOT_LOCAL, bad);
   }
-  assert.equal(assertLocalEnvironment({ env: {} }).ok, true);
+  // POSITIVE CONTROLS: this machine's own stack is permitted in each real form.
+  for (const url of ["http://127.0.0.1:55321", "http://localhost:55321", "https://local.supabase.test"]) {
+    const v = assertLocalEnvironment({ supabaseUrl: url });
+    assert.equal(v.ok, true, url);
+    assert.equal(v.target_judged, true);
+  }
+});
+
+await test("the runner enforces the target, and refuses one it cannot see", () => {
+  // The enforcement that actually runs lives in the bash runner, because that is
+  // the first point where a Supabase URL exists at all. Asserted structurally:
+  // the refusal must sit AFTER the trusted env is loaded, or it would be judging
+  // an empty variable exactly as the Node check used to.
+  const src = readFileSync(new URL("../alloy-certify-fixture", import.meta.url), "utf8");
+  const loadAt = src.indexOf("alloy_load_trusted_server_env_exports");
+  const judgeAt = src.indexOf("alloy_is_production_supabase_url");
+  const unknownAt = src.indexOf("certification_target_unknown");
+  assert.ok(loadAt > 0 && judgeAt > 0, "the runner must load the env and judge the target");
+  assert.ok(judgeAt > loadAt, "the target must be judged AFTER the env that supplies it is loaded");
+  assert.ok(unknownAt > loadAt, "an absent target must be refused, not treated as local");
 });
 
 // ------------------------------------------------- authorization
