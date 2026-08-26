@@ -644,7 +644,8 @@ export async function inspectCertificationGraph(
 
         const [ags, pis, plc, sch, ocm, att] = await Promise.all([
             supabase.from("child_enrollment_agreements").select("id").eq("org_id", orgId).eq("customer_member_id", id),
-            supabase.from("process_instances").select("id").eq("org_id", orgId).eq("subject_id", id),
+            // `state` travels so the caller can tell a running journey from a closed record.
+            supabase.from("process_instances").select("id, state").eq("org_id", orgId).eq("subject_id", id),
             supabase.from("child_placements").select("id").eq("org_id", orgId).eq("customer_member_id", id),
             supabase.from("schedule_assignments").select("id").eq("org_id", orgId).eq("customer_member_id", id),
             supabase.from("opportunity_customer_members").select("id").eq("org_id", orgId).eq("customer_member_id", id),
@@ -697,7 +698,15 @@ export async function inspectCertificationGraph(
     if (!(person as { data?: unknown }).data) missing.push("certification parent (persons)");
     if (((opps as { data?: unknown[] }).data ?? []).length === 0) missing.push("opportunity");
     for (const m of members) {
-        if (m.participations === 0) missing.push(`${m.firstName}: participation row`);
+        /*
+         * An absent `opportunity_customer_members` row is NOT missing participation.
+         *
+         * The platform retired that bridge: "OCM bridge write REMOVED. process_instances is the sole
+         * runtime owner of child participation at Create Lead ... No opportunity_customer_members row
+         * is created" (`createLeadChildOcmPersistence.ts`). Reporting its absence as a defect made a
+         * correct graph read as broken, and would have sent a later repair off to write legacy rows
+         * the runtime does not read. The live journey above IS the participation.
+         */
         if (m.placements === 0) missing.push(`${m.firstName}: placement`);
         if (m.scheduleAssignments === 0) missing.push(`${m.firstName}: schedule assignment`);
         if (m.agreementIds.length !== 1) missing.push(`${m.firstName}: expected 1 agreement, found ${m.agreementIds.length}`);
