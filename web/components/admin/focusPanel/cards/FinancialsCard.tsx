@@ -1,0 +1,481 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+
+import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { FinancialsCardVM } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
+import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
+import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
+import type { OperationalContext } from "@/lib/adminV2/runtime/operationalContext/types";
+
+type Props = {
+    model: FocusPanelCardModel;
+    context: OperationalContext;
+    receded?: boolean;
+    coordination?: FocusPanelCoordination;
+};
+
+/**
+ * THE FINANCIALS CARD — what is owed, what happened, and what can be done about it.
+ *
+ * Three densities, ONE read model. Compact, summary and expanded differ in how much of the same
+ * composed truth they show, never in what they compute — this component performs no financial
+ * arithmetic at all. Every cents value, every period placement and every GL code arrives decided by
+ * `buildFinancialsCardVM`, because a card that recomputed a balance would be a second answer to a
+ * question the ledger already answers.
+ *
+ * ── WHAT IT REFUSES TO SHOW ──
+ *
+ * The read model reports facts the platform does not own — payments, autopay, payer splits — as
+ * named unavailabilities rather than as zeroes. This card renders that absence as absence. A
+ * "$0.00 paid" line would state something the platform cannot know, and a disabled payer filter
+ * would advertise a model Financials does not have.
+ *
+ * ── SUBJECT, NOT HOUSEHOLD ──
+ *
+ * Attribution is `billable_source_type = 'enrollment_agreement'` → agreement → child, so the subject
+ * filter offers All plus each child. There is no Household option: `billable_source_type` admits only
+ * `job` and `enrollment_agreement`, so a household-level charge cannot be represented, and faking one
+ * by attaching it to a single child would put a family expense on one sibling's ledger.
+ */
+export default function FinancialsCard({ model, context, receded = false, coordination }: Props) {
+    const scope = context.participantScope ?? null;
+    const scopedMemberId = scope?.customerMemberId ?? null;
+    const customerId = householdIdFrom(context);
+
+    const [vm, setVm] = useState<FinancialsCardVM | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [expanded, setExpanded] = useState(false);
+    const [subjectFilter, setSubjectFilter] = useState<string>("all");
+    const [running, setRunning] = useState(false);
+    const [commandError, setCommandError] = useState<string | null>(null);
+
+    /*
+     * The card asks for the WHOLE account and filters in the client.
+     *
+     * Scoping the request to one child would make the subject filter a network round trip per
+     * selection and — worse — would make "All" unanswerable without a second shape of request. The
+     * account is small (one household's charges), the filter is presentation, and the totals below
+     * are still the server's.
+     */
+    const load = useCallback(async () => {
+        if (!customerId && !scopedMemberId) {
+            setVm(null);
+            return;
+        }
+        setLoading(true);
+        try {
+            const query = customerId
+                ? `customer_id=${encodeURIComponent(customerId)}`
+                : `customer_member_id=${encodeURIComponent(scopedMemberId as string)}`;
+            const res = await fetch(`/api/admin/financials/card?${query}`, { credentials: "include" });
+            const json = (await res.json()) as { ok?: boolean; vm?: FinancialsCardVM };
+            setVm(json?.ok && json.vm ? json.vm : null);
+        } catch {
+            setVm(null);
+        } finally {
+            setLoading(false);
+        }
+    }, [customerId, scopedMemberId]);
+
+    useEffect(() => {
+        // Clear FIRST: the previous household's balance must not linger while the next resolves.
+        setVm(null);
+        void load();
+    }, [load]);
+
+    /*
+     * A SCOPED CHILD PRESELECTS THE SUBJECT FILTER.
+     *
+     * When the panel is about one child, opening on "All" would answer about their siblings too. The
+     * operator can still widen it — the account is genuinely the household's — but the default
+     * matches what they are looking at.
+     */
+    useEffect(() => {
+        setSubjectFilter(scopedMemberId ?? "all");
+    }, [scopedMemberId]);
+
+    const visibleRows = useMemo(() => {
+        if (!vm) return [];
+        return subjectFilter === "all"
+            ? vm.rows
+            : vm.rows.filter((r) => r.subjectMemberId === subjectFilter);
+    }, [vm, subjectFilter]);
+
+    const run = useCallback(
+        async (templateId: string) => {
+            const target = subjectFilter !== "all" ? subjectFilter : scopedMemberId ?? vm?.subjects[0]?.customerMemberId;
+            if (!target || running) return;
+            setRunning(true);
+            setCommandError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: "charge.add",
+                        entity_type: "child",
+                        entity_id: target,
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: { customer_member_id: target, template_id: templateId },
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string };
+                // A refusal is the domain speaking — surfaced, never swallowed into a silent no-op.
+                if (!json?.ok) setCommandError(json?.error || "The charge was refused.");
+            } catch {
+                setCommandError("The charge could not be sent.");
+            } finally {
+                setRunning(false);
+                // The card REFRESHES from the read model; it never inserts the row it just created.
+                await load();
+            }
+        },
+        [load, running, scopedMemberId, subjectFilter, vm],
+    );
+
+    const currency = vm?.rows[0]?.currencyCode ?? "USD";
+    const compact = model.density === "compact" && !expanded;
+
+    return (
+        <div className="alloy-os-financials" data-financials-card="true" data-financials-subject={subjectFilter}>
+            <UniversalCard
+                title={model.title}
+                insight={insightFor(vm, loading, currency)}
+                iconName={model.iconName}
+                tier={model.tier}
+                archetype={model.archetype}
+                density="compact"
+                gridSpan={expanded ? "row" : model.span}
+                receded={receded}
+                data-universal-card-key="financials"
+                footerAction={null}
+            >
+                {vm?.unavailableReason ? (
+                    <p className="alloy-os-financials__empty" data-financials-empty="unavailable">
+                        {vm.unavailableReason}
+                    </p>
+                ) : !vm ? (
+                    <p className="alloy-os-financials__empty" data-financials-empty="loading">
+                        {loading ? "Loading the account…" : "No financial record."}
+                    </p>
+                ) : (
+                    <>
+                        {/* ── CURRENT PERIOD · PAST DUE / PAYMENT ─────────────────────────────── */}
+                        <div className="alloy-os-financials__bands">
+                            <section className="alloy-os-financials__band" data-financials-band="current-period">
+                                <p className="alloy-os-financials__band-label">
+                                    Current period · {vm.period.label}
+                                </p>
+                                {/* Individual dollar rows stay regular and tabular; only the total
+                                    earns stronger type. */}
+                                <Line label="Charges" cents={vm.reconciliation.grossCents} currency={currency} />
+                                {vm.reconciliation.discountsCents !== 0 ? (
+                                    <Line
+                                        label="Discounts & credits"
+                                        cents={vm.reconciliation.discountsCents}
+                                        currency={currency}
+                                    />
+                                ) : null}
+                                {vm.reconciliation.fundingCents !== 0 ? (
+                                    <Line label="Funding" cents={vm.reconciliation.fundingCents} currency={currency} />
+                                ) : null}
+                                {vm.reconciliation.adjustmentsCents !== 0 ? (
+                                    <Line
+                                        label="Adjustments"
+                                        cents={vm.reconciliation.adjustmentsCents}
+                                        currency={currency}
+                                    />
+                                ) : null}
+                                <Line
+                                    label="Responsibility"
+                                    cents={vm.reconciliation.responsibilityCents}
+                                    currency={currency}
+                                    strong
+                                    testId="responsibility"
+                                />
+                                {vm.reconciliation.scheduledCents !== 0 ? (
+                                    /* STATED BESIDE the balance, never inside it: a scheduled charge
+                                       is not yet owed, and folding it in would overstate the debt. */
+                                    <Line
+                                        label="Scheduled"
+                                        cents={vm.reconciliation.scheduledCents}
+                                        currency={currency}
+                                        muted
+                                        testId="scheduled"
+                                    />
+                                ) : null}
+                                {vm.chargeTemplates.length > 0 ? (
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <button
+                                                type="button"
+                                                className="alloy-os-financials__action"
+                                                data-financials-command="charge.add"
+                                                disabled={running}
+                                            >
+                                                Add charge →
+                                            </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" sideOffset={4} data-financials-charge-menu="true">
+                                            {vm.chargeTemplates.map((tpl) => (
+                                                <DropdownMenuItem
+                                                    key={tpl.id}
+                                                    data-financials-charge-template={tpl.id}
+                                                    onSelect={() => void run(tpl.id)}
+                                                >
+                                                    {/* The tenant's own label. Never `template_key`. */}
+                                                    {tpl.label}
+                                                    {tpl.amountCents != null ? (
+                                                        <span className="alloy-os-financials__menu-amount">
+                                                            {money(tpl.amountCents, tpl.currencyCode)}
+                                                        </span>
+                                                    ) : null}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                ) : null}
+                                {commandError ? (
+                                    <span className="alloy-os-financials__error" data-financials-command-error="true">
+                                        {commandError}
+                                    </span>
+                                ) : null}
+                            </section>
+
+                            <div className="alloy-os-financials__side">
+                                <section className="alloy-os-financials__band" data-financials-band="past-due">
+                                    <p className="alloy-os-financials__band-label">Past due</p>
+                                    {vm.pastDue ? (
+                                        <>
+                                            <Line
+                                                label={`${vm.pastDue.agingDays} days`}
+                                                cents={vm.pastDue.amountCents}
+                                                currency={currency}
+                                                strong
+                                                testId="past-due"
+                                            />
+                                            <p className="alloy-os-financials__note">
+                                                Oldest unpaid {vm.pastDue.oldestDueDate}
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <p className="alloy-os-financials__note">Nothing past due.</p>
+                                    )}
+                                </section>
+
+                                <section className="alloy-os-financials__band" data-financials-band="payment">
+                                    <p className="alloy-os-financials__band-label">Payment</p>
+                                    {/* Only what is genuinely owned. Every other payment fact is
+                                        named in `unavailable` and therefore omitted, not zeroed. */}
+                                    {vm.unavailable.map((u) => (
+                                        <p
+                                            key={u.fact}
+                                            className="alloy-os-financials__note"
+                                            data-financials-unavailable={u.fact}
+                                        >
+                                            {unavailableLabel(u.fact)}
+                                        </p>
+                                    ))}
+                                </section>
+                            </div>
+                        </div>
+
+                        {/* ── SUBJECT FILTER + LEDGER ─────────────────────────────────────────── */}
+                        {!compact ? (
+                            <>
+                                {vm.subjects.length > 1 ? (
+                                    <div className="alloy-os-financials__filters" data-financials-filters="true">
+                                        <FilterChip
+                                            active={subjectFilter === "all"}
+                                            onClick={() => setSubjectFilter("all")}
+                                            value="all"
+                                        >
+                                            All
+                                        </FilterChip>
+                                        {vm.subjects.map((s) => (
+                                            <FilterChip
+                                                key={s.customerMemberId}
+                                                active={subjectFilter === s.customerMemberId}
+                                                onClick={() => setSubjectFilter(s.customerMemberId)}
+                                                value={s.customerMemberId}
+                                            >
+                                                {s.displayName}
+                                            </FilterChip>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                <div className="alloy-os-financials__ledger" data-financials-ledger="true">
+                                    {vm.ledgerPeriods.map((group) => {
+                                        const groupRows = group.rows.filter(
+                                            (r) => subjectFilter === "all" || r.subjectMemberId === subjectFilter,
+                                        );
+                                        if (groupRows.length === 0) return null;
+                                        return (
+                                            <section
+                                                key={group.period.key}
+                                                className="alloy-os-financials__period"
+                                                data-financials-period={group.period.key}
+                                            >
+                                                <p className="alloy-os-financials__period-label">
+                                                    {group.period.label.toUpperCase()}
+                                                </p>
+                                                {groupRows.map((row) => (
+                                                    <div
+                                                        key={row.chargeId}
+                                                        className="alloy-os-financials__row"
+                                                        data-financials-row={row.chargeId}
+                                                    >
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--date">
+                                                            {row.date ?? "—"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell">
+                                                            {row.subjectName ?? "—"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell">
+                                                            {row.categoryLabel}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--desc">
+                                                            {row.description ?? "—"}
+                                                        </span>
+                                                        <span
+                                                            className="alloy-os-financials__cell alloy-os-financials__cell--gl"
+                                                            data-financials-gl={row.glCode ?? "unmapped"}
+                                                        >
+                                                            {/* Explicit, never a silent blank. */}
+                                                            {row.glCode ?? "Unmapped"}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--amount">
+                                                            {money(row.amountCents, row.currencyCode)}
+                                                        </span>
+                                                        <span
+                                                            className="alloy-os-financials__cell alloy-os-financials__cell--status"
+                                                            data-financials-lifecycle={row.lifecycleStatus}
+                                                        >
+                                                            {row.lifecycleStatus}
+                                                        </span>
+                                                        <span className="alloy-os-financials__cell alloy-os-financials__cell--source">
+                                                            {row.source ?? "—"}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </section>
+                                        );
+                                    })}
+                                    {visibleRows.length === 0 ? (
+                                        <p className="alloy-os-financials__note">No financial activity yet.</p>
+                                    ) : null}
+                                </div>
+                            </>
+                        ) : null}
+
+                        <button
+                            type="button"
+                            className="alloy-os-financials__details"
+                            data-financials-details="true"
+                            onClick={() => {
+                                setExpanded((v) => !v);
+                                coordination?.reportPerspective?.("financials", expanded ? "base" : "focused");
+                            }}
+                        >
+                            {expanded ? "← Less" : "Details →"}
+                        </button>
+                    </>
+                )}
+            </UniversalCard>
+        </div>
+    );
+}
+
+/**
+ * The household this panel is about.
+ *
+ * `truth` carries the household under more than one binding depending on how the panel was reached,
+ * so this reads them in order of authority rather than assuming one. Returning null is ordinary — a
+ * panel with no household simply has no account.
+ */
+function householdIdFrom(context: OperationalContext): string | null {
+    const truth = context.truth as Record<string, unknown>;
+    for (const key of ["customer.id", "household.id", "child.family_customer_id", "customer_id"]) {
+        const value = truth[key];
+        const s = value != null ? String(value).trim() : "";
+        if (s) return s;
+    }
+    return null;
+}
+
+function money(cents: number, currency: string): string {
+    return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
+}
+
+function unavailableLabel(fact: string): string {
+    switch (fact) {
+        case "payments":
+            return "Payments are not recorded for enrollment accounts yet.";
+        case "autopay":
+            return "Autopay is not configured in this platform.";
+        case "payer_split":
+            return "Responsibility splits are owned by Processing.";
+        default:
+            return fact;
+    }
+}
+
+function insightFor(vm: FinancialsCardVM | null, loading: boolean, currency: string): string {
+    if (loading && !vm) return "";
+    if (!vm || vm.unavailableReason) return "";
+    return `${money(vm.reconciliation.balanceCents, currency)} · ${vm.period.label}`;
+}
+
+function Line(props: {
+    label: string;
+    cents: number;
+    currency: string;
+    strong?: boolean;
+    muted?: boolean;
+    testId?: string;
+}) {
+    return (
+        <span
+            className={[
+                "alloy-os-financials__line",
+                props.strong ? "alloy-os-financials__line--strong" : "",
+                props.muted ? "alloy-os-financials__line--muted" : "",
+            ]
+                .filter(Boolean)
+                .join(" ")}
+            data-financials-line={props.testId}
+        >
+            <span className="alloy-os-financials__line-label">{props.label}</span>
+            <span className="alloy-os-financials__line-value">{money(props.cents, props.currency)}</span>
+        </span>
+    );
+}
+
+function FilterChip(props: {
+    active: boolean;
+    value: string;
+    onClick: () => void;
+    children: React.ReactNode;
+}) {
+    return (
+        <button
+            type="button"
+            className={`alloy-os-financials__chip${props.active ? " alloy-os-financials__chip--active" : ""}`}
+            data-financials-filter={props.value}
+            data-active={props.active ? "true" : undefined}
+            onClick={props.onClick}
+        >
+            {props.children}
+        </button>
+    );
+}

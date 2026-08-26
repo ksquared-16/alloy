@@ -162,6 +162,19 @@ export const FOCUS_PANEL_CARDS: readonly CardDefinition[] = [
      */
     { key: "staff", title: "Staff", grains: ["person"] },
     { key: "attendance", title: "Attendance", grains: ["opportunity", "child"] },
+    /*
+     * FINANCIALS — "what is owed, what happened, and what can I do about it".
+     *
+     * It does NOT supersede `billing_preview`, which asks a different question: "is billing
+     * CONFIGURED and ready for this enrollment?" One is readiness, the other is the ledger, and a
+     * family can be fully configured and owe nothing or be misconfigured and owe a great deal.
+     * Superseding would delete the readiness answer to make room for the balance.
+     *
+     * Both grains, for the same reason Attendance carries both: the account is the household's, and a
+     * child-grain panel scopes the same account to one subject rather than answering a different
+     * question.
+     */
+    { key: "financials", title: "Financials", ownsOperationalTruth: true, grains: ["opportunity", "child"] },
     /**
      * The first CHILD-grain card, and no longer the child's user-facing one.
      *

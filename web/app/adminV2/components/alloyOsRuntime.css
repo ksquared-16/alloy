@@ -9713,3 +9713,138 @@ button.alloy-os-child-edit__chip:disabled { cursor: default; opacity: 0.7; }
   font-size: 11.5px;
   color: var(--alloy-os-danger, #b42318);
 }
+
+/* ── FINANCIALS ─────────────────────────────────────────────────────────────────────────────────
+   The card is a reconciliation beside its exceptions, then a ledger. Dollar rows stay tabular so
+   columns of digits line up; only a total earns stronger type. */
+.alloy-os-financials__bands {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 12px;
+}
+.alloy-os-financials__side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alloy-os-financials__band-label {
+  margin: 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--alloy-os-text-primary, #1f2937);
+}
+.alloy-os-financials__line--strong {
+  margin-top: 3px;
+  padding-top: 3px;
+  font-weight: 650;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+.alloy-os-financials__line--muted {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__note {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__empty {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__action,
+.alloy-os-financials__details {
+  margin-top: 7px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 550;
+  color: var(--alloy-os-text-primary, #1f2937);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 4%, transparent);
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 13%, transparent);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.alloy-os-financials__action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.alloy-os-financials__error {
+  display: block;
+  margin-top: 5px;
+  font-size: 11.5px;
+  color: var(--alloy-os-danger, #b42318);
+}
+.alloy-os-financials__menu-amount {
+  margin-left: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.alloy-os-financials__chip {
+  padding: 2px 9px;
+  font-size: 11px;
+  border: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 13%, transparent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  cursor: pointer;
+}
+.alloy-os-financials__chip--active {
+  font-weight: 600;
+  color: var(--alloy-os-text-primary, #1f2937);
+  background: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+/* The ledger owns most of the expanded surface, so it scrolls inside its own box rather than
+   stretching the panel. */
+.alloy-os-financials__ledger {
+  margin-top: 9px;
+  overflow-x: auto;
+}
+.alloy-os-financials__period-label {
+  margin: 9px 0 3px;
+  font-size: 10.5px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-financials__row {
+  display: grid;
+  grid-template-columns: 82px 76px 92px minmax(90px, 1fr) 72px 78px 68px 84px;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-financials__cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--alloy-os-text-primary, #1f2937);
+}
+.alloy-os-financials__cell--amount {
+  text-align: right;
+  font-weight: 600;
+}
+.alloy-os-financials__cell--gl,
+.alloy-os-financials__cell--status,
+.alloy-os-financials__cell--source,
+.alloy-os-financials__cell--desc {
+  color: var(--alloy-os-text-secondary, #4b5563);
+}

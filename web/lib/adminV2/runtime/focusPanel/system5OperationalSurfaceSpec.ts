@@ -30,6 +30,7 @@ export const SYSTEM5_CARD_FOOTPRINT: Partial<Record<FocusPanelCardKey, FocusPane
     employment: "wide",
     staff: "wide",
     attendance: "wide",
+    financials: "wide",
     scheduling: "wide",
     current_work: "narrow",
     business_process: "narrow",
@@ -88,6 +89,7 @@ export const SYSTEM5_CARD_ICON: Record<FocusPanelCardKey, string> = {
     // One employee, not a group — the case chip keeps Users, the person card takes the singular.
     staff: "User",
     attendance: "Clock",
+    financials: "DollarSign",
     milestones: "Flag",
     scheduling: "CalendarDays",
     communications: "MessageSquare",

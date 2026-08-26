@@ -16,6 +16,7 @@ import BillingPreviewCard from "@/components/admin/focusPanel/cards/BillingPrevi
 import TimelineCard from "@/components/admin/focusPanel/cards/TimelineCard";
 import MilestonesCard from "@/components/admin/focusPanel/cards/MilestonesCard";
 import AttendanceCard from "@/components/admin/focusPanel/cards/AttendanceCard";
+import FinancialsCard from "@/components/admin/focusPanel/cards/FinancialsCard";
 import BusinessProcessCard from "@/components/admin/focusPanel/cards/BusinessProcessCard";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
@@ -145,6 +146,13 @@ export default function FocusPanelCardRenderer({
     if (model.key === "employment" || model.key === "staff") {
         return (
             <EmploymentCard model={model} context={context} receded={receded} coordination={coordination} />
+        );
+    }
+    // Financials reads the household's composed account; a scoped child preselects the subject
+    // filter rather than narrowing the account, because the account is genuinely the family's.
+    if (model.key === "financials") {
+        return (
+            <FinancialsCard model={model} context={context} receded={receded} coordination={coordination} />
         );
     }
     // Attendance reads its own composed VM for the SCOPED participant; the panel stays case-grain.

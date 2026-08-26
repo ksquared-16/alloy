@@ -930,6 +930,20 @@ function buildCardModels(input: {
     );
 
     map.set(
+        "financials",
+        card({
+            key: "financials",
+            title: "Financials",
+            // The balance is the insight, and only the composed read model knows it — the card fills
+            // this in from its own VM rather than from the case record, which knows no charges.
+            insight: "",
+            tier: "work",
+            span: 2,
+            density: "compact",
+        }),
+    );
+
+    map.set(
         "billing_preview",
         card({
             key: "billing_preview",

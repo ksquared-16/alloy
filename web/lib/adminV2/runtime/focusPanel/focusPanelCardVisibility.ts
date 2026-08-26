@@ -38,6 +38,8 @@ export const ENROLLMENT_DEFAULT_VISIBLE_CARD_KEYS: readonly FocusPanelCardKey[] 
     // The operating day. It renders against the SCOPED participant and stays quiet when none is
     // selected, so it earns a full row rather than competing with the family-level cards above.
     "attendance",
+    // What is owed and what happened — the account, scoped to whoever the panel is about.
+    "financials",
 ];
 
 export const ENROLLMENT_DEFAULT_LINKED_CARD_KEYS: readonly FocusPanelCardKey[] = [
