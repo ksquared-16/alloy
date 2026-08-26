@@ -26,8 +26,27 @@ export const MAX_PACKAGE_SIZE = 4;
 export type PackageInteraction =
     /** Every member has an authored control: a date, a choice, a yes/no. Answered by tapping. */
     | "deterministic"
-    /** Open text — the case where a natural answer may carry several facts at once. */
-    | "open_text"
+    /**
+     * One free-text answer may carry several facts, because Trust permits interpreting it.
+     *
+     * Rare on purpose, and it is D-101 that decides — not the field type. This is the only mode
+     * where a parent's paragraph is sent anywhere.
+     */
+    | "conversational_free_text"
+    /**
+     * Related open-text questions asked together, each answered on its own.
+     *
+     * The mode that carries the V1 experience. D-101 refuses provider interpretation for health
+     * narrative, safeguarding and artifact-specific responses — with reasons, and the Director has
+     * ruled it authoritative — so a parent's words about how their child is comforted are never
+     * sent to a provider. That is a constraint on INTERPRETATION, not on conversation: the questions
+     * still arrive together, under the school's own heading, and each answer settles its own need
+     * through the deterministic path.
+     *
+     * Calling this `open_text` was the earlier mistake. The label promised a paragraph that would be
+     * read as several facts, which for most of this corpus is something the platform must not do.
+     */
+    | "deterministic_cluster"
     /** Known values awaiting one confirmation. */
     | "confirmation";
 
@@ -41,14 +60,19 @@ export interface ConversationalPackage {
     readonly voice_key: string;
 }
 
-/** Deterministic controls are answered by tapping, and must not be blended into prose. */
-function interactionFor(need: EnrollmentInformationNeed): PackageInteraction {
+/**
+ * How this need is answered — and, for text, whether its words may be interpreted at all.
+ *
+ * The Trust allow-list is consulted rather than guessed at: eligibility is a property of the
+ * semantic domain, so two text fields side by side can legitimately differ.
+ */
+function interactionFor(need: EnrollmentInformationNeed, providerEligible: (n: EnrollmentInformationNeed) => boolean): PackageInteraction {
     if (need.state === "known_requires_confirmation") return "confirmation";
     const first = need.occurrences[0];
     const t = first?.field_type ?? "text";
     if (t === "date" || t === "boolean" || t === "select" || t === "multiselect" || t === "number") return "deterministic";
     if ((first?.options?.length ?? 0) > 0) return "deterministic";
-    return "open_text";
+    return providerEligible(need) ? "conversational_free_text" : "deterministic_cluster";
 }
 
 /**
@@ -74,9 +98,18 @@ function voiceKeyFor(need: EnrollmentInformationNeed): string {
  */
 export function packageOutstandingNeeds(
     needs: readonly EnrollmentInformationNeed[],
-    opts?: { maxSize?: number },
+    opts?: {
+        maxSize?: number;
+        /**
+         * Does Trust permit interpreting this need's words? Injected so packaging depends on the
+         * allow-list's ANSWER without importing its rules, and so a test can state the answer.
+         * Absent, nothing is treated as interpretable — the safe direction.
+         */
+        providerEligible?: (need: EnrollmentInformationNeed) => boolean;
+    },
 ): ConversationalPackage[] {
     const max = Math.max(1, opts?.maxSize ?? MAX_PACKAGE_SIZE);
+    const eligible = opts?.providerEligible ?? (() => false);
     const packages: ConversationalPackage[] = [];
     let run: EnrollmentInformationNeed[] = [];
 
@@ -85,7 +118,7 @@ export function packageOutstandingNeeds(
         packages.push({
             need_keys: run.map((n) => n.identity.key),
             section_title: run[0]!.occurrences[0]?.section_title ?? null,
-            interaction: interactionFor(run[0]!),
+            interaction: interactionFor(run[0]!, eligible),
             voice_key: voiceKeyFor(run[0]!),
         });
         run = [];
@@ -101,13 +134,13 @@ export function packageOutstandingNeeds(
          * several related things in one natural sentence. The cap is applied HERE rather than by
          * trimming a finished package — trimming would silently drop needs from the conversation.
          */
-        const headInteraction = interactionFor(head);
+        const headInteraction = interactionFor(head, eligible);
         const roomFor = headInteraction === "deterministic" ? 1 : max;
         const compatible =
             run.length < roomFor &&
             (head.occurrences[0]?.section_title ?? null) === (need.occurrences[0]?.section_title ?? null) &&
             voiceKeyFor(head) === voiceKeyFor(need) &&
-            headInteraction === interactionFor(need);
+            headInteraction === interactionFor(need, eligible);
         if (!compatible) flush();
         run.push(need);
     }

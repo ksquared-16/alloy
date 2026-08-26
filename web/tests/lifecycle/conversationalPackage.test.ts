@@ -28,7 +28,7 @@ describe("packaging groups on evidence the packet already carries", () => {
         expect(pkgs).toHaveLength(1);
         expect(pkgs[0]!.need_keys).toHaveLength(3);
         expect(pkgs[0]!.section_title).toBe("Health Information and Developmental History");
-        expect(pkgs[0]!.interaction).toBe("open_text");
+        expect(pkgs[0]!.interaction).toBe("deterministic_cluster");
     });
 
     it("never crosses the school's own section boundary", () => {
@@ -82,5 +82,34 @@ describe("packaging groups on evidence the packet already carries", () => {
         const pkgs = packageOutstandingNeeds([need({ state: "known_requires_confirmation", action: false }), need({})]);
         expect(pkgs[0]!.interaction).toBe("confirmation");
         expect(pkgs).toHaveLength(2);
+    });
+});
+
+describe("Trust decides whether words may be interpreted, not the field type", () => {
+    it("groups provider-INELIGIBLE text as a deterministic cluster", () => {
+        // The V1 case. D-101 refuses health narrative and safeguarding, so these questions arrive
+        // together and each answer settles on its own — conversation without interpretation.
+        const pkgs = packageOutstandingNeeds([need({}), need({}), need({})]);
+        expect(pkgs[0]!.interaction).toBe("deterministic_cluster");
+    });
+
+    it("marks provider-ELIGIBLE text as free text only when Trust says so", () => {
+        const pkgs = packageOutstandingNeeds([need({}), need({})], { providerEligible: () => true });
+        expect(pkgs[0]!.interaction).toBe("conversational_free_text");
+    });
+
+    it("defaults to NOT interpretable when no eligibility answer is supplied", () => {
+        // The safe direction: nothing is sent to a provider because a caller forgot to ask.
+        expect(packageOutstandingNeeds([need({})])[0]!.interaction).toBe("deterministic_cluster");
+    });
+
+    it("never mixes interpretable and non-interpretable text in one package", () => {
+        // Otherwise one parent paragraph would carry an answer Trust forbids transmitting.
+        const a = need({ key: "eligible" });
+        const b = need({ key: "ineligible" });
+        const pkgs = packageOutstandingNeeds([a, b], { providerEligible: (n) => n.identity.key === "eligible" });
+        expect(pkgs).toHaveLength(2);
+        expect(pkgs[0]!.interaction).toBe("conversational_free_text");
+        expect(pkgs[1]!.interaction).toBe("deterministic_cluster");
     });
 });
