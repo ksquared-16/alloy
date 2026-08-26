@@ -307,6 +307,66 @@ await test("a merge accepts every spelling of the pull request number", async ()
   assert.match(validateMergeInputs(base).detail, /a pull request number is required/);
 });
 
+await test("a result envelope is selected by action type, never by default", async () => {
+  // THE DEFECT. continuationTextForGovernedAction read `action.result.census`
+  // whatever the action was, so a completed repository.push reported itself back
+  // to the lane as { census_run_at: null, org_count: null, question_ids: null }
+  // under the instruction "Do not retry the census from this lane" — every field
+  // the lane needed absent, every field present meaningless.
+  const { governedResultEnvelope, continuationTextForGovernedAction } =
+    await import("../lib/vacilando/governed-action-request.mjs");
+
+  const push = governedResultEnvelope("repository.push", {
+    repository: REPO, branch: BRANCH, pushedSha: SHA,
+    remoteRef: `refs/heads/${BRANCH}`, idempotent: false,
+  });
+  assert.equal(push.ok, true);
+  assert.equal(push.summary.pushed_sha, SHA);
+  assert.equal(push.summary.remote_ref, `refs/heads/${BRANCH}`);
+  assert.equal(push.summary.state, "pushed");
+  assert.equal(governedResultEnvelope("repository.push", {
+    branch: BRANCH, pushedSha: SHA, remoteRef: "r", idempotent: true,
+  }).summary.state, "already_present");
+
+  // Each type reads its OWN shape.
+  assert.equal(governedResultEnvelope("promotion.open_pr", { pullRequestNumber: 522, reused: true }).summary.state, "already_open");
+  assert.equal(governedResultEnvelope("repository.merge_pull_request", { merge_sha: "abc123def456" }).summary.merge_sha, "abc123def456");
+  assert.equal(governedResultEnvelope("database.read_census", { census: { org_count: 3 } }).summary.org_count, 3);
+
+  // THE POSITIVE CONTROL. A mismatched envelope must FAIL, not render nulls.
+  // Rendering nulls is what turned a wiring fault into something that merely
+  // looked like nothing happened, and is why the defect survived a real push.
+  for (const [key, bad] of [
+    ["repository.push", { census: { org_count: null } }],
+    ["repository.push", {}],
+    ["promotion.open_pr", { pushedSha: SHA }],
+    ["repository.merge_pull_request", { census: {} }],
+    ["database.read_census", { pushedSha: SHA }],
+  ]) {
+    const out = governedResultEnvelope(key, bad);
+    assert.equal(out.ok, false, `${key} accepted a mismatched envelope`);
+    assert.equal(out.error, "result_envelope_mismatch");
+    assert.equal(out.expected, key);
+  }
+
+  // And the text a push sends back to the lane carries no census vocabulary.
+  const text = continuationTextForGovernedAction(
+    { request_id: "gar_x", action_key: "repository.push", target: "staging", lane_id: "lane_y", run_id: "erun_z" },
+    { id: "tha_1", result: { repository: REPO, branch: BRANCH, pushedSha: SHA, remoteRef: `refs/heads/${BRANCH}` } },
+  );
+  assert.doesNotMatch(text, /census|org_count|question_ids/i);
+  assert.match(text, /Do not push from this lane/);
+  assert.match(text, new RegExp(SHA));
+
+  // A mismatch is reported to the lane as a mismatch, not as an empty summary.
+  const broken = continuationTextForGovernedAction(
+    { request_id: "gar_x", action_key: "repository.push", target: "staging" },
+    { id: "tha_1", result: { census: {} } },
+  );
+  assert.match(broken, /RESULT ENVELOPE MISMATCH/);
+  assert.match(broken, /result_envelope_mismatch/);
+});
+
 // ------------------------------------------------------------ open PR guards
 
 function fakeGh({ headSha = SHA, existing = null, createOk = true, created = null } = {}) {
