@@ -42,6 +42,7 @@ import {
   mergePullRequest,
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
+import { executeRestoreQaSession } from "./qa-session-restore-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import {
@@ -409,6 +410,21 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
     return executeOpenPrTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    /*
+     * Returns a RESTORE result. Dispatching before the census branch matters: an action that fell
+     * through to census handling produced an all-null census-shaped envelope, which reads as "the
+     * action did nothing" rather than as a failure, and cost a full run to diagnose once already.
+     */
+    const authz = authorizeTrustedHostAction(actionId, { actor, nowMs, grant });
+    if (!authz.ok) return authz;
+    return executeRestoreQaSession({
+      action: authz.action,
+      grant,
+      grantCheck: grantAuthorizesAction,
+      nowMs: nowMs || Date.now(),
+    });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };

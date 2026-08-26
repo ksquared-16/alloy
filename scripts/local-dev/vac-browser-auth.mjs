@@ -29,13 +29,9 @@ import {
   verifyBrowserAuth,
 } from "./lib/vacilando/browser-auth.mjs";
 import { getDurableLane } from "./lib/vacilando/development-lane.mjs";
-import {
-  authorizeQaBootstrap,
-  consumeQaBootstrap,
-  openQaBootstrap,
-  publicBootstrapOutcome,
-} from "./lib/vacilando/qa-session-bootstrap.mjs";
-import { runQaSessionMint } from "./lib/vacilando/qa-session-mint-runner.mjs";
+import { publicBootstrapOutcome } from "./lib/vacilando/qa-session-bootstrap.mjs";
+import { ACTION_TYPES } from "./lib/vacilando/trusted-host-action-registry.mjs";
+import { requestTrustedHostAction } from "./lib/vacilando/trusted-host-actions.mjs";
 
 function usage(code = 2) {
   process.stderr.write(`Usage: vac browser-auth <status|sign-in|verify|restore> --lane <lane_id> [--slot N] [--timeout <s>] [--json]
@@ -148,43 +144,38 @@ if (op === "restore") {
    * file itself. `restored` is still reachable ONLY through the fresh-context live check below,
    * exactly as for an interactive sign-in — a mint that "looked fine" proves nothing on its own.
    */
-  const auth = authorizeQaBootstrap({
+  /*
+   * This CLI REQUESTS a restore. It does not perform one.
+   *
+   * It used to call `authorizeQaBootstrap({ operatorApproved: true })` itself, which is an agent
+   * approving its own privileged service-role action — governance in name only. The approval now
+   * comes from an operator grant on `environment.restore_qa_session`, and the trusted executor is
+   * the only caller that may set that flag. Nothing privileged runs here: no link is minted, no
+   * Supabase client is constructed, and the mint child is never spawned on this path.
+   */
+  const requested = requestTrustedHostAction({
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+    inputs: { laneId: validated.lane_id },
+    requestedBy: "worker",
+    executionSessionId: process.env.VACILANDO_RUN_ID || null,
+    reasonWorkerCannotExecute:
+      "Restoring a QA session mints a Supabase session from the service-role boundary. A worker may request it; only the operator may approve it.",
+  });
+  const out = publicBootstrapOutcome({
     validated,
-    requestedIdentity: null,
-    operatorApproved: true,
-    repositoryProfile: "alloy",
+    state: requested?.ok === false ? "refused" : "awaiting_operator_approval",
+    detail: requested?.ok === false ? (requested.error || "request_refused") : null,
   });
-  if (!auth.ok) {
-    const out = publicBootstrapOutcome({ validated, state: "refused", detail: auth.error });
-    emit(out, () => process.stdout.write(`Restore refused: ${auth.error}\n`));
-    process.exit(4);
-  }
-  openQaBootstrap({ slot: validated.slot });
-  process.stdout.write(`Restoring the QA session for slot ${validated.slot} (${validated.expected_identity}).\n`);
-  process.stdout.write(`A single-use link is minted and consumed inside the trusted host. No password is created or shown.\n`);
-
-  const mint = await runQaSessionMint(validated);
-  const consumed = consumeQaBootstrap({ slot: validated.slot });
-  if (!mint.ok || !consumed.ok) {
-    const detail = mint.ok ? consumed.error : `${mint.error}${mint.detail ? `: ${mint.detail}` : ""}`;
-    const out = publicBootstrapOutcome({ validated, state: BROWSER_AUTH_STATES.VERIFICATION_FAILED, detail });
-    emit(out, () => process.stdout.write(`Restore failed: ${detail}\n`));
-    process.exit(6);
-  }
-
-  const v = await verifyBrowserAuth(validated);
-  recordSlotVerification(validated.slot, {
-    state: v.state, expectedIdentity: validated.expected_identity,
-    actualIdentity: v.actual_identity, detail: v.detail,
-  });
-  const after = readSlotAuthStatus(validated.slot);
-  const out = publicAuthOutcome({ validated, state: v.state, status: after, detail: v.detail });
   emit(out, () => {
-    process.stdout.write(`${out.headline}\n`);
-    if (v.actual_identity) process.stdout.write(`  signed in as ${v.actual_identity}\n`);
-    if (out.detail) process.stdout.write(`  ${out.detail}\n`);
+    if (requested?.ok === false) {
+      process.stdout.write(`Restore could not be requested: ${requested.error}\n`);
+      return;
+    }
+    process.stdout.write(`Restore requested for slot ${validated.slot} (${validated.expected_identity}).\n`);
+    process.stdout.write(`Awaiting operator approval — nothing privileged runs until it is granted.\n`);
+    process.stdout.write(`  Director surface: Restore QA session for ${validated.expected_identity} on slot ${validated.slot}\n`);
   });
-  process.exit(v.ok ? 0 : 6);
+  process.exit(requested?.ok === false ? 4 : 0);
 }
 
 // sign-in
