@@ -534,5 +534,43 @@ await test("a non-terminal run reconciles to FAILED with the instruction preserv
   assert.equal(run.false_completion.preserved_instruction, "not yet delivered");
 });
 
+await test("an interrupted turn is over, so the pane is deliverable", async () => {
+  const P = await import("../lib/vacilando/provider-prompt-readiness.mjs");
+  // Trust Runtime sat like this for 72 minutes: the turn was INTERRUPTED, the
+  // agent was back at a live prompt, and an instruction was queued behind it.
+  // Only "Thinking for 12s" counted as a terminator, so the ⏺ narration ABOVE
+  // the interruption still looked newer than any completion and the pane read
+  // busy for ever.
+  const interrupted = [
+    "⏺ §1 confirmed — hashes identical, 0 holds, session unchanged. Building the",
+    "  refinement pass; first the draft field contract:",
+    "",
+    "  Ran 3 shell commands",
+    "  ⎿  Interrupted · What should Claude do instead?",
+    "                                                             100% context used",
+    "────────────────────────────────────────────────────────────────────────────",
+    "❯",
+    "────────────────────────────────────────────────────────────────────────────",
+    "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents",
+  ].join("\n");
+  const a = P.assessPanePromptReadiness(interrupted);
+  assert.equal(a.state, "ready");
+  assert.equal(P.promptReadinessAllowsSend(a).allow, true);
+  assert.equal(P.detectProviderBusy(interrupted), null);
+
+  // POSITIVE CONTROL: the same narration with NO interruption is still busy.
+  const stillRunning = [
+    "⏺ §1 confirmed — hashes identical, 0 holds, session unchanged. Building the",
+    "  refinement pass; first the draft field contract:",
+    "",
+    "  Ran 3 shell commands",
+  ].join("\n");
+  assert.notEqual(P.detectProviderBusy(stillRunning), null);
+  assert.equal(P.assessPanePromptReadiness(stillRunning).state, "busy");
+
+  // A completion after the interruption must still terminate normally.
+  assert.equal(P.detectProviderBusy(`${interrupted}\nThinking for 3s`), null);
+});
+
 process.stdout.write(`\n1..${pass + fail}\npass ${pass}\nfail ${fail}\n`);
 process.exit(fail === 0 ? 0 : 1);

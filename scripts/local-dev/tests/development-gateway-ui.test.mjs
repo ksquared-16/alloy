@@ -2288,6 +2288,27 @@ test("controls that gate progress live in the conversation, not the rail", () =>
     const at = view.indexOf(`${fn}(`, bar);
     assert.ok(at > bar && at < composer, `${fn} must render in the conversation column`);
   }
+
+  // They are ONE subject — whether this lane can keep working — so they render
+  // as one section rather than three unrelated cards in sequence.
+  assert.ok(view.slice(bar, composer).includes("gw-runtime-section"));
+
+  // The browser session card is reference state, not a progress gate: it belongs
+  // in the rail, directly under the folder and notification controls.
+  // Checked by POSITION of every call site, not by slicing one region: a card
+  // placed just ABOVE the decision bar is still in the conversation and would
+  // slip past a range check that starts at the bar.
+  const authCalls = [];
+  for (let at = view.indexOf("${renderBrowserAuthRecovery("); at !== -1;
+       at = view.indexOf("${renderBrowserAuthRecovery(", at + 1)) authCalls.push(at);
+  assert.equal(authCalls.length, 1, "exactly one browser-session call site");
+  assert.ok(authCalls[0] > railStart && authCalls[0] < railEnd,
+    "the browser session card belongs in the details rail");
+  const folderAt = rail.indexOf("renderLaneFolderPicker(");
+  const notifyAt = rail.indexOf("renderNotificationControls(");
+  const authAt = rail.indexOf("renderBrowserAuthRecovery(");
+  assert.ok(folderAt >= 0 && notifyAt > folderAt && authAt > notifyAt,
+    "browser session sits below folder and notifications");
 });
 
 test("the authorize button exists on every screen, not just mobile", () => {

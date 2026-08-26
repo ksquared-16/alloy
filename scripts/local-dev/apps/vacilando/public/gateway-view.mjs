@@ -4598,6 +4598,7 @@ export function renderGatewayShell({
             ${renderLaneRepository(lane, repositories)}
           </div>
           ${renderNotificationControls(notify || {})}
+          ${renderBrowserAuthRecovery(lane)}
           ${renderLaneLocalhost(lane)}
           ${renderCurrentWork(lane?.execution_run, nowMs, { cancelPending, activity: lane?.provider_activity?.activity })}${renderPreviousWork(lane?.previous_run)}
           ${renderOutputChrome(output, { lane, lastInstruction: lastInstruction || lane?.last_instruction })}
@@ -4641,7 +4642,6 @@ export function renderGatewayShell({
           </article>
         </div>
         <button type="button" class="gw-new-update" data-gw-new-update ${newUpdate ? "" : "hidden"}>New update ↓</button>
-        ${renderBrowserAuthRecovery(lane)}
         ${renderOperatorDecisionBar(operatorDecisionRun(lane), { activity: lane?.provider_activity?.activity })}
         ${/*
           ACTIONS BELONG WHERE THE CONVERSATION IS.
@@ -4653,9 +4653,23 @@ export function renderGatewayShell({
           and while it was inert it could not be scrolled or clicked at all. An
           action the operator cannot reach is the same as no action.
         */ ""}
-        ${renderLaneSessionCallout(lane, { executionCapacity })}
-        ${renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity })}
-        ${renderContextRefreshButton(lane)}
+        ${/*
+          ONE runtime section, directly below the conversation. These were three
+          separate cards stacked in sequence, which read as three unrelated
+          things; they are one subject — whether this lane can keep working.
+        */ ""}
+        ${(() => {
+          const parts = [
+            renderLaneSessionCallout(lane, { executionCapacity }),
+            renderLaneRuntimeControls(lane, cap, { capacity: executionCapacity }),
+            renderContextRefreshButton(lane),
+          ].filter((html) => String(html || "").trim());
+          if (!parts.length) return "";
+          return `<section class="gw-runtime-section" data-gw-runtime-section>
+            <h2 class="gw-runtime-section-h">Runtime</h2>
+            ${parts.join("\n")}
+          </section>`;
+        })()}
         ${renderGovernedOutcome(lane)}
         ${renderBlockingScreen(blockingScreen, { pending: screenPending })}
         ${renderUnanswerableScreen(blockingScreen)}
