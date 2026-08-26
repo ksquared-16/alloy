@@ -8,11 +8,15 @@ import { isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validateReadOnlySql } from "./trusted-host-sql-readonly.mjs";
 import { validateMergeInputs } from "./trusted-host-merge.mjs";
+import { validatePushInputs } from "./trusted-host-push.mjs";
+import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
   REPOSITORY_MERGE_PULL_REQUEST: "repository.merge_pull_request",
+  REPOSITORY_PUSH: "repository.push",
+  PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
 });
 
@@ -225,6 +229,53 @@ function defineRepositoryMergePullRequest() {
   };
 }
 
+function defineRepositoryPush() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_PUSH,
+    version: 1,
+    title: "Push a reviewed branch to the remote",
+    requiredCapability: "trusted_host.repository.push",
+    riskClass: "privileged_write",
+    timeoutMs: 180_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "branch", "expectedHeadSha", "worktreePath"],
+    },
+    outputSchema: { pushedSha: "string", remoteRef: "string" },
+    evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_ref", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validatePushInputs({
+        ...inputs,
+        worktree_path: inputs.worktree_path || inputs.worktreePath,
+      });
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function definePromotionOpenPr() {
+  return {
+    actionType: ACTION_TYPES.PROMOTION_OPEN_PR,
+    version: 1,
+    title: "Open a promotion pull request into staging",
+    requiredCapability: "trusted_host.promotion.open_pr",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "base", "headBranch", "expectedHeadSha", "title"],
+    },
+    outputSchema: { pullRequestNumber: "number", url: "string" },
+    evidenceSchema: ["repository", "base", "head_branch", "expected_head_sha", "pull_request", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateOpenPrInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -252,6 +303,8 @@ function defineDatabaseApplyMigration() {
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
+  [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
+  [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 
@@ -262,6 +315,10 @@ export function listRegisteredActions() {
     title: a.title,
     riskClass: a.riskClass,
     requiredCapability: a.requiredCapability,
+    // Surfaced so a lane discovering an action also learns what it must supply.
+    // Without this, discovery tells you an action exists and nothing about how
+    // to propose it, and the next thing you see is a validation refusal.
+    requiredInputs: a.inputSchema?.required || [],
   }));
 }
 
