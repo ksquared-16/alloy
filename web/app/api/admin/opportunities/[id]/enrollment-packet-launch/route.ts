@@ -31,15 +31,23 @@ import {
     parseEnrollmentEmailTemplatesFromPacketMetadata,
     type EnrollmentPacketLinkRow,
 } from "@/lib/forms/packets/enrollmentPacketEmailTemplate";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these public/embed links are built on.
+ *
+ * It is read from the ONE canonical public-origin authority and NOT from the request.
+ * These links are copied into emails, texts and third-party pages, so their origin has to
+ * be a property of the environment rather than of whichever host the operator's browser
+ * happened to reach — and a `Host` / `X-Forwarded-Host` header is caller-supplied, so
+ * deriving from it let a spoofed header choose where a recipient's link points.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 function parseUuidList(raw: unknown): string[] {
@@ -126,7 +134,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const targets: (string | null)[] = memberIds.length > 0 ? [...memberIds] : [null];
 
-    const embedBase = deriveEmbedBaseUrl(request);
+    const embedBase = deriveEmbedBaseUrl();
     const created: {
         public_link_id: string;
         embed_url: string | null;

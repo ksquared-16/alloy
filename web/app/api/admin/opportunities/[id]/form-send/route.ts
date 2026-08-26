@@ -3,12 +3,20 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { mintExistingRecordFormLinkForAdmin } from "@/lib/forms/existingRecord/mintExistingRecordFormLinkForAdmin";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these public/embed links are built on.
+ *
+ * It is read from the ONE canonical public-origin authority and NOT from the request.
+ * These links are copied into emails, texts and third-party pages, so their origin has to
+ * be a property of the environment rather than of whichever host the operator's browser
+ * happened to reach — and a `Host` / `X-Forwarded-Host` header is caller-supplied, so
+ * deriving from it let a spoofed header choose where a recipient's link points.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 /** POST /api/admin/opportunities/[id]/form-send — mint existing-record form link for an opportunity. */
@@ -49,7 +57,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             entityId: opportunityId,
             label,
         },
-        embedBaseUrl: deriveEmbedBaseUrl(request),
+        embedBaseUrl: deriveEmbedBaseUrl(),
     });
 
     if (!mint.ok) return jsonError(mint.message, mint.status);

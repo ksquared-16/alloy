@@ -17,16 +17,22 @@ import { resolveAnchorContext } from "@/lib/pos/packet/posPacketRoster";
 import { parseRequirementResponsibilityRules, REQUIREMENT_RESPONSIBILITIES_KEY } from "@/lib/pos/packet/requirementResponsibility";
 import { isLaunchEntityType, type LaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
 import { randomUUID } from "crypto";
+import { resolvePublicAppOrigin } from "@/lib/publicAppUrl";
 
 export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function deriveEmbedBaseUrl(request: NextRequest): string | null {
-    const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
-    if (!host?.trim()) return null;
-    const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
-    return `${proto}://${host.trim()}`;
+/**
+ * The origin these packet links are built on.
+ *
+ * Read from the ONE canonical public-origin authority, never from the request: these links
+ * are delivered to recipients, so a caller-supplied `Host` / `X-Forwarded-Host` header must
+ * not be able to decide where they point.
+ */
+function deriveEmbedBaseUrl(): string | null {
+    const decision = resolvePublicAppOrigin();
+    return decision.ok ? decision.origin : null;
 }
 
 /** Ensure a form has a published version; publish its latest draft if none. */
@@ -202,7 +208,7 @@ export async function POST(request: NextRequest) {
         ? fam.recipient_access.map((a) => ({ recipient_person_id: a.recipient_person_id as string | null }))
         : [{ recipient_person_id: null }];
 
-    const embedBaseUrl = deriveEmbedBaseUrl(request);
+    const embedBaseUrl = deriveEmbedBaseUrl();
     const shares: ShareResult[] = [];
 
     for (const access of accesses) {
