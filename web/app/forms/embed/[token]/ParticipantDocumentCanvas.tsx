@@ -189,13 +189,20 @@ export function ParticipantDocumentCanvas({
      * is being captured, the document turns to the page its authored placement lives on.
      */
     useEffect(() => {
-        if (signature && typeof signature.page === "number") setPage(signature.page + 1);
-    }, [signature?.page, !!signature]);
-
-    // A regenerated document is a new document: start it at the beginning.
-    useEffect(() => {
-        setPage(1);
-    }, [url]);
+        /*
+         * ONE effect, because two of them raced and the later one always won.
+         *
+         * A separate "a regenerated document starts at the beginning" effect ran after this one and
+         * reset the page to 1 — on every url change, which includes entering the signing phase and
+         * every regeneration during it. On the Oregon CIS the signature is on page 1 and the bug was
+         * invisible; on the Oregon Nonmedical Exemption it is on page 2, so the parent was shown a
+         * page with no signature line and no way to know where to sign.
+         *
+         * Where the parent is meant to BE is one decision: the signature's own page when there is a
+         * placement, and the first page otherwise.
+         */
+        setPage(signature && typeof signature.page === "number" ? signature.page + 1 : 1);
+    }, [url, signature?.page, !!signature]);
 
     const atFirst = page <= 1;
     const atLast = pageCount > 0 && page >= pageCount;

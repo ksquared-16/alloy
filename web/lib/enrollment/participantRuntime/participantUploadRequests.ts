@@ -88,13 +88,24 @@ export function uploadDestinationForField(
     return participantUploadRequests(schema).find((r) => r.field_id === fieldId) ?? null;
 }
 
+/**
+ * Is this attachment on file?
+ *
+ * Only a DOCUMENT ID counts, which is the same thing `validateSubmission` requires of a `file_ref`.
+ * A looser "some text is present" test read the conversation's `Not applicable` as a satisfied
+ * obligation, and the Exemption's two attachments showed as already attached before the parent had
+ * been asked for anything.
+ */
+const DOCUMENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function uploadIsOnFile(held: unknown): boolean {
+    return typeof held === "string" && DOCUMENT_ID.test(held.trim());
+}
+
 /** The attachments still owed — a `file_ref` holds a document id once it is satisfied. */
 export function outstandingUploadRequests(
     schema: Pick<FormSchemaV1, "fields">,
     values: Readonly<Record<string, unknown>>,
 ): ParticipantUploadRequest[] {
-    return participantUploadRequests(schema).filter((r) => {
-        const held = values[r.field_id];
-        return !(typeof held === "string" && held.trim().length > 0);
-    });
+    return participantUploadRequests(schema).filter((r) => !uploadIsOnFile(values[r.field_id]));
 }

@@ -5,9 +5,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import clsx from "clsx";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import { ParticipantUploads } from "./ParticipantUploads";
+import { ParticipantArtifactHeader } from "./ParticipantArtifactHeader";
+import { participantArtifactStatus } from "@/lib/enrollment/participantRuntime/participantArtifactStatus";
 import {
     outstandingUploadRequests,
     participantUploadRequests,
+    uploadIsOnFile,
 } from "@/lib/enrollment/participantRuntime/participantUploadRequests";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
@@ -402,30 +405,43 @@ export function FormEmbedClient({
             setDocumentRev(0);
             setReviewStep("handoff");
             setCapturedSignature(null);
-            {
-                // The authored placement, straight off the version's mapping — a duck read for the
-                // same reason as `hasOriginalDocument`: the server re-validates everything.
-                const placements = (json.data.pdf_mapping_json as {
-                    signature_placements?: Array<{
-                        field_id?: string;
-                        page?: number;
-                        x?: number;
-                        y?: number;
-                        width?: number;
-                        height?: number;
-                    }>;
-                } | null)?.signature_placements;
-                const first = Array.isArray(placements) ? placements[0] : null;
-                setSignaturePlacement(
-                    first &&
+            /*
+             * Where this artifact is signed comes from the RENDERER, not from the mapping.
+             *
+             * A composed document has no mapping — its signature block is reserved by the layout —
+             * so reading `pdf_mapping_json` here found nothing on the generated Tuition and
+             * Handbook agreements, and the parent was given a text box beside the document instead
+             * of the signature line on it. `enrollment-artifact` answers for both engines.
+             */
+            setSignaturePlacement(null);
+            void (async () => {
+                try {
+                    const res = await fetch(`/api/public/forms/${encToken}/enrollment-artifact`);
+                    const body = (await res.json()) as {
+                        ok?: boolean;
+                        data?: { signatures?: Array<Record<string, unknown>> };
+                    };
+                    const slots = Array.isArray(body?.data?.signatures) ? body.data.signatures : [];
+                    /*
+                     * The FIRST placement is the signature this artifact asks this parent for.
+                     *
+                     * The Oregon CIS carries two — "Signature*" and "Update signature" — and the
+                     * second is for a later re-verification, not for enrolling. Signing one must
+                     * never satisfy the other, and it does not: each is its own destination with its
+                     * own evidence row.
+                     */
+                    const first = slots[0];
+                    if (
+                        first &&
                         typeof first.field_id === "string" &&
-                        [first.page, first.x, first.y, first.width, first.height].every(
-                            (n) => typeof n === "number",
-                        )
-                        ? (first as NonNullable<typeof signaturePlacement>)
-                        : null,
-                );
-            }
+                        ["page", "x", "y", "width", "height"].every((k) => typeof first[k] === "number")
+                    ) {
+                        setSignaturePlacement(first as unknown as NonNullable<typeof signaturePlacement>);
+                    }
+                } catch {
+                    /* No placement: the Forms signature control stands, exactly as before. */
+                }
+            })();
             setPacketProgress(json.data.packet ?? null);
             setBrand(json.data.brand ?? null);
             setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
@@ -879,13 +895,14 @@ export function FormEmbedClient({
     const attachedUploads: Record<string, { document_id: string; filename: string } | undefined> = {};
     for (const request of uploadRequests) {
         const held = (payload.values ?? {})[request.field_id];
-        if (typeof held === "string" && held.trim()) {
+        if (uploadIsOnFile(held)) {
             attachedUploads[request.field_id] = {
-                document_id: held,
+                document_id: String(held),
                 filename: attachedFilenames[request.field_id] ?? "on file",
             };
         }
     }
+
 
     /** One attachment, through the token-scoped route that files it as a canonical Document. */
     const uploadParticipantDocument = async (
@@ -938,6 +955,22 @@ export function FormEmbedClient({
      */
     const ackFieldIds = compiled ? compiled.acknowledgments.map((c) => c.field_id) : [];
     const signatureFieldIds = compiled ? compiled.signatures.map((c) => c.field_id) : [];
+
+    /**
+     * Where the parent is, in the five words a parent uses.
+     *
+     * Derived on every render from what the artifact still wants, so it cannot drift from the state
+     * of the buttons beneath it.
+     */
+    const artifactStatus = participantArtifactStatus({
+        documentTitle: schema?.title ?? null,
+        step: reviewStep === "edit" ? "edit" : reviewStep === "sign" ? "sign" : "review",
+        requiredUploadsOutstanding,
+        signatureExpected: signaturePlacement != null || signatureFieldIds.length > 0,
+        signatureCaptured: capturedSignature != null,
+        packetTotal: enrollmentObjective?.progress?.total ?? 0,
+        packetSatisfied: enrollmentObjective?.progress?.satisfied ?? 0,
+    });
     const showDocument = originalDocument && !documentUnavailable;
     /** The document-first participant progression applies; otherwise the semantic fallback. */
     const documentFlow = enrollmentReview && compiled != null && showDocument;
@@ -1173,6 +1206,7 @@ export function FormEmbedClient({
                         </IntakeCard>
                     ) : reviewStep === "sign" ? (
                         <IntakeCard>
+                            <ParticipantArtifactHeader status={artifactStatus} />
                             {/* Acknowledge, then sign AT the document’s own signature line. */}
                             {ackFieldIds.length > 0 ? (
                                 <div className="pb-5 [&_header]:hidden" data-artifact-final-phase="acknowledgment">
@@ -1255,6 +1289,7 @@ export function FormEmbedClient({
                         /* REVIEW — the actual filled document, alone. The parent reviews their
                            paperwork; the machinery stays out of sight. */
                         <IntakeCard>
+                            <ParticipantArtifactHeader status={artifactStatus} />
                             <ParticipantDocumentCanvas
                                 url={`/api/public/forms/${encToken}/enrollment-document?rev=${documentRev}`}
                                 onUnavailable={() => setDocumentUnavailable(true)}
