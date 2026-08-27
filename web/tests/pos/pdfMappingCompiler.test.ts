@@ -72,7 +72,9 @@ describe("positive controls — the join must fail when it is wrong", () => {
         ]);
         expect(r.ok).toBe(true);
         if (!r.ok) return;
-        expect(Object.keys(r.value.acro_fields ?? r.value.mapping.acro_fields)).toHaveLength(1);
+        // `acro_fields` lives on the mapping, not on the compile result — the belt-and-braces
+        // fallback that used to be here never typechecked, and rc=144 hid that for the whole run.
+        expect(Object.keys(r.value.mapping.acro_fields)).toHaveLength(1);
         expect(r.value.mapping.acro_fields["Name"]!.field_id).toBe("field_1");
         expect(r.value.unmapped, "the losing claim is reported, not silently dropped").toContain("field_2");
     });

@@ -161,6 +161,14 @@ export async function applyPackagedCandidates(
             case "refused":
                 outcomes.push({ need_key: answer.need_key, result: "refused", detail: d.reason });
                 break;
+            /*
+             * The parent used the optional way out. The need is settled with NO value, which is a
+             * different outcome from "the runtime could not read the answer" — and listing it here
+             * rather than letting it fall through is what makes that difference visible to a caller.
+             */
+            case "decline_value":
+                outcomes.push({ need_key: answer.need_key, result: "settled" });
+                break;
             default:
                 outcomes.push({ need_key: answer.need_key, result: "no_change", detail: d.reason });
         }
