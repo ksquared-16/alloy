@@ -151,3 +151,70 @@ pre-enrollment charge:
 the code would be unrunnable and uncertifiable, and shipping unverifiable code to satisfy a
 checklist is worse than naming the blocker. This lane has already proven it cannot push or
 promote, so (1) is Director-owned.
+
+---
+
+# Final QA closure — evidence and verdict
+
+Brokered typecheck rc=0. Suites 262/262. Viewports 1600×1400 and 1920×1200.
+
+## Add Charge
+
+| Requirement | Result |
+|---|---|
+| Centered Focus Card + scrim | ✅ `data-universal-card-key="add_charge"`, expanded density, 1023×411 centered in the elevated host |
+| Dropdown works in-browser | ✅ 4 configured templates, each reshaping the form from `financial_charge_templates` |
+| Fixed amount | ✅ all four templates |
+| Operator-entered amount | ⚠ **not exercisable — this org configures no manual-amount template.** The path exists in the card; nothing to select |
+| Future-dated | ✅ Field trip, event date 2026-11-20 |
+| Required date template | ✅ Field trip requires a service date; the others do not |
+| Preview recomputes | ✅ billing period, due, responsibility all move with the selection |
+| Commit | ✅ committed, overlay closed, Financials refreshed from the read model |
+| Provenance labels removed | ✅ FROM BILLABLE_ON, SET BY THE MUTATION, FINANCIAL SUBJECT, TEMPLATE DEFAULT, FROM TEMPLATE all gone |
+| Draft ≠ owed | ✅ "Creates a draft — not yet owed"; balance stated UNCHANGED |
+
+Template shapes proven: `dated by the event · billed next cycle · fixed` (Field trip) ·
+`dated today · billed immediately · fixed` (Late pickup, Registration fee) ·
+`dated today · billed on a configured offset · fixed` (Materials).
+
+## Financials Details
+
+1180 × 1056 usable at 1920×1200, against 720 × 900 before — **1.92×**. Canvas-limited to
+1023 at 1600px and responsive below. No viewport overflow; no forced internal scrolling at
+this data volume. Summary strip, all eight ledger columns, type/subject/payer filters,
+period grouping with prior periods collapsed, GL code, no running balance. Achieved through
+the density system (`data-universal-card-density="expanded"`), not a Financials-only modal.
+
+## Health & Safety Details
+
+1180 × 567, three-column anatomy preserved. Commands proven end-to-end through the
+REGISTERED `health_fact.add` action (never `healthFactService` from React):
+
+| Command | Result |
+|---|---|
+| Add allergy | ✅ recorded on Certa, graded into care (not critical) |
+| Add condition | ✅ recorded |
+| Add medication | ✅ recorded with canonical `related_fact_id` ("for Peanut") |
+| Edit health profile | ⚠ **no registered seam — named in-card:** "Dietary and accommodation notes are edited on the child record" |
+| Upload document | ⚠ **no registered seam — named in-card:** "Health documents are uploaded through Documents" |
+
+Boundaries visible on the card: "Medication authorization · REQUIREMENT, NOT A FIELD",
+"EVIDENCE · None", "Projected from Household — Health never owns a contact."
+
+## Focus Panel header avatar
+
+| Requirement | Result |
+|---|---|
+| Initials fallback via CardAvatar | ✅ |
+| Uses the settled scope, not a second resolver | ✅ reported up from the body |
+| Certa → Certb switch | ✅ subject identity follows |
+| Case switch, stale scope refused | ✅ PassA Kid → Wrigley Kurzman, no carry-over |
+| Real canonical image | ❌ **not certifiable — see blockers** |
+
+## Accepted cards re-certified
+
+Business Process 1023 full row — ENROLLMENT, configured annotations, actions, activity
+trigger, compact aligned participants (markers certified separately under divergence).
+Financials 679 8/12 summary with RESPONSIBILITY; compact at case grain.
+Health & Safety 334 4/12 — HEALTH / REQUIRED INFORMATION, no pill cloud.
+Attendance 679 8/12 timeline with Assignment 334 4/12 beside it, expected-then-actual.
