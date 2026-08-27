@@ -4,6 +4,11 @@ import { PROCESSING_NEEDS_DESTINATION_DESCRIPTION } from "@/lib/pos/processingCa
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
+import { ParticipantUploads } from "./ParticipantUploads";
+import {
+    outstandingUploadRequests,
+    participantUploadRequests,
+} from "@/lib/enrollment/participantRuntime/participantUploadRequests";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -303,6 +308,8 @@ export function FormEmbedClient({
      * from the source document's own widget name. Null for a generated document.
      */
     const [sourceMapping, setSourceMapping] = useState<unknown>(null);
+    /** Filenames for what the parent attached, so the row can say WHICH file is on file. */
+    const [attachedFilenames, setAttachedFilenames] = useState<Record<string, string>>({});
     /** The version's authored signature placement — where on the document signing happens. */
     const [signaturePlacement, setSignaturePlacement] = useState<{
         field_id: string;
@@ -390,6 +397,7 @@ export function FormEmbedClient({
             setSchema(withoutAuthoringNotes(parsedSchema));
             setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
             setSourceMapping(json.data.pdf_mapping_json ?? null);
+            setAttachedFilenames({});
             setDocumentUnavailable(false);
             setDocumentRev(0);
             setReviewStep("handoff");
@@ -854,6 +862,72 @@ export function FormEmbedClient({
     const participantLabels: ReadonlyMap<string, string | null> = new Map(
         (compiled?.sections.flatMap((s) => s.controls) ?? []).map((c) => [c.field_id, c.participant_label]),
     );
+
+    /**
+     * The documents this artifact asks the parent to bring.
+     *
+     * Not part of the compiled control model on purpose: an attachment is participant WORK whose
+     * result is evidence, not a value the runtime resolved for them. It is presented as a short list
+     * of things to bring and gates completion the way the artifact itself says it does.
+     */
+    const uploadRequests = schema && enrollmentReview ? participantUploadRequests(schema) : [];
+    const outstandingUploads =
+        schema && enrollmentReview
+            ? outstandingUploadRequests(schema, (payload.values ?? {}) as Record<string, unknown>)
+            : [];
+    const requiredUploadsOutstanding = outstandingUploads.filter((r) => r.required).length;
+    const attachedUploads: Record<string, { document_id: string; filename: string } | undefined> = {};
+    for (const request of uploadRequests) {
+        const held = (payload.values ?? {})[request.field_id];
+        if (typeof held === "string" && held.trim()) {
+            attachedUploads[request.field_id] = {
+                document_id: held,
+                filename: attachedFilenames[request.field_id] ?? "on file",
+            };
+        }
+    }
+
+    /** One attachment, through the token-scoped route that files it as a canonical Document. */
+    const uploadParticipantDocument = async (
+        fieldId: string,
+        file: File,
+    ): Promise<{ document_id: string; filename: string } | { error: string }> => {
+        try {
+            const buffer = new Uint8Array(await file.arrayBuffer());
+            let binary = "";
+            for (let i = 0; i < buffer.length; i += 8192) {
+                binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
+            }
+            const res = await fetch(`/api/public/forms/${encToken}/enrollment-upload`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ field_id: fieldId, filename: file.name, file_base64: btoa(binary) }),
+            });
+            const json = (await res.json()) as {
+                ok?: boolean;
+                error?: string;
+                data?: { document_id?: string; filename?: string };
+            };
+            if (!json.ok || !json.data?.document_id) return { error: json.error ?? "That file could not be attached." };
+            return { document_id: json.data.document_id, filename: json.data.filename ?? file.name };
+        } catch {
+            return { error: "That file could not be attached." };
+        }
+    };
+
+    /** A `file_ref` destination holds the document id, and nothing else about the file. */
+    const recordAttachment = (fieldId: string, doc: { document_id: string; filename: string }) => {
+        setAttachedFilenames((prev) => ({ ...prev, [fieldId]: doc.filename }));
+        setValidationErrors(null);
+        setMessage(null);
+        const next = {
+            ...payload,
+            values: { ...((payload.values ?? {}) as Record<string, unknown>), [fieldId]: doc.document_id },
+        } as FormPayload;
+        setPayload(next);
+        void persistDraft(next);
+        scheduleDocumentRefresh();
+    };
     /**
      * Acknowledgment, then signature — STRUCTURALLY, not by document order.
      *
@@ -1190,6 +1264,16 @@ export function FormEmbedClient({
                                     {message}
                                 </p>
                             ) : null}
+                            {uploadRequests.length > 0 ? (
+                                <div className="mt-6">
+                                    <ParticipantUploads
+                                        requests={uploadRequests}
+                                        attached={attachedUploads}
+                                        onAttached={recordAttachment}
+                                        onUpload={uploadParticipantDocument}
+                                    />
+                                </div>
+                            ) : null}
                             <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-alloy-midnight/[0.07] pt-5">
                                 <span className="text-[14px] text-alloy-midnight/55">Something not right?</span>
                                 <button
@@ -1201,10 +1285,23 @@ export function FormEmbedClient({
                                     Make a change
                                 </button>
                                 <span className="flex-1" />
+                                {/* An attachment the document REQUIRES is part of reviewing it, and
+                                    the parent is told so here rather than at the end by a refusal. */}
+                                {requiredUploadsOutstanding > 0 ? (
+                                    <span className="text-[14px] text-alloy-midnight/55" data-uploads-outstanding="true">
+                                        {requiredUploadsOutstanding === 1
+                                            ? "One more thing to attach above."
+                                            : `${requiredUploadsOutstanding} more things to attach above.`}
+                                    </span>
+                                ) : null}
                                 <button
                                     type="button"
+                                    disabled={requiredUploadsOutstanding > 0}
                                     onClick={() => setReviewStep("sign")}
-                                    className="rounded-xl bg-alloy-midnight px-5 py-2.5 text-[15px] font-medium text-white"
+                                    className={clsx(
+                                        "rounded-xl px-5 py-2.5 text-[15px] font-medium text-white",
+                                        requiredUploadsOutstanding > 0 ? "bg-alloy-midnight/30" : "bg-alloy-midnight",
+                                    )}
                                     data-everything-looks-good="true"
                                 >
                                     Everything looks good

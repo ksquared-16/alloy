@@ -38,7 +38,27 @@ describe("execution date — the day the family signed, in the organisation's ow
     it("has no value before the artifact is executed", () => {
         const schema = schemaOf([f({ id: "d", type: "date", read_only: true, derived: { kind: "execution_date" } })]);
         expect(resolveFormDerivedValues(schema, {}, { executedAtIso: null, timeZone: "America/Los_Angeles" })).toEqual({});
-        expect(resolveFormDerivedValues(schema, {}, { executedAtIso: "2026-08-26T17:00:00Z", timeZone: "America/Los_Angeles" })).toEqual({ d: "8/26/2026" });
+        // A DATE destination stores a date. Writing the printed form here put "8/26/2026" in a
+        // `date` box and the submission was refused for three boxes the platform had just filled.
+        expect(resolveFormDerivedValues(schema, {}, { executedAtIso: "2026-08-26T17:00:00Z", timeZone: "America/Los_Angeles" })).toEqual({ d: "2026-08-26" });
+    });
+
+    it("stores the derivation's own words where the destination is not a date", () => {
+        // The same derivation, a text box: nothing canonical to store, so the display stands.
+        const schema = schemaOf([f({ id: "t", type: "text", read_only: true, derived: { kind: "execution_date" } })]);
+        expect(resolveFormDerivedValues(schema, {}, { executedAtIso: "2026-08-26T17:00:00Z", timeZone: "America/Los_Angeles" })).toEqual({ t: "8/26/2026" });
+    });
+
+    it("leaves a date destination alone rather than writing a plausible wrong date", () => {
+        // An age's `source_value` is the DATE OF BIRTH it was computed from — a different fact.
+        const schema = schemaOf([
+            f({ id: "dob", type: "date" }),
+            f({ id: "asof", type: "date" }),
+            f({ id: "age", type: "date", read_only: true, derived: { kind: "age_from_date_of_birth", source_key: "dob", as_of_key: "asof" } }),
+        ]);
+        expect(
+            resolveFormDerivedValues(schema, { dob: "2021-04-02", asof: "2026-09-01" }, { executedAtIso: "2026-08-26T17:00:00Z", timeZone: "UTC" }),
+        ).toEqual({});
     });
 });
 

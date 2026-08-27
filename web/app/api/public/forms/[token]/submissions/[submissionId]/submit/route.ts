@@ -470,7 +470,9 @@ export async function POST(
         supabase,
         ctx.orgId,
         submissionId,
-        (finalPayload.values ?? {}) as Record<string, unknown>
+        (finalPayload.values ?? {}) as Record<string, unknown>,
+        // Which artifact these values are FROM. Without it a field id is a position, not a fact.
+        { schema: validated.schema, formDefinitionId: ctx.formDefinitionId }
     );
     if (adv.error) {
         console.error("[public submit] packet advance failed:", adv.error.message);

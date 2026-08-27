@@ -78,7 +78,14 @@ type ActiveItemRow = {
  * Resolve the session's active artifact context — the SAME reads the edit route performs, shaped
  * for rendering: the pinned envelope, plus the draft submission id when one exists.
  */
-async function resolveActiveArtifact(
+/**
+ * The artifact this session is on, with its pinned schema.
+ *
+ * Exported because it is the ONE place that answers "which document is the parent working on right
+ * now" — the upload route needs the same answer, and a second derivation of it would be a second
+ * chance to disagree with D-94's pinning.
+ */
+export async function resolveActiveArtifact(
     supabase: SupabaseClient,
     input: { orgId: string; sessionId: string },
 ): Promise<

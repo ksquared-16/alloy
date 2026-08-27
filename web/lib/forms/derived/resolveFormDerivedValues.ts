@@ -14,7 +14,7 @@
  */
 
 import type { FormSchemaV1 } from "@/lib/forms/schema";
-import type { DerivedFieldBinding } from "@/lib/fields/derived/types";
+import type { DerivedFieldBinding, DerivedFieldResult } from "@/lib/fields/derived/types";
 import { resolveDerivedFieldDisplay } from "@/lib/fields/derived/resolveDerivedFieldDisplay";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 
@@ -40,6 +40,39 @@ export function formDerivedBindings(schema: FormSchemaV1): Record<string, Derive
     return bindings;
 }
 
+/** The authored type of each derived destination — what SHAPE the payload must hold. */
+function derivedDestinationTypes(schema: FormSchemaV1): Record<string, string> {
+    const types: Record<string, string> = {};
+    walkScalarFormFields(schema, (field) => {
+        if (field.derived) types[field.id] = field.type;
+    });
+    return types;
+}
+
+/**
+ * What gets STORED at one derived destination — which is not what gets printed there.
+ *
+ * `DerivedFieldResult` deliberately carries both: `display` is the operator-facing string
+ * (`08/26/2026`, `5 years 4 months`) and `source_value` is the ISO date the derivation is about.
+ * Writing `display` into the payload put `08/26/2026` in a `date` field, and the submission was
+ * refused — "Expected date string YYYY-MM-DD" — for three boxes the platform had just filled in
+ * itself. A parent could sign the Oregon CIS and never get past it.
+ *
+ * The destination's authored TYPE decides, because that is what validation enforces and what the
+ * next reader of this payload will assume. A `date` box stores a date; everything else stores the
+ * derivation's own words. How it then PRINTS on a specific line of a specific document is already
+ * owned elsewhere (`formatValueForDocumentDestination`), and that separation is the whole point:
+ * one stored value, formatted per destination.
+ *
+ * An age has no date-valued result — its `source_value` is the date of birth it was computed FROM,
+ * which is a different fact. Rather than write a plausible wrong date, a date destination with no
+ * date-valued derivation is left alone.
+ */
+function storedValueFor(result: DerivedFieldResult, destinationType: string | undefined): string | null {
+    if (destinationType !== "date") return result.display;
+    return result.kind === "execution_date" ? result.source_value : null;
+}
+
 /**
  * Resolve every derived destination this schema declares.
  *
@@ -54,6 +87,7 @@ export function resolveFormDerivedValues(
 ): Record<string, string> {
     const bindings = formDerivedBindings(schema);
     if (!Object.keys(bindings).length) return {};
+    const destinationTypes = derivedDestinationTypes(schema);
 
     const stringValues: Record<string, string> = {};
     for (const [k, v] of Object.entries(values)) if (typeof v === "string") stringValues[k] = v;
@@ -67,7 +101,9 @@ export function resolveFormDerivedValues(
             ...(ctx.executedAtIso ? { executedAtIso: ctx.executedAtIso } : {}),
             ...(ctx.timeZone ? { timeZone: ctx.timeZone } : {}),
         });
-        if (result) out[targetKey] = result.display;
+        if (!result) continue;
+        const stored = storedValueFor(result, destinationTypes[targetKey]);
+        if (stored != null) out[targetKey] = stored;
     }
     return out;
 }
