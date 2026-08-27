@@ -4,7 +4,13 @@ import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedHealthSafetyCard from "@/components/operationalCards/HealthSafetyCard";
+import HealthDetailCard from "@/components/operationalCards/HealthDetailCard";
+import {
+    useDismissSignal,
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
 import { adaptHealthVmToHealthCard } from "@/lib/adminV2/runtime/focusPanel/healthSafety/adaptHealthVmToHealthCard";
+import { adaptHealthVmToHealthDetail } from "@/lib/adminV2/runtime/focusPanel/healthSafety/adaptHealthVmToHealthDetail";
 import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -109,6 +115,30 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
      * The refusal paths below are untouched. A permission refusal and an unresolved participant are
      * NOT empty health records and must never render as one.
      */
+    /*
+     * The detail rides the Focus Panel's OWN depth layer — the same centered card and scrim the
+     * Financials detail uses. Reporting "focused" is what raises it; the scrim click and ESC come
+     * back through `useDismissSignal` rather than a close control this card owns.
+     */
+    useReportPerspective(coordination, "health_safety", expanded ? "focused" : "base");
+    useDismissSignal(coordination, "health_safety", () => setExpanded(false));
+
+    /*
+     * ── VIEW HEALTH DETAILS — the approved detail, PROJECTING the existing owners ──
+     *
+     * Not a second health model and not a copy: every field is already resolved by
+     * `buildHealthSafetyCardVM` from `person_health_facts`, documents, evaluated requirements and
+     * relationships. The refusal paths below still win — a permission refusal is not an empty
+     * health record, and must never open as one.
+     */
+    if (expanded && vm && !denied && !vm.unavailableReason) {
+        return (
+            <div className="alloy-os-health" data-health-card="true" data-health-overlay="detail">
+                <HealthDetailCard evidence={adaptHealthVmToHealthDetail(vm, name)} />
+            </div>
+        );
+    }
+
     if (vm && !denied && !vm.unavailableReason) {
         return (
             <div

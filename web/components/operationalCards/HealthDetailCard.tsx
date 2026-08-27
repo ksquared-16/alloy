@@ -187,7 +187,7 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
 
                         <section className="alloy-os-healthdetail__col">
                             {/* ── G · Requirements ───────────────────────────── */}
-                            <SectionHead ruled={false}>Enrollment requirements</SectionHead>
+                            <SectionHead ruled={false}>Required information</SectionHead>
                             {evidence.requirements.map((r) => (
                                 <article key={r.requirement} className="alloy-os-healthdetail__record">
                                     <p className="alloy-os-healthdetail__record-name">
