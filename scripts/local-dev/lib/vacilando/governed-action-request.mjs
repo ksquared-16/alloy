@@ -9,6 +9,8 @@
  * decisions, and trusted-host actions.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { evaluateDirectorAuthority } from "./director-authority.mjs";
+import { collectDirectorEvidence } from "./director-evidence.mjs";
 import {
   appendFileSync,
   existsSync,
@@ -796,6 +798,9 @@ export function publicGovernedAction(req) {
     // The operator's name for this decision. The id is diagnostic only.
     operator_label: operatorLabel(req),
     operator_card: operatorApprovalCard(req),
+    director_approval: req.director_approval || null,
+    director_decision: req.director_decision || null,
+    escalation_reason: req.escalation_reason || null,
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -1358,6 +1363,50 @@ function policyDecision(rec, { nowMs } = {}) {
       operator_approval_required: true,
       reason: "privileged_read_requires_operator",
     };
+  }
+  // DELEGATED GOVERNANCE. The Director may decide only what an explicit
+  // policy covers, on evidence gathered from sources the worker does not
+  // control. Anything unmatched, unmeasured or consequential falls through to
+  // the operator below — this can only ever produce MORE escalations than the
+  // policy set allows, never fewer.
+  try {
+    const evidence = collectDirectorEvidence(rec, {
+      stateRoot: runtimeRoot(),
+      worktree: rec.worktree_path || null,
+    });
+    if (Array.isArray(evidence.changed_files) && evidence.changed_files.length) {
+      // Let a governance-policy edit be SEEN rather than declared.
+      rec = { ...rec, inputs: { ...(rec.inputs || {}), changed_files: evidence.changed_files } };
+    }
+    const verdict = evaluateDirectorAuthority({
+      request: { ...rec, content_fingerprint: governedContentFingerprint(rec) },
+      evidence,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (verdict.decision === "director_approved") {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        reason: "director_approved",
+        director_decision: verdict,
+      };
+    }
+    if (verdict.decision === "policy_denied") {
+      return {
+        auto_execute: false,
+        operator_approval_required: true,
+        reason: "policy_denied_requires_operator",
+        director_decision: verdict,
+      };
+    }
+    return {
+      auto_execute: false,
+      operator_approval_required: true,
+      reason: "policy_default_requires_operator",
+      director_decision: verdict,
+    };
+  } catch {
+    // A broken evaluator must never approve. Fall through to the operator.
   }
   return {
     auto_execute: false,
@@ -2183,6 +2232,26 @@ export function processGovernedAction(requestId, {
   const policy = policyDecision(rec, { nowMs });
   rec.policy_decision = policy.reason;
   rec.operator_approval_required = Boolean(policy.operator_approval_required);
+  // A DIRECTOR APPROVAL IS NEVER DRESSED UP AS THE OPERATOR'S. It is recorded
+  // in its own field, naming the policy and the evidence that authorised it,
+  // so the ledger can always answer WHO decided and on what grounds. The
+  // escalation verdict is kept too, so an approval that reached the operator
+  // can say why it had to.
+  if (policy.director_decision) {
+    rec.director_decision = policy.director_decision;
+    if (policy.director_decision.decision === "director_approved") {
+      rec.director_approval = {
+        decision: "approved",
+        actor: "director",
+        policy: policy.director_decision.matched_policy,
+        policy_version: policy.director_decision.policy_version,
+        content_fingerprint: policy.director_decision.content_fingerprint,
+        at: policy.director_decision.evaluated_at,
+      };
+    } else {
+      rec.escalation_reason = policy.director_decision.escalation_reason || null;
+    }
+  }
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
