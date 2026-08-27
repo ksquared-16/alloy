@@ -11,7 +11,9 @@ import { mkdirSync, writeFileSync } from "node:fs";
 const TOKEN = process.env.PARTICIPANT_TOKEN ?? "";
 const OUT = process.env.R1_OUT ?? "/tmp/r1walk";
 const MAX = Number(process.env.R1_MAX ?? "5");
-test.use({ storageState: { cookies: [], origins: [] } });
+/** A phone when asked for one — 375px is the width the parent actually holds. */
+const VIEWPORT = process.env.R1_VIEWPORT === "mobile" ? { width: 375, height: 812 } : undefined;
+test.use({ storageState: { cookies: [], origins: [] }, ...(VIEWPORT ? { viewport: VIEWPORT } : {}) });
 
 const SOURCE_NAMES = [
     "Var History",
@@ -28,6 +30,14 @@ test("walk every artifact to completion", async ({ page }) => {
     test.setTimeout(900_000);
     test.skip(!TOKEN, "no token");
     mkdirSync(OUT, { recursive: true });
+    console.log(`viewport: ${JSON.stringify(page.viewportSize())}`);
+
+    /** Nothing may push the page sideways — a document scrolls inside its own box. */
+    const horizontalOverflow = async () =>
+        page.evaluate(() => ({
+            scroll: document.documentElement.scrollWidth,
+            client: document.documentElement.clientWidth,
+        }));
     const errors: string[] = [];
     const httpErrors: string[] = [];
     page.on("console", (m) => {
@@ -92,6 +102,8 @@ test("walk every artifact to completion", async ({ page }) => {
         const t = await texts();
         console.log("REVIEW SURFACE:\n" + t.join("\n"));
         console.log("source-label leak:", JSON.stringify(SOURCE_NAMES.filter((n) => t.some((s) => s.includes(n)))));
+        const overflow = await horizontalOverflow();
+        console.log(`page width: scroll=${overflow.scroll} client=${overflow.client} horizontal-overflow=${overflow.scroll > overflow.client + 1}`);
 
         const rows = await page.locator("[data-upload-request]").count();
         console.log("upload requests:", rows);

@@ -68,3 +68,35 @@ describe("an acknowledgment is an affirmation, not any tickbox", () => {
         );
     });
 });
+
+describe("a conversation cannot ask a question it has no words for", () => {
+    it("projects no need for a control the source document named", async () => {
+        const { projectEnrollmentInformationNeeds } = await import(
+            "@/lib/enrollment/informationNeeds/projectEnrollmentInformationNeeds"
+        );
+        const form = {
+            requirement_id: "r1",
+            form_definition_id: "f1",
+            form_definition_version_id: "v1",
+            session_item_id: "s1",
+            schema: {
+                fields: [
+                    { id: "field_24", type: "boolean", label: "Var History" },
+                    { id: "field_40", type: "text", label: "Primary Physician Name" },
+                ],
+                sections: [],
+            },
+            pdfMapping: { acro_fields: { "Var history": { field_id: "field_24" } } },
+        } as never;
+
+        const needs = projectEnrollmentInformationNeeds({
+            forms: [form],
+            subjectId: null,
+            sharedValues: {},
+            confirmations: {} as never,
+        });
+        const labels = needs.flatMap((n) => n.occurrences.map((o) => o.label));
+        // The school's own question survives; the PDF's name for a box is not asked out loud.
+        expect(labels).toEqual(["Primary Physician Name"]);
+    });
+});

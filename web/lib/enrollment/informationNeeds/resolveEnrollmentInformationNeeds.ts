@@ -248,10 +248,12 @@ export async function resolveEnrollmentInformationNeeds(
         versionIds.length
             ? // D-94 pinned versions are IMMUTABLE (trigger-certified), so reading one by id is a
               // cacheable fact — the same owner and TTL the pinned revision payload already uses.
-              cachedConfigRead(`needs:versions:${input.orgId}:${[...versionIds].sort().join(",")}`, async () => {
+              cachedConfigRead(`needs:versions:v2:${input.orgId}:${[...versionIds].sort().join(",")}`, async () => {
                   const res = await supabase
                       .from("form_definition_versions")
-                      .select("id, form_definition_id, schema_json")
+                      // `pdf_mapping_json` names which widget each control was imported from, which
+                      // is how a question is told apart from the source PDF's own name for a box.
+                      .select("id, form_definition_id, schema_json, pdf_mapping_json")
                       .eq("org_id", input.orgId)
                       .in("id", versionIds);
                   if (res.error) throw new Error(res.error.message);
@@ -267,15 +269,20 @@ export async function resolveEnrollmentInformationNeeds(
             : Promise.resolve({ data: [], error: null }),
     ]);
 
-    const versionById = new Map<string, { form_definition_id: string; schema_json: unknown }>();
+    const versionById = new Map<
+        string,
+        { form_definition_id: string; schema_json: unknown; pdf_mapping_json: unknown }
+    >();
     for (const row of (versionsResult.data ?? []) as {
         id: string;
         form_definition_id: string;
         schema_json: unknown;
+        pdf_mapping_json?: unknown;
     }[]) {
         versionById.set(String(row.id), {
             form_definition_id: String(row.form_definition_id),
             schema_json: row.schema_json,
+            pdf_mapping_json: row.pdf_mapping_json ?? null,
         });
     }
     const formByPacketItem = new Map<string, string>();
@@ -316,6 +323,7 @@ export async function resolveEnrollmentInformationNeeds(
             form_definition_version_id: versionId,
             session_item_id: item.id,
             schema,
+            pdfMapping: version.pdf_mapping_json,
         });
     }
 

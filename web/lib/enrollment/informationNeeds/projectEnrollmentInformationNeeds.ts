@@ -10,6 +10,11 @@
 
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
 import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
+import {
+    participantFacingLabel,
+    sourceFieldNamesByFieldId,
+    type SourceFieldMapping,
+} from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import {
@@ -35,6 +40,13 @@ export type PinnedRequirementForm = {
     readonly session_item_id: string;
     /** `schema_json` of THAT version. Never the definition's latest. */
     readonly schema: FormSchemaV1;
+    /**
+     * `pdf_mapping_json` of THAT version, when the artifact is source-fidelity.
+     *
+     * Carried so the projection can tell an authored question from the source document's own name
+     * for a box. Absent for a composed document, where every label is authored by definition.
+     */
+    readonly pdfMapping?: unknown;
 };
 
 export type ProjectNeedsInput = {
@@ -88,6 +100,8 @@ export function projectEnrollmentInformationNeeds(
             for (const id of sec.field_ids ?? []) if (!sectionByFieldId.has(id)) sectionByFieldId.set(id, title);
         }
 
+        const sourceFieldNames = sourceFieldNamesByFieldId(form.pdfMapping as SourceFieldMapping);
+
         walkScalarFormFields(form.schema, (field) => {
             // Not a participant need unless the participant is the one who supplies it. Display-only
             // prose was the first case — without it a handbook paragraph became an artifact-specific
@@ -95,6 +109,22 @@ export function projectEnrollmentInformationNeeds(
             // derived values are the same mistake at scale: 100 boxes the family never fills and 7
             // the platform writes itself were being counted as work they had to do.
             if (!formFieldAsksParticipant(field)) return;
+
+            /*
+             * A CONVERSATION CANNOT ASK A QUESTION IT HAS NO WORDS FOR.
+             *
+             * An imported control's label is often the source PDF's internal widget name, so the
+             * runtime asked a parent "Var History?" and "Prov Sp?" — and, having no words, could
+             * not rephrase, could not explain, and could not accept anything but a guess. Suppressing
+             * the label at the review surface (`participant_label`) fixed the printing and left the
+             * conversation asking it out loud.
+             *
+             * These destinations belong to the artifact, and the parent meets them ON the document,
+             * where the school's own sentence sits beside the box. None of the 72 across this packet
+             * is required, so nothing is blocked by declining to ask about them in words — and a
+             * required one would be an authoring defect worth seeing rather than papering over.
+             */
+            if (participantFacingLabel(field.label, sourceFieldNames[field.id]) == null) return;
 
             const identity = resolveEnrollmentNeedIdentity({
                 field,
