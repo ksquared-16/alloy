@@ -166,3 +166,45 @@ await test("NC14 — EVERY privileged_write action key has a non-read_only defau
     return entry ? `ACTION_TYPES.${entry[0]}` : k;
   }
 });
+
+await test("NC15 — no evidence collector reconstructs a canonical store path by hand", async () => {
+  // The defect this pins: director-evidence hand-joined
+  // stateRoot + "governed-actions/requests.json" and missed the "vacilando"
+  // segment, so the store read as empty. An unmeasured gate escalates, so the
+  // bug surfaced as a refusal — it wore the costume of caution, which is why
+  // it survived a full promotion cycle. Ask the owner for the path.
+  const fs = await import("node:fs");
+  const src = fs.readFileSync(new URL("../lib/vacilando/director-evidence.mjs", import.meta.url), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  for (const store of ["governed-actions", "execution-runs", "trusted-host-authz", "governed-dependencies", "trusted-host-actions"]) {
+    assert.ok(!new RegExp(`join\\([^)]*["']${store}["']`).test(code),
+      `director-evidence hand-joins the ${store} store; consume its canonical owner instead`);
+  }
+  // And the owner must actually be exported and used.
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  assert.equal(typeof G.governedActionStorePath, "function", "the store path owner must be exported");
+  assert.match(code, /governedActionStorePath\(/, "the collector must consume the owner");
+  assert.match(G.governedActionStorePath("/tmp/x"), /vacilando[/\\]governed-actions[/\\]requests\.json$/);
+});
+
+await test("NC16 — every registered action is executable or explicitly unavailable, never silently missing", async () => {
+  // A governed action must not be visible to governance but absent from
+  // execution. This asserts the two never diverge.
+  const R = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+  const missing = [];
+  for (const key of Object.values(R.ACTION_TYPES)) {
+    const def = R.getActionDefinition(key);
+    const avail = R.classifyActionAvailability(key);
+    // Available to governance implies resolvable for execution.
+    if (avail.code === "available" && !def) missing.push(key);
+    // And a resolvable definition must carry what execution needs.
+    if (def) {
+      assert.ok(def.riskClass, `${key} has no risk class`);
+      assert.equal(typeof def.validateInputs, "function", `${key} cannot validate its inputs`);
+      assert.ok(def.requiredCapability, `${key} names no required capability`);
+    }
+  }
+  assert.deepEqual(missing, [], "actions visible to governance but unresolvable at execution");
+  // The catalog and the registry must agree on the key set.
+  assert.equal(R.loadedActionKeys().length, Object.values(R.ACTION_TYPES).length);
+});

@@ -136,6 +136,18 @@ function bound(s, max) {
   return t.length > max ? t.slice(0, max) : t;
 }
 
+/**
+ * THE canonical location of the governed-action request store.
+ *
+ * Exported because a Director evidence collector hand-joined this path, missed
+ * the "vacilando" segment, and read nothing — which surfaced as an UNMEASURED
+ * gate and refused a cleanup. A missed file reads as "cannot tell", so that
+ * bug wore the costume of caution. Callers ask the owner now.
+ */
+export function governedActionStorePath(root = runtimeRoot()) {
+  return storePath(root);
+}
+
 function storePath(root = runtimeRoot()) {
   return join(root, "vacilando", "governed-actions", "requests.json");
 }
