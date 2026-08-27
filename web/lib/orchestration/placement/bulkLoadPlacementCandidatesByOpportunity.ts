@@ -66,32 +66,60 @@ export type PlacementCandidateQueueBundle = {
 
 export type PlacementCandidatesByOpportunityId = Map<string, PlacementCandidateQueueBundle[]>;
 
+/** The exact column list this loader maps. Exported so a caller that already read the rows can ask for the same shape. */
+export const PLACEMENT_CANDIDATE_QUEUE_SELECT =
+    "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, program_category_id, location_program_categories(key), customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))";
+
 export async function bulkLoadPlacementCandidatesByOpportunity(params: {
     supabase: SupabaseClient;
     orgId: string;
     opportunityIds: string[];
     /** Active candidates only (default true). */
     activeOnly?: boolean;
+    /**
+     * Rows the caller already read with {@link PLACEMENT_CANDIDATE_QUEUE_SELECT}.
+     *
+     * `placement_candidates` was read TWICE in a row on the queue-critical path: the ensure step
+     * reads it inside its concurrent wave to decide what to insert, and this loader then read the
+     * same table with the same org + opportunity filter as the NEXT serial step. Widening the read
+     * already in the wave costs nothing extra there and lets that serial round trip disappear.
+     *
+     * The mapping below stays the only place candidate rows become queue truth — this parameter
+     * changes where the rows came from, never what they mean.
+     */
+    preloadedRows?: readonly Record<string, unknown>[] | null;
 }): Promise<PlacementCandidatesByOpportunityId> {
     const out: PlacementCandidatesByOpportunityId = new Map();
     const ids = [...new Set(params.opportunityIds.map((id) => id.trim()).filter(Boolean))];
     if (!ids.length) return out;
 
-    let q = params.supabase
-        .from("placement_candidates")
-        .select(
-            "id, org_id, opportunity_id, customer_id, opportunity_customer_member_id, customer_member_id, person_id, site_id, is_synthetic_fallback, program_room_cohort_key, program_room_group_label, wait_since, start_date, status, seed_key, metadata, customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)), opportunity_customer_members(id, location_id, program_room_cohort_key, metadata, program_category_id, location_program_categories(key), customer_members(first_name, last_name, display_name, person_id, metadata, persons(first_name, last_name, full_name, date_of_birth)))"
-        )
-        .eq("org_id", params.orgId)
-        .in("opportunity_id", ids);
+    let rawCandidates: Array<Record<string, unknown>>;
+    if (params.preloadedRows) {
+        // Same filter the query below applies, re-applied here so a preloaded caller cannot widen
+        // the result set by accident.
+        const idSet = new Set(ids);
+        rawCandidates = (params.preloadedRows as Array<Record<string, unknown>>).filter((r) => {
+            const oppId = typeof r.opportunity_id === "string" ? r.opportunity_id : null;
+            if (!oppId || !idSet.has(oppId)) return false;
+            if (params.activeOnly !== false && r.status !== "active") return false;
+            return true;
+        });
+    } else {
+        let q = params.supabase
+            .from("placement_candidates")
+            .select(PLACEMENT_CANDIDATE_QUEUE_SELECT)
+            .eq("org_id", params.orgId)
+            .in("opportunity_id", ids);
 
-    if (params.activeOnly !== false) {
-        q = q.eq("status", "active");
-    }
+        if (params.activeOnly !== false) {
+            q = q.eq("status", "active");
+        }
 
-    const { data: rawCandidates, error: candErr } = await q;
-    if (candErr) {
-        throw new Error(`placement_candidates bulk load failed: ${candErr.message}`);
+        const { data, error: candErr } = await q;
+        if (candErr) {
+            throw new Error(`placement_candidates bulk load failed: ${candErr.message}`);
+        }
+        rawCandidates = (data ?? []) as unknown as Array<Record<string, unknown>>;
     }
 
     type Row = PlacementCandidateRow & {
@@ -163,7 +191,7 @@ export async function bulkLoadPlacementCandidatesByOpportunity(params: {
         return null;
     }
 
-    const candidates = (rawCandidates ?? []).map(normalizeCandidateRow);
+    const candidates = (rawCandidates as unknown as Row[]).map(normalizeCandidateRow);
     const candidateIds = candidates.map((c) => c.id);
 
     const linkByCandidate = new Map<string, PlacementCandidateLinkGroupSummary>();
