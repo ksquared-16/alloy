@@ -63,6 +63,7 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { canonicalLaneStoreId, getDurableLane, missionIdForLane } from "./development-lane.mjs";
+import { laneSlot, qaIdentityForSlot } from "./browser-auth.mjs";
 import {
   consumeGrant,
   getGrant,
@@ -189,6 +190,25 @@ export function isPendingGovernedStatus(status) {
   return PENDING_GOVERNED_STATUSES.includes(status);
 }
 
+/**
+ * Resolve a lane's slot and registered QA identity FOR DISPLAY ONLY.
+ *
+ * Consults the same registry the executor uses, so the approval names the account it will act on.
+ * Never throws: a control that cannot resolve a name must still render, falling back to generic
+ * wording rather than breaking the surface the operator approves from.
+ */
+function resolveSlotIdentityForDisplay(laneId) {
+  try {
+    if (!laneId) return { identity: null, slot: null };
+    const lane = getDurableLane(laneId);
+    const slot = lane ? laneSlot(lane) : null;
+    if (!Number.isInteger(Number(slot))) return { identity: null, slot: null };
+    return { identity: qaIdentityForSlot(Number(slot)) || null, slot: Number(slot) };
+  } catch {
+    return { identity: null, slot: null };
+  }
+}
+
 export function presentationForGovernedAction(req = {}) {
   const key = req.action_key || "";
   const inputs = req.inputs || {};
@@ -245,8 +265,17 @@ export function presentationForGovernedAction(req = {}) {
      * restoring signs into one. Two different decisions, so the words must not be interchangeable.
      */
     const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
-    const identity = req.registered_identity || inputs.registered_identity || "the slot's registered QA identity";
-    const slot = req.slot || inputs.slot || "";
+    /*
+     * The identity is RESOLVED for display, not read off the request.
+     *
+     * The request carries only a lane id - deliberately, so a caller cannot name a target - which
+     * left the control saying "the slot's registered QA identity". An approval that does not name
+     * the account being created is not an informed approval, so the same registry the executor uses
+     * is consulted here. It is display only: nothing downstream reads these values.
+     */
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
     return {
       approve_label: "Authorize QA identity provisioning",
       deny_label: "Deny",
@@ -267,8 +296,9 @@ export function presentationForGovernedAction(req = {}) {
      * this approval is the right one.
      */
     const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
-    const identity = req.registered_identity || inputs.registered_identity || "the slot's registered QA identity";
-    const slot = req.slot || inputs.slot || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
     return {
       approve_label: "Authorize QA session restore",
       deny_label: "Deny",
