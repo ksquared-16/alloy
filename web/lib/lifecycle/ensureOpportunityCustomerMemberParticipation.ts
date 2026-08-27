@@ -16,14 +16,21 @@
  * With an opportunity, identity is the existing unique constraint
  * `(org_id, opportunity_id, customer_member_id)`. Without one that constraint cannot help: Postgres
  * treats NULLs as DISTINCT in a unique index, so it would silently permit unlimited duplicate
- * participations for one child. `uq_ocm_context_free_participation` — a partial unique index over
- * `(org_id, customer_member_id) WHERE opportunity_id IS NULL` — restores the same guarantee for the
- * context-free case, and the lookup below matches it exactly.
+ * participations for one child.
+ *
+ * The context-free replacement is scoped to the EPISODE, because that is what a participation is —
+ * 600 children in the certification tenant hold two of them and 600 hold three, each carrying its
+ * own `start_date`, `stage_key` and `outcome_status_key`. So `uq_ocm_active_context_free_participation`
+ * constrains one ACTIVE context-free participation per child, and a concluded episode
+ * (`withdrawn` / `not_enrolling`, the child track's own `terminal` statuses) releases the slot.
+ * The lookup below matches that index exactly: reusing a CONCLUDED participation would hand a new
+ * journey the previous episode's outcome.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { TERMINAL_CHILD_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
 export async function ensureOpportunityCustomerMemberParticipation(params: {
     supabase: SupabaseClient;
@@ -42,18 +49,40 @@ export async function ensureOpportunityCustomerMemberParticipation(params: {
         throw new Error("Child member is required.");
     }
 
-    /** Matches whichever uniqueness protects this case — the constraint, or the partial index. */
-    const matchParticipation = () => {
-        const query = params.supabase
+    /**
+     * Matches whichever uniqueness protects this case — the constraint, or the partial index.
+     *
+     * The context-free branch selects and filters in code rather than composing a `not.in` filter:
+     * the terminal set has an owner (`TERMINAL_CHILD_STATUS_KEYS`) and reusing it keeps one
+     * vocabulary, where a hand-written PostgREST predicate would be a second copy of it.
+     */
+    async function findParticipation(): Promise<string | null> {
+        if (opportunityId) {
+            const { data } = await params.supabase
+                .from("opportunity_customer_members")
+                .select("id")
+                .eq("org_id", params.orgId)
+                .eq("customer_member_id", customerMemberId)
+                .eq("opportunity_id", opportunityId)
+                .maybeSingle();
+            return data?.id ? String(data.id) : null;
+        }
+        const { data } = await params.supabase
             .from("opportunity_customer_members")
-            .select("id")
+            .select("id, opportunity_id, outcome_status_key")
             .eq("org_id", params.orgId)
             .eq("customer_member_id", customerMemberId);
-        return opportunityId ? query.eq("opportunity_id", opportunityId) : query.is("opportunity_id", null);
-    };
+        const rows = (data ?? []) as { id: string; opportunity_id: string | null; outcome_status_key: string | null }[];
+        // Only an ACTIVE context-free episode may be reused. A concluded one is history, and
+        // returning it would start a new journey already holding the previous episode's outcome.
+        const active = rows.find(
+            (r) => r.opportunity_id === null && !TERMINAL_CHILD_STATUS_KEYS.includes(String(r.outcome_status_key ?? "")),
+        );
+        return active?.id ? String(active.id) : null;
+    }
 
-    const { data: existingOcm } = await matchParticipation().maybeSingle();
-    if (existingOcm?.id) return { ocmId: String(existingOcm.id), created: false };
+    const existingId = await findParticipation();
+    if (existingId) return { ocmId: existingId, created: false };
 
     const { data: inserted, error } = await params.supabase
         .from("opportunity_customer_members")
@@ -68,8 +97,8 @@ export async function ensureOpportunityCustomerMemberParticipation(params: {
         .single();
 
     if (error?.code === "23505") {
-        const { data: retry } = await matchParticipation().maybeSingle();
-        if (retry?.id) return { ocmId: String(retry.id), created: false };
+        const retryId = await findParticipation();
+        if (retryId) return { ocmId: retryId, created: false };
     }
     if (error || !inserted?.id) {
         throw new Error(error?.message ?? "Could not link child to this enrollment.");

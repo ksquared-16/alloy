@@ -38,6 +38,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
+import { ENROLLING_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
 import { RecordCreationError } from "@/lib/records/recordCreationErrors";
 import {
@@ -114,6 +116,28 @@ export async function startEnrollment(
         : await resolveLiveEnrollmentContextForHousehold(supabase, orgId, customerId);
     const opportunityId = resolved.context?.opportunityId ?? null;
 
+    /*
+     * THE ENROLLMENT PARTICIPATION IS ESTABLISHED HERE, NOT AT COMPLETION.
+     *
+     * `opportunity_customer_members` is the durable owner of a child's Enrollment state, and a
+     * journey needs that subject from its first moment — not conjured at the end, when the outcome
+     * would have nowhere to write. With a live episode this reuses the participation that episode
+     * already has; without one it creates a context-free participation and STILL creates no
+     * Opportunity, which is the whole point of the preceding paragraph.
+     *
+     * `enrolling` is the child track's own starting state. The ensurer is find-or-create, so an
+     * existing participation keeps whatever state it already holds — starting a journey never
+     * rewinds an episode that is further along.
+     */
+    const participation = await ensureOpportunityCustomerMemberParticipation({
+        supabase,
+        orgId,
+        opportunityId,
+        customerMemberId,
+        source: "enrollment_start",
+        outcomeStatusKey: ENROLLING_CHILD_STATUS_KEY,
+    });
+
     const created = await createEnrollmentProcessInstance(supabase, {
         orgId,
         subjectId: customerMemberId,
@@ -142,6 +166,9 @@ export async function startEnrollment(
         customerMemberId,
         customerId,
         opportunityId,
+        /** The durable Enrollment subject this journey belongs to. */
+        enrollmentParticipationId: participation.ocmId,
+        participationCreated: participation.created,
         contextOutcome: opportunityId ? "joined_live_episode" : "context_free",
         reused: created.reused === true,
         participantLaunch: launched.ok

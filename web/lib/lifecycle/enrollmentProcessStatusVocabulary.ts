@@ -48,6 +48,20 @@ export const ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabula
  * Collapsed child enrollment disposition statuses on OCM (S4).
  * null (in-process) | waitlisted | enrolling | enrolled | withdrawn | not_enrolling.
  */
+/**
+ * The child disposition a journey STARTS in, and the one it ends in.
+ *
+ * Named here rather than written as literals at the call sites, because this module is the
+ * vocabulary's owner and a disposition spelled in two places drifts. `enrolling` is the honest state
+ * for a child going through Enrollment; `null` also means in-process, and is what a participation
+ * created for some other reason carries until a disposition is actually decided.
+ */
+export const ENROLLING_CHILD_STATUS_KEY = "enrolling" as const;
+export const ENROLLED_CHILD_STATUS_KEY = "enrolled" as const;
+
+/** Dispositions that CONCLUDE a child's enrollment episode. Mirrors `terminal` below. */
+export const TERMINAL_CHILD_STATUS_KEYS: readonly string[] = ["withdrawn", "not_enrolling"];
+
 export const ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabularyRow[] = [
     { status_key: "waitlisted", status_label: "Waitlisted", sort_order: 10, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },
     { status_key: "enrolling", status_label: "Enrolling", sort_order: 20, stage_key: "", entity_type: "opportunity_customer_members", track_key: ENROLLMENT_TRACK_CHILD_KEY },

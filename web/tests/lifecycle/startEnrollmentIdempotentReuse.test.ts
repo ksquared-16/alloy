@@ -83,11 +83,29 @@ function client(db: { instances: Row[]; opportunities?: Row[]; inserts: number }
                     if (ignoreDuplicates) return { data: null, error: null };
                     return { data: null, error: { code: "23505", message: "duplicate key" } };
                 }
+                /*
+                 * `db.inserts` counts PROCESS INSTANCES, which is the invariant these tests are
+                 * about — "a second Start Enrollment creates no second journey".
+                 *
+                 * Start Enrollment also ensures the child's Enrollment Participation now, and that
+                 * insert lands on a different table. Counting both in one number would make this
+                 * assertion read as a duplicated journey when nothing of the sort happened.
+                 */
+                if (table !== "process_instances") {
+                    return { data: { id: `row-${table}-1` }, error: null };
+                }
                 const created = { id: `pi-${db.instances.length + 1}`, ...row };
                 db.instances.push(created);
                 db.inserts += 1;
                 return { data: { id: created.id }, error: null };
             },
+            /*
+             * Start Enrollment now also ensures the child's Enrollment Participation, and that
+             * write ends in `.single()`. Same semantics as `maybeSingle` for this double — the
+             * difference in PostgREST is only whether a missing row is an error, and nothing here
+             * exercises that.
+             */
+            single: async () => q.maybeSingle(),
             then: (resolve: (v: unknown) => void) => resolve({ data: rows().filter(matches), error: null }),
         };
         return q;
