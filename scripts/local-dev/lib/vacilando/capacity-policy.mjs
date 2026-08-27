@@ -241,12 +241,21 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
   // Compared against AVAILABLE, which is what the host can actually give out.
   // Comparing unused pages here is the defect this replaces: a machine with
   // ~5 GB available and zero swapping reported 0.06 GB and refused every build.
-  const memoryAvailableGb = Number.isFinite(cap?.memory_available_gb)
-    ? cap.memory_available_gb
-    : cap?.memory_free_gb;
-  const memoryBelowReserve = Number.isFinite(memoryAvailableGb) && memoryReserveGb != null
+  // NO FALLBACK TO `Pages free`. The first cut of this correction fell back to
+  // `memory_free_gb` when availability was missing, which left the entire old
+  // shape — Pages free -> free_gb -> memoryBelowReserve — reachable for any
+  // caller passing a legacy memory object. That is the exact path this hotfix
+  // exists to remove, so a snapshot without availability is now treated as an
+  // unmeasured host and constrains, rather than silently reverting to the
+  // number that refused every build.
+  const memoryAvailableGb = Number.isFinite(cap?.memory_available_gb) ? cap.memory_available_gb : null;
+  const memoryUnmeasured = memoryAvailableGb == null;
+  const memoryBelowReserve = memoryAvailableGb != null && memoryReserveGb != null
     && memoryAvailableGb < memoryReserveGb;
-  if (memoryBelowReserve) {
+  if (memoryUnmeasured) {
+    constrained.push(gate("memory_capacity", null,
+      "available memory could not be measured; expensive work is constrained rather than admitted on an unknown host"));
+  } else if (memoryBelowReserve) {
     constrained.push(gate("memory_capacity", memoryAvailableGb,
       `available ${memoryAvailableGb} GB is below the ${memoryReserveGb} GB reserve`));
   }
@@ -298,7 +307,8 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
         reserve_gb: memoryReserveGb,
         remaining_gb: Number.isFinite(memoryAvailableGb) && memoryReserveGb != null
           ? Number((memoryAvailableGb - memoryReserveGb).toFixed(2)) : null,
-        under_pressure: Boolean(cap?.under_memory_pressure),
+        under_pressure: Boolean(cap?.under_memory_pressure) || memoryUnmeasured,
+        unmeasured: memoryUnmeasured,
         pressure_signal: cap?.swap_rate_known ? "swap_rate" : "unavailable",
       },
       validation_capacity: {
