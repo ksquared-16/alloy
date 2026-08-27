@@ -938,6 +938,17 @@ export function EnrollmentConversationCard({
                             void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
                         }
                     />
+                    <CollectedAnswers
+                        collected={objective.collected}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
                     <ThreadTurn who="alloy" depth="current">
                         <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
                     </ThreadTurn>
