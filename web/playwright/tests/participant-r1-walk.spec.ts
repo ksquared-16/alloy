@@ -177,7 +177,15 @@ test("walk every artifact to completion", async ({ page }) => {
             }
             const done = page.getByRole("button", { name: /^done$/i }).first();
             console.log("  Done enabled after acknowledgement:", await done.isEnabled());
-            /* Done -> the regenerated document is on screen again, not a fixed sleep. */
+            /*
+             * Done -> the REGENERATED document is back, not merely a canvas.
+             *
+             * Waiting for `[data-participant-document] canvas` to be attached returned in ~30ms
+             * because the canvas from the previous render was still on screen. The interval
+             * measured nothing and, worse, the document was then fetched before regeneration
+             * finished, so the harness recorded PRE-signature bytes and made a correct product look
+             * like a regression.
+             */
             const tDone = Date.now();
             await done.click({ timeout: 20_000 });
             await page
@@ -185,12 +193,16 @@ test("walk every artifact to completion", async ({ page }) => {
                 .last()
                 .waitFor({ state: "detached", timeout: 30_000 })
                 .catch(() => undefined);
+            const canvasesBefore = await page.locator("[data-participant-document] canvas").count();
             await page
-                .locator("[data-participant-document] canvas")
-                .first()
-                .waitFor({ state: "attached", timeout: 60_000 })
+                .waitForFunction(
+                    (n) => document.querySelectorAll("[data-participant-document] canvas").length !== n,
+                    canvasesBefore,
+                    { timeout: 60_000 },
+                )
                 .catch(() => undefined);
-            console.log(`  done -> signed document back on screen: ${Date.now() - tDone} ms`);
+            await page.waitForTimeout(6000);
+            console.log(`  done -> regenerated document back on screen: ${Date.now() - tDone} ms`);
         } else {
             console.log("  no tap-to-sign affordance on this artifact");
         }
