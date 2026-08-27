@@ -208,3 +208,38 @@ await test("NC16 — every registered action is executable or explicitly unavail
   // The catalog and the registry must agree on the key set.
   assert.equal(R.loadedActionKeys().length, Object.values(R.ACTION_TYPES).length);
 });
+
+await test("NC17 — every registered privileged_write action has an executor branch in defaultExecute", async () => {
+  // The defect this pins: the housekeeping dispatch was inserted into
+  // requestTitle — a PRESENTATION function — where it referenced an
+  // out-of-scope `scope` and could never execute anything. defaultExecute fell
+  // through to action_unavailable, which reads as "this capability does not
+  // exist" rather than "nobody wired it". Registered, catalogued, policy-
+  // governed, mode-assigned, gate-measured — and still unreachable.
+  const fs = await import("node:fs");
+  const R = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+  const src = fs.readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
+  const start = src.indexOf("function defaultExecute(");
+  assert.ok(start > -1, "defaultExecute must exist");
+  // Bound the slice at the next top-level function declaration.
+  const rest = src.slice(start + 10);
+  const end = rest.search(/\n(?:export )?function \w+\(/);
+  const body = rest.slice(0, end > -1 ? end : rest.length);
+
+  const missing = [];
+  for (const [constName, key] of Object.entries(R.ACTION_TYPES)) {
+    const def = R.getActionDefinition(key);
+    if (!def || /read/i.test(def.riskClass || "")) continue;
+    if (!body.includes(`ACTION_TYPES.${constName}`)) missing.push(key);
+  }
+  assert.deepEqual(missing, [], "registered privileged_write actions with no executor branch in defaultExecute");
+
+  // And the presentation path must not be executing anything.
+  const titleStart = src.indexOf("function requestTitle(");
+  if (titleStart > -1) {
+    const titleRest = src.slice(titleStart + 10);
+    const titleEnd = titleRest.search(/\n(?:export )?function \w+\(/);
+    const titleBody = titleRest.slice(0, titleEnd > -1 ? titleEnd : titleRest.length);
+    assert.ok(!/fulfill\w+ForMission\(/.test(titleBody), "requestTitle must not execute governed actions");
+  }
+});

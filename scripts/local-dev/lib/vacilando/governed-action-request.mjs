@@ -1474,30 +1474,6 @@ function requestTitle(rec) {
     const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
     return b ? `Push ${b} to the remote` : "Push a reviewed branch";
   }
-  if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
-    return fulfillClosePullRequestForMission(scope, {
-      assignmentId: rec.run_id || null,
-      executionSessionId: rec.run_id || null,
-      inputs: rec.inputs || {},
-      actor,
-      nowMs,
-      grant,
-      authorizationId,
-      exactContext,
-    });
-  }
-  if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
-    return fulfillDeleteRemoteBranchForMission(scope, {
-      assignmentId: rec.run_id || null,
-      executionSessionId: rec.run_id || null,
-      inputs: rec.inputs || {},
-      actor,
-      nowMs,
-      grant,
-      authorizationId,
-      exactContext,
-    });
-  }
   if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
     const b = rec.inputs?.head_branch || rec.inputs?.headBranch || rec.inputs?.branch || "";
     return b ? `Open a staging pull request for ${b}` : "Open a promotion pull request";
@@ -2076,6 +2052,30 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return fulfillDeleteRemoteBranchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
       actor,
       nowMs,
       grant,
