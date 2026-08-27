@@ -23,9 +23,26 @@ import type { AttendanceEvidence } from "@/lib/cardLab/cardLabTypes";
 export default function AttendanceCard({
     evidence,
     onViewHistory,
+    commands,
 }: {
     evidence: AttendanceEvidence;
     onViewHistory?: () => void;
+    /**
+     * The registered attendance commands, supplied by whoever hosts the card.
+     *
+     * Nothing here writes attendance. Each control dispatches the REGISTERED action of the same
+     * name (`attendance.check_in` and its siblings), which is a thin adapter over the
+     * invariant-owning service. The lab leaves these undefined and the controls are inert, which is
+     * what a specimen should be.
+     */
+    commands?: {
+        checkIn?: () => void;
+        markAbsent?: () => void;
+        checkOut?: () => void;
+        correctCheckIn?: () => void;
+        recordMovement?: () => void;
+        running?: string | null;
+    };
 }) {
     const { expected, actual } = evidence;
     const span = Math.max(1, expected.toMin - expected.fromMin);
@@ -54,10 +71,15 @@ export default function AttendanceCard({
             >
                 {isEmpty ? (
                     <CardBody>
-                        <EmptyLine>Expected {expected.fromLabel} – {expected.toLabel}. Nothing recorded yet.</EmptyLine>
+                        <EmptyLine>
+                            {evidence.emptyLine
+                                ?? `Expected ${expected.fromLabel} – ${expected.toLabel}. Nothing recorded yet.`}
+                        </EmptyLine>
                         <ActionRow>
-                            <Action primary>Check in</Action>
-                            <Action>Mark absent</Action>
+                            <Action primary onClick={commands?.checkIn}>
+                                Check in
+                            </Action>
+                            <Action onClick={commands?.markAbsent}>Mark absent</Action>
                         </ActionRow>
                     </CardBody>
                 ) : (
@@ -94,9 +116,11 @@ export default function AttendanceCard({
                         />
 
                         <ActionRow>
-                            <Action>Correct check-in</Action>
-                            <Action>Record movement</Action>
-                            <Action primary>Check out</Action>
+                            <Action onClick={commands?.correctCheckIn}>Correct check-in</Action>
+                            <Action onClick={commands?.recordMovement}>Record movement</Action>
+                            <Action primary onClick={commands?.checkOut}>
+                                Check out
+                            </Action>
                         </ActionRow>
 
                         <div className="alloy-os-currentwork__recent-activity">

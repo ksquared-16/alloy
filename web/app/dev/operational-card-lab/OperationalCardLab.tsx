@@ -13,7 +13,7 @@ import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/f
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
-import AttendanceCard from "@/components/cardLab/AttendanceCard";
+import AttendanceCard from "@/components/operationalCards/AttendanceCard";
 import AddChargeCommand from "@/components/cardLab/AddChargeCommand";
 import FinancialsCard from "@/components/operationalCards/FinancialsCard";
 import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";

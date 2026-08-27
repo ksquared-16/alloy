@@ -1076,3 +1076,102 @@
 
 /* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
  * no banner, no count, no separate section. */
+
+
+/* ══ ATTENDANCE DAY TRACK ═════════════════════════════════════════════════════
+ *
+ * Extracted verbatim from the design lab's stylesheet. The approved Attendance card is a horizontal
+ * day timeline at full row width; production drew a four-slot grid (EXPECTED / ARRIVED / NOW /
+ * DEPARTED) instead, which is a different card.
+ */
+
+/* ── attendance day track ───────────────────────────────────────────────── */
+
+.alloy-os-attendance__body {
+  gap: 6px;
+}
+.alloy-os-attendance__track {
+  position: relative;
+  height: 10px;
+  margin: 6px 8px 0;
+}
+.alloy-os-attendance__expected {
+  position: absolute;
+  inset: 4px 0 auto 0;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-border, #e5e9ef);
+}
+.alloy-os-attendance__actual {
+  position: absolute;
+  top: 4px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick {
+  position: absolute;
+  top: 1px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 999px;
+  background: #fff;
+  box-sizing: border-box;
+}
+.alloy-os-attendance__tick[data-tick="past"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__tick[data-tick="now"] {
+  border: 2.5px solid var(--alloy-os-bend-pine, #00a283);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 18%, transparent);
+}
+.alloy-os-attendance__scale {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 8px;
+  font-size: 0.66rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+.alloy-os-attendance__recent {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 2px;
+}
+.alloy-os-attendance__day {
+  display: grid;
+  grid-template-columns: 8px minmax(0, auto) minmax(0, 1fr);
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-attendance__day-mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  align-self: center;
+}
+.alloy-os-attendance__day[data-day-state="present"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-bend-pine, #00a283);
+}
+.alloy-os-attendance__day[data-day-state="partial"] .alloy-os-attendance__day-mark {
+  background: #b45309;
+}
+.alloy-os-attendance__day[data-day-state="absent"] .alloy-os-attendance__day-mark {
+  background: var(--alloy-os-border, #e5e9ef);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--alloy-os-midnight, #273f52) 22%, transparent);
+}
+.alloy-os-attendance__day-label {
+  font-size: 0.72rem;
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-attendance__day-hours {
+  font-size: 0.68rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

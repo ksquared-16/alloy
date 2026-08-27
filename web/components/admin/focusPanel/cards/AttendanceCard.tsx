@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import ApprovedAttendanceCard from "@/components/operationalCards/AttendanceCard";
+import { adaptAttendanceVmToAttendanceCard } from "@/lib/adminV2/runtime/focusPanel/attendance/adaptAttendanceVmToAttendanceCard";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -129,6 +131,41 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
     }, [load]);
 
     const name = scope?.displayName ?? null;
+
+    /*
+     * ── THE DAY IS THE APPROVED CARD, RENDERED BY THE APPROVED COMPONENT ──
+     *
+     * Everything above this line is the card's DATA and COMMAND work — resolving the participant,
+     * loading the day, issuing check-in / move / check-out. None of it is presentation.
+     *
+     * What changes is that the card no longer draws itself. It renders
+     * `components/operationalCards/AttendanceCard`, the same component the design lab renders. The
+     * approximation drew a four-slot grid (EXPECTED / ARRIVED / NOW / DEPARTED); the approved card
+     * is a horizontal day timeline at full row width. That is not a denser version of the same
+     * card — it is a different one.
+     *
+     * The refusal path stays below: `unavailableReason` means the child has no attendable enrolment,
+     * which is not an unrecorded day and must not render as one.
+     */
+    if (vm && !vm.unavailableReason) {
+        return (
+            <div
+                className="alloy-os-attendance"
+                data-attendance-card="true"
+                data-attendance-subject={memberId ?? undefined}
+            >
+                <ApprovedAttendanceCard
+                    evidence={adaptAttendanceVmToAttendanceCard(vm)}
+                    commands={{
+                        checkIn: () => void run("attendance.check_in"),
+                        markAbsent: () => void run("attendance.mark_absent"),
+                        checkOut: () => void run("attendance.check_out"),
+                        running,
+                    }}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="alloy-os-attendance" data-attendance-card="true" data-attendance-subject={memberId ?? undefined}>

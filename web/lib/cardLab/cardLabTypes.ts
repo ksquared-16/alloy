@@ -193,6 +193,15 @@ export type AttendanceEvidence = {
     tickMinutes: number[];
     correctionNote: string | null;
     recentDays: { day: string; state: "present" | "absent" | "partial"; hours: string }[];
+    /**
+     * The empty state's line, when the default cannot be stated truthfully.
+     *
+     * The specimen's default reads "Expected 8:00 AM – 4:30 PM. Nothing recorded yet." Alloy has no
+     * expected arrival or departure TIME — scheduling is day-grain, and `schedule_patterns` carries
+     * start_date/end_date, not times of day — so production supplies a line built from what it does
+     * own rather than printing an empty window. Absent in the lab, where the fixture has both times.
+     */
+    emptyLine?: string | null;
 };
 
 export type LedgerEntry = {
