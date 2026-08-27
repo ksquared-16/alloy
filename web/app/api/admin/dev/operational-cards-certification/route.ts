@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import {
+    divergeOperationalCardsCertification,
     ensureOperationalCardsCertification,
     inspectCertificationGraph,
     diagnoseChildLens,
@@ -109,6 +110,12 @@ export async function POST(request: NextRequest) {
                 ok: true,
                 repair: await repairOperationalCardsCertification(supabase, orgId, actorUserId),
             });
+        }
+        if (action === "diverge") {
+            // A SCENARIO, not a repair: it puts one child at a different stage so the rail's
+            // participant markers can be certified. `ensure` restores alignment.
+            const result = await divergeOperationalCardsCertification(supabase, ctx.orgId);
+            return NextResponse.json({ ok: result.ok, diverge: result });
         }
         if (action === "verify") {
             return NextResponse.json({ ok: true, verify: await verifyOperationalCardsCertification(supabase, orgId) });

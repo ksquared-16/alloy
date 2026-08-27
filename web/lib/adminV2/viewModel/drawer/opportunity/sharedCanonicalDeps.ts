@@ -190,6 +190,28 @@ export async function resolveSharedCanonicalDeps(
         statusKey,
         statusDefs,
         workUnitMetadata: wuData?.metadata ?? null,
+        /*
+         * The record the stage annotations are ABOUT.
+         *
+         * The stages are configuration; the annotations are truth about THIS record, resolved
+         * through the platform's projection registry. Passing the record here rather than letting
+         * the card read it keeps one answer to "what does this stage say" — the same reason the
+         * stage ORDER is published on the rail instead of being re-derived downstream.
+         */
+        record: record as Record<string, unknown>,
+        annotationLabels: {
+            locationLabel:
+                trimOrNull((record as Record<string, unknown>)._location_name as string | null)
+                ?? trimOrNull((record as Record<string, unknown>)._location_label as string | null),
+            /*
+             * NULL, deliberately. `assigned_to` is on the record as an id and nothing resolves it
+             * to a name in this payload, so the `assigned_owner` projection has nothing to render
+             * and correctly renders nothing. Passing the raw id would put a uuid on an operator
+             * card; inventing a lookup here would add a query to the drawer's hot path for a
+             * projection no configuration currently selects.
+             */
+            ownerLabel: null,
+        },
     });
     // Mission stage for Current Work: Effective Process Position when participants diverge.
     // Lifecycle rail still reflects shared/context stage for chrome; stage-work uses Mission.

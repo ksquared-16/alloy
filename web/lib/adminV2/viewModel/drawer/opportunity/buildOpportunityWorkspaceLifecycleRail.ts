@@ -1,4 +1,5 @@
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import { resolveStageAnnotations } from "@/lib/adminV2/runtime/focusPanel/businessProcess/stageAnnotationProjections";
 import { effectiveStageKeyAssignment } from "@/lib/lifecycle/enrollmentOperatorStage";
 import {
     activeLifecycleProcess,
@@ -8,7 +9,16 @@ import {
 import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 
 export type OpportunityWorkspaceLifecycleRail = {
-    stages: Array<{ key: string; label: string }>;
+    stages: Array<{
+        key: string;
+        label: string;
+        /**
+         * The stage's resolved annotation slots — at most two, already turned from configured
+         * projection KEYS into operator-facing strings. Empty when the stage configures none or
+         * when its projections have nothing to say about this particular record.
+         */
+        support?: string[];
+    }>;
     current_stage_key: string | null;
     /**
      * The configured process's OWN NAME — "Enrollment", not "Waitlist".
@@ -35,15 +45,32 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
     statusKey: string | null;
     statusDefs: StatusDefinitionRow[];
     workUnitMetadata: unknown;
+    /**
+     * The record the annotations are ABOUT. Optional: a caller with no record still gets the rail,
+     * just without supporting detail — the stages are configuration, the annotations are truth.
+     */
+    record?: Record<string, unknown> | null;
+    /** Labels the record carries only as ids, resolved once by the caller. */
+    annotationLabels?: { locationLabel?: string | null; ownerLabel?: string | null };
 }): OpportunityWorkspaceLifecycleRail | null {
     const builder = lifecycleBuilderFromDepartmentMetadata(params.departmentMetadata);
     const process = builder ? activeLifecycleProcess(builder) : null;
     if (!process) return null;
 
-    const stages = activeStagesForProcess(process).map((s) => ({
-        key: s.key.trim(),
-        label: (s.label ?? s.key).trim() || s.key.trim(),
-    }));
+    const annotationInput = {
+        record: params.record ?? {},
+        labels: params.annotationLabels ?? {},
+    };
+    const stages = activeStagesForProcess(process).map((s) => {
+        const support = params.record
+            ? resolveStageAnnotations(s.stage_annotations_v1?.slots, annotationInput)
+            : [];
+        return {
+            key: s.key.trim(),
+            label: (s.label ?? s.key).trim() || s.key.trim(),
+            ...(support.length ? { support } : {}),
+        };
+    });
     if (stages.length < 2) return null;
 
     const stageKeys = stages.map((s) => s.key);

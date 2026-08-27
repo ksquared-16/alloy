@@ -91,6 +91,8 @@ export type CertificationEnsureResult =
            * record is exactly what made the card look broken.
            */
           lifecycleDepartment: { status: string; departmentId: string | null; stageCount: number };
+          /** Whether the process's stages declare annotation slots — what the approved rail renders. */
+          stageAnnotations: { status: string; configured: number; stagesWithoutSlots: string[] };
       }
     | { ok: false; reason: string; needsOperator?: boolean };
 
@@ -264,6 +266,58 @@ async function attachCertificationLifecycleDepartment(
     }
 }
 
+
+/**
+ * CERTIFICATION CONFIGURATION — the stage annotation slots the approved rail renders.
+ *
+ * The approved Business Process card shows each stage carrying a little supporting truth beneath
+ * its label ("Aug 11", "Aug 27 · 10:00 AM · North Campus", "#4 · Toddler"). Those come from
+ * CONFIGURATION selecting projections, not from the card. With no stage configuring any slot, the
+ * production rail is correct and information-thin — and the contract is unproven, because nothing
+ * exercises it.
+ *
+ * ── WHY THIS RETURNS AN INSTRUCTION INSTEAD OF WRITING ──
+ *
+ * `lifecycle_builder_v1` is a PUBLISHED PROJECTION. `trg_departments_lifecycle_projection_guard`
+ * refuses any write to it that publication did not authorise, and a first attempt to merge the
+ * slots into `departments.metadata` was correctly rejected with exactly that message. That guard is
+ * right and this fixture is not going to route around it.
+ *
+ * Authoring goes through the builder's own PATCH action (`update_stage_annotations`), which writes
+ * the draft and lets publication move it into the projection. This function therefore reports what
+ * IS configured and what remains to be authored, so `ensure` states the gap rather than silently
+ * producing an unannotated rail.
+ */
+async function inspectCertificationStageAnnotations(
+    supabase: SupabaseClient,
+    orgId: string,
+    departmentId: string | null,
+): Promise<{ status: string; configured: number; stagesWithoutSlots: string[] }> {
+    const none = (status: string) => ({ status, configured: 0, stagesWithoutSlots: [] as string[] });
+    if (!departmentId) return none("no_department");
+
+    const { data: dept, error } = await supabase
+        .from("departments")
+        .select("id, metadata")
+        .eq("org_id", orgId)
+        .eq("id", departmentId)
+        .maybeSingle();
+    if (error) return none(`department_read_failed: ${error.message}`);
+
+    const process = activeLifecycleProcess(
+        lifecycleBuilderFromDepartmentMetadata((dept as { metadata?: unknown } | null)?.metadata),
+    );
+    if (!process) return none("no_active_process");
+
+    const stages = activeStagesForProcess(process);
+    const configured = stages.filter((st) => st.stage_annotations_v1?.slots?.length).length;
+    return {
+        status: configured === 0 ? "none_configured" : configured === stages.length ? "all_configured" : "partial",
+        configured,
+        stagesWithoutSlots: stages.filter((st) => !st.stage_annotations_v1?.slots?.length).map((st) => st.key),
+    };
+}
+
 export async function ensureOperationalCardsCertification(
     supabase: SupabaseClient,
     orgId: string,
@@ -390,6 +444,12 @@ export async function ensureOperationalCardsCertification(
         supabase,
         orgId,
         opportunityId,
+    );
+
+    const stageAnnotations = await inspectCertificationStageAnnotations(
+        supabase,
+        orgId,
+        lifecycleDepartment.departmentId,
     );
 
     const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, orgId);
@@ -591,7 +651,73 @@ export async function ensureOperationalCardsCertification(
         });
     }
 
-    return { ok: true, customerId, personId, opportunityId, children, reused, lifecycleDepartment };
+    return {
+        ok: true,
+        customerId,
+        personId,
+        opportunityId,
+        children,
+        reused,
+        lifecycleDepartment,
+        stageAnnotations,
+    };
+}
+
+/**
+ * CERTIFICATION SCENARIO — participants at DIVERGENT stages.
+ *
+ * The approved rail places each participant at their OWN stage, independently of the case stage:
+ * Riley under Tour while Avery sits under Waitlist, with the case marker unmoved. The component
+ * already does this, and switches to the compact aligned summary when everyone agrees.
+ *
+ * Which meant the treatment was unprovable here. Every family in the certification tenant has all
+ * its children at the case stage, so every rail correctly rendered "2 children all at Waitlist" and
+ * the marker path never ran. A capability nothing exercises is a capability nobody can trust.
+ *
+ * This moves ONE child's journey back a stage so the two diverge. It is a scenario, not a repair:
+ * `ensure` self-heals both children forward to enrolled, so running ensure afterwards restores
+ * alignment and the scenario can be re-created at will.
+ */
+export async function divergeOperationalCardsCertification(
+    supabase: SupabaseClient,
+    orgId: string,
+    stageKey = "enrolling",
+): Promise<{ ok: boolean; movedChild?: string; stageKey?: string; reason?: string }> {
+    await assertNamespaceIsolated(supabase, orgId);
+
+    const existing = await findHousehold(supabase, orgId);
+    if (!existing.customerId) return { ok: false, reason: "No certification household — run ensure first." };
+
+    const { data: memberRows, error } = await supabase
+        .from("customer_members")
+        .select("id, first_name")
+        .eq("org_id", orgId)
+        .eq("customer_id", existing.customerId)
+        .order("first_name", { ascending: true });
+    if (error) return { ok: false, reason: `members_read_failed: ${error.message}` };
+
+    const members = (memberRows ?? []) as Array<{ id: string; first_name?: string | null }>;
+    if (members.length < 2) {
+        // One child cannot diverge from itself. Saying so beats moving the only child and calling
+        // the result a divergence.
+        return { ok: false, reason: "Divergence needs at least two children in the household." };
+    }
+
+    // The LAST child by name, so the scoped/first child stays where the operator expects it.
+    const target = members[members.length - 1]!;
+    const { data: piRow } = await supabase
+        .from("process_instances")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("subject_id", target.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    const instanceId = t((piRow as { id?: string } | null)?.id);
+    if (!instanceId) return { ok: false, reason: "No process instance for the target child." };
+
+    await moveProcessInstanceStage(supabase, { orgId, instanceId, stageKey });
+    return { ok: true, movedChild: t(target.first_name) || target.id, stageKey };
 }
 
 export async function verifyOperationalCardsCertification(

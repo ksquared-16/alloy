@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    STAGE_ANNOTATION_PROJECTIONS,
+    isStageAnnotationProjectionKey,
+} from "@/lib/adminV2/runtime/focusPanel/businessProcess/stageAnnotationProjections";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import {
@@ -23,6 +27,7 @@ import {
     updateProcessName,
     updateProcessDescription,
     updateStageDescription,
+    updateStageAnnotations,
     updateStageGrain,
     ensureStageTransitionInConfig,
     updateProcessCommandSet,
@@ -532,6 +537,52 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 }
 
                 config = updateStageGrain(config, pid, stage.id, grainInput);
+                break;
+            }
+            case "update_stage_annotations": {
+                /*
+                 * WHICH canonical projections this stage may show beneath its label.
+                 *
+                 * The keys are validated against the platform's own registry rather than stored as
+                 * whatever the caller sent. A configuration naming a projection that does not exist
+                 * would render nothing at runtime and look like a broken card, so it is refused here
+                 * with the list of what IS selectable.
+                 */
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const stageKey = typeof body.stage_key === "string" ? body.stage_key.trim() : "";
+                const stageIdInput = typeof body.stage_id === "string" ? body.stage_id.trim() : "";
+                const pid = processId || config.active_process_id;
+                const slotsInput = Array.isArray(body.slots)
+                    ? (body.slots as unknown[]).map((v) => (typeof v === "string" ? v.trim() : "")).filter(Boolean)
+                    : null;
+
+                if (!pid || (!stageKey && !stageIdInput)) {
+                    return NextResponse.json(
+                        { error: "process_id and stage_key (or stage_id) are required" },
+                        { status: 400 },
+                    );
+                }
+                if (!slotsInput) {
+                    return NextResponse.json({ error: "slots must be an array of projection keys" }, { status: 400 });
+                }
+                const unknownKeys = slotsInput.filter((k) => !isStageAnnotationProjectionKey(k));
+                if (unknownKeys.length) {
+                    return NextResponse.json(
+                        {
+                            error: `Unknown annotation projection: ${unknownKeys.join(", ")}`,
+                            selectable: Object.keys(STAGE_ANNOTATION_PROJECTIONS),
+                        },
+                        { status: 400 },
+                    );
+                }
+                const annProc = config.processes.find((p) => p.id === pid);
+                if (!annProc) return NextResponse.json({ error: "Process not found" }, { status: 404 });
+                const annStage = annProc.stages.find(
+                    (st) => (stageIdInput && st.id === stageIdInput) || (stageKey && st.key === stageKey),
+                );
+                if (!annStage) return NextResponse.json({ error: "Stage not found" }, { status: 404 });
+
+                config = updateStageAnnotations(config, pid, annStage.id, slotsInput);
                 break;
             }
             case "reorder_stage": {

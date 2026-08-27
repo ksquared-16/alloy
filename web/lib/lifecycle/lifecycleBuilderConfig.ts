@@ -102,6 +102,7 @@ const STAGE_OWNED_KEYS = [
     "allow_skipping",
     "operator_guidance",
     "subject_resolution_strategy",
+    "stage_annotations_v1",
 ] as const;
 
 export type LifecycleBuilderStageRecord = {
@@ -133,6 +134,16 @@ export type LifecycleBuilderStageRecord = {
      * never authored canonically, and only then may legacy answer.
      */
     requirements_v1?: StageRequirementsV1;
+    /**
+     * The stage's two bounded annotation slots — which canonical PROJECTIONS fill them.
+     *
+     * Configuration selects from the platform's registry
+     * (`STAGE_ANNOTATION_PROJECTIONS`); it never names a record path and never authors a
+     * display string. The cap of two lives with the platform, so a process cannot grow a
+     * third slot by authoring one. Absent means this stage says nothing beneath its label,
+     * which is a normal state rather than a gap to fill.
+     */
+    stage_annotations_v1?: { slots: string[] };
     /** V2 Builder — grain determines the queue row subject entity. */
     grain?: StageGrain;
     /** V2 Builder — freeform operator-authored stage purpose. */
@@ -270,6 +281,16 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             // rather than on truthiness or on `requirements.length`.
             const requirements = parseStageRequirementsV1(sr.requirements_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
+            const annotationSlots = Array.isArray(
+                (sr.stage_annotations_v1 as { slots?: unknown } | undefined)?.slots,
+            )
+                ? ((sr.stage_annotations_v1 as { slots: unknown[] }).slots
+                      .map((v) => (typeof v === "string" ? v.trim() : ""))
+                      .filter(Boolean)
+                      // Capped HERE, at the parse boundary, so an over-authored config is bounded
+                      // before it reaches anything that renders it.
+                      .slice(0, 2))
+                : null;
             stages.push(withUnknownFields({
                 id: sid,
                 key: skey,
@@ -284,6 +305,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 ...(perspectives ? { perspectives_v1: perspectives } : {}),
                 ...(actionCatalog ? { action_catalog_v1: actionCatalog } : {}),
                 ...(requirements !== null ? { requirements_v1: requirements } : {}),
+                ...(annotationSlots?.length ? { stage_annotations_v1: { slots: annotationSlots } } : {}),
                 ...(parseStageGrain(sr.grain) ? { grain: parseStageGrain(sr.grain) } : {}),
                 ...(typeof sr.purpose === "string" && sr.purpose.trim() ? { purpose: sr.purpose.trim() } : {}),
                 ...(typeof sr.parent_stage_key === "string" && sr.parent_stage_key ? { parent_stage_key: sr.parent_stage_key } : {}),
@@ -672,6 +694,50 @@ export function isConfiguredStageKey(metadata: unknown, stageKey: string): boole
  * Idempotent by construction: requesting the grain a stage already has returns the SAME config
  * object, so a no-op save cannot produce an unrelated diff.
  */
+/**
+ * Set a stage's annotation slots — WHICH canonical projections it may show beneath its label.
+ *
+ * Configuration selects; it never authors a display string and never names a record path. The
+ * platform owns the registry those keys index into, and the cap of two, so this only ever stores a
+ * short list of keys. An empty list clears the stage's annotations, which is a real choice — a
+ * process may decide a stage should say nothing.
+ */
+export function updateStageAnnotations(
+    config: LifecycleBuilderV1,
+    processId: string,
+    stageId: string,
+    slots: readonly string[]
+): LifecycleBuilderV1 {
+    const process = config.processes.find((p) => p.id === processId);
+    if (!process) throw new Error("Process not found");
+    const stage = process.stages.find((s) => s.id === stageId);
+    if (!stage) throw new Error("Stage not found");
+
+    // TWO SLOTS. The cap is the platform's, applied on the way in so nothing downstream has to
+    // defend against a third.
+    const next = slots.map((v) => v.trim()).filter(Boolean).slice(0, 2);
+    const current = stage.stage_annotations_v1?.slots ?? [];
+    if (current.length === next.length && current.every((v, i) => v === next[i])) return config;
+
+    return {
+        ...config,
+        processes: config.processes.map((p) => {
+            if (p.id !== processId) return p;
+            return {
+                ...p,
+                stages: p.stages.map((st) => {
+                    if (st.id !== stageId) return st;
+                    if (next.length === 0) {
+                        const { stage_annotations_v1: _cleared, ...rest } = st;
+                        return rest;
+                    }
+                    return { ...st, stage_annotations_v1: { slots: next } };
+                }),
+            };
+        }),
+    };
+}
+
 export function updateStageGrain(
     config: LifecycleBuilderV1,
     processId: string,
