@@ -824,3 +824,255 @@
   text-transform: uppercase;
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
+
+
+/* ══ HEALTH & SAFETY ══════════════════════════════════════════════════════════
+ *
+ * Extracted verbatim from the design lab's stylesheet, for the same reason as Financials: the
+ * approved card must render identically in the lab and in the real Focus Panel, and production
+ * carried only a partial set of its own.
+ *
+ * The section grammar these rules carry is the point of the card — a contained CRITICAL region with
+ * a restrained risk treatment, medications nested under the need they support, and ENROLLMENT
+ * HEALTH as a two-column list where "Missing" is a VALUE. The production approximation rendered the
+ * requirements as a cloud of pills instead, which reads as four warnings rather than one checklist
+ * with four rows.
+ */
+
+/* ── health & safety ────────────────────────────────────────────────────── */
+
+/* Restrained risk treatment. This card carries DURABLE safety information, not an active
+ * incident, so it stays a normal card surface with a narrow risk rail. Red is spent only on the
+ * two things that must be recognised: the severity, and what staff actually do. */
+.alloy-os-health__critical {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 2px 0 3px 10px;
+  border-left: 2px solid #c2410c;
+}
+.alloy-os-health__critical-label {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #c2410c;
+}
+.alloy-os-health__critical-icon {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+}
+.alloy-os-health__critical-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-health__critical-name {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__severity {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #c2410c 10%, #fff);
+  color: #c2410c;
+}
+.alloy-os-health__critical-line {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* What staff DO is the one line that has to survive a glance. */
+.alloy-os-health__critical-line--do {
+  font-size: 11.5px;
+  font-weight: 650;
+  color: #c2410c;
+}
+
+.alloy-os-health__need-inline {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.alloy-os-health__need-name {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-health__need-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+/* A medication sits UNDER the need it supports, indented against a quiet rail. */
+.alloy-os-health__med {
+  margin: 1px 0 0;
+  padding-left: 8px;
+  border-left: 1.5px solid color-mix(in srgb, var(--alloy-os-bend-pine, #00a283) 30%, transparent);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__med-name {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+/* Supporting operational context — two columns so it never dominates the care information. */
+.alloy-os-health__reqs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 1px 16px;
+}
+.alloy-os-health__req {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-health__req-name {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alloy-os-health__req-value {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-health__req-value--missing {
+  color: #b45309;
+}
+
+/* Emergency contacts are relationship context, so they share the footer with the detail link
+ * rather than competing with medical information in the body. */
+.alloy-os-health__footer {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.alloy-os-health__emergency {
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-health__emergency strong {
+  font-weight: 650;
+  color: var(--alloy-os-midnight, #273f52);
+}
+
+
+/* ══ SHARED BODY IDIOMS (CardLabKit primitives) ═══════════════════════════════
+ *
+ * `CardLabKit` — SectionHead, Fact, EmptyLine and friends — is no longer lab-only: the approved
+ * Process, Financials and Health cards all render through it in production. Its rules therefore
+ * have to travel with them.
+ *
+ * This is what made the Health card's section heads render as ordinary dark body text instead of
+ * the specimen's small uppercase labels. The card had the right sections in the right order and
+ * still did not look like the approved card, because `.alloy-os-cardlab__section-head` existed only
+ * in the lab's stylesheet.
+ */
+
+/* ── shared body idioms ─────────────────────────────────────────────────── */
+
+/* In-body section head. Matches What's Next's RECENT ACTIVITY label, and carries the family's
+   single hairline when it follows other content. */
+.alloy-os-cardlab__section-head {
+  margin: 5px 0 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 52%, #64748b);
+}
+/* The family has exactly ONE hairline — What's Next, before RECENT ACTIVITY, where a different
+ * KIND of content follows the action row. Sections of like content separate with whitespace. */
+.alloy-os-cardlab__section-head--ruled {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 9%, transparent);
+}
+.alloy-os-cardlab__section-head:first-child {
+  margin-top: 0;
+}
+
+.alloy-os-cardlab__fact {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 6px 12px;
+  margin-top: 3px;
+  min-width: 0;
+}
+.alloy-os-cardlab__value--missing {
+  color: #b45309;
+}
+.alloy-os-cardlab__value--positive {
+  color: var(--alloy-os-bend-pine, #00a283);
+}
+
+/* A fact that is not a person: name over detail, optional right-aligned value. */
+.alloy-os-cardlab__fact-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.alloy-os-cardlab__fact-row-value {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--alloy-os-text-secondary, #4b5563);
+}
+.alloy-os-cardlab__fact-row-value.alloy-os-household__row-detail--missing {
+  color: #b45309;
+  font-weight: 600;
+}
+.alloy-os-cardlab__row-main--inline {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.alloy-os-cardlab__name--severe {
+  color: #b91c1c;
+}
+
+/* The critical safety fact leads the card as the insight, so THAT is what carries the emphasis —
+ * no banner, no count, no separate section. */

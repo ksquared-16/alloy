@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
+import ApprovedHealthSafetyCard from "@/components/operationalCards/HealthSafetyCard";
+import { adaptHealthVmToHealthCard } from "@/lib/adminV2/runtime/focusPanel/healthSafety/adaptHealthVmToHealthCard";
 import type { HealthSafetyCardVM } from "@/lib/adminV2/runtime/focusPanel/healthSafety/buildHealthSafetyCardVM";
 import type { FocusPanelCardModel } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 import type { FocusPanelCoordination } from "@/lib/adminV2/runtime/focusPanel/focusPanelCoordinationModel";
@@ -90,6 +92,37 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
 
     const name = scope?.displayName ?? null;
     const criticalCount = vm?.criticalFacts.length ?? 0;
+
+    /*
+     * ── THE SUMMARY IS THE APPROVED CARD, RENDERED BY THE APPROVED COMPONENT ──
+     *
+     * Everything above this line is the card's DATA work — resolving the participant, loading the
+     * record, handling the permission refusal. None of it is presentation and none of it changes.
+     *
+     * What changes is that the summary no longer draws itself. It renders
+     * `components/operationalCards/HealthSafetyCard`, the same component the design lab renders, so
+     * the approved section grammar (CRITICAL / HEALTH / ENROLLMENT HEALTH / emergency contacts)
+     * reaches production intact. The approximation dropped the sections and rendered the enrollment
+     * requirements as a cloud of "missing" pills — four warnings where the specimen shows one
+     * checklist with four rows.
+     *
+     * The refusal paths below are untouched. A permission refusal and an unresolved participant are
+     * NOT empty health records and must never render as one.
+     */
+    if (vm && !denied && !vm.unavailableReason) {
+        return (
+            <div
+                className="alloy-os-health"
+                data-health-card="true"
+                data-health-subject={memberId ?? undefined}
+            >
+                <ApprovedHealthSafetyCard
+                    evidence={adaptHealthVmToHealthCard(vm)}
+                    onViewDetails={() => setExpanded(true)}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="alloy-os-health" data-health-card="true" data-health-subject={memberId ?? undefined}>

@@ -21,7 +21,7 @@ import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";
-import HealthSafetyCard from "@/components/cardLab/HealthSafetyCard";
+import HealthSafetyCard from "@/components/operationalCards/HealthSafetyCard";
 import JourneyCard from "@/components/cardLab/JourneyCard";
 import StaffCard from "@/components/cardLab/StaffCard";
 import {
