@@ -12,6 +12,7 @@ import { validatePushInputs } from "./trusted-host-push.mjs";
 import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
+import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -20,6 +21,7 @@ export const ACTION_TYPES = Object.freeze({
   PROMOTION_OPEN_PR: "promotion.open_pr",
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
+  ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -330,9 +332,35 @@ function defineEnvironmentRestoreQaSession() {
   };
 }
 
+/**
+ * Provision the managed QA identity a slot is registered to.
+ *
+ * Separate from the restore on purpose: creating an account and signing into one are different
+ * decisions, so they get different approvals. Restoration must never quietly create a user.
+ */
+function defineEnvironmentProvisionQaIdentity() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY,
+    version: 1,
+    title: "Provision a managed QA identity for a registered slot",
+    requiredCapability: "trusted_host.environment.provision_qa_identity",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 180_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", mutated: "boolean", occurrences: "number" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "mutated", "occurrences", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateProvisionQaIdentityInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
+  [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
