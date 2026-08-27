@@ -96,7 +96,8 @@ await test("4 — nothing renders once the decision is made", () => {
 await test("5 — the card answers what an operator needs before deciding", () => {
   const html = V.renderLaneRuntimeControls(LIVE_SHAPE);
   assert.match(html, /Approval required/);
-  assert.match(html, /Open a staging pull request/);
+  // The canonical operator label, not the old sentence-shaped title.
+  assert.match(html, /Open PR agent\/cursor\/5-memory-fallback-removal → staging/);
   assert.match(html, /ksquared-16\/alloy/, "repository");
   assert.match(html, /staging/, "environment");
   assert.match(html, /43eabdeb2c0f/, "commit, truncated");
@@ -111,7 +112,9 @@ await test("6 — the request id is present but SECONDARY, never the operator's 
   // But the headline is the human action, not the id.
   const title = html.match(/class="gw-approval-title">([^<]+)</)?.[1] || "";
   assert.equal(/^gar_/.test(title), false);
-  assert.match(title, /pull request/i);
+  // Human words naming the work — "PR" is the canonical form.
+  assert.match(title, /^Open PR /);
+  assert.ok(!title.includes("gar_"), "the id is never the title");
 });
 
 await test("7 — stale protection: the card carries the identity the SERVER issued", async () => {
@@ -278,7 +281,7 @@ await test("16 — the lane LIST shows approval required, from the same answer",
   assert.equal(p.state, "NEEDS_APPROVAL");
   assert.equal(p.label, "Needs approval");
   assert.equal(p.tone, "needs");
-  assert.match(p.headline, /Needs approval ·/);
+  assert.match(p.headline, /Needs approval —/);
   // The list badge and the card cannot disagree, because both come from here.
   assert.match(V.renderLaneRuntimeControls(LIVE_SHAPE), /data-gw-governed-approve/);
   // And it clears the moment a decision exists.

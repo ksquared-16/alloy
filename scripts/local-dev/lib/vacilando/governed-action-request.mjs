@@ -616,6 +616,141 @@ export function rejectStaleDecision(rec, expectedFingerprint) {
   };
 }
 
+/**
+ * THE NAME OF THE THING BEING DECIDED.
+ *
+ * An approval was announced to the operator as "approve gar_4dc7b4d8bcd0e0".
+ * Nothing in the UI carried that string, so there was no way to tell which
+ * visible item it meant — and a governed action the operator cannot NAME is a
+ * governed action the operator cannot find. The request id is diagnostic
+ * metadata; it is never the operator's concept of the work.
+ *
+ * The label answers one question: what am I being asked to approve? It is
+ * derived deterministically from canonical inputs, so the same request always
+ * produces the same words, and it never falls back to an identifier.
+ */
+export function operatorLabel(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const work = operatorWorkTitle(rec);
+  const key = rec.action_key;
+  const target = rec.target || DEFAULT_TARGET;
+  const pr = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+  const branch = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+
+  if (key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (work && pr) return `Merge ${work} — PR #${pr}`;
+    if (pr) return `Merge PR #${pr} to ${target}`;
+    return `Merge pull request to ${target}`;
+  }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    if (work) return `Push ${work} branch`;
+    return branch ? `Push ${branch}` : "Push a reviewed branch";
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const base = inputs.base || target;
+    if (work) return `Open PR for ${work}`;
+    return branch ? `Open PR ${branch} → ${base}` : `Open promotion PR into ${base}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    // Never hardcode a work name here. The label used to read "Apply Access &
+    // Identity staging migrations" for EVERY migration set, which named the
+    // wrong work for every caller but one.
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    if (work) return `Apply ${work} migrations`;
+    const n = list.length || (inputs.expected_version ? 1 : 0);
+    return n
+      ? `Apply ${n} ${target} migration${n === 1 ? "" : "s"}`
+      : `Apply ${target} migrations`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    const slot = operatorSlotHint(rec);
+    return `Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    const slot = operatorSlotHint(rec);
+    return `Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    const slot = operatorSlotHint(rec);
+    return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    if (work) return `Read-only census — ${work}`;
+    return `Read-only database census on ${target}`;
+  }
+  // An unregistered key still gets words rather than an identifier.
+  return work || (key ? String(key).replace(/[._]/g, " ") : "Governed action");
+}
+
+/** An explicit human work name, when the caller supplied one. Never invented. */
+function operatorWorkTitle(rec) {
+  const raw = rec?.work_title || rec?.inputs?.workTitle || rec?.inputs?.work_title || null;
+  const t = raw == null ? "" : String(raw).trim();
+  return t && t.length <= 80 ? t : null;
+}
+
+function operatorSlotHint(rec) {
+  const lane = rec?.inputs?.laneId || rec?.inputs?.lane_id || rec?.lane_id || "";
+  const resolved = typeof resolveSlotIdentityForDisplay === "function"
+    ? resolveSlotIdentityForDisplay(lane)
+    : null;
+  return rec?.slot || resolved?.slot || "";
+}
+
+/**
+ * The card, as a hierarchy rather than a sentence: what it is, then why, then
+ * the facts, and the request id LAST and small. The order here is the order the
+ * operator reads, so presentation cannot drift from the contract.
+ */
+export function operatorApprovalCard(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const presentation = presentationForGovernedAction(rec);
+  const context = [];
+  const push = (label, value) => { if (value) context.push({ label, value: String(value) }); };
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) push("Action", `Merge to ${rec.target || DEFAULT_TARGET}`);
+  else if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) push("Action", "Push to the remote");
+  else if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) push("Action", `Open a pull request into ${inputs.base || rec.target || DEFAULT_TARGET}`);
+  else push("Action", rec.target ? `${rec.action_key} · ${rec.target}` : rec.action_key);
+  const sha = String(inputs.expectedHeadSha || inputs.expected_head_sha || inputs.expectedSha || "");
+  push("Commit", sha ? sha.slice(0, 12) : "");
+  push("Branch", inputs.branch || inputs.headBranch || inputs.head_branch || "");
+  push("Repository", inputs.repository || "");
+  return {
+    label: operatorLabel(rec),
+    decision: "Approval required",
+    context,
+    reason: rec.purpose || rec.reason_worker_cannot_execute || null,
+    approve_label: presentation.approve_label,
+    deny_label: presentation.deny_label,
+    // Diagnostic only. Rendered small, beneath the controls, never as the name.
+    request_id_debug: `Request ${rec.request_id}`,
+  };
+}
+
+/**
+ * EVERY pending approval on this host, ordered deterministically.
+ *
+ * The operator should not have to know which lane originated a request. They
+ * had no way to reach one at all: the only approval surface lived inside a lane
+ * you already had to be looking at.
+ *
+ * Order: work that is actively blocked first, then oldest, then request id as a
+ * final tiebreak so the list never reshuffles between two renders.
+ */
+export function pendingApprovals({ root = runtimeRoot() } = {}) {
+  const rows = listGovernedActions({ root })
+    .filter((r) => r && PENDING_GOVERNED_STATUSES.includes(r.status) && r.status !== "executing");
+  const blocking = (r) => (r.run_id ? 0 : 1);
+  const filedAt = (r) => Date.parse(r.created_at || "") || 0;
+  rows.sort((a, b) =>
+    blocking(a) - blocking(b)
+    || filedAt(a) - filedAt(b)
+    || String(a.request_id).localeCompare(String(b.request_id)));
+  return rows.map((r) => ({ ...publicGovernedAction(r), operator_card: operatorApprovalCard(r) }));
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
@@ -658,6 +793,9 @@ export function publicGovernedAction(req) {
     wait_label: presentation.wait_label,
     mission_need: presentation.mission_need,
     detail: presentation.detail,
+    // The operator's name for this decision. The id is diagnostic only.
+    operator_label: operatorLabel(req),
+    operator_card: operatorApprovalCard(req),
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -1293,6 +1431,29 @@ export function requestGovernedAction(input = {}, {
   const artifactRefs = shape.artifactRefs.length
     ? shape.artifactRefs
     : (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS ? [Q15_CENSUS_ARTIFACT] : []);
+  // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
+  //
+  // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
+  // Approve three times; every attempt died inside GitHub with "Could not coerce
+  // value to GitObjectID", and because a failed request leaves the pending list,
+  // the operator was left hunting for a request that no longer appeared anywhere.
+  // Asking a human to authorize something that cannot possibly succeed is the
+  // defect — so the request is refused HERE, when the worker files it, rather
+  // than after a decision has been spent on it.
+  const shaInput = input.inputs || input.input || {};
+  const declaredSha = shaInput.expectedHeadSha || shaInput.expected_head_sha || shaInput.expectedSha || shaInput.expected_sha || null;
+  if (declaredSha != null && String(declaredSha).trim() !== "") {
+    const sha = String(declaredSha).trim();
+    if (!/^[0-9a-f]{40}$/i.test(sha)) {
+      return {
+        ok: false,
+        error: "abbreviated_source_sha",
+        failure_code: "invalid_request_inputs",
+        detail: `expectedHeadSha must be the full 40-character commit SHA; received "${sha}" (${sha.length} characters). An abbreviated SHA is ambiguous and is rejected by the merge API, so it can never be approved.`,
+      };
+    }
+  }
+
   const availability = classifyActionAvailability(shape.actionKey);
   if (availability.code === "unsupported_action_key") {
     return { ok: false, error: "unsupported_action_key", failure_code: "action_unavailable" };

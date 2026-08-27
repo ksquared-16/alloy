@@ -1234,6 +1234,16 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
     return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
   }
+  // EVERY pending approval, without needing to know a lane.
+  //
+  // The only approval surface used to live inside a lane the operator already
+  // had to be looking at, so a pending decision was unreachable unless you
+  // already knew where it came from.
+  if (path === "/api/v2/governed-actions/pending" || path === "/api/v2/approvals") {
+    const { pendingApprovals } = await import("./governed-action-request.mjs");
+    const approvals = pendingApprovals();
+    return { status: 200, body: { ok: true, count: approvals.length, approvals } };
+  }
   if (path === "/api/v2/governed-actions") {
     const { listGovernedActions, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");
     const mid = q("mission_id") || q("id");
