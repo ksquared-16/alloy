@@ -1964,7 +1964,12 @@ document.addEventListener("click", async (e) => {
       const r = await gwFetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request_id: requestId }),
+        body: JSON.stringify({
+          request_id: requestId,
+          // What the operator actually read. The server refuses the decision if
+          // the request has moved on since this card was drawn.
+          content_fingerprint: btn.getAttribute("data-content-fingerprint") || null,
+        }),
       });
       const out = await r.json().catch(() => ({}));
       G.notice = View.governedDecisionNotice({

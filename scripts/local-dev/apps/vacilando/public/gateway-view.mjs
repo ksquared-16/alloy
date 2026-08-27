@@ -576,6 +576,27 @@ export function staleAdmissionClaim(lane, nowMs = Date.now()) {
 }
 
 export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
+  // DISCOVERABILITY SHARES THE FIX. The lane list already had a NEEDS_APPROVAL
+  // branch, but it read this posture — which carried the same run-state gating
+  // that hid the card. So a pending approval was invisible in the list for the
+  // same reason it was unpressable in the lane: the request was real, and every
+  // surface asked the run about it instead of the lane.
+  //
+  // Deciding it here means the list badge, the group placement and the card all
+  // come from one answer and cannot disagree.
+  const pendingApproval = laneAwaitingOperatorApproval(lane);
+  if (pendingApproval) {
+    return {
+      state: "NEEDS_APPROVAL",
+      label: "Needs approval",
+      mark: "!",
+      hint: pendingApproval.title || pendingApproval.action_key || "Approval required",
+      headline: `Needs approval · ${pendingApproval.title || pendingApproval.action_key || "Governed action"}`,
+      tone: "needs",
+      slot: lane?.slot ?? lane?.binding?.slot ?? null,
+      queue_position: null,
+    };
+  }
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
   const liveAgent = liveAgentOnLane(lane);
@@ -1294,11 +1315,47 @@ export function renderCapacityHolders(capacity) {
  * spends its first seconds there and an operator who looks in that window
  * should still see the control rather than an empty panel.
  */
+/**
+ * The governed action a dependency is waiting on, shaped for the approval card.
+ *
+ * A dependency in WAITING_APPROVAL already carries the governed action's
+ * identity; what it lacks is the presentation fields the card reads. This
+ * adapts rather than duplicates, so the operator sees one surface and the two
+ * records cannot describe the same decision differently.
+ */
+export function dependencyGovernedAction(dep) {
+  if (!dep || dep.state !== "WAITING_APPROVAL" && dep.dependency_state !== "WAITING_APPROVAL") return null;
+  const ga = dep.governed_action || null;
+  if (ga) return ga;
+  if (!dep.governed_action_id && !dep.governed_action_key) return null;
+  return {
+    request_id: dep.governed_action_id || null,
+    status: "awaiting_operator",
+    operator_approval_required: true,
+    action_key: dep.governed_action_key || null,
+    target: dep.environment || dep.target_environment || null,
+    title: dep.title || `${dep.governed_action_key || "Governed action"} for ${dep.capability || dep.requested_capability || "required work"}`,
+    reason_worker_cannot_execute: dep.reason || "A dependency is waiting on a governed decision.",
+    purpose: dep.purpose || "Approving lets the dependency dispatch to an authorized executor.",
+    content_fingerprint: dep.content_fingerprint || null,
+    inputs: dep.action_inputs || dep.inputs || {},
+    from_dependency: dep.dependency_id || null,
+  };
+}
+
 export function laneAwaitingOperatorApproval(lane) {
   const candidates = [
     lane?.governed_action,
     lane?.execution_run?.governed_action,
     lane?.previous_run?.governed_action,
+    // A Governed Dependency in WAITING_APPROVAL is the same human decision
+    // wearing a different record. The operator must not have to care whether
+    // the request came from `vac governed-action`, a dependency, or anything
+    // else canonical — pending human governance is ONE interaction, so the
+    // dependency's governed action feeds the same card rather than a second
+    // component that would drift from it.
+    dependencyGovernedAction(lane?.governed_dependency),
+    dependencyGovernedAction(lane?.execution_run?.governed_dependency),
   ].filter(Boolean);
   for (const ga of candidates) {
     // A decision already made never offers the buttons again, whatever the
@@ -1337,13 +1394,9 @@ export function renderLaneApprovalCard(lane, ga) {
   // Stale protection: the card carries the identity it was rendered for, so an
   // Approve pressed after the content changed can be refused rather than
   // silently approving something the operator never read.
-  const fingerprint = esc([
-    ga?.action_key || "", ga?.target || "",
-    inputs.expectedHeadSha || inputs.expectedSha || "",
-    inputs.branch || inputs.headBranch || "",
-    inputs.pullRequestNumber ?? "",
-    Array.isArray(inputs.migrations) ? inputs.migrations.join(",") : "",
-  ].join("|"));
+  // The SERVER's identity for this content, not one the client invented — a
+  // fingerprint computed here would only prove the client agreed with itself.
+  const fingerprint = esc(ga?.content_fingerprint || "");
   return `<aside class="gw-runtime gw-approval" data-gw-runtime data-posture="NEEDS_APPROVAL" data-gw-governed-approval data-request-id="${rid}">
     <div class="gw-work-h">Approval required</div>
     <p class="gw-approval-title">${esc(ga?.title || ga?.action_key || "Governed action")}</p>

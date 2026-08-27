@@ -114,20 +114,24 @@ await test("6 — the request id is present but SECONDARY, never the operator's 
   assert.match(title, /pull request/i);
 });
 
-await test("7 — stale protection: the card carries the identity it was rendered for", () => {
-  const a = V.renderLaneRuntimeControls(LIVE_SHAPE);
-  const fpA = a.match(/data-content-fingerprint="([^"]*)"/)?.[1];
-  assert.ok(fpA && fpA.length > 0);
-  // Same action, DIFFERENT commit — must not share a fingerprint.
-  const moved = {
-    ...LIVE_SHAPE,
-    governed_action: {
-      ...LIVE_SHAPE.governed_action,
-      inputs: { ...LIVE_SHAPE.governed_action.inputs, expectedHeadSha: "0000000000000000" },
-    },
+await test("7 — stale protection: the card carries the identity the SERVER issued", async () => {
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  // The fingerprint is the server's, not the client's — a value the client
+  // computed would only prove the client agreed with itself.
+  const rec = {
+    request_id: "gar_8934d2967989e8", action_key: "promotion.open_pr", target: "staging",
+    status: "awaiting_operator", operator_approval_required: true,
+    inputs: LIVE_SHAPE.governed_action.inputs,
   };
-  const fpB = V.renderLaneRuntimeControls(moved).match(/data-content-fingerprint="([^"]*)"/)?.[1];
-  assert.notEqual(fpA, fpB, "a changed commit changes the card's identity");
+  const fp = G.governedContentFingerprint(rec);
+  assert.ok(fp && fp.length > 0);
+  const lane = { ...LIVE_SHAPE, governed_action: { ...LIVE_SHAPE.governed_action, content_fingerprint: fp } };
+  assert.match(V.renderLaneRuntimeControls(lane), new RegExp(`data-content-fingerprint="${fp}"`));
+  // A moved commit yields a different identity, so the old card is detectable.
+  const moved = G.governedContentFingerprint({ ...rec, inputs: { ...rec.inputs, expectedHeadSha: "0000000000000000" } });
+  assert.notEqual(fp, moved);
+  // With no fingerprint issued, the card renders empty rather than inventing one.
+  assert.match(V.renderLaneRuntimeControls(LIVE_SHAPE), /data-content-fingerprint=""/);
 });
 
 await test("8 — the controls are not hidden behind a disclosure or an overflow", () => {
@@ -147,6 +151,122 @@ await test("9 — the handler's selector and the markup's attribute are the same
   const html = V.renderLaneRuntimeControls(LIVE_SHAPE);
   assert.match(html, /data-gw-governed-approve/, "markup attribute");
   assert.match(html, /data-gw-governed-deny/);
+});
+
+// ── Server-side stale-content enforcement ────────────────────────────────────
+
+await test("10 — the fingerprint binds CONTENT, not the request id", async () => {
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  const base = {
+    request_id: "gar_same", action_key: "promotion.open_pr", target: "staging",
+    inputs: { repository: "ksquared-16/alloy", headBranch: "b", expectedHeadSha: "ABC123DEF" },
+  };
+  // Same id, moved commit — the whole point.
+  const moved = { ...base, inputs: { ...base.inputs, expectedHeadSha: "999999999" } };
+  assert.notEqual(G.governedContentFingerprint(base), G.governedContentFingerprint(moved));
+  // Case and order must not manufacture a difference.
+  assert.equal(G.governedContentFingerprint(base), G.governedContentFingerprint({ ...base, inputs: { ...base.inputs, expectedHeadSha: "abc123def" } }));
+  const m1 = { ...base, inputs: { ...base.inputs, migrations: ["b.sql", "a.sql"] } };
+  const m2 = { ...base, inputs: { ...base.inputs, migrations: ["a.sql", "b.sql"] } };
+  assert.equal(G.governedContentFingerprint(m1), G.governedContentFingerprint(m2), "order-independent");
+  // Environment is normalised, so aliases do not read as different content.
+  assert.equal(G.governedContentFingerprint({ ...base, target: "STAGING " }), G.governedContentFingerprint(base));
+});
+
+await test("11 — a stale decision is REFUSED server-side, and returns the current request", async () => {
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  const rec = {
+    request_id: "gar_x", action_key: "promotion.open_pr", target: "staging", status: "awaiting_operator",
+    inputs: { repository: "r", headBranch: "b", expectedHeadSha: "NEW" },
+  };
+  const oldCard = G.governedContentFingerprint({ ...rec, inputs: { ...rec.inputs, expectedHeadSha: "OLD" } });
+  const refusal = G.rejectStaleDecision(rec, oldCard);
+  assert.ok(refusal, "a moved commit is refused");
+  assert.equal(refusal.error, "stale_content");
+  assert.equal(refusal.ok, false);
+  assert.equal(refusal.presented_fingerprint, oldCard);
+  assert.equal(refusal.current_fingerprint, G.governedContentFingerprint(rec));
+  // The operator gets the CURRENT request back so the card can redraw truthfully.
+  assert.equal(refusal.request.request_id, "gar_x");
+  // A matching card passes, and an absent fingerprint does not gate legacy callers.
+  assert.equal(G.rejectStaleDecision(rec, G.governedContentFingerprint(rec)), null);
+  assert.equal(G.rejectStaleDecision(rec, null), null);
+});
+
+await test("12 — both approve AND deny enforce it", async () => {
+  const src = readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
+  const approve = src.slice(src.indexOf("export async function approveGovernedAction"), src.indexOf("export async function approveGovernedAction") + 1200);
+  const deny = src.slice(src.indexOf("export function denyGovernedAction"), src.indexOf("export function denyGovernedAction") + 1200);
+  assert.match(approve, /rejectStaleDecision\(rec, expectedFingerprint\)/);
+  assert.match(deny, /rejectStaleDecision\(rec, expectedFingerprint\)/, "denying content the operator never read is still a wrong decision");
+});
+
+await test("13 — the card renders the SERVER's fingerprint, never one the client invented", () => {
+  const lane = { ...LIVE_SHAPE, governed_action: { ...LIVE_SHAPE.governed_action, content_fingerprint: "server-fp-abc" } };
+  assert.match(V.renderLaneRuntimeControls(lane), /data-content-fingerprint="server-fp-abc"/);
+  const viewSrc = readFileSync(new URL("../apps/vacilando/public/gateway-view.mjs", import.meta.url), "utf8");
+  assert.match(viewSrc, /ga\?\.content_fingerprint/);
+  // And the client hands it back.
+  const client = readFileSync(new URL("../apps/vacilando/public/gateway.js", import.meta.url), "utf8");
+  assert.match(client, /content_fingerprint: btn\.getAttribute\("data-content-fingerprint"\)/);
+});
+
+// ── Governed dependency integration ──────────────────────────────────────────
+
+await test("14 — a dependency in WAITING_APPROVAL uses the SAME card", () => {
+  const lane = {
+    lane_id: "l", name: "Health & Safety",
+    execution_run: { run_id: "r", state: "WAITING_RESOURCE", resource_wait: { reason: "needs_operator_input" } },
+    governed_dependency: {
+      dependency_id: "gdep_1", dependency_state: "WAITING_APPROVAL",
+      governed_action_id: "gar_dep", governed_action_key: "database.apply_migration",
+      target_environment: "development_certification", requested_capability: "apply migrations",
+      content_fingerprint: "fp-dep",
+      action_inputs: { repository: "ksquared-16/alloy", migrations: ["a.sql", "b.sql", "c.sql"] },
+    },
+  };
+  const html = V.renderLaneRuntimeControls(lane);
+  assert.match(html, /data-gw-governed-approve/);
+  assert.match(html, /data-request-id="gar_dep"/);
+  assert.match(html, /data-content-fingerprint="fp-dep"/);
+  assert.match(html, /development_certification/);
+  assert.match(html, /3 file/, "the migration set is shown, not hidden behind the id");
+  // One component, not two.
+  assert.equal((html.match(/data-gw-governed-approve/g) || []).length, 1);
+});
+
+await test("15 — only WAITING_APPROVAL surfaces; other dependency states do not", () => {
+  const mk = (state) => ({
+    lane_id: "l",
+    governed_dependency: { dependency_id: "d", dependency_state: state, governed_action_id: "gar_d", governed_action_key: "database.apply_migration" },
+  });
+  assert.ok(V.laneAwaitingOperatorApproval(mk("WAITING_APPROVAL")));
+  for (const s of ["DECLARED", "READY_TO_ROUTE", "WAITING_EXECUTOR", "WAITING_CAPACITY", "EXECUTING", "VERIFYING", "SATISFIED", "FAILED"]) {
+    assert.equal(V.laneAwaitingOperatorApproval(mk(s)), null, s);
+  }
+});
+
+// ── Discoverability ──────────────────────────────────────────────────────────
+
+await test("16 — the lane LIST shows approval required, from the same answer", () => {
+  const p = V.deriveLaneExecutionPosture(LIVE_SHAPE);
+  assert.equal(p.state, "NEEDS_APPROVAL");
+  assert.equal(p.label, "Needs approval");
+  assert.equal(p.tone, "needs");
+  assert.match(p.headline, /Needs approval ·/);
+  // The list badge and the card cannot disagree, because both come from here.
+  assert.match(V.renderLaneRuntimeControls(LIVE_SHAPE), /data-gw-governed-approve/);
+  // And it clears the moment a decision exists.
+  const decided = { ...LIVE_SHAPE, governed_action: { ...LIVE_SHAPE.governed_action, operator_approval: { decision: "approved" } } };
+  assert.notEqual(V.deriveLaneExecutionPosture(decided).state, "NEEDS_APPROVAL");
+});
+
+await test("17 — discoverability holds for a dependency too", () => {
+  const lane = {
+    lane_id: "l",
+    governed_dependency: { dependency_id: "d", dependency_state: "WAITING_APPROVAL", governed_action_id: "gar_d", governed_action_key: "database.apply_migration", target_environment: "development_certification" },
+  };
+  assert.equal(V.deriveLaneExecutionPosture(lane).state, "NEEDS_APPROVAL");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

@@ -476,7 +476,13 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       : (pendingGovernedActionForMission(v.mission_id || v.missionId)
         || pendingGovernedActionForLane(v.lane_id || v.laneId));
     try {
-      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, { actor: actorDefault }));
+      // The card hands back the identity it was rendered for. A request id
+      // alone would let a tap approve content that moved after the operator
+      // read it.
+      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, {
+        actor: actorDefault,
+        expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
+      }));
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return {
@@ -496,6 +502,7 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       actor: actorDefault,
       reason: v.reason || "approval_denied",
       code: v.code || "approval_denied",
+      expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
     });
     return { status: out.ok ? 200 : 409, body: out };
   }

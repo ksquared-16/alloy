@@ -8,7 +8,7 @@
  * This is not a parallel orchestrator: it sits on execution runs, mission
  * decisions, and trusted-host actions.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -529,11 +529,70 @@ function capturePullRequestSnapshot(rec, { gh = null } = {}) {
   }
 }
 
+/**
+ * The canonical identity of WHAT an operator is being asked to approve.
+ *
+ * A request id is not enough. It names a row; it says nothing about the content
+ * that row currently points at. If the branch moves, the commit changes, or the
+ * migration set is edited after the approval card is drawn, the id still
+ * matches and the operator's tap would approve something they never read.
+ *
+ * So the decision binds to the content: the action, the normalised environment,
+ * the repository, the branch, the source commit, the pull request, and the
+ * migration set. Both halves compute it from this one function — the card
+ * renders what the server produced, and the server recomputes it at decision
+ * time. A fingerprint the client invented would prove nothing.
+ */
+export function governedContentFingerprint(req) {
+  if (!req) return null;
+  const inputs = req.inputs || {};
+  const migrations = Array.isArray(inputs.migrations)
+    ? inputs.migrations.map((m) => (typeof m === "string" ? m : `${m?.version || ""}:${m?.path || m?.migration_path || ""}`)).sort()
+    : [];
+  const canonical = JSON.stringify({
+    action_key: req.action_key || null,
+    // Normalised so `cert` and `certification` cannot read as different
+    // content, and `development_certification` cannot read as the same.
+    environment: String(inputs.environment || req.target || "").trim().toLowerCase() || null,
+    repository: inputs.repository || null,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    source_sha: String(inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "").toLowerCase() || null,
+    pull_request: inputs.pullRequestNumber ?? inputs.pull_request_number ?? null,
+    migrations,
+  });
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 32);
+}
+
+/**
+ * Shared by approve and deny.
+ *
+ * Deny is checked too, deliberately: denying content the operator did not read
+ * is a smaller harm than approving it, but it is still a decision recorded
+ * against the wrong thing, and a stale deny would let the real request slip
+ * through unnoticed.
+ */
+export function rejectStaleDecision(rec, expectedFingerprint) {
+  if (!expectedFingerprint) return null;
+  const current = governedContentFingerprint(rec);
+  if (current === expectedFingerprint) return null;
+  return {
+    ok: false,
+    error: "stale_content",
+    detail: "The request changed after this approval card was shown. Nothing was approved or denied; review the current request.",
+    presented_fingerprint: expectedFingerprint,
+    current_fingerprint: current,
+    request: publicGovernedAction(rec),
+  };
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
   return {
     request_id: req.request_id,
+    // The identity the operator is actually deciding about. The card renders
+    // this and hands it back; the server recomputes and compares.
+    content_fingerprint: governedContentFingerprint(req),
     mission_id: req.mission_id,
     // What vouched for this action, so the approval card can say so instead of
     // leaving a repository-authorized request looking unattributed.
@@ -2119,9 +2178,16 @@ export async function approveGovernedAction(requestId, {
   actor = "operator",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  // STALE CONTENT. The operator approved what the card showed them. If the
+  // content moved since, the id still matches and approving would authorise
+  // something they never saw — so the decision is refused and the current
+  // request is returned so the card can redraw with the truth.
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
   if (rec.status === "failed") {
     rec.status = "awaiting_director";
@@ -2210,9 +2276,12 @@ export function denyGovernedAction(requestId, {
   code = "approval_denied",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   rec.operator_approval = {
     decision: "denied",
     actor,
