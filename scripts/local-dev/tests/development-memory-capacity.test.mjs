@@ -29,6 +29,19 @@ async function test(name, fn) {
 }
 
 const GB = 1073741824;
+
+/**
+ * Source with comments stripped.
+ *
+ * A guard that scans raw text fails on the comment PROMISING not to do the
+ * thing — this suite's own comments say "Pages free" precisely because the code
+ * must not. Scan code, never prose.
+ */
+function codeOnly(url) {
+  return readFileSync(url, "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .split("\n").filter((l) => !/^\s*(\/\/|\*)/.test(l)).join("\n");
+}
 const PAGE = 16384;
 const pages = (g) => Math.round((g * GB) / PAGE);
 
@@ -171,7 +184,7 @@ await test("NEGATIVE 7 — health and S4 admission consume the SAME snapshot", a
   assert.equal(cap.axes.memory_capacity.pressure_state, finding.measurements.pressure_state);
   assert.equal(cap.axes.memory_capacity.under_pressure, s.under_pressure);
   // Neither recomputes availability of its own.
-  const capSrc = readFileSync(new URL("../lib/vacilando/capacity-policy.mjs", import.meta.url), "utf8");
+  const capSrc = codeOnly(new URL("../lib/vacilando/capacity-policy.mjs", import.meta.url));
   assert.equal(/Pages\s+free/.test(capSrc), false, "the policy does not parse memory itself");
 });
 
@@ -284,6 +297,48 @@ await test("MUTATION — reverting the axis to Pages free reproduces the origina
   const mutatedRemaining = s.free_gb - s.reserve_gb;
   assert.ok(mutatedRemaining < 0, "the old comparison refuses the very same host");
   assert.ok(Math.abs(mutatedRemaining + 2.3) < 0.4, "by roughly the 2.3 GB the incident reported");
+});
+
+await test("REGRESSION GUARD — the old `Pages free` admission path is unreachable", () => {
+  // The shape this correction removes: Pages free -> free_gb -> memoryBelowReserve.
+  // The first cut left it reachable through a fallback, so any caller passing a
+  // legacy memory object silently got the behaviour that refused every build.
+  const legacy = { free_gb: 0.06, free_pct: 0.25, compressor_gb: 11, swapouts_delta: 0, swap_rate_known: true };
+  const cap = C.computeCapacityPolicy(C.hostCapability({
+    os: { cpus: () => new Array(8), totalmem: () => 24 * GB, arch: () => "arm64", platform: () => "darwin" },
+    memory: legacy, disk: { total_gb: 460, free_gb: 44, free_pct: 9.6 }, load: { one: 5 },
+  }));
+  // It does NOT quietly compare 0.06 against the reserve and report -2.34.
+  assert.equal(cap.axes.memory_capacity.available_gb, null);
+  assert.equal(cap.axes.memory_capacity.unmeasured, true);
+  assert.equal(cap.axes.memory_capacity.remaining_gb, null, "no remaining figure is invented from free pages");
+  assert.equal(cap.axes.memory_capacity.under_pressure, true, "an unmeasured host constrains, conservatively");
+  const gateReason = cap.constrained_axes.find((c) => c.value === "memory_capacity" || c.reason?.includes("could not be measured"));
+  assert.ok(gateReason, "and it says so as a constrained axis");
+  assert.match(gateReason.reason, /could not be measured/);
+
+  // A real snapshot still works normally.
+  const good = C.computeCapacityPolicy(C.hostCapability({
+    os: { cpus: () => new Array(8), totalmem: () => 24 * GB, arch: () => "arm64", platform: () => "darwin" },
+    memory: snap(), disk: { total_gb: 460, free_gb: 44, free_pct: 9.6 }, load: { one: 5 },
+  }));
+  assert.ok(good.axes.memory_capacity.remaining_gb > 0);
+  assert.equal(good.axes.memory_capacity.unmeasured, false);
+});
+
+await test("REGRESSION GUARD — the policy never reads a memory page counter itself", () => {
+  const src = codeOnly(new URL("../lib/vacilando/capacity-policy.mjs", import.meta.url));
+  assert.equal(/Pages\s+free/.test(src), false, "no page counter is parsed in code");
+  assert.equal(/vm_stat/.test(src), false);
+  // `memory_free_gb` survives for REPORTING only. It is never the comparand.
+  assert.equal(/memory_free_gb\s*<|free_gb\s*<\s*memoryReserveGb/.test(src), false);
+  assert.match(src, /memoryAvailableGb\s*<\s*memoryReserveGb/, "availability is what the reserve is compared against");
+  // And there is no fallback from availability back to free pages. Scoped to
+  // the ASSIGNMENT of memoryAvailableGb — `memory_free_gb` still appears twice
+  // as a reported field, which is correct and must not trip this guard.
+  const assignment = src.slice(src.indexOf("const memoryAvailableGb"), src.indexOf("const memoryUnmeasured"));
+  assert.equal(/memory_free_gb/.test(assignment), false, "availability never falls back to free pages");
+  assert.match(assignment, /memory_available_gb.*:\s*null/s, "a missing measurement yields null, not a substitute");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
