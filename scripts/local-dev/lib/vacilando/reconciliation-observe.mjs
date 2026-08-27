@@ -55,17 +55,23 @@ export function observeReconciliation({
   for (const port of PORTS) {
     const owner = registered.get(port) || null;
     const pidFile = owner ? join(root, "pids", `${owner}.pid`) : null;
-    const recorded = pidFile && existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8").trim()) : null;
+    // A pid RECORD is the claim of a live runtime. Its absence is not a lie —
+    // it is a stopped server with its durable assignment intact.
+    const hasRuntimeClaim = Boolean(pidFile && existsSync(pidFile));
+    const recorded = hasRuntimeClaim ? Number(readFileSync(pidFile, "utf8").trim()) : null;
     const alive = pidAlive(recorded);
     const serving = processes.find((p) => new RegExp(`-p\\s+${port}\\b`).test(p.command || "")) || null;
     let verdict;
     if (serving && owner && alive) verdict = "matched";
     else if (serving && (!owner || !alive)) verdict = "unregistered_server";
-    else if (!serving && owner && !alive) verdict = "stale_record";
+    // Only a runtime CLAIM that reality disproves is stale.
+    else if (!serving && owner && hasRuntimeClaim && !alive) verdict = "stale_record";
+    else if (!serving && owner) verdict = "registered_inactive";
     else if (!serving && !owner) verdict = "free";
     else verdict = "matched";
     ports.push({
       port, registered: owner, recorded_worktree: owner, recorded_pid: recorded, alive,
+      has_runtime_claim: hasRuntimeClaim,
       serving_pid: serving ? serving.pid : null,
       observed_owner: serving ? (serving.worktree || null) : null,
       verdict,

@@ -270,3 +270,90 @@ await test("EXECUTOR — re-observation gathers reality, never accepts it from i
   const O = await import("../lib/vacilando/reconciliation-observe.mjs");
   assert.equal(typeof O.gatherObservation, "function");
 });
+
+await test("CONVERGENCE — a durable assignment with no server is not a correction", () => {
+  // The defect: registered + no pid file was called stale_record, so every
+  // stopped dev server looked like corruption AND clear_dead_pid_record
+  // proposed itself forever — removing the pid file left the assignment
+  // registered and the verdict unchanged. stale_record now means only what it
+  // says: metadata CLAIMS a live runtime that reality disproves.
+  const registeredNoServer = obs([portObs({ has_runtime_claim: false, recorded_pid: null, alive: false, serving_pid: null, verdict: "registered_inactive" })]);
+  const plan = R.buildReconciliationPlan(registeredNoServer);
+  assert.equal(plan.corrections.length, 0, "a stopped server with a durable assignment needs no correction");
+  assert.equal(plan.withheld.length, 0, "and is not withheld either — it is simply correct");
+
+  // A genuine stale CLAIM still produces one.
+  const staleClaim = obs([portObs({ has_runtime_claim: true, recorded_pid: 4242, alive: false, serving_pid: null, verdict: "stale_record" })]);
+  assert.deepEqual(R.buildReconciliationPlan(staleClaim).corrections.map((c) => c.kind), ["clear_dead_pid_record"]);
+});
+
+await test("CONVERGENCE — an applied correction does not reappear in the next plan", () => {
+  // THE INVARIANT THE PREVIOUS IMPLEMENTATION VIOLATED: apply reported 36 of 36
+  // written and the very next canonical plan proposed all 36 again. A write is
+  // not success; a changed observation is.
+  const r = root();
+  mkdirSync(join(r, "pids"), { recursive: true });
+  writeFileSync(join(r, "pids", "wt1.pid"), "4242");
+
+  const before = obs([portObs({ has_runtime_claim: true, recorded_pid: 4242, alive: false, serving_pid: null, verdict: "stale_record" })]);
+  const p1 = R.buildReconciliationPlan(before);
+  assert.equal(p1.corrections.length, 1);
+
+  const out = R.applyReconciliationPlan(p1, { root: r, freshObservation: before });
+  assert.equal(out.applied.length, 1, "the correction applies");
+  assert.equal(existsSync(join(r, "pids", "wt1.pid")), false, "and the runtime claim is gone");
+
+  // Re-observe the SAME external reality: the claim no longer exists, so the
+  // port is a durable assignment at rest and proposes nothing.
+  const after = obs([portObs({ has_runtime_claim: false, recorded_pid: null, alive: false, serving_pid: null, verdict: "registered_inactive" })]);
+  const p2 = R.buildReconciliationPlan(after);
+  const appliedIds = out.applied.map((a) => `${a.kind}:${a.port ?? a.path}`);
+  const stillProposed = p2.corrections.map((c) => `${c.kind}:${c.port ?? c.path}`).filter((id) => appliedIds.includes(id));
+  assert.deepEqual(stillProposed, [], "a successfully applied correction must not be re-proposed");
+});
+
+await test("CONVERGENCE — changed reality may legitimately create a NEW correction", () => {
+  // Convergence must not mean silence. If a server dies after apply, the next
+  // plan should say so.
+  const settled = obs([portObs({ has_runtime_claim: false, verdict: "registered_inactive" })]);
+  assert.equal(R.buildReconciliationPlan(settled).corrections.length, 0);
+  const died = obs([portObs({ has_runtime_claim: true, recorded_pid: 777, alive: false, serving_pid: null, verdict: "stale_record" })]);
+  assert.equal(R.buildReconciliationPlan(died).corrections.length, 1, "new reality, new correction");
+});
+
+await test("CONVERGENCE — the OBSERVER derives the verdict, not the fixture", async () => {
+  // The three convergence tests above hand-set `verdict`, so they exercise the
+  // planner and never the classification logic — two mutations to the observer
+  // survived them. This one builds a real runtime root and lets the observer
+  // decide, which is the only way the distinction can actually fail.
+  const O = await import("../lib/vacilando/reconciliation-observe.mjs");
+  const r = root();
+  mkdirSync(join(r, "metadata"), { recursive: true });
+  mkdirSync(join(r, "pids"), { recursive: true });
+  writeFileSync(join(r, "metadata", "wt9.env"), 'ALLOY_WORKTREE_NAME="wt9"\nPORT="3011"\n');
+
+  // Durable assignment, NO pid record, nothing serving.
+  let ports = O.observeReconciliation({ root: r, processes: [] }).ports;
+  let p = ports.find((x) => x.port === 3011);
+  assert.equal(p.verdict, "registered_inactive", "a stopped server keeps its assignment and is not stale");
+  assert.equal(p.has_runtime_claim, false);
+  assert.equal(R.buildReconciliationPlan({ ports, worktrees: [] }).corrections.length, 0);
+
+  // Now a pid RECORD claiming a process that does not exist.
+  writeFileSync(join(r, "pids", "wt9.pid"), "999999");
+  ports = O.observeReconciliation({ root: r, processes: [] }).ports;
+  p = ports.find((x) => x.port === 3011);
+  assert.equal(p.verdict, "stale_record", "a runtime claim reality disproves IS stale");
+  assert.equal(p.has_runtime_claim, true);
+  const plan = R.buildReconciliationPlan({ ports, worktrees: [] });
+  assert.deepEqual(plan.corrections.map((c) => c.kind), ["clear_dead_pid_record"]);
+
+  // Apply, then re-observe the same external reality: it must converge.
+  R.applyReconciliationPlan(plan, { root: r, freshObservation: { ports, worktrees: [] } });
+  const after = O.observeReconciliation({ root: r, processes: [] }).ports;
+  assert.equal(after.find((x) => x.port === 3011).verdict, "registered_inactive");
+  assert.equal(R.buildReconciliationPlan({ ports: after, worktrees: [] }).corrections.length, 0,
+    "the applied correction must not be re-proposed");
+  // And the durable assignment survived.
+  assert.ok(existsSync(join(r, "metadata", "wt9.env")), "durable configuration must never be destroyed");
+});
