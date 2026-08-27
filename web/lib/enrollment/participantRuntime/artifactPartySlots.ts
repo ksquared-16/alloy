@@ -331,3 +331,37 @@ export function broadcastingPartyFieldIds(
     }
     return out;
 }
+
+/**
+ * Group destinations into SLOTS — one per role and ordinal, carrying all its fields.
+ *
+ * The missing bridge between reading an artifact and projecting into it. `artifactPartySlots`
+ * answers per DESTINATION ("Trustee #1 Name" and "Trustee #1 Email" are two boxes"), while
+ * `projectPartiesIntoSlots` seats one person per SLOT. Handing it the destination list directly
+ * made every attribute its own slot, so a role with three attributes looked like capacity three and
+ * the second and third seats were filled with nobody — a trust deed with three trustee lines
+ * reported capacity four, and a sailing club seated its one guardian into the name box while
+ * leaving the phone box empty.
+ *
+ * Found by running the cross-domain proof, not by reading either module.
+ */
+export function groupPartySlots(
+    destinations: readonly PartySlotDestination[],
+): { slot_id: string; role: string; ordinal: number; field_ids: string[] }[] {
+    const bySlot = new Map<string, { slot_id: string; role: string; ordinal: number; field_ids: string[] }>();
+    for (const d of destinations) {
+        const slotId = `${d.role}#${d.ordinal}`;
+        const slot = bySlot.get(slotId) ?? { slot_id: slotId, role: d.role, ordinal: d.ordinal, field_ids: [] };
+        slot.field_ids.push(d.field_id);
+        bySlot.set(slotId, slot);
+    }
+    return [...bySlot.values()].sort((a, b) => a.role.localeCompare(b.role) || a.ordinal - b.ordinal);
+}
+
+/** Read an artifact straight into projectable slots. */
+export function artifactSlotsForProjection(
+    schema: Pick<FormSchemaV1, "fields">,
+    vocabulary: readonly string[] = [],
+) {
+    return groupPartySlots(artifactPartySlots(schema, vocabulary));
+}
