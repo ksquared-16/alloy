@@ -92,6 +92,30 @@ test("EVERY registered action has a dispatch branch — the gap that cost five r
     assert.deepEqual(undispatched, [], `registered but never dispatched: ${undispatched.join(", ")}`);
 });
 
+test("the approval control describes a RESTORE, never another action's words", async () => {
+    /*
+     * The restore fell through to the census presentation and offered the operator
+     * "Authorize census — Read-only database census · Data mode: Read-only" for an action that mints
+     * a Supabase session. A control that misdescribes what it authorizes is worse than no control,
+     * and it is the same fallthrough shape as the missing dispatch branch.
+     */
+    const { presentationForGovernedAction } = await import("../lib/vacilando/governed-action-request.mjs");
+    const p = presentationForGovernedAction({
+        action_key: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION,
+        lane_id: LANE,
+        slot: 5,
+        registered_identity: IDENTITY,
+        inputs: { laneId: LANE },
+        status: "requested",
+    });
+    assert.match(p.approve_label, /restore/i, "the label must say what it authorizes");
+    assert.ok(!/census/i.test(p.approve_label), "must not borrow the census label");
+    assert.ok(!/census|read-only/i.test(p.detail), `detail must not describe a census: ${p.detail}`);
+    assert.match(p.detail, /qa-slot5-refactor@example\.com/, "the identity being restored must be named");
+    assert.match(p.detail, /Slot 5/, "the slot must be named");
+    assert.match(p.detail, /no password/i, "must state that no password is created or shown");
+});
+
 test("the governed executor is SYNCHRONOUS — a Promise is scored as a failure", () => {
     /*
      * processGovernedAction calls its executor without awaiting, and the trusted-host actions beside
