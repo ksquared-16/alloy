@@ -149,6 +149,15 @@ export const GATES = Object.freeze({
   no_open_pull_request_depends: (ev) => (ev.no_open_pull_request_depends == null ? null : ev.no_open_pull_request_depends === true),
   no_active_lane_reference: (ev) => (ev.active_lane_reference == null ? null : ev.active_lane_reference === false),
   no_unique_work_lost: (ev) => (ev.unique_work_at_risk == null ? null : ev.unique_work_at_risk === false),
+  // ── Reconciliation metadata ──────────────────────────────────────────────
+  reconciliation_plan_readable: (ev) => (ev.reconciliation_plan_readable == null ? null : ev.reconciliation_plan_readable === true),
+  reconciliation_plan_current: (ev) => (ev.reconciliation_plan_current == null ? null : ev.reconciliation_plan_current === true),
+  all_corrections_allowlisted: (ev) => (ev.all_corrections_allowlisted == null ? null : ev.all_corrections_allowlisted === true),
+  no_destructive_corrections: (ev) => (ev.destructive_corrections == null ? null : ev.destructive_corrections === 0),
+  no_foreign_owner_mutation: (ev) => (ev.foreign_owner_mutations == null ? null : ev.foreign_owner_mutations === 0),
+  no_ambiguous_owner_mutation: (ev) => (ev.ambiguous_owner_mutations == null ? null : ev.ambiguous_owner_mutations === 0),
+  no_live_process_affected: (ev) => (ev.live_process_affecting == null ? null : ev.live_process_affecting === 0),
+  metadata_store_known: (ev) => (ev.metadata_store_known == null ? null : ev.metadata_store_known === true),
   certification_suite_passed: (ev) => (ev.certification_suite_passed == null ? null : ev.certification_suite_passed === true),
 });
 
@@ -234,6 +243,25 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
       "managed_repository", "branch_exists_remotely", "branch_never_protected_name",
       "branch_not_protected", "not_protected_branch_write", "remote_head_matches", "full_exact_sha",
       "no_open_pull_request_depends", "no_active_lane_reference", "no_unique_work_lost",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_reconciliation_metadata_v1",
+    label: "Routine reconciliation metadata",
+    action_key: "vacilando.apply_reconciliation_plan",
+    environments: Object.freeze(["staging", "development_certification"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // Metadata-only, and reversible because the records describe observed
+    // reality rather than change it. Withheld retirement findings may EXIST in
+    // the plan and stay untouched; what may never happen is one of them moving
+    // into the executable set, which the fingerprint binds both halves against.
+    gates: Object.freeze([
+      "reconciliation_plan_readable", "reconciliation_plan_current",
+      "all_corrections_allowlisted", "no_destructive_corrections",
+      "no_foreign_owner_mutation", "no_ambiguous_owner_mutation",
+      "no_live_process_affected", "metadata_store_known",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),

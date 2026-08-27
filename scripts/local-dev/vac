@@ -20,6 +20,7 @@ Usage:
   vac certify-fixture <name> <op>   Run an allowlisted certification fixture (credentials stay trusted)
   vac browser-auth <status|sign-in> Recover a lane's browser session (you sign in; the agent cannot)
   vac health [--json|--check N]     Host and Vacilando runtime health (read-only)
+  vac reconcile [--apply]      S7 reconciliation: read-only plan; --apply FILES a governed request
   vac run-report <run_id> <type> --message-file <path|->
                            Submit the user-facing agent report that IS the
                            conversation: progress | needs-input | completion | failure
@@ -64,6 +65,10 @@ case "${1:-}" in
   health)
     shift
     exec node "$SCRIPT_DIR/vac-health.mjs" "$@"
+    ;;
+  reconcile)
+    shift
+    exec node "$SCRIPT_DIR/vac-reconcile.mjs" "$@"
     ;;
   browser-auth)
     shift

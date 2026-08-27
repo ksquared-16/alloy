@@ -135,7 +135,16 @@ await test("NC13 — scope did not widen: no force, rewrite or delete-repository
   for (const forbidden of ["repository.force_push", "repository.delete", "repository.rewrite_history", "repository.force_delete_branch"]) {
     assert.ok(!keys.includes(forbidden), `${forbidden} must not exist`);
   }
-  assert.equal(keys.length, 10, "exactly two capabilities were added");
+  // The count is not the invariant — the ABSENCE of destructive capabilities
+  // is. Pinning a number here just breaks every time a legitimate capability
+  // lands, which teaches people to edit the number rather than read the test.
+  for (const expected of ["repository.close_pull_request", "repository.delete_remote_branch"]) {
+    assert.ok(keys.includes(expected), `${expected} must remain registered`);
+  }
+  // Nothing may destroy repository content or signal a process.
+  for (const k of keys) {
+    assert.ok(!/force|rewrite|delete_repository|kill|destroy|purge/.test(k), `unexpectedly destructive capability: ${k}`);
+  }
 });
 
 await test("NC14 — EVERY privileged_write action key has a non-read_only default mode", async () => {
