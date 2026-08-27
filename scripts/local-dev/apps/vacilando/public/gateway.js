@@ -1174,6 +1174,36 @@ function startOutputPoll(laneId) {
   }));
 }
 
+/**
+ * Repaint the global pending-approvals bar.
+ *
+ * Kept independent of the lane projection on purpose: an approval must be
+ * reachable even when no lane is selected, which is exactly the state the
+ * operator was in when they could not find one.
+ */
+async function refreshApprovals() {
+  try {
+    const r = await gwFetch("/api/v2/governed-actions/pending");
+    const out = await r.json().catch(() => ({}));
+    G.approvals = Array.isArray(out.approvals) ? out.approvals : [];
+  } catch { G.approvals = G.approvals || []; }
+  paintApprovals();
+}
+
+function paintApprovals() {
+  const el = document.getElementById("approvals-bar");
+  if (!el) return;
+  const rows = G.approvals || [];
+  el.innerHTML = View.renderPendingApprovalsBar(rows);
+  el.hidden = rows.length === 0;
+  const badge = document.getElementById("nb-needs");
+  if (badge) {
+    badge.textContent = String(rows.length);
+    badge.hidden = rows.length === 0;
+    badge.setAttribute("aria-hidden", rows.length === 0 ? "true" : "false");
+  }
+}
+
 function startListPoll() {
   stopListPoll();
   G.pollList = setInterval(async () => {
@@ -1182,6 +1212,7 @@ function startListPoll() {
     G.listInflight = true;
     try {
       await fetchLanes();
+      await refreshApprovals();
       paintRail();
       if (G.selected) {
         const listed = View.knownLane(G.lanes, G.selected);
@@ -1459,6 +1490,10 @@ async function show(r) {
   if (gen !== G.showGen) return;
   startListPoll();
   paint();
+  // Paint pending approvals on first show, not only on the next poll tick —
+  // an approval the operator cannot see for 20 seconds is one they will not
+  // find at all.
+  refreshApprovals().catch(() => {});
   if (!G.notifyRestored) {
     G.notifyRestored = true;
     restoreGatewayNotifications().catch(() => {});
@@ -1957,6 +1992,7 @@ document.addEventListener("click", async (e) => {
       || G.lane?.execution_run?.governed_action
       || G.lane?.previous_run?.governed_action;
     const requestId = btn.getAttribute("data-request-id") || ga?.request_id;
+    const row = (G.approvals || []).find((a) => a && a.request_id === requestId) || null;
     if (!requestId) return;
     btn.disabled = true;
     try {
@@ -1964,18 +2000,26 @@ document.addEventListener("click", async (e) => {
       const r = await gwFetch(path, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ request_id: requestId }),
+        body: JSON.stringify({
+          request_id: requestId,
+          // What the operator actually read. The server refuses the decision if
+          // the request has moved on since this card was drawn.
+          content_fingerprint: btn.getAttribute("data-content-fingerprint") || null,
+        }),
       });
       const out = await r.json().catch(() => ({}));
       G.notice = View.governedDecisionNotice({
         approve: Boolean(governedApprove),
         already: out.already === true,
         error: out.ok ? null : (out.error || "approve_failed"),
-        actionKey: ga?.action_key,
-        title: ga?.title,
-        approveLabel: ga?.approve_label,
+        actionKey: row?.action_key || ga?.action_key,
+        // The row the operator actually pressed — G.lane can be a different
+        // lane entirely when the decision came from the global bar.
+        title: row ? View.governedActionLabel(row) : (ga ? View.governedActionLabel(ga) : null),
+        approveLabel: row?.approve_label || ga?.approve_label,
       });
       const laneId = G.selected || G.lane?.lane_id;
+      await refreshApprovals();
       await fetchLanes();
       if (laneId) await fetchLane(laneId);
       paint();

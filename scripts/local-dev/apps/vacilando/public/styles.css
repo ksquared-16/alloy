@@ -2285,3 +2285,63 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-approval-actions { flex-direction: column; }
   .gw-approval-actions .btn { width: 100%; }
 }
+
+/* ── Global pending approvals ───────────────────────────────────────────────
+   The operator was told to "approve gar_4dc7b4d8bcd0e0" with no surface
+   anywhere carrying that string. This bar sits at the top of every route so a
+   pending decision is found without knowing which lane raised it, and the
+   NAME of the work leads — the request id is diagnostic, and is sized to say
+   so. */
+.gw-approvals-bar[hidden] { display: none; }
+.gw-approvals {
+  margin: 12px 16px 0;
+  border: 1px solid var(--needs-border, #b7791f);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--needs-bg, rgba(183, 121, 31, 0.08));
+  padding: 12px 14px;
+}
+.gw-approvals-h {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  opacity: .85; margin-bottom: 10px;
+}
+.gw-approvals-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--needs-border, #b7791f); color: #fff; font-size: 12px;
+}
+.gw-approval-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "main actions" "ref ref";
+  gap: 10px 16px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid rgba(128, 128, 128, .22);
+}
+.gw-approval-row:first-of-type { border-top: 0; }
+.gw-approval-row-main { grid-area: main; min-width: 0; }
+.gw-approval-row-actions { grid-area: actions; display: flex; gap: 8px; }
+.gw-approval-row-ref { grid-area: ref; }
+/* The name of the work dominates. */
+.gw-approval-row-title { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; }
+.gw-approval-row-ctx { margin: 3px 0 0; font-size: 12.5px; opacity: .8; }
+.gw-approval-row-why { margin: 3px 0 0; font-size: 12.5px; opacity: .7; }
+/* The id is secondary by size, weight and colour — never mistakable for a name. */
+.gw-approval-row-ref, .gw-approval-ref {
+  margin: 6px 0 0; font-size: 11px; opacity: .5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gw-approvals .btn { min-height: 44px; }
+
+/* iPhone: stacked, full-width, genuinely tappable, no disclosure to open. */
+@media (max-width: 860px) {
+  .gw-approvals { margin: 10px 10px 0; padding: 12px; }
+  .gw-approval-row {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "actions" "ref";
+  }
+  .gw-approval-row-actions { flex-direction: column; }
+  .gw-approvals .btn { width: 100%; min-height: 44px; }
+}

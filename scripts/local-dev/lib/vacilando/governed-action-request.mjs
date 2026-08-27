@@ -8,7 +8,7 @@
  * This is not a parallel orchestrator: it sits on execution runs, mission
  * decisions, and trusted-host actions.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -529,11 +529,236 @@ function capturePullRequestSnapshot(rec, { gh = null } = {}) {
   }
 }
 
+/**
+ * The canonical identity of WHAT an operator is being asked to approve.
+ *
+ * A request id is not enough. It names a row; it says nothing about the content
+ * that row currently points at. If the branch moves, the commit changes, or the
+ * migration set is edited after the approval card is drawn, the id still
+ * matches and the operator's tap would approve something they never read.
+ *
+ * So the decision binds to the content: the action, the normalised environment,
+ * the repository, the branch, the source commit, the pull request, and the
+ * migration set. Both halves compute it from this one function — the card
+ * renders what the server produced, and the server recomputes it at decision
+ * time. A fingerprint the client invented would prove nothing.
+ */
+export function governedContentFingerprint(req) {
+  if (!req) return null;
+  const inputs = req.inputs || {};
+  const migrations = Array.isArray(inputs.migrations)
+    ? inputs.migrations.map((m) => (typeof m === "string" ? m : `${m?.version || ""}:${m?.path || m?.migration_path || ""}`)).sort()
+    : [];
+  // Fields that get a normalisation rule of their own. Everything ELSE in
+  // inputs still contributes verbatim below — an allowlist here would mean
+  // that for an action whose content lives in an unlisted field (a census IS
+  // its query) the fingerprint could not tell two different requests apart,
+  // and the protection would be theatre for exactly that action.
+  const normalised = new Set([
+    "environment", "repository", "branch", "headBranch", "head_branch",
+    "expectedHeadSha", "expected_sha", "expectedSha",
+    "pullRequestNumber", "pull_request_number", "migrations",
+  ]);
+  const rest = {};
+  for (const key of Object.keys(inputs).sort()) {
+    if (normalised.has(key)) continue;
+    rest[key] = canonicalForFingerprint(inputs[key]);
+  }
+  const canonical = JSON.stringify({
+    action_key: req.action_key || null,
+    // Normalised so `cert` and `certification` cannot read as different
+    // content, and `development_certification` cannot read as the same.
+    environment: String(inputs.environment || req.target || "").trim().toLowerCase() || null,
+    repository: inputs.repository || null,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    source_sha: String(inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "").toLowerCase() || null,
+    pull_request: inputs.pullRequestNumber ?? inputs.pull_request_number ?? null,
+    migrations,
+    rest,
+  });
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 32);
+}
+
+/**
+ * Deep key-sorted value, so an object that serialises in a different key order
+ * is not mistaken for different content. Array order is PRESERVED — for
+ * anything but the migration set, order is meaning.
+ */
+function canonicalForFingerprint(value) {
+  if (Array.isArray(value)) return value.map(canonicalForFingerprint);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = canonicalForFingerprint(value[k]);
+    return out;
+  }
+  return value ?? null;
+}
+
+/**
+ * Shared by approve and deny.
+ *
+ * Deny is checked too, deliberately: denying content the operator did not read
+ * is a smaller harm than approving it, but it is still a decision recorded
+ * against the wrong thing, and a stale deny would let the real request slip
+ * through unnoticed.
+ */
+export function rejectStaleDecision(rec, expectedFingerprint) {
+  if (!expectedFingerprint) return null;
+  const current = governedContentFingerprint(rec);
+  if (current === expectedFingerprint) return null;
+  return {
+    ok: false,
+    error: "stale_content",
+    detail: "The request changed after this approval card was shown. Nothing was approved or denied; review the current request.",
+    presented_fingerprint: expectedFingerprint,
+    current_fingerprint: current,
+    request: publicGovernedAction(rec),
+  };
+}
+
+/**
+ * THE NAME OF THE THING BEING DECIDED.
+ *
+ * An approval was announced to the operator as "approve gar_4dc7b4d8bcd0e0".
+ * Nothing in the UI carried that string, so there was no way to tell which
+ * visible item it meant — and a governed action the operator cannot NAME is a
+ * governed action the operator cannot find. The request id is diagnostic
+ * metadata; it is never the operator's concept of the work.
+ *
+ * The label answers one question: what am I being asked to approve? It is
+ * derived deterministically from canonical inputs, so the same request always
+ * produces the same words, and it never falls back to an identifier.
+ */
+export function operatorLabel(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const work = operatorWorkTitle(rec);
+  const key = rec.action_key;
+  const target = rec.target || DEFAULT_TARGET;
+  const pr = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+  const branch = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+
+  if (key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (work && pr) return `Merge ${work} — PR #${pr}`;
+    if (pr) return `Merge PR #${pr} to ${target}`;
+    return `Merge pull request to ${target}`;
+  }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    if (work) return `Push ${work} branch`;
+    return branch ? `Push ${branch}` : "Push a reviewed branch";
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const base = inputs.base || target;
+    if (work) return `Open PR for ${work}`;
+    return branch ? `Open PR ${branch} → ${base}` : `Open promotion PR into ${base}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    // Never hardcode a work name here. The label used to read "Apply Access &
+    // Identity staging migrations" for EVERY migration set, which named the
+    // wrong work for every caller but one.
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    if (work) return `Apply ${work} migrations`;
+    const n = list.length || (inputs.expected_version ? 1 : 0);
+    return n
+      ? `Apply ${n} ${target} migration${n === 1 ? "" : "s"}`
+      : `Apply ${target} migrations`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    const slot = operatorSlotHint(rec);
+    return `Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    const slot = operatorSlotHint(rec);
+    return `Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    const slot = operatorSlotHint(rec);
+    return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    if (work) return `Read-only census — ${work}`;
+    return `Read-only database census on ${target}`;
+  }
+  // An unregistered key still gets words rather than an identifier.
+  return work || (key ? String(key).replace(/[._]/g, " ") : "Governed action");
+}
+
+/** An explicit human work name, when the caller supplied one. Never invented. */
+function operatorWorkTitle(rec) {
+  const raw = rec?.work_title || rec?.inputs?.workTitle || rec?.inputs?.work_title || null;
+  const t = raw == null ? "" : String(raw).trim();
+  return t && t.length <= 80 ? t : null;
+}
+
+function operatorSlotHint(rec) {
+  const lane = rec?.inputs?.laneId || rec?.inputs?.lane_id || rec?.lane_id || "";
+  const resolved = typeof resolveSlotIdentityForDisplay === "function"
+    ? resolveSlotIdentityForDisplay(lane)
+    : null;
+  return rec?.slot || resolved?.slot || "";
+}
+
+/**
+ * The card, as a hierarchy rather than a sentence: what it is, then why, then
+ * the facts, and the request id LAST and small. The order here is the order the
+ * operator reads, so presentation cannot drift from the contract.
+ */
+export function operatorApprovalCard(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const presentation = presentationForGovernedAction(rec);
+  const context = [];
+  const push = (label, value) => { if (value) context.push({ label, value: String(value) }); };
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) push("Action", `Merge to ${rec.target || DEFAULT_TARGET}`);
+  else if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) push("Action", "Push to the remote");
+  else if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) push("Action", `Open a pull request into ${inputs.base || rec.target || DEFAULT_TARGET}`);
+  else push("Action", rec.target ? `${rec.action_key} · ${rec.target}` : rec.action_key);
+  const sha = String(inputs.expectedHeadSha || inputs.expected_head_sha || inputs.expectedSha || "");
+  push("Commit", sha ? sha.slice(0, 12) : "");
+  push("Branch", inputs.branch || inputs.headBranch || inputs.head_branch || "");
+  push("Repository", inputs.repository || "");
+  return {
+    label: operatorLabel(rec),
+    decision: "Approval required",
+    context,
+    reason: rec.purpose || rec.reason_worker_cannot_execute || null,
+    approve_label: presentation.approve_label,
+    deny_label: presentation.deny_label,
+    // Diagnostic only. Rendered small, beneath the controls, never as the name.
+    request_id_debug: `Request ${rec.request_id}`,
+  };
+}
+
+/**
+ * EVERY pending approval on this host, ordered deterministically.
+ *
+ * The operator should not have to know which lane originated a request. They
+ * had no way to reach one at all: the only approval surface lived inside a lane
+ * you already had to be looking at.
+ *
+ * Order: work that is actively blocked first, then oldest, then request id as a
+ * final tiebreak so the list never reshuffles between two renders.
+ */
+export function pendingApprovals({ root = runtimeRoot() } = {}) {
+  const rows = listGovernedActions({ root })
+    .filter((r) => r && PENDING_GOVERNED_STATUSES.includes(r.status) && r.status !== "executing");
+  const blocking = (r) => (r.run_id ? 0 : 1);
+  const filedAt = (r) => Date.parse(r.created_at || "") || 0;
+  rows.sort((a, b) =>
+    blocking(a) - blocking(b)
+    || filedAt(a) - filedAt(b)
+    || String(a.request_id).localeCompare(String(b.request_id)));
+  return rows.map((r) => ({ ...publicGovernedAction(r), operator_card: operatorApprovalCard(r) }));
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
   return {
     request_id: req.request_id,
+    // The identity the operator is actually deciding about. The card renders
+    // this and hands it back; the server recomputes and compares.
+    content_fingerprint: governedContentFingerprint(req),
     mission_id: req.mission_id,
     // What vouched for this action, so the approval card can say so instead of
     // leaving a repository-authorized request looking unattributed.
@@ -568,6 +793,9 @@ export function publicGovernedAction(req) {
     wait_label: presentation.wait_label,
     mission_need: presentation.mission_need,
     detail: presentation.detail,
+    // The operator's name for this decision. The id is diagnostic only.
+    operator_label: operatorLabel(req),
+    operator_card: operatorApprovalCard(req),
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -1203,6 +1431,29 @@ export function requestGovernedAction(input = {}, {
   const artifactRefs = shape.artifactRefs.length
     ? shape.artifactRefs
     : (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS ? [Q15_CENSUS_ARTIFACT] : []);
+  // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
+  //
+  // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
+  // Approve three times; every attempt died inside GitHub with "Could not coerce
+  // value to GitObjectID", and because a failed request leaves the pending list,
+  // the operator was left hunting for a request that no longer appeared anywhere.
+  // Asking a human to authorize something that cannot possibly succeed is the
+  // defect — so the request is refused HERE, when the worker files it, rather
+  // than after a decision has been spent on it.
+  const shaInput = input.inputs || input.input || {};
+  const declaredSha = shaInput.expectedHeadSha || shaInput.expected_head_sha || shaInput.expectedSha || shaInput.expected_sha || null;
+  if (declaredSha != null && String(declaredSha).trim() !== "") {
+    const sha = String(declaredSha).trim();
+    if (!/^[0-9a-f]{40}$/i.test(sha)) {
+      return {
+        ok: false,
+        error: "abbreviated_source_sha",
+        failure_code: "invalid_request_inputs",
+        detail: `expectedHeadSha must be the full 40-character commit SHA; received "${sha}" (${sha.length} characters). An abbreviated SHA is ambiguous and is rejected by the merge API, so it can never be approved.`,
+      };
+    }
+  }
+
   const availability = classifyActionAvailability(shape.actionKey);
   if (availability.code === "unsupported_action_key") {
     return { ok: false, error: "unsupported_action_key", failure_code: "action_unavailable" };
@@ -2119,9 +2370,16 @@ export async function approveGovernedAction(requestId, {
   actor = "operator",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  // STALE CONTENT. The operator approved what the card showed them. If the
+  // content moved since, the id still matches and approving would authorise
+  // something they never saw — so the decision is refused and the current
+  // request is returned so the card can redraw with the truth.
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
   if (rec.status === "failed") {
     rec.status = "awaiting_director";
@@ -2210,9 +2468,12 @@ export function denyGovernedAction(requestId, {
   code = "approval_denied",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   rec.operator_approval = {
     decision: "denied",
     actor,

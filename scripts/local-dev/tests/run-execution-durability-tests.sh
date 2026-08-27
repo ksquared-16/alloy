@@ -60,6 +60,7 @@ SUITES=(
   "development-executor-authority.test.mjs"
   "development-memory-capacity.test.mjs"
   "development-governed-approval-ui.test.mjs"
+  "development-approval-discoverability.test.mjs"
 )
 
 PASS=0
