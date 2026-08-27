@@ -39,6 +39,7 @@ import {
     applyConfirmationGroup,
     applyConfirmationGroupMemberEdit,
 } from "@/lib/enrollment/participantRuntime/applyConfirmationGroup";
+import { applyPartyResponse } from "@/lib/enrollment/participantRuntime/applyPartyResponse";
 
 function plaintextToken(raw: string): string {
     try {
@@ -71,6 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         value?: unknown;
         confirm_group?: unknown;
         edit_fact?: unknown;
+        party?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -164,6 +166,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
         editResponse.headers.set("Server-Timing", timing.header());
         return editResponse;
+    }
+
+    /**
+     * ADDING A PERSON — decline, reuse, or collect.
+     *
+     * The browser sends an intent; the ROLE comes from the turn the platform is offering, and a
+     * reused person is addressed by a handle matched against the candidates the server published.
+     * Everything durable is written through the canonical relationship service.
+     */
+    const partyBody = body.party;
+    if (partyBody != null && typeof partyBody === "object" && !Array.isArray(partyBody)) {
+        const applied = await applyPartyResponse(supabase, {
+            orgId: access.value.orgId,
+            sessionId: access.value.sessionId,
+            customerId: current.context.customerId ?? null,
+            customerMemberId: current.context.needsContext.subjectId ?? null,
+            objective: current.value,
+            sessionMetadata: current.context.needsContext.session?.metadata ?? {},
+            response: partyBody as never,
+            nowIso: new Date().toISOString(),
+        });
+        if (!applied.ok) return publicErr(applied.error, 409, { code: "party_refused" });
+
+        // Re-resolve: the canonical graph moved, so the platform decides what comes next.
+        const after = await resolveParticipantEnrollmentObjectiveWithContext(supabase, {
+            orgId: access.value.orgId,
+            processInstanceId: access.value.processInstanceId,
+            canonicalValues: canonical.values,
+        });
+        if (!after.ok) return publicErr(after.refusal.detail, 409, { code: after.refusal.code });
+        const partyResponse = publicOk({
+            outcome: applied.outcome,
+            objective: participantObjectiveWireModel(after.value, {
+                subjectDisplayName: canonical.subjectDisplayName,
+            }),
+        });
+        partyResponse.headers.set("Server-Timing", timing.header());
+        return partyResponse;
     }
 
     const text = typeof body.text === "string" ? body.text : null;

@@ -64,7 +64,17 @@ describe("a cluster reads as a topic, not a card of fields", () => {
          * deliberately, in which the parent is correcting one named fact rather than answering the
          * conversation. Counting its markup here would score a correct product as a regression.
          */
-        const conversational = CODE.replace(/function StructuredFactEditor\([\s\S]*?\n\}\n/, "");
+        /*
+         * The correction editor and the new-person form are excluded and asserted separately.
+         *
+         * Neither is a competing answer surface for the current question: one is a correction mode
+         * the parent opened deliberately, the other collects ONE person's identity together — name,
+         * phone and email as a single coherent act rather than three turns about fragments of the
+         * same person.
+         */
+        const conversational = CODE
+            .replace(/function StructuredFactEditor\([\s\S]*?\n\}\n/, "")
+            .replace(/function NewPartyForm\([\s\S]*?\n\}\n/, "");
         const inputs = conversational.match(/<input\b/g) ?? [];
         const textareas = conversational.match(/<textarea\b/g) ?? [];
         expect(inputs.length + textareas.length, "one typed control at most, for date/number").toBeLessThanOrEqual(2);
@@ -86,6 +96,18 @@ describe("a cluster reads as a topic, not a card of fields", () => {
         // And the dock's typed control stands down while it is open, so one question never has two
         // answer surfaces.
         expect(CODE).toMatch(/correcting && turn\.editor\s*\n?\s*\? null/);
+    });
+
+    it("collects one PERSON together, not one fragment per turn", () => {
+        // A person is a coherent thing: name, phone and email in one form, saved once, persisted
+        // through the canonical relationship service so they can later be reused by name.
+        expect(CODE).toContain("data-participant-party-form");
+        for (const part of ["Full name", "Phone", "Email"]) {
+            expect(CODE).toContain(`aria-label="${part}"`);
+        }
+        // And the alternative to typing someone in is choosing someone already known.
+        expect(CODE).toContain("data-participant-party-candidate");
+        expect(CODE).toContain("data-participant-party-decline");
     });
 
     it("gives a whole address structured parts rather than one text box", () => {

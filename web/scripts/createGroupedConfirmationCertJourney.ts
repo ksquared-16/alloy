@@ -19,6 +19,7 @@
 import { createClient } from "@supabase/supabase-js";
 
 import { launchParticipantEnrollment } from "@/lib/enrollment/participantLaunch/launchParticipantEnrollment";
+import { attachPartyRole } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
 
 const ORG = "00000000-0000-4000-8000-000000000001";
 const SOURCE = "grouped_confirmation_cert";
@@ -174,6 +175,55 @@ async function main() {
         .single();
     if (instanceError) throw instanceError;
     const processInstanceId = (instance as { id: string }).id;
+
+    /**
+     * A SECOND ADULT the household already knows, not yet related to this child.
+     *
+     * Realistic pre-existing truth: a grandparent the school met when an older sibling enrolled.
+     * She is the reuse offer — the conversation should propose her by name rather than asking the
+     * parent to retype someone the school already holds.
+     */
+    const { data: relative, error: relativeError } = await supabase
+        .from("persons")
+        .insert({
+            org_id: ORG,
+            first_name: fixture("FIXTURE_RELATIVE_FIRST", "Margot"),
+            last_name: FAMILY.householdName.split(/\s+/)[0] ?? "Bennett",
+            full_name: `${fixture("FIXTURE_RELATIVE_FIRST", "Margot")} ${FAMILY.householdName.split(/\s+/)[0] ?? "Bennett"}`,
+            phone: fixture("FIXTURE_RELATIVE_PHONE", "5035550193"),
+            metadata: { source: SOURCE },
+        })
+        .select("id")
+        .single();
+    if (relativeError) throw relativeError;
+    const { error: relativeLinkError } = await supabase.from("customer_persons").insert({
+        org_id: ORG,
+        customer_id: customerId,
+        person_id: (relative as { id: string }).id,
+        role_type: "emergency_contact",
+        is_primary: false,
+        status: "active",
+        metadata: { source: SOURCE },
+    });
+    if (relativeLinkError) throw relativeLinkError;
+
+    /*
+     * THE PRIMARY ADULT IS THE CHILD'S GUARDIAN — recorded canonically.
+     *
+     * The fixture linked the person to the HOUSEHOLD and stopped there, so the participant runtime
+     * saw no guardian relationship for the child and asked "would you like to add a parent or
+     * guardian?" about someone it had just confirmed. A real pre-enrolment journey establishes this
+     * relationship; the fixture now does too, through the same canonical service the runtime uses.
+     */
+    const guardianLink = await attachPartyRole(supabase, {
+        orgId: ORG,
+        customerId,
+        customerMemberId: childId,
+        role: "guardian",
+        personId,
+        priority: 1,
+    });
+    if (!guardianLink.ok) throw new Error(`guardian relationship refused: ${guardianLink.error}`);
 
     // Started the ORDINARY way — the same call the operator surface makes.
     const launched = await launchParticipantEnrollment(supabase, {

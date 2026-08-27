@@ -23,6 +23,7 @@
 
 import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
 import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
+import type { PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 
 /**
  * The turn kinds V1 supports.
@@ -51,6 +52,14 @@ export const PARTICIPANT_TURN_KINDS = [
      * extraction step run while there is still an artifact to inform.
      */
     "collect_evidence",
+    /**
+     * A person to add, by ROLE — never by numbered slot.
+     *
+     * "Would you like to add another parent or guardian?" is a question about people. Which box
+     * they land in is projection's business, decided after the conversation, from canonical
+     * relationship priority.
+     */
+    "collect_party",
     "complete_artifact",
     "complete",
 ] as const;
@@ -79,6 +88,8 @@ export type ParticipantTurn = {
      * the same rule that keeps a model from choosing its own subject.
      */
     readonly evidence?: readonly ParticipantEvidenceObligation[];
+    /** The role being offered, and who already holds it. Present only on `collect_party`. */
+    readonly party?: PartyOffer;
 };
 
 /**

@@ -40,6 +40,8 @@ export type ParticipantTurnControl =
     | { readonly kind: "handoff" }
     /** Required documents to attach, BEFORE any paperwork is prepared. */
     | { readonly kind: "evidence" }
+    /** A person to add by role — reuse someone known, or collect a new one. */
+    | { readonly kind: "party" }
     | { readonly kind: "done" };
 
 /** The controls that actually collect a value. Shared by collection and by correction. */
@@ -68,6 +70,7 @@ export type ParticipantValueControl =
  */
 export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantTurnControl {
     if (turn.kind === "complete") return { kind: "done" };
+    if (turn.kind === "collect_party") return { kind: "party" };
     if (turn.kind === "collect_evidence") return { kind: "evidence" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
@@ -546,6 +549,10 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
+    }
+    if (turn.kind === "collect_party") {
+        // The runtime's own sentence — a question about a PERSON, never about a numbered box.
+        return turn.prompt;
     }
     if (turn.kind === "collect_evidence") {
         /*

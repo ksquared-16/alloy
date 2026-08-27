@@ -17,6 +17,7 @@ import { packageOutstandingNeeds } from "@/lib/enrollment/participantRuntime/con
 import {
     activeConfirmationGroup,
     collectedAnswers,
+    confirmationRef,
     groupSettledConfirmations,
     identityFactRank,
     type ConfirmationGroup,
@@ -158,6 +159,21 @@ export type ParticipantObjectiveWire = {
          * Field id and the school's own words for the document — nothing about storage, entity or
          * classification, which the upload route derives server-side from the pinned schema.
          */
+        /**
+         * A person to add, by ROLE.
+         *
+         * Never a numbered slot: the parent is asked about people, and projection decides which box
+         * each person lands in afterwards from canonical relationship priority.
+         */
+        readonly party: {
+            readonly role_label: string;
+            /** People already holding this role for this child. */
+            readonly existing: readonly string[];
+            /** Household people offerable for reuse — opaque handles, never person ids. */
+            readonly candidates: readonly { readonly ref: string; readonly name: string; readonly detail: string | null }[];
+            /** Zero means declining is always available, which is every role today. */
+            readonly minimum: number;
+        } | null;
         readonly evidence: readonly {
             readonly field_id: string;
             readonly title: string;
@@ -555,6 +571,18 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             cluster: activeCluster(objective, subjectName),
+            party: turn.party
+                ? {
+                      role_label: turn.party.role_label,
+                      existing: turn.party.existing.map((p) => p.full_name),
+                      candidates: objective.party_candidates.map((c) => ({
+                          ref: confirmationRef(c.person_id),
+                          name: c.full_name,
+                          detail: c.phone ?? c.email ?? null,
+                      })),
+                      minimum: turn.party.minimum,
+                  }
+                : null,
             evidence: (turn.evidence ?? []).map((e) => ({
                 field_id: e.field_id,
                 title: e.title,

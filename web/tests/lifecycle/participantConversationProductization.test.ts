@@ -405,7 +405,7 @@ describe("presentation changed; authority did not", () => {
          */
         const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-zA-Z_]+)/g)].map((m) => m[1]);
         expect(new Set(bodyKeys)).toEqual(
-            new Set(["text", "value", "decline", "confirmGroup", "editFact"]),
+            new Set(["text", "value", "decline", "confirmGroup", "editFact", "party"]),
         );
         /*
          * `confirmGroup` is admitted on exactly the terms `decline` was: a BARE literal flag. It

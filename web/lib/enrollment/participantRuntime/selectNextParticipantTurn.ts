@@ -26,6 +26,7 @@ import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participant
 import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
 import { orderNeedsForTraversal } from "@/lib/enrollment/participantRuntime/participantTraversalOrder";
+import type { PartyOffer } from "@/lib/enrollment/participantRuntime/partyOfferPlan";
 
 /**
  * Deterministic wording — the FALLBACK that always exists.
@@ -52,6 +53,25 @@ export function deterministicPrompt(need: EnrollmentInformationNeed): string {
      */
     if (/\?\s*$/.test(label)) return label;
     return `What is ${label}?`;
+}
+
+/**
+ * "Physicians" -> "physician", "Parents / Guardians" -> "parent or guardian".
+ *
+ * A definition's label names the COLLECTION it manages; the question asks for one member of it. The
+ * slash form matters: "Would you like to add a parents / guardian?" is what a naive trailing-s trim
+ * produced, and a parent reads that as a mistake rather than a question.
+ */
+function singular(label: string): string {
+    return label
+        .split("/")
+        .map((part) => part.trim().replace(/s$/i, "").toLowerCase())
+        .filter(Boolean)
+        .join(" or ");
+}
+
+function article(label: string): string {
+    return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
 }
 
 function formatValue(value: unknown): string {
@@ -89,6 +109,8 @@ export type NextParticipantTurnInput = {
      * without a second vocabulary. Absent leaves the historical order untouched.
      */
     readonly requiresConfirmation?: ReadonlySet<string>;
+    /** The next person to offer, resolved from canonical parties and artifact capacity. */
+    readonly partyOffer?: PartyOffer | null;
 };
 
 /**
@@ -141,6 +163,29 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
             prompt: deterministicPrompt(next),
             proposed_value: next.state === "known_requires_confirmation" ? next.current_value : null,
             resolves_occurrences: next.occurrence_count,
+        };
+    }
+
+    /*
+     * THE PEOPLE, BEFORE THE DOCUMENTS.
+     *
+     * Every shared fact about the child and the responding adult is settled, so the conversation
+     * turns to who else is involved. This is an OFFER: minimums come from configured semantic
+     * requirements and there are none today, so each is declinable and declining is settlement.
+     * One offer per role — a packet printing three emergency-contact rows asks once, because
+     * capacity is a ceiling on printing and the family decides how many people exist.
+     */
+    if (input.partyOffer) {
+        const offer = input.partyOffer;
+        return {
+            kind: "collect_party",
+            need: null,
+            prompt: offer.is_additional
+                ? `Would you like to add another ${singular(offer.role_label)}?`
+                : `Would you like to add ${article(offer.role_label)} ${singular(offer.role_label)}?`,
+            proposed_value: null,
+            resolves_occurrences: 0,
+            party: offer,
         };
     }
 

@@ -207,7 +207,7 @@ describe("14. the browser sends words, never authority", () => {
          */
         const bodyKeys = [...COMPONENT.matchAll(/submit\(\{\s*([a-zA-Z_]+)/g)].map((m) => m[1]);
         expect(new Set(bodyKeys)).toEqual(
-            new Set(["text", "value", "decline", "confirmGroup", "editFact"]),
+            new Set(["text", "value", "decline", "confirmGroup", "editFact", "party"]),
         );
         // The handle is passed straight through from the server's own payload — never composed in
         // the browser out of anything the parent or the DOM could supply.

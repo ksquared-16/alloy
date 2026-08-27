@@ -395,6 +395,60 @@ function StructuredFactEditor({
 }
 
 /**
+ * One coherent person, collected once.
+ *
+ * Name, phone and email together — the identity a source artifact prints — rather than three turns
+ * that each ask about a fragment of the same person. Persisted through the canonical relationship
+ * service, so the same person can later be OFFERED for reuse instead of retyped.
+ */
+function NewPartyForm({
+    roleLabel,
+    busy,
+    onSave,
+    onCancel,
+}: {
+    roleLabel: string;
+    busy: boolean;
+    onSave: (identity: { full_name: string; phone?: string; email?: string }) => void;
+    onCancel: () => void;
+}) {
+    const [name, setName] = useState("");
+    const [phone, setPhone] = useState("");
+    const [email, setEmail] = useState("");
+    const field = "w-full rounded-lg border border-alloy-midnight/20 bg-white px-3 py-2 text-[15px] text-alloy-midnight";
+    const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
+    return (
+        <div className="flex flex-col gap-3" data-participant-party-form={roleLabel}>
+            <label>
+                <span className={caption}>Full name</span>
+                <input className={field} aria-label="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+            </label>
+            <label>
+                <span className={caption}>Phone</span>
+                <input className={field} aria-label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </label>
+            <label>
+                <span className={caption}>Email</span>
+                <input className={field} aria-label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || name.trim().length === 0}
+                    onClick={() => onSave({ full_name: name.trim(), phone: phone.trim(), email: email.trim() })}
+                    className="rounded-lg bg-alloy-bend-pine px-4 py-2 text-[14px] font-medium text-white disabled:opacity-50"
+                >
+                    Save
+                </button>
+                <button type="button" onClick={onCancel} disabled={busy} className="text-[13px] text-alloy-midnight/50 underline underline-offset-2">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
  * What the parent has already settled — a semantic record, not a button transcript.
  *
  * The thread used to keep every exchange that produced a settled fact, so a grouped confirmation
@@ -671,6 +725,8 @@ export function EnrollmentConversationCard({
      */
     const [justUpdated, setJustUpdated] = useState<ReadonlySet<string>>(() => new Set());
     /** Documents attached in this sitting, by field id — the upload row's own done-state. */
+    /** The parent chose "Someone else" and is giving a new person's details. */
+    const [addingParty, setAddingParty] = useState(false);
     const [attachedEvidence, setAttachedEvidence] = useState<
         Record<string, { document_id: string; filename: string } | undefined>
     >({});
@@ -767,6 +823,8 @@ export function EnrollmentConversationCard({
             confirmGroup?: boolean;
             /** Correct ONE fact of the card. `ref` is the opaque handle the server issued. */
             editFact?: { ref: string; value: unknown };
+            /** Add a person by the role the platform is offering: decline, reuse, or collect. */
+            party?: { decline?: boolean; select_ref?: string; identity?: { full_name: string; phone?: string; email?: string } };
         }) => {
             if (inFlight.current) return;
             inFlight.current = true;
@@ -821,6 +879,7 @@ export function EnrollmentConversationCard({
              * mode itself ends when the turn moves on, which the objective decides.
              */
             if (!payload.editFact) setChangingGroup(false);
+            setAddingParty(false);
             setEditingRef(null);
             setText("");
             try {
@@ -842,6 +901,7 @@ export function EnrollmentConversationCard({
                             ...(payload.decline ? { decline: true } : {}),
                             ...(payload.confirmGroup ? { confirm_group: true } : {}),
                             ...(payload.editFact ? { edit_fact: payload.editFact } : {}),
+                            ...(payload.party ? { party: payload.party } : {}),
                         }),
                     },
                 );
@@ -911,6 +971,92 @@ export function EnrollmentConversationCard({
         return (
             <IntakeCard>
                 <IntakeHeading title="Everything we need is complete." subtitle="Thank you." />
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "party" && turn.party) {
+        /*
+         * A PERSON, BY ROLE — never "Parent #2".
+         *
+         * Known household people are offered first so a parent never retypes someone the school
+         * already has; "Someone else" collects one coherent person. Declining is always available
+         * because no configured requirement makes any of these mandatory today.
+         */
+        const party = turn.party;
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) => void submit({ editFact: { ref, value }, settledAs: displayValue(value) })}
+                    />
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                        {party.existing.length > 0 ? (
+                            <ThreadSupporting>
+                                {`Already listed: ${party.existing.join(", ")}.`}
+                            </ThreadSupporting>
+                        ) : null}
+                    </ThreadTurn>
+                    <div className="flex flex-col gap-2" data-participant-party={party.role_label}>
+                        {addingParty ? (
+                            <NewPartyForm
+                                roleLabel={party.role_label}
+                                busy={busy}
+                                onCancel={() => setAddingParty(false)}
+                                onSave={(identity) =>
+                                    void submit({ party: { identity }, settledAs: identity.full_name })
+                                }
+                            />
+                        ) : (
+                            <>
+                                {party.candidates.map((candidate) => (
+                                    <button
+                                        key={candidate.ref}
+                                        type="button"
+                                        disabled={busy}
+                                        data-participant-party-candidate={candidate.ref}
+                                        onClick={() =>
+                                            void submit({ party: { select_ref: candidate.ref }, settledAs: candidate.name })
+                                        }
+                                        className="flex items-baseline justify-between rounded-xl border border-alloy-midnight/12 px-4 py-3 text-left hover:border-alloy-bend-pine disabled:opacity-50"
+                                    >
+                                        <span className="text-[15px] font-medium text-alloy-midnight">{candidate.name}</span>
+                                        {candidate.detail ? (
+                                            <span className="text-[13px] text-alloy-midnight/45">{candidate.detail}</span>
+                                        ) : null}
+                                    </button>
+                                ))}
+                                <button
+                                    type="button"
+                                    disabled={busy}
+                                    data-participant-party-new="true"
+                                    onClick={() => setAddingParty(true)}
+                                    className="rounded-xl border border-dashed border-alloy-midnight/20 px-4 py-3 text-left text-[15px] text-alloy-midnight/70 hover:border-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Someone else
+                                </button>
+                                {party.minimum === 0 ? (
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        data-participant-party-decline="true"
+                                        onClick={() => void submit({ party: { decline: true }, settledAs: "No, continue" })}
+                                        className="mt-1 self-start text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                                    >
+                                        No, continue
+                                    </button>
+                                ) : null}
+                            </>
+                        )}
+                    </div>
+                </div>
             </IntakeCard>
         );
     }
