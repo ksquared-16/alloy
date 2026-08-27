@@ -126,6 +126,20 @@ export function projectEnrollmentInformationNeeds(
              */
             if (participantFacingLabel(field.label, sourceFieldNames[field.id]) == null) return;
 
+            /*
+             * A DOCUMENT IS BROUGHT, NOT TYPED.
+             *
+             * An upload destination holds a document id — `validateSubmission` requires exactly
+             * that — so a conversation asking "What is your Immunization record?" can only collect
+             * words that the submission will then refuse. All three certified upload obligations
+             * were projected this way.
+             *
+             * They are not dropped: they are participant WORK, presented at the artifact that asks
+             * for them, where the parent attaches a file and the answer becomes the id of a
+             * canonical Document. The conversation collects values; this is not one.
+             */
+            if (field.type === "file_ref") return;
+
             const identity = resolveEnrollmentNeedIdentity({
                 field,
                 subjectId: input.subjectId,
