@@ -382,6 +382,31 @@ export function authorizeTrustedHostAction(actionId, {
 } = {}) {
   const action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
+
+  // AN ACTION AUTHORISED A MOMENT AGO IS STILL AUTHORISED.
+  //
+  // This is where Director authority was being lost. The fulfil path authorises
+  // WITH the Director's exact-request context and the action becomes
+  // "authorized"; it then calls executeTrustedHostAction, whose per-action
+  // executor authorises AGAIN with no context at all. The second call fell
+  // through to findAuthorization, found no standing grant for a fresh SHA, and
+  // escalated to the operator — discarding an authorization that had already
+  // passed every check seconds earlier.
+  //
+  // Honouring the pinned authorization is not a weakening: the ONLY way an
+  // action reaches this state is by passing the checks below, and the pinned
+  // authorization is re-validated here rather than assumed.
+  if (action.authorizationState === "authorized" && action.authorizationId) {
+    const pinned = listAuthorizations(action.missionId)
+      .find((x) => x.authorizationId === action.authorizationId) || null;
+    const stillValid = pinned
+      && pinned.status === "active"
+      && !(pinned.expires_at && Date.parse(pinned.expires_at) < (nowMs ?? Date.now()));
+    // A repository grant is not in this store; it authorised the action on its
+    // own terms and is equally not re-derived here.
+    if (stillValid || (!pinned && grant)) return { ok: true, action, already: true };
+  }
+
   let auth = null;
   if (authorizationId) {
     auth = listAuthorizations(action.missionId).find((a) => a.authorizationId === authorizationId) || null;
