@@ -63,3 +63,6 @@ web/test-results/
 web/tsconfig.poscheck.json
 certification-tour/
 web/.metadata_never_index
+
+# Playwright run artifacts at the repo root (machine state, not source).
+test-results/
