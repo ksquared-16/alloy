@@ -1271,7 +1271,7 @@ export function FormEmbedClient({
                                 </div>
                             ) : null}
                             <p className="pb-4 text-[15px] text-alloy-midnight" data-artifact-final-phase="signature">
-                                {participantSignaturePrompt()}
+                                {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
                             {signaturePlacement ? (
                                 <ParticipantDocumentCanvas
@@ -1447,7 +1447,7 @@ export function FormEmbedClient({
                             data-artifact-final-phase="signature"
                         >
                             <p className="pb-3 text-[15px] text-alloy-midnight">
-                                {participantSignaturePrompt()}
+                                {participantSignaturePrompt(artifactStatus.state !== "complete")}
                             </p>
                             <FormEngineRenderer
                                 schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}

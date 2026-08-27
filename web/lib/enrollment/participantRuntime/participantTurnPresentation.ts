@@ -502,9 +502,17 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
     return turn.prompt;
 }
 
-/** The line that introduces the signature, once the paperwork has been reviewed. */
-export function participantSignaturePrompt(): string {
-    return "Everything look right? One last step — sign below.";
+/**
+ * The line that introduces the last step, once the paperwork has been reviewed.
+ *
+ * Not every document is signed. The completed Admissions application asks for no signature, and
+ * saying "One last step — sign below" above a page with nothing to sign told the parent to look for
+ * something that was not there.
+ */
+export function participantSignaturePrompt(signatureExpected = true): string {
+    return signatureExpected
+        ? "Everything look right? One last step — sign below."
+        : "Everything look right? Finish this one when you're ready.";
 }
 
 /**
