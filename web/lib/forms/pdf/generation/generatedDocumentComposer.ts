@@ -25,6 +25,7 @@ import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf
 import type { FormSchemaV1, FormField } from "@/lib/forms/schema";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatValueForDocumentDestination } from "@/lib/forms/pdf/documentDestinationDate";
+import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 
 /**
  * The layout's own version.
@@ -221,6 +222,12 @@ export async function composeGeneratedDocument(input: {
     const quiet = rgb(0.42, 0.46, 0.5);
     const rule = rgb(0.85, 0.87, 0.89);
 
+    const applies = documentFieldApplies({
+        schema: input.schema,
+        values: input.values,
+        signatures: input.signatures ?? null,
+    });
+
     let page: PDFPage = pdf.addPage([PAGE.width, PAGE.height]);
     let y = PAGE.height - MARGIN.top;
     const signaturePlacements: GeneratedSignaturePlacement[] = [];
@@ -373,6 +380,9 @@ export async function composeGeneratedDocument(input: {
             }
 
             if (!isRenderableValueField(field)) continue;
+
+            /* A destination whose authored condition is false is not part of this family's record. */
+            if (!applies(field.id)) continue;
 
             /*
              * A read-only destination with nothing in it has nothing to say.

@@ -213,9 +213,18 @@ function usableFieldValue(value: unknown): value is FieldValue {
 export function fidelityFieldValues(
     mapping: FidelityPdfMapping,
     values: Readonly<Record<string, unknown>>,
+    /**
+     * Whether a destination applies to this family's document.
+     *
+     * Supplied, a box whose authored condition is false prints nothing — the chickenpox date with no
+     * chickenpox, the update-signature date with no update signature. Omitted, every destination
+     * applies, which is the historical behaviour.
+     */
+    applies?: (fieldId: string) => boolean,
 ): Record<string, FieldValue> {
     const out: Record<string, FieldValue> = {};
     for (const [pdfField, target] of Object.entries(mapping.acro_fields)) {
+        if (applies && !applies(target.field_id)) continue;
         const value = values[target.field_id];
         if (!usableFieldValue(value)) continue;
         /**

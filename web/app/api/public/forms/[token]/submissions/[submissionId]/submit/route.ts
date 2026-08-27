@@ -176,7 +176,13 @@ export async function POST(
     const derivedValues = resolveFormDerivedValues(
         schema,
         (payloadToValidate.values ?? {}) as Record<string, unknown>,
-        { executedAtIso: new Date().toISOString(), timeZone: await fetchOrgTimeZoneIana(supabase, ctx.orgId) },
+        {
+            executedAtIso: new Date().toISOString(),
+            timeZone: await fetchOrgTimeZoneIana(supabase, ctx.orgId),
+            // A signature date is the date of THAT signature — so whether it applies depends on
+            // whether the participant actually made it.
+            signatures: (payloadToValidate.signatures ?? null) as Record<string, unknown> | null,
+        },
     );
     if (Object.keys(derivedValues).length > 0) {
         payloadToValidate = {

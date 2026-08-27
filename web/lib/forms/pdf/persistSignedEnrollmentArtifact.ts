@@ -44,7 +44,8 @@ import {
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
-import { validateFormSchema } from "@/lib/forms/schema";
+import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
+import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 
 export type PersistSignedArtifactResult =
     | { readonly ok: true; readonly document_id: string; readonly reused: boolean }
@@ -55,7 +56,7 @@ type SubmissionRow = {
     id: string;
     org_id: string;
     status: string;
-    payload: { values?: Record<string, unknown> } | null;
+    payload: { values?: Record<string, unknown>; signatures?: Record<string, unknown> } | null;
     form_definition_version_id: string;
     person_id: string | null;
     customer_id: string | null;
@@ -167,13 +168,38 @@ export async function persistSignedEnrollmentArtifact(
     const source = await resolveFidelitySourceBytes(supabase, input.orgId, mapping);
     if (!source.ok) return { ok: false, error: source.detail };
 
+    /*
+     * The PINNED schema, so the stored copy applies the same conditions the live render did.
+     *
+     * An unreadable schema means no conditions can be evaluated; every destination then applies,
+     * which is the behaviour that stood before conditions existed.
+     */
+    let submittedSchema: FormSchemaV1 | null = null;
+    try {
+        submittedSchema = validateFormSchema((ver as { schema_json: unknown }).schema_json);
+    } catch {
+        submittedSchema = null;
+    }
+
     // Evidence comes from any captured signature — a drawn-only signature carries no typed name.
     const firstSigner = signatures.find((s) => s.typed_full_name || s.drawn_asset_document_id) ?? signatures[0];
     const artifact = await buildSignedArtifact({
         sourcePdf: source.bytes,
         documentId: source.sourceRef,
         // The SUBMITTED values, exactly — the stored copy must correspond to what was signed.
-        fieldValues: fidelityFieldValues(mapping, (sub.payload?.values ?? {}) as Record<string, unknown>),
+        // The stored copy applies the SAME conditions the live render did, or a parent would sign
+        // one document and the record would keep another.
+        fieldValues: fidelityFieldValues(
+            mapping,
+            (sub.payload?.values ?? {}) as Record<string, unknown>,
+            submittedSchema
+                ? documentFieldApplies({
+                      schema: submittedSchema,
+                      values: (sub.payload?.values ?? {}) as Record<string, unknown>,
+                      signatures: (sub.payload?.signatures ?? null) as Record<string, unknown> | null,
+                  })
+                : undefined,
+        ),
         signatures: marks,
         evidence: {
             signerName: firstSigner?.typed_full_name ?? "",

@@ -40,6 +40,7 @@ import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/fo
 import { validateFormSchema } from "@/lib/forms/schema";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 import { PDFDocument } from "pdf-lib";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
 
@@ -289,6 +290,7 @@ export async function renderParticipantEnrollmentDocument(
     const derived = resolveFormDerivedValues(schema, values, {
         executedAtIso: input.nowIso,
         timeZone: input.timeZone ?? "UTC",
+        signatures: (payload?.signatures ?? null) as Record<string, unknown> | null,
     });
     for (const [fieldId, value] of Object.entries(derived)) {
         const held = values[fieldId];
@@ -338,7 +340,15 @@ export async function renderParticipantEnrollmentDocument(
 
     const filled = await fillPdfWithFidelity({
         sourcePdf: source.bytes,
-        fieldValues: fidelityFieldValues(mapping, values),
+        fieldValues: fidelityFieldValues(
+            mapping,
+            values,
+            documentFieldApplies({
+                schema,
+                values,
+                signatures: (payload?.signatures ?? null) as Record<string, unknown> | null,
+            }),
+        ),
         documentId: source.sourceRef,
         now: input.nowIso,
     });
