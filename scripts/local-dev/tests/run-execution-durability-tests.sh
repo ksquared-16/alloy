@@ -45,6 +45,18 @@ SUITES=(
   "development-governed-promotion-chain.test.mjs"
   "development-certification-fixture.test.mjs"
   "development-browser-auth.test.mjs"
+  "development-process-attribution.test.mjs"
+  "development-health.test.mjs"
+  "development-workload-classification.test.mjs"
+  "development-capacity-policy.test.mjs"
+  "development-validation-admission.test.mjs"
+  "development-run-wait.test.mjs"
+  "development-resource-reconciliation.test.mjs"
+  "development-provider-seat-state.test.mjs"
+  "development-governed-dependency.test.mjs"
+  "development-toolkit-retention.test.mjs"
+  "development-governed-dependency-runtime.test.mjs"
+  "development-validation-convergence.test.mjs"
 )
 
 PASS=0

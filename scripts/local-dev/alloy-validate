@@ -178,14 +178,34 @@ run_validate() {
   trap 'alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
 
   alloy_sprint_ops_defaults
-  # Memory pressure can refuse before waiting; do NOT enforce heavy-job count
-  # here — the holder already occupies the heavy slot, and waiters must queue
-  # on the validation lease instead of dying with "heavy-job limit".
+  # A REFUSAL, not an authorisation. It can only stop work from starting; it can
+  # never grant capacity, so it does not make a second budget. See the
+  # single-owner invariant in lib/vacilando/validation-routing.mjs.
   alloy_refuse_if_memory_pressure_heavy "$kind"
 
-  alloy_validate_acquire_lock "$name" "$kind" "$cmd" "$slot" "$branch" "$commit" "$request_id"
+  # ---------------------------------------------------------------------------
+  # S5 IS THE CAPACITY AUTHORITY. One decision, not two.
+  #
+  # This used to hold a host-wide mkdir MUTEX plus a counted heavy-job budget,
+  # neither of which knew anything about S5's weighted tokens — the same class
+  # of work authorised twice by two regimes that could not see each other. Both
+  # are now replaced by a single S5 claim, which is hardware-derived (S4),
+  # weighted by classification (S3), and worker-capped by the same policy that
+  # governs `vac run`.
+  #
+  # The queue registration below stays: it is VISIBILITY, and it grants nothing.
+  # ---------------------------------------------------------------------------
+  local admit_out=""
+  if ! admit_out="$(ALLOY_VALIDATE_HOLDER_PID=$$ node "${SCRIPT_DIR}/vac-validate-admit.mjs" --kind "$kind" --command "$cmd")"; then
+    alloy_die "validation capacity refused by the S5 broker (see: vac health --check validation.collisions)"
+  fi
+  eval "$admit_out"
   local heavy_lock=""
-  heavy_lock="$(alloy_acquire_resource_slot heavy "$ALLOY_MAX_CONCURRENT_HEAVY_JOBS" "$name")"
+  # shellcheck disable=SC2064
+  trap 'node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
+  if [[ "${ALLOY_S5_ENFORCED:-0}" == "1" ]]; then
+    alloy_info "governed by S5: ${ALLOY_S5_CLASS} · weight ${ALLOY_S5_WEIGHT} · workers <= ${ALLOY_S5_WORKER_CEILING} · claim ${ALLOY_S5_CLAIM_ID}"
+  fi
 
   local hb_pid=""
   (
@@ -211,7 +231,7 @@ run_validate() {
   fi
 
   # shellcheck disable=SC2064
-  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
 
   local vlog
   vlog="$(alloy_validate_log_path)"
@@ -237,7 +257,7 @@ run_validate() {
   local pgid_file
   pgid_file="$(alloy_validate_pgid_file)"
   # shellcheck disable=SC2064
-  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_reap_owned_job "'"$pgid_file"'"; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; alloy_release_resource_slot "'"$heavy_lock"'"; alloy_validate_release_lock' EXIT INT TERM HUP
+  trap '[[ -n "'"$hb_pid"'" ]] && kill "'"$hb_pid"'" 2>/dev/null || true; alloy_reap_owned_job "'"$pgid_file"'"; [[ "'"$browser_lease"'" -eq 1 ]] && alloy_browser_cert_release "'"$browser_holder"'"; node "'"${SCRIPT_DIR}"'/vac-validate-release.mjs" "'"${ALLOY_S5_CLAIM_ID:-}"'" "$rc" 2>/dev/null || true; alloy_validate_queue_unregister "'"$early_queue"'"' EXIT INT TERM HUP
 
   if [[ "$use_argv" -eq 1 ]]; then
     ( cd "$web_dir" && alloy_run_owned "$pgid_file" "$vlog" --argv \

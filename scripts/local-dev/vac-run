@@ -84,4 +84,11 @@ if [[ "$unmanaged" -eq 1 ]]; then
   export ALLOY_VALIDATE_SLOT_OVERRIDE=0
 fi
 
+# `command --` is the governed validation path (S5): classify, admit against the
+# canonical capacity policy, cap workers, execute, measure, release. Other kinds
+# still delegate to alloy-validate, which holds the host-wide lease.
+if [[ "$kind" == "command" ]]; then
+  exec node "$SCRIPT_DIR/vac-governed-validate.mjs" "$@"
+fi
+
 exec "$SCRIPT_DIR/alloy-validate" --cwd "$kind" "$@"

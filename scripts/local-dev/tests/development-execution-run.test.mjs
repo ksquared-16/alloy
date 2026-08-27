@@ -487,23 +487,35 @@ await test("findExecutionRun uses the isolated runtime root", () => {
   assert.equal(publicExecutionRun(found.run).instruction, undefined);
 });
 
-await test("Phase 1 did not modify resource-governance files", () => {
+await test("resource-governance files stay frozen outside their owning slice", () => {
+  // Phase 1 froze these. S5 (validation admission) deliberately extends
+  // `vac-run` — the instruction was to use the EXISTING wrapper rather than
+  // invent a parallel CLI — so vac-run is no longer in the frozen set.
+  //
+  // Validation path convergence is the OWNING SLICE for `alloy-validate` and
+  // `lib/lock.sh`: its whole purpose is to remove the second capacity regime
+  // those two carried — a host-wide mutex and a counted heavy-job budget — and
+  // point them at S5. Both leave the frozen set for the same reason vac-run did.
+  // What replaces the freeze is stronger than it was: the convergence suite
+  // asserts by name that neither budget can come back, and that every semantic
+  // alloy-validate legitimately owns survived.
+  //
+  // Worth stating plainly: this guard compares the working tree to HEAD, so it
+  // only ever catches UNCOMMITTED edits. Committing would have turned it green
+  // on its own. Removing the entry deliberately is the honest form of the change.
   const files = [
     "web/package.json",
-    "scripts/local-dev/vac-run",
-    "scripts/local-dev/alloy-validate",
     "scripts/local-dev/alloy-compute",
     "scripts/local-dev/lib/sprint-ops.sh",
     "scripts/local-dev/lib/browser-cert-lease.sh",
     "scripts/local-dev/lib/browser-cert-lease.mjs",
-    "scripts/local-dev/lib/lock.sh",
     "scripts/local-dev/lib/machine-capacity.sh",
     "scripts/local-dev/lib/actuation-core.sh",
     "scripts/workspace/doctor.mjs",
   ];
   const repo = join(HERE, "../../..");
   const existing = files.filter((p) => existsSync(join(repo, p)));
-  assert.ok(existing.length >= 8, `expected resource files present, got ${existing.join(",")}`);
+  assert.ok(existing.length >= 6, `expected resource files present, got ${existing.join(",")}`);
   const diff = spawnSync("git", ["diff", "--name-only", "HEAD", "--", ...existing], { cwd: repo, encoding: "utf8" });
   assert.equal(diff.status, 0, diff.stderr);
   assert.equal(diff.stdout.trim(), "", diff.stdout);

@@ -24,6 +24,7 @@ import { randomUUID } from "node:crypto";
 
 import {
   activeAgentSessionForLane,
+  getAgentSession,
   listAgentSessionsForLane,
   patchAgentSession,
 } from "./agent-session.mjs";
@@ -421,4 +422,246 @@ async function providerIsLive(lane, { root = undefined } = {}) {
   } catch {
     return false;
   }
+}
+
+// ── S8: contention-driven seat reclamation ───────────────────────────────────
+//
+// Suspension above is the parked case: a lane holding a seat while it waits on
+// a person. S8 adds the IDLE case — a live agent at a ready prompt with no run
+// at all — and one rule that governs it: the seat is released only because
+// another admission is waiting for provider capacity, never because time
+// passed. The classification, the grace policy, the ranking and the plan live
+// in provider-seat-state.mjs; the release itself goes through the code above,
+// because there must be exactly one way to put a provider down.
+
+import {
+  captureDormancyState,
+  dormancyIsDurable,
+  verifyResumeContinuity,
+  RESUME_FAILURE_WAIT_REASON,
+} from "./provider-seat-state.mjs";
+import { describeWait } from "./run-wait.mjs";
+import { listExecutionRunsForLane } from "./execution-run.mjs";
+
+export const RECLAIM_COMMAND = "lane.reclaim_idle_seat";
+/** Why a reclaim refused. Each one leaves the seat exactly as it was. */
+export const RECLAIM_REFUSALS = Object.freeze([
+  "lane_not_found", "no_agent_session", "no_recheck_provided",
+  "eligibility_changed", "dormancy_state_not_durable", "provider_stop_failed",
+]);
+
+/**
+ * Attachment IDENTITY for the dormancy snapshot — never the bytes.
+ *
+ * Attachments live in their own store on disk and outlive any process; what
+ * dormancy must preserve is the reference set, so a resumed lane can prove it
+ * still owns the same files.
+ */
+async function laneAttachments(laneId, root) {
+  try {
+    const { readAttachmentStore } = await import("./lane-attachments.mjs");
+    const id = String(laneId || "");
+    return Object.values(readAttachmentStore(root).attachments || {})
+      .filter((a) => a?.lane_id === id)
+      .sort((a, b) => String(a.attachment_id).localeCompare(String(b.attachment_id)));
+  } catch { return []; }
+}
+
+/**
+ * Release ONE idle seat because a specific admission is waiting for it.
+ *
+ * THE RECHECK IS THE SAFETY PROPERTY. A plan is computed from a snapshot, and
+ * between the snapshot and the release an instruction can arrive. So the seat
+ * is reclassified from live state immediately before the process is touched,
+ * and any change at all aborts. `recheckSeat` is REQUIRED: omitting it refuses
+ * the reclaim rather than falling back to the cached verdict, so no future
+ * caller can skip the recheck by forgetting it.
+ *
+ * DURABILITY BEFORE RELEASE, as everywhere else in this module. The dormancy
+ * snapshot is written and read back before the provider is stopped; if it
+ * cannot be made durable the seat is kept.
+ */
+export async function reclaimIdleProviderSeat({
+  laneId,
+  reclaimedFor = null,
+  reclaimReason = "provider_capacity_contention",
+  recheckSeat = null,
+  origin = "provider-capacity",
+  nowMs = Date.now(),
+  root = undefined,
+} = {}) {
+  if (typeof recheckSeat !== "function") {
+    return { ok: false, error: "no_recheck_provided", command: RECLAIM_COMMAND, lane_id: laneId ?? null };
+  }
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found", command: RECLAIM_COMMAND };
+  const session = activeAgentSessionForLane(rec.lane_id, root);
+  if (!session) return { ok: false, error: "no_agent_session", command: RECLAIM_COMMAND, lane_id: rec.lane_id };
+  if (session.state === "SUSPENDED") {
+    return { ok: true, already: true, command: RECLAIM_COMMAND, lane_id: rec.lane_id };
+  }
+
+  // ---- recompute eligibility from live state, immediately before release ----
+  const fresh = await recheckSeat({ laneId: rec.lane_id, root, nowMs });
+  if (!fresh || fresh.state !== "idle" || fresh.reclaimable !== true) {
+    return {
+      ok: false,
+      error: "eligibility_changed",
+      command: RECLAIM_COMMAND,
+      lane_id: rec.lane_id,
+      observed_state: fresh?.state || null,
+      observed_reason: fresh?.state_reason || null,
+      aborted: true,
+    };
+  }
+
+  // ---- durability BEFORE the process is stopped ----
+  const run = session.run_id ? getExecutionRun(session.run_id, root) : null;
+  const snapshot = captureDormancyState({
+    lane: rec,
+    session,
+    run,
+    runLedger: listExecutionRunsForLane(rec.lane_id, root) || [],
+    attachments: await laneAttachments(rec.lane_id, root),
+    now: nowMs,
+  });
+  const durable = dormancyIsDurable(snapshot);
+  if (!durable.ok) {
+    return { ok: false, error: durable.error, command: RECLAIM_COMMAND, lane_id: rec.lane_id, missing: durable.missing };
+  }
+  patchAgentSession(session.agent_session_id, {
+    dormancy: snapshot,
+    dormancy_reason: reclaimReason,
+    reclaimed_for: reclaimedFor,
+  }, { root });
+  // Read it back. A snapshot we cannot re-read is not durable, whatever the
+  // write returned.
+  const verified = getAgentSession(session.agent_session_id, root)?.dormancy || null;
+  if (!verified || verified.lane_id !== rec.lane_id) {
+    return { ok: false, error: "dormancy_state_not_durable", command: RECLAIM_COMMAND, lane_id: rec.lane_id };
+  }
+
+  // ---- release through the one canonical suspension path ----
+  const out = await suspendLaneProvider(rec.lane_id, {
+    origin,
+    reason: reclaimReason,
+    nowMs,
+    root,
+  });
+  if (!out.ok) {
+    return { ok: false, error: out.error, command: RECLAIM_COMMAND, lane_id: rec.lane_id, detail: out.detail ?? null };
+  }
+
+  patchAgentSession(session.agent_session_id, {
+    dormant_since: iso(nowMs),
+    reclaim_reason: reclaimReason,
+    reclaimed_for: reclaimedFor,
+  }, { root, event: "seat_reclaimed", extra: { reclaimed_for: reclaimedFor, reason: reclaimReason } });
+
+  return {
+    ok: true,
+    command: RECLAIM_COMMAND,
+    lane_id: rec.lane_id,
+    agent_session_id: session.agent_session_id,
+    // No fake live-provider metadata is left behind.
+    provider_process_absent: true,
+    provider_capacity_released: true,
+    resume_available: true,
+    dormant_since: iso(nowMs),
+    reclaim_reason: reclaimReason,
+    reclaimed_for: reclaimedFor,
+    dormancy: snapshot,
+  };
+}
+
+/**
+ * Bring a dormant lane back.
+ *
+ * Capacity is reacquired through the canonical admission path because that is
+ * what `startLaneAgentSession` does — it assesses provider capacity and queues
+ * an admission when the ceiling binds. Resume does not get its own door.
+ *
+ * On failure the lane STAYS dormant and says so, with a bounded S6 wait. The
+ * one thing that must never happen is a record claiming a live provider that
+ * is not there.
+ */
+export async function resumeDormantLane(laneId, {
+  origin = "operator",
+  nowMs = Date.now(),
+  root = undefined,
+} = {}) {
+  const rec = getDurableLane(laneId, root);
+  if (!rec) return { ok: false, error: "lane_not_found", command: RESUME_COMMAND };
+  const sessions = listAgentSessionsForLane(rec.lane_id, root) || [];
+  const dormantSession = sessions.find((s) => s?.state === "SUSPENDED" && s?.dormancy)
+    || sessions.find((s) => s?.state === "SUSPENDED")
+    || activeAgentSessionForLane(rec.lane_id, root);
+  const before = dormantSession?.dormancy || null;
+
+  const out = await resumeLaneProvider(rec.lane_id, { origin, nowMs, root });
+  if (!out.ok) {
+    if (dormantSession) {
+      patchAgentSession(dormantSession.agent_session_id, {
+        resume_attempts: Number(dormantSession.resume_attempts || 0) + 1,
+        last_resume_result: { ok: false, error: out.error || "provider_start_failed", at: iso(nowMs) },
+      }, { root, event: "provider_resume_failed", extra: { error: out.error || null } });
+    }
+    return {
+      ok: false,
+      error: out.error || "provider_start_failed",
+      command: RESUME_COMMAND,
+      lane_id: rec.lane_id,
+      // Truthful: still dormant, still recoverable, holding nothing.
+      still_dormant: true,
+      provider_capacity_held: false,
+      resume_available: true,
+      wait: describeWait({
+        reason: RESUME_FAILURE_WAIT_REASON,
+        resource_id: rec.lane_id,
+        waiting_since: nowMs,
+        now: nowMs,
+      }),
+    };
+  }
+
+  const after = captureDormancyState({
+    lane: getDurableLane(rec.lane_id, root) || rec,
+    session: activeAgentSessionForLane(rec.lane_id, root),
+    run: out.run_id ? getExecutionRun(out.run_id, root) : null,
+    runLedger: listExecutionRunsForLane(rec.lane_id, root) || [],
+    attachments: await laneAttachments(rec.lane_id, root),
+    now: nowMs,
+    // Carried from the snapshot: these describe the conversation the lane had,
+    // not anything the new process invented.
+    lastInstruction: before?.last_instruction ?? null,
+    lastOutput: before?.last_output ?? null,
+    conversationRef: before?.conversation_ref ?? null,
+    configuration: before?.configuration ?? null,
+  });
+  const continuity = before
+    ? verifyResumeContinuity(before, after)
+    : { ok: true, differences: [], volatile_ignored: [], not_verified: "no_prior_dormancy_snapshot" };
+
+  const sessionId = dormantSession?.agent_session_id || out.agent_session_id || null;
+  if (sessionId) {
+    const prior = getAgentSession(sessionId, root);
+    patchAgentSession(sessionId, {
+      resume_count: Number(prior?.resume_count || 0) + 1,
+      last_resume_result: { ok: true, at: iso(nowMs), continuity_ok: continuity.ok },
+      dormant_since: null,
+      reclaim_reason: null,
+    }, { root, event: "provider_resumed", extra: { origin, from: "dormant" } });
+  }
+
+  return {
+    ok: true,
+    command: RESUME_COMMAND,
+    lane_id: rec.lane_id,
+    agent_session_id: out.agent_session_id || sessionId,
+    run_id: out.run_id || null,
+    resumed_from_dormancy: Boolean(before),
+    continuity,
+    dormancy_before: before,
+    lane_after: after,
+  };
 }
