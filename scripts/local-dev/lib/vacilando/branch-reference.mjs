@@ -62,6 +62,12 @@ export function resolveBranchReferences({
   lanesPath = null,
   runsPath = null,
   governedActionsPath = null,
+  // The request ASKING about this branch. A governed action must not count
+  // itself as a reason its own subject is in use — that is self-blocking, and
+  // it is the structural twin of the prose bug this module replaced: there the
+  // run that MENTIONED a branch blocked it, here the request that TARGETS a
+  // branch blocked it.
+  excludeGovernedActionId = null,
 } = {}) {
   const target = norm(branch);
   if (!target) return { ok: false, references: [], unknown: ["no_branch_supplied"] };
@@ -129,6 +135,7 @@ export function resolveBranchReferences({
     const pending = new Set(["requested", "awaiting_director", "awaiting_operator", "awaiting_control_plane_refresh", "executing"]);
     for (const r of Array.isArray(rows) ? rows : []) {
       if (!r || !pending.has(r.status)) continue;
+      if (excludeGovernedActionId && r.request_id === excludeGovernedActionId) continue;
       const inputs = r.inputs || {};
       const b = inputs.branch || inputs.headBranch || inputs.head_branch || null;
       if (norm(b) !== target) continue;

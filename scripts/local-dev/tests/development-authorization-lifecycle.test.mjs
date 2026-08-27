@@ -167,3 +167,42 @@ await test("BR9 — the evidence collector no longer substring-scans", () => {
   assert.ok(!/JSON\.stringify\(\w+\)\.includes\(/.test(code), "serialised-record substring matching must not exist");
   assert.match(code, /branchIsReferenced\(/, "the collector must use the structured resolver");
 });
+
+await test("BR10 — a governed action is never a reference to its OWN subject branch", () => {
+  // The defect live certification found: a pending delete request whose
+  // inputs.branch is the branch counted as a governed_action_source_branch
+  // reference, so the request became its own blocking dependency and no branch
+  // could ever be Director-deleted. Structural twin of the prose bug — there
+  // the run that MENTIONED a branch blocked it, here the request that TARGETS
+  // it did.
+  const dir = mkdtempSync(join(tmpdir(), "vac-self-"));
+  const lanes = join(dir, "lanes.json"); const runs = join(dir, "runs.json"); const gas = join(dir, "ga.json");
+  writeFileSync(lanes, JSON.stringify({ lanes: [] }));
+  writeFileSync(runs, JSON.stringify({ lanes: {} }));
+  writeFileSync(gas, JSON.stringify({ requests: [
+    { request_id: "gar_self", status: "awaiting_operator", inputs: { branch: "agent/cursor/5-x", repository: "ksquared-16/alloy" } },
+    { request_id: "gar_other", status: "awaiting_operator", inputs: { branch: "agent/cursor/5-x", repository: "ksquared-16/alloy" } },
+  ] }));
+  const paths = { lanesPath: lanes, runsPath: runs, governedActionsPath: gas };
+
+  // Without the exclusion both requests count, so the branch is "in use".
+  assert.equal(B.resolveBranchReferences({ branch: "agent/cursor/5-x", ...paths }).references.length, 2);
+
+  // Excluding the asking request leaves only the genuinely OTHER one.
+  const withExclusion = B.resolveBranchReferences({ branch: "agent/cursor/5-x", excludeGovernedActionId: "gar_self", ...paths });
+  assert.equal(withExclusion.references.length, 1);
+  assert.equal(withExclusion.references[0].resource_id, "gar_other", "another action's reference must still count");
+
+  // And when the asking request is the ONLY one, the branch is unreferenced.
+  writeFileSync(gas, JSON.stringify({ requests: [{ request_id: "gar_self", status: "awaiting_operator", inputs: { branch: "agent/cursor/5-x", repository: "ksquared-16/alloy" } }] }));
+  assert.equal(B.branchIsReferenced({ branch: "agent/cursor/5-x", excludeGovernedActionId: "gar_self", ...paths }), false,
+    "a request must not block itself");
+  assert.equal(B.branchIsReferenced({ branch: "agent/cursor/5-x", ...paths }), true,
+    "without the exclusion it self-blocks — which is the bug");
+});
+
+await test("BR11 — the collector passes the requesting action's own id", async () => {
+  const fsx = await import("node:fs");
+  const src = fsx.readFileSync(new URL("../lib/vacilando/director-evidence.mjs", import.meta.url), "utf8");
+  assert.match(src, /excludeGovernedActionId:\s*rec\?\.request_id/, "the collector must exclude the asking request");
+});
