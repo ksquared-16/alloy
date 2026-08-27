@@ -2345,3 +2345,12 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
   .gw-approval-row-actions { flex-direction: column; }
   .gw-approvals .btn { width: 100%; min-height: 44px; }
 }
+
+/* Why an approval reached the operator at all. Under delegated governance most
+   actions never appear here, so when one does the reason is the point. */
+.gw-approval-row-esc {
+  margin: 4px 0 0; font-size: 12.5px; line-height: 1.4;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(183, 121, 31, .10);
+  border-left: 2px solid var(--needs-border, #b7791f);
+}

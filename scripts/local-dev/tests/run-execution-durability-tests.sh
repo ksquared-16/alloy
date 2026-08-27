@@ -61,6 +61,8 @@ SUITES=(
   "development-memory-capacity.test.mjs"
   "development-governed-approval-ui.test.mjs"
   "development-approval-discoverability.test.mjs"
+  "development-director-authority.test.mjs"
+  "development-director-certification.test.mjs"
 )
 
 PASS=0

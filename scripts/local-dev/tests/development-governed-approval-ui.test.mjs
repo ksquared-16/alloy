@@ -101,7 +101,7 @@ await test("5 — the card answers what an operator needs before deciding", () =
   assert.match(html, /ksquared-16\/alloy/, "repository");
   assert.match(html, /staging/, "environment");
   assert.match(html, /43eabdeb2c0f/, "commit, truncated");
-  assert.match(html, /Why approval is required/);
+  assert.match(html, /Why this needs you/);
   assert.match(html, /Effect/);
 });
 

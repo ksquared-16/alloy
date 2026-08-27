@@ -1426,6 +1426,7 @@ export function renderPendingApprovalsBar(approvals) {
         <div class="gw-approval-row-main">
           <p class="gw-approval-row-title">${esc(governedActionLabel(ga))}</p>
           ${ctx ? `<p class="gw-approval-row-ctx">${ctx}</p>` : ""}
+          ${ga.escalation_reason ? `<p class="gw-approval-row-esc"><strong>Why this needs you.</strong> ${esc(ga.escalation_reason)}</p>` : ""}
           ${ga.purpose ? `<p class="gw-approval-row-why">${esc(ga.purpose)}</p>` : ""}
         </div>
         <div class="gw-approval-row-actions">
@@ -1461,7 +1462,7 @@ export function renderLaneApprovalCard(lane, ga) {
     <p class="gw-approval-title">${esc(governedActionLabel(ga))}</p>
     <div class="gw-work-h">Approval required</div>
     ${facts.length ? `<dl class="gw-approval-facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>` : ""}
-    <p class="gw-runtime-d"><strong>Why approval is required.</strong> ${esc(why)}</p>
+    <p class="gw-runtime-d"><strong>Why this needs you.</strong> ${esc(ga?.escalation_reason || why)}</p>
     <p class="gw-runtime-d"><strong>Effect.</strong> ${esc(effect)}</p>
     <div class="gw-runtime-actions gw-approval-actions">
       <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.approve_label || "Approve")}</button>
