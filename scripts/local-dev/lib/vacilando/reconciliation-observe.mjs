@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { classifyWorktree } from "./resource-reconciliation.mjs";
+import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
 
 /* ── Observation ──────────────────────────────────────────────────────────
  * The same rules `vac health` already uses, in one owner so the plan and the
@@ -94,7 +95,11 @@ export function observeReconciliation({
 
   const worktrees = onDisk.map((name) => {
     const full = join(worktreeParent, name);
-    const isRegistered = registeredNames.includes(name);
+    // THE OWNER answers registration. Scanning metadata/*.env here is what
+    // made a discovered worktree invisible: adoption wrote somewhere else, so
+    // the same correction was proposed forever.
+    const registration = resolveWorktreeRegistration({ root, name, repositoryId: "repo_alloy" });
+    const isRegistered = registration.known;
     const inGit = gitKnown ? gitKnown.includes(name) : null;
 
     // A provider or dev server whose command names this worktree.
@@ -123,7 +128,10 @@ export function observeReconciliation({
 
     const classified = classifyWorktree({
       path: name,
-      registration: isRegistered ? { provenance: "managed" } : null,
+      // Provenance comes from the owner. A discovered worktree is KNOWN —
+      // registration and lifecycle are independent, so it can be discovered
+      // and active at the same time.
+      registration: isRegistered ? { provenance: registration.provenance } : null,
       liveProviders,
       liveDevServer,
       activeRuns: active,
@@ -131,7 +139,13 @@ export function observeReconciliation({
       branchDurable,
       referencedBy: (referencesByWorktree && referencesByWorktree[name]) || [],
     });
-    return { ...classified, in_git_worktree_list: inGit };
+    return {
+      ...classified,
+      in_git_worktree_list: inGit,
+      provenance: registration.provenance,
+      known: registration.known,
+      managed: registration.managed === true,
+    };
   });
 
   return { ports, worktrees, registered_names: registeredNames, observed_at: null };

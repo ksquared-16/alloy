@@ -100,14 +100,18 @@ await test("NC8 — a directory git does not list is never adopted as a worktree
   assert.equal(ok.ok, true);
 });
 
-await test("NC6 — adoption records DISCOVERED provenance and never claims managed", () => {
+await test("NC6 — adoption records DISCOVERED provenance and never claims managed", async () => {
   const r = root();
   R.applyCorrection({ kind: "adopt_unmanaged_worktree", path: "wt-real" },
     { root: r, observation: obs([], [{ path: "wt-real", managed: false, in_git_worktree_list: true, state: "unmanaged" }]) });
-  const rec = JSON.parse(readFileSync(join(r, "reconciliation", "worktree-wt-real.json"), "utf8"));
-  assert.equal(rec.provenance, "discovered");
-  assert.equal(rec.managed, false, "adoption must never claim Vacilando created it");
-  assert.equal(rec.retirement_state, null, "no retirement state may be inferred");
+  // Asserted through the OWNER, not a storage path. A consumer that has to
+  // know where registration lives is the coupling this slice removed.
+  const W = await import("../lib/vacilando/worktree-registration.mjs");
+  const reg = W.resolveWorktreeRegistration({ root: r, name: "wt-real", repositoryId: "repo_alloy" });
+  assert.equal(reg.known, true, "adoption must make the worktree KNOWN");
+  assert.equal(reg.provenance, "discovered");
+  assert.equal(reg.managed, false, "adoption must never claim Vacilando created it");
+  for (const f of ["slot", "port", "agent"]) assert.ok(reg[f] == null, `${f} must not be fabricated`);
   R.applyCorrection({ kind: "adopt_observed_server", port: 3011 },
     { root: r, observation: obs([portObs({ verdict: "unregistered_server", serving_pid: 555, registered: null })]) });
   const prec = JSON.parse(readFileSync(join(r, "reconciliation", "port-3011.json"), "utf8"));
@@ -356,4 +360,68 @@ await test("CONVERGENCE — the OBSERVER derives the verdict, not the fixture", 
     "the applied correction must not be re-proposed");
   // And the durable assignment survived.
   assert.ok(existsSync(join(r, "metadata", "wt9.env")), "durable configuration must never be destroyed");
+});
+
+await test("REGISTRATION OWNER — discovery never mints management", async () => {
+  const W = await import("../lib/vacilando/worktree-registration.mjs");
+  const r = root();
+  for (const field of W.MANAGEMENT_ONLY_FIELDS) {
+    const out = W.registerDiscoveredWorktree({ root: r, name: "wt-a", extra: { [field]: 1 } });
+    assert.equal(out.ok, false, field);
+    assert.equal(out.error, "discovery_may_not_assign_management");
+  }
+  const ok = W.registerDiscoveredWorktree({ root: r, name: "wt-a", repositoryId: "repo_alloy" });
+  assert.equal(ok.registration.provenance, "discovered");
+  assert.equal(ok.registration.managed, false);
+  for (const f of ["slot", "port", "agent"]) assert.ok(ok.registration[f] == null, `${f} must not be fabricated`);
+  // Known is not managed.
+  assert.equal(W.isManagedWorktree({ root: r, name: "wt-a" }), false);
+  assert.equal(W.registrationProvenance({ root: r, name: "wt-a" }), "discovered");
+  // Unknown is a real answer.
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-nope" }).provenance, "unknown");
+});
+
+await test("REGISTRATION OWNER — repository-aware identity does not collide", async () => {
+  const W = await import("../lib/vacilando/worktree-registration.mjs");
+  const r = root();
+  W.registerDiscoveredWorktree({ root: r, name: "wt-same", repositoryId: "repo_alloy" });
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-same", repositoryId: "repo_alloy" }).known, true);
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-same", repositoryId: "repo_other" }).known, false,
+    "the same name in another repository is a different worktree");
+  assert.notEqual(W.registrationKey({ repositoryId: "a", name: "w" }), W.registrationKey({ repositoryId: "b", name: "w" }));
+});
+
+await test("REGISTRATION OWNER — migration preserves audit and never invents presence", async () => {
+  const W = await import("../lib/vacilando/worktree-registration.mjs");
+  const r = root();
+  mkdirSync(join(r, "reconciliation"), { recursive: true });
+  writeFileSync(join(r, "reconciliation", "worktree-wt-live.json"), JSON.stringify({ kind: "adopt_unmanaged_worktree", path: "wt-live", provenance: "discovered", managed: false, adopted_at: "2026-01-01T00:00:00Z" }));
+  writeFileSync(join(r, "reconciliation", "worktree-wt-gone.json"), JSON.stringify({ kind: "adopt_unmanaged_worktree", path: "wt-gone", provenance: "discovered", managed: false }));
+  writeFileSync(join(r, "reconciliation", "worktree-wt-bogus.json"), JSON.stringify({ kind: "adopt_unmanaged_worktree", path: "wt-bogus", provenance: "managed", managed: true }));
+  const out = W.migrateAdoptionRecords({ root: r, existsInGit: (p) => p === "wt-live" });
+  assert.deepEqual(out.migrated.map((m) => m.name), ["wt-live"]);
+  const reasons = out.rejected.map((x) => x.reason);
+  assert.ok(reasons.includes("worktree_absent_from_git"), "a record for a vanished worktree must not register it");
+  assert.ok(reasons.includes("record_claims_management"), "a record claiming management must not be migrated");
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-gone" }).known, false);
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-bogus" }).managed, false);
+  // Audit evidence survives.
+  assert.equal(W.resolveWorktreeRegistration({ root: r, name: "wt-live" }).evidence.adopted_at, "2026-01-01T00:00:00Z");
+});
+
+await test("CONVERGENCE — worktree adoption disappears from the next plan", async () => {
+  const O = await import("../lib/vacilando/reconciliation-observe.mjs");
+  const r = root();
+  const parent = mkdtempSync(join(tmpdir(), "wts-"));
+  mkdirSync(join(parent, "wt-alpha"), { recursive: true });
+  const git = [join(parent, "wt-alpha")];
+  const obs1 = O.observeReconciliation({ root: r, processes: [], worktreeParent: parent, gitWorktrees: git });
+  const p1 = R.buildReconciliationPlan(obs1);
+  assert.deepEqual(p1.corrections.map((c) => c.kind), ["adopt_unmanaged_worktree"]);
+  const out = R.applyReconciliationPlan(p1, { root: r, freshObservation: obs1 });
+  assert.equal(out.applied.length, 1);
+  const obs2 = O.observeReconciliation({ root: r, processes: [], worktreeParent: parent, gitWorktrees: git });
+  assert.deepEqual(R.buildReconciliationPlan(obs2).corrections, [], "the applied adoption must not be re-proposed");
+  assert.equal(obs2.worktrees[0].provenance, "discovered");
+  assert.equal(obs2.worktrees[0].managed, false, "known is not managed");
 });

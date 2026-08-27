@@ -303,12 +303,21 @@ const worktrees = await safely(async () => {
   const onDisk = existsSync(parent)
     ? readdirSync(parent, { withFileTypes: true }).filter((d) => d.isDirectory() && /^wt/.test(d.name)).map((d) => d.name)
     : [];
-  const metaDir = join(root, "metadata");
-  const registered = existsSync(metaDir)
-    ? readdirSync(metaDir).filter((f) => f.endsWith(".env")).map((f) => f.replace(/\.env$/, ""))
-    : [];
-  const unmanaged = onDisk.filter((n) => !registered.includes(n));
-  return { onDisk: onDisk.length, registered: registered.length, unmanaged };
+  // Registration comes from the OWNER, not from scanning slot metadata.
+  // Health and reconciliation must answer "does Vacilando know this worktree"
+  // the same way, or adoption improves one and not the other.
+  const { listRegisteredWorktrees } = await import("./lib/vacilando/worktree-registration.mjs");
+  const known = listRegisteredWorktrees({ root });
+  const byName = new Map(known.map((k) => [k.name, k]));
+  const managed = onDisk.filter((n) => byName.get(n)?.managed === true);
+  const discovered = onDisk.filter((n) => byName.get(n)?.provenance === "discovered");
+  const unknown = onDisk.filter((n) => !byName.has(n));
+  return {
+    onDisk: onDisk.length,
+    registered: managed.length + discovered.length,
+    managed: managed.length, discovered: discovered.length,
+    unmanaged: unknown,
+  };
 }, { onDisk: 0, registered: 0, unmanaged: [] });
 
 // ── S9: toolkit retention, from the canonical owner ──────────────────────────
