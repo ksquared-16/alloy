@@ -59,6 +59,7 @@ SUITES=(
   "development-validation-convergence.test.mjs"
   "development-executor-authority.test.mjs"
   "development-trusted-credential.test.mjs"
+  "development-memory-capacity.test.mjs"
 )
 
 PASS=0
