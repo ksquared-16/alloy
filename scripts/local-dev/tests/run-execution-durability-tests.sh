@@ -64,6 +64,7 @@ SUITES=(
   "development-director-authority.test.mjs"
   "development-director-certification.test.mjs"
   "development-exact-authorization.test.mjs"
+  "development-authorization-lifecycle.test.mjs"
   "development-director-execution-bridge.test.mjs"
   "development-governed-run-wait.test.mjs"
   "development-repository-housekeeping.test.mjs"

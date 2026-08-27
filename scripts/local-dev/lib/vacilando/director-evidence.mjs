@@ -16,6 +16,8 @@ import { join } from "node:path";
 import { repositoryStorePath } from "./repository-registry.mjs";
 import { governedActionStorePath } from "./governed-action-request.mjs";
 import { executionRunStorePath } from "./execution-run.mjs";
+import { developmentLaneStorePath } from "./development-lane.mjs";
+import { branchIsReferenced } from "./branch-reference.mjs";
 import {
   measureClosePullRequestGates,
   measureDeleteRemoteBranchGates,
@@ -155,8 +157,18 @@ export function collectDirectorEvidence(rec, {
     try {
       Object.assign(evidence, measureDeleteRemoteBranchGates({ repository, branch: br, expectedHeadSha: sha }));
     } catch { /* unmeasured -> escalates */ }
-    const refs = activeLaneReference(stateRoot, br);
-    evidence.active_lane_reference = refs;
+    // STRUCTURED REFERENCES ONLY. The previous implementation serialised every
+    // non-terminal run and asked whether the branch NAME appeared in the JSON,
+    // so a run whose instruction text merely mentioned the branch counted as
+    // depending on it — including the run doing the deleting, which meant the
+    // gate blocked itself. Prose is not a reference.
+    let lanesPath = null; let runsPath = null; let gaPath2 = null;
+    try { lanesPath = developmentLaneStorePath(stateRoot); } catch { lanesPath = null; }
+    try { runsPath = executionRunStorePath(stateRoot); } catch { runsPath = null; }
+    try { gaPath2 = governedActionStorePath(stateRoot); } catch { gaPath2 = null; }
+    evidence.active_lane_reference = branchIsReferenced({
+      branch: br, repository, lanesPath, runsPath, governedActionsPath: gaPath2,
+    });
     // Unique work is only "not at risk" when the branch head is reachable from
     // the canonical branch. Unreachable or unmeasurable stays null.
     evidence.unique_work_at_risk = uniqueWorkAtRisk(wt, sha);
@@ -187,23 +199,6 @@ function activeGovernedMergeFor(stateRoot, repository, prNumber) {
     && Number(r.inputs?.pullRequestNumber ?? r.inputs?.pull_request_number) === Number(prNumber));
 }
 
-/** Does any non-terminal run or lane still name this branch? */
-function activeLaneReference(stateRoot, branch) {
-  if (!branch) return null;
-  let runsPath = null;
-  try { runsPath = executionRunStorePath(stateRoot); } catch { runsPath = null; }
-  const runs = runsPath ? readJson(runsPath) : null;
-  if (!runs?.lanes) return null;                               // cannot tell -> escalate
-  const terminal = new Set(["COMPLETE", "FAILED", "ABANDONED"]);
-  for (const v of Object.values(runs.lanes)) {
-    const rs = Array.isArray(v) ? v : (v.runs || Object.values(v).find(Array.isArray) || []);
-    for (const r of rs) {
-      if (!r || terminal.has(String(r.state).toUpperCase())) continue;
-      if (JSON.stringify(r).includes(branch)) return true;
-    }
-  }
-  return false;
-}
 
 /** Would deleting this head lose work no canonical branch can reach? */
 function uniqueWorkAtRisk(worktree, sha) {

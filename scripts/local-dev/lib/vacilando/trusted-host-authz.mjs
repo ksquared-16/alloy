@@ -52,6 +52,12 @@ export function grantMissionAuthorization({
   expiresAt = null,
   sourceDecisionId = null,
   note = null,
+  // Scope a standing grant may DECLARE. Declared-but-different is a non-match;
+  // undeclared leaves that dimension unrestricted, which is why the SUBJECT
+  // binding above is the one that may never be absent.
+  repository = null,
+  environment = null,
+  subjectScope = null,
   nowMs,
 } = {}) {
   if (!missionId || !actionType) return { ok: false, error: "missing_fields" };
@@ -64,6 +70,9 @@ export function grantMissionAuthorization({
     databaseTarget,
     riskClass,
     queryHash: queryHash || null,
+    repository: repository || null,
+    environment: environment || null,
+    subject_scope: subjectScope || null,
     status: "active",
     granted_at: iso(nowMs),
     granted_by: actor,
@@ -112,6 +121,70 @@ export function isOperatorOnlyAuthzEnvironment(env) {
  * content identity and refused outright for operator-only environments, so a
  * misconfigured policy still cannot produce production authority.
  */
+
+/**
+ * SUBJECT SCOPE — reuse breadth, stated rather than inferred.
+ *
+ * An operator approved ONE failed pull-request close. The grant that minted
+ * carried no queryHash, and findAuthorization read "no binding" as "matches
+ * anything of this action type" — so a single decision about one PR became
+ * standing authority to close EVERY pull request, at any SHA, until it
+ * expired. The same happened for branch deletion.
+ *
+ * Absence of a binding is not a wildcard. A grant that may cover more than one
+ * subject has to SAY so.
+ */
+export const SUBJECT_SCOPES = Object.freeze({
+  /** Valid for one subject only: the queryHash it was issued against. */
+  EXACT: "exact",
+  /** Explicitly reusable for any subject of this action inside the mission. */
+  ANY_WITHIN_MISSION: "any_within_mission",
+});
+
+/**
+ * How a standing grant's reuse breadth resolves.
+ *
+ * legacy_unbound is the historical shape: no subject binding AND no declared
+ * scope. It is reported, never honoured — silently ignoring malformed historical
+ * authority is how the leak survived in the first place.
+ */
+export function classifyStandingGrant(auth) {
+  if (!auth) return { class: "absent", matchable: false };
+  if (auth.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
+    return { class: "exact_request", matchable: true, subject_scope: SUBJECT_SCOPES.EXACT };
+  }
+  const declared = auth.subject_scope || null;
+  if (declared === SUBJECT_SCOPES.ANY_WITHIN_MISSION) {
+    return { class: "explicit_wildcard", matchable: true, subject_scope: declared };
+  }
+  if (auth.queryHash) {
+    return { class: "subject_bound", matchable: true, subject_scope: SUBJECT_SCOPES.EXACT };
+  }
+  return {
+    class: "legacy_unbound",
+    matchable: false,
+    subject_scope: null,
+    reason: "issued with no subject binding and no declared subject_scope; absence is not a wildcard",
+  };
+}
+
+/** Every standing grant that would once have matched anything. For audit and health. */
+export function legacyUnboundAuthorizations(missionId) {
+  return listAuthorizations(missionId)
+    .filter((a) => a.status === "active")
+    .filter((a) => classifyStandingGrant(a).class === "legacy_unbound")
+    .map((a) => ({
+      authorizationId: a.authorizationId,
+      actionType: a.actionType,
+      granted_by: a.granted_by,
+      granted_at: a.granted_at,
+      expires_at: a.expires_at,
+      databaseTarget: a.databaseTarget || null,
+      classification: "legacy_unbound",
+      effect: "inert — no longer matches; retained for audit",
+    }));
+}
+
 export function grantExactRequestAuthorization({
   missionId,
   requestId,
@@ -278,15 +351,31 @@ export function findAuthorization({
     .filter((a) => a.status === "active")
     .filter((a) => a.actionType === actionType)
     .filter((a) => a.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS || a.databaseTarget === databaseTarget)
+    // A grant that names an environment or repository may not be used outside
+    // it. Declared-but-different is a non-match, never a shrug.
+    .filter((a) => !a.environment || !environment || normEnv(a.environment) === normEnv(environment))
+    .filter((a) => !a.repository || !repository || a.repository === repository)
     .filter((a) => !isExpired(a, nowMs))
     .filter((a) => {
-      // Merge authorization is SHA-bound. Approving one expected head
-      // must not auto-execute a later pin of the same PR.
+      // ABSENCE IS NEVER A WILDCARD.
+      //
+      // This used to end "|| !a.queryHash || !queryHash", so a grant with no
+      // subject binding matched every request of its action type, and a
+      // request with no subject matched every grant. One approval of one PR
+      // close became authority over all of them.
+      //
+      // A standing grant now needs a subject binding that MATCHES, or an
+      // explicitly declared wildcard scope. Merge and migration keep their
+      // stricter rule, which was already correct.
       if (actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
         || actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
         return Boolean(queryHash) && a.queryHash === queryHash;
       }
-      return !a.queryHash || !queryHash || a.queryHash === queryHash;
+      if (a.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) return true;  // already bound above
+      const klass = classifyStandingGrant(a);
+      if (klass.class === "legacy_unbound") return false;
+      if (klass.class === "explicit_wildcard") return true;
+      return Boolean(queryHash) && a.queryHash === queryHash;
     })
     // UNUSED IS NOT TRANSFERABLE. This filter used to end `|| !a.used_at`,
     // which let an unused single-action grant match any request at all.
