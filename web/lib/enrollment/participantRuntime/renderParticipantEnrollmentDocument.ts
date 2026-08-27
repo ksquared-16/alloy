@@ -38,13 +38,33 @@ import { loadPublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormE
 import { participantPrefillValues } from "@/lib/public/forms/resolvePublicFormEmbedContext";
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
+import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
+import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
+import { PDFDocument } from "pdf-lib";
+
+/** Page count of rendered bytes — the unified contract reports it for either engine. */
+async function pdfPageCount(bytes: Uint8Array): Promise<number> {
+    try {
+        return (await PDFDocument.load(bytes)).getPageCount();
+    } catch {
+        return 1;
+    }
+}
 
 export type ParticipantDocumentRenderResult =
     | {
           readonly ok: true;
           readonly bytes: Uint8Array;
-          readonly mapping: FidelityPdfMapping;
-          readonly fillReport: { applied: string[]; missed: string[] };
+          /** Which engine produced these bytes. Chosen once, here, at the artifact boundary. */
+          readonly renderer: "source_fidelity" | "generated_document";
+          /** What makes this rendering reproducible: source bytes for one, layout for the other. */
+          readonly renderIdentity: string;
+          readonly pageCount: number;
+          readonly signaturePlacements: readonly { field_id: string; page: number; x: number; y: number; width: number; height: number }[];
+          /** True only when the parent is looking at the school's own document. */
+          readonly isSourceReplica: boolean;
+          readonly mapping: FidelityPdfMapping | null;
+          readonly fillReport: { applied: string[]; missed: string[] } | null;
       }
     | { readonly ok: false; readonly code: "no_document" | "unavailable"; readonly detail: string };
 
@@ -68,6 +88,11 @@ async function resolveActiveArtifact(
           formSubmissionId: string | null;
           /** Which Form this artifact is — the home of any process-scoped answer it carries. */
           formDefinitionId: string;
+          /** D-94: the version this session reviews, and the provenance a composed record carries. */
+          versionId: string | null;
+          sourceDocumentId: string | null;
+          sourceSha256: string | null;
+          sourceTitle: string | null;
       }
     | { ok: false; detail: string }
 > {
@@ -83,7 +108,7 @@ async function resolveActiveArtifact(
 
     const { data: packetItem } = await supabase
         .from("form_packet_items")
-        .select("form_definition_id")
+        .select("form_definition_id, metadata")
         .eq("org_id", input.orgId)
         .eq("id", row.packet_item_id)
         .maybeSingle();
@@ -98,7 +123,31 @@ async function resolveActiveArtifact(
     );
     if (!envelope) return { ok: false, detail: "Pinned version unavailable." };
 
-    return { ok: true, envelope, formSubmissionId: row.form_submission_id ?? null, formDefinitionId };
+    /*
+     * Provenance for a COMPOSED record.
+     *
+     * A filled artifact pins its source through the mapping's sha; a composed one has no mapping, so
+     * the document itself must carry where it came from — otherwise the completed record could be
+     * mistaken for something Alloy invented rather than something a school asked.
+     */
+    const { data: sourceDoc } = await supabase
+        .from("documents")
+        .select("id, title, file_name, checksum_sha256")
+        .eq("org_id", input.orgId)
+        .eq("id", (packetItem as { metadata?: { source_document_id?: string } } | null)?.metadata?.source_document_id ?? "")
+        .maybeSingle();
+    const doc = sourceDoc as { id?: string; title?: string; file_name?: string; checksum_sha256?: string } | null;
+
+    return {
+        ok: true,
+        envelope,
+        formSubmissionId: row.form_submission_id ?? null,
+        formDefinitionId,
+        versionId: row.resolved_form_definition_version_id ?? null,
+        sourceDocumentId: doc?.id ?? null,
+        sourceSha256: doc?.checksum_sha256 ?? null,
+        sourceTitle: doc?.title ?? doc?.file_name ?? null,
+    };
 }
 
 export async function renderParticipantEnrollmentDocument(
@@ -108,6 +157,8 @@ export async function renderParticipantEnrollmentDocument(
         readonly sessionId: string;
         /** Injected clock — the engine stamps PDF dates, and determinism keeps output hashable. */
         readonly nowIso: string;
+        /** The organisation's zone, for derived execution dates. */
+        readonly timeZone?: string;
     },
 ): Promise<ParticipantDocumentRenderResult> {
     // The artifact chain and the session row are independent — one wave, not two.
@@ -122,12 +173,16 @@ export async function renderParticipantEnrollmentDocument(
     ]);
     if (!artifact.ok) return { ok: false, code: "unavailable", detail: artifact.detail };
 
+    /*
+     * ONE CHOICE, MADE HERE.
+     *
+     * A mapping means the source is a real form with real boxes, so it is FILLED. No mapping means
+     * the source was a hosted form with no placements to recover, so the completed record is
+     * COMPOSED. This used to be where the parent fell back to compiled HTML — a null mapping read
+     * as "we have nothing to show you", when it actually means "this artifact is generated".
+     * Everything downstream now receives a real document either way.
+     */
     const mapping = parseFidelityPdfMapping(artifact.envelope.pdfMappingJson);
-    if (!mapping) {
-        // Not an error: most versions have no original document, and the caller falls back to the
-        // compiled semantic review.
-        return { ok: false, code: "no_document", detail: "This version carries no original document." };
-    }
 
     let schema;
     try {
@@ -154,7 +209,7 @@ export async function renderParticipantEnrollmentDocument(
             input.orgId,
             sessionRow as { shared_values?: unknown; process_instance_id?: string | null },
         ),
-        resolveFidelitySourceBytes(supabase, input.orgId, mapping),
+        mapping ? resolveFidelitySourceBytes(supabase, input.orgId, mapping) : Promise.resolve(null),
     ]);
     const payload = (draftResult.data as { payload?: { values?: Record<string, unknown> } } | null)?.payload;
     const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
@@ -165,7 +220,42 @@ export async function renderParticipantEnrollmentDocument(
         // that box and nothing else — the reason it can be collected without becoming canonical.
         ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
     };
-    if (!source.ok) return { ok: false, code: "unavailable", detail: source.detail };
+    // Derived destinations are filled at render, from the values already in hand.
+    Object.assign(values, resolveFormDerivedValues(schema, values, {
+        executedAtIso: input.nowIso,
+        timeZone: input.timeZone ?? "UTC",
+    }));
+
+    if (!mapping) {
+        /*
+         * COMPOSED. Alloy's completed record of an intake whose source had no layout to recover:
+         * authoritative as what was collected, never presented as a replica of the original.
+         */
+        const composed = await composeGeneratedDocument({
+            schema,
+            values,
+            provenance: {
+                form_definition_id: artifact.formDefinitionId,
+                form_definition_version_id: artifact.versionId ?? "",
+                source_document_id: artifact.sourceDocumentId ?? null,
+                source_sha256: artifact.sourceSha256 ?? null,
+                source_title: artifact.sourceTitle ?? null,
+            },
+        });
+        return {
+            ok: true,
+            bytes: composed.bytes,
+            renderer: "generated_document",
+            renderIdentity: composed.composerVersion,
+            pageCount: composed.pageCount,
+            signaturePlacements: composed.signaturePlacements,
+            isSourceReplica: false,
+            mapping: null,
+            fillReport: null,
+        };
+    }
+
+    if (!source || !source.ok) return { ok: false, code: "unavailable", detail: source?.detail ?? "Source bytes unavailable." };
 
     const filled = await fillPdfWithFidelity({
         sourcePdf: source.bytes,
@@ -174,5 +264,15 @@ export async function renderParticipantEnrollmentDocument(
         now: input.nowIso,
     });
 
-    return { ok: true, bytes: filled.bytes, mapping, fillReport: { applied: filled.applied, missed: filled.missed } };
+    return {
+        ok: true,
+        bytes: filled.bytes,
+        renderer: "source_fidelity",
+        renderIdentity: mapping.source_sha256,
+        pageCount: await pdfPageCount(filled.bytes),
+        signaturePlacements: mapping.signature_placements,
+        isSourceReplica: true,
+        mapping,
+        fillReport: { applied: filled.applied, missed: filled.missed },
+    };
 }
