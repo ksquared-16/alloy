@@ -193,10 +193,14 @@ describe("3. progress is deterministic and truthful", () => {
 // ---------------------------------------------------------------------------
 
 describe("14. the browser sends words, never authority", () => {
-    it("the request body carries only text or value", () => {
-        // The only two keys the component ever sends.
+    it("the request body carries only words, a value, or a bare intent", () => {
+        /*
+         * `decline` joined `text` and `value` when leaving a question blank stopped being a value.
+         * It names no field, no need and no target — the server decides whether the current turn may
+         * be declined — so the vocabulary widened without the browser gaining anything to claim.
+         */
         const bodyKeys = [...COMPONENT.matchAll(/submit\(\{\s*([a-z_]+)/g)].map((m) => m[1]);
-        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value"]));
+        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value", "decline"]));
     });
 
     it("no authority-bearing identifier appears anywhere in the component", () => {
