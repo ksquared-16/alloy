@@ -33,6 +33,8 @@ import {
 } from "./trusted-host-action-registry.mjs";
 import {
   findAuthorization,
+  AUTHORIZATION_CLASSES,
+  exactAuthorizationCovers,
   markAuthorizationUsed,
   recognizePriorCensusAuthorization,
   listAuthorizations,
@@ -376,12 +378,32 @@ export function authorizeTrustedHostAction(actionId, {
   authorizationId = null,
   nowMs,
   grant = null,
+  exactContext = null,
 } = {}) {
   const action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
   let auth = null;
   if (authorizationId) {
     auth = listAuthorizations(action.missionId).find((a) => a.authorizationId === authorizationId) || null;
+    // PRESENTING AN ID IS NOT AUTHORISATION. This lookup used to accept any
+    // id it could resolve, with no check that the authorization actually
+    // covered THIS action — so a caller holding one id could have executed a
+    // different action with it. An exact-request authorization is now verified
+    // against the action's own parameters before it counts.
+    if (auth && auth.scope === AUTHORIZATION_CLASSES.EXACT_REQUEST) {
+      const ctx = exactContext || {};
+      const covers = exactAuthorizationCovers(auth, {
+        requestId: ctx.requestId ?? null,
+        contentFingerprint: ctx.contentFingerprint ?? null,
+        actionType: action.actionType,
+        environment: ctx.environment ?? null,
+        repository: ctx.repository ?? action.inputs?.repository ?? null,
+        sourceSha: ctx.sourceSha
+          ?? action.inputs?.expectedHeadSha ?? action.inputs?.expected_head_sha ?? null,
+      });
+      const expired = auth.expires_at && Date.parse(auth.expires_at) < (nowMs ?? Date.now());
+      if (!covers || auth.status !== "active" || expired || auth.used_at) auth = null;
+    }
   } else {
     auth = findAuthorization({
       missionId: action.missionId,
@@ -720,6 +742,8 @@ export function fulfillDatabaseCensusForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   recognizePriorCensusAuthorization(missionId, { nowMs });
 
@@ -741,7 +765,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
     return { ok: true, action: req.action, already: true };
   }
 
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) {
     return {
       ok: false,
@@ -1148,6 +1172,8 @@ export function fulfillAssignQaAccessForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
@@ -1155,7 +1181,7 @@ export function fulfillAssignQaAccessForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
@@ -1168,6 +1194,8 @@ export function fulfillProvisionQaIdentityForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
@@ -1175,7 +1203,7 @@ export function fulfillProvisionQaIdentityForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
@@ -1195,6 +1223,8 @@ export function fulfillRestoreQaSessionForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
@@ -1202,7 +1232,7 @@ export function fulfillRestoreQaSessionForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
@@ -1234,6 +1264,8 @@ export function fulfillRepositoryPushForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
@@ -1241,7 +1273,7 @@ export function fulfillRepositoryPushForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
@@ -1253,6 +1285,8 @@ export function fulfillPromotionOpenPrForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId, assignmentId, executionSessionId, requestedBy: actor,
@@ -1260,7 +1294,7 @@ export function fulfillPromotionOpenPrForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
   return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
@@ -1272,6 +1306,8 @@ export function fulfillRepositoryMergeForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -1284,7 +1320,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) {
     return {
       ok: false,
@@ -1302,6 +1338,8 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   actor = "director",
   nowMs,
   grant = null,
+  authorizationId = null,
+  exactContext = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -1314,7 +1352,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
   if (!auth.ok) {
     return {
       ok: false,

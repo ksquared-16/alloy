@@ -63,6 +63,7 @@ SUITES=(
   "development-approval-discoverability.test.mjs"
   "development-director-authority.test.mjs"
   "development-director-certification.test.mjs"
+  "development-exact-authorization.test.mjs"
 )
 
 PASS=0
