@@ -139,7 +139,15 @@ export interface CreatePacketDeps {
     listFormKeys(orgId: string): Promise<Set<string>>;
     listPacketKeys(orgId: string): Promise<Set<string>>;
     insertFormDefinition(a: { orgId: string; key: string; name: string; metadata: Record<string, unknown> }): Promise<{ id: string }>;
-    insertVersion(a: { orgId: string; formDefinitionId: string; versionNumber: number; schemaJson: unknown; metadata: Record<string, unknown> }): Promise<{ id: string }>;
+    /**
+     * `pdfMappingJson` is the seam Processing never had.
+     *
+     * A realized Form knew what it collected and never where its values printed, so every version
+     * this pipeline published carried a null mapping and Participant Runtime fell back to compiled
+     * HTML forever. The mapping belongs on the immutable version for the same reason the schema does
+     * (D-94): a running session must review the document its own version describes.
+     */
+    insertVersion(a: { orgId: string; formDefinitionId: string; versionNumber: number; schemaJson: unknown; metadata: Record<string, unknown>; pdfMappingJson?: unknown }): Promise<{ id: string }>;
     publishVersion(a: { orgId: string; versionId: string; userId: string }): Promise<void>;
     insertPacketDefinition(a: { orgId: string; key: string; name: string; metadata: Record<string, unknown> }): Promise<{ id: string }>;
     insertPacketItem(a: { orgId: string; packetDefinitionId: string; formDefinitionId: string; pinnedVersionId: string | null; sequenceIndex: number; metadata: Record<string, unknown> }): Promise<{ id: string }>;
@@ -509,9 +517,14 @@ export function makeCreatePacketDepsFromSupabase(supabase: SupabaseClient): Repr
             if (error) throw new Error(error.message);
             return { id: (data as { id: string }).id };
         },
-        async insertVersion({ orgId, formDefinitionId, versionNumber, schemaJson, metadata }) {
+        async insertVersion({ orgId, formDefinitionId, versionNumber, schemaJson, metadata, pdfMappingJson }) {
             const { data, error } = await supabase.from("form_definition_versions")
-                .insert({ org_id: orgId, form_definition_id: formDefinitionId, version_number: versionNumber, status: "draft", schema_json: schemaJson, metadata })
+                .insert({
+                    org_id: orgId, form_definition_id: formDefinitionId, version_number: versionNumber,
+                    status: "draft", schema_json: schemaJson, metadata,
+                    // Absent stays absent: a generated-document artifact has no mapping by design.
+                    ...(pdfMappingJson === undefined ? {} : { pdf_mapping_json: pdfMappingJson }),
+                })
                 .select("id").single();
             if (error) throw new Error(error.message);
             return { id: (data as { id: string }).id };
