@@ -290,6 +290,20 @@ export function FormEmbedClient({
      * the semantic review stands and the parent is never shown a blank.
      */
     const [originalDocument, setOriginalDocument] = useState(false);
+    /**
+     * What the RENDERER says this artifact is — the one answer that spans both engines.
+     *
+     * `originalDocument` above is a duck read of the fidelity mapping and therefore true only for a
+     * source replica. Using it to decide whether to show a document at all sent every generated
+     * agreement — the completed Admissions application, the Tuition and Handbook agreements — down
+     * the semantic fallback, where the parent met an HTML form instead of the document Alloy had
+     * composed for them.
+     */
+    const [artifactModel, setArtifactModel] = useState<{
+        renderer: "source_fidelity" | "generated_document";
+        page_count: number;
+        signatures: Array<{ field_id: string; page: number; x: number; y: number; width: number; height: number }>;
+    } | null>(null);
     const [documentRev, setDocumentRev] = useState(0);
     const [documentUnavailable, setDocumentUnavailable] = useState(false);
     const documentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -414,14 +428,26 @@ export function FormEmbedClient({
              * of the signature line on it. `enrollment-artifact` answers for both engines.
              */
             setSignaturePlacement(null);
+            setArtifactModel(null);
             void (async () => {
                 try {
                     const res = await fetch(`/api/public/forms/${encToken}/enrollment-artifact`);
                     const body = (await res.json()) as {
                         ok?: boolean;
-                        data?: { signatures?: Array<Record<string, unknown>> };
+                        data?: {
+                            renderer?: "source_fidelity" | "generated_document";
+                            page_count?: number;
+                            signatures?: Array<Record<string, unknown>>;
+                        };
                     };
                     const slots = Array.isArray(body?.data?.signatures) ? body.data.signatures : [];
+                    if (body?.ok && body.data?.renderer) {
+                        setArtifactModel({
+                            renderer: body.data.renderer,
+                            page_count: typeof body.data.page_count === "number" ? body.data.page_count : 1,
+                            signatures: slots as NonNullable<typeof artifactModel>["signatures"],
+                        });
+                    }
                     /*
                      * The FIRST placement is the signature this artifact asks this parent for.
                      *
@@ -662,7 +688,15 @@ export function FormEmbedClient({
         return () => {
             cancelled = true;
         };
-    }, [token]);
+        /*
+         * `submissionId` is in the deps because finishing an artifact advances the packet.
+         *
+         * The objective carries how many documents are done, and the header above the paperwork
+         * reads it. Fetched once per token, that count froze: a parent who had just finished their
+         * third document was still told they were on it. A new draft id is exactly the moment the
+         * runtime moved on, so it is the moment to ask again.
+         */
+    }, [token, submissionId]);
 
     if (phase === "loading") {
         return (
@@ -971,7 +1005,13 @@ export function FormEmbedClient({
         packetTotal: enrollmentObjective?.progress?.total ?? 0,
         packetSatisfied: enrollmentObjective?.progress?.satisfied ?? 0,
     });
-    const showDocument = originalDocument && !documentUnavailable;
+    /*
+     * A document is shown when the renderer can produce one — for EITHER engine.
+     *
+     * The replica-only test that stood here is what made "the parent's own document" true of the
+     * two state forms and false of the three the school wrote.
+     */
+    const showDocument = artifactModel != null && !documentUnavailable;
     /** The document-first participant progression applies; otherwise the semantic fallback. */
     const documentFlow = enrollmentReview && compiled != null && showDocument;
     const allowTypedSignature =
@@ -1000,7 +1040,7 @@ export function FormEmbedClient({
      * frame is corrected by the next refresh or by submit.
      */
     const scheduleDocumentRefresh = () => {
-        if (!originalDocument || documentUnavailable) return;
+        if (artifactModel == null || documentUnavailable) return;
         if (documentRefreshTimer.current) clearTimeout(documentRefreshTimer.current);
         documentRefreshTimer.current = setTimeout(() => setDocumentRev((r) => r + 1), 1500);
     };

@@ -41,6 +41,7 @@ import { validateFormSchema } from "@/lib/forms/schema";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
 import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { PDFDocument } from "pdf-lib";
+import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
 
 /** Page count of rendered bytes — the unified contract reports it for either engine. */
 async function pdfPageCount(bytes: Uint8Array): Promise<number> {
@@ -157,6 +158,36 @@ export async function resolveActiveArtifact(
     };
 }
 
+/**
+ * The Forms signature payload, as marks a composer can draw.
+ *
+ * `validateSubmission` already fixes the shape — drawn carries `drawn_document_id`, typed carries
+ * `typed_full_name`, and the two are exclusive — so this reads it and fetches the asset bytes. An
+ * asset that cannot be read yields no mark, which leaves the line empty rather than substituting
+ * something the participant did not make.
+ */
+async function composedSignatureMarks(
+    supabase: SupabaseClient,
+    orgId: string,
+    signatures: Record<string, unknown> | undefined,
+): Promise<Record<string, { drawnPng?: Uint8Array | null; typedFullName?: string | null }>> {
+    const out: Record<string, { drawnPng?: Uint8Array | null; typedFullName?: string | null }> = {};
+    if (!signatures || typeof signatures !== "object") return out;
+    for (const [fieldId, raw] of Object.entries(signatures)) {
+        const entry = raw as { kind?: string; drawn_document_id?: string; typed_full_name?: string } | null;
+        if (!entry || typeof entry !== "object") continue;
+        if (entry.kind === "drawn" && typeof entry.drawn_document_id === "string" && entry.drawn_document_id) {
+            const asset = await downloadDocumentBytesSafe(supabase, { orgId, documentId: entry.drawn_document_id });
+            out[fieldId] = { drawnPng: asset?.bytes ?? null };
+            continue;
+        }
+        if (entry.kind === "typed" && typeof entry.typed_full_name === "string") {
+            out[fieldId] = { typedFullName: entry.typed_full_name };
+        }
+    }
+    return out;
+}
+
 export async function renderParticipantEnrollmentDocument(
     supabase: SupabaseClient,
     input: {
@@ -218,7 +249,9 @@ export async function renderParticipantEnrollmentDocument(
         ),
         mapping ? resolveFidelitySourceBytes(supabase, input.orgId, mapping) : Promise.resolve(null),
     ]);
-    const payload = (draftResult.data as { payload?: { values?: Record<string, unknown> } } | null)?.payload;
+    const payload = (draftResult.data as {
+        payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown> };
+    } | null)?.payload;
     const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
     const values: Record<string, unknown> = {
         ...draftValues,
@@ -238,9 +271,18 @@ export async function renderParticipantEnrollmentDocument(
          * COMPOSED. Alloy's completed record of an intake whose source had no layout to recover:
          * authoritative as what was collected, never presented as a replica of the original.
          */
+        /*
+         * The marks this composed document already carries.
+         *
+         * Read from the SAME draft payload the values came from, so the preview a parent sees while
+         * signing and the record they finish with are one rendering. The bytes of a drawn mark come
+         * from the evidence's own document reference — never re-drawn, never substituted.
+         */
+        const signatures = await composedSignatureMarks(supabase, input.orgId, payload?.signatures);
         const composed = await composeGeneratedDocument({
             schema,
             values,
+            signatures,
             provenance: {
                 form_definition_id: artifact.formDefinitionId,
                 form_definition_version_id: artifact.versionId ?? "",

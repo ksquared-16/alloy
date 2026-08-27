@@ -180,11 +180,27 @@ function wrap(text: string, font: PDFFont, size: number, maxWidth: number): stri
     return lines.length ? lines : [""];
 }
 
+/**
+ * A signature the participant actually made, ready to be drawn where this layout reserved room.
+ *
+ * The composer reserves a signature block and draws a rule under it, and for a long time that was
+ * all it did — so a parent could sign the Tuition agreement, see the mark on their screen, and get
+ * back a composed document with an empty line. A reserved block that never receives its mark is a
+ * blank on a document someone agreed to.
+ */
+export interface ComposedSignatureMark {
+    /** PNG bytes exactly as captured. The mark on paper is the mark that was made. */
+    readonly drawnPng?: Uint8Array | null;
+    readonly typedFullName?: string | null;
+}
+
 export async function composeGeneratedDocument(input: {
     schema: FormSchemaV1;
     /** Field id → the participant's answer. Absent means unanswered, and prints as such. */
     values: Readonly<Record<string, unknown>>;
     provenance: GeneratedDocumentProvenance;
+    /** Field id → the captured signature, when the participant has signed that block. */
+    signatures?: Readonly<Record<string, ComposedSignatureMark>>;
 }): Promise<ComposedGeneratedDocument> {
     const pdf = await PDFDocument.create();
     const body = await pdf.embedFont(StandardFonts.Helvetica);
@@ -273,6 +289,46 @@ export async function composeGeneratedDocument(input: {
                     color: ink,
                 });
                 page.drawText("Signature", { x: MARGIN.left, y: lineY - 12, size: 7.5, font: body, color: quiet });
+
+                /*
+                 * The mark goes ON the rule this layout just drew.
+                 *
+                 * Sized to fit the reserved block and centred over the rule, so a wide or a narrow
+                 * capture both sit on the line rather than across the text above it. A drawn mark
+                 * is drawn; a typed name is written in the same script-ish italic the operator side
+                 * uses; an unreadable asset leaves the line empty rather than substituting a
+                 * stand-in, exactly as the fidelity path decided.
+                 */
+                const mark = input.signatures?.[field.id];
+                if (mark?.drawnPng && mark.drawnPng.length > 0) {
+                    try {
+                        const png = await pdf.embedPng(mark.drawnPng);
+                        const maxW = SIGNATURE_BLOCK.ruleWidth - 8;
+                        const maxH = 30;
+                        const scale = Math.min(maxW / png.width, maxH / png.height, 1);
+                        const w = png.width * scale;
+                        const h = png.height * scale;
+                        page.drawImage(png, {
+                            x: MARGIN.left + (SIGNATURE_BLOCK.ruleWidth - w) / 2,
+                            y: lineY + 2,
+                            width: w,
+                            height: h,
+                        });
+                    } catch {
+                        /* Unreadable capture: the line stays empty rather than showing a stand-in. */
+                    }
+                } else if (mark?.typedFullName && mark.typedFullName.trim()) {
+                    const typed = toDrawable(mark.typedFullName.trim());
+                    const size = 16;
+                    const w = Math.min(italic.widthOfTextAtSize(typed, size), SIGNATURE_BLOCK.ruleWidth - 8);
+                    page.drawText(typed, {
+                        x: MARGIN.left + (SIGNATURE_BLOCK.ruleWidth - w) / 2,
+                        y: lineY + 5,
+                        size,
+                        font: italic,
+                        color: ink,
+                    });
+                }
                 signaturePlacements.push({
                     field_id: field.id,
                     page: pdf.getPageCount() - 1,

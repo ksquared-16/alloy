@@ -152,3 +152,36 @@ describe("the tamper guard must not erase a value the platform just derived", ()
         expect(out.values.today, "the derived value was computed this second — the baseline is stale by definition").toBe("8/26/2026");
     });
 });
+
+describe("an age is a day apart, and days have no timezone", () => {
+    const schema = schemaOf([
+        f({ id: "dob", type: "date" }),
+        f({ id: "first_day", type: "date" }),
+        f({
+            id: "age",
+            type: "text",
+            read_only: true,
+            required: true,
+            derived: { kind: "age_from_date_of_birth", source_key: "dob", as_of_key: "first_day" },
+        }),
+    ]);
+    const at = (dob: string, firstDay: string) =>
+        resolveFormDerivedValues(schema, { dob, first_day: firstDay }, { executedAtIso: "2026-08-27T00:00:00Z", timeZone: "UTC" });
+
+    it("does not shift the as-of date back a day", () => {
+        // Built at UTC midnight and read through local getters, the as-of landed on the PREVIOUS
+        // calendar day everywhere west of Greenwich, and every age came out a day early.
+        expect(at("2021-04-02", "2026-04-02")).toEqual({ age: "5 yrs 0 mos" });
+        expect(at("2021-04-02", "2026-04-01")).toEqual({ age: "4 yrs 11 mos" });
+    });
+
+    it("has an answer when a child starts on the day they were born", () => {
+        // A day early meant NEGATIVE here, so the derivation returned nothing, the required box
+        // stayed blank, and the whole submission was refused for a value the platform owed.
+        expect(at("2021-04-02", "2021-04-02")).toEqual({ age: "0 mos" });
+    });
+
+    it("still refuses when the as-of date genuinely precedes the birth", () => {
+        expect(at("2021-04-02", "2020-01-01")).toEqual({});
+    });
+});
