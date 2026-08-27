@@ -36,6 +36,9 @@ import {
 } from "@/lib/process/processInstances";
 import { TERMINAL_CHILD_STATUS_KEYS } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 
+/** The durable Enrollment subject. Named once so every query here reads the same table. */
+const PARTICIPATION_TABLE = "opportunity_customer_members" as const;
+
 export type EnrollmentJourneyContext = {
     readonly processInstanceId: string;
     /** The durable Enrollment subject. Null only when none could be resolved. */
@@ -63,7 +66,7 @@ async function participationForSubject(
     opportunityId: string | null,
 ): Promise<{ id: string; opportunity_id: string | null } | null> {
     const { data } = await supabase
-        .from("opportunity_customer_members")
+        .from(PARTICIPATION_TABLE)
         .select("id, opportunity_id, outcome_status_key")
         .eq("org_id", orgId)
         .eq("customer_member_id", customerMemberId);
@@ -99,7 +102,7 @@ export async function resolveEnrollmentJourneyContext(
     // The current shape: the context IS the participation.
     if (contextType === ENROLLMENT_PARTICIPATION_CONTEXT_TYPE && contextId) {
         const { data } = await supabase
-            .from("opportunity_customer_members")
+            .from(PARTICIPATION_TABLE)
             .select("id, customer_member_id, opportunity_id")
             .eq("org_id", input.orgId)
             .eq("id", contextId)
@@ -146,4 +149,83 @@ export async function resolveEnrollmentJourneyContext(
         acquisition: participation.opportunity_id ? "present" : "absent",
         resolvedVia: "subject_lookup",
     };
+}
+
+/**
+ * The context ids that reach an Enrollment journey belonging to any of these Opportunities.
+ *
+ * Every consumer that asks "which journeys belong to this Opportunity?" needs the same widening,
+ * because a journey now anchors to the child's Enrollment Participation and the Opportunity id no
+ * longer appears in `process_instances.context_id` at all. Written once here rather than at each
+ * call site: the failure it prevents is a query that returns FEWER rows and no error, which is the
+ * kind of defect that survives review precisely because nothing looks wrong.
+ *
+ * The Opportunity ids are included in the result, so journeys under the older anchor keep matching
+ * and no backfill has to land first.
+ */
+export async function enrollmentContextIdsForOpportunities(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityIds: readonly string[],
+): Promise<{
+    /** Every context id to match on — Opportunity ids and participation ids together. */
+    readonly contextIds: string[];
+    /** Participation id -> its Opportunity, for mapping a matched journey back. */
+    readonly opportunityIdByContextId: Map<string, string>;
+}> {
+    const ids = [...new Set(opportunityIds.map((id) => (id ?? "").trim()).filter(Boolean))];
+    const opportunityIdByContextId = new Map<string, string>();
+    if (!ids.length) return { contextIds: [], opportunityIdByContextId };
+
+    const { data, error } = await supabase
+        .from(PARTICIPATION_TABLE)
+        .select("id, opportunity_id")
+        .eq("org_id", orgId)
+        .in("opportunity_id", ids);
+    if (error) throw new Error(error.message);
+    for (const row of (data ?? []) as { id: string; opportunity_id: string | null }[]) {
+        if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+    }
+    return { contextIds: [...ids, ...opportunityIdByContextId.keys()], opportunityIdByContextId };
+}
+
+/**
+ * The Opportunity behind each of these journeys, in one query.
+ *
+ * The mirror of {@link enrollmentContextIdsForOpportunities}: that one starts from Opportunities and
+ * widens to the journeys, this one starts from journeys and resolves back. Consumers that already
+ * hold process rows want this direction, and resolving each row through
+ * {@link resolveEnrollmentJourneyContext} would turn one question into a query per child.
+ *
+ * A context id that is already an Opportunity id simply finds no participation and is returned
+ * mapped to itself, so callers need no special case for the older anchor.
+ */
+export async function opportunityIdsForEnrollmentContexts(
+    supabase: SupabaseClient,
+    orgId: string,
+    rows: readonly { context_type?: string | null; context_id?: string | null }[],
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const participationIds = new Set<string>();
+    for (const row of rows) {
+        const contextId = (row.context_id ?? "").trim();
+        if (!contextId) continue;
+        const contextType = (row.context_type ?? "").trim();
+        if (contextType === ENROLLMENT_CONTEXT_TYPE) out.set(contextId, contextId);
+        else if (contextType === ENROLLMENT_PARTICIPATION_CONTEXT_TYPE) participationIds.add(contextId);
+    }
+    if (!participationIds.size) return out;
+
+    const { data, error } = await supabase
+        .from(PARTICIPATION_TABLE)
+        .select("id, opportunity_id")
+        .eq("org_id", orgId)
+        .in("id", [...participationIds]);
+    if (error) throw new Error(error.message);
+    for (const row of (data ?? []) as { id: string; opportunity_id: string | null }[]) {
+        // A context-free participation has no Opportunity, and is deliberately absent from the map
+        // rather than present with a null — a caller must not be handed an empty string to query on.
+        if (row.opportunity_id) out.set(String(row.id), String(row.opportunity_id));
+    }
+    return out;
 }

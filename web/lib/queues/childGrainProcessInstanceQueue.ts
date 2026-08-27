@@ -43,14 +43,6 @@ function metaStr(meta: Record<string, unknown> | null | undefined, key: string):
  */
 export function mapProcessInstanceToTrackRow(
     pi: PiRow,
-    /**
-     * The journey's Opportunity — resolved, never `pi.context_id`.
-     *
-     * Passed in rather than derived because `context_id` is an OCM id once a journey anchors to its
-     * participation, and writing that into `opportunity_id` produces a row that looks entirely
-     * ordinary while pointing at the wrong table.
-     */
-    opportunityId: string,
     opp: OcmEnrollmentTrackQueryRow["opportunities"] extends infer O ? (O extends Array<infer E> ? E : O) : never,
     cm: NonNullable<OcmEnrollmentTrackQueryRow["customer_members"]> extends Array<infer E> ? E : NonNullable<OcmEnrollmentTrackQueryRow["customer_members"]>,
     programCategory: { key?: string | null; label?: string | null } | null,
@@ -60,7 +52,14 @@ export function mapProcessInstanceToTrackRow(
         // in metadata.migrated_from_ocm_id for any consumer still keyed on it.
         id: (metaStr(pi.metadata, "migrated_from_ocm_id") ?? pi.id),
         org_id: pi.org_id,
-        opportunity_id: opportunityId,
+        /*
+         * The Opportunity's OWN id — never `pi.context_id`.
+         *
+         * Once a journey anchors to its Enrollment Participation the context id is an OCM id, and
+         * writing that here produces a row that looks entirely ordinary while pointing at the wrong
+         * table. The resolved Opportunity is already in hand, so it answers for itself.
+         */
+        opportunity_id: String((opp as { id?: string } | null)?.id ?? ""),
         customer_member_id: pi.subject_id,
         outcome_status_key: pi.state,
         program_category_id: metaStr(pi.metadata, "program_category_id"),
@@ -214,13 +213,11 @@ function resolveContextOpportunity(pi: PiRow, refs: ResolvedRefs): Record<string
 
 /** Map one admitted instance + its in-scope opportunity into a track row. */
 function toTrackRow(pi: PiRow, opp: Record<string, unknown>, refs: ResolvedRefs): OcmEnrollmentTrackQueryRow {
-    const opportunityId = String((opp as { id?: string }).id ?? "");
     const cm = refs.cmById.get(pi.subject_id) ?? null;
     const catId = metaStr(pi.metadata, "program_category_id");
     const cat = catId ? refs.catById.get(catId) ?? null : null;
     return mapProcessInstanceToTrackRow(
         pi,
-        opportunityId,
         opp as OcmEnrollmentTrackQueryRow["opportunities"] as never,
         cm as never,
         cat,
