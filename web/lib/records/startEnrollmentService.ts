@@ -37,7 +37,10 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { createEnrollmentProcessInstance } from "@/lib/process/processInstances";
+import {
+    createEnrollmentProcessInstance,
+    ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+} from "@/lib/process/processInstances";
 import { ensureOpportunityCustomerMemberParticipation } from "@/lib/lifecycle/ensureOpportunityCustomerMemberParticipation";
 import { ENROLLING_CHILD_STATUS_KEY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { resolveLiveEnrollmentContextForHousehold } from "@/lib/records/enrollmentContextResolver";
@@ -138,10 +141,26 @@ export async function startEnrollment(
         outcomeStatusKey: ENROLLING_CHILD_STATUS_KEY,
     });
 
+    /*
+     * THE JOURNEY ANCHORS TO THE PARTICIPATION, whether or not acquisition brought the family here.
+     *
+     * One context shape for Enrollment. Anchoring to the Opportunity could not describe a
+     * context-free enrolment at all, and keeping both shapes would leave every downstream consumer
+     * guessing which one a given journey used. The Opportunity is still reachable — it is on the
+     * participation — and `resolveEnrollmentJourneyContext` still reads journeys written under the
+     * older shape, so this converges without a flag day.
+     *
+     * Reuse also improves: the instance is now deduped by EPISODE rather than by acquisition
+     * episode or by bare subject, which is the grain a journey actually has.
+     */
     const created = await createEnrollmentProcessInstance(supabase, {
         orgId,
         subjectId: customerMemberId,
-        contextId: opportunityId,
+        contextId: participation.ocmId,
+        contextType: ENROLLMENT_PARTICIPATION_CONTEXT_TYPE,
+        // Where the family came from — kept distinct from what the journey anchors to, so the
+        // D-96 department pin still resolves canonically.
+        acquisitionOpportunityId: opportunityId,
         // No stage: the journey's configured entry decides position. Stamping one here would be
         // this service inventing a place in a process it does not own.
         stageKey: null,

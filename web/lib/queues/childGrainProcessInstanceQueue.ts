@@ -43,6 +43,14 @@ function metaStr(meta: Record<string, unknown> | null | undefined, key: string):
  */
 export function mapProcessInstanceToTrackRow(
     pi: PiRow,
+    /**
+     * The journey's Opportunity — resolved, never `pi.context_id`.
+     *
+     * Passed in rather than derived because `context_id` is an OCM id once a journey anchors to its
+     * participation, and writing that into `opportunity_id` produces a row that looks entirely
+     * ordinary while pointing at the wrong table.
+     */
+    opportunityId: string,
     opp: OcmEnrollmentTrackQueryRow["opportunities"] extends infer O ? (O extends Array<infer E> ? E : O) : never,
     cm: NonNullable<OcmEnrollmentTrackQueryRow["customer_members"]> extends Array<infer E> ? E : NonNullable<OcmEnrollmentTrackQueryRow["customer_members"]>,
     programCategory: { key?: string | null; label?: string | null } | null,
@@ -52,7 +60,7 @@ export function mapProcessInstanceToTrackRow(
         // in metadata.migrated_from_ocm_id for any consumer still keyed on it.
         id: (metaStr(pi.metadata, "migrated_from_ocm_id") ?? pi.id),
         org_id: pi.org_id,
-        opportunity_id: pi.context_id ?? "",
+        opportunity_id: opportunityId,
         customer_member_id: pi.subject_id,
         outcome_status_key: pi.state,
         program_category_id: metaStr(pi.metadata, "program_category_id"),
@@ -92,6 +100,8 @@ type ResolvedRefs = {
     oppById: Map<string, Record<string, unknown>>;
     cmById: Map<string, Record<string, unknown>>;
     catById: Map<string, { key?: string | null; label?: string | null }>;
+    /** OCM context id -> its Opportunity. Empty for journeys anchored to an Opportunity already. */
+    opportunityIdByContextId: Map<string, string>;
 };
 
 /**
@@ -121,13 +131,44 @@ async function resolveTrackRowRefs(params: {
         ),
     ];
 
-    const oppById = new Map<string, Record<string, unknown>>();
+    /*
+     * A CONTEXT ID IS NOT ALWAYS AN OPPORTUNITY ID.
+     *
+     * Enrollment journeys anchor to the child's Enrollment Participation, so `context_id` is an OCM
+     * id and looking it up in `opportunities` matches nothing. The row is then dropped by
+     * `if (!opp) continue` below — silently, and for EVERY journey created after the convergence,
+     * which would have emptied the child-grain Work Views without a single error anywhere.
+     *
+     * The participation knows its Opportunity, so it is resolved through the participation and the
+     * rest of this function is unchanged. Context ids that really are Opportunity ids simply find no
+     * participation and pass straight through, so journeys under the older anchor keep working.
+     */
+    const opportunityIdByContextId = new Map<string, string>();
     if (contextIds.length) {
+        const { data, error } = await params.supabase
+            .from("opportunity_customer_members")
+            .select("id, opportunity_id")
+            .eq("org_id", params.orgId)
+            .in("id", contextIds);
+        if (error) throw new Error(`process-instance participation resolve failed: ${error.message}`);
+        for (const r of data ?? []) {
+            const row = r as { id: string; opportunity_id: string | null };
+            // A context-free participation has no Opportunity. That is an ordinary answer, and it
+            // leaves the journey with nothing for an opportunity-shaped queue row to be built from.
+            if (row.opportunity_id) opportunityIdByContextId.set(String(row.id), String(row.opportunity_id));
+        }
+    }
+    const resolvedOpportunityIds = [
+        ...new Set(contextIds.map((id) => opportunityIdByContextId.get(id) ?? id)),
+    ];
+
+    const oppById = new Map<string, Record<string, unknown>>();
+    if (resolvedOpportunityIds.length) {
         const { data, error } = await params.supabase
             .from("opportunities")
             .select(OPP_SELECT)
             .eq("org_id", params.orgId)
-            .in("id", contextIds);
+            .in("id", resolvedOpportunityIds);
         if (error) throw new Error(`process-instance opportunity resolve failed: ${error.message}`);
         for (const o of data ?? []) oppById.set(String((o as { id: string }).id), o as Record<string, unknown>);
     }
@@ -156,16 +197,30 @@ async function resolveTrackRowRefs(params: {
         }
     }
 
-    return { oppById, cmById, catById };
+    return { oppById, cmById, catById, opportunityIdByContextId };
+}
+
+/**
+ * The Opportunity a journey's context points at — through the participation when that is the anchor.
+ *
+ * One helper rather than the expression repeated at each membership rule, because the two rules
+ * admitting different instances is deliberate and them disagreeing about what a context IS is not.
+ */
+function resolveContextOpportunity(pi: PiRow, refs: ResolvedRefs): Record<string, unknown> | null {
+    if (!pi.context_id) return null;
+    const opportunityId = refs.opportunityIdByContextId.get(pi.context_id) ?? pi.context_id;
+    return refs.oppById.get(opportunityId) ?? null;
 }
 
 /** Map one admitted instance + its in-scope opportunity into a track row. */
 function toTrackRow(pi: PiRow, opp: Record<string, unknown>, refs: ResolvedRefs): OcmEnrollmentTrackQueryRow {
+    const opportunityId = String((opp as { id?: string }).id ?? "");
     const cm = refs.cmById.get(pi.subject_id) ?? null;
     const catId = metaStr(pi.metadata, "program_category_id");
     const cat = catId ? refs.catById.get(catId) ?? null : null;
     return mapProcessInstanceToTrackRow(
         pi,
+        opportunityId,
         opp as OcmEnrollmentTrackQueryRow["opportunities"] as never,
         cm as never,
         cat,
@@ -205,7 +260,7 @@ export async function queryEnrollmentProcessInstanceTrackRows(params: {
     for (const pi of piRows) {
         // Context opportunity must resolve (org-scoped). Lane membership is effective stage — not
         // whether the family opportunity is still parked on this stage work unit.
-        const opp = pi.context_id ? refs.oppById.get(pi.context_id) : null;
+        const opp = resolveContextOpportunity(pi, refs);
         if (!opp) continue;
         // Effective-stage membership: keep only children whose PI.stage_key ?? opp.stage_key == lane.
         const oppStageKey = typeof opp.stage_key === "string" ? opp.stage_key : null;
@@ -251,13 +306,13 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
 
     // In-scope instances only (context opportunity resolved in-org), then the
     // Definition's own liveness gate over the canonical participant shape.
-    const inScope = piRows.filter((pi) => pi.context_id && refs.oppById.has(pi.context_id));
+    const inScope = piRows.filter((pi) => resolveContextOpportunity(pi, refs) !== null);
     if (!inScope.length) return [];
 
     const participants = buildEnrollmentParticipants(
         inScope,
         inScope.map((pi) => {
-            const opp = refs.oppById.get(pi.context_id!)!;
+            const opp = resolveContextOpportunity(pi, refs)!;
             return {
                 id: String(opp.id),
                 stage_key: typeof opp.stage_key === "string" ? opp.stage_key : null,
@@ -270,13 +325,15 @@ export async function queryEnrollmentProcessInstanceParticipationRows(params: {
             id: String(cm.id),
             is_active: typeof cm.is_active === "boolean" ? cm.is_active : null,
         })),
+        [],
+        refs.opportunityIdByContextId,
     );
     const live = new Set(participants.filter(isLiveEnrollmentParticipant).map((p) => p.participantId));
 
     const rows: OcmEnrollmentTrackQueryRow[] = [];
     for (const pi of inScope) {
         if (!live.has(pi.id)) continue;
-        rows.push(toTrackRow(pi, refs.oppById.get(pi.context_id!)!, refs));
+        rows.push(toTrackRow(pi, resolveContextOpportunity(pi, refs)!, refs));
     }
     return rows;
 }
