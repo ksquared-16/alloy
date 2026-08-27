@@ -105,12 +105,34 @@ export function resolveFormDerivedValues(
      */
     const applies = documentFieldApplies({ schema, values, signatures: ctx.signatures ?? null });
 
+    /*
+     * AN EXECUTION DATE IS THE DAY THE ARTIFACT WAS EXECUTED.
+     *
+     * An artifact that asks to be signed and carries no signature was not executed, so there is no
+     * such day yet and stamping one asserts an execution that did not happen. This is the floor
+     * beneath the per-destination conditions above: the Oregon CIS states its two signature dates
+     * declaratively, and the Nonmedical Exemption — an immutable v3 this correction may not
+     * republish — is covered by the same rule without a schema change.
+     *
+     * Applied only where the caller supplied the signatures; without them nothing is known and the
+     * historical behaviour stands.
+     */
+    const signatureIds = new Set<string>();
+    walkScalarFormFields(schema, (field) => {
+        if (field.type === "signature") signatureIds.add(field.id);
+    });
+    const executed =
+        ctx.signatures === undefined || ctx.signatures === null
+            ? true
+            : signatureIds.size === 0 || [...signatureIds].some((id) => ctx.signatures?.[id] != null);
+
     const stringValues: Record<string, string> = {};
     for (const [k, v] of Object.entries(values)) if (typeof v === "string") stringValues[k] = v;
 
     const out: Record<string, string> = {};
     for (const targetKey of Object.keys(bindings)) {
         if (!applies(targetKey)) continue;
+        if (!executed && bindings[targetKey]?.kind === "execution_date") continue;
         const result = resolveDerivedFieldDisplay({
             target_key: targetKey,
             values: stringValues,

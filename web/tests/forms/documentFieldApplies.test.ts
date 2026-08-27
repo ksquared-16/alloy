@@ -144,3 +144,40 @@ describe("the source-fidelity fill agrees with the schema", () => {
         expect(Object.keys(fidelityFieldValues(mapping, values))).toContain("Date  Fecha");
     });
 });
+
+describe("an execution date is the day the artifact was executed", () => {
+    /** The Exemption's shape: one signature, one unconditional signature-date. */
+    const exemption = {
+        title: "Oregon Nonmedical Exemption",
+        fields: [
+            { id: "sig", type: "signature", label: "Signature2", required: false },
+            { id: "when", type: "date", label: "Date Fecha 3", required: false, read_only: true, derived: { kind: "execution_date" } },
+        ],
+        sections: [{ id: "s", title: "Page 2", field_ids: ["sig", "when"] }],
+    } as unknown as FormSchemaV1;
+    const ctx = { executedAtIso: "2026-08-27T17:00:00Z", timeZone: "America/Los_Angeles" };
+
+    it("is not written for an artifact that asks to be signed and has not been", () => {
+        // Covers an immutable version this correction may not republish, with no schema change.
+        expect(resolveFormDerivedValues(exemption, {}, { ...ctx, signatures: {} })).toEqual({});
+    });
+
+    it("is written once the artifact is signed", () => {
+        expect(
+            resolveFormDerivedValues(exemption, {}, { ...ctx, signatures: { sig: { kind: "drawn", drawn_document_id: "d" } } }),
+        ).toEqual({ when: "2026-08-27" });
+    });
+
+    it("does not gate an artifact that asks for no signature at all", () => {
+        const noSig = {
+            title: "Admissions",
+            fields: [{ id: "when", type: "text", label: "Today's Date:", read_only: true, derived: { kind: "execution_date" } }],
+            sections: [{ id: "s", title: "x", field_ids: ["when"] }],
+        } as unknown as FormSchemaV1;
+        expect(resolveFormDerivedValues(noSig, {}, { ...ctx, signatures: {} })).toEqual({ when: "8/27/2026" });
+    });
+
+    it("keeps the historical behaviour when the caller knows nothing about signatures", () => {
+        expect(resolveFormDerivedValues(exemption, {}, ctx)).toEqual({ when: "2026-08-27" });
+    });
+});
