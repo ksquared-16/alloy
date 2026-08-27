@@ -89,11 +89,20 @@ export function compilePdfMappingForRealizedArtifact(input: {
          */
         if (field.type === "signature") {
             const bbox = field.bbox;
-            if (Array.isArray(bbox) && bbox.length === 4 && typeof field.page === "number") {
+            if (Array.isArray(bbox) && bbox.length === 4 && typeof field.page === "number" && field.page >= 1) {
                 const [x0, y0, x1, y1] = bbox as [number, number, number, number];
                 signature_placements.push({
                     field_id: field.id,
-                    page: field.page,
+                    /*
+                     * ONE-INDEXED IN, ZERO-INDEXED OUT.
+                     *
+                     * `acroFormStructure` numbers pages the way a person does — `f.page > 0 ? f.page : 1`
+                     * — and the fidelity contract indexes them the way an array does, straight into
+                     * `pages[ov.page]`. Passing the reader's number through unchanged puts every
+                     * signature exactly one page late: on a two-page form the mark lands on page two,
+                     * and on the last page it silently lands nowhere at all.
+                     */
+                    page: field.page - 1,
                     x: Math.min(x0, x1),
                     y: Math.min(y0, y1),
                     width: Math.abs(x1 - x0),

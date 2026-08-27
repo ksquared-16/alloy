@@ -37,11 +37,12 @@ describe("compiling a source mapping from certified evidence", () => {
     it("preserves an authored signature rectangle rather than treating it as a value box", () => {
         const r = compile([
             f({ id: "field_1", evidence: "pdf_field:Name" }),
-            f({ id: "sig_1", type: "signature", evidence: "pdf_field:Signature1", page: 0, bbox: [142, 100, 370, 130] }),
+            f({ id: "sig_1", type: "signature", evidence: "pdf_field:Signature1", page: 1, bbox: [142, 100, 370, 130] }),
         ]);
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         expect(r.value.signatures).toBe(1);
+        // The reader numbers pages from 1; `pages[ov.page]` indexes from 0. Page one is index zero.
         expect(r.value.mapping.signature_placements[0]).toEqual({ field_id: "sig_1", page: 0, x: 142, y: 100, width: 228, height: 30 });
         // A signature is a mark, not a typed value.
         expect(r.value.mapping.acro_fields["Signature1"]).toBeUndefined();
@@ -106,5 +107,31 @@ describe("positive controls — the join must fail when it is wrong", () => {
         expect(parsed?.engine).toBe("fidelity_v1");
         expect(parsed?.source_sha256).toBe(SHA);
         expect(parsed?.template_key, "an uploaded original, not a controlled template").toBeUndefined();
+    });
+});
+
+describe("page numbering crosses a base boundary", () => {
+    it("converts the reader's one-indexed page to the contract's zero-indexed one", () => {
+        // Left unconverted, a mark authored on page one lands on page two — and on the last page it
+        // lands nowhere, because `pages[ov.page]` is simply undefined.
+        const r = compile([
+            f({ id: "a", evidence: "pdf_field:Name" }),
+            f({ id: "s1", type: "signature", evidence: "pdf_field:Sig1", page: 1, bbox: [10, 20, 110, 50] }),
+            f({ id: "s2", type: "signature", evidence: "pdf_field:Sig2", page: 2, bbox: [10, 20, 110, 50] }),
+        ]);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.value.mapping.signature_placements.map((p) => p.page)).toEqual([0, 1]);
+    });
+
+    it("refuses a page number the reader could not have produced", () => {
+        const r = compile([
+            f({ id: "a", evidence: "pdf_field:Name" }),
+            f({ id: "s", type: "signature", evidence: "pdf_field:Sig", page: 0, bbox: [10, 20, 110, 50] }),
+        ]);
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.value.signatures, "page 0 is not a page the reader emits").toBe(0);
+        expect(r.value.unmapped).toContain("s");
     });
 });
