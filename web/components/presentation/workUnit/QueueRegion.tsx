@@ -31,7 +31,7 @@ import { WS_QUEUE_TOOLBAR_CHROME } from "@/components/workspace/workspaceTokens"
 import { markPerceived } from "@/lib/perf/perceivedPerf";
 import { CondensedQueueRow } from "./CondensedQueueRow";
 import { QueueFilterControls } from "./QueueFilterControls";
-import { useFocusPanelOpen } from "./FocusPanelSurface";
+import { useFocusPanelOpen } from "./FocusPanelOpenContext";
 import { queueRowsForListDuringHold } from "@/lib/presentation/runtime/queueRowsRetention";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useRetainedScroll } from "@/lib/presentation/runtime/useRetainedScroll";
