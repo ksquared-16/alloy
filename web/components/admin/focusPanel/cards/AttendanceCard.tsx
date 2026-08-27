@@ -150,12 +150,17 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                     <p className="alloy-os-attendance__empty" data-attendance-empty="no-participant">
                         Select a child to see their day.
                     </p>
-                ) : vm?.unavailableReason ? (
-                    <p className="alloy-os-attendance__empty" data-attendance-empty="unavailable">
-                        {vm.unavailableReason}
-                    </p>
                 ) : vm ? (
                     <>
+                        {/*
+                            THE CARD STAYS THE CARD.
+                            A child with no attendable enrolment used to replace this whole surface
+                            with one sentence. Missing prerequisites change the FACTS and the
+                            COMMANDS; they do not turn Attendance into an error message. The day
+                            renders with its real (empty) values and the reason is stated quietly
+                            below, so the operator still sees which child this is and what the day
+                            says about them.
+                        */}
                         <div className="alloy-os-attendance__day" data-attendance-day={vm.date}>
                             <Slot label="Expected" value={vm.expected.expected ? vm.expected.roomLabel ?? "Today" : "Not expected"} />
                             <Slot label="Arrived" value={timeOf(vm.checkInAt)} />
@@ -178,11 +183,19 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                             <Slot label="Departed" value={timeOf(vm.checkOutAt)} />
                         </div>
 
+                        {vm.unavailableReason ? (
+                            /* Quiet, and below the day — not in place of it. */
+                            <p className="alloy-os-attendance__note" data-attendance-unavailable="true">
+                                {vm.unavailableReason}
+                            </p>
+                        ) : null}
+
                         {/* THE REGISTERED COMMANDS, offered only where the day admits them. A control
                             for an impossible transition is a promise the domain would refuse — check-in
-                            on a child already present, or a transfer for a child who has not arrived. */}
+                            on a child already present, or a transfer for a child who has not arrived.
+                            With no attendance subject at all, none of them can be honoured. */}
                         <div className="alloy-os-attendance__actions" data-attendance-actions="true">
-                            {vm.state === "not_arrived" || vm.state === "no_record" ? (
+                            {!vm.unavailableReason && (vm.state === "not_arrived" || vm.state === "no_record") ? (
                                 <>
                                     <button
                                         type="button"
@@ -204,7 +217,7 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                                     </button>
                                 </>
                             ) : null}
-                            {vm.state === "present" ? (
+                            {!vm.unavailableReason && vm.state === "present" ? (
                                 <>
                                     <button
                                         type="button"

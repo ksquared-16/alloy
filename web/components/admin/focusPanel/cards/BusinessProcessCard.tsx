@@ -80,7 +80,16 @@ export default function BusinessProcessCard({ model, context, receded = false, c
     return (
         <div className="alloy-os-process" data-business-process-card="true">
             <UniversalCard
-                title={model.title}
+                /*
+                 * THE PROCESS'S OWN IDENTITY, preferred over the card model's frame title.
+                 *
+                 * `processLabel` is the tenant's configured process label where the runtime carries
+                 * one. It does not yet carry the Business Process NAME — the provisioning answer
+                 * knows `process.name` but nothing plumbs it into the operational context — so the
+                 * fallback is the card's registered identity rather than the predecessor's
+                 * "What's Next", which is what QA saw.
+                 */
+                title={evidence.processLabel ?? model.title}
                 insight=""
                 iconName={model.iconName}
                 tier={model.tier}

@@ -152,6 +152,9 @@ export type FinancialsCardVM = {
     unavailableReason: string | null;
 };
 
+/** No id can equal this, so an empty source list selects nothing rather than everything. */
+const NO_SOURCE_SENTINEL = "00000000-0000-0000-0000-000000000000";
+
 function t(v: unknown): string {
     return v != null ? String(v).trim() : "";
 }
@@ -258,11 +261,20 @@ export async function buildFinancialsCardVM(
         customer_id: string | null;
         status: string;
     }>;
-    if (agreements.length === 0) {
-        return { ...vm, unavailableReason: "No enrollment agreement, so there is nothing billable yet." };
-    }
-
-    const resolvedCustomerId = customerId ?? (t(agreements[0]!.customer_id) || null);
+    /*
+     * AN ENROLMENT IS ONE BILLABLE SOURCE, NOT ELIGIBILITY FOR FINANCIALS.
+     *
+     * This used to return "No enrollment agreement, so there is nothing billable yet" and replace the
+     * whole card. That encoded a product assumption the business rejects: a family incurs charges
+     * BEFORE they enrol — a waitlist fee, a registration or application fee, a deposit. Gating the
+     * card on an agreement made those charges unreachable and, worse, told the operator the family
+     * had nothing billable when the truth was that we had not looked.
+     *
+     * Whether a PARTICULAR charge needs an agreement belongs to the charge template and the
+     * `charge.add` resolver — tuition may require one, a waitlist fee must not. It is never the
+     * card provider's question.
+     */
+    const resolvedCustomerId = customerId ?? (t(agreements[0]?.customer_id) || null);
     const memberIds = [...new Set(agreements.map((a) => a.customer_member_id))];
     const { data: memberRows } = await supabase
         .from("customer_members")
@@ -277,6 +289,7 @@ export async function buildFinancialsCardVM(
     );
 
     vm.account = { customerId: resolvedCustomerId, label: null };
+    // A household with no enrolment still HAS an account. Financials answers for it.
     vm.subjects = agreements.map((a) => ({
         customerMemberId: a.customer_member_id,
         agreementId: a.id,
@@ -285,19 +298,31 @@ export async function buildFinancialsCardVM(
     }));
 
     const memberByAgreement = new Map(agreements.map((a) => [a.id, a.customer_member_id]));
-    const agreementIds = agreements.map((a) => a.id);
+    /*
+     * Every id this account can be charged against: its enrolment agreements, and the household.
+     * A charge whose source is the household has no child subject, which the ledger renders as the
+     * account rather than inventing an attribution.
+     */
+    const billableSourceIds = [
+        ...agreements.map((a) => a.id),
+        ...(resolvedCustomerId ? [resolvedCustomerId] : []),
+    ];
 
     // ── CHARGES, GL CONFIGURATION AND TEMPLATES, in one pass ─────────────────────────────────────
     const [chargeResult, glMappingResult, glAccountResult, templateResult] = await Promise.all([
+        /*
+         * BOTH SOURCES, in one read. A household's account is the union of what its enrolments owe
+         * and what the household itself owes — the pre-enrolment fees that have no agreement to hang
+         * off. `billable_source_type` already carries the distinction; nothing new is invented here.
+         */
         supabase
             .from("charges")
             .select(
-                "id, billable_source_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
+                "id, billable_source_type, billable_source_id, charge_category, charge_type, status, amount_cents, currency_code, charge_template_id, "
                 + "service_date, occurs_on, billable_on, due_date, posted_at, voided_at, description, metadata, created_at",
             )
             .eq("org_id", args.orgId)
-            .eq("billable_source_type", "enrollment_agreement")
-            .in("billable_source_id", agreementIds),
+            .in("billable_source_id", billableSourceIds.length ? billableSourceIds : [NO_SOURCE_SENTINEL]),
         supabase.from("gl_account_mappings").select("key, gl_account_id, is_active").eq("org_id", args.orgId),
         supabase.from("gl_accounts").select("id, code, name, is_active").eq("org_id", args.orgId),
         supabase

@@ -679,17 +679,33 @@ function buildCardModels(input: {
         nextActionLabel: headerPrimaryAction?.label ?? null,
     });
     map.set("current_work", currentWorkModel);
-    // THE SUCCESSOR PUBLISHES THE SAME MODEL UNDER THE CANONICAL IDENTITY.
-    //
-    // Configuration naming `current_work` normalizes to `business_process`, so composition asks for
-    // the successor — and a successor with no model would DISAPPEAR the card from every tenant that
-    // already configured it. Until Slice 2 deepens the presentation into the combined Process card,
-    // the successor renders exactly what the predecessor did: same truth, same content, one entry
-    // selected. There is no second source of work truth here, only a second name for it.
-    map.set(FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY, {
-        ...currentWorkModel,
-        key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
-    });
+    /*
+     * THE SUCCESSOR HAS ITS OWN MODEL. It used to be `{ ...currentWorkModel }`.
+     *
+     * That shim was written as a temporary measure — "until Slice 2 deepens the presentation" — and
+     * was never replaced, so the canonical Business Process card inherited the PREDECESSOR's
+     * presentation wholesale: the title "What's Next", Current Work's insight, its secondary line
+     * and its due chip. QA saw the locked composition rendering under the old visual grammar and
+     * correctly failed it. The anatomy was right all along; the identity was borrowed.
+     *
+     * What the card needs from the MODEL is only its frame. Everything else — the stage rail, the
+     * participant markers, the annotations, the current work line and the actions — is composed by
+     * `buildBusinessProcessCardEvidence` from canonical truth, which is why the insight is empty
+     * here rather than duplicated: two sources for one line is how they drift.
+     */
+    map.set(
+        FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+        card({
+            key: FOCUS_PANEL_BUSINESS_PROCESS_CARD_KEY,
+            // The process's own identity. The card overrides this with the tenant's configured
+            // process label when the runtime carries one; see the note in BusinessProcessCard.
+            title: "Business Process",
+            insight: "",
+            tier: "work",
+            span: 1,
+            density: "compact",
+        }),
+    );
 
     const health = healthInsight(displayVm);
     const documentsOutstanding =

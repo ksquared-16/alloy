@@ -267,11 +267,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 data-universal-card-key="financials"
                 footerAction={null}
             >
-                {vm?.unavailableReason ? (
-                    <p className="alloy-os-financials__empty" data-financials-empty="unavailable">
-                        {vm.unavailableReason}
-                    </p>
-                ) : !vm ? (
+                {!vm ? (
                     <p className="alloy-os-financials__empty" data-financials-empty="loading">
                         {loading ? "Loading the account…" : "No financial record."}
                     </p>
@@ -425,6 +421,12 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             an operator is actually working the ledger — removed the only way to add
                             a charge. */}
                         <div className="alloy-os-financials__actions" data-financials-actions="true">
+                        {vm.unavailableReason ? (
+                            /* Stated beneath the anatomy, never in place of it. */
+                            <span className="alloy-os-financials__note" data-financials-unavailable="true">
+                                {vm.unavailableReason}
+                            </span>
+                        ) : null}
                         {vm.chargeTemplates.length > 0 ? (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>

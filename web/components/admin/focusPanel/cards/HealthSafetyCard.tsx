@@ -170,6 +170,21 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
                             </section>
                         ) : null}
 
+                        {/*
+                            NO STRUCTURED HEALTH FACTS IS A QUIET STATE, NOT AN ABSENT CARD.
+                            Health facts and Enrollment Health requirements are different sections
+                            with different owners, so an empty Health section must not suppress the
+                            requirements below it — nor turn the card into a list of warnings.
+                        */}
+                        {vm.criticalFacts.length === 0
+                        && vm.careFacts.length === 0
+                        && vm.medications.length === 0
+                        && vm.profileFacts.length === 0 ? (
+                            <p className="alloy-os-health__empty" data-health-empty="no-facts">
+                                No recorded allergies, conditions or medications.
+                            </p>
+                        ) : null}
+
                         {/* 2 · ONGOING CARE */}
                         {vm.careFacts.length > 0 || unpairedMedications(vm).length > 0 || vm.profileFacts.length > 0 ? (
                             <section className="alloy-os-health__care" data-health-region="care">
