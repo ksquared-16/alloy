@@ -42,6 +42,7 @@ import {
   fulfillRepositoryPushForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
+  fulfillAssignQaAccessForMission,
   fulfillPromotionOpenPrForMission,
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
@@ -257,6 +258,23 @@ export function presentationForGovernedAction(req = {}) {
       wait_label: "Waiting on Director — promotion pull request",
       mission_need: `Needs approval — Open ${b} → ${base}`,
       detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    /*
+     * Says what access is granted, to whom, and where. "Staging admin" is the whole substance of
+     * this approval, so it belongs in the label rather than behind it.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA access assignment",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA access assignment",
+      mission_need: `Needs approval — Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Assign staging admin access to ${identity}${slot ? ` for Slot ${slot}` : ""} in the canonical staging organization · lane ${lane} · one user_roles row · organization derived from existing staging admins, never supplied · no production or customer access`,
     };
   }
   if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
@@ -943,6 +961,7 @@ function defaultModeForAction(actionKey, requested) {
   // enum would add governance vocabulary for one action that already has a home.
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
   return "read_only";
 }
 
@@ -1699,6 +1718,16 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
         worktree_path: rec.worktree_path,
         worktreePath: rec.worktree_path,
       },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    return fulfillAssignQaAccessForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
       actor,
       nowMs,
       grant,
