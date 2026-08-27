@@ -36,6 +36,11 @@ import {
 } from "@/lib/forms/pdf/fidelityMappingContract";
 import { loadPublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { participantPrefillValues } from "@/lib/public/forms/resolvePublicFormEmbedContext";
+import { resolveChildParties } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
+import {
+    applyPartyArtifactValues,
+    projectPartyArtifactValues,
+} from "@/lib/enrollment/participantRuntime/projectPartyArtifactValues";
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
@@ -234,7 +239,7 @@ export async function renderParticipantEnrollmentDocument(
     if (!sessionRow) return { ok: false, code: "unavailable", detail: "Session not found." };
 
     // Draft, canonical prefill and the sha-pinned source bytes have no ordering between them.
-    const [draftResult, prefill, source] = await Promise.all([
+    const [draftResult, prefill, source, parties] = await Promise.all([
         artifact.formSubmissionId
             ? supabase
                   .from("form_submissions")
@@ -249,6 +254,15 @@ export async function renderParticipantEnrollmentDocument(
             sessionRow as { shared_values?: unknown; process_instance_id?: string | null },
         ),
         mapping ? resolveFidelitySourceBytes(supabase, input.orgId, mapping) : Promise.resolve(null),
+        /*
+         * The canonical people around this child — no ordering against the other three.
+         *
+         * Read here rather than in a renderer because BOTH renderer classes hang off the single
+         * value assembly below: a mapping means fill, no mapping means compose, and the values are
+         * decided before that branch. Putting the party projection anywhere downstream would mean
+         * two integration points and two chances to disagree.
+         */
+        resolvePartiesForSession(supabase, input.orgId, sessionRow as { process_instance_id?: string | null }),
     ]);
     const payload = (draftResult.data as {
         payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown> };
@@ -298,6 +312,27 @@ export async function renderParticipantEnrollmentDocument(
         values[fieldId] = value;
     }
 
+    /*
+     * PARTY DESTINATIONS ARE AUTHORITATIVE, AND THEY GO LAST.
+     *
+     * Every step above fills what the artifact does not have — the draft, the shared values, the
+     * derived stamps. None of them can know that six destinations declaring one canonical key
+     * belong to six different people, which is how one phone number came to be written into a
+     * dentist's box.
+     *
+     * So the canonical party graph is applied after all of them, and it CLEARS a party-owned
+     * destination before filling it: a shared value that reached "Emergency Contact #2 Phone
+     * Number" must not survive merely because it was merged first. A box owned by a party shows
+     * that party or nothing.
+     *
+     * Ordering, not cleanup: this is the one seam where artifact values are finalised, so neither
+     * renderer needs to know parties exist.
+     */
+    const partyFill = projectPartyArtifactValues(schema, parties, []);
+    const withParties = applyPartyArtifactValues(values, partyFill);
+    for (const key of Object.keys(values)) delete values[key];
+    Object.assign(values, withParties);
+
     if (!mapping) {
         /*
          * COMPOSED. Alloy's completed record of an intake whose source had no layout to recover:
@@ -332,7 +367,16 @@ export async function renderParticipantEnrollmentDocument(
             signaturePlacements: composed.signaturePlacements,
             isSourceReplica: false,
             mapping: null,
-            fillReport: null,
+            /*
+             * A COMPOSED DOCUMENT REPORTS WHAT IT FILLED, TOO.
+             *
+             * This was null, so the only renderer that could say which destinations received a
+             * value was the source-fidelity one — and the packet's party destinations live on a
+             * COMPOSED artifact, which meant the one class carrying people reported nothing. The
+             * report is the same shape either way: the destinations the composer was given a value
+             * for, and the ones left blank.
+             */
+            fillReport: composedFillReport(schema, values),
         };
     }
 
@@ -364,4 +408,56 @@ export async function renderParticipantEnrollmentDocument(
         mapping,
         fillReport: { applied: filled.applied, missed: filled.missed },
     };
+}
+
+/**
+ * The canonical parties for the child this session is about.
+ *
+ * Never throws: with no parties the projection fills nothing and every party destination renders
+ * blank, which is the truthful state before the conversation has collected anyone.
+ */
+async function resolvePartiesForSession(
+    supabase: SupabaseClient,
+    orgId: string,
+    sessionRow: { process_instance_id?: string | null },
+) {
+    try {
+        const processInstanceId = String(sessionRow.process_instance_id ?? "").trim();
+        if (!processInstanceId) return [];
+        const { data } = await supabase
+            .from("process_instances")
+            .select("subject_id")
+            .eq("org_id", orgId)
+            .eq("id", processInstanceId)
+            .maybeSingle();
+        const childId = String((data as { subject_id?: string } | null)?.subject_id ?? "").trim();
+        if (!childId) return [];
+        return await resolveChildParties(supabase, { orgId, customerMemberId: childId });
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Which destinations a composed document was given a value for.
+ *
+ * Field ids rather than PDF widget names, because a composed document has no widgets — its
+ * destinations are the schema's own controls.
+ */
+function composedFillReport(
+    schema: { fields: readonly { id: string; type?: string }[] },
+    values: Readonly<Record<string, unknown>>,
+): { applied: string[]; missed: string[] } {
+    const applied: string[] = [];
+    const missed: string[] = [];
+    const walk = (fields: readonly { id: string; type?: string; fields?: readonly never[] }[]) => {
+        for (const field of fields) {
+            if (field.type === "group") { walk((field as { fields: readonly never[] }).fields ?? []); continue; }
+            const held = values[field.id];
+            const has = typeof held === "string" ? held.trim().length > 0 : held != null;
+            (has ? applied : missed).push(field.id);
+        }
+    };
+    walk(schema.fields as never);
+    return { applied, missed };
 }
