@@ -39,6 +39,8 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
+import { normalizeEnvironmentId } from "./executor-authority.mjs";
+
 export const GOVERNED_DEPENDENCY_SCHEMA = "vacilando.governed_dependency.v1";
 
 /**
@@ -234,10 +236,20 @@ export function dependencySubjectKey(action = {}) {
   return null;
 }
 
+/**
+ * Environment identity, resolved through the canonical registry.
+ *
+ * ALIASES NORMALIZE BEFORE THE HASH. If `cert` and `certification` hashed
+ * differently, an approval for one would not satisfy the other and the operator
+ * would be asked the same question twice about the same action. Equally, a name
+ * that is NOT a registered alias is left alone: folding
+ * `development_certification` onto `certification` because it looks close would
+ * approve work against a different database.
+ */
 export function normalizeEnvironment(value) {
   const s = String(value || "").trim().toLowerCase();
   if (!s) return null;
-  return s;
+  return normalizeEnvironmentId(s) || s;
 }
 
 /**
