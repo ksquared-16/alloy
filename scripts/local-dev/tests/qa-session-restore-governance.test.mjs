@@ -8,18 +8,23 @@
  * happen is the privileged child being spawned, and that is what these assert.
  */
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { ACTION_TYPES, getActionDefinition, listRegisteredActions } from "../lib/vacilando/trusted-host-action-registry.mjs";
 import {
     FORBIDDEN_RESTORE_INPUTS,
     executeRestoreQaSession,
+    executeRestoreQaSessionSync,
     resolveRestoreTarget,
     safeFailure,
     validateRestoreQaSessionInputs,
 } from "../lib/vacilando/qa-session-restore-action.mjs";
 import { resetQaBootstrapsForTests } from "../lib/vacilando/qa-session-bootstrap.mjs";
 
+const HERE = dirname(fileURLToPath(import.meta.url));
 const LANE = "lane_73a897409906";
 const IDENTITY = "qa-slot5-refactor@example.com";
 
@@ -63,6 +68,39 @@ test("the action is registered and always requires operator approval", () => {
     assert.deepEqual(def.inputSchema.required, ["laneId"]);
     const listed = listRegisteredActions().map((a) => a.actionType);
     assert.ok(listed.includes("environment.restore_qa_session"), "must appear in discovery");
+});
+
+test("EVERY registered action has a dispatch branch — the gap that cost five round trips", async () => {
+    /*
+     * The restore was registered, mode-mapped, input-validated and operator-APPROVED, and still
+     * failed `action_unavailable`, because `defaultExecute` dispatches per action key and falls
+     * through for anything without a branch. Every suite passed throughout: they exercised the
+     * executor, and nothing exercised the path that chooses it.
+     *
+     * This reads the dispatcher's source rather than calling it, because `defaultExecute` is not
+     * exported and the property under test is structural: a key that reaches the registry without
+     * reaching the dispatcher is unusable no matter how correct its executor is.
+     */
+    const src = await readFile(join(HERE, "..", "lib", "vacilando", "governed-action-request.mjs"), "utf8");
+    const dispatch = src.slice(src.indexOf("function defaultExecute"), src.indexOf("function applyExecuteResult"));
+    assert.ok(dispatch.length > 0, "defaultExecute must be locatable");
+    const registered = listRegisteredActions().map((a) => a.actionType);
+    const undispatched = registered.filter((key) => {
+        const constName = Object.keys(ACTION_TYPES).find((k) => ACTION_TYPES[k] === key);
+        return !dispatch.includes(`ACTION_TYPES.${constName}`);
+    });
+    assert.deepEqual(undispatched, [], `registered but never dispatched: ${undispatched.join(", ")}`);
+});
+
+test("the governed executor is SYNCHRONOUS — a Promise is scored as a failure", () => {
+    /*
+     * processGovernedAction calls its executor without awaiting, and the trusted-host actions beside
+     * this one use spawnSync. An async executor returned a Promise, which the path treated as a
+     * failed execution. Asserting the return is not thenable is the cheap way to keep it that way.
+     */
+    const out = executeRestoreQaSessionSync({ action: action(), grant: null });
+    assert.ok(typeof out?.then !== "function", "executeRestoreQaSessionSync must not return a Promise");
+    assert.equal(out.failure_code, "grant_missing");
 });
 
 test("a pending request executes nothing — no grant means no mint", async () => {

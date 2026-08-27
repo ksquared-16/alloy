@@ -40,6 +40,7 @@ import {
 } from "./trusted-host-authz.mjs";
 import {
   fulfillRepositoryPushForMission,
+  fulfillRestoreQaSessionForMission,
   fulfillPromotionOpenPrForMission,
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
@@ -1633,6 +1634,21 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       grant,
     });
   }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    return fulfillRestoreQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  /*
+   * Anything without a branch above lands here. That fallthrough is why a registered, mode-mapped,
+   * operator-APPROVED restore still failed `action_unavailable`: the action existed everywhere
+   * except in this dispatch, and the error names the registry rather than the missing branch.
+   */
   if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "action_unavailable" };
   }

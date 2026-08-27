@@ -27,7 +27,7 @@
  * metadata — names, counts, expiry timestamps, file mode — which is what a
  * status display actually needs.
  */
-import { execFile, execFileSync } from "node:child_process";
+import { execFile, execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -341,6 +341,32 @@ export async function verifyBrowserAuth(validated, {
   const cmd = verifyCommand || join(stateRootToolkit(), "alloy-agent-verify");
   const run = spawn || defaultSpawn;
   const out = await run(cmd, [String(validated.slot), "authenticated-home"], { timeoutMs });
+  return interpretVerifyOutput(validated, out);
+}
+
+/**
+ * The same verification, synchronously.
+ *
+ * The governed execution path is synchronous — `processGovernedAction` calls its executor without
+ * awaiting, and the existing trusted-host actions do their real work through `spawnSync` (git for
+ * push, gh for merge). An async verifier handed that path a Promise, which it scored as a failure.
+ *
+ * This shares `interpretVerifyOutput` with the async form, so there is ONE definition of what
+ * counts as authenticated rather than a second that could drift from it.
+ */
+export function verifyBrowserAuthSync(validated, {
+  spawnSyncImpl = null,
+  verifyCommand = null,
+  timeoutMs = 180_000,
+} = {}) {
+  const cmd = verifyCommand || join(stateRootToolkit(), "alloy-agent-verify");
+  const run = spawnSyncImpl || defaultSpawnSync;
+  const out = run(cmd, [String(validated.slot), "authenticated-home"], { timeoutMs });
+  return interpretVerifyOutput(validated, out);
+}
+
+/** Read a verify run's output into a verdict. Shared so async and sync cannot disagree. */
+function interpretVerifyOutput(validated, out) {
   const text = `${out.stdout || ""}\n${out.stderr || ""}`;
 
   // The app is asked who it is; the storage file is never parsed for identity.
@@ -366,6 +392,16 @@ export async function verifyBrowserAuth(validated, {
     state: verdict.state,
     detail: verdict.detail || null,
     actual_identity: actualIdentity,
+  };
+}
+
+function defaultSpawnSync(cmd, argv, { timeoutMs }) {
+  const r = spawnSync(cmd, argv, { timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024, encoding: "utf8" });
+  return {
+    ok: r.status === 0,
+    stdout: String(r.stdout || ""),
+    stderr: String(r.stderr || ""),
+    error: r.error ? String(r.error.message || r.error) : null,
   };
 }
 

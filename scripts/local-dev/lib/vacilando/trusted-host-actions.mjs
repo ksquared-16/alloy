@@ -42,7 +42,7 @@ import {
   mergePullRequest,
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
-import { executeRestoreQaSession } from "./qa-session-restore-action.mjs";
+import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import {
@@ -412,19 +412,7 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
     return executeOpenPrTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
-    /*
-     * Returns a RESTORE result. Dispatching before the census branch matters: an action that fell
-     * through to census handling produced an all-null census-shaped envelope, which reads as "the
-     * action did nothing" rather than as a failure, and cost a full run to diagnose once already.
-     */
-    const authz = authorizeTrustedHostAction(actionId, { actor, nowMs, grant });
-    if (!authz.ok) return authz;
-    return executeRestoreQaSession({
-      action: authz.action,
-      grant,
-      grantCheck: grantAuthorizesAction,
-      nowMs: nowMs || Date.now(),
-    });
+    return executeRestoreQaSessionTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1026,6 +1014,65 @@ export function executePushTrustedHostAction(action, { actor = "director", nowMs
     return failTrustedAction(action, out?.code || "push_failed", out?.detail || "Push failed", { nowMs });
   }
   return completeTrustedAction(action, publicPushResult(out), { nowMs });
+}
+
+/**
+ * Restore a managed slot's QA browser session.
+ *
+ * Mirrors the push and open-PR executors exactly, because `applyExecuteResult` requires the
+ * `{ ok, action }` shape with `action.state === "completed"` — returning a bare restore result
+ * reads to the caller as a failed execution. `executeRestoreQaSessionSync` is used because this
+ * path is synchronous: `processGovernedAction` does not await its executor.
+ */
+export function executeRestoreQaSessionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeRestoreQaSessionSync({
+    action,
+    grant,
+    grantCheck: grantAuthorizesAction,
+    nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Restore result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "restore_failed", out?.failure_detail || "QA session restore failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/**
+ * The mission-scoped entry point the governed processor calls.
+ *
+ * `defaultExecute` in governed-action-request.mjs dispatches to a `fulfill*ForMission` helper per
+ * action and falls through to `action_unavailable` for anything without one. The restore was
+ * registered and mode-mapped but had no helper, so it fell through and failed after the operator
+ * had already approved it. Modelled on `fulfillRepositoryPushForMission`.
+ */
+export function fulfillRestoreQaSessionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 /** Open the promotion pull request, or report the one that already exists. */
