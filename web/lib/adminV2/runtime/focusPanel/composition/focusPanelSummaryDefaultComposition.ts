@@ -244,6 +244,8 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *   attendance       the child's operating day. This is the composition where the card's subject is
  *                    unambiguous — the child IS the record of attention — so it never has to ask the
  *                    operator to scope it.
+ *   health_safety    what an operator needs to know to care for this child safely right now. Child
+ *                    grain only, for the same reason: at case grain it refuses rather than guessing.
  *   children         kept, with the focused child active; siblings are supporting context. A child
  *                    subject is a reason to scope this card, never to remove it.
  *   household        family/relationship context, and honestly family-scoped — it does not claim to
@@ -352,6 +354,26 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         tier: "context",
         visibility: "visible",
         area: { colStart: 9, colSpan: 4, rowStart: 10, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
+    {
+        /*
+         * HEALTH & SAFETY — and this composition is the only place it can render.
+         *
+         * The card is CHILD GRAIN ONLY: a case panel covering several children has no single health
+         * subject, and the published case-grain Surface correctly shows it refusing with "Select a
+         * child to see their health information". Here the child IS the record of attention, so the
+         * question "what do I need to know to care for this child safely right now" has an answer.
+         *
+         * Six columns, appended below rather than displacing anything: nothing was removed to make
+         * room, and a 12-column card would force `planPublishedLayout` from `lanes` to `grid` for the
+         * whole panel — the trap documented on the case composition's Employment entry.
+         */
+        key: "health_safety",
+        tier: "work",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 12, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },

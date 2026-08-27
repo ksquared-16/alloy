@@ -104,6 +104,9 @@ describe("a child with family settlement keeps the enrollment context", () => {
             "scheduling",
             "financials",
             "billing_preview",
+            // Health & Safety, placed at child grain because this is where the record of attention
+            // IS a child. At case grain the card refuses rather than choosing a subject.
+            "health_safety",
         ]);
     });
 

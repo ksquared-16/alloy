@@ -6,14 +6,22 @@ import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focu
 import { canViewHealth } from "@/lib/health/healthAccess";
 
 describe("§14 — Surface placement and Health permission are independent", () => {
-    it("health_safety is REGISTERED but not yet PLACED — registration is not placement", () => {
-        // Configuration chooses placement; permission chooses access. A registered card that no
-        // composition places simply does not appear, which is the second half of the independence
-        // claim and is the platform's current true state (J is gated on the schema).
+    it("is placed at CHILD grain and nowhere else — placement follows the subject", () => {
+        // Configuration chooses placement; permission chooses access. Health is placed where the
+        // record of attention IS a child, and deliberately not on grains that have no single health
+        // subject — at case grain the card refuses rather than guessing, which the published Surface
+        // (v134) demonstrates in the real panel.
         expect(FOCUS_PANEL_CARD_KEYS).toContain("health_safety");
-        for (const grain of ["opportunity", "child", "person", "household"] as const) {
+        // The child-WITH-FAMILY composition: a child reached through an Enrollment lens, where the
+        // family settlement is authoritative. The DURABLE child composition is deliberately one card
+        // and health facts require an enrolment, so it is not placed there.
+        expect(
+            focusPanelDefaultCompositionForGrain("child", { familySettlement: true } as never).map((e) => e.key),
+        ).toContain("health_safety");
+        expect(focusPanelDefaultCompositionForGrain("child").map((e) => e.key)).not.toContain("health_safety");
+        for (const grain of ["opportunity", "person", "household"] as const) {
             const placed = focusPanelDefaultCompositionForGrain(grain).map((e) => e.key);
-            expect(placed, `health_safety must not be placed on ${grain} yet`).not.toContain("health_safety");
+            expect(placed, `health_safety must not be code-placed on ${grain}`).not.toContain("health_safety");
         }
     });
 
