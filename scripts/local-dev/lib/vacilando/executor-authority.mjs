@@ -158,7 +158,13 @@ export function assertEnvironmentAuthority({
     return { ok: false, refusal: "capability_mismatch", environment: id, detail: `${id} ${mode} is owned by ${wanted}, not ${capability}` };
   }
 
-  if (!spec.provisioned || credentialAvailable === false) {
+  // The registry declares the DEFAULT platform state; a live binding check can
+  // override it upward but never downward. `provisioned: false` means "this
+  // environment requires a binding and the platform does not ship one" — if a
+  // host has actually registered it, `credentialAvailable: true` is the
+  // evidence that settles it. An explicit `false` always refuses, whatever the
+  // registry says, because a missing credential is a fact about this machine.
+  if (credentialAvailable === false || (!spec.provisioned && credentialAvailable !== true)) {
     return {
       ok: false, refusal: "environment_unprovisioned", environment: id,
       credential_ref: spec.credential_ref,

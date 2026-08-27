@@ -5,6 +5,7 @@
 #   vac run-report <run_id> <type> --message-file <path|-> [...]
 #   vac governed-action --run <id> --lane <lane> --json '{...}'
 #   vac governed-dependency --run <id> --lane <lane> --json '{...}'
+#   vac trusted-credential status|register <trusted_secret:name> ...
 #   vac status
 #   vac cancel <request_id>
 set -euo pipefail
@@ -76,6 +77,10 @@ case "${1:-}" in
   governed-dependency)
     shift
     exec node "$SCRIPT_DIR/vac-governed-dependency.mjs" "$@"
+    ;;
+  trusted-credential)
+    shift
+    exec node "$SCRIPT_DIR/vac-trusted-credential.mjs" "$@"
     ;;
   run)
     shift
