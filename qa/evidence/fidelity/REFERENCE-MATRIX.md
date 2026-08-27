@@ -119,5 +119,35 @@ controls offered.
 |---|---|---|
 | No expected attendance TIME — scheduling is day-grain (`schedule_patterns` carries dates) | Scheduling | open; Attendance contributes the room it can name |
 | No payer ALLOCATION store — a `payer` role exists, shares do not | Processing | open; payers are named, no split is invented |
-| Pre-enrollment `customer` billable source | promotion | migration authored in wt6, in NO promoted SHA; `resolveChargeSubject` still requires an enrollment agreement. Census `gar_450e643a2503e1` requested to confirm the deployed CHECK |
+| Pre-enrollment `customer` billable source | promotion + Financials | **blocked, measured** — see below |
 | Only ONE lifecycle process configured (`enrollment`) | configuration | Assignment/Billing exist as lab specimens; the same component renders all three |
+
+## Pre-enrollment billing — the blocker, measured
+
+Not inferred from the migration tree. A live preview against a waitlisted child
+(`b247b8a3…`, household `0658832a…`, template "Field trip") returns:
+
+```
+eligible: false
+blockers: [{ code: "no_enrollment_agreement",
+             message: "This child has no enrollment agreement, so there is nothing to charge against." }]
+```
+
+The domain refuses cleanly and the command card would surface that message verbatim — the
+behaviour is right, the capability is absent. Three things stand between here and a
+pre-enrollment charge:
+
+1. **`charges.billable_source_type` must admit `customer`.** `BILLABLE_SOURCE_TYPES` already
+   lists it; the widening migration `20260827120000_household_billable_source.sql` exists in this
+   worktree and is in NO promoted SHA, so it has never been applied. Census
+   `gar_450e643a2503e1` was requested to confirm which side of that gap the deployed CHECK is on.
+2. **`resolveChargeSubject` must resolve a customer-scoped subject** when a child has no
+   agreement, instead of refusing.
+3. **`childcareChargeService` must stop hardcoding `billable_source_type = 'enrollment_agreement'`**
+   on write.
+
+(2) and (3) are ordinary code and were NOT written, because a charge carrying
+`billable_source_type = 'customer'` against a database whose CHECK forbids it fails at insert:
+the code would be unrunnable and uncertifiable, and shipping unverifiable code to satisfy a
+checklist is worse than naming the blocker. This lane has already proven it cannot push or
+promote, so (1) is Director-owned.
