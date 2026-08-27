@@ -37,14 +37,10 @@ import {
 import { loadPublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { participantPrefillValues } from "@/lib/public/forms/resolvePublicFormEmbedContext";
 import { resolveChildParties } from "@/lib/enrollment/participantRuntime/childPartyRuntime";
-import {
-    applyPartyArtifactValues,
-    projectPartyArtifactValues,
-} from "@/lib/enrollment/participantRuntime/projectPartyArtifactValues";
+import { resolveArtifactValues } from "@/lib/enrollment/participantRuntime/resolveArtifactValues";
 import { processScopedAnswersToFieldIds, sharedValuesToFieldIds } from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { composeGeneratedDocument } from "@/lib/forms/pdf/generation/generatedDocumentComposer";
-import { resolveFormDerivedValues } from "@/lib/forms/derived/resolveFormDerivedValues";
 import { documentFieldApplies } from "@/lib/forms/documentFieldApplies";
 import { PDFDocument } from "pdf-lib";
 import { downloadDocumentBytesSafe } from "@/lib/pos/processingCase/structure/documentBytes";
@@ -72,6 +68,13 @@ export type ParticipantDocumentRenderResult =
           readonly isSourceReplica: boolean;
           readonly mapping: FidelityPdfMapping | null;
           readonly fillReport: { applied: string[]; missed: string[] } | null;
+          /**
+           * The values this rendering was produced from.
+           *
+           * Returned so the review list can describe the SAME artifact the parent is looking at
+           * rather than re-deriving a thinner one from the draft payload.
+           */
+          readonly resolvedValues: Readonly<Record<string, unknown>>;
       }
     | { readonly ok: false; readonly code: "no_document" | "unavailable"; readonly detail: string };
 
@@ -283,55 +286,27 @@ export async function renderParticipantEnrollmentDocument(
      * A process-scoped answer belongs to exactly one destination on exactly this Form. It fills that
      * box and nothing else — the reason it can be collected without becoming canonical.
      */
-    const values: Record<string, unknown> = { ...draftValues };
-    const prefilled = {
-        ...sharedValuesToFieldIds(schema, prefill),
-        ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
-    };
-    for (const [fieldId, value] of Object.entries(prefilled)) {
-        const held = values[fieldId];
-        const alreadyAnswered = typeof held === "string" ? held.trim().length > 0 : held != null;
-        if (!alreadyAnswered) values[fieldId] = value;
-    }
     /*
-     * Derived destinations are filled at render — but never OVER a value that was already recorded.
+     * ONE RESOLVER. The renderer is a consumer of it, not its owner.
      *
-     * Before submission there is nothing stored and today's date is the honest preview: the artifact
-     * has not been executed yet. After submission the submitted payload holds the day the family
-     * actually signed, and recomputing would quietly restamp a completed document to whenever
-     * someone last opened it. "Today's Date" on a signed form means the day it was signed.
+     * This assembly used to live here, so only the renderer could see its result — and the review
+     * list beside the document compiled from the draft payload instead, showing a party destination
+     * blank while the document showed the person. `resolveArtifactValues` is now the authority and
+     * both surfaces read it.
      */
-    const derived = resolveFormDerivedValues(schema, values, {
-        executedAtIso: input.nowIso,
-        timeZone: input.timeZone ?? "UTC",
+    const resolved = resolveArtifactValues({
+        schema,
+        draftValues,
+        prefilled: {
+            ...sharedValuesToFieldIds(schema, prefill),
+            ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
+        },
+        parties,
+        nowIso: input.nowIso,
+        timeZone: input.timeZone,
         signatures: (payload?.signatures ?? null) as Record<string, unknown> | null,
     });
-    for (const [fieldId, value] of Object.entries(derived)) {
-        const held = values[fieldId];
-        if (typeof held === "string" && held.trim()) continue;
-        values[fieldId] = value;
-    }
-
-    /*
-     * PARTY DESTINATIONS ARE AUTHORITATIVE, AND THEY GO LAST.
-     *
-     * Every step above fills what the artifact does not have — the draft, the shared values, the
-     * derived stamps. None of them can know that six destinations declaring one canonical key
-     * belong to six different people, which is how one phone number came to be written into a
-     * dentist's box.
-     *
-     * So the canonical party graph is applied after all of them, and it CLEARS a party-owned
-     * destination before filling it: a shared value that reached "Emergency Contact #2 Phone
-     * Number" must not survive merely because it was merged first. A box owned by a party shows
-     * that party or nothing.
-     *
-     * Ordering, not cleanup: this is the one seam where artifact values are finalised, so neither
-     * renderer needs to know parties exist.
-     */
-    const partyFill = projectPartyArtifactValues(schema, parties, []);
-    const withParties = applyPartyArtifactValues(values, partyFill);
-    for (const key of Object.keys(values)) delete values[key];
-    Object.assign(values, withParties);
+    const values: Record<string, unknown> = { ...resolved.values };
 
     if (!mapping) {
         /*
@@ -377,6 +352,7 @@ export async function renderParticipantEnrollmentDocument(
              * for, and the ones left blank.
              */
             fillReport: composedFillReport(schema, values),
+            resolvedValues: values,
         };
     }
 
@@ -407,6 +383,7 @@ export async function renderParticipantEnrollmentDocument(
         isSourceReplica: true,
         mapping,
         fillReport: { applied: filled.applied, missed: filled.missed },
+        resolvedValues: values,
     };
 }
 
