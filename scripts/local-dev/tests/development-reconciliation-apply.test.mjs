@@ -211,3 +211,43 @@ await test("SOURCE GUARD — the OBSERVER may read reality but never change it",
   const kills = code.match(/process\.kill\([^)]*\)/g) || [];
   assert.ok(kills.every((k) => /process\.kill\(pid,\s*0\)/.test(k)), "only signal-0 liveness probes are permitted");
 });
+
+await test("CLI — the request surface cannot apply anything", async () => {
+  const fsx = await import("node:fs");
+  const src = fsx.readFileSync(new URL("../vac-reconcile.mjs", import.meta.url), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  // It must not import a single apply verb. Provable absence beats a promise.
+  assert.ok(!code.includes("reconciliation-apply.mjs"), "the CLI must not import the apply module at all");
+  for (const verb of ["applyReconciliationPlan", "applyCorrection", "writeDiscovered", "unlinkSync", "writeFileSync"]) {
+    assert.ok(!code.includes(verb), `the CLI must not reference ${verb}`);
+  }
+  // --apply FILES a governed request; it does not execute one.
+  assert.match(code, /requestGovernedAction\(/, "--apply must file a governed action");
+  assert.match(code, /action_key: "vacilando\.apply_reconciliation_plan"/);
+  assert.match(code, /planFingerprint: plan\.fingerprint/, "the request must bind the canonical planner's fingerprint");
+  assert.match(code, /title: "Apply Vacilando reconciliation metadata"/, "human work name, not an action key");
+
+  // No hidden force mode, and an unknown option cannot fall through to apply.
+  assert.ok(!/--force/.test(code), "there must be no force mode");
+  assert.match(code, /unknown option/, "an unrecognised option must be refused");
+  assert.match(code, /process\.exit\(2\)/, "and must exit before any request is filed");
+
+  // Read-only is the default: --apply must be explicitly present.
+  assert.match(code, /const apply = args\.includes\("--apply"\)/);
+});
+
+await test("CLI — corrections come from the planner, never from the caller", async () => {
+  const fsx = await import("node:fs");
+  const code = fsx.readFileSync(new URL("../vac-reconcile.mjs", import.meta.url), "utf8");
+  // The correction list handed to the request is the planner's own output.
+  assert.match(code, /corrections: plan\.corrections/, "the CLI may not assemble its own correction list");
+  assert.match(code, /withheld: plan\.withheld/);
+  assert.ok(!/corrections:\s*\[/.test(code), "no literal correction array may be constructed");
+  // And the executor re-derives regardless, so a forged list is not executable.
+  const ex = fsx.readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const fn = ex.slice(ex.indexOf("executeApplyReconciliationPlanTrustedHostAction"), ex.indexOf("export function fulfillApplyReconciliationPlanForMission"));
+  assert.match(fn, /buildReconciliationPlan\(/, "the executor must rebuild the plan itself");
+  assert.match(fn, /rebuilt\.fingerprint !== action\.inputs\?\.planFingerprint/, "and refuse on fingerprint mismatch");
+  assert.match(fn, /stale_plan/);
+});
