@@ -466,6 +466,11 @@ export function questionForNeed(
     } as unknown as ParticipantObjectiveWire);
 }
 
+/** "a middle name", "an emergency contact" — article by sound, not by spelling rules nobody reads. */
+function indefiniteArticle(label: string): string {
+    return /^[aeiou]/i.test(label.trim()) ? "an" : "a";
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
@@ -506,9 +511,38 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
          * These prompts are the school's own, and the topic heading above them supplies the context
          * a possessive was standing in for. So they are asked as written.
          */
-        if (!(turn as { entity_type?: string | null }).entity_type) {
+        /*
+         * NEVER A NAKED LABEL.
+         *
+         * This branch used to return the authored label with a question mark bolted on, so a parent
+         * was asked, in its entirety, "Middle Name?" — the runtime knew it was talking about Malik
+         * and said none of it. Every active question must be understandable on its own, which means
+         * carrying its subject.
+         *
+         * Where the destination declares no entity, `subject_entity_type` supplies one from the
+         * packet's own layout, and where even that is absent the question still gets a stem and a
+         * possessive rather than being handed over raw.
+         */
+        /*
+         * NO SUBJECT, NO INVENTED POSSESSIVE.
+         *
+         * A destination the packet gives no subject for keeps the school's own words. That was a
+         * deliberate earlier decision and it is still right: "General health" belongs to nobody the
+         * runtime can name, and "What is your family's General health?" is worse than the label.
+         *
+         * What changed is that far fewer destinations are subject-less than before, because
+         * `subject_entity_type` reads the packet's layout. "Middle Name" sits between child-bound
+         * boxes, so it now HAS a subject and gets a real question.
+         */
+        const hasSubject = Boolean((turn as { entity_type?: string | null }).entity_type);
+        if (!hasSubject) {
             const own = (turn.label ?? "").trim().replace(/\s*[:?]+\s*$/, "");
             if (own.length >= 2) return `${own}?`;
+        }
+        if (turn.optional) {
+            // A yes/no shape for an optional attribute — the same shape allergies already uses, and
+            // what a specialist actually says: "Does Malik have a middle name?"
+            return `Does ${them} have ${indefiniteArticle(label)} ${label}?`;
         }
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;

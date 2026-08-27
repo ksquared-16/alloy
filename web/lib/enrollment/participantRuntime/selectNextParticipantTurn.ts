@@ -25,6 +25,7 @@ import type {
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
 import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
+import { orderNeedsForTraversal } from "@/lib/enrollment/participantRuntime/participantTraversalOrder";
 
 /**
  * Deterministic wording — the FALLBACK that always exists.
@@ -83,6 +84,11 @@ export type NextParticipantTurnInput = {
      * existing caller and test is unchanged by the addition.
      */
     readonly outstandingEvidence?: readonly ParticipantEvidenceObligation[];
+    /**
+     * The D-100 policy, so traversal can tell the child's BASIC block from their later topics
+     * without a second vocabulary. Absent leaves the historical order untouched.
+     */
+    readonly requiresConfirmation?: ReadonlySet<string>;
 };
 
 /**
@@ -111,9 +117,21 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
      * Optionality decides whether a need BLOCKS completion — it drives the progress count and the
      * skip affordance — not whether it is worth asking about.
      */
-    const actionable = input.needs.needs
-        .filter((need) => need.state === "known_requires_confirmation" || need.state === "missing")
-        .sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
+    /*
+     * SUBJECT FIRST, THEN TOPIC, THEN THE PROJECTION'S OWN ORDER.
+     *
+     * This used to sort on state alone, so the queue was "every confirmation anywhere, then every
+     * collection anywhere" in source-field order — which is how a conversation comes to jump from a
+     * guardian to a child's date of birth and back to the guardian again. Confirmations still come
+     * first WITHIN a subject; they no longer pull the conversation away from the person being
+     * discussed. Absent a policy the historical order stands.
+     */
+    const outstanding = input.needs.needs.filter(
+        (need) => need.state === "known_requires_confirmation" || need.state === "missing",
+    );
+    const actionable = input.requiresConfirmation
+        ? orderNeedsForTraversal(outstanding, input.requiresConfirmation, input.needs.needs)
+        : [...outstanding].sort((a, b) => (TURN_PRIORITY[a.state] ?? 9) - (TURN_PRIORITY[b.state] ?? 9));
 
     const next = actionable[0];
     if (next) {

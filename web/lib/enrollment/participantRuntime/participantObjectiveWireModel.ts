@@ -571,7 +571,13 @@ export function participantObjectiveWireModel(
                 : null,
             confirmation_group: confirmationGroupCard(objective, subjectName),
             scope: turn.need?.identity.scope ?? null,
-            entity_type: turn.need?.identity.entity_type ?? null,
+            /*
+             * The EFFECTIVE subject — declared entity, else the one the packet's layout says this
+             * destination sits among. The distinction between the two is preserved on the identity
+             * server-side; a participant surface needs to know who it is talking about, not how the
+             * platform came to know.
+             */
+            entity_type: turn.need?.identity.entity_type ?? turn.need?.identity.subject_entity_type ?? null,
             canonical_key: turn.need?.identity.canonical_key ?? null,
             options: firstOccurrence ? optionsForNeed(objective, firstOccurrence.form_field_id) : [],
             optional: turn.need?.optional === true,

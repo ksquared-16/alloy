@@ -71,7 +71,11 @@ export type ParticipantEnrollmentObjectiveResult =
 function buildParticipantObjective(
     progress: EnrollmentParticipantProgress,
     needs: EnrollmentInformationNeeds,
-    context?: { readonly forms: EnrollmentNeedsContext["forms"]; readonly evidenceOnFile: ReadonlySet<string> },
+    context?: {
+        readonly forms: EnrollmentNeedsContext["forms"];
+        readonly evidenceOnFile: ReadonlySet<string>;
+        readonly requiresConfirmation?: ReadonlySet<string>;
+    },
 ): ParticipantEnrollmentObjective {
     /*
      * Evidence is resolved BEFORE the turn is selected, because it is one of the things the turn
@@ -93,7 +97,12 @@ function buildParticipantObjective(
         ),
         missing: needs.needs.filter((n) => n.state === "missing"),
         artifact_specific: needs.needs.filter((n) => n.state === "artifact_specific"),
-        next_turn: selectNextParticipantTurn({ needs, progress, outstandingEvidence: outstanding_evidence }),
+        next_turn: selectNextParticipantTurn({
+            needs,
+            progress,
+            outstandingEvidence: outstanding_evidence,
+            requiresConfirmation: context?.requiresConfirmation,
+        }),
     };
 }
 
@@ -136,6 +145,7 @@ export function recomputeParticipantObjectiveFromContext(
     return buildParticipantObjective(context.progress, needs, {
         forms: context.needsContext.forms,
         evidenceOnFile: context.evidenceOnFile ?? new Set<string>(),
+        requiresConfirmation: context.requiresConfirmation,
     });
 }
 
@@ -205,6 +215,7 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
         value: buildParticipantObjective(progressResult.value, needsResult.value, {
             forms: (captured as EnrollmentNeedsContext).forms,
             evidenceOnFile,
+            requiresConfirmation,
         }),
         context: {
             progress: progressResult.value,

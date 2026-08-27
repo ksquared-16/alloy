@@ -25,6 +25,7 @@ import {
     resolveEnrollmentNeedIdentity,
     type EnrollmentNeedIdentity,
 } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
+import { inferUnboundDestinationEntity } from "@/lib/enrollment/informationNeeds/unboundDestinationSubject";
 import {
     confirmationSatisfiesCurrentValue,
     type EnrollmentNeedConfirmationMap,
@@ -165,6 +166,8 @@ export function projectEnrollmentInformationNeeds(
                 subjectId: input.subjectId,
                 formDefinitionId: form.form_definition_id,
                 insideCollectionBoundGroup: fieldIsInsideCollectionBoundGroup(form.schema, field.id),
+                // The packet's own layout, for grammar and ordering only — never for identity.
+                inferredEntityType: inferUnboundDestinationEntity(form.schema, field.id),
                 formDefinitionVersionId: form.form_definition_version_id,
                 sessionItemId: form.session_item_id,
             });
