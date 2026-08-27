@@ -137,3 +137,32 @@ await test("NC13 — scope did not widen: no force, rewrite or delete-repository
   }
   assert.equal(keys.length, 10, "exactly two capabilities were added");
 });
+
+await test("NC14 — EVERY privileged_write action key has a non-read_only default mode", async () => {
+  // The trap I fell into, made general. validateAgainstRegistry denies any
+  // non-read risk class in read_only mode, so a newly registered
+  // privileged_write action with no default mode is registered, discoverable,
+  // proposable — and then refused as "policy_denied", which reads as the
+  // operator forbidding it rather than nobody having assigned it a mode. The
+  // source comment says this already cost a full delivery cycle once; it cost
+  // me another. This asserts it for every key, so it cannot cost a third.
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  const reg = await import("../lib/vacilando/trusted-host-action-registry.mjs");
+  const src = (await import("node:fs")).readFileSync(new URL("../lib/vacilando/governed-action-request.mjs", import.meta.url), "utf8");
+  // The WHOLE function: promotion and migration modes are assigned ABOVE the
+  // privileged_write comment, so a narrower window falsely flags merge/push.
+  const start = src.indexOf("function defaultModeForAction(");
+  assert.ok(start > -1, "the default-mode function must exist");
+  const modeFn = src.slice(start, src.indexOf('return "read_only";', start));
+  for (const key of Object.values(reg.ACTION_TYPES)) {
+    const def = reg.getActionDefinition ? reg.getActionDefinition(key) : null;
+    const risk = def?.riskClass || "";
+    if (!risk || /read/i.test(risk)) continue;                 // read actions may default read_only
+    assert.ok(modeFn.includes(key) || modeFn.includes(keyConst(key)),
+      `${key} is ${risk} but has no default governed mode; it would be denied as policy_denied`);
+  }
+  function keyConst(k) {
+    const entry = Object.entries(reg.ACTION_TYPES).find(([, v]) => v === k);
+    return entry ? `ACTION_TYPES.${entry[0]}` : k;
+  }
+});
