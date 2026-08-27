@@ -255,24 +255,101 @@ export const FOCUS_PANEL_SUMMARY_CHILD_COMPOSITION: readonly SummaryCompositionE
  *   billing_preview  family-scoped contextual information, placed last and compact precisely
  *                    because it is not child-owned. Its priority differs from Current Work.
  *
- * Layout mirrors the case surface exactly: What's Next holds the left column full height; Household
- * then Children stack on the right; Assignments and Billing Preview close on a shared bottom row. No card spans all 12
- * columns — that forces `planPublishedLayout` from `lanes` to `grid` for the whole panel.
+ * Layout is the approved artifact's, not the case surface's: the Journey takes a full row, then
+ * Financials 8/12 beside Billing Preview 4/12, then a three-card reference band at 4/12 each, then
+ * Attendance at a full row. Two cards span all 12 columns, so this panel plans as `grid` rather
+ * than `lanes` — see the note on the first entry for why that is the correct trade here.
  */
 export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly SummaryCompositionEntry[] = [
+    /*
+     * ── THE GEOMETRY BELOW IS THE APPROVED ARTIFACT'S, MEASURED FROM IT ──
+     *
+     * The approved specimen states its own spans: the Process card at FULL ROW, then Financials at
+     * 8/12 beside a 4/12 companion; Household, Health & Safety and a third reference card at 4/12
+     * each; then Attendance at FULL ROW. Specimen width is 1055px.
+     *
+     * This composition previously placed Process, Health & Safety and Attendance at six columns
+     * each, on a recorded rule that "a 12-column card forces `planPublishedLayout` from `lanes` to
+     * `grid` for the whole panel". That rule is REAL — `planLanesFromGrid` returns null the moment
+     * any area has `colSpan >= columns` — but the consequence was mis-stated as a prohibition. Grid
+     * is not a failure mode: it is the strategy that file documents as "the richest model
+     * (vertical/horizontal spans, independent regions) — when present it wins", and it honours
+     * colStart/colSpan exactly. The only thing lanes buys is transposition so a short card cannot
+     * inherit a tall neighbour's row height. The case composition has shipped a `colSpan: 12`
+     * Employment card all along, so grid is already the live strategy on the case surface.
+     *
+     * Half-width Process is what QA read as "the stage sequence renders vertically". The band CSS
+     * has no vertical mode to switch into — `.alloy-os-progression` is `grid-auto-flow: column`
+     * unconditionally, with no media or container query anywhere. At 514px its five stages get
+     * ~100px each and their labels wrap into tall narrow columns. The rail was always horizontal;
+     * it was never given the width the approved specimen gives it.
+     */
     {
+        // FULL ROW. The Journey is the widest thing on the panel because it is the most horizontal:
+        // five stages, each carrying a label and up to two annotation lines, read left to right.
         key: "current_work",
         tier: "work",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 1, rowSpan: 7 },
+        area: { colStart: 1, colSpan: 12, rowStart: 1, rowSpan: 2 },
+        encodedSpan: "row",
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * FINANCIALS — the locked V5 footprint: EIGHT of twelve columns, with a real companion in
+         * the remaining four. Not the stretched full-row default, which left the reconciliation
+         * floating in whitespace.
+         *
+         * `Details →` expands it to a full row in place; the ledger is the expanded representation
+         * and needs the width, but it earns that width only when the operator asks for it.
+         */
+        key: "financials",
+        tier: "work",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 8, rowStart: 3, rowSpan: 2 },
+        encodedSpan: 1,
+        // `standard` IS the V5 summary. The compact density is a different placement — supporting
+        // financial context inside another process — and states the balance without the breakdown.
+        encodedDensity: "standard",
+    },
+    {
+        /*
+         * The 4/12 companion, and a genuine one rather than filler. Billing Preview answers "is
+         * billing CONFIGURED?" while Financials answers "what is owed?" — the readiness of the
+         * arrangement beside the state of the account, which is the pairing an operator actually
+         * reads together.
+         */
+        key: "billing_preview",
+        tier: "context",
+        visibility: "visible",
+        area: { colStart: 9, colSpan: 4, rowStart: 3, rowSpan: 2 },
+        encodedSpan: 1,
+        encodedDensity: "compact",
+    },
+    {
+        // The reference band: three 4/12 cards across one row, as the specimen composes them.
+        key: "household",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 4, rowStart: 5, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "standard",
     },
     {
-        key: "household",
-        tier: "reference",
+        /*
+         * HEALTH & SAFETY — and this composition is the only place it can render.
+         *
+         * The card is CHILD GRAIN ONLY: a case panel covering several children has no single health
+         * subject, and the published case-grain Surface correctly shows it refusing with "Select a
+         * child to see their health information". Here the child IS the record of attention, so the
+         * question "what do I need to know to care for this child safely right now" has an answer.
+         *
+         * 4/12, in the reference band, at the specimen's own placement and width.
+         */
+        key: "health_safety",
+        tier: "work",
         visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 1, rowSpan: 3 },
+        area: { colStart: 5, colSpan: 4, rowStart: 5, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "standard",
     },
@@ -280,7 +357,7 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "children",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 4, rowSpan: 4 },
+        area: { colStart: 9, colSpan: 4, rowStart: 5, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "standard",
     },
@@ -297,16 +374,16 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
          * the Enrolled children lens composed this list instead and rendered no Attendance card at
          * all. A card is only placed where a composition places it.
          *
-         * Six columns, directly under What's Next: the day outranks Assignments for an enrolled
-         * child, and a 12-column card would force `planPublishedLayout` from `lanes` to `grid` for
-         * the whole panel — the trap documented on the case composition's Employment entry.
+         * FULL ROW, at the specimen's own span: the approved Attendance is a horizontal day
+         * timeline running from expected arrival to expected departure, and a timeline is the one
+         * shape that cannot be cropped to half a panel and still be read.
          */
         key: "attendance",
         tier: "work",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 8, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
+        area: { colStart: 1, colSpan: 12, rowStart: 8, rowSpan: 2 },
+        encodedSpan: "row",
+        encodedDensity: "standard",
     },
     {
         // Assignments. Placement IS child-scoped, and this card is also the DESTINATION the
@@ -314,66 +391,10 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         // `inquiry_child.program` / schedule / start_date to `scheduling`. Omitting it left the
         // Assignment affordance rendering but inert: `navigateIdentityFieldLink` refuses a card
         // absent from `focusTargets` and returns `destination_unavailable`, silently.
-        //
-        // Beside Attendance rather than under it: the day and the assignments are the same band of
-        // operating context, and pairing them frees the bottom row for the Financials pair below.
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 8, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
-    },
-    {
-        /*
-         * FINANCIALS — the locked V5 footprint: EIGHT of twelve columns, with a real companion in the
-         * remaining four. Not the stretched full-row default, which left the reconciliation floating
-         * in whitespace, and not a 12-column card — that forces `planPublishedLayout` from `lanes` to
-         * `grid` for the whole panel, the trap documented on the case composition's Employment entry.
-         *
-         * `Details →` expands it to a full row in place; the ledger is the expanded representation and
-         * needs the width, but it earns that width only when the operator asks for it.
-         */
-        key: "financials",
-        tier: "work",
-        visibility: "visible",
-        area: { colStart: 1, colSpan: 8, rowStart: 10, rowSpan: 2 },
-        encodedSpan: 1,
-        // `standard` IS the V5 summary. The compact density is a different placement — supporting
-        // financial context inside another process — and states the balance without the breakdown.
-        encodedDensity: "standard",
-    },
-    {
-        /*
-         * The 4/12 companion, and a genuine one rather than filler. Billing Preview answers "is
-         * billing CONFIGURED?" while Financials answers "what is owed?" — the readiness of the
-         * arrangement beside the state of the account, which is the pairing an operator actually
-         * reads together.
-         */
-        key: "billing_preview",
-        tier: "context",
-        visibility: "visible",
-        area: { colStart: 9, colSpan: 4, rowStart: 10, rowSpan: 2 },
-        encodedSpan: 1,
-        encodedDensity: "compact",
-    },
-    {
-        /*
-         * HEALTH & SAFETY — and this composition is the only place it can render.
-         *
-         * The card is CHILD GRAIN ONLY: a case panel covering several children has no single health
-         * subject, and the published case-grain Surface correctly shows it refusing with "Select a
-         * child to see their health information". Here the child IS the record of attention, so the
-         * question "what do I need to know to care for this child safely right now" has an answer.
-         *
-         * Six columns, appended below rather than displacing anything: nothing was removed to make
-         * room, and a 12-column card would force `planPublishedLayout` from `lanes` to `grid` for the
-         * whole panel — the trap documented on the case composition's Employment entry.
-         */
-        key: "health_safety",
-        tier: "work",
-        visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 12, rowSpan: 2 },
+        area: { colStart: 1, colSpan: 6, rowStart: 10, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },
@@ -382,27 +403,6 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
     { key: "milestones", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
 ];
 
-/**
- * The durable FAMILY's composition — the Household card, on its own.
- *
- * Same six-column left lane as the child, for the same recorded reason: a 12-column card forces
- * `planPublishedLayout` to fall back from `lanes` to `grid`.
- *
- * ── THIS ARM IS WHY THE CARD WAS ONCE INVISIBLE ──
- *
- * Widening `OperationalSubjectType` without adding an arm to the switch below left it NON-EXHAUSTIVE,
- * so it returned `undefined` and the surface composed a grid with no areas: the model carried a ready
- * Household card and the panel rendered nothing, with no error. That is a TYPE error and CI would
- * have caught it — `npm run typecheck` cannot run on this host, and the browser found it first.
- *
- * ── AND WHY IT IS DISTINCT FROM THE TWO CHILD COMPOSITIONS ABOVE ──
- *
- * A durable family is not a child seen through its family, and it is not a case. It is the household
- * as its own record: one card, family-owned, with nothing borrowed from an enrollment it may not
- * have. `familySettlement` above answers "is a settled family the Record of Truth BEHIND this
- * child"; this arm answers "the family IS the record", which is a different question with a
- * different subject.
- */
 export const FOCUS_PANEL_SUMMARY_HOUSEHOLD_COMPOSITION: readonly SummaryCompositionEntry[] = [
     {
         key: "household",

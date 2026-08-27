@@ -40,6 +40,20 @@ export default function ProgressionBand({
      */
     participantsByStep?: Record<string, RailParticipant[]>;
 }) {
+    /*
+     * NO STEPS IS NOT AN EMPTY BAND.
+     *
+     * The wrapper is `display: grid` with `grid-auto-flow: column`, so rendering it with nothing
+     * inside leaves a real element carrying the band's margin — a hollow strip between the card
+     * header and the work line. Production showed exactly that for a record whose department
+     * declares no lifecycle process: `buildOpportunityWorkspaceLifecycleRail` returns null, the
+     * evidence carries zero stages, and the card drew the container anyway.
+     *
+     * A process with no configured stages has no rail to show. Saying nothing is the honest
+     * rendering; an empty container is a rail that failed to load, which is a different claim.
+     */
+    if (steps.length === 0) return null;
+
     return (
         <div
             className={clsx("alloy-os-progression", compact && "alloy-os-progression--compact")}

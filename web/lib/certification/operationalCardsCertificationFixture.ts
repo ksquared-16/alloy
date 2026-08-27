@@ -32,6 +32,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
+import {
+    activeLifecycleProcess,
+    activeStagesForProcess,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { resolveCreateLeadEntryDepartmentForOrg } from "@/lib/lifecycle/resolveCreateLeadEntryDepartment";
 import { resolveAttendanceSubject } from "@/lib/childcareOperational/attendance/resolveAttendanceSubject";
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { resolveOperationalEnrollmentTodayYmd } from "@/lib/childcareOperational/operationalEnrollmentApi";
@@ -78,6 +84,13 @@ export type CertificationEnsureResult =
           opportunityId: string | null;
           children: CertificationChildResult[];
           reused: boolean;
+          /**
+           * Whether the certification opportunity sits in a department declaring an active lifecycle
+           * process — which is what decides whether the Business Process card has a stage rail to
+           * render at all. Reported rather than assumed: a fixture that silently produced a railless
+           * record is exactly what made the card look broken.
+           */
+          lifecycleDepartment: { status: string; departmentId: string | null; stageCount: number };
       }
     | { ok: false; reason: string; needsOperator?: boolean };
 
@@ -143,6 +156,112 @@ async function findHousehold(
         .limit(1)
         .maybeSingle();
     return { customerId: (link?.customer_id as string) ?? null, personId: person.id as string };
+}
+
+/**
+ * Repair the certification opportunity's PLACEMENT so the Business Process card has a rail.
+ *
+ * ── WHAT WAS ACTUALLY WRONG ──
+ *
+ * The certification opportunity carried `work_unit_id = NULL` and the legacy status `new_inquiry`.
+ * Today's `executeCreateLeadAction` can produce neither: it fails closed with "Create Lead is not
+ * configured for this process/location" rather than persist an orphaned lead, and its own comment
+ * says it "never mints legacy `new_inquiry`". So this record predates the current command — a stale
+ * fixture household that the product would now refuse to create.
+ *
+ * The consequence was invisible until the cards were compared to the approved artifact. A
+ * department reaches the drawer only through `opportunities.work_unit_id → work_units.department_id`
+ * (there is no `opportunities.department_id` column — an earlier attempt to write one failed loudly
+ * with "column does not exist"). No work unit means no department, no lifecycle builder, a null
+ * rail, and a Business Process card composed with ZERO stages — while every real pipeline record in
+ * the same org showed all six. The card was right; the fixture was not a pipeline record.
+ *
+ * ── WHY THIS RESOLVES RATHER THAN PLACES ──
+ *
+ * The work unit is not chosen here. `resolveCreateLeadEntryDepartmentForOrg` is the same
+ * configuration resolver `create_lead` consults, and it already refuses to guess: `ambiguous` is
+ * returned when more than one process can create leads. Hand-picking a work unit would fabricate
+ * the pipeline structure the rail is supposed to be evidence OF.
+ *
+ * Never throws. A fixture that cannot resolve a placement still produces a usable household; it
+ * simply cannot certify the stage rail, and reporting that beats failing the whole ensure.
+ */
+async function attachCertificationLifecycleDepartment(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string | null,
+): Promise<{ status: string; departmentId: string | null; stageCount: number }> {
+    const none = (status: string) => ({ status, departmentId: null, stageCount: 0 });
+    if (!opportunityId) return none("no_opportunity");
+
+    try {
+        const { data: oppRow, error: oppErr } = await supabase
+            .from("opportunities")
+            .select("id, work_unit_id")
+            .eq("org_id", orgId)
+            .eq("id", opportunityId)
+            .maybeSingle();
+        if (oppErr) return none(`opportunity_read_failed: ${oppErr.message}`);
+
+        let workUnitId = t((oppRow as { work_unit_id?: string | null } | null)?.work_unit_id);
+        let repaired = false;
+
+        if (!workUnitId) {
+            const entry = await resolveCreateLeadEntryDepartmentForOrg(supabase, orgId, null);
+            if (entry.state === "ambiguous") {
+                return none("ambiguous_entry_process: more than one process can create leads");
+            }
+            if (entry.state !== "resolved" || !entry.workUnitId) {
+                return none(`entry_process_unresolved: ${entry.state}`);
+            }
+            const { error: updErr } = await supabase
+                .from("opportunities")
+                .update({ work_unit_id: entry.workUnitId })
+                .eq("org_id", orgId)
+                .eq("id", opportunityId);
+            if (updErr) return none(`work_unit_attach_failed: ${updErr.message}`);
+            workUnitId = entry.workUnitId;
+            repaired = true;
+        }
+
+        const { data: wuRow, error: wuErr } = await supabase
+            .from("work_units")
+            .select("id, department_id")
+            .eq("org_id", orgId)
+            .eq("id", workUnitId)
+            .maybeSingle();
+        if (wuErr) return none(`work_unit_read_failed: ${wuErr.message}`);
+
+        const departmentId = t((wuRow as { department_id?: string | null } | null)?.department_id);
+        if (!departmentId) return none("work_unit_has_no_department");
+
+        const { data: deptRow, error: deptErr } = await supabase
+            .from("departments")
+            .select("id, metadata")
+            .eq("org_id", orgId)
+            .eq("id", departmentId)
+            .maybeSingle();
+        if (deptErr) return none(`department_read_failed: ${deptErr.message}`);
+
+        const process = activeLifecycleProcess(
+            lifecycleBuilderFromDepartmentMetadata((deptRow as { metadata?: unknown } | null)?.metadata),
+        );
+        const stageCount = process ? activeStagesForProcess(process).length : 0;
+
+        // Fewer than two stages is what `buildOpportunityWorkspaceLifecycleRail` itself rejects, so
+        // report it in the same terms rather than implying a rail that will not render.
+        return {
+            status:
+                stageCount >= 2 ?
+                    repaired ? "work_unit_repaired"
+                    :   "already_placed"
+                :   "department_declares_no_lifecycle_process",
+            departmentId,
+            stageCount,
+        };
+    } catch (e) {
+        return none(`placement_repair_threw: ${e instanceof Error ? e.message : String(e)}`);
+    }
 }
 
 export async function ensureOperationalCardsCertification(
@@ -266,6 +385,12 @@ export async function ensureOperationalCardsCertification(
             .maybeSingle();
         opportunityId = t((oppRow as { id?: string } | null)?.id) || null;
     }
+
+    const lifecycleDepartment = await attachCertificationLifecycleDepartment(
+        supabase,
+        orgId,
+        opportunityId,
+    );
 
     const todayYmd = await resolveOperationalEnrollmentTodayYmd(supabase, orgId);
     const children: CertificationChildResult[] = [];
@@ -466,7 +591,7 @@ export async function ensureOperationalCardsCertification(
         });
     }
 
-    return { ok: true, customerId, personId, opportunityId, children, reused };
+    return { ok: true, customerId, personId, opportunityId, children, reused, lifecycleDepartment };
 }
 
 export async function verifyOperationalCardsCertification(
