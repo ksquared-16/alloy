@@ -18,10 +18,11 @@ import {
     slotAuthStoragePath,
     validateBrowserAuthRequest,
     verifyBrowserAuth,
+    verifyBrowserAuthSync,
 } from "./browser-auth.mjs";
 import { getDurableLane } from "./development-lane.mjs";
 import { authorizeQaBootstrap, consumeQaBootstrap, openQaBootstrap } from "./qa-session-bootstrap.mjs";
-import { runQaSessionMint } from "./qa-session-mint-runner.mjs";
+import { runQaSessionMint, runQaSessionMintSync } from "./qa-session-mint-runner.mjs";
 
 /** Inputs a caller may never supply. Present so the refusal is explicit rather than implied. */
 export const FORBIDDEN_RESTORE_INPUTS = Object.freeze([
@@ -99,6 +100,37 @@ export function resolveRestoreTarget(laneId, { getLane = getDurableLane } = {}) 
  * privileged runs — the mint child is not spawned, so a denied or pending request cannot reach
  * Supabase at all. `restored` is still decided by the fresh-context verification, never by the mint.
  */
+export function executeRestoreQaSessionSync({
+    action,
+    grant,
+    grantCheck,
+    nowMs = Date.now(),
+    mint = runQaSessionMintSync,
+    verify = verifyBrowserAuthSync,
+    getLane = getDurableLane,
+} = {}) {
+    /*
+     * The governed path is synchronous.
+     *
+     * `processGovernedAction` calls its executor WITHOUT awaiting, and every trusted-host action
+     * beside this one does its real work through `spawnSync` — git for push, gh for merge. An async
+     * executor hands that path a Promise, which it scores as a failed execution. Both injected
+     * defaults here are therefore the synchronous forms, and this function returns a value.
+     */
+    const prepared = prepareRestore({ action, grant, grantCheck, nowMs, getLane });
+    if (!prepared.ok) return prepared.failure;
+    const { validated } = prepared;
+
+    openQaBootstrap({ slot: validated.slot, nowMs });
+    const minted = mint(validated, { storagePath: slotAuthStoragePath(validated.slot) });
+    const consumed = consumeQaBootstrap({ slot: validated.slot, nowMs });
+    const afterMint = checkMint({ validated, minted, consumed });
+    if (afterMint) return afterMint;
+
+    return finishRestore({ validated, verified: verify(validated), nowMs });
+}
+
+/** Async form, kept for callers outside the governed path (and for the tests that inject fakes). */
 export async function executeRestoreQaSession({
     action,
     grant,
@@ -108,15 +140,35 @@ export async function executeRestoreQaSession({
     verify = verifyBrowserAuth,
     getLane = getDurableLane,
 } = {}) {
-    if (!grant) return safeFailure({ code: "grant_missing" });
+    const prepared = prepareRestore({ action, grant, grantCheck, nowMs, getLane });
+    if (!prepared.ok) return prepared.failure;
+    const { validated } = prepared;
+
+    openQaBootstrap({ slot: validated.slot, nowMs });
+    const minted = await mint(validated, { storagePath: slotAuthStoragePath(validated.slot) });
+    const consumed = consumeQaBootstrap({ slot: validated.slot, nowMs });
+    const afterMint = checkMint({ validated, minted, consumed });
+    if (afterMint) return afterMint;
+
+    return finishRestore({ validated, verified: await verify(validated), nowMs });
+}
+
+/**
+ * Every decision made before anything privileged happens.
+ *
+ * Pure and shared by both orchestrators, so the sync and async forms cannot diverge on who may
+ * restore what. If this returns a failure, the mint child is never spawned.
+ */
+function prepareRestore({ action, grant, grantCheck, nowMs, getLane }) {
+    if (!grant) return { ok: false, failure: safeFailure({ code: "grant_missing" }) };
     const authorized = grantCheck ? grantCheck(grant, action, { nowMs }) : { ok: true };
-    if (!authorized.ok) return safeFailure({ code: authorized.error || "grant_rejected" });
+    if (!authorized.ok) return { ok: false, failure: safeFailure({ code: authorized.error || "grant_rejected" }) };
 
     const inputCheck = validateRestoreQaSessionInputs(action?.inputs || {});
-    if (!inputCheck.ok) return safeFailure({ code: inputCheck.error, detail: inputCheck.detail });
+    if (!inputCheck.ok) return { ok: false, failure: safeFailure({ code: inputCheck.error, detail: inputCheck.detail }) };
 
     const resolved = resolveRestoreTarget(inputCheck.normalized.laneId, { getLane });
-    if (!resolved.ok) return safeFailure({ code: resolved.error, detail: resolved.detail });
+    if (!resolved.ok) return { ok: false, failure: safeFailure({ code: resolved.error, detail: resolved.detail }) };
     const validated = resolved.validated;
 
     // Operator approval is carried from the grant. This is the ONLY place it may be true.
@@ -127,32 +179,37 @@ export async function executeRestoreQaSession({
         repositoryProfile: "alloy",
         nowMs,
     });
-    if (!allowed.ok) return safeFailure({ code: allowed.error, lane: validated.lane_id, slot: validated.slot });
-
-    openQaBootstrap({ slot: validated.slot, nowMs });
-    const minted = await mint(validated, { storagePath: slotAuthStoragePath(validated.slot) });
-    const consumed = consumeQaBootstrap({ slot: validated.slot, nowMs });
-    if (!minted.ok || !consumed.ok) {
-        return safeFailure({
-            code: minted.ok ? consumed.error : minted.error,
-            lane: validated.lane_id,
-            slot: validated.slot,
-            identity: validated.expected_identity,
-            storageWritten: false,
-        });
+    if (!allowed.ok) {
+        return { ok: false, failure: safeFailure({ code: allowed.error, lane: validated.lane_id, slot: validated.slot }) };
     }
+    return { ok: true, validated };
+}
 
-    const verified = await verify(validated);
+/** Returns a failure result when the mint or its single-use consumption did not succeed. */
+function checkMint({ validated, minted, consumed }) {
+    if (minted.ok && consumed.ok) return null;
+    return safeFailure({
+        code: minted.ok ? consumed.error : minted.error,
+        lane: validated.lane_id,
+        slot: validated.slot,
+        identity: validated.expected_identity,
+        storageWritten: false,
+    });
+}
+
+/** `restored` is decided here, by the fresh-context verification — never by the mint. */
+function finishRestore({ validated, verified, nowMs }) {
+    const ok = verified.ok === true;
     return {
-        ok: verified.ok === true,
-        status: verified.ok === true ? "restored" : "verification_failed",
+        ok,
+        status: ok ? "restored" : "verification_failed",
         lane_id: validated.lane_id,
         slot: validated.slot,
         registered_identity: validated.expected_identity,
         storage_written: true,
-        verified: verified.ok === true,
-        verified_at: verified.ok === true ? new Date(nowMs).toISOString() : null,
-        failure_code: verified.ok === true ? null : "verification_failed",
+        verified: ok,
+        verified_at: ok ? new Date(nowMs).toISOString() : null,
+        failure_code: ok ? null : "verification_failed",
     };
 }
 
