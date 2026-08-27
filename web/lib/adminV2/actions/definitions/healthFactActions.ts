@@ -23,8 +23,8 @@
 import { randomUUID } from "crypto";
 
 import type { ActionResult, RegisteredAction } from "@/lib/adminV2/actions/actionTypes";
-import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { HealthAccessDeniedError } from "@/lib/health/healthAccess";
+import { resolveHealthAccessForActor } from "@/lib/health/healthAccessForAction";
 import {
     addHealthFact,
     editHealthFact,
@@ -49,14 +49,11 @@ function childIdFrom(payload: Record<string, unknown> | undefined, entityId: str
 /**
  * The caller's real grants.
  *
- * Resolved per invocation rather than trusted from the payload — a payload-supplied permission set
- * would be an authorization the caller granted themselves.
+ * Resolved per invocation from the client the action already receives, never trusted from the
+ * payload — a payload-supplied permission set is an authorization the caller granted themselves.
+ * Deliberately NOT via `getAdminAccessContextCached`: that reaches `next/headers`, and this module is
+ * reachable from a client component, so importing it broke every adminV2 page.
  */
-async function accessForCaller(): Promise<{ permissionKeys: readonly string[] | null }> {
-    const access = await getAdminAccessContextCached();
-    // A failed access resolution denies: null is not an empty grant set.
-    return { permissionKeys: access.ok ? access.permissionKeys : null };
-}
 
 function mapError(err: unknown, correlationId: string): ActionResult {
     if (err instanceof HealthAccessDeniedError) {
@@ -126,7 +123,7 @@ const addFact: RegisteredAction = {
         const correlationId = randomUUID();
         try {
             const row = await addHealthFact(supabase as SupabaseClient, {
-                access: await accessForCaller(),
+                access: await resolveHealthAccessForActor(supabase as SupabaseClient, ctx.orgId, ctx.userId),
                 orgId: ctx.orgId,
                 subjectEntityType: "customer_member",
                 subjectEntityId: childIdFrom(payload, invocation.entityId),
@@ -195,7 +192,7 @@ const editFact: RegisteredAction = {
         const correlationId = randomUUID();
         try {
             const { created } = await editHealthFact(supabase as SupabaseClient, {
-                access: await accessForCaller(),
+                access: await resolveHealthAccessForActor(supabase as SupabaseClient, ctx.orgId, ctx.userId),
                 orgId: ctx.orgId,
                 factId: t(payload.fact_id),
                 payload: (payload.payload ?? {}) as Record<string, unknown>,
@@ -260,7 +257,7 @@ const endFact: RegisteredAction = {
         const correlationId = randomUUID();
         try {
             const row = await endHealthFact(supabase as SupabaseClient, {
-                access: await accessForCaller(),
+                access: await resolveHealthAccessForActor(supabase as SupabaseClient, ctx.orgId, ctx.userId),
                 orgId: ctx.orgId,
                 factId: t(payload.fact_id),
                 effectiveTo: t(payload.effective_to) || null,
