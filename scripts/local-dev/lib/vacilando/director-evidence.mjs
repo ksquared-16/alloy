@@ -14,6 +14,11 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repositoryStorePath } from "./repository-registry.mjs";
+import {
+  measureClosePullRequestGates,
+  measureDeleteRemoteBranchGates,
+  isNeverDeletable,
+} from "./trusted-host-repository-housekeeping.mjs";
 
 const PROTECTED = ["staging", "main", "master", "production"];
 
@@ -124,6 +129,37 @@ export function collectDirectorEvidence(rec, {
     governance_exception_active: governanceExceptionActive === true,
     operator_hold: operatorHold === true,
   };
+  // Repository housekeeping measures REAL GitHub state. Anything unreadable
+  // stays null, and a null gate escalates — a cleanup that cannot be proven
+  // safe is never a cleanup the Director performs.
+  if (rec?.action_key === "repository.close_pull_request") {
+    try {
+      const n = {
+        repository,
+        pullRequestNumber: Number(inputs.pullRequestNumber ?? inputs.pull_request_number),
+        expectedHeadBranch: inputs.expectedHeadBranch || inputs.headBranch || null,
+        expectedHeadSha: sha,
+        expectedBaseBranch: inputs.expectedBaseBranch || inputs.base || null,
+        expectedHeadRepository: inputs.expectedHeadRepository || null,
+      };
+      Object.assign(evidence, measureClosePullRequestGates(n));
+    } catch { /* unmeasured -> escalates */ }
+    // A governed merge still legitimately targeting this PR blocks closure.
+    evidence.active_governed_merge = activeGovernedMergeFor(stateRoot, repository, inputs.pullRequestNumber ?? inputs.pull_request_number);
+  }
+  if (rec?.action_key === "repository.delete_remote_branch") {
+    const br = inputs.branch || inputs.branchName || null;
+    evidence.branch = br;
+    evidence.branch_never_protected_name = br == null ? null : !isNeverDeletable(br);
+    try {
+      Object.assign(evidence, measureDeleteRemoteBranchGates({ repository, branch: br, expectedHeadSha: sha }));
+    } catch { /* unmeasured -> escalates */ }
+    const refs = activeLaneReference(stateRoot, br);
+    evidence.active_lane_reference = refs;
+    // Unique work is only "not at risk" when the branch head is reachable from
+    // the canonical branch. Unreachable or unmeasurable stays null.
+    evidence.unique_work_at_risk = uniqueWorkAtRisk(wt, sha);
+  }
   if (rec?.action_key === "promotion.open_pr") {
     evidence.remote_head_sha = remoteHead(wt, branch);
   }
@@ -131,4 +167,46 @@ export function collectDirectorEvidence(rec, {
     evidence.protected_branch = PROTECTED.includes(String(branch).toLowerCase());
   }
   return evidence;
+}
+
+/** Is a governed merge still legitimately targeting this pull request? */
+function activeGovernedMergeFor(stateRoot, repository, prNumber) {
+  if (!prNumber) return null;
+  const db = readJson(join(stateRoot, "governed-actions", "requests.json"));
+  const rows = Array.isArray(db) ? db : (db?.requests || db?.records || (db && Object.values(db).find(Array.isArray)) || null);
+  if (!Array.isArray(rows)) return null;                       // cannot tell -> escalate
+  const pending = ["requested", "awaiting_director", "awaiting_operator", "awaiting_control_plane_refresh", "executing"];
+  return rows.some((r) => r
+    && r.action_key === "repository.merge_pull_request"
+    && pending.includes(r.status)
+    && Number(r.inputs?.pullRequestNumber ?? r.inputs?.pull_request_number) === Number(prNumber));
+}
+
+/** Does any non-terminal run or lane still name this branch? */
+function activeLaneReference(stateRoot, branch) {
+  if (!branch) return null;
+  const runs = readJson(join(stateRoot, "execution-runs", "runs.json"));
+  if (!runs?.lanes) return null;                               // cannot tell -> escalate
+  const terminal = new Set(["COMPLETE", "FAILED", "ABANDONED"]);
+  for (const v of Object.values(runs.lanes)) {
+    const rs = Array.isArray(v) ? v : (v.runs || Object.values(v).find(Array.isArray) || []);
+    for (const r of rs) {
+      if (!r || terminal.has(String(r.state).toUpperCase())) continue;
+      if (JSON.stringify(r).includes(branch)) return true;
+    }
+  }
+  return false;
+}
+
+/** Would deleting this head lose work no canonical branch can reach? */
+function uniqueWorkAtRisk(worktree, sha) {
+  if (!worktree || !existsSync(worktree) || !sha) return null;
+  const merged = git(["merge-base", "--is-ancestor", sha, "origin/staging"], worktree);
+  if (merged !== null) return false;                           // reachable from staging
+  const branches = git(["branch", "-r", "--contains", sha], worktree);
+  if (branches == null) return null;                           // unmeasurable -> escalate
+  const others = branches.split("\n").map((x) => x.trim()).filter((x) => x && !/->/.test(x));
+  // Reachable only from the branch about to be deleted means the commits go
+  // with it. That is exactly the case a human should decide.
+  return others.length <= 1;
 }
