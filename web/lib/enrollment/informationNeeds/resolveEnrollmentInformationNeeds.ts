@@ -38,6 +38,7 @@ import {
     type EnrollmentParticipantProgressResult,
 } from "@/lib/enrollment/participantProgress/resolveEnrollmentParticipantProgress";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
+import { readEnrollmentNeedDeclines } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
 import { readEnrollmentNeedConfirmations } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import {
     projectEnrollmentInformationNeeds,
@@ -113,6 +114,7 @@ export function assembleEnrollmentInformationNeeds(
         sharedValues: (session.shared_values ?? {}) as Record<string, unknown>,
         canonicalValues: input.canonicalValues,
         confirmations: readEnrollmentNeedConfirmations(session.metadata),
+        declines: readEnrollmentNeedDeclines(session.metadata),
         requiresConfirmation: input.requiresConfirmation,
     });
     return {

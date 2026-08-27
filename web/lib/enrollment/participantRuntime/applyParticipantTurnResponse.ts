@@ -28,6 +28,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
+import { buildEnrollmentNeedDeclinePatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
@@ -301,6 +302,35 @@ export async function applyParticipantTurnResponse(
                     metadata: (patch.metadata ?? postWrite?.metadata ?? {}) as Record<string, unknown>,
                 };
             }
+        }
+
+        if (disposition.action === "decline_value") {
+            /*
+             * SETTLEMENT, NOT A VALUE. `shared_values` is deliberately untouched.
+             *
+             * The alternative — writing the shortcut's own label — is what produced "Middle name:
+             * Nothing to add" on a signed Oregon health form. The decline lives beside the D-99
+             * confirmations in the session's metadata, which is the extensibility owner for facts
+             * about the interaction rather than about the family.
+             */
+            let metadata: Record<string, unknown> = buildEnrollmentNeedDeclinePatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                declinedAtIso: input.nowIso,
+            });
+            if (input.clearPendingFor) {
+                metadata = withoutPendingClarification(metadata, input.clearPendingFor) as Record<string, unknown>;
+            }
+            const { error } = await supabase
+                .from("form_packet_sessions")
+                .update({ metadata })
+                .eq("id", sessionId)
+                .eq("org_id", input.orgId);
+            if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+            postWrite = {
+                shared_values: (row.shared_values ?? {}) as Record<string, unknown>,
+                metadata,
+            };
         }
 
         if (disposition.action === "write_shared_value" && sharedKey) {

@@ -41,6 +41,14 @@ export const ENROLLMENT_NEED_STATES = [
     "known",
     "known_requires_confirmation",
     "confirmed",
+    /**
+     * Asked, and the participant chose to leave it blank.
+     *
+     * Distinct from `missing`, which means nobody has been asked yet, and distinct from a value —
+     * there is no value. Declining is only offered where the authored control says the answer is
+     * optional, and it settles the need without putting anything on any document.
+     */
+    "declined",
     "artifact_specific",
 ] as const;
 

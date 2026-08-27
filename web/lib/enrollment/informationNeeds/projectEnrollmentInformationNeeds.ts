@@ -11,6 +11,10 @@
 import { fieldIsInsideCollectionBoundGroup } from "@/lib/forms/prefill/formsCollectionPrefill";
 import { formFieldAsksParticipant } from "@/lib/forms/formFieldCollectsValue";
 import {
+    declineSatisfiesAbsence,
+    type EnrollmentNeedDeclineMap,
+} from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
+import {
     participantFacingLabel,
     sourceFieldNamesByFieldId,
     type SourceFieldMapping,
@@ -58,6 +62,14 @@ export type ProjectNeedsInput = {
     /** Canonical record prefill, by the same shared key. Lower precedence than session values. */
     readonly canonicalValues?: Readonly<Record<string, unknown>>;
     readonly confirmations: EnrollmentNeedConfirmationMap;
+    /**
+     * Needs the participant was asked about and chose to leave blank.
+     *
+     * Kept apart from `sharedValues` for the reason the decline store states: settlement is not a
+     * value, and storing the shortcut's label as one is what put "Nothing to add" in a middle-name
+     * box on a state health form.
+     */
+    readonly declines?: EnrollmentNeedDeclineMap;
     /**
      * Which canonical keys require participant confirmation for this objective.
      *
@@ -276,6 +288,25 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
          * what QA did: "na".
          */
         const blocking = acc.occurrences.some((o) => o.required);
+
+        /*
+         * A decline settles an OPTIONAL need and nothing else.
+         *
+         * Where the Form insists on an answer there is nothing to decline, so a stored decline is
+         * ignored rather than honoured — the question comes back, which is the safe direction.
+         */
+        if (!blocking && declineSatisfiesAbsence(input.declines?.[identity.key], false)) {
+            return {
+                ...base,
+                state: "declined",
+                has_value: false,
+                current_value: null,
+                value_source: "none",
+                requires_participant_action: false,
+                optional: true,
+            };
+        }
+
         return {
             ...base,
             state: "missing",

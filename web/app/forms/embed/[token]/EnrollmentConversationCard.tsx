@@ -202,7 +202,7 @@ export function EnrollmentConversationCard({
     const control = useMemo(() => controlForTurn(objective.next_turn), [objective]);
 
     const submit = useCallback(
-        async (payload: { text?: string; value?: unknown; settledAs?: string }) => {
+        async (payload: { text?: string; value?: unknown; settledAs?: string; decline?: boolean }) => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true);
@@ -243,9 +243,18 @@ export function EnrollmentConversationCard({
                     {
                         method: "POST",
                         headers: { "content-type": "application/json" },
-                        // WORDS ONLY. No identifier of any kind — the server owns every one of
-                        // those and reads them from the session's current turn.
-                        body: JSON.stringify(payload),
+                        /*
+                         * WORDS ONLY. No identifier of any kind — the server owns every one of
+                         * those and reads them from the session's current turn.
+                         *
+                         * `settledAs` stays behind deliberately: it is the thread's own echo of what
+                         * the parent chose, and a shortcut's label must never travel as an answer.
+                         */
+                        body: JSON.stringify({
+                            ...(payload.text !== undefined ? { text: payload.text } : {}),
+                            ...(payload.value !== undefined ? { value: payload.value } : {}),
+                            ...(payload.decline ? { decline: true } : {}),
+                        }),
                     },
                 );
                 const json = (await res.json()) as TurnResponse;
@@ -408,17 +417,21 @@ export function EnrollmentConversationCard({
         }
         // Leaving it blank stays available, beside the choices rather than instead of them.
         if (optionalUnanswered && skipLabel) {
-            suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
+            suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
         }
     } else if (optionalUnanswered && skipLabel && affirmLabel) {
         suggestionKind = "optional";
         suggestions.push({
             label: skipLabel,
             emphasis: true,
-            // Resolves the turn outright — no redundant Continue after a binary answer. The label IS
-            // the answer. Writing null would leave the need unmet and the question would come back
-            // forever; "No known allergies" is both true and what a specialist would write down.
-            onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }),
+            /*
+             * Resolves the turn outright — and records SETTLEMENT, not the button's own words.
+             *
+             * The label describes what the parent did; it is not their answer. Sending it as a value
+             * is what printed "Middle name: Nothing to add" on a signed Oregon health form. The
+             * thread still echoes the label, because that is what the parent chose.
+             */
+            onSelect: () => void submit({ decline: true, settledAs: skipLabel }),
         });
         suggestions.push({
             // Local: reveals the authored control for the parent who does have something to tell us.
@@ -430,7 +443,7 @@ export function EnrollmentConversationCard({
         suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
         suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
     } else if (skipLabel && elaborating) {
-        suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
+        suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
     }
 
     /**
