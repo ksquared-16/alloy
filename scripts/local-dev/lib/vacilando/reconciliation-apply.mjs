@@ -14,6 +14,7 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { normalizeVerdict, observeReconciliation } from "./reconciliation-observe.mjs";
+import { registerDiscoveredWorktree } from "./worktree-registration.mjs";
 import { buildReconciliationPlan, planIsCurrent, planFingerprint, RECONCILIATION_PLAN_SCHEMA, RECONCILIATION_POLICY_VERSION, SAFE_CORRECTION_KINDS, WITHHELD_CORRECTION_KINDS, isSafeCorrection, applicableCorrections } from "./reconciliation-plan.mjs";
 
 export { normalizeVerdict, observeReconciliation } from "./reconciliation-observe.mjs";
@@ -81,13 +82,15 @@ export function applyCorrection(correction, { root, observation, nowMs = Date.no
     // Only git may say a directory is a worktree. Unknown is not yes.
     if (w.in_git_worktree_list !== true) return { ok: false, kind, skipped: "not_in_git_worktree_list" };
     if (w.managed) return { ok: false, kind, skipped: "already_managed" };
-    writeDiscovered(root, `worktree-${w.path}`, {
-      schema_version: RECONCILIATION_PLAN_SCHEMA, kind, path: w.path,
-      // Adoption makes it VISIBLE. It never claims Vacilando created it.
-      provenance: "discovered", managed: false, retirement_state: null,
-      adopted_at: new Date(nowMs).toISOString(),
+    // Through the CANONICAL OWNER, so every consumer that asks "does
+    // Vacilando know this worktree" gets the reconciled answer — and so the
+    // next plan stops proposing this same adoption.
+    const reg = registerDiscoveredWorktree({
+      root, name: w.path, repositoryId: "repo_alloy",
+      evidence: { kind, adopted_at: new Date(nowMs).toISOString() }, nowMs,
     });
-    return { ok: true, kind, path: w.path, provenance: "discovered" };
+    if (!reg.ok) return { ok: false, kind, path: w.path, skipped: reg.error };
+    return { ok: true, kind, path: w.path, provenance: reg.registration.provenance };
   }
 
   return { ok: false, kind, skipped: "unimplemented_correction" };

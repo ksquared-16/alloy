@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { classifyWorktree } from "./resource-reconciliation.mjs";
+import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
 
 /* ── Observation ──────────────────────────────────────────────────────────
  * The same rules `vac health` already uses, in one owner so the plan and the
@@ -55,17 +56,23 @@ export function observeReconciliation({
   for (const port of PORTS) {
     const owner = registered.get(port) || null;
     const pidFile = owner ? join(root, "pids", `${owner}.pid`) : null;
-    const recorded = pidFile && existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8").trim()) : null;
+    // A pid RECORD is the claim of a live runtime. Its absence is not a lie —
+    // it is a stopped server with its durable assignment intact.
+    const hasRuntimeClaim = Boolean(pidFile && existsSync(pidFile));
+    const recorded = hasRuntimeClaim ? Number(readFileSync(pidFile, "utf8").trim()) : null;
     const alive = pidAlive(recorded);
     const serving = processes.find((p) => new RegExp(`-p\\s+${port}\\b`).test(p.command || "")) || null;
     let verdict;
     if (serving && owner && alive) verdict = "matched";
     else if (serving && (!owner || !alive)) verdict = "unregistered_server";
-    else if (!serving && owner && !alive) verdict = "stale_record";
+    // Only a runtime CLAIM that reality disproves is stale.
+    else if (!serving && owner && hasRuntimeClaim && !alive) verdict = "stale_record";
+    else if (!serving && owner) verdict = "registered_inactive";
     else if (!serving && !owner) verdict = "free";
     else verdict = "matched";
     ports.push({
       port, registered: owner, recorded_worktree: owner, recorded_pid: recorded, alive,
+      has_runtime_claim: hasRuntimeClaim,
       serving_pid: serving ? serving.pid : null,
       observed_owner: serving ? (serving.worktree || null) : null,
       verdict,
@@ -88,7 +95,11 @@ export function observeReconciliation({
 
   const worktrees = onDisk.map((name) => {
     const full = join(worktreeParent, name);
-    const isRegistered = registeredNames.includes(name);
+    // THE OWNER answers registration. Scanning metadata/*.env here is what
+    // made a discovered worktree invisible: adoption wrote somewhere else, so
+    // the same correction was proposed forever.
+    const registration = resolveWorktreeRegistration({ root, name, repositoryId: "repo_alloy" });
+    const isRegistered = registration.known;
     const inGit = gitKnown ? gitKnown.includes(name) : null;
 
     // A provider or dev server whose command names this worktree.
@@ -117,7 +128,10 @@ export function observeReconciliation({
 
     const classified = classifyWorktree({
       path: name,
-      registration: isRegistered ? { provenance: "managed" } : null,
+      // Provenance comes from the owner. A discovered worktree is KNOWN —
+      // registration and lifecycle are independent, so it can be discovered
+      // and active at the same time.
+      registration: isRegistered ? { provenance: registration.provenance } : null,
       liveProviders,
       liveDevServer,
       activeRuns: active,
@@ -125,7 +139,13 @@ export function observeReconciliation({
       branchDurable,
       referencedBy: (referencesByWorktree && referencesByWorktree[name]) || [],
     });
-    return { ...classified, in_git_worktree_list: inGit };
+    return {
+      ...classified,
+      in_git_worktree_list: inGit,
+      provenance: registration.provenance,
+      known: registration.known,
+      managed: registration.managed === true,
+    };
   });
 
   return { ports, worktrees, registered_names: registeredNames, observed_at: null };

@@ -24,7 +24,14 @@ export const RECONCILIATION_SCHEMA = "vacilando.resource_reconciliation.v1";
 
 export const WORKTREE_STATES = Object.freeze(["active", "dormant", "unmanaged", "retirable", "protected"]);
 export const PORT_VERDICTS = Object.freeze([
-  "matched", "free", "stale_record", "unregistered_server", "foreign_owner", "ambiguous",
+  // registered_inactive is a DURABLE ASSIGNMENT WITH NO RUNNING SERVER, which
+  // is a normal resting state and needs no correction. stale_record means
+  // something narrower and worse: the metadata CLAIMS a live runtime that
+  // reality disproves — a pid record pointing at a process that is gone.
+  // Conflating the two made every stopped dev server look like corruption, and
+  // made clear_dead_pid_record propose itself forever: removing the pid file
+  // left the assignment registered and the verdict unchanged.
+  "matched", "free", "registered_inactive", "stale_record", "unregistered_server", "foreign_owner", "ambiguous",
 ]);
 
 /** Where a worktree's registration came from. Never inferred. */
@@ -175,6 +182,11 @@ export function planCorrections({ ports = [], worktrees = [] } = {}) {
 
   for (const p of ports) {
     switch (p.verdict) {
+      case "registered_inactive":
+        // Nothing to correct: the assignment is durable and honest about
+        // having no server. Erasing it to make a metric green would destroy
+        // configuration that is supposed to survive a restart.
+        break;
       case "stale_record":
         actions.push({
           kind: "clear_dead_pid_record", port: p.port, worktree: p.recorded_worktree,
