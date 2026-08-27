@@ -124,9 +124,18 @@ const configuredOrg = String(env.DEV_QUEUE_ORG_ID || "").trim();
 let orgId;
 let orgSource;
 if (configuredOrg) {
-    // Confirm it is a real organization rather than a stale or mistyped id: a membership row
-    // pointing at nothing would look assigned and grant nothing.
-    const orgRow = await admin.from("organizations").select("id").eq("id", configuredOrg).maybeSingle();
+    /*
+     * The table is `orgs`, not `organizations`.
+     *
+     * The first version guessed the plural-English name and failed with organization_read_failed,
+     * spending an approval on a typo. `orgs` is what every application owner reads — the metric
+     * snapshot writers, the tour comms context, entity-label and status-definition resolution — so
+     * it is the name to use here too.
+     *
+     * The check itself stays: a membership row pointing at an organization that does not exist
+     * would look assigned and grant nothing.
+     */
+    const orgRow = await admin.from("orgs").select("id").eq("id", configuredOrg).maybeSingle();
     if (orgRow.error) fail("organization_read_failed", orgRow.error.message);
     if (!orgRow.data?.id) fail("configured_org_not_found", "DEV_QUEUE_ORG_ID does not match an existing organization");
     orgId = configuredOrg;
