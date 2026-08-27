@@ -167,11 +167,6 @@
   color: var(--alloy-os-text-tertiary, #9ca3af);
 }
 
-.alloy-os-progression,
-  .alloy-os-attendance__recent {
-    grid-auto-flow: row;
-  }
-
 /* ── process card: the work band under the stage band ─────────────────────── */
 .alloy-os-process__work {
   display: grid;
