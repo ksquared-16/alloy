@@ -104,9 +104,14 @@ await test("CLASSES — an unknown authorization class is never reusable", () =>
 
 await test("MISSION STANDING — the intentionally reusable class still works", () => {
   // Operator paths must not be broken by tightening the exact class.
+  // Reusability is now DECLARED, not inferred from an absent binding. An
+  // unbound grant used to match every request of its action type, which is the
+  // leak Authorization Lifecycle V1 closed — so the intentionally reusable
+  // class says so explicitly.
   const m = A.grantMissionAuthorization({
     missionId: MISSION, actionType: "database.read_census",
-    databaseTarget: "staging", actor: "operator", nowMs: Date.now(),
+    databaseTarget: "staging", actor: "operator",
+    subjectScope: A.SUBJECT_SCOPES.ANY_WITHIN_MISSION, nowMs: Date.now(),
   });
   assert.ok(m.ok, "operator mission grants must still be mintable");
   const found = A.findAuthorization({
