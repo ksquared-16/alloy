@@ -49,6 +49,7 @@ export function runQaAccessAssignSync(validated, {
         org_id: typeof parsed.org_id === "string" ? parsed.org_id : null,
         memberships_for_user: Number.isFinite(parsed.memberships_for_user) ? parsed.memberships_for_user : null,
         candidate_orgs_seen: Number.isFinite(parsed.candidate_orgs_seen) ? parsed.candidate_orgs_seen : null,
+        org_source: typeof parsed.org_source === "string" ? parsed.org_source : null,
     };
 }
 

@@ -123,6 +123,17 @@ test("an existing membership is idempotent and mutates nothing", () => {
     assert.equal(r.mutated, false);
 });
 
+test("the configured seeded organization is the authority, and is reported as such", () => {
+    // DEV_QUEUE_ORG_ID is what the rest of the tooling treats as canonical; when it is set the
+    // child uses it and says so, rather than inferring a tenant from who happens to have admins.
+    const assign = spyAssign({ ok: true, result: "assigned", mutated: true, user_id: "u1", org_id: "org-configured", memberships_for_user: 1, candidate_orgs_seen: 4, org_source: "configured" });
+    const r = executeAssignQaAccessSync({ action: action(), grant: validGrant(), assign, grantCheck: () => ({ ok: true }), getLane: laneFor() });
+    assert.equal(r.ok, true);
+    assert.equal(r.org_source, "configured", "the result must record where the organization came from");
+    assert.equal(r.org_id, "org-configured");
+    assert.equal(r.candidate_orgs_seen, 4, "several admin orgs existed and configuration still settled it");
+});
+
 test("an ambiguous canonical organization is REFUSED, not guessed", () => {
     // The child refuses when several organizations have admins; a wrong tenant is not recoverable.
     const assign = spyAssign({ ok: false, error: "canonical_org_ambiguous", detail: "3 organizations have admin members; refusing to choose" });
