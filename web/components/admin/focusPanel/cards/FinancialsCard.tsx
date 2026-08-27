@@ -455,7 +455,20 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         rows: periodRows,
                         currency,
                     })}
-                    span={model.span === 1 ? 1 : "row"}
+                    /*
+                     * DENSITY SELECTS THE PRESENTATION, which is what density is for.
+                     *
+                     * `compact` is supporting financial context inside another operating process —
+                     * what is due, why at a glance, whether payment is healthy, and the ways in. It
+                     * deliberately does NOT reconcile: a half-stated breakdown is more misleading
+                     * than none. `standard` is the full period.
+                     *
+                     * Keyed off the model's density rather than its span because span is a LAYOUT
+                     * fact a published Surface may override — the case surface hands this card 8
+                     * columns while its composition asks for the compact policy, and the operator's
+                     * placement should not silently change which questions the card answers.
+                     */
+                    span={model.density === "compact" ? 1 : "row"}
                     onDetails={() => setOverlay("detail")}
                     onAddCharge={() => setOverlay("add_charge")}
                 />

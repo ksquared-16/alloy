@@ -144,10 +144,13 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
      * is a horizontal day timeline at full row width. That is not a denser version of the same
      * card — it is a different one.
      *
-     * The refusal path stays below: `unavailableReason` means the child has no attendable enrolment,
-     * which is not an unrecorded day and must not render as one.
+     * INELIGIBILITY RENDERS AT THE SAME DENSITY, in the same card. `unavailableReason` means the
+     * child has no attendable enrolment — which is not an unrecorded day, and the card says so in
+     * its own words rather than dropping to a different layout. Falling back to the legacy grid for
+     * this state was how the approved timeline and a four-slot grid ended up on the same surface,
+     * one per record.
      */
-    if (vm && !vm.unavailableReason) {
+    if (vm) {
         return (
             <div
                 className="alloy-os-attendance"
@@ -156,12 +159,21 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
             >
                 <ApprovedAttendanceCard
                     evidence={adaptAttendanceVmToAttendanceCard(vm)}
-                    commands={{
-                        checkIn: () => void run("attendance.check_in"),
-                        markAbsent: () => void run("attendance.mark_absent"),
-                        checkOut: () => void run("attendance.check_out"),
-                        running,
-                    }}
+                    /*
+                     * NO COMMANDS WHEN THERE IS NOTHING TO COMMAND. A child with no attendable
+                     * enrolment cannot be checked in, and offering the control would be an
+                     * affordance the domain will refuse — the card states the reason instead.
+                     */
+                    commands={
+                        vm.unavailableReason ?
+                            undefined
+                        :   {
+                                checkIn: () => void run("attendance.check_in"),
+                                markAbsent: () => void run("attendance.mark_absent"),
+                                checkOut: () => void run("attendance.check_out"),
+                                running,
+                            }
+                    }
                 />
             </div>
         );

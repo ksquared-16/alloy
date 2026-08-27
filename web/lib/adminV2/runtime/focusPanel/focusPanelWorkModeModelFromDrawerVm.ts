@@ -14,6 +14,7 @@
 
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
+import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -62,6 +63,30 @@ export function focusPanelWorkModeModelFromDrawerVm(
         canMutate,
         selectedParticipationId: input.selectedParticipationId ?? null,
     });
+
+    /*
+     * ── THE COMPOSITION'S DECLARED DENSITY SELECTS THE FINANCIALS PRESENTATION ──
+     *
+     * Financials is the one card that ships two approved presentations of one read model: the full
+     * period reconciliation, and a compact supporting-context version for process surfaces that
+     * need the balance and the ways in without the breakdown. Both are the same VM and the same
+     * ownership; density chooses which questions the placement answers.
+     *
+     * The card model hardcodes `standard`, and the composition's `encodedDensity` is documented as
+     * render-inert metadata — so the compact placement the case composition already declares was
+     * unreachable, and the compact presentation existed only in the lab. This is where the two
+     * meet: the grain's composition is resolved here, and the model is built here.
+     *
+     * Scoped to `financials` deliberately. A blanket density override would silently re-render
+     * every card whose composition entry disagrees with its model default, which is a much larger
+     * change than the one being asked for and not one anyone has looked at.
+     */
+    const composition = focusPanelDefaultCompositionForGrain(context.subject.type);
+    const financialsEntry = composition?.find((entry) => entry.key === "financials");
+    const financialsModel = cards.get("financials");
+    if (financialsEntry?.encodedDensity && financialsModel) {
+        cards.set("financials", { ...financialsModel, density: financialsEntry.encodedDensity });
+    }
 
     const cardReadiness = new Map<FocusPanelCardKey, FocusPanelCardReadiness>();
     for (const [key, model] of cards) {

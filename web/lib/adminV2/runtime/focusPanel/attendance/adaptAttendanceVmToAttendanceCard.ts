@@ -179,7 +179,14 @@ export function adaptAttendanceVmToAttendanceCard(vm: AttendanceCardVM): Attenda
          * specimen's default produces when the platform has no expected window to fill it with.
          */
         emptyLine:
-            vm.state === "absent" ? "Marked absent today."
+            /*
+             * INELIGIBLE is not EMPTY. A child with no attendable enrolment has no day to record,
+             * and the card says which of the two it is — in the same card, at the same density,
+             * because dropping to another layout for this state is what put a timeline and a
+             * four-slot grid on the same surface.
+             */
+            vm.unavailableReason ? vm.unavailableReason
+            : vm.state === "absent" ? "Marked absent today."
             : vm.expected.roomLabel ?
                 `Expected in ${vm.expected.roomLabel}. Nothing recorded yet.`
             : vm.expected.expected ? "Expected today. Nothing recorded yet."

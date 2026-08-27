@@ -75,12 +75,17 @@ export default function AttendanceCard({
                             {evidence.emptyLine
                                 ?? `Expected ${expected.fromLabel} – ${expected.toLabel}. Nothing recorded yet.`}
                         </EmptyLine>
-                        <ActionRow>
-                            <Action primary onClick={commands?.checkIn}>
-                                Check in
-                            </Action>
-                            <Action onClick={commands?.markAbsent}>Mark absent</Action>
-                        </ActionRow>
+                        {/* Controls only where a command exists to run. A host that supplies none
+                            is stating that this subject cannot be checked in, and an inert button
+                            would contradict the line above it. */}
+                        {commands ? (
+                            <ActionRow>
+                                <Action primary onClick={commands.checkIn}>
+                                    Check in
+                                </Action>
+                                <Action onClick={commands.markAbsent}>Mark absent</Action>
+                            </ActionRow>
+                        ) : null}
                     </CardBody>
                 ) : (
                     <CardBody className="alloy-os-attendance__body">
