@@ -10,6 +10,15 @@ import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycle
 export type OpportunityWorkspaceLifecycleRail = {
     stages: Array<{ key: string; label: string }>;
     current_stage_key: string | null;
+    /**
+     * The configured process's OWN NAME — "Enrollment", not "Waitlist".
+     *
+     * Already resolved here to read the stages, and carried so the Business Process card can title
+     * itself with the process rather than falling back to its registered card key. Without it the
+     * card titled itself from `businessProcess.label`, which is the STAGE label, and read "WAITLIST"
+     * directly above a rail whose current column already said Waitlist.
+     */
+    process_name?: string | null;
 };
 
 function trimOrNull(v: unknown): string | null {
@@ -52,5 +61,5 @@ export function buildOpportunityWorkspaceLifecycleRail(params: {
         if (fromWu && stageKeys.includes(fromWu)) currentStageKey = fromWu;
     }
 
-    return { stages, current_stage_key: currentStageKey };
+    return { stages, current_stage_key: currentStageKey, process_name: trimOrNull(process.name) };
 }

@@ -32,6 +32,14 @@ export type OperationalSubjectRef = {
 export type OperationalBusinessProcess = {
     key: string | null;
     label: string | null;
+    /**
+     * THE PROCESS'S NAME, distinct from `label` — which is the current STAGE's label.
+     *
+     * Two different questions that read alike: "what process is this record in" (Enrollment) versus
+     * "where in it is the record" (Waitlist). Conflating them titled the Business Process card with
+     * its own current stage.
+     */
+    name?: string | null;
     /** Current builder stage key, when known. */
     stageKey: string | null;
     /**

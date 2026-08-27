@@ -106,16 +106,18 @@ export function adaptBusinessProcessEvidenceToProcessCard(input: {
         sourceWorkView: null,
         childStates,
         /*
-         * NOT the stage label.
+         * THE PROCESS NAME — and emphatically not `evidence.processLabel`.
          *
-         * `evidence.processLabel` is sourced from `context.businessProcess.label`, which is the
-         * STAGE — so passing it made the card title read "WAITLIST" directly above a rail whose
-         * current column already says Waitlist. The canonical Business Process NAME exists on the
-         * server (`contextualFocusAnswer` carries `businessProcess.name`) but nothing plumbs it into
-         * the operational context, so the card falls back to its registered identity rather than
-         * asserting the stage is the process.
+         * `processLabel` is sourced from `context.businessProcess.label`, which is the current
+         * STAGE. Passing it titled the card "WAITLIST" directly above a rail whose current column
+         * already said Waitlist. The name is now carried separately, resolved from the department's
+         * configured lifecycle process — the same record the rail's stages come from — so the card
+         * titles itself "ENROLLMENT", as the approved specimen does.
+         *
+         * Still falls back to the registered card identity when a department declares no process:
+         * an unnamed process is a real state, and the card must not assert a name it does not have.
          */
-        processLabel: "",
+        processLabel: evidence.processName ?? "",
         stages,
         currentStageLabel: evidence.caseStageLabel ?? "",
         workLine: evidence.currentWork?.answerLine ?? "",

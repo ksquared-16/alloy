@@ -168,6 +168,33 @@
 }
 
 /* ── process card: the work band under the stage band ─────────────────────── */
+/*
+ * ACTIONS SIZE TO THEIR LABELS, because this card is a full row.
+ *
+ * `ActionRow` renders the platform's `.alloy-os-currentwork__helpful-row`, whose base rule is
+ * `repeat(auto-fit, minmax(0, 1fr))` — equal-width columns, correct for What's Next in a narrow
+ * lane. The Process work band puts that row in a `minmax(300px, 0.9fr)` column, so four registered
+ * actions got ~70px each and the labels clipped mid-word ("hange lead locatio").
+ *
+ * The approved specimen sizes each action to its own label and right-aligns the set. Overriding the
+ * inherited grid here rather than in the platform rule keeps What's Next unchanged; wrapping rather
+ * than scrolling means a fifth action costs a line, never a truncated word.
+ */
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  grid-template-columns: none;
+}
+
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__helpful-action,
+.alloy-os-process__work-actions .alloy-os-currentwork__helpful-row > .alloy-os-currentwork__primary-action {
+  width: auto;
+  min-width: 0;
+  /* One line per action. A wrapped label reads as two actions on a rail of many. */
+  white-space: nowrap;
+}
+
 .alloy-os-process__work {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);

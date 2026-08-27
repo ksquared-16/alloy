@@ -87,7 +87,16 @@ export default function BusinessProcessCard({ model, context, receded = false, c
         const slots = context.recordHeaderActions ?? null;
         if (!slots) return [];
         return [
-            ...(slots.primary ?? []).map((a) => ({ key: a.key, label: a.label, primary: true })),
+            /*
+             * EXACTLY ONE FILLED ACTION.
+             *
+             * The registry's `primary` slot can hold several, and marking all of them primary put
+             * two filled green buttons side by side — the approved specimen fills one and outlines
+             * the rest. Emphasis is a ranking, not a category: if everything is primary, nothing is.
+             * The registry still decides the ORDER and which action leads; this only decides how
+             * many earn the fill.
+             */
+            ...(slots.primary ?? []).map((a, i) => ({ key: a.key, label: a.label, primary: i === 0 })),
             ...(slots.secondary ?? []).map((a) => ({ key: a.key, label: a.label, primary: false })),
         ];
     }, [context.recordHeaderActions]);

@@ -348,6 +348,8 @@ export function buildOperationalContext(input: BuildOperationalContextInput): Op
         businessProcess: {
             key: stageContext?.stage_key ?? null,
             label: stageContext?.stage_label ?? statusLabel ?? null,
+            // The process, not the stage. Only the rail knows it; nothing else on the VM does.
+            name: lifecycleRail?.process_name ?? null,
             stageKey: lifecycleRail?.current_stage_key ?? stageContext?.stage_key ?? null,
             // The rail already resolved the configured order; publishing it here keeps ONE answer to
             // "what are this process's stages" rather than a second derivation in the card.

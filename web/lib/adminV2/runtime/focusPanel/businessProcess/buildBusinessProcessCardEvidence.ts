@@ -74,6 +74,8 @@ export type BusinessProcessStage = {
 export type BusinessProcessCardEvidence = {
     /** Operator-facing process name. */
     processLabel: string | null;
+    /** The configured process's own name, when the department declares one. */
+    processName?: string | null;
     /** The case's authoritative stage. Participant state never changes it. */
     caseStageKey: string | null;
     caseStageLabel: string | null;
@@ -191,6 +193,7 @@ export function buildBusinessProcessCardEvidence(
 
     return {
         processLabel: context.businessProcess.label ?? null,
+        processName: context.businessProcess.name ?? null,
         caseStageKey,
         caseStageLabel,
         stages,
