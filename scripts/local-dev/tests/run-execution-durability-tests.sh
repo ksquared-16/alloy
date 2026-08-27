@@ -65,6 +65,7 @@ SUITES=(
   "development-director-certification.test.mjs"
   "development-exact-authorization.test.mjs"
   "development-director-execution-bridge.test.mjs"
+  "development-governed-run-wait.test.mjs"
 )
 
 PASS=0
