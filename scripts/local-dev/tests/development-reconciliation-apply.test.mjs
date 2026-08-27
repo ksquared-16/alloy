@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const R = await import("../lib/vacilando/reconciliation-apply.mjs");
+const { observeReconciliation } = await import("../lib/vacilando/reconciliation-observe.mjs");
+const { buildReconciliationPlan } = await import("../lib/vacilando/reconciliation-plan.mjs");
 
 const root = () => mkdtempSync(join(tmpdir(), "vac-rec-"));
 const portObs = (over = {}) => ({
@@ -424,4 +426,70 @@ await test("CONVERGENCE — worktree adoption disappears from the next plan", as
   assert.deepEqual(R.buildReconciliationPlan(obs2).corrections, [], "the applied adoption must not be re-proposed");
   assert.equal(obs2.worktrees[0].provenance, "discovered");
   assert.equal(obs2.worktrees[0].managed, false, "known is not managed");
+});
+
+/* ── Port ownership is asked, never re-derived ───────────────────────────────
+ *
+ * These reproduce the live S7 convergence failure. Port 3011 was assigned to
+ * wt1-r2-true-cold-work-unit while wt1-access-identity-v2 actually served it.
+ * The observer's own verdict ladder had no foreign_owner case, so it reported
+ * unregistered_server, the plan proposed adopt_observed_server, and adoption
+ * wrote a discovered record that could not change owner/alive/serving. The
+ * correction therefore recurred on every single plan, forever.
+ */
+
+test("a live server on a port assigned to someone else is foreign_owner, not unregistered", () => {
+  const r = root();
+  mkdirSync(join(r, "metadata"), { recursive: true });
+  writeFileSync(join(r, "metadata", "wt-owner.env"), 'PORT="3011"\n', "utf8");
+  const obs = observeReconciliation({
+    root: r,
+    processes: [{ pid: 4242, command: "next dev -p 3011", worktree: "wt-intruder" }],
+    gitWorktrees: [],
+  });
+  const p = obs.ports.find((x) => x.port === 3011);
+  assert.equal(p.verdict, "foreign_owner");
+  assert.notEqual(p.verdict, "unregistered_server");
+});
+
+test("a foreign owner proposes NO correction — it is withheld, so it cannot recur", () => {
+  const r = root();
+  mkdirSync(join(r, "metadata"), { recursive: true });
+  writeFileSync(join(r, "metadata", "wt-owner.env"), 'PORT="3011"\n', "utf8");
+  const obs = observeReconciliation({
+    root: r,
+    processes: [{ pid: 4242, command: "next dev -p 3011", worktree: "wt-intruder" }],
+    gitWorktrees: [],
+  });
+  const plan = buildReconciliationPlan(obs, { nowMs: 1 });
+  assert.equal(plan.corrections.filter((c) => c.port === 3011).length, 0);
+  assert.ok(plan.withheld.some((w) => w.port === 3011));
+});
+
+test("a serving port whose owner cannot be proven is ambiguous, never adopted on a guess", () => {
+  const r = root();
+  mkdirSync(join(r, "metadata"), { recursive: true });
+  const obs = observeReconciliation({
+    root: r,
+    processes: [{ pid: 4242, command: "next dev -p 3011", worktree: null }],
+    gitWorktrees: [],
+  });
+  const p = obs.ports.find((x) => x.port === 3011);
+  assert.equal(p.verdict, "ambiguous");
+  const plan = buildReconciliationPlan(obs, { nowMs: 1 });
+  assert.equal(plan.corrections.filter((c) => c.port === 3011).length, 0);
+});
+
+test("a genuinely unowned live server is still adopted as discovered", () => {
+  const r = root();
+  mkdirSync(join(r, "metadata"), { recursive: true });
+  const obs = observeReconciliation({
+    root: r,
+    processes: [{ pid: 4242, command: "next dev -p 3011", worktree: "wt-nobody" }],
+    gitWorktrees: [],
+  });
+  const p = obs.ports.find((x) => x.port === 3011);
+  assert.equal(p.verdict, "unregistered_server");
+  const plan = buildReconciliationPlan(obs, { nowMs: 1 });
+  assert.ok(plan.corrections.some((c) => c.kind === "adopt_observed_server" && c.port === 3011));
 });

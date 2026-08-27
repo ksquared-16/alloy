@@ -11,7 +11,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { classifyWorktree } from "./resource-reconciliation.mjs";
+import { classifyPort, classifyWorktree } from "./resource-reconciliation.mjs";
 import { resolveWorktreeRegistration } from "./worktree-registration.mjs";
 
 /* ── Observation ──────────────────────────────────────────────────────────
@@ -62,14 +62,23 @@ export function observeReconciliation({
     const recorded = hasRuntimeClaim ? Number(readFileSync(pidFile, "utf8").trim()) : null;
     const alive = pidAlive(recorded);
     const serving = processes.find((p) => new RegExp(`-p\\s+${port}\\b`).test(p.command || "")) || null;
-    let verdict;
-    if (serving && owner && alive) verdict = "matched";
-    else if (serving && (!owner || !alive)) verdict = "unregistered_server";
-    // Only a runtime CLAIM that reality disproves is stale.
-    else if (!serving && owner && hasRuntimeClaim && !alive) verdict = "stale_record";
-    else if (!serving && owner) verdict = "registered_inactive";
-    else if (!serving && !owner) verdict = "free";
-    else verdict = "matched";
+    // Ask the classifier. This observer used to re-derive its own verdict ladder,
+    // which had no foreign_owner case at all — so a live server holding a port the
+    // registry assigns to SOMEONE ELSE was reported as unregistered_server and
+    // adopted forever. classifyPort's own comment warns against exactly that
+    // collapse. There is one owner of "what is true about this port".
+    const observedOwner = serving ? (serving.worktree || null) : null;
+    const { verdict } = classifyPort({
+      port,
+      recordedWorktree: owner,
+      recordedPid: recorded,
+      recordedPidAlive: alive,
+      hasRuntimeClaim,
+      listening: Boolean(serving),
+      observedPid: serving ? serving.pid : null,
+      observedOwnerWorktree: observedOwner,
+      ownershipProven: Boolean(observedOwner),
+    });
     ports.push({
       port, registered: owner, recorded_worktree: owner, recorded_pid: recorded, alive,
       has_runtime_claim: hasRuntimeClaim,
