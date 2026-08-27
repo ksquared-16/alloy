@@ -35,6 +35,11 @@
  */
 
 import { canonicalKeyFor } from "@/lib/pos/packet/packetFieldPlan";
+import {
+    participantFacingLabel,
+    sourceFieldNamesByFieldId,
+    type SourceFieldMapping,
+} from "@/lib/enrollment/participantRuntime/sourceLabelIdentity";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
@@ -51,6 +56,13 @@ export type CompiledControlKind =
 export type CompiledArtifactControl = {
     readonly field_id: string;
     readonly label: string;
+    /**
+     * The words Alloy may print for this control — null when the authored label is the source
+     * document's own widget name and therefore says nothing to a parent.
+     *
+     * A caller that prints `label` instead of this one has reintroduced the source-label leak.
+     */
+    readonly participant_label: string | null;
     readonly kind: CompiledControlKind;
     /** The authored control type, so an edit uses the same semantics the Form would. */
     readonly input_type: string;
@@ -110,16 +122,25 @@ function readOptions(field: unknown): readonly string[] {
  * Classify one control.
  *
  * Signature and acknowledgment are recognised STRUCTURALLY, not by reading their labels: a signature
- * is the authored signature type, and an acknowledgment is a required boolean with no canonical
- * binding — a yes/no that belongs to this document rather than to the family's shared record. A
+ * is the authored signature type, and an acknowledgment is a REQUIRED boolean with no canonical
+ * binding — an affirmation the participant must make before the document is complete. A
  * label-matching rule would break the moment a tenant wrote "I agree" instead.
+ *
+ * `required` is load-bearing, not decoration. Without it every optional tickbox on an imported
+ * document became an acknowledgment: the Oregon CIS's "check if the child had chickenpox" and all
+ * fourteen of the Exemption's vaccine and reason boxes were gathered under "please confirm you have
+ * reviewed the information above" — a legal affirmation manufactured out of a status question a
+ * parent is free to leave blank. An optional unbound boolean is this artifact's own work, and it is
+ * classified as exactly that.
  */
 function classify(field: FormField, sharedKey: string | null, value: unknown): CompiledControlKind {
     if (!formFieldCollectsValue(field)) return "display_content";
     if (field.type === "signature") return "signature";
 
     const bound = sharedKey != null;
-    if (!bound && field.type === "boolean") return "acknowledgment";
+    if (!bound && field.type === "boolean") {
+        return field.required === true ? "acknowledgment" : "unresolved_artifact_specific";
+    }
     if (bound && hasValue(value)) return "resolved_shared_value";
     return "unresolved_artifact_specific";
 }
@@ -141,8 +162,17 @@ function sharedKeyOf(field: FormField): string | null {
 export function compileParticipantArtifact(
     schema: Pick<FormSchemaV1, "fields"> & { sections?: unknown },
     values: Readonly<Record<string, unknown>>,
+    /**
+     * The version's `pdf_mapping_json`, when this artifact is source-fidelity.
+     *
+     * It is the record of which widget each control was imported from, which is the only reliable
+     * way to tell an authored question from the PDF's internal name for a box. Absent (a generated
+     * document) every label is authored by definition, so nothing is suppressed.
+     */
+    sourceMapping?: SourceFieldMapping,
 ): CompiledArtifact {
     const controls: CompiledArtifactControl[] = [];
+    const sourceNames = sourceFieldNamesByFieldId(sourceMapping);
 
     const walk = (fields: readonly FormField[]) => {
         for (const field of fields) {
@@ -155,6 +185,7 @@ export function compileParticipantArtifact(
             controls.push({
                 field_id: field.id,
                 label: field.label ?? "",
+                participant_label: participantFacingLabel(field.label, sourceNames[field.id]),
                 kind: classify(field, sharedKey, value),
                 input_type: field.type,
                 options: readOptions(field),

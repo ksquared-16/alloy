@@ -111,13 +111,45 @@ function withSharedPrefill(payload: FormPayload, packet: ResolvePacketMeta | nul
  *
  * Title and section titles are stripped deliberately: the review owns the document's presentation,
  * and on the certification form the authored section titles are OCR page markers ("Page 1") that
- * must not resurface as headings beside a single input. The FIELDS are untouched — type, options,
- * validation and signature semantics all remain the Form's.
+ * must not resurface as headings beside a single input. Type, options, validation and signature
+ * semantics are untouched — they all remain the Form's.
+ *
+ * LABELS pass through the participant seam, and this is the one place that happens for every
+ * rendered control. An imported Form's label is often the source PDF's internal widget name
+ * (`Var history`, `Prov Sp`, `Signature1`), which is not a question and must never be printed to a
+ * parent. `participant_label` is null for exactly those, and a control with no words of its own is
+ * captioned by the artifact rather than by the source system.
  */
-function reviewControlSubSchema(schema: FormSchemaV1, fieldIds: string[]): FormSchemaV1 {
+function reviewControlSubSchema(
+    schema: FormSchemaV1,
+    fieldIds: string[],
+    participantLabels?: ReadonlyMap<string, string | null>,
+): FormSchemaV1 {
     const sub = subSchemaForFieldsGrouped(schema, fieldIds, "");
-    return { ...sub, sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })) };
+    const relabel = (fields: FormField[]): FormField[] =>
+        fields.map((f) => {
+            if (f.type === "group") {
+                return { ...f, fields: relabel((f as { fields: FormField[] }).fields) } as FormField;
+            }
+            if (!participantLabels?.has(f.id)) return f;
+            const words = participantLabels.get(f.id) ?? null;
+            return { ...f, label: words ?? UNNAMED_SOURCE_CONTROL_LABEL } as FormField;
+        });
+    return {
+        ...sub,
+        fields: relabel(sub.fields as FormField[]),
+        sections: sub.sections.map((s) => ({ id: s.id, field_ids: s.field_ids })),
+    };
 }
+
+/**
+ * What a control is called when the source document named it and nobody else did.
+ *
+ * Not a guess at the question — a statement that the words live on the page in front of the parent.
+ * Reached only if such a control is ever rendered as a captioned input; on a source-fidelity
+ * artifact it is presented at its authored placement instead.
+ */
+const UNNAMED_SOURCE_CONTROL_LABEL = "Marked on your document";
 
 type ResolveOk = {
     ok: true;
@@ -266,6 +298,11 @@ export function FormEmbedClient({
         typedName?: string;
         drawnDataUrl?: string;
     } | null>(null);
+    /**
+     * The version's `pdf_mapping_json`, held so the compiled artifact can tell an authored label
+     * from the source document's own widget name. Null for a generated document.
+     */
+    const [sourceMapping, setSourceMapping] = useState<unknown>(null);
     /** The version's authored signature placement — where on the document signing happens. */
     const [signaturePlacement, setSignaturePlacement] = useState<{
         field_id: string;
@@ -352,6 +389,7 @@ export function FormEmbedClient({
             }
             setSchema(withoutAuthoringNotes(parsedSchema));
             setOriginalDocument(hasOriginalDocument(json.data.pdf_mapping_json));
+            setSourceMapping(json.data.pdf_mapping_json ?? null);
             setDocumentUnavailable(false);
             setDocumentRev(0);
             setReviewStep("handoff");
@@ -800,8 +838,22 @@ export function FormEmbedClient({
      */
     const enrollmentReview = enrollmentJourney && participantPhase === "artifact_review" && artifactRenderable;
     const compiled = enrollmentReview
-        ? compileParticipantArtifact(schema, (payload.values ?? {}) as Record<string, unknown>)
+        ? compileParticipantArtifact(
+              schema,
+              (payload.values ?? {}) as Record<string, unknown>,
+              sourceMapping as Parameters<typeof compileParticipantArtifact>[2],
+          )
         : null;
+    /**
+     * The words each control may be captioned with — the seam every rendered control passes through.
+     *
+     * Built from the compiled model rather than the schema so the source-provenance rule is applied
+     * in exactly one place, and a null in here is load-bearing: it means the source document named
+     * this box and Alloy has no question for it.
+     */
+    const participantLabels: ReadonlyMap<string, string | null> = new Map(
+        (compiled?.sections.flatMap((s) => s.controls) ?? []).map((c) => [c.field_id, c.participant_label]),
+    );
     /**
      * Acknowledgment, then signature — STRUCTURALLY, not by document order.
      *
@@ -1025,7 +1077,7 @@ export function FormEmbedClient({
                                 renderInput={(control) => (
                                     <div className="[&_header]:hidden">
                                         <FormEngineRenderer
-                                            schema={reviewControlSubSchema(schema, [control.field_id])}
+                                            schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                             payload={payload}
                                             onChange={(next) => {
                                                 setValidationErrors(null);
@@ -1054,7 +1106,7 @@ export function FormEmbedClient({
                                         Please confirm you&rsquo;ve reviewed the information above.
                                     </p>
                                     <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                        schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
                                             setValidationErrors(null);
@@ -1097,7 +1149,7 @@ export function FormEmbedClient({
                                 /* No authored placement on this version — the Forms control stands. */
                                 <div className="[&_header]:hidden">
                                     <FormEngineRenderer
-                                        schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                        schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                         payload={payload}
                                         onChange={(next) => {
                                             setValidationErrors(null);
@@ -1174,7 +1226,7 @@ export function FormEmbedClient({
                             // engine renders it, so type, options and validation stay authored.
                             <div className="[&_header]:hidden">
                                 <FormEngineRenderer
-                                    schema={reviewControlSubSchema(schema, [control.field_id])}
+                                    schema={reviewControlSubSchema(schema, [control.field_id], participantLabels)}
                                     payload={payload}
                                     onChange={(next) => {
                                         setValidationErrors(null);
@@ -1201,7 +1253,7 @@ export function FormEmbedClient({
                                 Please confirm you&rsquo;ve reviewed the information above.
                             </p>
                             <FormEngineRenderer
-                                schema={reviewControlSubSchema(schema, ackFieldIds)}
+                                schema={reviewControlSubSchema(schema, ackFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
                                     setValidationErrors(null);
@@ -1226,7 +1278,7 @@ export function FormEmbedClient({
                                 {participantSignaturePrompt()}
                             </p>
                             <FormEngineRenderer
-                                schema={reviewControlSubSchema(schema, signatureFieldIds)}
+                                schema={reviewControlSubSchema(schema, signatureFieldIds, participantLabels)}
                                 payload={payload}
                                 onChange={(next) => {
                                     setValidationErrors(null);
