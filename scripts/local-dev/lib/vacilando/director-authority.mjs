@@ -132,6 +132,23 @@ export const GATES = Object.freeze({
     (ev.pull_request_head_sha == null ? null : String(ev.pull_request_head_sha).toLowerCase() === String(ev.source_sha || "").toLowerCase()),
   no_unresolved_governance_findings: (ev) =>
     (ev.unresolved_governance_findings == null ? null : Number(ev.unresolved_governance_findings) === 0),
+  // ── Repository housekeeping ──────────────────────────────────────────────
+  pull_request_exists: (ev) => (ev.pull_request_exists == null ? null : ev.pull_request_exists === true),
+  pull_request_readable: (ev) => (ev.pull_request_readable == null ? null : ev.pull_request_readable === true),
+  pull_request_open: (ev) => (ev.pull_request_open == null ? null : ev.pull_request_open === true),
+  pull_request_not_merged: (ev) => (ev.pull_request_not_merged == null ? null : ev.pull_request_not_merged === true),
+  head_sha_matches: (ev) => (ev.head_sha_matches == null ? null : ev.head_sha_matches === true),
+  head_branch_matches: (ev) => (ev.head_branch_matches == null ? null : ev.head_branch_matches === true),
+  head_repository_matches: (ev) => (ev.head_repository_matches == null ? null : ev.head_repository_matches === true),
+  base_branch_matches: (ev) => (ev.base_branch_matches == null ? null : ev.base_branch_matches === true),
+  no_active_governed_merge: (ev) => (ev.active_governed_merge == null ? null : ev.active_governed_merge === false),
+  branch_exists_remotely: (ev) => (ev.branch_exists_remotely == null ? null : ev.branch_exists_remotely === true),
+  branch_never_protected_name: (ev) => (ev.branch_never_protected_name == null ? null : ev.branch_never_protected_name === true),
+  branch_not_protected: (ev) => (ev.branch_not_protected == null ? null : ev.branch_not_protected === true),
+  remote_head_matches: (ev) => (ev.remote_head_matches == null ? null : ev.remote_head_matches === true),
+  no_open_pull_request_depends: (ev) => (ev.no_open_pull_request_depends == null ? null : ev.no_open_pull_request_depends === true),
+  no_active_lane_reference: (ev) => (ev.active_lane_reference == null ? null : ev.active_lane_reference === false),
+  no_unique_work_lost: (ev) => (ev.unique_work_at_risk == null ? null : ev.unique_work_at_risk === false),
   certification_suite_passed: (ev) => (ev.certification_suite_passed == null ? null : ev.certification_suite_passed === true),
 });
 
@@ -182,6 +199,41 @@ export const DELEGATED_POLICIES_V1 = Object.freeze([
     gates: Object.freeze([
       "managed_repository", "managed_agent_branch", "full_exact_sha",
       "base_is_staging", "branch_pushed_to_remote",
+      "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_repository_housekeeping_v1",
+    label: "Routine repository housekeeping — close disposable pull request",
+    action_key: "repository.close_pull_request",
+    environments: Object.freeze(["staging"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // Closing an unmerged PR changes no branch and no environment, and a PR
+    // can be reopened — which is why this is routine_reversible. What it must
+    // never do is close something that is no longer the thing that was
+    // approved, so identity is gated field by field against real GitHub state.
+    gates: Object.freeze([
+      "managed_repository", "pull_request_readable", "pull_request_exists",
+      "pull_request_open", "pull_request_not_merged",
+      "head_sha_matches", "head_branch_matches", "head_repository_matches", "base_branch_matches",
+      "no_active_governed_merge", "no_governance_exception", "no_operator_hold",
+    ]),
+  }),
+  Object.freeze({
+    policy_id: "routine_repository_housekeeping_v1",
+    label: "Routine repository housekeeping — delete disposable remote branch",
+    action_key: "repository.delete_remote_branch",
+    environments: Object.freeze(["staging"]),
+    consequence_class: CONSEQUENCE_CLASSES.ROUTINE_REVERSIBLE,
+    enabled: true,
+    // Deleting a branch is recoverable only while its commits are reachable,
+    // so "no unique work at risk" is a REQUIRED measured gate rather than an
+    // assumption, and age is never evidence of disposability.
+    gates: Object.freeze([
+      "managed_repository", "branch_exists_remotely", "branch_never_protected_name",
+      "branch_not_protected", "not_protected_branch_write", "remote_head_matches", "full_exact_sha",
+      "no_open_pull_request_depends", "no_active_lane_reference", "no_unique_work_lost",
       "no_governance_exception", "no_operator_hold",
     ]),
   }),

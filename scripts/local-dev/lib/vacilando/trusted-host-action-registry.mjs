@@ -14,6 +14,10 @@ import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
 import { validateAssignQaAccessInputs } from "./qa-access-assign-action.mjs";
+import {
+  validateClosePullRequestInputs,
+  validateDeleteRemoteBranchInputs,
+} from "./trusted-host-repository-housekeeping.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -24,6 +28,8 @@ export const ACTION_TYPES = Object.freeze({
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
   ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
+  REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
+  REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -282,6 +288,51 @@ function definePromotionOpenPr() {
   };
 }
 
+
+function defineRepositoryClosePullRequest() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST,
+    version: 1,
+    title: "Close a disposable pull request without merging",
+    requiredCapability: "trusted_host.repository.close_pull_request",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "pullRequestNumber", "expectedHeadBranch", "expectedHeadSha"],
+    },
+    outputSchema: { pullRequestNumber: "number", state: "string", merged: "boolean" },
+    evidenceSchema: ["repository", "pull_request", "expected_head_sha", "state_before", "state_after", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateClosePullRequestInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function defineRepositoryDeleteRemoteBranch() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH,
+    version: 1,
+    title: "Delete a disposable remote branch",
+    requiredCapability: "trusted_host.repository.delete_remote_branch",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "branch", "expectedHeadSha"],
+    },
+    outputSchema: { branch: "string", deleted: "boolean" },
+    evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_head_sha", "dependents", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateDeleteRemoteBranchInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -392,6 +443,8 @@ const REGISTRY = new Map([
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 

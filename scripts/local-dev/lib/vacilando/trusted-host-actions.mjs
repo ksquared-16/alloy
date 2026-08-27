@@ -49,6 +49,7 @@ import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.m
 import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
+import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -510,6 +511,12 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
     return executeAssignQaAccessTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return executeClosePullRequestTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1280,6 +1287,79 @@ export function executeOpenPrTrustedHostAction(action, { actor = "director", now
     return failTrustedAction(action, out?.code || "open_pr_failed", out?.detail || "Opening the pull request failed", { nowMs });
   }
   return completeTrustedAction(action, publicOpenPrResult(out), { nowMs });
+}
+
+
+export function executeClosePullRequestTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = closePullRequest(action.inputs, {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) return failTrustedAction(action, out?.code || "close_pr_failed", out?.detail || "Closing the pull request failed", { nowMs });
+  return completeTrustedAction(action, {
+    repository: out.repository, pullRequestNumber: out.pullRequestNumber,
+    state: out.state, merged: out.merged,
+    state_before: out.state_before, state_after: out.state_after, credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = deleteRemoteBranch(action.inputs, {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) return failTrustedAction(action, out?.code || "delete_branch_failed", out?.detail || "Deleting the remote branch failed", { nowMs });
+  return completeTrustedAction(action, {
+    repository: out.repository, branch: out.branch, deleted: out.deleted,
+    deleted_head_sha: out.deleted_head_sha, dependents_at_deletion: out.dependents_at_deletion,
+    credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function fulfillClosePullRequestForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillDeleteRemoteBranchForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillRepositoryPushForMission(missionId, {

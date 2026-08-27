@@ -44,6 +44,8 @@ import {
 } from "./trusted-host-authz.mjs";
 import {
   fulfillRepositoryPushForMission,
+  fulfillClosePullRequestForMission,
+  fulfillDeleteRemoteBranchForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
   fulfillAssignQaAccessForMission,
@@ -678,6 +680,16 @@ export function operatorLabel(rec) {
   if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
     const slot = operatorSlotHint(rec);
     return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    if (work && n) return `Close ${work} PR #${n}`;
+    return n ? `Close pull request #${n}` : "Close a pull request";
+  }
+  if (key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    const b = inputs.branch || inputs.branchName || "";
+    if (work) return `Delete ${work} branch`;
+    return b ? `Delete remote branch ${b}` : "Delete a remote branch";
   }
   if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
     if (work) return `Read-only census — ${work}`;
@@ -1447,6 +1459,30 @@ function requestTitle(rec) {
   if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
     const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
     return b ? `Push ${b} to the remote` : "Push a reviewed branch";
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return fulfillDeleteRemoteBranchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
   }
   if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
     const b = rec.inputs?.head_branch || rec.inputs?.headBranch || rec.inputs?.branch || "";

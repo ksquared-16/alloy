@@ -66,6 +66,7 @@ SUITES=(
   "development-exact-authorization.test.mjs"
   "development-director-execution-bridge.test.mjs"
   "development-governed-run-wait.test.mjs"
+  "development-repository-housekeeping.test.mjs"
 )
 
 PASS=0
