@@ -371,9 +371,23 @@ describe("the conversation is operable without a mouse", () => {
 // ---------------------------------------------------------------------------
 
 describe("presentation changed; authority did not", () => {
-    it("the browser still sends words and nothing else", () => {
+    it("the browser still sends words, a value, or a bare intent — and nothing else", () => {
+        /*
+         * `decline` joined `text` and `value` when leaving a question blank stopped being a value.
+         *
+         * It is admitted here deliberately and on one condition: it is a BARE FLAG. It names no
+         * field, no need, no target and no words — the server decides whether the current turn may
+         * be declined at all. That is the same authority boundary `text` and `value` sit behind,
+         * which is why widening the vocabulary does not widen what the browser can claim.
+         */
         const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-z_]+)/g)].map((m) => m[1]);
-        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value"]));
+        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value", "decline"]));
+        // The flag is sent as a literal true, never as a key, an id or a label. Counted rather
+        // than matched with a lookahead, which backtracks past the space and passes vacuously.
+        const declineColons = (CARD.match(/\bdecline:/g) ?? []).length;
+        const declineTrue = (CARD.match(/\bdecline: true\b/g) ?? []).length;
+        expect(declineColons).toBeGreaterThan(0);
+        expect(declineTrue).toBe(declineColons);
     });
 
     it("no new participant surface names an internal identifier", () => {
