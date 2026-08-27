@@ -168,6 +168,7 @@ export function collectDirectorEvidence(rec, {
     try { gaPath2 = governedActionStorePath(stateRoot); } catch { gaPath2 = null; }
     evidence.active_lane_reference = branchIsReferenced({
       branch: br, repository, lanesPath, runsPath, governedActionsPath: gaPath2,
+      excludeGovernedActionId: rec?.request_id || null,
     });
     // Unique work is only "not at risk" when the branch head is reachable from
     // the canonical branch. Unreachable or unmeasurable stays null.
