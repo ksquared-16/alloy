@@ -173,6 +173,31 @@ await test("10 — the fingerprint binds CONTENT, not the request id", async () 
   assert.equal(G.governedContentFingerprint({ ...base, target: "STAGING " }), G.governedContentFingerprint(base));
 });
 
+await test("10b — content in an UNLISTED input field still binds the decision", async () => {
+  const G = await import("../lib/vacilando/governed-action-request.mjs");
+  // A census IS its query. An allowlist of promotion-shaped fields would give
+  // two entirely different censuses the same fingerprint, so an operator who
+  // approved one could have the other executed — the exact swap the
+  // fingerprint exists to stop.
+  const base = {
+    action_key: "database.read_census", target: "staging",
+    inputs: { databaseTarget: "staging", queryArtifactPath: "a.sql", expectedQueryHash: "h1" },
+  };
+  const swapped = { ...base, inputs: { ...base.inputs, queryArtifactPath: "b.sql", expectedQueryHash: "h2" } };
+  assert.notEqual(G.governedContentFingerprint(base), G.governedContentFingerprint(swapped));
+  assert.ok(G.rejectStaleDecision({ ...swapped, status: "awaiting_operator" }, G.governedContentFingerprint(base)));
+  // Serialisation order is not content.
+  const reordered = { ...base, inputs: { expectedQueryHash: "h1", queryArtifactPath: "a.sql", databaseTarget: "staging" } };
+  assert.equal(G.governedContentFingerprint(base), G.governedContentFingerprint(reordered));
+  // Nested shapes sort deeply rather than by chance.
+  const n1 = { ...base, inputs: { ...base.inputs, opts: { b: 2, a: 1 } } };
+  const n2 = { ...base, inputs: { ...base.inputs, opts: { a: 1, b: 2 } } };
+  assert.equal(G.governedContentFingerprint(n1), G.governedContentFingerprint(n2));
+  // ...but a nested VALUE change is still a content change.
+  const n3 = { ...base, inputs: { ...base.inputs, opts: { a: 1, b: 3 } } };
+  assert.notEqual(G.governedContentFingerprint(n1), G.governedContentFingerprint(n3));
+});
+
 await test("11 — a stale decision is REFUSED server-side, and returns the current request", async () => {
   const G = await import("../lib/vacilando/governed-action-request.mjs");
   const rec = {

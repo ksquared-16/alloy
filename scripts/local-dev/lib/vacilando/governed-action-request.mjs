@@ -549,6 +549,21 @@ export function governedContentFingerprint(req) {
   const migrations = Array.isArray(inputs.migrations)
     ? inputs.migrations.map((m) => (typeof m === "string" ? m : `${m?.version || ""}:${m?.path || m?.migration_path || ""}`)).sort()
     : [];
+  // Fields that get a normalisation rule of their own. Everything ELSE in
+  // inputs still contributes verbatim below — an allowlist here would mean
+  // that for an action whose content lives in an unlisted field (a census IS
+  // its query) the fingerprint could not tell two different requests apart,
+  // and the protection would be theatre for exactly that action.
+  const normalised = new Set([
+    "environment", "repository", "branch", "headBranch", "head_branch",
+    "expectedHeadSha", "expected_sha", "expectedSha",
+    "pullRequestNumber", "pull_request_number", "migrations",
+  ]);
+  const rest = {};
+  for (const key of Object.keys(inputs).sort()) {
+    if (normalised.has(key)) continue;
+    rest[key] = canonicalForFingerprint(inputs[key]);
+  }
   const canonical = JSON.stringify({
     action_key: req.action_key || null,
     // Normalised so `cert` and `certification` cannot read as different
@@ -559,8 +574,24 @@ export function governedContentFingerprint(req) {
     source_sha: String(inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "").toLowerCase() || null,
     pull_request: inputs.pullRequestNumber ?? inputs.pull_request_number ?? null,
     migrations,
+    rest,
   });
   return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 32);
+}
+
+/**
+ * Deep key-sorted value, so an object that serialises in a different key order
+ * is not mistaken for different content. Array order is PRESERVED — for
+ * anything but the migration set, order is meaning.
+ */
+function canonicalForFingerprint(value) {
+  if (Array.isArray(value)) return value.map(canonicalForFingerprint);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = canonicalForFingerprint(value[k]);
+    return out;
+  }
+  return value ?? null;
 }
 
 /**
