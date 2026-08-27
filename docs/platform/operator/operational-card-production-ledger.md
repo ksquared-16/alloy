@@ -2044,3 +2044,74 @@ Unchanged from §30 and gated on the same single step: `H1 applied · real facts
 participant switching · positive health.view proof · Surface placement · browser certification ·
 0 page errors` are all **not reached**, because every one needs the schema. Health & Safety is
 **not** production-ready and the card is on **no** Surface. Safety Signals remain out of scope.
+
+---
+
+## 32. Health foundation promoted, applied, and proven (2026-08-26)
+
+### 32.1 The real blocker was content, not authority
+
+Two governed migration requests had never taken effect. The reason was not routing or credentials:
+**the migrations existed only on a feature branch and in no promoted SHA**, so nothing could bind to
+them.
+
+### 32.2 Promotion, and the branch that must not be merged
+
+`agent/claude/6-surfaces-faacca` is **102 commits behind staging**. Merging it as-is would have
+**deleted 64 `scripts/local-dev` toolkit files, reverted 35 more, and deleted 4 `certification/`
+census artifacts** — the "right repository, wrong base" hazard, arriving exactly where the toolkit
+had been swept onto an Alloy branch before.
+
+So the promotion is a branch cut from **current** `origin/staging` carrying **exactly three files**,
+byte-identical (sha256 verified on both sides):
+
+```text
+20260826120000_h1_person_health_facts.sql          0510117…82afd1
+20260826121000_m1_health_grain_correction.sql      53e910d…4f6948
+20260826122000_dh6_health_visibility_permission.sql 65c1ef7…9fd4bd5
+```
+
+PR **#548** → squash-merged → promoted staging SHA **`e55bc152849e6f32d702eaed0ba31210efc29f4d`**,
+where all three hashes still match.
+
+**The one failing check was not mine.** Supabase Preview reported `cancelled` —
+*"Maximum number of concurrent branches reached"* — a preview quota limit that never attempted the
+SQL. It is not a required check; the two that are (Trust Adoption, Trust DB) both passed. Recent PRs
+show `skipping` there because they touch no migrations.
+
+### 32.3 Applied, then verified by real read
+
+| §1 assertion | Result |
+|---|---|
+| `person_health_facts` exists | **yes** — real read, 0 rows |
+| M1 grain | `allergy_notes` → `child` / `child.allergies`; `medication_flag` deprecated; **0** definitions left at enrollment grain |
+| catalogue width | **57 → 59** |
+| `health.view`, `health.manage` | both defined |
+| admin | holds **both** |
+| **ops** | holds **none** |
+
+### 32.4 D-H6 closed — both halves
+
+* **Negative** (previous run): admin/ops operator with full route admission → `403 permission_denied`.
+* **Positive** (now): the same operator, once granted → `200` with a composed VM.
+
+Route admission was never sufficient; the grant is what changed.
+
+### 32.5 Real Health truth, created through H4
+
+The fixture wrote nothing directly. Through `healthFactService`:
+
+```text
+Certa   Peanut · severe · "Administer EpiPen Jr and call 911 immediately."
+        EpiPen Jr — treats → Peanut          (the pairing resolves)
+Certb   Mild intermittent asthma             (no critical region at all)
+```
+
+The two children render **differently**, which is what makes participant switching mean something. A
+repeated ensure returned `created 0 · reused 3 · refusals 0`.
+
+### 32.6 Still open
+
+Browser certification in the Focus Panel (I) and Surface placement (J). The card is on **no**
+Surface, so nothing renders it to an operator yet — registration is not placement. Safety Signals
+remain out of scope.
