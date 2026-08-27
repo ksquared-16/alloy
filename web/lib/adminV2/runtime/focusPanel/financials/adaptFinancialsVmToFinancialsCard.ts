@@ -32,15 +32,29 @@
 
 import type {
     FinancialsCardVM,
+    FinancialsChargeTemplateOption,
     FinancialsLedgerRow,
     FinancialsPastDue,
     FinancialsReconciliation,
 } from "@/lib/adminV2/runtime/focusPanel/financials/buildFinancialsCardVM";
-import type { FinancialsEvidence, FinancialsPayer } from "@/lib/cardLab/cardLabTypes";
+import type {
+    AddChargeSpecimen,
+    ChargeTemplateOption,
+    FinancialsEvidence,
+    FinancialsLedgerPeriod,
+    FinancialsPayer,
+} from "@/lib/cardLab/cardLabTypes";
 
 /** Reductions and funding are stored as their own categories, not as negative tuition. */
 const REDUCTION_CATEGORIES = new Set(["discount", "credit", "adjustment"]);
 const FUNDING_CATEGORIES = new Set(["subsidy_offset"]);
+
+/** "2026-10-01" → "Oct 1, 2026". Null rather than a guess when the value is not a date. */
+function longDate(ymd: string): string | null {
+    const d = new Date(`${ymd}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
 
 function money(cents: number, currency: string): string {
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
@@ -188,5 +202,171 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 `Payments received · ${money(reconciliation.paymentsCents, currency)}`
             :   `No payments recorded this period`,
         upcoming: [],
+    };
+}
+
+/**
+ * THE LEDGER, grouped by billing period — the detail card's subject.
+ *
+ * The summary states the period; the detail states the rows behind it. Both read the SAME
+ * `FinancialsCardVM`, so a number cannot differ between them: `ledgerPeriods` is the server's own
+ * grouping, already placed by `billable_on`, and this only renames and formats.
+ *
+ * Two things are deliberately absent.
+ *
+ * NO RUNNING BALANCE. `ledger_transactions` provides no authoritative running balance, and
+ * computing one here would invent an ordering the backend does not guarantee. Two rows on the same
+ * date have no canonical sequence, so any running total would be one of several equally defensible
+ * answers presented as the answer.
+ *
+ * NO STORED KEYS ON SCREEN. `categoryLabel` and `glAccountName` come from configuration
+ * (`chargeCategoryLabel`, `gl_account_mappings`); a row whose GL is genuinely unmapped renders null
+ * rather than a raw key, because "unmapped" is a real state an operator needs to see.
+ */
+export function adaptFinancialsVmToLedgerPeriods(input: {
+    vm: FinancialsCardVM;
+    currency: string;
+    /** Only the current period opens; prior periods are closed until asked for. */
+    openPeriodKey: string | null;
+}): FinancialsLedgerPeriod[] {
+    const { vm, currency } = input;
+    return vm.ledgerPeriods.map((group) => ({
+        label: group.period.label,
+        summary:
+            group.totalCents === 0 ?
+                "Closed · $0"
+            :   `Balance ${money(group.totalCents, currency)}`,
+        open: group.period.key === input.openPeriodKey,
+        entries: group.rows.map((row) => ({
+            when: shortDate(row.date) ?? "—",
+            // The account, not a child, when a household charge has no participant subject.
+            subject: row.subjectName ?? "Household",
+            type: row.categoryKey,
+            glCode:
+                row.glCode ?
+                    row.glAccountName ? `${row.glCode} · ${row.glAccountName}`
+                    :   row.glCode
+                :   null,
+            label: row.description ?? row.categoryLabel,
+            amount: money(row.amountCents, currency),
+            kind: row.amountCents < 0 ? "credit" : "charge",
+            status: row.lifecycleStatus,
+            source: row.categoryLabel,
+        })),
+    }));
+}
+
+/**
+ * A configured charge template → the approved command card's option.
+ *
+ * Everything here comes from `financial_charge_templates` via the read model. The card hardcodes no
+ * category, no dating rule and no responsibility; it renders what configuration declares, in
+ * configuration's own labels.
+ *
+ * Some of the template's declared behaviour is not projected by the read model yet
+ * (`allowsDateOverride`, `payerTargeting`, `requiresSubject`, `requiresNote`). Those are stated
+ * conservatively rather than optimistically: dates are NOT overridable and a payer is NOT
+ * targetable unless the platform says so, because the failure of guessing wrong is an operator
+ * being offered a control the domain will refuse.
+ */
+export function adaptChargeTemplateOption(
+    tpl: FinancialsChargeTemplateOption,
+    currency: string,
+): ChargeTemplateOption {
+    return {
+        key: tpl.id,
+        label: tpl.label,
+        amountStrategy:
+            tpl.amountStrategy === "fixed" ? "fixed"
+            : tpl.amountStrategy === "rate_derived" ? "rate_derived"
+            :   "manual",
+        amount: tpl.amountCents != null ? money(tpl.amountCents, tpl.currencyCode || currency) : null,
+        occursOn: tpl.occursOnStrategy,
+        billableOn: tpl.billableOnStrategy,
+        // `responsibility` is a template column the read model does not project; the household is
+        // the only responsibility Alloy can currently attribute a childcare charge to.
+        responsibility: "Household",
+        allowsDateOverride: false,
+        payerTargeting: "default_split",
+        requiresSubject: true,
+        requiresNote: tpl.amountStrategy !== "fixed",
+    };
+}
+
+/**
+ * The command card's display values, from the DOMAIN's own preview.
+ *
+ * `previewSummary` and `previewChanges` are what `mode: "preview"` returned — the same resolver the
+ * write uses, so what the operator confirms is what gets persisted. Nothing about the charge is
+ * computed here; this only places the domain's answer into the approved layout.
+ */
+export function adaptAddChargeSpecimen(input: {
+    template: ChargeTemplateOption;
+    subjectLabel: string;
+    /** Operator-entered amount, for a template whose strategy leaves it open. */
+    amount: string;
+    note: string;
+    period: string;
+    balanceCents: number;
+    currency: string;
+    /**
+     * The DOMAIN's preview: `mode: "preview"` runs the same resolver the write uses, and returns
+     * the resolved amount plus the dating it applied ("Occurs …", "Billable …", "Applies to …").
+     */
+    previewSummary: string | null;
+    previewChanges: readonly string[];
+}): AddChargeSpecimen {
+    /*
+     * The domain states its resolved dating as "Occurs 2026-09-18" / "Billable 2026-10-01". The
+     * value is canonical; the FORMAT is storage's, so it is rendered as a date an operator reads
+     * rather than as the ISO string the resolver happened to return.
+     */
+    const line = (prefix: string): string | null => {
+        const raw =
+            input.previewChanges.find((c) => c.toLowerCase().startsWith(prefix))?.slice(prefix.length).trim()
+            ?? null;
+        if (!raw) return null;
+        const iso = raw.match(/^\d{4}-\d{2}-\d{2}$/) ? raw : null;
+        return iso ? (longDate(iso) ?? raw) : raw;
+    };
+
+    /*
+     * The resolved amount, read back out of the preview summary the domain composed
+     * (`\`${templateKey} ${amount}\``). Parsed rather than recomputed: the resolver may price a
+     * rate-derived template in a way this side cannot reproduce, and a second answer here would be
+     * exactly the drift the adapter exists to prevent.
+     */
+    const resolvedAmount = input.previewSummary?.match(/[$][\d,]+\.\d{2}/)?.[0] ?? null;
+    const amountCents =
+        resolvedAmount ? Math.round(Number(resolvedAmount.replace(/[$,]/g, "")) * 100) : null;
+
+    return {
+        template: input.template,
+        subject: input.subjectLabel,
+        amount: resolvedAmount ?? input.amount,
+        /*
+         * Dating comes from the preview, in the domain's own words — never the template's raw
+         * strategy key. "event_date" is a stored value, and printing it on an operator card is the
+         * labels-not-keys rule broken in the one place an operator is about to commit money.
+         */
+        serviceDate: line("occurs") ?? "Resolved at commit",
+        period: line("billable") ?? input.period,
+        due: "Configured policy",
+        overridden: null,
+        chargeTo: input.template.responsibility,
+        // Allocation renders ONLY when the split is authoritative. Alloy has no allocation store.
+        allocation: null,
+        note: input.note,
+        previewBefore: money(input.balanceCents, input.currency),
+        /*
+         * Before + the RESOLVED charge. Both numbers are canonical — the balance from the read
+         * model, the amount from the domain's own preview — so this is the addition the card is
+         * asking the operator to authorise, not an estimate of it. With no resolved amount there is
+         * no after to state, and the balance simply does not move on screen.
+         */
+        previewAfter:
+            amountCents != null ?
+                money(input.balanceCents + amountCents, input.currency)
+            :   money(input.balanceCents, input.currency),
     };
 }

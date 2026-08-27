@@ -83,6 +83,23 @@ describe("operational cards shared stylesheet", () => {
         expect(conflicts).toEqual([]);
     });
 
+    /*
+     * A TRUNCATED BLOCK TAKES THE WHOLE APPLICATION DOWN, not just one card.
+     *
+     * The second extraction overshot its line range and copied a lab-only rule in half, leaving an
+     * unclosed brace. `alloyOsRuntime.css` @imports this file, so the whole adminV2 stylesheet
+     * failed to parse and every workspace route returned 500 — from a card stylesheet.
+     *
+     * Balanced braces is not a style rule; it is the difference between a broken card and a broken
+     * product. Cheap to assert, and it catches every copy-a-range-wrong mistake at once.
+     */
+    it("is syntactically whole — every block closed", () => {
+        const css = readFileSync(SHARED_CSS, "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+        const opens = (css.match(/\{/g) ?? []).length;
+        const closes = (css.match(/\}/g) ?? []).length;
+        expect({ opens, closes }).toEqual({ opens, closes: opens });
+    });
+
     it("keeps the progression band horizontal, as the approved specimen renders it", () => {
         const shared = declarationsBySelector(readFileSync(SHARED_CSS, "utf8"));
         const flows = [...shared.entries()]

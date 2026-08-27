@@ -14,10 +14,10 @@ import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContex
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
 
 import AttendanceCard from "@/components/operationalCards/AttendanceCard";
-import AddChargeCommand from "@/components/cardLab/AddChargeCommand";
+import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
 import FinancialsCard from "@/components/operationalCards/FinancialsCard";
-import FinancialsDetailCard from "@/components/cardLab/FinancialsDetailCard";
-import HealthDetailCard from "@/components/cardLab/HealthDetailCard";
+import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
+import HealthDetailCard from "@/components/operationalCards/HealthDetailCard";
 import ProcessCard from "@/components/operationalCards/ProcessCard";
 import SafetySignals from "@/components/cardLab/SafetySignals";
 import CareTeamCard from "@/components/cardLab/CareTeamCard";

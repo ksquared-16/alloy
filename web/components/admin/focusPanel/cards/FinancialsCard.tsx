@@ -4,7 +4,18 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedFinancialsCard from "@/components/operationalCards/FinancialsCard";
-import { adaptFinancialsVmToFinancialsCard } from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
+import AddChargeCommand from "@/components/operationalCards/AddChargeCommand";
+import FinancialsDetailCard from "@/components/operationalCards/FinancialsDetailCard";
+import {
+    useDismissSignal,
+    useReportPerspective,
+} from "@/lib/adminV2/runtime/focusPanel/useFocusPanelCoordination";
+import {
+    adaptAddChargeSpecimen,
+    adaptChargeTemplateOption,
+    adaptFinancialsVmToFinancialsCard,
+    adaptFinancialsVmToLedgerPeriods,
+} from "@/lib/adminV2/runtime/focusPanel/financials/adaptFinancialsVmToFinancialsCard";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -53,10 +64,22 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
     const [vm, setVm] = useState<FinancialsCardVM | null>(null);
     const [loading, setLoading] = useState(false);
-    const [expanded, setExpanded] = useState(false);
+    /*
+     * ONE overlay at a time, and the Focus Panel's OWN depth layer renders it.
+     *
+     * `useReportPerspective(..., "focused")` is what raises this card into the centered, scrimmed
+     * position the approved detail and command cards are drawn in — the same machinery Scheduling
+     * already uses. Neither of these is a new page or a second modal system, and the scrim click /
+     * ESC path comes back through `useDismissSignal` rather than a close button this card owns.
+     */
+    const [overlay, setOverlay] = useState<null | "detail" | "add_charge">(null);
+    const expanded = overlay === "detail";
     const [subjectFilter, setSubjectFilter] = useState<string>("all");
     const [running, setRunning] = useState(false);
     const [commandError, setCommandError] = useState<string | null>(null);
+    const [chargeAmount, setChargeAmount] = useState("");
+    const [chargeNote, setChargeNote] = useState("");
+    const [chargeEventDate, setChargeEventDate] = useState("");
     const [pending, setPending] = useState<{
         templateId: string;
         label: string;
@@ -148,6 +171,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             template_id: templateId,
                             child_label: vm?.subjects.find((s) => s.customerMemberId === chargeTarget)
                                 ?.displayName,
+                            // An `event_date` template is REFUSED without one — the preview returns
+                            // `missing_event_date` — so the operator's date has to travel with the
+                            // preview, not only with the commit.
+                            ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
+                            ...(chargeNote ? { note: chargeNote } : {}),
                         },
                     }),
                 });
@@ -174,7 +202,7 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 setRunning(false);
             }
         },
-        [chargeTarget, running, vm],
+        [chargeTarget, chargeEventDate, chargeNote, running, vm],
     );
 
     const commit = useCallback(async () => {
@@ -203,6 +231,12 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                 return;
             }
             setPending(null);
+            // The command card closes on success only. A refusal keeps it open with the domain's
+            // own message, so the operator can correct the charge rather than re-open and retype it.
+            setOverlay(null);
+            setChargeAmount("");
+            setChargeNote("");
+            setChargeEventDate("");
         } catch {
             setCommandError("The charge could not be sent.");
         } finally {
@@ -271,6 +305,136 @@ export default function FinancialsCard({ model, context, receded = false, coordi
      * The EXPANDED path below is untouched: the ledger is the expanded representation and is not
      * part of the approved summary specimen.
      */
+    /*
+     * The command card opens on the DOMAIN's answer, not on the template's raw configuration.
+     *
+     * Without this the card showed `event_date` as its service date — a stored strategy key on the
+     * one screen where an operator is about to commit money. Previewing on open (and whenever the
+     * template or subject changes) means every date, the amount and the subject on screen are what
+     * the resolver actually produced.
+     */
+    useEffect(() => {
+        if (overlay !== "add_charge" || !vm) return;
+        const first = pending?.templateId ?? vm.chargeTemplates[0]?.id ?? null;
+        if (!first) return;
+        void preview(first, vm.chargeTemplates.find((t) => t.id === first)?.label ?? "");
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-previews on open, subject and date change
+    }, [overlay, subjectFilter, chargeEventDate]);
+
+    // Elevation reported from RENDER-adjacent state, so the depth layer and this card agree on the
+    // same frame. A card that reported after paint would flash its base surface first.
+    useReportPerspective(coordination, "financials", overlay ? "focused" : "base");
+    useDismissSignal(coordination, "financials", () => {
+        setOverlay(null);
+        setPending(null);
+        setCommandError(null);
+    });
+
+    /*
+     * ── ADD CHARGE — the approved command card, over the domain's own preview ──
+     *
+     * The template catalog, the preview and the write are all unchanged: `mode: "preview"` runs the
+     * same resolver the write uses, so what the operator confirms is what gets persisted. Only the
+     * PRESENTATION moves — from a generic list-and-confirm into the approved command card.
+     */
+    if (overlay === "add_charge" && vm && reconciliation) {
+        const templates = vm.chargeTemplates.map((tpl) => adaptChargeTemplateOption(tpl, currency));
+        const selected =
+            templates.find((tpl) => tpl.key === pending?.templateId) ?? templates[0] ?? null;
+        const subjectLabel =
+            subjectFilter === "all" ?
+                "Household"
+            :   (vm.subjects.find((sub) => sub.customerMemberId === subjectFilter)?.displayName
+                ?? "Household");
+
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="add_charge">
+                {selected ? (
+                    <AddChargeCommand
+                        templates={templates}
+                        specimen={adaptAddChargeSpecimen({
+                            template: selected,
+                            subjectLabel,
+                            amount: chargeAmount || selected.amount || "—",
+                            note: chargeNote,
+                            period: vm.period.label,
+                            balanceCents: reconciliation.balanceCents,
+                            currency,
+                            previewSummary: pending?.summary ?? null,
+                            previewChanges: pending?.changes ?? [],
+                        })}
+                        controls={{
+                            selectedTemplateId: selected.key,
+                            onSelectTemplate: (id) => {
+                                const tpl = templates.find((x) => x.key === id);
+                                void preview(id, tpl?.label ?? "");
+                            },
+                            subjects: [
+                                { id: "all", label: "Household" },
+                                ...vm.subjects.map((sub) => ({
+                                    id: sub.customerMemberId,
+                                    label: sub.displayName,
+                                })),
+                            ],
+                            selectedSubjectId: subjectFilter,
+                            onSelectSubject: setSubjectFilter,
+                            amount: chargeAmount,
+                            onAmount: setChargeAmount,
+                            note: chargeNote,
+                            onNote: setChargeNote,
+                            eventDate: chargeEventDate,
+                            onEventDate: setChargeEventDate,
+                            onSubmit: () => void commit(),
+                            onCancel: () => {
+                                setOverlay(null);
+                                setPending(null);
+                                setCommandError(null);
+                            },
+                            running,
+                            error: commandError,
+                        }}
+                    />
+                ) : (
+                    // A configured catalog with nothing in it is a configuration state, not an error.
+                    <p className="alloy-os-financials__empty">No charge types are configured.</p>
+                )}
+            </div>
+        );
+    }
+
+    /*
+     * ── DETAILS — the approved ledger-first detail, in the same depth layer ──
+     *
+     * Same read model as the summary, so a number cannot differ between them. The ledger is grouped
+     * by billing period with prior periods closed, and carries no running balance: `ledger_transactions`
+     * guarantees no ordering, and computing one would present one defensible answer as the answer.
+     */
+    if (overlay === "detail" && vm && reconciliation) {
+        return (
+            <div className="alloy-os-financials" data-financials-card="true" data-financials-overlay="detail">
+                <FinancialsDetailCard
+                    evidence={adaptFinancialsVmToFinancialsCard({
+                        vm,
+                        reconciliation,
+                        pastDue,
+                        rows: vm.rows.filter(
+                            (r) =>
+                                r.periodKey === vm.period.key
+                                && (subjectFilter === "all" || r.subjectMemberId === subjectFilter),
+                        ),
+                        currency,
+                    })}
+                    periods={adaptFinancialsVmToLedgerPeriods({
+                        vm,
+                        currency,
+                        openPeriodKey: vm.period.key,
+                    })}
+                    activeSubject={subjectFilter === "all" ? "All" : subjectFilter}
+                />
+            </div>
+        );
+    }
+
     if (!expanded && vm && reconciliation && !vm.unavailableReason) {
         const periodRows = vm.rows.filter(
             (r) =>
@@ -292,8 +456,8 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                         currency,
                     })}
                     span={model.span === 1 ? 1 : "row"}
-                    onDetails={() => setExpanded(true)}
-                    onAddCharge={() => setSubjectFilter(subjectFilter)}
+                    onDetails={() => setOverlay("detail")}
+                    onAddCharge={() => setOverlay("add_charge")}
                 />
             </div>
         );
@@ -653,10 +817,9 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                             type="button"
                             className="alloy-os-financials__details"
                             data-financials-details="true"
-                            onClick={() => {
-                                setExpanded((v) => !v);
-                                coordination?.reportPerspective?.("financials", expanded ? "base" : "focused");
-                            }}
+                            // The overlay state owns elevation now; reporting perspective here as
+                            // well would give the depth layer two authorities for one card.
+                            onClick={() => setOverlay(expanded ? null : "detail")}
                         >
                             {expanded ? "← Less" : "Details →"}
                         </button>
