@@ -108,10 +108,30 @@ const anon = createClient(supabaseUrl, anonKey, { auth: { autoRefreshToken: fals
 
 // The address comes from the slot registry, and is checked against the auth directory so a bootstrap
 // can only ever restore an account that already exists. This never creates a user.
-const list = await admin.auth.admin.listUsers({ page: 1, perPage: 200 }).catch((e) => ({ error: e }));
-if (list?.error) fail("directory_read_failed", list.error.message);
-const user = (list?.data?.users || []).find((u) => String(u.email || "").toLowerCase() === identity.toLowerCase());
-if (!user) fail("identity_not_registered", "no such account in the auth directory");
+/*
+ * Walk the WHOLE directory, not the first page.
+ *
+ * This read decides whether the account exists, and a single `perPage: 200` call reports
+ * `identity_not_registered` for any account that happens to sort past the first page — a false
+ * negative indistinguishable from a genuinely missing user, on the one question the operator would
+ * act on. Paging stops when a page comes back short, and is bounded so a directory that keeps
+ * answering cannot spin here.
+ */
+const PER_PAGE = 200;
+const MAX_PAGES = 50;
+let user = null;
+let scanned = 0;
+for (let page = 1; page <= MAX_PAGES && !user; page++) {
+    const list = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE }).catch((e) => ({ error: e }));
+    if (list?.error) fail("directory_read_failed", list.error.message);
+    const users = list?.data?.users || [];
+    scanned += users.length;
+    user = users.find((u) => String(u.email || "").toLowerCase() === identity.toLowerCase()) || null;
+    if (users.length < PER_PAGE) break;
+}
+// The count is metadata, not identity: it says how hard we looked, so a "not registered" verdict
+// can be trusted instead of guessed at.
+if (!user) fail("identity_not_registered", `no such account after scanning ${scanned} directory entries`);
 
 const link = await admin.auth.admin.generateLink({ type: "magiclink", email: identity }).catch((e) => ({ error: e }));
 if (link?.error) fail("mint_failed", link.error.message);
