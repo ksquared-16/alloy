@@ -15,6 +15,7 @@
 import { deriveOpportunityFocusPanelPresentation } from "@/lib/adminV2/runtime/focusPanel/deriveOpportunityFocusPanelCards";
 import { buildOperationalContext } from "@/lib/adminV2/runtime/operationalContext/buildOperationalContext";
 import { focusPanelDefaultCompositionForGrain } from "@/lib/adminV2/runtime/focusPanel/composition/focusPanelSummaryDefaultComposition";
+import { isOperationalSubjectType } from "@/lib/adminV2/runtime/operationalContext/subjectGrain";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { FocusPanelMode } from "@/lib/adminV2/runtime/focusPanel/focusPanelMode";
 import type { FocusPanelCardKey } from "@/lib/adminV2/runtime/focusPanel/focusPanelCardModel";
@@ -81,7 +82,15 @@ export function focusPanelWorkModeModelFromDrawerVm(
      * every card whose composition entry disagrees with its model default, which is a much larger
      * change than the one being asked for and not one anyone has looked at.
      */
-    const composition = focusPanelDefaultCompositionForGrain(context.subject.type);
+    /*
+     * `OperationalSubjectRef.type` is a plain string; the grain resolver takes the narrower
+     * `OperationalSubjectType`. This seam always builds from an opportunity drawer VM, so the
+     * subject IS a case — asserted through the resolver's own guard rather than cast, so a future
+     * grain reaching here resolves to the case composition instead of silently to `undefined`.
+     */
+    const composition = focusPanelDefaultCompositionForGrain(
+        isOperationalSubjectType(context.subject.type) ? context.subject.type : "opportunity",
+    );
     const financialsEntry = composition?.find((entry) => entry.key === "financials");
     const financialsModel = cards.get("financials");
     if (financialsEntry?.encodedDensity && financialsModel) {

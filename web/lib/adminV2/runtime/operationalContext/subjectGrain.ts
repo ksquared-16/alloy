@@ -38,6 +38,25 @@ import type { OperationalGrain } from "@/lib/adminV2/runtime/operationalContext/
  */
 export type OperationalSubjectType = "opportunity" | "child" | "person" | "household";
 
+const OPERATIONAL_SUBJECT_TYPES: readonly OperationalSubjectType[] = [
+    "opportunity",
+    "child",
+    "person",
+    "household",
+];
+
+/**
+ * Narrow a loose subject type onto the union.
+ *
+ * `OperationalSubjectRef.type` is a plain string — it carries whatever entity type the view model
+ * reported. Callers that need the GRAIN have to narrow it, and narrowing by guard rather than by
+ * cast means a subject type nobody has taught the runtime about falls into an explicit fallback
+ * instead of matching no switch arm and resolving to `undefined`.
+ */
+export function isOperationalSubjectType(value: unknown): value is OperationalSubjectType {
+    return typeof value === "string" && (OPERATIONAL_SUBJECT_TYPES as readonly string[]).includes(value);
+}
+
 export type SubjectGrainResolution =
     | { ok: true; grain: OperationalGrain; subjectType: OperationalSubjectType }
     | { ok: false; reason: string };

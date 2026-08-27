@@ -72,6 +72,9 @@ function provenanceOf(fact: HealthSafetyFact): HealthProvenance {
     return {
         source: SOURCE_LABELS[kind] ?? kind ?? "Recorded",
         detail: fact.provenance.confirmedAt ? `Confirmed ${shortDate(fact.provenance.confirmedAt)}` : null,
+        // CONFIRMED is the difference between "a parent said this" and "we checked", and it is a
+        // timestamp on the fact — never an assumption from the source kind.
+        confirmed: Boolean(fact.provenance.confirmedAt),
     };
 }
 

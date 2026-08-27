@@ -199,137 +199,17 @@ export default function AttendanceCard({ model, context, receded = false }: Prop
                     <p className="alloy-os-attendance__empty" data-attendance-empty="no-participant">
                         Select a child to see their day.
                     </p>
-                ) : vm ? (
-                    <>
-                        {/*
-                            THE CARD STAYS THE CARD.
-                            A child with no attendable enrolment used to replace this whole surface
-                            with one sentence. Missing prerequisites change the FACTS and the
-                            COMMANDS; they do not turn Attendance into an error message. The day
-                            renders with its real (empty) values and the reason is stated quietly
-                            below, so the operator still sees which child this is and what the day
-                            says about them.
-                        */}
-                        <div className="alloy-os-attendance__day" data-attendance-day={vm.date}>
-                            <Slot label="Expected" value={vm.expected.expected ? vm.expected.roomLabel ?? "Today" : "Not expected"} />
-                            <Slot label="Arrived" value={timeOf(vm.checkInAt)} />
-                            {visibleMovements(vm.movements).map((m) => (
-                                <Slot
-                                    key={m.eventId}
-                                    label={timeOf(m.at) ?? "Moved"}
-                                    value={m.toRoomLabel ?? "—"}
-                                    data-attendance-movement={m.eventId}
-                                />
-                            ))}
-                            {hiddenMovements(vm.movements) > 0 ? (
-                                <Slot
-                                    label="Moves"
-                                    value={`+${hiddenMovements(vm.movements)} movements`}
-                                    data-attendance-movement-overflow="true"
-                                />
-                            ) : null}
-                            <Slot label="Now" value={stateLabel(vm)} />
-                            <Slot label="Departed" value={timeOf(vm.checkOutAt)} />
-                        </div>
-
-                        {vm.unavailableReason ? (
-                            /* Quiet, and below the day — not in place of it. */
-                            <p className="alloy-os-attendance__note" data-attendance-unavailable="true">
-                                {vm.unavailableReason}
-                            </p>
-                        ) : null}
-
-                        {/* THE REGISTERED COMMANDS, offered only where the day admits them. A control
-                            for an impossible transition is a promise the domain would refuse — check-in
-                            on a child already present, or a transfer for a child who has not arrived.
-                            With no attendance subject at all, none of them can be honoured. */}
-                        <div className="alloy-os-attendance__actions" data-attendance-actions="true">
-                            {!vm.unavailableReason && (vm.state === "not_arrived" || vm.state === "no_record") ? (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="alloy-os-attendance__action"
-                                        data-attendance-command="attendance.check_in"
-                                        disabled={Boolean(running)}
-                                        onClick={() => void run("attendance.check_in")}
-                                    >
-                                        Check in
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className="alloy-os-attendance__action"
-                                        data-attendance-command="attendance.mark_absent"
-                                        disabled={Boolean(running)}
-                                        onClick={() => void run("attendance.mark_absent")}
-                                    >
-                                        Mark absent
-                                    </button>
-                                </>
-                            ) : null}
-                            {!vm.unavailableReason && vm.state === "present" ? (
-                                <>
-                                    <button
-                                        type="button"
-                                        className="alloy-os-attendance__action"
-                                        data-attendance-command="attendance.check_out"
-                                        disabled={Boolean(running)}
-                                        onClick={() => void run("attendance.check_out")}
-                                    >
-                                        Check out
-                                    </button>
-                                    {vm.siteRooms.length > 0 ? (
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <button
-                                                    type="button"
-                                                    className="alloy-os-attendance__action"
-                                                    data-attendance-command="attendance.move"
-                                                    disabled={Boolean(running)}
-                                                >
-                                                    Move room ▾
-                                                </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="start" sideOffset={4} data-attendance-move-menu="true">
-                                                {vm.siteRooms
-                                                    // The room they are already in is not a destination.
-                                                    .filter((r) => r.id !== vm.currentRoomLocationId)
-                                                    .map((r) => (
-                                                        <DropdownMenuItem
-                                                            key={r.id}
-                                                            data-attendance-move-room={r.id}
-                                                            onSelect={() =>
-                                                                void run("attendance.move", {
-                                                                    to_room_location_id: r.id,
-                                                                })
-                                                            }
-                                                        >
-                                                            {r.label}
-                                                        </DropdownMenuItem>
-                                                    ))}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    ) : null}
-                                </>
-                            ) : null}
-                            {commandError ? (
-                                <span className="alloy-os-attendance__error" data-attendance-command-error="true">
-                                    {commandError}
-                                </span>
-                            ) : null}
-                        </div>
-
-                        {vm.recentDays.length > 0 ? (
-                            <div className="alloy-os-attendance__history" data-attendance-history="true">
-                                {vm.recentDays.map((d) => (
-                                    <span key={d.date} className="alloy-os-attendance__history-day">
-                                        {shortDay(d.date)} {timeOf(d.firstCheckInAt) ?? "—"}
-                                        {d.lastCheckOutAt ? `–${timeOf(d.lastCheckOutAt)}` : d.present ? "–Present" : ""}
-                                    </span>
-                                ))}
-                            </div>
-                        ) : null}
-                    </>
                 ) : (
+                    /*
+                     * A participant is scoped but the day has not resolved yet.
+                     *
+                     * Everything BELOW this point used to be a second Attendance card — the
+                     * four-slot grid, its own command row, its own ineligible message. It is gone
+                     * because the approved component now renders every state a resolved `vm` can
+                     * be in, including ineligible. TypeScript found the remains: with the early
+                     * return above, `vm` was `never` here, which is the compiler saying this
+                     * branch can no longer be reached.
+                     */
                     <p className="alloy-os-attendance__empty" data-attendance-empty="loading">
                         {loading ? "Loading the day…" : "No attendance record."}
                     </p>
