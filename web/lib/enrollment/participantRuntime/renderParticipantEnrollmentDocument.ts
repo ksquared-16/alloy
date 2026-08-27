@@ -260,11 +260,23 @@ export async function renderParticipantEnrollmentDocument(
         // that box and nothing else — the reason it can be collected without becoming canonical.
         ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
     };
-    // Derived destinations are filled at render, from the values already in hand.
-    Object.assign(values, resolveFormDerivedValues(schema, values, {
+    /*
+     * Derived destinations are filled at render — but never OVER a value that was already recorded.
+     *
+     * Before submission there is nothing stored and today's date is the honest preview: the artifact
+     * has not been executed yet. After submission the submitted payload holds the day the family
+     * actually signed, and recomputing would quietly restamp a completed document to whenever
+     * someone last opened it. "Today's Date" on a signed form means the day it was signed.
+     */
+    const derived = resolveFormDerivedValues(schema, values, {
         executedAtIso: input.nowIso,
         timeZone: input.timeZone ?? "UTC",
-    }));
+    });
+    for (const [fieldId, value] of Object.entries(derived)) {
+        const held = values[fieldId];
+        if (typeof held === "string" && held.trim()) continue;
+        values[fieldId] = value;
+    }
 
     if (!mapping) {
         /*

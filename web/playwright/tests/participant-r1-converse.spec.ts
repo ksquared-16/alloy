@@ -35,6 +35,7 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
                 kind: turn.kind,
                 inputType: turn.input_type,
                 label: turn.label,
+                canonicalKey: turn.canonical_key,
                 options: turn.options ?? [],
                 cluster: turn.cluster ?? null,
             };
@@ -76,12 +77,32 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
         const composer = page.locator("#participant-composer");
         const send = page.locator('[aria-label="Send"]');
 
+        /*
+         * A name has to be a name.
+         *
+         * "Not applicable" at a guardian-name turn is REFUSED, and correctly so — the runtime checks
+         * that an answer is plausible for the fact it collects. A driver that ignores that loops on
+         * "Sorry, I didn't catch that" and proves nothing about the product.
+         */
+        const key = String(state.canonicalKey ?? "");
         const typedAnswer =
             state.inputType === "number"
                 ? "5415551234"
                 : Array.isArray(state.options) && state.options.length
                   ? String(state.options[0])
-                  : "Not applicable";
+                  : /email/.test(key)
+                    ? "parent@example.com"
+                    : /phone/.test(key)
+                      ? "5415551234"
+                      : /address/.test(key)
+                        ? "100 Main Street, Bend, OR 97701"
+                        : /name/.test(key)
+                          ? key.includes("child")
+                              ? key.includes("first")
+                                  ? "Mateo"
+                                  : "Sigwalk"
+                              : "Alex Sigwalk"
+                          : "Not applicable";
 
         if (await dateInput.count()) {
             await dateInput.first().fill("2026-09-01");
