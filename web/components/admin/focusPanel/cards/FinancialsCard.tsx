@@ -220,7 +220,21 @@ export default function FinancialsCard({ model, context, receded = false, coordi
                     entity_id: chargeTarget,
                     mode: "execute",
                     confirmation: { confirmed: true },
-                    payload: { customer_member_id: chargeTarget, template_id: pending.templateId },
+                    /*
+                     * THE COMMIT MUST CARRY WHAT THE PREVIEW CARRIED.
+                     *
+                     * This payload was the bare pair while the preview had already learned to send
+                     * the event date, so an `occurs_on = event_date` template previewed cleanly and
+                     * then refused at commit with `missing_event_date` — after the operator had
+                     * entered the date. Preview and commit run the same resolver; they have to be
+                     * given the same inputs or the resolver is being asked two different questions.
+                     */
+                    payload: {
+                        customer_member_id: chargeTarget,
+                        template_id: pending.templateId,
+                        ...(chargeEventDate ? { event_date: chargeEventDate } : {}),
+                        ...(chargeNote ? { note: chargeNote } : {}),
+                    },
                 }),
             });
             const json = (await res.json()) as { ok?: boolean; error?: string | { message?: string } };
@@ -244,7 +258,11 @@ export default function FinancialsCard({ model, context, receded = false, coordi
             // The card REFRESHES from the read model; it never inserts the row it just created.
             await load();
         }
-    }, [chargeTarget, load, pending, running]);
+        // `chargeEventDate` and `chargeNote` are READ inside this callback and must be in its
+        // dependency list. Without them the commit closed over the empty initial values and the
+        // domain refused with `missing_event_date` — after the operator had entered a date, and
+        // after the PREVIEW had accepted it. A stale closure is invisible until the two disagree.
+    }, [chargeEventDate, chargeNote, chargeTarget, load, pending, running]);
 
     const currency = vm?.rows[0]?.currencyCode ?? "USD";
     /*
