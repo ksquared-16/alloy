@@ -145,7 +145,14 @@ describe("the seam is in one place, and the doctrines stay apart", () => {
             "lib/enrollment/participantRuntime/renderParticipantEnrollmentDocument.ts",
             "lib/forms/pdf/persistSignedEnrollmentArtifact.ts",
         ]) {
-            expect(source(rel), rel).toContain("fidelityFieldValues(mapping,");
+            /*
+             * Whitespace-insensitive on purpose.
+             *
+             * The literal `fidelityFieldValues(mapping,` broke the moment either call site gained a
+             * third argument and wrapped across lines — a formatting change, not a drift. What the
+             * guard is for is that BOTH paths still go through this one seam.
+             */
+            expect(source(rel).replace(/\s+/g, " "), rel).toContain("fidelityFieldValues( mapping,");
         }
         // And neither formats dates itself.
         for (const rel of [
