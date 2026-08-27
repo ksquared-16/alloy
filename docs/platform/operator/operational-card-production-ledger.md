@@ -2350,3 +2350,82 @@ Per §10 these cards are **not** re-declared production-ready.
 5. **`customer` billable source is authored, not applied.** The CHECK constraint still admits only
    `job` and `enrollment_agreement`, so the pre-enrolment Add Charge scenario cannot be certified
    until the migration is promoted and applied.
+
+---
+
+## 36. Fidelity pass 2 — Business Process converged; three cards still duplicated (2026-08-27)
+
+### 36.1 The two real causes
+
+QA was right that "same information" is not fidelity. There were two causes, and the second was the
+larger.
+
+**Two components.** The locked specimen lived in the design lab and production kept an
+approximation of the same approved card. `ProcessCard` and `ProgressionBand` now live in
+`components/operationalCards/`, and the production card draws nothing — it supplies canonical
+evidence through an adapter that renames and formats and *decides* nothing. Every judgement was
+already made by `buildBusinessProcessCardEvidence`; a mapper that re-decided any of it would be the
+second answer that caused the drift.
+
+**Two stylesheets — and this was most of what QA saw.** The locked styles existed only in the lab:
+
+```text
+progression-band rules   lab 32   production 0
+process rules            lab 32   production 13
+```
+
+Production rendered the approved component's DOM with **none** of its appearance. A shared component
+with a private stylesheet is still two presentations. 62 rules now live in
+`operationalCardsShared.css`, imported by both surfaces; the 75 private copies are gone.
+
+The "malformed" `Recent activity24▾` and `2 childrenall at Waitlist` were never markup bugs — they
+were missing styles.
+
+### 36.2 Business Process — the four audit gaps
+
+| Gap | Status |
+|---|---|
+| `evidence.actions` not consumed | **closed** — renders the registry's resolved actions (3 on the Waitlist case: Update Lead Status · Reschedule tour · Change lead location). Provider resolves, card renders, nothing hardcoded. |
+| aligned participant summary | **closed** — the adapter carries every participant so the *component* decides; reads `2 CHILDREN all at Waitlist` |
+| stage annotations | **pass-through proven**; this Enrollment configuration declares none, so zero is correct. Not yet certified against a process that declares some. |
+| canonical process name | **still open** — see below |
+
+The title no longer claims the stage is the process. `evidence.processLabel` is sourced from the
+stage label, so passing it made the card read "WAITLIST" above a rail already saying Waitlist. The
+canonical name exists server-side — `contextualFocusAnswer` carries `businessProcess.name` — but
+nothing plumbs it into the operational context. The route is
+`answer.businessProcess.name → OperationalSubjectContext → commitCritical → OperationalContext`.
+
+### 36.3 Financials speaks to operators now
+
+The Payment region was printing *"payments are not recorded for enrollment accounts yet"*,
+*"autopay is not configured in this platform"* and *"responsibility splits are owned by Processing"* —
+development findings on a card someone uses to run a childcare centre. The VM now carries a canonical
+`paymentSetup`, deliberately separate from the `unavailable` list that records why the *platform*
+cannot answer.
+
+```text
+CURRENT PERIOD · Charges $0.00 · Responsibility $0.00
+PAST DUE       · Nothing past due
+PAYMENT        · No payment method on file
+Add charge →     Details →
+```
+
+Health also stopped announcing emptiness as its headline (`… · No recorded health facts`); the card
+already exists in the child's context, so the name is the answer.
+
+### 36.4 Verified — 0 page errors, 0 failed requests
+
+Waitlist family and the certification enrolled family both render all four cards. Tests: **1183
+passing**, 6 skipped.
+
+### 36.5 NOT done — do not read this as fidelity-complete
+
+1. **Attendance, Financials and Health & Safety are still duplicated.** Only Business Process was
+   converged. `cardLab/AttendanceCard · FinancialsCard · HealthSafetyCard` remain separate from their
+   production counterparts. §5 is the primary acceptance criterion and is **one of four** met.
+2. **The `customer` billable-source migration is authored but not promoted or applied**, so the
+   pre-enrolment Add Charge scenario still cannot be certified.
+3. **No pixel-level side-by-side measurements** were taken (§6). Anatomy was compared structurally.
+4. **Canonical process name** not plumbed (§36.2).
+5. **Stage annotations** unproven against a configured specimen.
