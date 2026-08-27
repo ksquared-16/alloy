@@ -50,6 +50,27 @@ function spyProvision(result = { ok: true, result: "created", mutated: true, occ
     return fn;
 }
 
+test("the approval NAMES the account and slot, resolved from the registry", async () => {
+    /*
+     * The request carries only a lane id - deliberately - so the presentation must resolve the
+     * identity itself. It previously rendered "the slot's registered QA identity", which is not an
+     * informed approval: the operator could not see which account was about to be created.
+     */
+    const { presentationForGovernedAction } = await import("../lib/vacilando/governed-action-request.mjs");
+    const p = presentationForGovernedAction({
+        action_key: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY,
+        lane_id: LANE,
+        inputs: { laneId: LANE },
+        status: "requested",
+    });
+    assert.match(p.approve_label, /provision/i, "the label must say it creates an account");
+    assert.ok(!/census|restore/i.test(p.approve_label), "must not borrow another action's label");
+    assert.match(p.detail, /qa-slot5-refactor@example\.com/, "the account being created must be named");
+    assert.match(p.detail, /Slot 5/, "the slot must be named");
+    assert.match(p.detail, /no email is sent/i);
+    assert.match(p.detail, /creates no browser session/i);
+});
+
 test("the action is registered, dispatchable and always requires operator approval", () => {
     const def = getActionDefinition(ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY);
     assert.ok(def, "must be in the registry");
