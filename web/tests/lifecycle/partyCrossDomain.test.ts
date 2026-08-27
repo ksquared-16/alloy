@@ -14,16 +14,14 @@ describe("three unrelated domains, one implementation", () => {
         expect(roles).toContain("owner");
         expect(artifactSlotCapacity(slots, "owner"), "two owner lines, three boxes").toBe(2);
         /*
-         * "Authorised Collector" groups as its OWN role, not as `authorized_pickup`.
+         * "Authorised Collector" resolves to the CANONICAL pickup role.
          *
-         * The canonical `detection_patterns` are American-spelled ("authorized", "pickup"), so a
-         * British form's collector is not recognised as the canonical pickup role. The fallback
-         * still groups it correctly, so it never broadcasts — but no canonical relationship can be
-         * written for it. The fix is one word in that definition's `detection_patterns`, which is
-         * the "one definition row" mechanism working as designed; it is NOT a synonym list in
-         * participant runtime, so it is reported rather than patched here.
+         * The canonical `detection_patterns` are American-spelled, so the British spelling used
+         * to group as a role of its own — recognised enough not to broadcast, but with no
+         * canonical relationship writable for it. Generic orthography (-ise -> -ize) runs before
+         * the canonical detector reads the phrase; it adds no vocabulary and knows no packet.
          */
-        expect(roles).toContain("authorised_collector");
+        expect(roles).toContain("authorized_pickup");
     });
 
     it("sailing club: guardian / emergency / pickup, one person in two roles", () => {

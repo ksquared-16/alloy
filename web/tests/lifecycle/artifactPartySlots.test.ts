@@ -122,11 +122,12 @@ describe("the role vocabulary decides, not this file", () => {
             { id: "k2", type: "text", label: "Owner #1 Mobile" },
             { id: "k3", type: "text", label: "Authorised Collector #2 Name" },
         ] } as unknown as FormSchemaV1;
-        const slots = artifactPartySlots(kennel, ["owner", "authorised_collector"]);
+        const slots = artifactPartySlots(kennel, ["owner"]);
         expect(slots.map((s) => `${s.role}#${s.ordinal}:${s.attribute}`)).toEqual([
             "owner#1:name",
             "owner#1:phone",
-            "authorised_collector#2:name",
+            // British spelling, resolved to the canonical role by generic orthography.
+            "authorized_pickup#2:name",
         ]);
     });
 });

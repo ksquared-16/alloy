@@ -107,6 +107,23 @@ function roleSlug(phrase: string): string {
  * calls `guardian`. The MOST specific match wins — a phrase naming both `parent` and `guardian`
  * resolves to the one whose key shares more tokens with it, so neither is arbitrarily preferred.
  */
+/**
+ * Ordinary English spelling variants, so a role is recognised however the school writes it.
+ *
+ * The canonical `detection_patterns` are American-spelled, so "Authorised Collector" was not
+ * recognised as the pickup role and grouped as a role of its own — no canonical relationship could
+ * be written for it. This is generic orthography (-ise/-isation/-ised → -ize/-ization/-ized), not a
+ * localization layer and not a packet alias list: it changes only how a WORD is spelled before the
+ * canonical detector reads it, and adds no vocabulary of its own.
+ */
+export function normalizeRelationshipSpelling(text: string): string {
+    return text
+        .replace(/\b(\w*?)isation\b/gi, "$1ization")
+        .replace(/\b(\w*?)ised\b/gi, "$1ized")
+        .replace(/\b(\w*?)ising\b/gi, "$1izing")
+        .replace(/\b(\w*?)ise\b/gi, "$1ize");
+}
+
 export function matchCanonicalRole(
     phrase: string,
     vocabulary: readonly string[] = [],
@@ -124,7 +141,7 @@ export function matchCanonicalRole(
      * Adding a role therefore remains ONE definition row, exactly as that module's own
      * future-proof rule promises. No vocabulary is authored here.
      */
-    const detected = detectRelationshipDefinitionForTitle(phrase);
+    const detected = detectRelationshipDefinitionForTitle(normalizeRelationshipSpelling(phrase));
     if (detected) return detected.operational_role_key;
 
     /*

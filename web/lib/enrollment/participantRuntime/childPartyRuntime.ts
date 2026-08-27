@@ -30,6 +30,7 @@ import {
     createPersonChildRelationship,
 } from "@/lib/fields/personChildRelationship/personChildRelationshipService";
 import { relationshipDefinitionForRole } from "@/lib/fields/relationship/relationshipDefinitions";
+import { validateOperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipValidation";
 import type { CollectedParty } from "@/lib/enrollment/participantRuntime/partySlotProjection";
 
 /** A person the conversation can talk about, with the identity a source artifact may print. */
@@ -189,10 +190,23 @@ export async function attachPartyRole(
         readonly priority?: number | null;
     },
 ): Promise<AttachPartyResult> {
+    /*
+     * VALIDATE THE ROLE BEFORE ANY WRITE.
+     *
+     * R3 attached a physician and left a relationship row carrying no roles: the person and the
+     * relationship were created, then the role was refused, and nothing undid the first two. An
+     * orphan relationship is worse than a refusal — it is a person silently related to a child for
+     * no stated reason, and it would project into an artifact slot.
+     *
+     * Both checks run first, against the SAME authorities the write path uses, so the common
+     * failure never reaches a mutation at all. The compensating delete below covers the rest.
+     */
     const definition = relationshipDefinitionForRole(input.role);
     if (!definition) {
         return { ok: false, error: `"${input.role}" is not a configured relationship role.` };
     }
+    const roleCheck = validateOperationalRoleKey(definition.operational_role_key);
+    if (!roleCheck.ok) return { ok: false, error: roleCheck.reason };
 
     let personId = (input.personId ?? "").trim();
     let createdPerson = false;
@@ -265,5 +279,31 @@ export async function attachPartyRole(
         operationalRoles: [definition.operational_role_key],
     });
     if (!created.ok) return { ok: false, error: created.error };
+
+    /*
+     * NO ORPHAN SURVIVES.
+     *
+     * `createPersonChildRelationship` inserts the edge and then its roles, so a role rejected at
+     * that second step leaves an edge with none — a person related to a child for no stated reason,
+     * which would then project into an artifact slot. The pre-checks above make that unreachable
+     * for a bad role key; this covers everything else (a constraint, a race, a transient failure)
+     * by verifying the outcome and undoing the edge this call created.
+     *
+     * Idempotency is untouched: only an edge created BY THIS CALL is removed, and an existing
+     * relationship never reaches here.
+     */
+    const { data: roleRows } = await supabase
+        .from("person_child_relationship_roles")
+        .select("id")
+        .eq("org_id", input.orgId)
+        .eq("relationship_id", created.relationship.id);
+    if ((roleRows ?? []).length === 0) {
+        await supabase
+            .from("person_child_relationships")
+            .delete()
+            .eq("org_id", input.orgId)
+            .eq("id", created.relationship.id);
+        return { ok: false, error: "That role could not be recorded, so nothing was changed." };
+    }
     return { ok: true, person_id: personId, created_person: createdPerson };
 }
