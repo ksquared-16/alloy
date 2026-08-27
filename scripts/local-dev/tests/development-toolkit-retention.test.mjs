@@ -508,5 +508,40 @@ await test("GUARD — an unreadable process table blocks the prune instead of em
   assert.equal(plan.prunable_count, 0);
 });
 
+await test("LIVE-SHAPE — the prune tool does not block itself", () => {
+  // `alloy-toolkit prune` resolves through ~/bin/alloy-dev -> current, so the
+  // tool appears in the process table as a `toolkit/current/...` command with
+  // no version in it: an unresolvable pin, which blocks the plan. It blocked
+  // ITSELF, and every plan run the normal way reported execution_blocked with
+  // nothing prunable. Invoking the file by path never showed it.
+  const processes = [
+    { pid: 900, ppid: 1, command: "node /r/toolkit/current/vac-toolkit-prune.mjs --json" },
+    { pid: 901, ppid: 900, command: "node /r/toolkit/current/lib/child.mjs" },
+  ];
+  const withSelf = T.resolveProcessPins({ processes });
+  assert.equal(withSelf.fully_resolved, false, "unfiltered, the tool is an unresolved pin");
+
+  // The tool's own chain removed — which is what the CLI now does.
+  const mine = new Set([900, 901]);
+  const filtered = T.resolveProcessPins({ processes: processes.filter((p) => !mine.has(p.pid)) });
+  assert.equal(filtered.fully_resolved, true);
+  assert.equal(T.planPrune({ inventory: inv(), currentSha: "v19", pins: filtered }).execution_blocked, false);
+
+  // And an unrelated unresolvable process STILL blocks — that is the behaviour
+  // that matters and must not be filtered away with it.
+  const other = T.resolveProcessPins({
+    processes: [{ pid: 500, ppid: 1, command: "node /r/toolkit/current/lib/vacilando-gateway-host.mjs" }],
+  });
+  assert.equal(other.fully_resolved, false);
+  assert.equal(T.planPrune({ inventory: inv(), currentSha: "v19", pins: other }).execution_blocked, true);
+});
+
+await test("LIVE-SHAPE — the CLI removes its own chain before resolving pins", () => {
+  const cli = readFileSync(new URL("../vac-toolkit-prune.mjs", import.meta.url), "utf8");
+  assert.match(cli, /function ownChain/);
+  assert.match(cli, /mine\.has\(p\.pid\)/, "the chain is filtered out of the process list");
+  assert.match(cli, /is not a workload holding a version/);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

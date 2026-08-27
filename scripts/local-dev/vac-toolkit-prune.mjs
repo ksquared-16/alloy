@@ -121,8 +121,34 @@ function readProcesses() {
   return rows;
 }
 
+/**
+ * This invocation's own process chain.
+ *
+ * `alloy-toolkit prune` resolves through ~/bin/alloy-dev -> current, so the
+ * prune tool itself appears in the process table as a `toolkit/current/...`
+ * command with no version in it — an unresolvable pin, which blocks the plan.
+ * The tool blocked ITSELF, and every plan run the normal way reported
+ * execution_blocked with nothing prunable. Only running it through the symlink
+ * showed it; invoking the file by path never did.
+ *
+ * A prune invocation is not a workload holding a version, so it and its
+ * ancestors are removed before pins are resolved. Any OTHER unresolvable
+ * process still blocks, which is the behaviour that matters.
+ */
+function ownChain(processes) {
+  const byPid = new Map(processes.map((p) => [p.pid, p]));
+  const mine = new Set();
+  let pid = process.pid;
+  for (let i = 0; i < 8 && pid && !mine.has(pid); i += 1) {
+    mine.add(pid);
+    pid = byPid.get(pid)?.ppid ?? null;
+  }
+  return mine;
+}
+
 function gather() {
-  const processes = readProcesses();
+  const all = readProcesses();
+  const processes = all ? (() => { const mine = ownChain(all); return all.filter((p) => !mine.has(p.pid)); })() : null;
   const keepN = configuredKeepN(process.env);
   // A process table we could not read is not an empty process table. Synthesise
   // one unresolved pin so the plan blocks rather than pruning blind.
