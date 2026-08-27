@@ -49,9 +49,23 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             // communications preview, so it must not block the record's first paint. Opt out
             // unless a caller explicitly requests the seeded preview (`comms_preview=1`).
             deferCommunicationsPreview: sp.get("comms_preview") !== "1",
-            // Stage work (Current Work region) resolves through the thin `…/stage-work` resource
-            // after first paint. Opt out with `stage_work=1` for a full inline compose.
-            deferStageWork: sp.get("stage_work") !== "1",
+            /*
+             * Stage work composes INLINE, because it no longer costs anything to.
+             *
+             * It was deferred to a thin `…/stage-work` resource so it could not block first paint,
+             * and that was right while the compose awaited Module B after Module A. Now that the two
+             * run together, B carrying stage-work measures 181-380 ms against A's ~650-800 ms, so the
+             * slice finishes inside A and `max(A, B)` is unchanged.
+             *
+             * Deferring it, meanwhile, was never free on the client: every path derives the fetch key
+             * from `vm.workspace.lifecycle_rail.current_stage_key`, so What's Next could not even ASK
+             * for its data until the whole ~124 KB view model had landed — a second round-trip
+             * measured at 209-2065 ms after the VM, for a card whose request needs one stage key.
+             * The bytes are identical either way; the client fetched them regardless.
+             *
+             * `stage_work=0` restores the deferred contract.
+             */
+            deferStageWork: sp.get("stage_work") === "0",
         });
 
         if (!result.ok) {

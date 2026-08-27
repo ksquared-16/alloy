@@ -96,23 +96,50 @@ export async function composeOpportunityDrawerViewModel(
     // render model, first-paint contract, header, registry actions, and Tier-2 summaries. Mutates the
     // shared record in place (first-paint patches) BEFORE B; the orchestrator snapshots above_fold.record
     // ONCE, after B's patches. Imports no Tier-3.
-    const initial = await buildInitialPanelResource({
-        supabase,
-        gate,
-        opportunityId,
-        departmentId,
-        workUnitId: workUnitId || null,
-        statusKey,
-        record,
-        deptMetadata,
-        layoutConfigJson,
-        queueDefinition,
-        wuMetadata,
-        statusDefs,
-        lifecycleRail: lifecycle_rail,
-        hintOperTrustHeadline: params.hintOperTrustHeadline,
-        hintOperTrustUrgency: params.hintOperTrustUrgency,
-    });
+    /*
+     * A AND B RUN TOGETHER — B never reads A.
+     *
+     * B's whole input list is ids, `deptMetadata` and the stage key/label, all of which come from
+     * `shared`; it is not passed `record` and cannot patch it, so the "A mutates the record before B"
+     * ordering the comment above describes is preserved by construction rather than by the await.
+     * Awaiting them in sequence therefore cost `initial + deferred` for no dependency at all.
+     *
+     * This is what lets stage-work stop being a second round-trip: measured, B carrying the stage-work
+     * slice is 181-380 ms against A's ~650-800 ms, so `Promise.all` hides B inside A entirely and the
+     * compose still costs `max(A, B)` = A.
+     */
+    const deferStageWork = params.deferStageWork === true;
+    const [initial, deferred] = await Promise.all([
+        buildInitialPanelResource({
+            supabase,
+            gate,
+            opportunityId,
+            departmentId,
+            workUnitId: workUnitId || null,
+            statusKey,
+            record,
+            deptMetadata,
+            layoutConfigJson,
+            queueDefinition,
+            wuMetadata,
+            statusDefs,
+            lifecycleRail: lifecycle_rail,
+            hintOperTrustHeadline: params.hintOperTrustHeadline,
+            hintOperTrustUrgency: params.hintOperTrustUrgency,
+        }),
+        buildDeferredDetailResource({
+            supabase,
+            orgId,
+            opportunityId,
+            viewerUserId: gate.userId,
+            departmentId,
+            deptMetadata,
+            currentStageKey,
+            currentStageLabel,
+            deferCommunicationsPreview: params.deferCommunicationsPreview === true,
+            deferStageWork,
+        }),
+    ]);
     if (!initial.ok) {
         return finishCompose({
             ok: false,
@@ -128,19 +155,6 @@ export async function composeOpportunityDrawerViewModel(
     // S4.3 — the deep/deferred (Tier-3) composition (Module B): stage context, family comms preview, and
     // the heavy stage-work slice. Resolved independently of the visible primary panel; the workspace VM
     // route defers comms + stage-work off the record-open path.
-    const deferStageWork = params.deferStageWork === true;
-    const deferred = await buildDeferredDetailResource({
-        supabase,
-        orgId,
-        opportunityId,
-        viewerUserId: gate.userId,
-        departmentId,
-        deptMetadata,
-        currentStageKey,
-        currentStageLabel,
-        deferCommunicationsPreview: params.deferCommunicationsPreview === true,
-        deferStageWork,
-    });
     Object.assign(phases, deferred.phases_ms);
     const {
         stage_context,
