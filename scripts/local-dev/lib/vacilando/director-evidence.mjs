@@ -18,6 +18,7 @@ import { governedActionStorePath } from "./governed-action-request.mjs";
 import { executionRunStorePath } from "./execution-run.mjs";
 import { developmentLaneStorePath } from "./development-lane.mjs";
 import { branchIsReferenced } from "./branch-reference.mjs";
+import { isSafeCorrection, WITHHELD_CORRECTION_KINDS } from "./reconciliation-apply.mjs";
 import {
   measureClosePullRequestGates,
   measureDeleteRemoteBranchGates,
@@ -135,6 +136,28 @@ export function collectDirectorEvidence(rec, {
   // Repository housekeeping measures REAL GitHub state. Anything unreadable
   // stays null, and a null gate escalates — a cleanup that cannot be proven
   // safe is never a cleanup the Director performs.
+  // Reconciliation metadata. Everything here is derived from the PLAN the
+  // request carries; whether that plan still describes reality is re-checked by
+  // the executor, and its fingerprint is a gate in its own right.
+  if (rec?.action_key === "vacilando.apply_reconciliation_plan") {
+    const corrections = Array.isArray(inputs.corrections) ? inputs.corrections : null;
+    const withheld = Array.isArray(inputs.withheld) ? inputs.withheld : [];
+    evidence.reconciliation_plan_readable = corrections != null && Boolean(inputs.planFingerprint);
+    // Currency is asserted by the request and PROVEN again at execution; an
+    // absent fingerprint leaves this unmeasured, which escalates.
+    evidence.reconciliation_plan_current = /^[0-9a-f]{32}$/.test(String(inputs.planFingerprint || "")) ? true : null;
+    if (corrections) {
+      evidence.all_corrections_allowlisted = corrections.every((c) => isSafeCorrection(c?.kind));
+      evidence.destructive_corrections = corrections.filter((c) => WITHHELD_CORRECTION_KINDS.includes(c?.kind)).length;
+      evidence.live_process_affecting = corrections.filter((c) => c?.affects_live_process === true).length;
+    }
+    // Withheld findings may EXIST. What must be zero is any of them appearing
+    // among the corrections, which the two counts above already establish.
+    evidence.foreign_owner_mutations = corrections ? corrections.filter((c) => c?.kind === "reassign_port").length : null;
+    evidence.ambiguous_owner_mutations = corrections ? corrections.filter((c) => c?.kind === "any_correction").length : null;
+    evidence.withheld_count = withheld.length;
+    evidence.metadata_store_known = Boolean(stateRoot);
+  }
   if (rec?.action_key === "repository.close_pull_request") {
     try {
       const n = {

@@ -45,6 +45,7 @@ import {
 import {
   fulfillRepositoryPushForMission,
   fulfillClosePullRequestForMission,
+  fulfillApplyReconciliationPlanForMission,
   fulfillDeleteRemoteBranchForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
@@ -693,6 +694,10 @@ export function operatorLabel(rec) {
     const slot = operatorSlotHint(rec);
     return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
   }
+  if (key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    const n = Array.isArray(inputs.corrections) ? inputs.corrections.length : 0;
+    return n ? `Apply Vacilando reconciliation metadata — ${n} correction${n === 1 ? "" : "s"}` : "Apply Vacilando reconciliation metadata";
+  }
   if (key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
     const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
     if (work && n) return `Close ${work} PR #${n}`;
@@ -1242,6 +1247,7 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
   if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
+  if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   return "read_only";
 }
 
@@ -2052,6 +2058,18 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    return fulfillApplyReconciliationPlanForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
       actor,
       nowMs,
       grant,

@@ -50,6 +50,8 @@ import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
+import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
+import { observeReconciliation } from "./reconciliation-observe.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -514,6 +516,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
     return executeClosePullRequestTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    return executeApplyReconciliationPlanTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
     return executeDeleteRemoteBranchTrustedHostAction(action, { actor, nowMs, grant });
@@ -1330,6 +1335,61 @@ export function executeDeleteRemoteBranchTrustedHostAction(action, { actor = "di
     deleted_head_sha: out.deleted_head_sha, dependents_at_deletion: out.dependents_at_deletion,
     credentialsExposed: false,
   }, { nowMs });
+}
+
+
+export function executeApplyReconciliationPlanTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+
+  // THE EXECUTOR RECOMPUTES. It never trusts the correction list it was handed:
+  // an ad hoc list supplied by a caller must not be executable, so the plan is
+  // rebuilt from live observation and compared by fingerprint.
+  const root = action.inputs?.runtimeRoot || runtimeRoot();
+  let fresh;
+  try {
+    fresh = observeReconciliation({
+      root,
+      processes: action.inputs?.processes || [],
+      worktreeParent: action.inputs?.worktreeParent || null,
+      gitWorktrees: action.inputs?.gitWorktrees || null,
+    });
+  } catch (e) {
+    return failTrustedAction(action, "observation_failed", String(e?.message || e), { nowMs });
+  }
+  const rebuilt = buildReconciliationPlan(fresh, { nowMs, planId: action.inputs?.planId });
+  if (rebuilt.fingerprint !== action.inputs?.planFingerprint) {
+    return failTrustedAction(action, "stale_plan",
+      `plan fingerprint ${action.inputs?.planFingerprint} no longer describes observed state (now ${rebuilt.fingerprint})`, { nowMs });
+  }
+  const out = applyReconciliationPlan(rebuilt, { root, freshObservation: fresh, nowMs });
+  if (!out.ok) return failTrustedAction(action, out.error || "apply_failed", out.reason || "reconciliation apply refused", { nowMs });
+  return completeTrustedAction(action, {
+    plan_id: out.plan_id, plan_fingerprint: out.fingerprint,
+    requested: out.requested, applied: out.applied, skipped: out.skipped,
+    withheld: out.withheld, unsupported: out.unsupported, credentialsExposed: false,
+  }, { nowMs });
+}
+
+export function fulfillApplyReconciliationPlanForMission(missionId, {
+  assignmentId = null, executionSessionId = null, inputs = {},
+  actor = "director", nowMs, grant = null, authorizationId = null, exactContext = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant, authorizationId, exactContext });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillClosePullRequestForMission(missionId, {

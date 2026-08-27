@@ -30,6 +30,7 @@ export const ACTION_TYPES = Object.freeze({
   ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
   REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
   REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
+  VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -289,6 +290,46 @@ function definePromotionOpenPr() {
 }
 
 
+function defineApplyReconciliationPlan() {
+  return {
+    actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN,
+    version: 1,
+    title: "Apply safe Vacilando reconciliation metadata corrections",
+    requiredCapability: "trusted_host.vacilando.apply_reconciliation_plan",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["planId", "planFingerprint", "generatedAt", "policyVersion", "corrections"],
+    },
+    outputSchema: { applied: "array", skipped: "array", withheld: "array" },
+    evidenceSchema: ["plan_id", "plan_fingerprint", "corrections", "withheld", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const planId = String(inputs.planId || "").trim();
+      const fingerprint = String(inputs.planFingerprint || "").trim();
+      const corrections = Array.isArray(inputs.corrections) ? inputs.corrections : null;
+      const withheld = Array.isArray(inputs.withheld) ? inputs.withheld : [];
+      if (!planId) return { ok: false, code: "missing_plan_id" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_plan_fingerprint" };
+      if (!corrections) return { ok: false, code: "missing_corrections" };
+      if (!String(inputs.policyVersion || "").trim()) return { ok: false, code: "missing_policy_version" };
+      if (!String(inputs.generatedAt || "").trim()) return { ok: false, code: "missing_generated_at" };
+      // The executor recomputes the plan itself; an ad hoc correction list
+      // supplied by a caller must never be executable, so the fingerprint is
+      // required and re-derived downstream.
+      return {
+        ok: true,
+        normalized: {
+          planId, planFingerprint: fingerprint, generatedAt: String(inputs.generatedAt),
+          policyVersion: String(inputs.policyVersion), corrections, withheld,
+          runtimeRoot: inputs.runtimeRoot || null,
+          dedupeKey: `reconcile:${planId}#${fingerprint.slice(0, 12)}`,
+        },
+      };
+    },
+  };
+}
+
 function defineRepositoryClosePullRequest() {
   return {
     actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST,
@@ -445,6 +486,7 @@ const REGISTRY = new Map([
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
   [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
   [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 
