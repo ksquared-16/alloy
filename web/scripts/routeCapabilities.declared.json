@@ -1,5 +1,5 @@
 {
-  "reviewed": "2026-08-10 — W-14 initial issuance (assignment asg_0232d36df9694c)",
+  "reviewed": "2026-08-27",
   "note": "Declared route capability table. Every exported HTTP handler under web/app/api appears here, at method grain. status 'declared' requires a catalog capability key; status 'none' asserts the handler legitimately requires none and must state why; status 'pending' is W-15's burndown backlog and is ratcheted downward only. Enforced by scripts/checkRouteCapabilities.mjs (prebuild) and locked by tests/access/routeCapabilityDeclaration.test.ts (RL-10). W-14 delivers the mechanism and the pilot slice; W-15 drives pending to zero.",
   "ratchet": {
     "max_pending": 693,
@@ -3650,6 +3650,12 @@
         "reason": "The custom fields flagged for public booking, for the ALLOY_PUBLIC_ORG_ID org. Same shape as booking-config: the org comes from environment rather than the request, and the projection is restricted to fields explicitly marked public. Service-role access with an org filter the caller cannot influence."
       }
     },
+    "app/api/public/forms/[token]/enrollment-artifact/route.ts": {
+      "GET": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the five sibling public/forms/[token]/enrollment-* routes already reviewed rather than left seeded `pending`: the family has a settled answer, and an identical route sitting in the backlog would inflate it with something that is not an open question. READ-ONLY and selects nothing: the only caller input is the token, and the artifact is chosen by the session's own active item. New in Real Enrollment V1 (PR #555); it answers which document the participant is on and where it is signed, across both renderer engines."
+      }
+    },
     "app/api/public/forms/[token]/enrollment-document/route.ts": {
       "GET": {
         "status": "none",
@@ -3678,6 +3684,12 @@
       "POST": {
         "status": "none",
         "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family or contact acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolvePublicFormLinkByToken / the tour equivalent, which refuse an inactive or expired link BEFORE any side effect and match by token_hash rather than by the plaintext presented — locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Same classification as the thirteen sibling public routes already reviewed; strength of the credential is a token-lifecycle question, not a capability one."
+      }
+    },
+    "app/api/public/forms/[token]/enrollment-upload/route.ts": {
+      "POST": {
+        "status": "none",
+        "reason": "The token in the request IS the credential, and there is no org principal to hold a capability: the caller is a family acting on a link sent to them. Requiring a capability would make the route unusable by everyone it exists for. Resolution goes through resolveParticipantEnrollmentFromToken, which reuses resolvePublicFormLinkByToken EXACTLY — the same resolver named in the sibling reviews — refusing an inactive or expired link BEFORE any side effect and matching by token_hash rather than by the plaintext presented, locked by RL-32's public-form leg (tests/access/publicFormCredentialResolution.test.ts). Classified with the five sibling public/forms/[token]/enrollment-* routes already reviewed rather than left seeded `pending`: the family has a settled answer, and an identical route sitting in the backlog would inflate it with something that is not an open question. The caller names a field id and nothing else, and it is bound to the session's own D-94-pinned schema before anything is written; the document classification comes from that schema and the owning entity is the session's own child, so the request cannot name a target. New in Real Enrollment V1 (PR #555); it is how a family attaches the immunization record their school is required to hold."
       }
     },
     "app/api/public/forms/[token]/resolve/route.ts": {
