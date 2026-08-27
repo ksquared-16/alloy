@@ -29,12 +29,11 @@ await test("SOURCE GUARD — the executor cannot signal, stop or delete anything
   ]) {
     assert.ok(!code.includes(forbidden), `the apply executor must not contain ${forbidden}`);
   }
-  // process.kill appears exactly once and ONLY as a signal-0 liveness probe,
-  // which sends nothing. Bounding it is stronger than banning the substring and
-  // then quietly needing an exception: any real signal fails this.
-  const kills = code.match(/process\.kill\([^)]*\)/g) || [];
-  assert.equal(kills.length, 1, "only the liveness probe may reference process.kill");
-  assert.match(kills[0], /process\.kill\(pid,\s*0\)/, "and it must send signal 0, never a real signal");
+  // The apply executor is now provably incapable of touching a process at all.
+  // Observation was split out precisely so this guard needs NO exception —
+  // an exception is what makes such a guard worthless.
+  assert.ok(!code.includes("process.kill"), "the apply executor must not reference process.kill at all");
+  assert.ok(!code.includes("execFileSync"), "and must not shell out");
   // It may unlink a PID RECORD, and that is the only unlink permitted.
   assert.equal((code.match(/unlinkSync\(/g) || []).length, 1, "exactly one metadata unlink is allowed");
   assert.match(code, /unlinkSync\(pidFile\)/, "and it must be the pid record");
@@ -188,4 +187,27 @@ await test("NC-SPLIT — an action outside the allowlist can never become applic
   assert.deepEqual(out.unsupported.map((c) => c.kind), ["retire_worktree", "stop_server"]);
   // And nothing unsupported survives into a built plan.
   assert.equal(R.applicableCorrections([{ kind: "rm_rf_everything" }]).corrections.length, 0);
+});
+
+
+await test("SOURCE GUARD — the OBSERVER may read reality but never change it", async () => {
+  const fsx = await import("node:fs");
+  const src = fsx.readFileSync(new URL("../lib/vacilando/reconciliation-observe.mjs", import.meta.url), "utf8");
+  const code = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  // It shells out on purpose — that is why it is a separate module — but only
+  // to READ. Every git invocation here must be a read-only subcommand.
+  const gitCalls = code.match(/execFileSync\("git",\s*\[[^\]]*\]/g) || [];
+  assert.ok(gitCalls.length > 0, "the observer is expected to read git");
+  for (const call of gitCalls) {
+    assert.match(call, /"(status|rev-parse|merge-base|worktree)"/, `non-read git call: ${call}`);
+    for (const w of ["remove", "prune", "checkout", "reset", "clean", "branch", "push", "rm"]) {
+      assert.ok(!call.includes(`"${w}"`), `observer must not run git ${w}`);
+    }
+  }
+  for (const forbidden of ["SIGTERM", "SIGKILL", "rm -rf", "rmSync", "unlinkSync", "writeFileSync"]) {
+    assert.ok(!code.includes(forbidden), `the observer must not contain ${forbidden}`);
+  }
+  // Liveness probing is allowed, and only at signal 0.
+  const kills = code.match(/process\.kill\([^)]*\)/g) || [];
+  assert.ok(kills.every((k) => /process\.kill\(pid,\s*0\)/.test(k)), "only signal-0 liveness probes are permitted");
 });

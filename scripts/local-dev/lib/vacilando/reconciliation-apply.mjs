@@ -12,9 +12,12 @@
  * re-checks and writes.
  */
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { planCorrections, classifyPort } from "./resource-reconciliation.mjs";
+import { planCorrections } from "./resource-reconciliation.mjs";
+import { normalizeVerdict, observeReconciliation } from "./reconciliation-observe.mjs";
+
+export { normalizeVerdict, observeReconciliation } from "./reconciliation-observe.mjs";
 
 export const RECONCILIATION_PLAN_SCHEMA = "vacilando.reconciliation_plan.v1";
 export const RECONCILIATION_POLICY_VERSION = "routine_reconciliation_metadata_v1";
@@ -51,85 +54,6 @@ export function applicableCorrections(actions = []) {
 
 export function isSafeCorrection(kind) {
   return SAFE_CORRECTION_KINDS.includes(String(kind || ""));
-}
-
-/* ── Observation ──────────────────────────────────────────────────────────
- * The same rules `vac health` already uses, in one owner so the plan and the
- * health report cannot disagree about what is true.
- */
-
-const PORTS = Object.freeze([3011, 3012, 3013, 3014, 3015, 3016]);
-
-/** Verdicts arrive hyphenated from the probe and underscored from the classifier. */
-export function normalizeVerdict(v) {
-  return String(v || "").replace(/-/g, "_");
-}
-
-function pidAlive(pid) {
-  if (!pid) return false;
-  try { process.kill(pid, 0); return true; } catch { return false; }
-}
-
-export function observeReconciliation({
-  root,
-  processes = [],
-  worktreeParent = null,
-  gitWorktrees = null,
-} = {}) {
-  const metaDir = join(root, "metadata");
-  const registered = new Map();
-  const registeredNames = [];
-  if (existsSync(metaDir)) {
-    for (const f of readdirSync(metaDir)) {
-      if (!f.endsWith(".env")) continue;
-      const name = f.replace(/\.env$/, "");
-      registeredNames.push(name);
-      const m = readFileSync(join(metaDir, f), "utf8").match(/PORT="?(\d+)"?/);
-      if (m) registered.set(Number(m[1]), name);
-    }
-  }
-
-  const ports = [];
-  for (const port of PORTS) {
-    const owner = registered.get(port) || null;
-    const pidFile = owner ? join(root, "pids", `${owner}.pid`) : null;
-    const recorded = pidFile && existsSync(pidFile) ? Number(readFileSync(pidFile, "utf8").trim()) : null;
-    const alive = pidAlive(recorded);
-    const serving = processes.find((p) => new RegExp(`-p\\s+${port}\\b`).test(p.command || "")) || null;
-    let verdict;
-    if (serving && owner && alive) verdict = "matched";
-    else if (serving && (!owner || !alive)) verdict = "unregistered_server";
-    else if (!serving && owner && !alive) verdict = "stale_record";
-    else if (!serving && !owner) verdict = "free";
-    else verdict = "matched";
-    ports.push({
-      port, registered: owner, recorded_worktree: owner, recorded_pid: recorded, alive,
-      serving_pid: serving ? serving.pid : null,
-      observed_owner: serving ? (serving.worktree || null) : null,
-      verdict,
-    });
-  }
-
-  // Worktrees: only what git itself reports is adoptable.
-  const onDisk = worktreeParent && existsSync(worktreeParent)
-    ? readdirSync(worktreeParent, { withFileTypes: true })
-      .filter((d) => d.isDirectory() && /^wt/.test(d.name)).map((d) => d.name)
-    : [];
-  const gitKnown = Array.isArray(gitWorktrees) ? gitWorktrees.map((w) => String(w).split("/").pop()) : null;
-  const worktrees = onDisk.map((name) => {
-    const isRegistered = registeredNames.includes(name);
-    // A directory git does not list is NOT a worktree and may never be adopted.
-    const inGit = gitKnown ? gitKnown.includes(name) : null;
-    return {
-      path: name,
-      managed: isRegistered,
-      in_git_worktree_list: inGit,
-      state: isRegistered ? "active" : "unmanaged",
-      unregistered_but_live: false,
-    };
-  });
-
-  return { ports, worktrees, registered_names: registeredNames, observed_at: null };
 }
 
 /* ── Plan identity ────────────────────────────────────────────────────────── */
