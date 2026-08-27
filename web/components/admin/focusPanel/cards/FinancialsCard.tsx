@@ -378,17 +378,26 @@ export default function FinancialsCard({ model, context, receded = false, coordi
 
                                 <section className="alloy-os-financials__band" data-financials-band="payment">
                                     <p className="alloy-os-financials__band-label">Payment</p>
-                                    {/* Only what is genuinely owned. Every other payment fact is
-                                        named in `unavailable` and therefore omitted, not zeroed. */}
-                                    {vm.unavailable.map((u) => (
-                                        <p
-                                            key={u.fact}
-                                            className="alloy-os-financials__note"
-                                            data-financials-unavailable={u.fact}
-                                        >
-                                            {unavailableLabel(u.fact)}
+                                    {/*
+                                        ONLY CANONICAL PAYMENT STATE THAT ACTUALLY EXISTS.
+                                        This region used to print the platform's own limitations at
+                                        the operator — "payments are not recorded for enrollment
+                                        accounts yet", "autopay is not configured in this platform",
+                                        "responsibility splits are owned by Processing". Those are
+                                        development findings; they belong in the ledger, not on a
+                                        card someone uses to run a childcare centre. Where no
+                                        canonical payment state exists, the region stays neutral and
+                                        says nothing rather than explaining our architecture.
+                                    */}
+                                    {vm.paymentSetup ? (
+                                        <p className="alloy-os-financials__note" data-financials-payment="state">
+                                            {vm.paymentSetup}
                                         </p>
-                                    ))}
+                                    ) : (
+                                        <p className="alloy-os-financials__note" data-financials-payment="none">
+                                            No payment method on file
+                                        </p>
+                                    )}
                                 </section>
                             </div>
                             )}
@@ -631,19 +640,6 @@ function householdIdFrom(context: OperationalContext): string | null {
 
 function money(cents: number, currency: string): string {
     return (cents / 100).toLocaleString(undefined, { style: "currency", currency: currency || "USD" });
-}
-
-function unavailableLabel(fact: string): string {
-    switch (fact) {
-        case "payments":
-            return "Payments are not recorded for enrollment accounts yet.";
-        case "autopay":
-            return "Autopay is not configured in this platform.";
-        case "payer_split":
-            return "Responsibility splits are owned by Processing.";
-        default:
-            return fact;
-    }
 }
 
 /**

@@ -377,6 +377,15 @@ function insightFor(
         const top = vm.criticalFacts[0]!;
         return `${name ? `${name} · ` : ""}${top.label}${top.severity ? ` · ${severityLabel(top.severity)}` : ""}`;
     }
+    /*
+     * ABSENCE IS NOT THE CARD'S IDENTITY.
+     *
+     * This used to read "Lennon Kurzman · No recorded health facts", which announced the emptiness as
+     * the headline. The card already exists in the child's context; the child's name is the answer,
+     * and the quiet empty state inside the Health section says the rest. Where there IS ongoing care
+     * to summarise, it is summarised.
+     */
     const total = vm.careFacts.length + vm.medications.length + vm.profileFacts.length;
-    return name ? `${name} · ${total === 0 ? "No recorded health facts" : `${total} care note${total === 1 ? "" : "s"}`}` : "";
+    if (!name) return "";
+    return total === 0 ? name : `${name} · ${total} care note${total === 1 ? "" : "s"}`;
 }

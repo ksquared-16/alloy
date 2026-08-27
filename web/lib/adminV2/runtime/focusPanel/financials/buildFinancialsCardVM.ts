@@ -148,6 +148,13 @@ export type FinancialsCardVM = {
     ledgerPeriods: FinancialsPeriodGroup[];
     chargeTemplates: FinancialsChargeTemplateOption[];
     unavailable: FinancialsUnavailable[];
+    /**
+     * Canonical payment state to show the operator, or null when none exists.
+     *
+     * Deliberately NOT the `unavailable` list: that records why the PLATFORM cannot answer, which is
+     * a development finding and never operator copy.
+     */
+    paymentSetup: string | null;
     /** Absent when the subject has no attendable/billable enrolment — the card renders no controls. */
     unavailableReason: string | null;
 };
@@ -190,6 +197,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
         ledgerPeriods: [],
         chargeTemplates: [],
         unavailable: [],
+        paymentSetup: null,
         unavailableReason: null,
     };
 }
