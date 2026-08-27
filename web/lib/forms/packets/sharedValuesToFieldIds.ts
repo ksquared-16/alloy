@@ -28,6 +28,7 @@
 import { canonicalKeyFor } from "@/lib/pos/packet/packetFieldPlan";
 import { formFieldCollectsValue } from "@/lib/forms/formFieldCollectsValue";
 import { walkScalarFormFields } from "@/lib/forms/formSchemaFieldWalk";
+import { parseProcessScopedAnswerKey } from "@/lib/enrollment/informationNeeds/participantCollectionMode";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 
 /**
@@ -36,6 +37,33 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
  * Unbound fields are never filled: they have no canonical identity, so nothing in the shared
  * namespace can legitimately claim to be their value. They remain the artifact's own to collect.
  */
+/**
+ * Which fields a PROCESS-SCOPED answer fills — exactly the one it names, and only on its own Form.
+ *
+ * Kept apart from the shared-value mapper above, and for the reason that mapper states: an unbound
+ * field has no canonical identity, so nothing in the shared namespace may claim to be its value.
+ * A process-scoped key claims nothing — it addresses a single destination by id — so it can fill
+ * that destination without any of the authority a shared value would carry.
+ */
+export function processScopedAnswersToFieldIds(
+    schema: Pick<FormSchemaV1, "fields">,
+    sessionValues: Readonly<Record<string, unknown>>,
+    formDefinitionId: string,
+): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    if (!sessionValues || !formDefinitionId) return out;
+    for (const [key, value] of Object.entries(sessionValues)) {
+        const parsed = parseProcessScopedAnswerKey(key);
+        if (!parsed || parsed.formDefinitionId !== formDefinitionId) continue;
+        out[parsed.fieldId] = value;
+    }
+    // Only fields this schema actually carries — a stale key from a superseded version fills nothing.
+    const present = new Set<string>();
+    walkScalarFormFields(schema as FormSchemaV1, (f) => present.add(f.id));
+    for (const id of Object.keys(out)) if (!present.has(id)) delete out[id];
+    return out;
+}
+
 export function sharedValuesToFieldIds(
     schema: Pick<FormSchemaV1, "fields">,
     sharedValues: Readonly<Record<string, unknown>>,

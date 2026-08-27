@@ -41,6 +41,9 @@ import ProcessingWorkflowStepper from "./ProcessingWorkflowStepper";
 import ProcessingSourceDocumentViewport from "./ProcessingSourceDocumentViewport";
 import WorkspaceZonePanel from "@/components/workspace/WorkspaceZonePanel";
 import ProcessingConceptReview from "./ProcessingConceptReview";
+import PacketIntakeReview, { type PacketFactRow } from "./PacketIntakeReview";
+import type { PacketIntakeResult } from "@/lib/pos/packetIntake/contracts";
+import type { PacketReviewDecision } from "@/lib/pos/packetIntake/packetIntakeDb";
 import type { BusinessConceptCandidate, ProposalDecisionState } from "@/lib/pos/discovery/contracts";
 import { toDecisionRecords, fromDecisionRecords } from "@/lib/pos/discovery/discoveryDecisionBridge";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
@@ -62,7 +65,9 @@ import { formatDisplayDateTime } from "@/lib/presentation/presentationDateFormat
 import { proposeGeneratedFormName } from "@/lib/pos/documentInstanceNaming";
 import ProcessingNativeFormCreatingState from "./ProcessingNativeFormCreatingState";
 import ProcessingConfirmDialog from "./ProcessingConfirmDialog";
-import { capabilitiesForFormat, detectProcessingSourceFormat } from "@/lib/pos/processingSourceCapabilities";
+import { capabilitiesForFormat, detectProcessingSourceFormat, processingImportAcceptList } from "@/lib/pos/processingSourceCapabilities";
+import { uploadProcessingDocument } from "@/lib/pos/processingDocumentUpload";
+import { isBulkAcceptSafe } from "@/lib/pos/discovery/bulkAcceptSafety";
 
 function formatWhen(iso: string | null | undefined): string {
     // Canonical presentation datetime (doctrine: typography-and-presentation-doctrine.md).
@@ -172,7 +177,28 @@ export default function PosTemplateSetupColumn({
     const [phase, setPhase] = useState<"review" | "generate">("review");
     // Configuration Discovery (FP16): concept-first review is the default entry; the detailed
     // field/question review is a drill-down. Operator decisions on proposals are held here.
-    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed">("concepts");
+    const [reviewMode, setReviewMode] = useState<"concepts" | "detailed" | "packet">("concepts");
+    /**
+     * A case that has been analysed as a packet IS a packet — land on it.
+     *
+     * The analysis was always durable and only the VIEW was not: `reviewMode` starts at "concepts",
+     * so reopening this case rendered the single-document draft instead. On the real certification
+     * packet that meant a three-question handbook preview standing in for 180 destinations, and the
+     * operator had no way to reach the analysis their tenant already held.
+     */
+    const restoredPacketRef = useRef<string | null>(null);
+    useEffect(() => {
+        const stored = detail?.packetIntake as PacketIntakeResult | null | undefined;
+        if (!caseId || !stored || restoredPacketRef.current === caseId) return;
+        restoredPacketRef.current = caseId;
+        setPacket(stored);
+        setReviewMode("packet");
+    }, [caseId, detail]);
+    // Packet analysis: the SAME case read across every source attached to it. Held here beside the
+    // single-document draft so the operator moves between them without leaving the case.
+    const [packet, setPacket] = useState<PacketIntakeResult | null>(null);
+    const [packetDecisions, setPacketDecisions] = useState<Record<string, PacketReviewDecision>>({});
+    const [packetBusy, setPacketBusy] = useState(false);
     const [conceptDecisions, setConceptDecisions] = useState<Record<string, ProposalDecisionState>>({});
     const [applying, setApplying] = useState(false);
     const [applicationCounts, setApplicationCounts] = useState<Record<string, number> | null>(null);
@@ -583,7 +609,9 @@ export default function PosTemplateSetupColumn({
         setConceptDecisions((prev) => {
             const next = { ...prev };
             for (const p of discovery.proposals) {
-                if (p.confidence.band === "high" && (next[p.id] ?? p.decision_state) === "proposed") next[p.id] = "accepted";
+                // Confidence alone is not a licence. `isBulkAcceptSafe` also requires an ownership
+                // conclusion that does not need a person — so a 99%-confident routing number stays.
+                if (isBulkAcceptSafe(p) && (next[p.id] ?? p.decision_state) === "proposed") next[p.id] = "accepted";
             }
             return next;
         });
@@ -784,6 +812,113 @@ export default function PosTemplateSetupColumn({
             setBusy(false);
         }
     };
+
+    /**
+     * Analyse EVERY source attached to this case as one packet. Same case, same authorization, same
+     * endpoint as the single-document detect — `mode: "packet"` is what changes. Publishes nothing.
+     */
+    /**
+     * Add another source to THIS case.
+     *
+     * The whole gap in one control: `processing_case_sources` always allowed several sources and
+     * packet analysis always read them, but nothing an operator could press ever wrote one — so
+     * "Analyse as one packet" sat next to a case that could only ever have one.
+     */
+    const addSourceInputRef = useRef<HTMLInputElement | null>(null);
+    const [addingSource, setAddingSource] = useState(false);
+
+    const handleAddSource = async (file: File | null) => {
+        if (!file || !caseId) return;
+        setAddingSource(true);
+        setErr(null);
+        try {
+            const res = await uploadProcessingDocument({
+                file,
+                intent: "generate_form",
+                displayName: file.name,
+                attachToCaseId: caseId,
+            });
+            if (res.attach_outcome && res.attach_outcome !== "attached" && res.attach_outcome !== "already_attached") {
+                throw new Error(
+                    res.attach_outcome === "is_primary"
+                        ? "That document is already this case's primary source."
+                        : `Couldn't attach that document (${res.attach_outcome}).`,
+                );
+            }
+            await reload();
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn't add that source");
+        } finally {
+            setAddingSource(false);
+            if (addSourceInputRef.current) addSourceInputRef.current.value = "";
+        }
+    };
+
+    const handleAnalyzePacket = async () => {
+        if (!caseId) return;
+        setPacketBusy(true);
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ mode: "packet" }),
+            });
+            const body = (await res.json().catch(() => ({}))) as {
+                data?: { packet_intake?: PacketIntakeResult; packet_review_decisions?: PacketReviewDecision[] };
+                error?: string;
+            };
+            if (!res.ok) throw new Error(body.error ?? "Couldn't analyse this case as a packet");
+            setPacket(body.data?.packet_intake ?? null);
+            const stored = body.data?.packet_review_decisions ?? [];
+            setPacketDecisions(Object.fromEntries(stored.map((d) => [`${d.subject}:${d.subject_id}`, d])));
+            setReviewMode("packet");
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn't analyse this case as a packet");
+        } finally {
+            setPacketBusy(false);
+        }
+    };
+
+    /** Record ONE packet review decision. Persisted immediately — a decision the operator made is
+     *  not something to lose to a reload. Actor and time are stamped server-side. */
+    const recordPacketDecision = async (d: Omit<PacketReviewDecision, "decided_by" | "decided_at">) => {
+        if (!caseId) return;
+        const key = `${d.subject}:${d.subject_id}`;
+        const optimistic: PacketReviewDecision = { ...d, decided_by: "you", decided_at: new Date().toISOString() };
+        const next = { ...packetDecisions, [key]: optimistic };
+        setPacketDecisions(next);
+        try {
+            await fetch(`/api/admin/processing/cases/${caseId}/form-draft/discovery-decisions`, {
+                method: "PUT",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ packet_decisions: Object.values(next).map(({ decided_by: _b, decided_at: _a, ...rest }) => rest) }),
+            });
+        } catch {
+            /* the decision is still shown; the next save retries the whole set */
+        }
+    };
+
+    /** Facts, in the review grain: one row per proposal, with its concept and source. */
+    const packetFacts: PacketFactRow[] = useMemo(() => {
+        if (!packet) return [];
+        const rows: PacketFactRow[] = [];
+        const OBLIGATION = new Set(["acknowledgement", "upload_requirement", "signature"]);
+        for (const src of packet.sources) {
+            const analysis = packet.source_analysis?.[src.document_id];
+            if (!analysis) continue;
+            const byCandidate = new Map(analysis.proposals.map((p) => [p.candidate_id, p]));
+            for (const c of analysis.concepts) {
+                if (OBLIGATION.has(c.kind)) continue;
+                const proposal = byCandidate.get(c.id);
+                if (!proposal) continue;
+                rows.push({ id: proposal.id, concept: c, proposal, documentId: src.document_id, documentTitle: src.title });
+            }
+        }
+        return rows;
+    }, [packet]);
 
     const handleCreate = async (generateAnyway = false) => {
         const trimmedFormName = formName.trim();
@@ -1091,6 +1226,34 @@ export default function PosTemplateSetupColumn({
                     testId="processing-generate-anyway-confirm"
                 />
                 </>
+            ) : reviewMode === "packet" && packet ? (
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                            <div className="text-[13px] font-semibold text-alloy-midnight">Packet review</div>
+                            <div className="text-[11px] text-alloy-midnight/55">
+                                {packet.sources.length} source documents analysed together. Proposals only — nothing is published from this screen.
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            className="rounded-lg border border-alloy-stone/25 px-2.5 py-1 text-[11px] text-alloy-midnight/70"
+                            data-testid="packet-back-to-document"
+                            onClick={() => setReviewMode("concepts")}
+                        >
+                            Back to this document
+                        </button>
+                    </div>
+                    <PacketIntakeReview
+                        packet={packet}
+                        facts={packetFacts}
+                        decisions={packetDecisions}
+                        onDecision={(d) => void recordPacketDecision(d)}
+                        onRenameArtifact={(artifactId, name) =>
+                            void recordPacketDecision({ subject: "artifact", subject_id: artifactId, decision: "renamed", name })
+                        }
+                    />
+                </div>
             ) : reviewMode === "concepts" && discovery && !created ? (
                 <ProcessingConceptReview
                     discovery={discovery}
@@ -1383,6 +1546,14 @@ export default function PosTemplateSetupColumn({
             <div className="shrink-0 border-t border-alloy-stone/22 border-l-[3px] border-l-alloy-bend-pine bg-white px-3 py-2">
                 {err ? <div className="mb-1.5 text-[11px] text-alloy-midnight/60">{err}</div> : null}
                 <div className="flex items-center justify-between gap-3">
+                    {(detail?.sources.length ?? 0) > 1 ? (
+                        <p className="min-w-0 text-[10px] text-alloy-midnight/55" data-testid="processing-case-sources">
+                            {detail!.sources.length} sources on this case:{" "}
+                            {detail!.sources
+                                .map((s) => `${s.display.originalFilename ?? s.display.label}${s.role === "primary" ? " (primary)" : ""}`)
+                                .join(" · ")}
+                        </p>
+                    ) : null}
                     <p className={`min-w-0 text-[10px] ${created ? "text-alloy-bend-pine" : "text-alloy-midnight/40"}`}>
                         {created
                             ? "Processing complete — your native form is ready. Continue in Studio → Forms to edit and publish."
@@ -1392,6 +1563,40 @@ export default function PosTemplateSetupColumn({
                         {!created ? (
                             <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                                 {busy ? "Re-detecting…" : "Re-detect questions"}
+                            </button>
+                        ) : null}
+                        {!created ? (
+                            <>
+                                <input
+                                    ref={addSourceInputRef}
+                                    type="file"
+                                    accept={processingImportAcceptList()}
+                                    className="hidden"
+                                    data-testid="processing-add-source-input"
+                                    onChange={(e) => void handleAddSource(e.target.files?.[0] ?? null)}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={addingSource || packetBusy || busy || creating}
+                                    onClick={() => addSourceInputRef.current?.click()}
+                                    className={WS_ACTION_SECONDARY}
+                                    data-testid="processing-add-source"
+                                    title="Attach another document to this case, then analyse them together"
+                                >
+                                    {addingSource ? "Adding…" : "Add source"}
+                                </button>
+                            </>
+                        ) : null}
+                        {!created ? (
+                            <button
+                                type="button"
+                                disabled={packetBusy || busy || creating}
+                                onClick={() => void handleAnalyzePacket()}
+                                className={WS_ACTION_SECONDARY}
+                                data-testid="processing-analyze-packet"
+                                title="Analyse every source attached to this case together"
+                            >
+                                {packetBusy ? "Analysing packet…" : packet ? "Re-analyse packet" : "Analyse as one packet"}
                             </button>
                         ) : null}
                         {created ? (

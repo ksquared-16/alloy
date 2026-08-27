@@ -15,6 +15,7 @@
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { formatPhoneDisplay } from "@/lib/intake/normalize/phone";
 
 /**
  * The control a turn needs.
@@ -162,7 +163,30 @@ export function optionalAffirmLabel(objective: ParticipantObjectiveWire): string
  * confusing question, so the rule is: recognise the handful of facts Enrollment actually asks about,
  * and otherwise present the operator's own words unchanged rather than mangling them.
  */
-export function naturalFieldLabel(label: string | null | undefined): string {
+/** Canonical facts Enrollment actually asks about, keyed by the fact rather than its printing. */
+const KNOWN_BY_CANONICAL_KEY: Record<string, string> = {
+    child_first_name: "first name",
+    child_last_name: "last name",
+    child_date_of_birth: "date of birth",
+    dob: "date of birth",
+    date_of_birth: "date of birth",
+    guardian_name: "name",
+    name: "name",
+    phone: "phone number",
+    guardian_phone: "phone number",
+    email: "email address",
+    guardian_email: "email address",
+    address: "address",
+    allergies: "allergies",
+    start_date: "first day",
+};
+
+export function naturalFieldLabel(label: string | null | undefined, canonicalKey?: string | null): string {
+    // The canonical key first: it names the FACT, while the label only records where it was printed.
+    // "Childs Last Name" is a bilingual column heading with its apostrophe lost to OCR; the key
+    // behind it is `child_last_name`, and that is the thing worth recognising.
+    const fromKey = canonicalKey ? KNOWN_BY_CANONICAL_KEY[canonicalKey.toLowerCase().split(":").pop() ?? ""] : undefined;
+    if (fromKey) return fromKey;
     const raw = authoredOrHumanizedLabel(label);
     if (!raw) return "this";
     const key = raw.toLowerCase().replace(/[^a-z]+/g, " ").trim();
@@ -180,6 +204,8 @@ export function naturalFieldLabel(label: string | null | undefined): string {
     };
     if (known[key]) return known[key];
     // Otherwise: the operator's label, lower-cased only when it is Title Case boilerplate.
+    // Sentence-case authored text is left exactly as written — a school's own words for its own
+    // parents are not the platform's to re-case, which is a decision this repository already made.
     return /^[A-Z][a-z]+(?: [A-Z][a-z]+)*$/.test(raw) ? raw.toLowerCase() : raw;
 }
 
@@ -233,6 +259,15 @@ export function displayValue(value: unknown): string {
         const formatted = formatDisplayDate(raw, { timeZone: "UTC" });
         if (formatted && !isIsoDateString(formatted)) return formatted;
     }
+    /*
+     * A phone is STORED as ten digits and READ as a phone number.
+     *
+     * The normalizer is right to keep `5415551234` — one canonical string, no punctuation to
+     * disagree about. But that is a storage decision, and it was reaching the parent verbatim in
+     * the correction surface, where it reads as a serial number rather than the number they gave.
+     * Formatting is presentation, so it happens here and the stored value never changes.
+     */
+    if (/^\d{10}$/.test(raw)) return formatPhoneDisplay(raw);
     return raw;
 }
 
@@ -290,14 +325,133 @@ export function participantQuestionSegments(
     return [{ text: participantQuestion(objective), emphasis: false }];
 }
 
+
+/**
+ * Whose fact is this, in the words a person would use?
+ *
+ * The subject belongs to the NEED — its grain and its canonical entity — and never to the imported
+ * label. A guardian's phone number arrives on a page headed "Parent/Guardian #1 Phone Number", under
+ * a Form built around a child, and the previous real run duly asked the parent for "Marisol's phone
+ * number". Reading the grain instead is the whole repair.
+ *
+ *  - the child            → the child's familiar name
+ *  - the responding adult → you / your
+ *  - the household        → your family's
+ *  - a signature          → you / your
+ */
+export type ConversationVoice = {
+    /** "Marisol's" / "your" / "your family's" — the possessive before a fact. */
+    possessive: string;
+    /** "Marisol" / "you" — the subject of a sentence. */
+    subject: string;
+    /** True when the person being spoken to owns the fact, so "Do you…" reads correctly. */
+    secondPerson: boolean;
+};
+
+export function conversationVoice(objective: ParticipantObjectiveWire): ConversationVoice {
+    const turn = objective.next_turn as { scope?: string | null; entity_type?: string | null };
+    const child = familiarName(objective);
+    const childPossessive = child ? `${child}'s` : "your child's";
+
+    // The canonical entity is the strongest signal, because it names the record the fact lives on.
+    switch ((turn.entity_type ?? "").toLowerCase()) {
+        case "person":
+        case "guardian":
+        case "contact":
+            return { possessive: "your", subject: "you", secondPerson: true };
+        case "customer":
+            return { possessive: "your family's", subject: "your family", secondPerson: true };
+        case "child":
+        case "customer_member":
+        // An enrolment fact is about the child being enrolled — "Marisol's first day", not the
+        // family's. The record it lives on is the enrolment; the person it describes is the child.
+        case "enrollment":
+            return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+    }
+
+    // No canonical entity — fall back to grain. `recipient` is the person signing: they are here.
+    if ((turn.scope ?? "") === "recipient") return { possessive: "your", subject: "you", secondPerson: true };
+    if ((turn.scope ?? "") === "household") return { possessive: "your family's", subject: "your family", secondPerson: true };
+    return { possessive: childPossessive, subject: child || "your child", secondPerson: false };
+}
+
+
+/**
+ * The school already asked it — ask it their way.
+ *
+ * Many destinations are not field labels at all but whole questions the school wrote: "How would you
+ * describe your child's gender?", "Does your child become tired or nap during the day?". Wrapping
+ * one in the platform's own frame produced "What is Marisol's How would you describe your child's
+ * gender??" — the wrong subject, the school's question buried inside it, and two question marks.
+ *
+ * So an authored question is asked as written, with one substitution: the school wrote "your child"
+ * because it did not know the child's name, and the specialist sitting beside the parent does.
+ */
+function authoredQuestionPrompt(label: string, child: string | null): string | null {
+    const raw = (label ?? "").trim();
+    if (raw.length < 8) return null;
+    const isQuestion = raw.endsWith("?") || /^(has|have|does|do|did|is|are|was|were|can|could|will|would|should|how|what|when|where|which|who|why)\b/i.test(raw);
+    if (!isQuestion) return null;
+    let text = raw.replace(/\s*[:?]+\s*$/, "").trim();
+    if (child) {
+        text = text
+            .replace(/\byour child's\b/gi, `${child}'s`)
+            .replace(/\byour student's\b/gi, `${child}'s`)
+            .replace(/\byour child\b/gi, child)
+            .replace(/\byour student\b/gi, child);
+    }
+    return `${text}?`;
+}
+
+
+/**
+ * The participant-facing question for a need that is NOT the current turn.
+ *
+ * A cluster shows its siblings, and they must be worded exactly as they will be when their turn
+ * comes — same grain, same voice, same authored-question handling. So this composes the minimal
+ * turn shape and asks the one function that already knows how to say it, rather than growing a
+ * second wording path that would drift from the first.
+ */
+export function questionForNeed(
+    need: {
+        identity: { scope?: string | null; entity_type?: string | null; canonical_key?: string | null };
+        state: string;
+        current_value: unknown;
+        occurrence_count: number;
+        occurrences: readonly { label: string }[];
+    },
+    subjectDisplayName: string | null,
+): string {
+    const confirming = need.state === "known_requires_confirmation";
+    return participantQuestion({
+        subject_display_name: subjectDisplayName,
+        next_turn: {
+            kind: confirming ? "confirm_known_value" : "collect_missing_value",
+            prompt: "",
+            proposed_value: confirming ? need.current_value : null,
+            resolves_occurrences: need.occurrence_count,
+            input_type: null,
+            label: need.occurrences[0]?.label ?? null,
+            options: [],
+            optional: false,
+            field_ids: [],
+            scope: need.identity.scope ?? null,
+            entity_type: need.identity.entity_type ?? null,
+            canonical_key: need.identity.canonical_key ?? null,
+        },
+    } as unknown as ParticipantObjectiveWire);
+}
+
 export function participantQuestion(objective: ParticipantObjectiveWire): string {
     const turn = objective.next_turn;
     const subject = familiarName(objective);
     // Always `'s`, including for names ending in s — "Test Process's", the way the parent would say
     // it. The plural-possessive rule does not apply to a personal name.
-    const possessive = subject ? `${subject}'s` : "your child's";
-    const them = subject || "your child";
-    const label = naturalFieldLabel(turn.label);
+    const voice = conversationVoice(objective);
+    const possessive = voice.possessive;
+    const them = voice.subject;
+    // The canonical key names the fact; the imported label only describes where it was printed.
+    const label = naturalFieldLabel(turn.label, (turn as { canonical_key?: string | null }).canonical_key ?? null);
 
     if (turn.kind === "confirm_known_value") {
         const shown = displayValue(turn.proposed_value);
@@ -314,7 +468,26 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         if (label.includes("allerg")) {
             return `Does ${them} have any allergies we should know about?`;
         }
-        return `What is ${possessive} ${label}?`;
+        const authored = authoredQuestionPrompt(turn.label ?? "", subject);
+        if (authored) return authored;
+
+        /*
+         * NO CANONICAL OWNER, SO NO POSSESSIVE.
+         *
+         * A bespoke school prompt — "General health:", "Primary Physician Name:" — binds to nothing,
+         * so there is no record to say whose it is. The household fallback filled that silence with
+         * "your family's", and produced "What is your family's General health?": a claim of ownership
+         * the platform cannot support, wrapped around wording the school already got right.
+         *
+         * These prompts are the school's own, and the topic heading above them supplies the context
+         * a possessive was standing in for. So they are asked as written.
+         */
+        if (!(turn as { entity_type?: string | null }).entity_type) {
+            const own = (turn.label ?? "").trim().replace(/\s*[:?]+\s*$/, "");
+            if (own.length >= 2) return `${own}?`;
+        }
+        // "What is your phone number?" — not "What is your your phone number?".
+        return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
     }
     if (turn.kind === "complete_artifact") {
         // The instruction lives on the [Review paperwork] action, not in the sentence — the
@@ -329,9 +502,17 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
     return turn.prompt;
 }
 
-/** The line that introduces the signature, once the paperwork has been reviewed. */
-export function participantSignaturePrompt(): string {
-    return "Everything look right? One last step — sign below.";
+/**
+ * The line that introduces the last step, once the paperwork has been reviewed.
+ *
+ * Not every document is signed. The completed Admissions application asks for no signature, and
+ * saying "One last step — sign below" above a page with nothing to sign told the parent to look for
+ * something that was not there.
+ */
+export function participantSignaturePrompt(signatureExpected = true): string {
+    return signatureExpected
+        ? "Everything look right? One last step — sign below."
+        : "Everything look right? Finish this one when you're ready.";
 }
 
 /**
@@ -382,8 +563,19 @@ export function participantProgressDisplay(
     if (remaining <= 0) return { label: "Almost there", percent: work.percent };
     // Orientation, not gamification: no streaks, no celebration, no "you're doing great".
     if (remaining === 1) return { label: "One more thing", percent: work.percent };
-    if (work.percent >= 70) return { label: `Almost there · ${remaining} left`, percent: work.percent };
-    return { label: `${remaining} things left`, percent: work.percent };
+
+    /*
+     * WHERE they are, not how many are left.
+     *
+     * "41 things left" is a true number and a discouraging one, and it is the count this product
+     * has spent the whole slice refusing to show — first as "Question 17 of 92", now in its last
+     * hiding place. A parent working through a topic wants to know which topic; the percentage
+     * beside it already says how far along they are.
+     */
+    const topic = objective.next_turn.cluster?.title;
+    if (topic) return { label: topic, percent: work.percent };
+    if (work.percent >= 70) return { label: "Almost there", percent: work.percent };
+    return { label: "In progress", percent: work.percent };
 }
 
 export function progressLine(objective: ParticipantObjectiveWire): string {

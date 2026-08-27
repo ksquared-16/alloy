@@ -13,6 +13,7 @@ import {
 import type { InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import type { ChildFocusSavePatch } from "@/lib/adminV2/runtime/focusPanel/children/childFocusEditState";
 import { reconcileLegacyChildEnrollmentAlias } from "@/lib/fields/canonicalFieldProjection";
+import { CHILD_PROFILE_INLINE_SAVE_MAP } from "@/lib/fields/customerMemberProfileSurfaces";
 
 const INLINE_IDENTITY_KEYS = new Set<string>([
     "child.first_name",
@@ -20,13 +21,12 @@ const INLINE_IDENTITY_KEYS = new Set<string>([
     "child.date_of_birth",
 ]);
 
-const INLINE_PROFILE_KEYS: Readonly<Record<string, string>> = {
-    "child.preferred_name": "preferred_name",
-    "child.gender": "gender",
-    "child.allergies": "allergies",
-    "child.medical_notes": "medical_notes",
-    "child.special_instructions": "special_instructions",
-};
+/**
+ * Derived from the child-profile manifest. Hand-maintaining this map was one of four parallel lists
+ * a new durable child fact had to be added to; the manifest is the owner now.
+ * @see lib/fields/customerMemberProfileSurfaces
+ */
+const INLINE_PROFILE_KEYS: Readonly<Record<string, string>> = CHILD_PROFILE_INLINE_SAVE_MAP;
 
 const INLINE_OCM_NOTES_REFS = new Set<string>(["inquiry_child.notes"]);
 

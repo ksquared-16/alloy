@@ -20,14 +20,20 @@ import { discoverConcepts } from "./conceptDiscovery";
 import { matchConcepts } from "./configurationMatching";
 
 const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
-    existing_fields: "Existing fields matched",
-    new_fields: "New fields proposed",
-    form_responses: "Form responses (no field)",
+    existing_fields: "Alloy already has",
+    new_fields: "New durable fields",
+    held_for_owner: "Handled by another area",
+    safeguarding: "Safeguarding restrictions found",
+    financial: "Payments",
+    derived: "Handled automatically",
+    needs_ownership_review: "Needs your decision",
+    form_responses: "Families will provide",
     relationships: "Relationships found",
     upload_requirements: "Upload requirements found",
     acknowledgements: "Acknowledgements found",
     signatures: "Signatures found",
     static_content: "Static / legal sections found",
+    collections: "Repeating structures found",
     output_copies: "Generated / output copies found",
     needs_review: "Items needing review",
 };
@@ -35,6 +41,10 @@ const CATEGORY_LABEL: Record<DiscoveryCategory, string> = {
 const CATEGORY_ORDER: DiscoveryCategory[] = [
     "existing_fields",
     "new_fields",
+    "held_for_owner",
+    "safeguarding",
+    "financial",
+    "derived",
     "form_responses",
     "relationships",
     "upload_requirements",
@@ -42,26 +52,46 @@ const CATEGORY_ORDER: DiscoveryCategory[] = [
     "signatures",
     "static_content",
     "output_copies",
+    "collections",
+    "needs_ownership_review",
     "needs_review",
 ];
 
-function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
+/**
+ * The ONE categorizer. Exported because the review UI used to keep a second copy of this switch,
+ * and the copy fell behind: `financial_payment` and `derived_value_system` were added here and not
+ * there, so those rows rendered correctly inside "All" while their own tabs read zero. A duplicated
+ * taxonomy does not disagree loudly — it disagrees in the one place nobody is looking.
+ */
+export function categoryFor(p: ConfigurationProposal): DiscoveryCategory {
     switch (p.disposition) {
         case "reuse_canonical_field":
         case "reuse_existing_field":
             return "existing_fields";
         case "create_proposed_field":
             return "new_fields";
+        case "held_for_canonical_owner":
+            return "held_for_owner";
         case "form_only_response":
             return "form_responses";
         case "relationship_binding":
             return "relationships";
+        case "safeguarding_binding":
+            return "safeguarding";
+        case "financial_payment":
+            return "financial";
+        case "derived_value_system":
+            return "derived";
+        case "held_unknown_owner":
+            return "needs_ownership_review";
         case "upload_requirement":
             return "upload_requirements";
         case "acknowledgement":
             return "acknowledgements";
         case "signature_requirement":
             return "signatures";
+        case "structured_collection":
+            return "collections";
         case "static_content":
             return "static_content";
         case "output_binding":

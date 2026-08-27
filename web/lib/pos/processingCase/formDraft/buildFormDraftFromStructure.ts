@@ -32,8 +32,9 @@ function mapType(t: StructureFieldType): { type: DraftFormFieldType; warning?: s
         case "file":
             return { type: "file_ref" };
         case "select":
-            // No options are known from the document — keep as text and flag for the builder.
-            return { type: "text", warning: "choice" };
+            // Resolved by the caller: a choice WITH declared options drafts as a choice; without
+            // them it stays text and is flagged, because inventing options would be worse.
+            return { type: "select" };
         case "text":
         case "unknown":
         default:
@@ -79,7 +80,13 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
         for (const f of sec.fields) {
             fieldCounter += 1;
             const id = slugId("field", fieldCounter);
-            const mapped = mapType(f.suggested_type);
+            const declaredOptions = f.options?.filter((o) => o.trim().length > 0) ?? [];
+            const mappedRaw = mapType(f.suggested_type);
+            // A choice without options is not a choice we can publish — keep it text and say so.
+            const mapped =
+                mappedRaw.type === "select" && declaredOptions.length === 0
+                    ? { type: "text" as const, warning: "choice" }
+                    : mappedRaw;
             if (mapped.warning === "choice" && !choiceFlagged) {
                 warnings.push("Some fields look like choices (select). They were drafted as text — add options in the builder.");
                 choiceFlagged = true;
@@ -92,6 +99,8 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
                 description: f.evidence ? undefined : undefined,
                 confidence: f.confidence === "invalid" ? "low" : f.confidence,
                 evidence: f.evidence,
+                ...(declaredOptions.length ? { options: declaredOptions } : {}),
+                ...(f.validate ? { validate: f.validate } : {}),
                 ...(typeof f.page === "number" ? { page: f.page } : {}),
                 // Geometry the native-layout detector recovered. Without it the review canvas has
                 // nothing to place, which is why Detailed Questions rendered an empty document.

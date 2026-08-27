@@ -176,7 +176,13 @@ export function PacketBuilderWorkspaceLayout({
                             />
                         </label>
                         <label className="flex items-center gap-2 pt-1 text-sm sm:col-span-2">
-                            <input type="checkbox" checked={defActive} disabled={busy} onChange={(e) => onDefActiveChange(e.target.checked)} />
+                            <input
+                                type="checkbox"
+                                className="h-4 w-4 rounded border-alloy-forge/25 text-alloy-bend-pine accent-alloy-bend-pine focus:ring-alloy-bend-pine/30"
+                                checked={defActive}
+                                disabled={busy}
+                                onChange={(e) => onDefActiveChange(e.target.checked)}
+                            />
                             <span className={opMetadata}>Active — allow new packet runs</span>
                         </label>
                         <label className="space-y-1 text-sm sm:col-span-2">
@@ -190,15 +196,40 @@ export function PacketBuilderWorkspaceLayout({
                         </label>
                     </div>
                     <div className="mt-3">
-                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={onSaveMeta}>
+                        {/*
+                         * Pine, not the shared PrimaryButton.
+                         *
+                         * `PrimaryButton` is `bg-alloy-blue` and is used app-wide, so changing it is
+                         * not this pass's business. Alloy's Configuration doctrine is that a primary
+                         * action is Bend Pine, so this surface states that directly rather than
+                         * inheriting a blue that contradicts it.
+                         */}
+                        <button
+                            type="button"
+                            className="inline-flex items-center justify-center rounded-lg bg-alloy-bend-pine px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-alloy-bend-pine/90 disabled:opacity-50"
+                            disabled={busy}
+                            onClick={onSaveMeta}
+                        >
                             Save overview
-                        </PrimaryButton>
+                        </button>
                     </div>
                 </IntakeWorkspaceRegion>
 
                 {pipelinePreview.length > 0 ?
                     <section className={opRegionSeparator}>
-                        <IntakeWorkspaceRegion title="Saved pipeline" lead="Current step order on the server.">
+                        {/*
+                         * "Included forms", not "Saved pipeline".
+                         *
+                         * The operator's question here is which artifacts make up this packet — the
+                         * old title answered a question about server state instead. The ORDER is
+                         * kept and still numbered, because it is not cosmetic: the runtime advances
+                         * through `current_sequence_index`, and review renders in the same order.
+                         */}
+                        <IntakeWorkspaceRegion
+                            title="Included forms"
+                            lead={`${pipelinePreview.length} form${pipelinePreview.length === 1 ? "" : "s"} · the order a family meets them, and the order they are reviewed in.`}
+                            data-testid="packet-region-included-forms"
+                        >
                             <ol className={opGroupedSurface}>
                                 {pipelinePreview.map((step) => (
                                     <li key={`${step.sequence_index}-${step.form_definition_id}`} className={opGroupedRowInner}>
@@ -221,10 +252,18 @@ export function PacketBuilderWorkspaceLayout({
                     </section>
                 :   null}
 
-                <section id="packet-steps" className={opRegionSeparator} data-testid="packet-region-steps">
+                <section id="packet-steps" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-steps">
+                    {/*
+                     * Confirm and reorder — not rebuild.
+                     *
+                     * Processing already determined which artifacts this packet contains and handed
+                     * them over; asking an operator to author the list again would discard that. The
+                     * ORDER stays editable because it is runtime-significant: the session advances
+                     * through `current_sequence_index`, and review renders in the same order.
+                     */}
                     <IntakeWorkspaceRegion
-                        title="Step composition"
-                        lead="Build the ordered intake flow — each step is one form."
+                        title="Confirm order"
+                        lead="The order a family meets these forms, and the order they are reviewed in. Processing already chose the forms — change the order here if it should read differently."
                     >
                         <PacketStepCompositionEditor
                             steps={steps}
@@ -241,8 +280,17 @@ export function PacketBuilderWorkspaceLayout({
                     </IntakeWorkspaceRegion>
                 </section>
 
-                <section id="packet-distribution" className={opRegionSeparator} data-testid="packet-region-distribution">
-                    <IntakeWorkspaceRegion title="Distribution" lead="Send or publish this intake workflow.">
+                <section id="packet-distribution" className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-distribution">
+                    {/*
+                     * Named so it cannot be mistaken for Enrollment execution. `enrollment.start`
+                     * already realizes the participant objective — it derives its own packet, mints
+                     * its own link and creates the session. A link minted here is a DIRECT send,
+                     * outside any configured process.
+                     */}
+                    <IntakeWorkspaceRegion
+                        title="Send this packet directly"
+                        lead="For sending this packet on its own. Configured processes such as Enrollment launch their participant work automatically — you do not need to send a link here for those."
+                    >
                         <PacketDistributionLaunchPanel
                             packetName={defName}
                             busy={busy}
@@ -255,10 +303,10 @@ export function PacketBuilderWorkspaceLayout({
                     </IntakeWorkspaceRegion>
                 </section>
 
-                <section className={opRegionSeparator} data-testid="packet-region-sessions">
+                <section className={clsx(opRegionSeparator, "rounded-[14px] border border-alloy-stone/20 bg-white p-4")} data-testid="packet-region-sessions">
                     <IntakeWorkspaceRegion
                         title="Sessions & review"
-                        lead="Families appear here after they submit a completed packet run."
+                        lead="Families appear here after they submit a completed run of this packet, whether it was sent directly or launched by a process."
                     >
                         <p className={opMetadata}>
                             {sessionCount > 0 ?
@@ -270,7 +318,7 @@ export function PacketBuilderWorkspaceLayout({
                                 <button
                                     type="button"
                                     onClick={onOpenWorkQueue}
-                                    className="text-sm font-semibold text-alloy-pine hover:underline"
+                                    className="text-sm font-semibold text-alloy-bend-pine hover:underline"
                                 >
                                     Open session inbox
                                 </button>

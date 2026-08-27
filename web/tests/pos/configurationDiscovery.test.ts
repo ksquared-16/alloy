@@ -55,20 +55,39 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
     });
 
     it("produces the operator-facing summary categories", () => {
-        expect(summaryCount(/Existing fields matched/)).toBeGreaterThanOrEqual(6);
-        expect(summaryCount(/Relationships found/)).toBe(3);
-        expect(summaryCount(/Upload requirements found/)).toBe(2);
+        // Labels are operator-facing now ("Alloy already has", not "Existing fields matched"). The
+        // counts are the assertion; the wording belongs to the review, not to discovery's contract.
+        expect(summaryCount(/Alloy already has/)).toBeGreaterThanOrEqual(6);
+        // Five, not three: the care-provider definitions added in Slice 4 mean this school's
+        // "Primary Care Doctor" and "Dentist" fields bind to a physician / dentist relationship
+        // instead of being proposed as new child fields. Different school, same vocabulary.
+        expect(summaryCount(/Relationships found/)).toBe(5);
+        // Three, not two: the page asks for immunization records on or before the first day AND for
+        // updated records after every new immunization. The old fixed lexicon collapsed both into
+        // one "immunization" requirement; they are different obligations with different timing.
+        expect(summaryCount(/Upload requirements found/)).toBe(3);
         expect(summaryCount(/Acknowledgements found/)).toBe(1);
         expect(summaryCount(/Signatures found/)).toBe(2);
         expect(summaryCount(/output copies found/)).toBe(1);
     });
 
-    it("AUDIT: proposes only genuinely durable new fields — screening data is form-only, not new fields", () => {
+    it("AUDIT: proposes NO new fields from inference — screening data is form-only", () => {
         const newFields = proposals.filter((p) => p.disposition === "create_proposed_field");
         const formOnly = proposals.filter((p) => p.disposition === "form_only_response");
-        // The 5 audited durable new fields — no more (25→5 correction). Optimize ownership, not count.
+        // This assertion has moved twice, in the same direction. It was 25 durable new fields, then
+        // 3 after the Slice 4 audit, and it is 0 now: a new field is an affirmative ownership
+        // conclusion, and none of the three survives one.
+        //
+        //   "Date of Enrollment" — an execution date, resolved from the execution.
+        //   "Nickname"          — binds to the settled `preferred_name` field.
+        //   "Preferred Hospital"— unmatched, which is the absence of a conclusion, not one.
         const newLabels = newFields.map((p) => concepts.find((c) => c.id === p.candidate_id)!.label).sort();
-        expect(newLabels).toEqual(["Date of Enrollment", "Dentist Name/Practice", "Nickname", "Preferred Hospital", "Primary Care Doctor Name/Practice"]);
+        expect(newLabels).toEqual([]);
+        const dispositionOf = (re: RegExp) =>
+            proposals.find((p) => re.test(concepts.find((c) => c.id === p.candidate_id)!.label))?.disposition;
+        expect(dispositionOf(/Date of Enrollment/)).toBe("derived_value_system");
+        expect(dispositionOf(/Nickname/)).toBe("reuse_canonical_field");
+        expect(dispositionOf(/Preferred Hospital/)).toBe("held_unknown_owner");
         // The health-history screening grid is FORM-ONLY, never durable customer_member fields.
         for (const screening of ["Ear Infections", "Diabetes", "Asthma", "Nosebleeds", "Convulsions/Seizures", "Heart Disease/Defect"]) {
             expect(formOnly.some((p) => concepts.find((c) => c.id === p.candidate_id)!.label === screening)).toBe(true);
@@ -78,9 +97,12 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(formOnly.some((p) => /health care plan/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
         expect(formOnly.some((p) => /if yes, please explain/i.test(concepts.find((c) => c.id === p.candidate_id)!.label))).toBe(true);
         expect(formOnly.length).toBeGreaterThanOrEqual(18);
-        // A durable medical-provider field carries health sensitivity.
-        const doctor = newFields.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
-        expect(doctor?.proposed_field?.sensitivity).toBe("health");
+        // The doctor is no longer a proposed FIELD at all — it binds to the physician relationship,
+        // which is a better answer than a health-sensitive field on the child. The sensitivity claim
+        // moves with it: what carries health data now is the person the relationship links.
+        const doctor = proposals.find((p) => /Primary Care Doctor/.test(concepts.find((c) => c.id === p.candidate_id)!.label));
+        expect(doctor?.disposition).toBe("relationship_binding");
+        expect(doctor?.target_relationship_role).toBe("physician");
     });
 
     it("matches high-confidence canonical fields to the existing model (no duplicates)", () => {
@@ -102,20 +124,23 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
     it("classifies guardians, emergency contacts, and pickups as child-scoped relationships", () => {
         const rel = proposals.filter((p) => p.disposition === "relationship_binding");
         const roles = rel.map((p) => p.target_relationship_role).sort();
-        expect(roles).toEqual(["authorized_pickup", "emergency_contact", "guardian"]);
+        expect(roles).toEqual(["authorized_pickup", "dentist", "emergency_contact", "guardian", "physician"]);
         // relationship concepts, not flat person fields
         expect(concepts.filter((c) => c.kind === "relationship_group").every((c) => c.cardinality === "multiple")).toBe(true);
         // no "Emergency Contact #1 Name" leaked as a scalar field concept
         expect(concepts.some((c) => c.kind === "scalar_field" && /Emergency Contact #/.test(c.label))).toBe(false);
     });
 
-    it("recognizes both document-upload requirements (immunization + conditional health-care-plan)", () => {
+    it("recognizes each document-upload requirement the page states, separately", () => {
         const uploads = proposals.filter((p) => p.disposition === "upload_requirement");
-        expect(uploads.length).toBe(2);
         expect(uploads.every((p) => p.target_requirement_type === "upload")).toBe(true);
         const labels = uploads.map((p) => concepts.find((c) => c.id === p.candidate_id)?.label ?? "");
         expect(labels.some((l) => /immuniz/i.test(l))).toBe(true);
-        expect(labels.some((l) => /health care plan/i.test(l))).toBe(true);
+        expect(labels.some((l) => /care plan/i.test(l))).toBe(true);
+        // The ongoing "bring us updated records" instruction is its own obligation, not a restatement
+        // of the first-day requirement.
+        expect(labels.some((l) => /updated records/i.test(l))).toBe(true);
+        expect(uploads.length).toBe(3);
     });
 
     it("recognizes the emergency-authorization acknowledgement", () => {
@@ -139,12 +164,28 @@ describe("Configuration Discovery — Enrollment Record acceptance fixture", () 
         expect(concepts.find((c) => c.id === out?.candidate_id)?.kind).toBe("output_copy");
     });
 
-    it("proposes a durable new field for a genuine unmatched attribute (choice with options)", () => {
+    it("HOLDS a genuine unmatched attribute rather than concluding it is durable truth", () => {
+        // Slice 7 overturns what this test used to assert. "Preferred Hospital" is unmatched, and
+        // unmatched is not an ownership conclusion — it is the absence of one. Alloy no longer
+        // reasons "nothing matched, so make a field"; that is exactly how a routing number became a
+        // customer field.
         const hospital = proposalFor(/Preferred Hospital/);
-        expect(hospital?.disposition).toBe("create_proposed_field");
-        expect(hospital?.proposed_field?.data_type).toBe("select");
-        expect((hospital?.proposed_field?.option_set ?? []).length).toBe(6);
-        // new fields are proposals only — never auto-created
+        expect(hospital?.disposition).toBe("held_unknown_owner");
+        expect(hospital?.proposed_field, "a held concept must carry nothing creatable").toBeUndefined();
+        expect(hospital?.ownership_routing?.owner).toBe("HELD_UNKNOWN_OWNER");
+    });
+
+    it("leaves the operator an explicit, single-row way to make it durable", () => {
+        // Held is not a straitjacket. An operator who knows their programme may decide this IS
+        // durable — but it must be one person on one row, never an inference and never a bulk sweep.
+        const hospital = proposalFor(/Preferred Hospital/)!;
+        const create = hospital.alternatives.find((a) => a.disposition === "create_proposed_field");
+        expect(create, "the operator needs a way to resolve a held row").toBeDefined();
+        expect(create!.confidence.signals.join(" ")).toMatch(/Alloy did not conclude this/i);
+        expect(hospital.ownership_routing?.bulkAcceptSafe).toBe(false);
+    });
+
+    it("still auto-creates nothing", () => {
         expect(proposals.filter((p) => p.disposition === "create_proposed_field").every((p) => p.decision_state === "proposed")).toBe(true);
     });
 

@@ -8,6 +8,7 @@
  * - **RLS**: service role bypasses RLS; row insert still sets **`org_id`** from admin context.
  * - **Signed URLs**: `GET /api/admin/documents/[id]/signed-url` uses the same bucket + `storage_path` on the row; bucket must allow **read** for the service role when creating signed URLs.
  */
+import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -17,7 +18,7 @@ import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
 import { resolveUploadEntityTarget } from "@/lib/admin/resolveUploadEntityTarget";
-import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
+import { attachRelatedSourceToCaseSafe, maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
@@ -128,10 +129,28 @@ export async function POST(request: NextRequest) {
     // existing Processing Case spine (non-form on-ramp). Default OFF — existing callers
     // that don't send this flag are completely unaffected.
     const openProcessingCase = formData.get("open_processing_case") === "true";
+    /**
+     * Attach this upload to an EXISTING case as a related source instead of opening a new one.
+     *
+     * Same handler on purpose. This endpoint already owns "create the canonical document, then link
+     * it to a Processing case"; the only thing that varies is whether the case is new. A second
+     * upload endpoint would be a parallel packet-upload system, which is what the packet work has
+     * avoided from the start.
+     */
+    const attachToCaseId =
+        typeof formData.get("attach_to_case_id") === "string"
+            ? (formData.get("attach_to_case_id") as string).trim()
+            : "";
 
-    // Resolve where this document attaches. Normal uploads still require a valid entity;
-    // POS intake (open_processing_case=true) may upload without one (entity-less artifact).
-    const target = resolveUploadEntityTarget({ openProcessingCase, entityTypeRaw, entityId }, CANONICAL_ENTITY_TYPE);
+    // Resolve where this document attaches. Normal uploads still require a valid entity; POS
+    // intake may upload without one (entity-less artifact). Attaching to an existing case is the
+    // same kind of intake as opening one — the artifact belongs to the CASE, not to a CRM record —
+    // so it carries the same entity-less allowance. Keying this on `open_processing_case` alone
+    // made every attach fail MISSING_ENTITY.
+    const target = resolveUploadEntityTarget(
+        { openProcessingCase: openProcessingCase || Boolean(attachToCaseId), entityTypeRaw, entityId },
+        CANONICAL_ENTITY_TYPE,
+    );
     if (!target.ok) {
         return NextResponse.json({ error: target.message, code: target.code }, { status: 400 });
     }
@@ -164,6 +183,13 @@ export async function POST(request: NextRequest) {
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || DEFAULT_ORG_DOCUMENTS_BUCKET;
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    // Content hash of the bytes we are about to store.
+    //
+    // `documents.checksum_sha256` has existed all along and no upload ever wrote it, so every
+    // document in every tenant carried a null. Packet intake selects it as source provenance, which
+    // means a packet could name three artifacts and prove nothing about which bytes they were —
+    // exactly the claim a certification has to be able to make.
+    const checksumSha256 = createHash("sha256").update(buffer).digest("hex");
     const safeName = sanitizeFilename(origName);
     const objectId = randomUUID();
     const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
@@ -217,6 +243,7 @@ export async function POST(request: NextRequest) {
             original_filename: origName !== "upload" ? origName : null,
             mime_type: mimeType || null,
             byte_size: buffer.length,
+            checksum_sha256: checksumSha256,
             bucket,
             storage_path: storagePath,
             status: "uploaded",
@@ -357,13 +384,29 @@ export async function POST(request: NextRequest) {
     // upload response. No extraction/matching/commit happens here — that stays honest
     // in the review spine (a document source resolves to a "routed" no-op on approval).
     let processingCaseId: string | null = null;
+    let attachOutcome: string | null = null;
     let classificationKey: string | null = null;
     let candidateCount: number | null = null;
     // Defensive outer guard: the upload has already succeeded (storage + row + event).
     // Opening the case / classification / extraction are all best-effort and must NEVER
     // turn a successful upload into a failed response, even if a helper is changed later.
     try {
-      if (openProcessingCase) {
+      if (attachToCaseId) {
+        // Attach to the case the operator is looking at. Never opens a second case, never touches
+        // the primary — a packet is one case with several sources, not several cases.
+        const attached = await attachRelatedSourceToCaseSafe(supabase, {
+            orgId: ctx.orgId,
+            processingCaseId: attachToCaseId,
+            sourceKind: "document",
+            sourceId: docId,
+        });
+        processingCaseId = attached.ok ? attachToCaseId : null;
+        attachOutcome = attached.ok
+            ? attached.attached
+                ? "attached"
+                : "already_attached"
+            : attached.reason;
+      } else if (openProcessingCase) {
         const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
             orgId: ctx.orgId,
             sourceKind: "document",
@@ -468,6 +511,7 @@ export async function POST(request: NextRequest) {
         document,
         raw: row,
         processing_case_id: processingCaseId,
+        ...(attachOutcome ? { attach_outcome: attachOutcome } : {}),
         classification_key: classificationKey,
         extraction_candidate_count: candidateCount,
     });

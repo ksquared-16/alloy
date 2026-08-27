@@ -27,8 +27,12 @@ import type { FormFieldSource } from "@/lib/forms/schema";
 import type { SectionDisposition } from "@/lib/pos/processingCase/formDraft/sectionDisposition";
 import type { RequirementType } from "@/lib/pos/packet/requirementResponsibility";
 import type { OperationalRoleKey } from "@/lib/fields/personChildRelationship/personChildRelationshipEntity";
+import type { OwnershipHold } from "./canonicalOwnershipHolds";
+import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
+import type { SafeguardingRestrictionKind } from "@/lib/safeguarding/safeguardingRestriction";
+import type { OwnershipRouting } from "./ownershipRouting";
 
-export const DISCOVERY_CONTRACT_VERSION = "fp16.0";
+export const DISCOVERY_CONTRACT_VERSION = "fp16.2";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Confidence — operator language first, numeric as supporting detail (never the message).
@@ -71,6 +75,28 @@ export interface SourceRef {
     section_key: string;
     /** Detected field/question labels contributing to this concept (evidence, display). */
     labels: string[];
+    /**
+     * The DESTINATIONS this concept came from, by the reader's own stable identity — an AcroForm
+     * field name, a hosted-form control name. Labels are evidence, not identity: two destinations in
+     * different artifacts can share the label "Today's Date:", and a label-keyed lineage cannot tell
+     * them apart or survive a wording change. This is what lets an operator ask "why does Alloy think
+     * this fact belongs here?" and be shown the exact controls.
+     */
+    destinations?: SourceDestinationRef[];
+}
+
+/** One source destination, addressable and stable. */
+export interface SourceDestinationRef {
+    /** The reader's stable identity for the control (`pdf_field:Signature1`, `hosted_form:q10:RESULT_TextField-2`). */
+    evidence: string;
+    /** Label as the source wrote it — display evidence, never identity. */
+    label: string;
+    /** 1-based page, where the source has pages. */
+    page: number | null;
+    /** The section the destination sits in. */
+    section_title: string;
+    /** The logical artifact inside the source that owns it, when the source has several. */
+    logical_artifact_id?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -95,6 +121,14 @@ export type SemanticBlockRole =
 export interface SemanticField {
     /** Stable id: `${section_key}:${normalized_label}`. */
     id: string;
+    /** Set when this field is one occurrence of a repeating structure (see `SemanticSection.repeating_groups`). */
+    repeat_group_id?: string;
+    /** For signature fields: the initial required signature, or an update / re-sign line. */
+    signature_variant?: import("@/lib/pos/processingCase/structure/signatureFieldName").SignatureVariant;
+    /** The reader's stable identity for this destination — lineage, not a display label. */
+    evidence?: string;
+    /** 1-based page, where the source has pages. */
+    page?: number;
     label: string;
     role: SemanticBlockRole;
     /** Draft field type (text/date/number/select/boolean/signature/file_ref). */
@@ -115,6 +149,8 @@ export interface SemanticSection {
     output_copy: boolean;
     static_text?: string | null;
     fields: SemanticField[];
+    /** Repeating structures on this section's page — one decision each, not one per occurrence. */
+    repeating_groups?: import("@/lib/pos/processingCase/structure/repeatingFieldGroups").RepeatingFieldGroup[];
 }
 
 export interface SemanticDocumentModel {
@@ -136,6 +172,8 @@ export type ConceptKind =
     | "upload_requirement" // a document must be provided (immunization records)
     | "acknowledgement" // consent / legal affirmation
     | "signature" // a signature responsibility
+    | "value_series" // ONE value the document writes N times (a dose schedule, a five-column row)
+    | "repeating_record" // a table whose ROWS are instances of one record (name + date, N times)
     | "static_content" // instructional / legal prose to preserve
     | "output_copy" // generated/output projection of earlier information
     | "unresolved"; // could not be classified — operator decides
@@ -156,6 +194,14 @@ export interface BusinessConceptCandidate {
      */
     concept_key: string | null;
     subject: ConceptSubject;
+    /**
+     * WHO the label names, when it names anyone — child, guardian, physician, emergency contact.
+     * A canonical binding whose field belongs to a different party is refused rather than proposed.
+     * @see ./bindingSafety
+     */
+    party?: import("./bindingSafety").ConceptParty;
+    /** The attribute the label asks for (name / phone / email / address / date_of_birth). */
+    attribute?: string;
     /** How many of this concept the document collects (a group is `multiple`). */
     cardinality: "single" | "multiple";
     /** For relationship concepts: the child- or household-scoped operational role. */
@@ -166,6 +212,18 @@ export interface BusinessConceptCandidate {
     /** Suggested draft data type for scalar/choice concepts. */
     suggested_data_type?: string;
     options?: string[];
+    /**
+     * For value_series / repeating_record / grouped choice concepts: how many occurrences the
+     * document draws, and the destinations they occupy. The occurrences are evidence of
+     * CARDINALITY — they are never separate facts.
+     */
+    repetition?: {
+        instances: number;
+        member_labels: string[];
+        member_names: string[];
+        item_types: string[];
+        group_id: string;
+    };
     /** Whether all values populating an output copy are already collected elsewhere. */
     output_of?: string[]; // concept_keys the output copy reproduces
     source: SourceRef;
@@ -184,13 +242,48 @@ export type ProposalDisposition =
     | "create_proposed_field" // no match → propose a NEW durable configurable field (never auto-created)
     | "form_only_response" // collected on the form but NOT durable record data — no field created
     | "relationship_binding" // repeated person → operational-role relationship
+    | "safeguarding_binding" // an active restriction on a child — the canonical safeguarding owner
     | "upload_requirement"
     | "acknowledgement"
     | "signature_requirement"
     | "static_content"
+    | "structured_collection" // repeated destinations reviewed as ONE collection, not N fields
     | "output_binding" // generated/output-copy projection of approved concepts
     | "derived_value"
+    | "held_for_canonical_owner" // a settled owner outside Enrollment — collected, never created here
+    | "financial_payment" // a payment credential, setup detail, or billing amount — never a field
+    | "derived_value_system" // computable from canonical truth or from the execution itself
+    | "held_unknown_owner" // ownership not established — reviewable, never silently a field
     | "unresolved"; // manual classification required
+
+/**
+ * An obligation intentionally held because its canonical owner is not implemented yet.
+ *
+ * The distinction this type exists to make durable:
+ *
+ *     requirement intentionally deferred, owner named    ≠    requirement accidentally missing
+ *
+ * A silent omission looks identical to a bug from every surface that reads a packet. This record is
+ * what makes the two readable apart — in review, in the realized packet's metadata, and in Studio.
+ *
+ * `hold_state` and `intended_owner` reuse the vocabulary `ownershipRouting` already owns; only
+ * `obligation` is new, and it names WHAT was asked for rather than who owns it.
+ */
+export interface DeferredCapability {
+    obligation: "PAYMENT_SETUP_REQUIRED";
+    hold_state: "HELD_PENDING_FINANCIALS";
+    intended_owner: "FINANCIAL_PAYMENT";
+    /** The owning program, in operator language — what Studio prints. */
+    owner_label: string;
+    /** Why it is deferred rather than built. Operator language, no ontology. */
+    reason: string;
+    /** The exact sentence that raised it. Lineage, not decoration: it is how an operator recognises it. */
+    clause: string;
+    /** Obligation identity — the discovery concept this came from. */
+    concept_id: string;
+    section_title?: string;
+    page?: number;
+}
 
 /** A proposed NEW configurable field — never persisted until the operator explicitly approves. */
 export interface ProposedFieldDefinition {
@@ -222,6 +315,9 @@ export interface ProposalAlternative {
     confidence: Confidence;
 }
 
+/** Structured derivations discovery can declare. Prose lives in `derived_from`. */
+export type DerivedValueKind = "age_at_date" | "execution_date" | "household_membership";
+
 export interface ConfigurationProposal {
     contract_version: string;
     /** Stable id: same lineage slug as the candidate it serves. */
@@ -232,14 +328,63 @@ export interface ConfigurationProposal {
     target_field_source?: FormFieldSource;
     /** Matched relationship role (relationship_binding). */
     target_relationship_role?: OperationalRoleKey;
+    /**
+     * Matched safeguarding restriction kind (safeguarding_binding). The operational EFFECT is
+     * deliberately absent: a form question rarely states the terms of an order, and inferring
+     * "may not pick up" from "is there a restraining order?" would be Alloy deciding what a court
+     * decided. The operator supplies the effect at approval.
+     */
+    target_safeguarding_kind?: SafeguardingRestrictionKind;
     /** Matched requirement type (upload/acknowledgement/signature). */
     target_requirement_type?: RequirementType;
+    /**
+     * For `derived_value_system`: WHICH derivation, structurally.
+     *
+     * `derived_from` explains the reasoning to an operator; this says what to compute. Realization
+     * consumes the kind, so a derived destination is filled because discovery declared its
+     * semantics — never because a downstream layer recognised a label.
+     */
+    derived_kind?: DerivedValueKind;
+    /**
+     * For an upload requirement: the canonical document classification the requested document
+     * already has a name for. Absent means Alloy has no document type for what is being asked —
+     * which is a REPORTED gap, never a silently untyped upload.
+     */
+    target_document_classification?: ProcessingClassificationKey;
     /** Proposed new field (create_proposed_field only). */
     proposed_field?: ProposedFieldDefinition;
     confidence: Confidence;
     alternatives: ProposalAlternative[];
     /** Operator decision — persisted separately from detector output. */
     decision_state: ProposalDecisionState;
+    /**
+     * A canonical binding that WAS matched and then refused because it belongs to another party.
+     * Surfaced so the operator sees the decision instead of an unexplained gap — and so a refusal
+     * can never be mistaken for "the matcher found nothing".
+     */
+    refused_binding?: { target: FormFieldSource; reason: string };
+    /**
+     * Why this concept cannot become a durable field HERE, and who owns it instead.
+     * Present only on `held_for_canonical_owner`, and mutually exclusive with `proposed_field`.
+     */
+    ownership_hold?: OwnershipHold;
+    /**
+     * The ownership conclusion reached before this proposal was shaped.
+     *
+     * Present on every proposal the router touched. `create_proposed_field` may appear ONLY where
+     * this says `CANONICAL_FIELD`, which is what makes a new field an affirmative conclusion rather
+     * than the residue of failed matching.
+     */
+    ownership_routing?: OwnershipRouting;
+    /**
+     * Present when this obligation is intentionally held for an owner Alloy has not built yet.
+     *
+     * It rides on the proposal rather than a side table so that every reader of the analysis — the
+     * review UI, the apply pass, the packet realization — sees the deferral without having to know
+     * to look for it. Nothing downstream may turn a proposal carrying this into an executable
+     * requirement.
+     */
+    deferred_capability?: DeferredCapability;
     /** Validation problems that would block application (e.g. new field needs a key). */
     validation_issues: string[];
     explanation: string;
@@ -253,6 +398,11 @@ export interface ConfigurationProposal {
 export type DiscoveryCategory =
     | "existing_fields"
     | "new_fields"
+    | "held_for_owner"
+    | "safeguarding"
+    | "financial"
+    | "derived"
+    | "needs_ownership_review"
     | "form_responses"
     | "relationships"
     | "upload_requirements"
@@ -260,6 +410,7 @@ export type DiscoveryCategory =
     | "signatures"
     | "static_content"
     | "output_copies"
+    | "collections"
     | "needs_review";
 
 export interface DiscoverySummaryCount {

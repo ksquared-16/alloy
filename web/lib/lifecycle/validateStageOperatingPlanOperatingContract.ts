@@ -564,7 +564,21 @@ export function validateStageOperatingPlanOperatingContract(
                     issues.push({ code: "transition_close_status_invalid", severity: "error", message: "A configured closed status must carry derived close semantics.", controlId });
                 }
             }
-        } else if (transition.closes_record === true) {
+        } else if (transition.closes_record === true && !transition.status_key) {
+            /*
+             * Only when the status is genuinely ABSENT.
+             *
+             * This branch used to fire whenever the `if` above was skipped — which includes the case
+             * where a status IS named but `configuredStatuses` is undefined. Publish validation never
+             * passes the catalog, deliberately, and says why two hundred lines up: "`undefined` means
+             * 'cannot evaluate', so status-domain checks are skipped rather than guessed from an empty
+             * list." The family-close branch honours that. This one did not, so every closing
+             * transition in every tenant failed publication no matter which status it named, and no
+             * configuration change could clear it.
+             *
+             * Closing with no status at all remains an error — that one is decidable without the
+             * catalog, because there is nothing to look up.
+             */
             issues.push({ code: "transition_close_status_invalid", severity: "error", message: "Close semantics require a configured closed status.", controlId });
         }
     }

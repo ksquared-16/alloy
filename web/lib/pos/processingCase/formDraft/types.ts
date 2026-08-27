@@ -14,7 +14,16 @@
  */
 
 /** Field types we draft. A subset of FormFieldType that needs no extra config to be valid. */
-export type DraftFormFieldType = "text" | "number" | "date" | "boolean" | "file_ref" | "signature";
+/**
+ * Field types we draft.
+ *
+ * `select` / `multiselect` are here because a source can DECLARE its choices — a hosted form states
+ * them outright, and an AcroForm dropdown carries them in the widget. Drafting those as text was the
+ * one place a web source's best evidence was thrown away: a closed choice became free text, and the
+ * requiredness and options the author wrote were lost between extraction and publish. A choice is
+ * only drafted as a choice when the source actually supplied options — options are never invented.
+ */
+export type DraftFormFieldType = "text" | "number" | "date" | "boolean" | "select" | "multiselect" | "file_ref" | "signature";
 
 export type DraftFieldConfidence = "high" | "medium" | "low";
 
@@ -23,6 +32,16 @@ export interface DraftFormField {
     label: string;
     type: DraftFormFieldType;
     required: boolean;
+    /**
+     * Placed on the artifact, not asked of the participant.
+     *
+     * A destination whose semantic concept is owned elsewhere — held for Health, resolved through
+     * Relationship, reproduced as static prose — still needs its page/bbox so the document renders.
+     * It must not also become a question.
+     */
+    read_only?: boolean;
+    /** Alloy fills this destination from canonical truth; it is never asked. */
+    derived?: { kind: "age_from_date_of_birth" | "execution_date"; source_key?: string; as_of_key?: string };
     /** Basic layout hint: "half" pairs with the next half into a 2-up row (FormSchemaV1 layout_width). */
     layout_width?: "full" | "half" | "third" | "quarter";
     description?: string;
@@ -33,6 +52,15 @@ export interface DraftFormField {
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
+    /**
+     * Allowed choices the SOURCE declared. A hosted form states its options outright, unlike a PDF
+     * where they must be guessed, and losing them at the draft would throw away the best evidence a
+     * web source gives. `DraftFormFieldType` has no `select` yet, so a choice still drafts as text
+     * and the options ride alongside until the builder can publish them.
+     */
+    options?: string[];
+    /** Validation the SOURCE declared. Carried so a published form cannot claim fidelity it lost. */
+    validate?: { pattern?: string; min?: number; max?: number; min_length?: number; max_length?: number };
     /** Canonical binding (operator-reviewed or auto-suggested) — persisted to the form. */
     field_source?: import("@/lib/forms/schema").FormFieldSource;
     /**
@@ -113,6 +141,34 @@ export interface DraftCollectionGroup {
     decision_state?: string;
 }
 
+/**
+ * A document a CLAUSE asked for, approved by the operator.
+ *
+ * A section's `disposition` says what the whole section is. It cannot say "this is a consent page
+ * that also, in its fourth sentence, asks you to bring an immunization record" — and that sentence is
+ * exactly what the real packet is made of. Typing the whole section `upload` to carry one clause
+ * would turn a consent page into an upload page and lose every other thing it does.
+ *
+ * So the clause rides beside the section instead of redefining it. It survives regardless of the
+ * section's disposition, because a static/acknowledgement section drops field prompts and this is
+ * not a prompt the source drew — it is an obligation the source stated.
+ */
+export interface DraftClauseUpload {
+    /** Stable field id in the published form — the participant-facing control. */
+    id: string;
+    /** The approved obligation this came from (proposal identity), for lineage. */
+    obligation_id: string;
+    /** The discovery concept id — the clause's own identity in the source. */
+    concept_id: string;
+    /** Short participant-facing label. */
+    label: string;
+    /** The clause's own wording, kept verbatim so the document's meaning is never paraphrased away. */
+    description: string;
+    required: boolean;
+    /** The canonical document classification, when discovery recognised one. Never invented. */
+    document_type?: string;
+}
+
 export interface DraftFormSection {
     id: string;
     title: string;
@@ -124,6 +180,11 @@ export interface DraftFormSection {
      * `recommendSectionDisposition`; the operator confirms/overrides before publish. Omitted === "fields".
      */
     disposition?: import("./sectionDisposition").SectionDisposition;
+    /**
+     * Approved clause-level document obligations anchored to this section. Populated by
+     * `applyDiscovery` from APPROVED upload proposals; never inferred from prose here.
+     */
+    clause_uploads?: DraftClauseUpload[];
     /**
      * Preserved instructional / consent / signature prose that field-extraction alone would discard.
      * Carried into the published form as a `text_block` so the document's meaning is never lost.

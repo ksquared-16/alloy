@@ -26,6 +26,7 @@
  * Pure.
  */
 
+import { formatPhoneDisplay } from "@/lib/intake/normalize/phone";
 import { formatDisplayDate, parsePresentationDateInput } from "@/lib/presentation/presentationDateFormat";
 
 /**
@@ -64,6 +65,13 @@ export function formatValueForDocumentDestination(
 ): unknown {
     if (typeof value !== "string") return value;
     const raw = value.trim();
+    /*
+     * Ten bare digits in a printed box are a phone number nobody wants to read.
+     *
+     * The canonical value stays exactly as stored; this is the destination deciding how the fact
+     * appears on paper, which is the same job `date_format` already does for a date.
+     */
+    if (/^\d{10}$/.test(raw)) return formatPhoneDisplay(raw);
     if (!isStoredDate(raw)) return value;
     if (format === "iso") return raw;
 

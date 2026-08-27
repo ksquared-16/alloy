@@ -42,23 +42,31 @@ const EXPECTED: Record<string, CanonicalCollectionProviderDefinition> = {
 };
 
 describe("POS-FP17 — relationship collection provider derivation", () => {
-    it("derives the 3 relationship providers byte-identically to the prior hand-authored defs", () => {
+    it("derives the originally hand-authored providers byte-identically", () => {
+        // The byte-identity claim is about the THREE providers that predate derivation. The count is
+        // deliberately not frozen: adding a collectable role is one definition row, and a test that
+        // fails when someone exercises that property would be testing the opposite of the doctrine.
         const derived = deriveRelationshipCollectionProviders();
-        expect(derived.length).toBe(3);
-        for (const p of derived) {
-            expect(p).toEqual(EXPECTED[p.refKey]);
+        const byRef = new Map(derived.map((p) => [p.refKey, p]));
+        for (const [refKey, expected] of Object.entries(EXPECTED)) {
+            expect(byRef.get(refKey), `${refKey} no longer derives`).toEqual(expected);
         }
+        expect(derived.length).toBeGreaterThanOrEqual(Object.keys(EXPECTED).length);
     });
 
-    it("registry = native structural + derived relationship providers (5 total, order stable)", () => {
-        const all = listCanonicalCollectionProviders();
-        expect(all.map((p) => p.refKey)).toEqual([
+    it("registry = native structural first, then derived relationship providers in definition order", () => {
+        const all = listCanonicalCollectionProviders().map((p) => p.refKey);
+        // Natives lead, and the original three keep their order — new roles append.
+        expect(all.slice(0, 5)).toEqual([
             "children",
             "household.members",
             "person.contact_role.parents",
             "person.contact_role.emergency_contacts",
             "person.contact_role.authorized_pickups",
         ]);
+        // The care-provider roles a real enrollment packet asked for, derived with no provider code.
+        expect(all).toContain("person.contact_role.physicians");
+        expect(all).toContain("person.contact_role.dentists");
     });
 
     it("classifies providers: children/household.members native, the rest configured", () => {

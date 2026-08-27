@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { carryForwardSharedValues } from "@/lib/forms/packets/carryForwardSharedValues";
 import { loadPublishedFormEnvelope, type PublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 import { computePacketOperatorReviewWarnings } from "@/lib/forms/packets/packetOperatorReviewWarnings";
 import { emitOpportunityEnrollmentPacketSubmittedForReviewSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
@@ -517,7 +519,14 @@ export async function advancePacketSessionAfterSubmit(
     supabase: SupabaseClient,
     orgId: string,
     submissionId: string,
-    submittedValues: Record<string, unknown>
+    submittedValues: Record<string, unknown>,
+    /**
+     * Which artifact these values came from.
+     *
+     * Supplied, the carry-forward keys each value by its identity rather than by its position in
+     * this Form. Omitted, the historical shallow merge stands.
+     */
+    origin?: { schema: Pick<FormSchemaV1, "fields">; formDefinitionId: string }
 ): Promise<{ result: AdvancePacketResult | null; error: Error | null }> {
     const { data: row, error: findErr } = await supabase
         .from("form_packet_session_items")
@@ -550,9 +559,10 @@ export async function advancePacketSessionAfterSubmit(
         };
     }
 
-    const shared = shallowMergeSharedValues(
+    const shared = carryForwardSharedValues(
         (session.shared_values ?? {}) as Record<string, unknown>,
-        submittedValues
+        submittedValues,
+        origin
     );
 
     const now = new Date().toISOString();

@@ -204,13 +204,13 @@ describe("Continue, not Saving", () => {
         /**
          * ONE primary action for a typed answer.
          *
-         * The label moved from "Continue" to "Use this" when the control moved into the composer
-         * dock: "Continue" reads as a wizard step, and this is a reply. The property under test is
-         * that there is exactly one such action and that a duplicate submit cannot reach the
-         * network — not which word is on it.
+         * The label has moved twice — "Continue", then "Use this", now "Done" — and the wording was
+         * never the property. What matters is that a typed control has exactly ONE action and that a
+         * duplicate submit cannot reach the network. "Use this" specifically had to go: it was a
+         * second submit paradigm sitting above a composer that also accepted the answer.
          */
         expect(card.match(/onSubmit\(text\.trim\(\), shown\)/g)?.length).toBe(2);
-        expect(card).toContain("Use this");
+        expect(card, "a second submit paradigm must not return").not.toContain("Use this");
         expect(card).toContain("disabled={busy || !ready}");
         // Persistence stays an implementation detail; the guard is the in-flight ref, not the copy.
         expect(card).toContain("inFlight.current");

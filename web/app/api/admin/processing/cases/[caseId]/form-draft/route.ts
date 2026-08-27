@@ -4,6 +4,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { buildFormDraftForCaseSafe, type FormDraftStageTiming } from "@/lib/pos/processingCase/formDraft/buildFormDraftForCaseSafe";
 import { dbRecordFormDraftDetection } from "@/lib/pos/processingCase/formDraft/formDraftPreviewDb";
+import { buildPacketIntakeForCaseSafe } from "@/lib/pos/packetIntake/buildPacketIntakeForCaseSafe";
+import { dbLoadPacketReview } from "@/lib/pos/packetIntake/packetIntakeDb";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,12 @@ class DetectTimeout extends Error {
  * Reliability (FP15): bounded timeout + per-stage timings + a durable detection record so a
  * hung/failed run is a visible, retryable state instead of an endless spinner. Idempotent —
  * retrying re-runs detection and overwrites the draft.
+ *
+ * `{"mode":"packet"}` runs the SAME case against EVERY source attached to it (`packet_source`) and
+ * stores one composed packet analysis instead of one document's draft. It is a mode of this handler
+ * rather than a route of its own, because it is the same operator action on the same case with the
+ * same authorization — and because a new route file is a governance cost the packet does not need
+ * to pay. Publishes nothing either way.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ caseId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -43,6 +51,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const supabase = createAdminClient();
     const stages: FormDraftStageTiming[] = [];
     const startedAt = Date.now();
+    const body = (await request.json().catch(() => ({}))) as { mode?: unknown };
+    const packetMode = body?.mode === "packet";
 
     try {
         // Case must exist and belong to the org.
@@ -66,6 +76,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             if (sig?.aborted) reject(new DOMException("aborted", "AbortError"));
             sig?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")), { once: true });
         });
+
+        if (packetMode) {
+            const packetTimer = new Promise<never>((_, reject) => setTimeout(() => reject(new DetectTimeout()), DETECT_TIMEOUT_MS));
+            const built = await Promise.race([buildPacketIntakeForCaseSafe(supabase, { orgId: ctx.orgId, caseId }), packetTimer]);
+            if (!built) {
+                return jsonError("Could not analyse this case as a packet — it has no readable document sources.", 422);
+            }
+            const decisions = await dbLoadPacketReview(supabase, { orgId: ctx.orgId, caseId });
+            return jsonData({
+                caseId,
+                packet_intake: built.packet,
+                unreadable: built.unreadable,
+                packet_review_decisions: decisions,
+                detection: { total_ms: Date.now() - startedAt },
+            });
+        }
 
         const pipeline = buildFormDraftForCaseSafe(
             supabase,

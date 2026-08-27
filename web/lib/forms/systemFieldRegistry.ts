@@ -24,6 +24,13 @@ export type SystemFieldValueKind =
     | "signature";
 
 export type SystemFieldRegistryEntry = {
+    /**
+     * Superseded by a canonical row elsewhere. A deprecated row still RESOLVES — existing forms keep
+     * working — but nothing new should bind to it, and the pickers hide it.
+     */
+    deprecated?: boolean;
+    /** The registry id that replaces a deprecated row. */
+    superseded_by?: string;
     /** Stable id used in admin UI (`sys:<id>`) and as `form_field_id`. */
     id: string;
     entity_type: SystemFieldEntityType;
@@ -136,17 +143,49 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         suggested_kind: "phone",
         public_intake_safe: true,
     },
+    /**
+     * M1 — durable child-health truth is CHILD grain, not Enrollment grain (D-H1).
+     *
+     * `allergy_notes` was registered at `enrollment` grain, which says an allergy is a fact about an
+     * admission. It is a fact about a child, and it outlives every admission. The canonical
+     * destination is the child's own `allergies` field, which already exists.
+     *
+     * The correction is ADDITIVE and reversible: the child-grain row below is the canonical one, and
+     * the enrollment-grain row stays, deprecated, sharing the SAME `shared_value_key`. That shared
+     * identity is the no-silent-loss mechanism — ask-once dedupes on `shared_value_key` FIRST, so a
+     * packet asking for allergies at either grain collects the value once and both destinations
+     * receive it. Nothing is deleted, and published forms keep the binding they were stamped with.
+     *
+     * `medication_flag` is NOT given a child-grain replacement. Medication is a Health-foundation
+     * kind (D-H5) and Enrollment must not create a competing destination for it — so the legacy row
+     * stays legacy, marked deprecated, and does not become the new truth.
+     */
     {
-        id: "allergy_notes",
-        entity_type: "enrollment",
-        field_key: "allergy_notes",
-        shared_value_key: "allergy_notes",
-        crm_mapping_key: "health.allergy_notes",
-        default_label: "Allergy notes",
+        id: "child_allergies",
+        entity_type: "child",
+        field_key: "allergies",
+        shared_value_key: "child_allergies",
+        crm_mapping_key: "child.allergies",
+        default_label: "Allergies",
         default_description: "Food or environmental allergies staff should know about.",
         default_required: false,
         suggested_kind: "textarea",
         public_intake_safe: true,
+    },
+    {
+        id: "allergy_notes",
+        entity_type: "enrollment",
+        field_key: "allergy_notes",
+        // Shares the child-grain identity so the two never collect twice or diverge.
+        shared_value_key: "child_allergies",
+        crm_mapping_key: "health.allergy_notes",
+        default_label: "Allergy notes",
+        default_description: "Deprecated — superseded by the child-grain Allergies field.",
+        default_required: false,
+        suggested_kind: "textarea",
+        public_intake_safe: true,
+        deprecated: true,
+        superseded_by: "child_allergies",
     },
     {
         id: "medication_flag",
@@ -155,10 +194,12 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         shared_value_key: "medication_flag",
         crm_mapping_key: "health.medication_flag",
         default_label: "Medication during care",
-        default_description: "Whether the child takes medication while in care.",
+        // Legacy by direction: medication becomes a Health-foundation fact kind, not this boolean.
+        default_description: "Deprecated — medication becomes a Health fact; this flag is not the new truth.",
         default_required: false,
         suggested_kind: "checkbox",
         public_intake_safe: true,
+        deprecated: true,
     },
     {
         id: "program_room_preference",

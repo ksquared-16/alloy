@@ -300,6 +300,23 @@ export function disposeParticipantCandidate(input: {
         case "clarification_needed":
             return { action: "no_change", reason: candidate.kind };
 
+        case "declined": {
+            /*
+             * Declining is only available where the AUTHORED control says the answer is optional.
+             *
+             * `optional` on the need is derived from `field.required` across every occurrence, so a
+             * fact one artifact insists on cannot be waved away because another treats it as
+             * optional. Refusing here fails in the safe direction: the question is asked again.
+             */
+            if (turn.kind !== "collect_missing_value") {
+                return { action: "refused", reason: "There is nothing here to leave blank." };
+            }
+            if (turn.need.optional !== true) {
+                return { action: "refused", reason: "This one is required, so it cannot be left blank." };
+            }
+            return { action: "decline_value" };
+        }
+
         case "confirmed": {
             if (turn.kind !== "confirm_known_value") {
                 return { action: "refused", reason: "There is no proposed value to confirm." };

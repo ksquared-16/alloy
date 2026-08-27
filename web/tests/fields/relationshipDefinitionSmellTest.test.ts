@@ -6,57 +6,62 @@
  * definition and write NO provider code, NO Forms change, NO Configuration Discovery change and NO
  * relationship execution change.
  *
- * This test injects a `physicians` definition by mocking the canonical registry, then asserts that
- * every consumer picks it up with no other edit. It is the guard that keeps the layering honest —
- * if someone reintroduces a per-role allowlist anywhere in the chain, this test fails.
+ * This test injects a hypothetical `case_workers` definition by mocking the canonical registry, then
+ * asserts that every consumer picks it up with no other edit. It is the guard that keeps the layering
+ * honest — if someone reintroduces a per-role allowlist anywhere in the chain, this test fails.
+ *
+ * It used to inject `physicians`. Physician is now a REAL definition — a real enrollment packet asked
+ * for a child's doctor — so the hypothetical moved to another role the criterion names. That the real
+ * one arrived as a single row, colliding with nothing but this fixture's capability key, IS the
+ * criterion being met.
  *
  * @see docs/platform/core/data/relationship-model.md
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const PHYSICIAN = {
-    definition_key: "physicians",
-    operational_role_key: "physician",
+const CASE_WORKER = {
+    definition_key: "case_workers",
+    operational_role_key: "case_worker",
     source_entity_type: "customer",
     target_entity_type: "person",
     direction: "anchor_to_target" as const,
     cardinality: "many" as const,
-    label: "Physicians",
-    help_text: "The child's physicians.",
+    label: "Case workers",
+    help_text: "Assigned case workers.",
     collectable: true,
     scopes: ["this_child", "all_children_in_household"],
     nested_field_keys: ["full_name", "phone"],
     create_link_policy: "create_or_link" as const,
-    apply_command_key: "add_physician",
+    apply_command_key: "add_case_worker",
     responsibility_default: "either_guardian",
     native: false as const,
-    provider_ref: "person.contact_role.physicians",
-    collection_ref: "physicians",
+    provider_ref: "person.contact_role.case_workers",
+    collection_ref: "case_workers",
     item_entity_type: "person",
-    provider_role_key: "physician",
+    provider_role_key: "case_worker",
     required_context_keys: ["customer_id"],
     active_only: false,
     ordering_policy: "display_name" as const,
-    iteration_alias: "physician",
-    detection_patterns: ["physician", "doctor"],
+    iteration_alias: "case_worker",
+    detection_patterns: ["case\\s*worker", "caseworker"],
     detection_priority: 15,
     detection_word_suffix: true,
     relationship_scope: "child" as const,
     executor_kind: "child_scoped_contact" as const,
     write_targets: ["contacts", "customer_persons"] as const,
     persists_to: "person_child_relationships" as const,
-    role_key_candidates: ["physician", "doctor"],
+    role_key_candidates: ["case_worker", "caseworker"],
 };
 
 // Inject the new row as if an operator had configured it — every other module is untouched.
 vi.mock("@/lib/fields/relationship/relationshipDefinitions", async (importOriginal) => {
     const actual = await importOriginal<typeof import("@/lib/fields/relationship/relationshipDefinitions")>();
-    const rows = [...actual.RELATIONSHIP_DEFINITIONS, PHYSICIAN];
+    const rows = [...actual.RELATIONSHIP_DEFINITIONS, CASE_WORKER];
     const byRole = new Map(rows.map((d) => [d.operational_role_key, d]));
     const byRef = new Map(rows.map((d) => [d.provider_ref, d]));
     const byCommand = new Map(rows.map((d) => [d.apply_command_key, d]));
-    const re = (d: typeof PHYSICIAN) =>
+    const re = (d: typeof CASE_WORKER) =>
         new RegExp(`\\b(${d.detection_patterns.join("|")})${d.detection_word_suffix ? "\\b" : ""}`, "i");
     return {
         ...actual,
@@ -72,7 +77,7 @@ vi.mock("@/lib/fields/relationship/relationshipDefinitions", async (importOrigin
         detectRelationshipDefinitionForTitle: (title: string) =>
             [...rows]
                 .sort((a, b) => a.detection_priority - b.detection_priority)
-                .find((d) => re(d as typeof PHYSICIAN).test(title.toLowerCase())),
+                .find((d) => re(d as typeof CASE_WORKER).test(title.toLowerCase())),
         relationshipDetectionPattern: () =>
             new RegExp(`\\b(${rows.flatMap((d) => d.detection_patterns).join("|")})`, "i"),
     };
@@ -87,12 +92,12 @@ describe("SMELL TEST — a new configured relationship needs ONE definition row"
         const { findCanonicalCollectionProvider, classifyCollectionProvider } = await import(
             "@/lib/fields/collection/canonicalCollectionProviderRegistry"
         );
-        const provider = findCanonicalCollectionProvider("person.contact_role.physicians");
-        expect(provider, "physician has no collection provider").toBeDefined();
+        const provider = findCanonicalCollectionProvider("person.contact_role.case_workers");
+        expect(provider, "case_worker has no collection provider").toBeDefined();
         expect(provider!.providerKind).toBe("relationship_role");
-        expect(provider!.label).toBe("Physicians");
-        expect(provider!.relationshipRoleKey).toBe("physician");
-        expect(classifyCollectionProvider("person.contact_role.physicians")).toBe("configured_relationship");
+        expect(provider!.label).toBe("Case workers");
+        expect(provider!.relationshipRoleKey).toBe("case_worker");
+        expect(classifyCollectionProvider("person.contact_role.case_workers")).toBe("configured_relationship");
     });
 
     it("ZERO Forms changes: bindable, authorable, and correctly aliased", async () => {
@@ -104,23 +109,23 @@ describe("SMELL TEST — a new configured relationship needs ONE definition row"
         );
         const { collectionBindingFromProvider } = await import("@/lib/fields/formsCollectionRepeatBinding");
 
-        const provider = findFormsCollectionBindingProvider("person.contact_role.physicians");
-        expect(provider, "physician not bindable in Forms").toBeDefined();
-        expect(collectionBindingAuthoringEnabledForProvider("person.contact_role.physicians")).toBe(true);
+        const provider = findFormsCollectionBindingProvider("person.contact_role.case_workers");
+        expect(provider, "case_worker not bindable in Forms").toBeDefined();
+        expect(collectionBindingAuthoringEnabledForProvider("person.contact_role.case_workers")).toBe(true);
         expect(buildFormsAuthorableCollectionBindingSeeds().map((p) => p.refKey)).toContain(
-            "person.contact_role.physicians",
+            "person.contact_role.case_workers",
         );
         const binding = collectionBindingFromProvider(provider!);
         expect(binding.iteration_entity_type).toBe("person");
-        expect(binding.iteration_alias).toBe("physician");
+        expect(binding.iteration_alias).toBe("case_worker");
     });
 
     it("ZERO Configuration Discovery changes: the section is detected and classified", async () => {
         const { detectRelationshipDefinitionForTitle, relationshipDetectionPattern } = await import(
             "@/lib/fields/relationship/relationshipDefinitions"
         );
-        expect(relationshipDetectionPattern().test("Physician Information")).toBe(true);
-        expect(detectRelationshipDefinitionForTitle("physician information")?.operational_role_key).toBe("physician");
+        expect(relationshipDetectionPattern().test("Case worker Information")).toBe(true);
+        expect(detectRelationshipDefinitionForTitle("case worker information")?.operational_role_key).toBe("case_worker");
         // precedence still honours the more specific role
         expect(detectRelationshipDefinitionForTitle("emergency contact")?.operational_role_key).toBe(
             "emergency_contact",
@@ -142,32 +147,32 @@ describe("SMELL TEST — a new configured relationship needs ONE definition row"
             "@/lib/admin/actions/childScopedContactRoleMapping"
         );
 
-        const entry = relationshipActionRegistryEntry("add_physician");
-        expect(entry, "no registry entry for add_physician").not.toBeNull();
-        expect(entry!.defaultRoleKey).toBe("physician");
+        const entry = relationshipActionRegistryEntry("add_case_worker");
+        expect(entry, "no registry entry for add_case_worker").not.toBeNull();
+        expect(entry!.defaultRoleKey).toBe("case_worker");
         expect(entry!.executorKind).toBe("child_scoped_contact");
         expect(entry!.allowedScopes).toEqual(["this_child", "all_children_in_household"]);
-        expect(entry!.label).toBe("Add Physicians");
+        expect(entry!.label).toBe("Add Case workers");
 
-        expect(isRelationshipRuntimeFacadeSupported("add_physician")).toBe(true);
+        expect(isRelationshipRuntimeFacadeSupported("add_case_worker")).toBe(true);
 
-        const cap = tryResolvePlatformCapability("add_physician");
-        expect(cap.status, "no platform capability for add_physician").toBe("known");
+        const cap = tryResolvePlatformCapability("add_case_worker");
+        expect(cap.status, "no platform capability for add_case_worker").toBe("known");
         expect(cap.status === "known" && cap.capability.executionOwner).toBe("relationship_runtime");
-        expect(cap.status === "known" && cap.capability.operatorLabel).toBe("Add Physicians");
+        expect(cap.status === "known" && cap.capability.operatorLabel).toBe("Add Case workers");
 
         expect(
             resolveRelationshipRoleKeyForAction({
-                actionKey: "add_physician",
-                activeRoleKeys: new Set(["physician", "guardian"]),
+                actionKey: "add_case_worker",
+                activeRoleKeys: new Set(["case_worker", "guardian"]),
             }),
-        ).toBe("physician");
+        ).toBe("case_worker");
 
         expect(
             shouldWriteChildScopedRelationshipsToPcr({
                 executorKind: "child_scoped_contact",
-                roleKey: "physician",
-                actionKey: "add_physician",
+                roleKey: "case_worker",
+                actionKey: "add_case_worker",
             }),
         ).toBe(true);
     });

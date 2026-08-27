@@ -15,6 +15,7 @@ import type {
     NormalizedValidationError,
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
+import { isPlacementOnlyForParticipant } from "@/lib/forms/placementOnlyFields";
 import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
 import { isCustomUnmappedField } from "@/lib/forms/formFieldAuthoringPresentation";
 import { CUSTOM_UNMAPPED_FIELD_ADMIN_DESCRIPTION } from "@/lib/forms/systemFieldToFormField";
@@ -91,6 +92,17 @@ export function FormEngineRenderer({
     validationErrors,
 }: FormEngineRendererProps) {
     const readonly = mode === "readonly";
+
+    /**
+     * Show a field when the schema's own conditions say so AND it is not a placement-only
+     * destination. Review keeps everything: a reviewer is reading the DOCUMENT, not filling it.
+     */
+    const shows = useCallback(
+        (field: FormField) =>
+            evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]) &&
+            (readonly || !isPlacementOnlyForParticipant(field, payload.values)),
+        [schema, payload.values, readonly],
+    );
     const loose = variant === "embed";
 
     const sectionModels = useMemo(() => {
@@ -493,7 +505,7 @@ export function FormEngineRenderer({
         (field: FormField & { type: "group" }) => {
             const rep = field.repeat ?? { min: 0, max: undefined };
             const rows = payload.groups?.[field.id] ?? [];
-            const vis = evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]);
+            const vis = shows(field);
             if (!vis) return null;
 
             const groupInlineErrors = errorsUnderPrefix(validationErrors, [field.id]);
@@ -535,7 +547,7 @@ export function FormEngineRenderer({
                                 {child.fields.map((nf) => {
                                     const getVal = (fid: string) =>
                                         fid in nr.values ? nr.values[fid] : payload.values[fid];
-                                    if (!evaluateFieldVisibility(nf.id, schema, getVal)) return null;
+                                    if (!shows(nf)) return null;
                                     if (nf.type === "signature") {
                                         const sig = nr.signatures?.[nf.id];
                                         const sigErrPrefix = [field.id, String(rowIdx), child.id, String(j), "signatures", nf.id];
@@ -637,7 +649,7 @@ export function FormEngineRenderer({
                             {field.fields.map((child) => {
                                 const getVal = (fid: string) =>
                                     fid in row.values ? row.values[fid] : payload.values[fid];
-                                if (!evaluateFieldVisibility(child.id, schema, getVal)) return null;
+                                if (!shows(child)) return null;
                                 if (child.type === "group") {
                                     return renderNestedGroup(child, row, idx, rows);
                                 }
@@ -723,7 +735,7 @@ export function FormEngineRenderer({
     const renderFieldList = useCallback(
         (fields: FormField[]) =>
             chunkFieldsForHalfRowLayout(
-                fields.filter((field) => evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]))
+                fields.filter((field) => shows(field))
             ).map((row, ri) => (
                 <div
                     key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
@@ -814,9 +826,7 @@ export function FormEngineRenderer({
                     const fields = block.field_ids
                         .map((fid) => schemaFieldById(schema, fid))
                         .filter(Boolean) as FormField[];
-                    const visibleFields = fields.filter((field) =>
-                        evaluateFieldVisibility(field.id, schema, (id) => payload.values[id])
-                    );
+                    const visibleFields = fields.filter((field) => shows(field));
                     const regionTitle = block.title?.trim() ?? "";
                     const showRegionTitle =
                         Boolean(regionTitle) && !titlesEquivalent(regionTitle, schema.title ?? "");

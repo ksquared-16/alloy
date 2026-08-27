@@ -20,9 +20,12 @@ describe("processingImportIntent", () => {
         });
     });
 
-    it("marks packet intent unavailable in V1 options", () => {
+    it("offers packet intake now that a case can be analysed across all its sources", () => {
+        // Held closed while nothing composed across a case's sources. `buildPacketIntakeForCaseSafe`
+        // reads every document attached to the case and composes one analysis, so the intent is real.
         const packet = PROCESSING_IMPORT_INTENT_OPTIONS.find((opt) => opt.value === "packet_source");
-        expect(packet?.available).toBe(false);
+        expect(packet?.available).toBe(true);
+        expect(packet?.description).toMatch(/analyze every source/i);
     });
 
     it("parseProcessingIntentFromMetadata reads case metadata", () => {

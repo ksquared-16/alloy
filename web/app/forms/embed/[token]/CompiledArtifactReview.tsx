@@ -27,7 +27,7 @@ function Fact({
     return (
         <div className="flex items-baseline justify-between gap-4 border-b border-alloy-midnight/[0.06] py-3">
             <div className="min-w-0">
-                <div className="text-[13px] text-alloy-midnight/50">{naturalFieldLabel(control.label)}</div>
+                <div className="text-[13px] text-alloy-midnight/50">{captionFor(control)}</div>
                 <div className="text-[15px] text-alloy-midnight">{displayValue(control.value) || "—"}</div>
             </div>
             {onEdit ? (
@@ -42,6 +42,20 @@ function Fact({
             ) : null}
         </div>
     );
+}
+
+
+/**
+ * What this control is called, when Alloy is entitled to call it anything.
+ *
+ * `participant_label` is null when the label is the source PDF's own widget name, and the fallback
+ * is deliberately NOT the raw label — that is the leak. A control with no words of its own is
+ * named by the canonical fact behind it if there is one, and otherwise says where it lives.
+ */
+function captionFor(control: CompiledArtifactControl): string {
+    const words = naturalFieldLabel(control.participant_label, control.shared_key);
+    if (words && words !== "this") return words;
+    return "Marked on your document";
 }
 
 export function CompiledArtifactReview({
@@ -95,7 +109,7 @@ export function CompiledArtifactReview({
                             return (
                                 <div key={control.field_id} className="flex flex-col gap-2 border-b border-alloy-midnight/[0.06] py-3">
                                     <label className="text-[13px] text-alloy-midnight/50" htmlFor={`edit-${control.field_id}`}>
-                                        {naturalFieldLabel(control.label)}
+                                        {captionFor(control)}
                                     </label>
                                     {/* The SAME semantic control the Form authored — a date stays a date. */}
                                     <input

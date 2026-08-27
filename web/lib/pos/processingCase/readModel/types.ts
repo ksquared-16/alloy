@@ -92,6 +92,15 @@ export interface ProcessingCaseQueueRow {
 
 /** Deliverable 2 — the case detail projection: case fields + sources (no extraction/match/resolution/outcome — later). */
 export interface ProcessingCaseDetail {
+    /**
+     * The stored packet analysis, when this case has been analysed as one.
+     *
+     * The analysis was always durable; only the VIEW of it was not. `reviewMode` is React state
+     * initialised to "concepts", so reopening a packet case rendered the single-document draft —
+     * a three-question handbook preview standing in for a 180-destination packet. Carrying the
+     * stored packet on the detail is what lets the screen land where the case actually is.
+     */
+    packetIntake?: unknown | null;
     id: string;
     status: ProcessingCaseStatus;
     caseType: string | null;

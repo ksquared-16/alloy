@@ -28,6 +28,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
+import { buildEnrollmentNeedDeclinePatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
@@ -153,7 +154,15 @@ export async function applyParticipantTurnResponse(
 
     const sessionId = before.value.session_id;
     const needKey = turn.need?.identity.key ?? null;
-    const sharedKey = turn.need?.identity.shared_value_key ?? null;
+    /*
+     * Where this session keeps the answer — which is not the same as what the answer IS.
+     *
+     * A canonical datum keeps its `shared_value_key` and reaches every destination that claims it.
+     * A process-scoped question keeps a key naming its one destination, so a resumed session
+     * remembers it without any canonical consumer being able to match it. Reading the session key
+     * here is what lets the conversation settle both kinds through one path.
+     */
+    const sharedKey = turn.need?.identity.session_value_key ?? null;
     /** The session as it stands AFTER this turn's write — the pure recompute's one moving input. */
     let postWrite: { shared_values: Record<string, unknown>; metadata: Record<string, unknown> } | null = null;
 
@@ -293,6 +302,35 @@ export async function applyParticipantTurnResponse(
                     metadata: (patch.metadata ?? postWrite?.metadata ?? {}) as Record<string, unknown>,
                 };
             }
+        }
+
+        if (disposition.action === "decline_value") {
+            /*
+             * SETTLEMENT, NOT A VALUE. `shared_values` is deliberately untouched.
+             *
+             * The alternative — writing the shortcut's own label — is what produced "Middle name:
+             * Nothing to add" on a signed Oregon health form. The decline lives beside the D-99
+             * confirmations in the session's metadata, which is the extensibility owner for facts
+             * about the interaction rather than about the family.
+             */
+            let metadata: Record<string, unknown> = buildEnrollmentNeedDeclinePatch({
+                metadata: row.metadata ?? {},
+                needKey,
+                declinedAtIso: input.nowIso,
+            });
+            if (input.clearPendingFor) {
+                metadata = withoutPendingClarification(metadata, input.clearPendingFor) as Record<string, unknown>;
+            }
+            const { error } = await supabase
+                .from("form_packet_sessions")
+                .update({ metadata })
+                .eq("id", sessionId)
+                .eq("org_id", input.orgId);
+            if (error) return { ok: false, refusal: { code: "write_failed", detail: error.message } };
+            postWrite = {
+                shared_values: (row.shared_values ?? {}) as Record<string, unknown>,
+                metadata,
+            };
         }
 
         if (disposition.action === "write_shared_value" && sharedKey) {

@@ -60,8 +60,10 @@ export const PROCESSING_BUILDER_CANONICAL_FIELDS: readonly ProcessingBuilderCano
     { id: "program_category_id", registryId: "program_category_id", pickerLabel: "Desired program", pickerMeta: "Select · Enrollment", group: "enrollment" },
     { id: "schedule_type", registryId: "schedule_type", pickerLabel: "Desired schedule", pickerMeta: "Select · Enrollment", group: "enrollment" },
     { id: "child_site", registryId: "child_site", pickerLabel: "Preferred school / site", pickerMeta: "Select · Enrollment", group: "enrollment" },
-    { id: "allergy_notes", registryId: "allergy_notes", pickerLabel: "Allergies", pickerMeta: "Long text · Medical", group: "medical" },
-    { id: "medication_flag", registryId: "medication_flag", pickerLabel: "Medication during care", pickerMeta: "Yes / No · Medical", group: "medical" },
+    // M1 — the picker offers the CHILD-grain allergy destination. The enrollment-grain rows remain in
+    // the registry (deprecated, still resolving for forms already bound to them) but are not offered
+    // for new bindings: nothing new should be created at the wrong grain.
+    { id: "child_allergies", registryId: "child_allergies", pickerLabel: "Allergies", pickerMeta: "Long text · Medical · Child", group: "medical" },
     { id: "emergency_phone", registryId: "guardian_phone", pickerLabel: "Emergency phone", pickerMeta: "Phone · Emergency", group: "emergency_contacts" },
     { id: "emergency_email", registryId: "guardian_email", pickerLabel: "Emergency email", pickerMeta: "Email · Emergency", group: "emergency_contacts" },
     { id: "customer_account_name", registryId: "customer_account_name", pickerLabel: "Household name", pickerMeta: "Short text · Household", group: "household" },

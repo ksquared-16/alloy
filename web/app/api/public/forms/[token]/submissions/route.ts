@@ -5,6 +5,10 @@ import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import { mergePrefillIntoDraftValues } from "@/lib/forms/prefill/mergePrefillDraftValues";
+import {
+    processScopedAnswersToFieldIds,
+    sharedValuesToFieldIds,
+} from "@/lib/forms/packets/sharedValuesToFieldIds";
 import { parsePrefillFieldMapFromMetadata } from "@/lib/forms/prefill/prefillFieldMap";
 import { resolveFormPrefillPayload } from "@/lib/forms/prefill/resolveFormPrefillPayload";
 import { shouldApplyServerPrefill } from "@/lib/forms/prefill/resolveFormPrefillValues";
@@ -143,8 +147,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
     let clientVals = (payload.values ?? {}) as Record<string, unknown>;
     if (ctx.packet && packetSessionRow) {
+        /*
+         * A previous step's value reaches this draft by IDENTITY, never by position.
+         *
+         * The raw spread this replaced put the last artifact's `field_6` into this artifact's
+         * `field_6` — a phone number on the Oregon CIS, a date on the Oregon Nonmedical Exemption.
+         * Finishing the first document made the second one unopenable, and the parent, having just
+         * signed, was shown "Invalid submission payload" instead of their next form.
+         *
+         * Both readers already existed and both already refuse this: a canonical key fills the
+         * fields that bind to it, and a process-scoped key fills the one destination it names on
+         * the one Form it names. Anything else in the shared namespace addresses nothing here.
+         */
         const sv = (packetSessionRow.shared_values ?? {}) as Record<string, unknown>;
-        clientVals = { ...sv, ...clientVals };
+        clientVals = {
+            ...sharedValuesToFieldIds(schema, sv),
+            ...processScopedAnswersToFieldIds(schema, sv, ctx.formDefinitionId),
+            ...clientVals,
+        };
     }
 
     if (ctx.packet) {

@@ -50,14 +50,30 @@ function fieldRole(label: string, dataType: string, disposition: SectionDisposit
 }
 
 export function buildSemanticModel(structure: DocumentStructureCandidate): SemanticDocumentModel {
+    // Repeating structures are detected per page; attach each to the section that owns that page.
+    const groupsByPage = new Map<number, NonNullable<DocumentStructureCandidate["repeating_groups"]>>();
+    for (const g of structure.repeating_groups ?? []) {
+        const arr = groupsByPage.get(g.page) ?? [];
+        arr.push(g);
+        groupsByPage.set(g.page, arr);
+    }
+
     const sections: SemanticSection[] = structure.sections.map((sec) => {
         const disposition: SectionDisposition = sec.disposition ?? "fields";
         const section_key = normalizeKey(sec.title || "section");
         const page = sec.page ?? 1;
         // A repeated person GROUP only when it's a data-collection section — a signature/consent
         // section that merely mentions "guardian" (e.g. "Parent/Guardian Signatures") is NOT a group.
+        //
+        // Nor is an EXECUTION BLOCK. "Parent Handbook Acknowledgement" contains the word parent and
+        // three fields — parent name, student name, date — but they exist to execute an agreement,
+        // not to describe a person. Treating them as a guardian roster made those three destinations
+        // claimed twice: once as the facts they are, once as members of a relationship that isn't
+        // there. A section holding a signature is an execution, whatever its heading says.
+        const holdsSignature = sec.fields.some((f) => f.suggested_type === "signature");
         const repeated_person =
             disposition === "fields" &&
+            !holdsSignature &&
             PERSON_GROUP_RE.test(sec.title || "") &&
             !/^contact\s+information/i.test(sec.title || "");
         const output_copy = sec.duplicate === true;
@@ -68,6 +84,10 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
                 id: `${section_key}:${normalizeKey(f.label)}`,
                 label: f.label,
                 role,
+                ...(f.repeat_group_id ? { repeat_group_id: f.repeat_group_id } : {}),
+                ...(f.evidence ? { evidence: f.evidence } : {}),
+                ...(typeof f.page === "number" ? { page: f.page } : {}),
+                ...(f.signature_variant ? { signature_variant: f.signature_variant } : {}),
                 data_type: f.suggested_type,
                 ...(f.options && f.options.length ? { options: f.options } : {}),
                 ...(role === "conditional_explanation" ? { depends_on: f.label.replace(/\s*—\s*if\s+yes.*$/i, "").trim() } : {}),
@@ -83,6 +103,7 @@ export function buildSemanticModel(structure: DocumentStructureCandidate): Seman
             output_copy,
             static_text: sec.static_text ?? null,
             fields,
+            ...(groupsByPage.get(page)?.length ? { repeating_groups: groupsByPage.get(page) } : {}),
         };
     });
 

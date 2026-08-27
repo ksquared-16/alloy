@@ -20,7 +20,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ProcessingCaseDeps, ProcessingCaseSourceKind } from "./types";
 import { makeProcessingCaseDbDeps } from "./processingCaseDb";
-import { openProcessingCaseFromSource, type OpenProcessingCaseResult } from "./openProcessingCaseFromSource";
+import { attachRelatedSource, openProcessingCaseFromSource, type OpenProcessingCaseResult } from "./openProcessingCaseFromSource";
 
 /**
  * The non-form source kinds this on-ramp is responsible for. Form-backed kinds
@@ -104,5 +104,69 @@ export async function maybeOpenProcessingCaseFromNonFormSourceSafe(
             e instanceof Error ? e.message : e
         );
         return null;
+    }
+}
+
+export type AttachRelatedSourceResult =
+    | { ok: true; attached: boolean; reason?: "already_attached" }
+    | { ok: false; reason: "not_found" | "is_primary" | "unsupported_kind" | "failed" };
+
+/**
+ * Attach an ALREADY-CREATED document to an existing case as a `related` source.
+ *
+ * The reachability gap this closes: `processing_case_sources` has always carried
+ * `role: primary | related`, `attachRelatedSource` has always been the canonical writer, and packet
+ * analysis has always read every source — but nothing an operator could press ever wrote a related
+ * row. So "Analyse as one packet" was reachable in the UI while the state it analyses was not,
+ * and every case in every database had exactly one source.
+ *
+ * Deliberately narrow. It does not create the document — the upload path already owns the bytes,
+ * the hash and the provenance — and it does not open, replace or fork a case. It links one existing
+ * document to one existing case, once.
+ */
+export async function attachRelatedSourceToCaseSafe(
+    supabase: SupabaseClient,
+    args: { orgId: string; processingCaseId: string; sourceKind: string; sourceId: string }
+): Promise<AttachRelatedSourceResult> {
+    try {
+        if (!args.orgId || !args.processingCaseId || !args.sourceId) return { ok: false, reason: "not_found" };
+        if (!isNonFormProcessingSourceKind(args.sourceKind)) return { ok: false, reason: "unsupported_kind" };
+
+        // The case must exist IN THIS ORG. Same authorization boundary as the case itself: a caller
+        // who cannot see the case cannot attach to it.
+        const { data: caseRow } = await supabase
+            .from("processing_cases")
+            .select("id")
+            .eq("org_id", args.orgId)
+            .eq("id", args.processingCaseId)
+            .maybeSingle();
+        if (!caseRow) return { ok: false, reason: "not_found" };
+
+        // Idempotent, and never a second primary. Re-attaching the same document is a no-op rather
+        // than a duplicate participant-visible source; attaching the case's own primary is refused,
+        // because a source that is already the primary must not also appear as related.
+        const { data: existing } = await supabase
+            .from("processing_case_sources")
+            .select("role")
+            .eq("org_id", args.orgId)
+            .eq("processing_case_id", args.processingCaseId)
+            .eq("source_id", args.sourceId)
+            .maybeSingle();
+        if (existing) {
+            return existing.role === "primary"
+                ? { ok: false, reason: "is_primary" }
+                : { ok: true, attached: false, reason: "already_attached" };
+        }
+
+        await attachRelatedSource(makeProcessingCaseDbDeps(supabase), {
+            orgId: args.orgId,
+            processingCaseId: args.processingCaseId,
+            sourceKind: args.sourceKind as NonFormProcessingSourceKind,
+            sourceId: args.sourceId,
+        });
+        return { ok: true, attached: true };
+    } catch (e) {
+        console.warn("[attachRelatedSourceToCaseSafe]", e instanceof Error ? e.message : e);
+        return { ok: false, reason: "failed" };
     }
 }

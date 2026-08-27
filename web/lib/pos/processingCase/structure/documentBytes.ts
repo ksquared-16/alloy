@@ -36,6 +36,25 @@ export async function downloadDocumentBytesSafe(
     }
 }
 
+/** True when the mime/bytes look like a captured HTML page (a hosted-form capture). */
+export function looksLikeHtmlBytes(bytes: Uint8Array | null | undefined, mimeType?: string | null): boolean {
+    if (mimeType && /html|xhtml/i.test(mimeType)) return true;
+    if (!bytes || bytes.length < 14) return false;
+    const head = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 1024)).trimStart().toLowerCase();
+    return head.startsWith("<!doctype html") || head.startsWith("<html") || head.includes("<html");
+}
+
+/** Decode captured bytes as text. Never throws; returns null when they are not decodable. */
+export function decodeCaptureText(bytes: Uint8Array | null | undefined): string | null {
+    try {
+        if (!bytes || bytes.length === 0) return null;
+        const text = new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+        return text.trim() ? text : null;
+    } catch {
+        return null;
+    }
+}
+
 /** True when the mime/bytes look like a PDF (AcroForm extraction is PDF-only). */
 export function looksLikePdfBytes(bytes: Uint8Array | null | undefined, mimeType?: string | null): boolean {
     if (mimeType && /pdf/i.test(mimeType)) return true;

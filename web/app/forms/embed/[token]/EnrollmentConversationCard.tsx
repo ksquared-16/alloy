@@ -103,6 +103,55 @@ type TurnResponse = {
 /** One settled exchange, held locally for this sitting only. */
 type Exchange = { said: string; answered: string };
 
+
+/**
+ * One topic, with the questions it asks.
+ *
+ * A cluster is a conversation about a subject, not a card full of fields. So the topic is spoken
+ * once, the question being answered right now is the prominent one, the questions already answered
+ * recede beneath their own answers, and what is still to come is listed quietly so a parent can see
+ * where the topic ends. Only the active question has an answer surface — the composer below — which
+ * is what keeps "which question am I answering?" from ever being ambiguous.
+ *
+ * Deliberately NOT three inputs with three buttons. That is the shape this whole slice replaced.
+ */
+function ConversationTopic({
+    cluster,
+}: {
+    cluster: NonNullable<ParticipantObjectiveWire["next_turn"]["cluster"]>;
+}) {
+    const settled = cluster.questions.filter((q) => q.state === "settled");
+    const upcoming = cluster.questions.filter((q) => q.state === "upcoming");
+    return (
+        <div className="mb-3" data-participant-topic={cluster.title ?? "topic"}>
+            {cluster.title ? (
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/40">
+                    {cluster.title}
+                </p>
+            ) : null}
+            {settled.length > 0 ? (
+                <ul className="mb-2 space-y-1" data-participant-topic-settled={settled.length}>
+                    {settled.map((q) => (
+                        <li key={q.need_key} className="flex gap-2 text-[13px] leading-snug text-alloy-midnight/45">
+                            <span aria-hidden className="text-alloy-bend-pine">✓</span>
+                            <span>
+                                {q.question}
+                                {q.answer ? <span className="text-alloy-midnight/60"> — {q.answer}</span> : null}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            ) : null}
+            {upcoming.length > 0 ? (
+                <p className="text-[12px] leading-snug text-alloy-midnight/35" data-participant-topic-upcoming={upcoming.length}>
+                    {upcoming.length === 1 ? "Then: " : `Then ${upcoming.length} more: `}
+                    {upcoming.map((q) => q.question.replace(/\?$/, "")).join(" · ")}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
 export function EnrollmentConversationCard({
     token,
     initialObjective,
@@ -153,7 +202,7 @@ export function EnrollmentConversationCard({
     const control = useMemo(() => controlForTurn(objective.next_turn), [objective]);
 
     const submit = useCallback(
-        async (payload: { text?: string; value?: unknown; settledAs?: string }) => {
+        async (payload: { text?: string; value?: unknown; settledAs?: string; decline?: boolean }) => {
             if (inFlight.current) return;
             inFlight.current = true;
             setBusy(true);
@@ -194,9 +243,18 @@ export function EnrollmentConversationCard({
                     {
                         method: "POST",
                         headers: { "content-type": "application/json" },
-                        // WORDS ONLY. No identifier of any kind — the server owns every one of
-                        // those and reads them from the session's current turn.
-                        body: JSON.stringify(payload),
+                        /*
+                         * WORDS ONLY. No identifier of any kind — the server owns every one of
+                         * those and reads them from the session's current turn.
+                         *
+                         * `settledAs` stays behind deliberately: it is the thread's own echo of what
+                         * the parent chose, and a shortcut's label must never travel as an answer.
+                         */
+                        body: JSON.stringify({
+                            ...(payload.text !== undefined ? { text: payload.text } : {}),
+                            ...(payload.value !== undefined ? { value: payload.value } : {}),
+                            ...(payload.decline ? { decline: true } : {}),
+                        }),
                     },
                 );
                 const json = (await res.json()) as TurnResponse;
@@ -342,15 +400,38 @@ export function EnrollmentConversationCard({
             label: control.deny,
             onSelect: () => setCorrecting(true),
         });
+    } else if (control.kind === "options") {
+        /*
+         * THE CHOICES COME FIRST, INCLUDING WHEN THE QUESTION IS OPTIONAL.
+         *
+         * The optional branch used to be tested ahead of this one, so a question with a closed
+         * option set and `optional: true` offered "Nothing to add" and "Yes — I'll tell you" and
+         * never its own choices. A parent asked "How would you describe Mateo's gender?" — a
+         * question the school authored with three answers — had to volunteer to tell us, and was
+         * then handed a text box for a closed set. Optionality is about whether an answer is
+         * REQUIRED, never about whether the answers are shown.
+         */
+        suggestionKind = "options";
+        for (const option of control.options) {
+            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
+        }
+        // Leaving it blank stays available, beside the choices rather than instead of them.
+        if (optionalUnanswered && skipLabel) {
+            suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
+        }
     } else if (optionalUnanswered && skipLabel && affirmLabel) {
         suggestionKind = "optional";
         suggestions.push({
             label: skipLabel,
             emphasis: true,
-            // Resolves the turn outright — no redundant Continue after a binary answer. The label IS
-            // the answer. Writing null would leave the need unmet and the question would come back
-            // forever; "No known allergies" is both true and what a specialist would write down.
-            onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }),
+            /*
+             * Resolves the turn outright — and records SETTLEMENT, not the button's own words.
+             *
+             * The label describes what the parent did; it is not their answer. Sending it as a value
+             * is what printed "Middle name: Nothing to add" on a signed Oregon health form. The
+             * thread still echoes the label, because that is what the parent chose.
+             */
+            onSelect: () => void submit({ decline: true, settledAs: skipLabel }),
         });
         suggestions.push({
             // Local: reveals the authored control for the parent who does have something to tell us.
@@ -361,23 +442,23 @@ export function EnrollmentConversationCard({
         suggestionKind = "boolean";
         suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
         suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
-    } else if (control.kind === "options") {
-        suggestionKind = "options";
-        for (const option of control.options) {
-            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
-        }
     } else if (skipLabel && elaborating) {
-        suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
+        suggestions.push({ label: skipLabel, onSelect: () => void submit({ decline: true, settledAs: skipLabel }) });
     }
 
     /**
-     * The typed control, shown only when a keyboard answer alone would not do.
+     * The typed control — shown ONLY where a keyboard answer alone genuinely would not do.
      *
      * A date is the reference case: the deterministic path has to work with the provider disabled,
-     * so a date of birth gets a real date picker beside the composer rather than instructions about
-     * how to phrase one.
+     * so a date of birth gets a real date picker rather than instructions about how to phrase one.
+     *
+     * ORDINARY TEXT NO LONGER GETS ONE. The parent used to face three ways to answer the same
+     * question at once — a generic text box with a "Use this" button, quiet reply pills, and a
+     * composer saying "Message Alloy…" — and had to work out which of them Alloy was listening to.
+     * There is one conversation: for text, the composer IS the answer surface, and a second text box
+     * above it was never a control, only a competing paradigm.
      */
-    const typed: ParticipantValueControl | null =
+    const typedCandidate: ParticipantValueControl | null =
         control.kind === "choice_or_text"
             ? correcting
                 ? control.correction
@@ -385,6 +466,12 @@ export function EnrollmentConversationCard({
             : control.kind === "value" && !optionalUnanswered
               ? control
               : null;
+    /** Input types whose answer a keyboard alone cannot supply well: a picker earns its place. */
+    const NEEDS_ITS_OWN_CONTROL = new Set(["date", "number"]);
+    const typed: ParticipantValueControl | null =
+        typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
+            ? typedCandidate
+            : null;
 
     return (
         <ConversationViewport
@@ -420,6 +507,9 @@ export function EnrollmentConversationCard({
                         while its own answer is still in flight above it. */}
                     {awaitingTurn ? null : (
                         <ThreadTurn who="alloy" depth="current">
+                            {objective.next_turn.cluster ? (
+                                <ConversationTopic cluster={objective.next_turn.cluster} />
+                            ) : null}
                             <ThreadSaid who="alloy" depth="current">
                                 {participantQuestionSegments(objective).map((segment, i) =>
                                     segment.emphasis ? (
@@ -489,7 +579,7 @@ export function EnrollmentConversationCard({
                     <SuggestedReplies replies={suggestions} busy={busy} controlKind={suggestionKind} />
                     <Composer
                         busy={busy}
-                        placeholder="Message Alloy…"
+                        placeholder={typed ? "Or tell me in your own words…" : "Type your answer…"}
                         focusSignal={participantQuestion(objective)}
                         onSend={(words) => void submit({ text: words, settledAs: words })}
                     />
@@ -585,9 +675,9 @@ function TypedAnswer({
                 type="button"
                 disabled={busy || !ready}
                 onClick={() => onSubmit(text.trim(), shown)}
-                className="min-h-[44px] rounded-xl bg-alloy-midnight px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-juniper disabled:opacity-40"
+                className="min-h-[44px] rounded-xl bg-alloy-bend-pine px-4 text-[14px] font-medium text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-bend-pine disabled:opacity-40"
             >
-                Use this
+                Done
             </button>
         </div>
     );

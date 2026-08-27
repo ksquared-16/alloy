@@ -41,6 +41,14 @@ export const ENROLLMENT_NEED_STATES = [
     "known",
     "known_requires_confirmation",
     "confirmed",
+    /**
+     * Asked, and the participant chose to leave it blank.
+     *
+     * Distinct from `missing`, which means nobody has been asked yet, and distinct from a value —
+     * there is no value. Declining is only offered where the authored control says the answer is
+     * optional, and it settles the need without putting anything on any document.
+     */
+    "declined",
     "artifact_specific",
 ] as const;
 
@@ -59,6 +67,15 @@ export type EnrollmentNeedOccurrence = {
     readonly form_field_id: string;
     readonly label: string;
     readonly required: boolean;
+    /**
+     * The section the school itself put this destination in.
+     *
+     * Grouping evidence the packet already carries — "Contact Information", "Emergency Contact
+     * Information & Authorized Adults", "Health Information and Developmental History" are the
+     * school's own headings, not categories Alloy invented. Carried so a conversation can ask
+     * related things together without any layer having to guess what is related.
+     */
+    readonly section_title: string | null;
     /**
      * The AUTHORED control type — `date`, `boolean`, `select`, `text`, `signature`, …
      *
