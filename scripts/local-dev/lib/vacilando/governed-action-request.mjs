@@ -41,6 +41,7 @@ import {
 import {
   fulfillRepositoryPushForMission,
   fulfillRestoreQaSessionForMission,
+  fulfillProvisionQaIdentityForMission,
   fulfillPromotionOpenPrForMission,
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
@@ -236,6 +237,22 @@ export function presentationForGovernedAction(req = {}) {
       wait_label: "Waiting on Director — promotion pull request",
       mission_need: `Needs approval — Open ${b} → ${base}`,
       detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    /*
+     * Names the account being created and the slot it belongs to. Provisioning creates an account;
+     * restoring signs into one. Two different decisions, so the words must not be interchangeable.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const identity = req.registered_identity || inputs.registered_identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || "";
+    return {
+      approve_label: "Authorize QA identity provisioning",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA identity provisioning",
+      mission_need: `Needs approval — Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Create the managed, non-production QA account ${identity}${slot ? ` for Slot ${slot}` : ""} in hosted staging · lane ${lane} · no email is sent · no human-managed password is created · creates no browser session`,
     };
   }
   if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
@@ -895,6 +912,7 @@ function defaultModeForAction(actionKey, requested) {
   // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
   // enum would add governance vocabulary for one action that already has a home.
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   return "read_only";
 }
 
@@ -1651,6 +1669,16 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
         worktree_path: rec.worktree_path,
         worktreePath: rec.worktree_path,
       },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return fulfillProvisionQaIdentityForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
       actor,
       nowMs,
       grant,

@@ -29,14 +29,32 @@ Create six dedicated **local/staging** portal users (one per slot). Suggested ma
 | 5 | Refactor / infrastructure | `admin` for platform refactors |
 | 6 | Experimental | `ops` sandbox |
 
-Configure aliases in `~/.config/alloy-dev/config`:
+### Slot QA identities are managed machine accounts
+
+Each slot's QA identity is a **managed, non-human account in hosted staging** — a machine
+identifier, not a mailbox. It needs no routable inbox, receives no mail, and no person signs in as
+it. The shipped defaults are the real identities:
 
 ```bash
-ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@your-staging.org"
+ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@example.com"
 # ... through slot 6
 ```
 
-**Never** put passwords in config. Sign in manually during `alloy-agent-login`.
+Override them only to point a slot at a *different* managed QA account; there is no need to invent
+a deliverable address.
+
+Two governed actions own their lifecycle, and they are deliberately separate — creating an account
+and signing into one are different decisions, so each needs its own approval:
+
+- `environment.provision_qa_identity` creates exactly the registry-resolved identity, confirmed,
+  with no email sent. Restoration never creates a user as a side effect.
+- `environment.restore_qa_session` mints a single-use magic link and establishes the browser
+  session.
+
+**No password is ever created for a person to hold.** Where the provider requires one internally it
+is generated inside the trusted child and discarded immediately — never displayed, returned, logged
+or persisted. `alloy-agent-login` remains available for a human-operated account, but a managed slot
+identity is restored through the governed action rather than typed in.
 
 ## Safe environment (`alloy-agent-prepare`)
 

@@ -43,6 +43,7 @@ import {
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
 import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
+import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
 import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import {
@@ -413,6 +414,9 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs, 
   }
   if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
     return executeRestoreQaSessionTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return executeProvisionQaIdentityTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
@@ -1046,6 +1050,48 @@ export function executeRestoreQaSessionTrustedHostAction(action, { actor = "dire
     return failTrustedAction(action, out?.failure_code || "restore_failed", out?.failure_detail || "QA session restore failed", { nowMs });
   }
   return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Provision the managed QA identity, in the `{ ok, action }` shape applyExecuteResult requires. */
+export function executeProvisionQaIdentityTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeProvisionQaIdentitySync({
+    action, grant, grantCheck: grantAuthorizesAction, nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Provisioning result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "provision_failed", out?.failure_detail || "QA identity provisioning failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Mission-scoped entry point for provisioning; `defaultExecute` dispatches here. */
+export function fulfillProvisionQaIdentityForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 /**
