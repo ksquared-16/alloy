@@ -52,6 +52,11 @@ export function ParticipantDocumentCanvas({
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const [status, setStatus] = useState<"loading" | "ready">("loading");
+    const [pageCount, setPageCount] = useState(0);
+    const [page, setPage] = useState(1);
+    /** Read inside the render effect without making the effect depend on it. */
+    const pageRef = useRef(1);
+    pageRef.current = page;
     // The latest overlay props, readable from the imperative render without re-rasterizing.
     const signatureRef = useRef<DocumentSignatureOverlay | null>(signature ?? null);
     signatureRef.current = signature ?? null;
@@ -76,8 +81,18 @@ export function ParticipantDocumentCanvas({
 
                 // Replace previous render wholesale — a regenerate is a new document, not a patch.
                 container.replaceChildren();
+                setPageCount(doc.numPages);
 
-                for (let pageNumber = 1; pageNumber <= doc.numPages; pageNumber++) {
+                /*
+                 * ONE PAGE AT A TIME.
+                 *
+                 * Paperwork is read a page at a time, and a phone cannot show four stacked pages
+                 * legibly — the parent got a single tall column and had to scroll past pages they
+                 * were not being asked about. Only the page in view is rendered, so navigation is
+                 * also the thing that keeps a long document cheap.
+                 */
+                const only = Math.min(Math.max(1, pageRef.current), doc.numPages);
+                for (let pageNumber = only; pageNumber <= only; pageNumber++) {
                     const page = await doc.getPage(pageNumber);
                     if (cancelled) return;
                     const base = page.getViewport({ scale: 1 });
@@ -164,16 +179,63 @@ export function ParticipantDocumentCanvas({
         // onUnavailable is a stable host callback by contract; the url and the signature's captured
         // preview are the identity of a render.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [url, signature?.preview?.typedName, signature?.preview?.drawnPngDataUrl, signature?.focus, !!signature]);
+        // `page` is a dependency: turning the page re-renders that page and only that page.
+    }, [url, page, signature?.preview?.typedName, signature?.preview?.drawnPngDataUrl, signature?.focus, !!signature]);
+
+    /*
+     * A signature navigates to its own page.
+     *
+     * The parent should never be asked to find the place they are meant to sign — when a signature
+     * is being captured, the document turns to the page its authored placement lives on.
+     */
+    useEffect(() => {
+        if (signature && typeof signature.page === "number") setPage(signature.page + 1);
+    }, [signature?.page, !!signature]);
+
+    // A regenerated document is a new document: start it at the beginning.
+    useEffect(() => {
+        setPage(1);
+    }, [url]);
+
+    const atFirst = page <= 1;
+    const atLast = pageCount > 0 && page >= pageCount;
 
     return (
-        <div data-participant-document="true">
+        <div data-participant-document="true" data-participant-document-pages={pageCount || undefined}>
             {status === "loading" ? (
                 <p className="py-6 text-center text-[14px] text-alloy-midnight/50">
                     Preparing your paperwork…
                 </p>
             ) : null}
             <div ref={containerRef} className="flex flex-col gap-4" />
+            {pageCount > 1 ? (
+                /* Reachable on a phone: full-height targets, and never off the safe area. */
+                <nav
+                    className="mt-4 flex items-center justify-between gap-3 border-t border-alloy-midnight/[0.07] pt-4"
+                    aria-label="Document pages"
+                    data-participant-document-nav="true"
+                >
+                    <button
+                        type="button"
+                        onClick={() => setPage((p) => Math.max(1, p - 1))}
+                        disabled={atFirst}
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-4 text-[14px] font-medium text-alloy-midnight disabled:opacity-35"
+                    >
+                        ‹ Previous
+                    </button>
+                    <span className="text-[13px] tabular-nums text-alloy-midnight/60" aria-live="polite">
+                        Page {Math.min(page, pageCount)} of {pageCount}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setPage((p) => (pageCount ? Math.min(pageCount, p + 1) : p))}
+                        disabled={atLast}
+                        className="min-h-[44px] rounded-xl border border-alloy-midnight/15 px-4 text-[14px] font-medium text-alloy-midnight disabled:opacity-35"
+                    >
+                        Next ›
+                    </button>
+                </nav>
+            ) : null}
         </div>
     );
 }
