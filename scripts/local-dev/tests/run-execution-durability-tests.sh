@@ -58,6 +58,7 @@ SUITES=(
   "development-governed-dependency-runtime.test.mjs"
   "development-validation-convergence.test.mjs"
   "development-executor-authority.test.mjs"
+  "development-memory-capacity.test.mjs"
 )
 
 PASS=0
