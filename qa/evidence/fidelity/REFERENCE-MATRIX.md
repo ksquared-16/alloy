@@ -70,3 +70,54 @@ presentation one.
 `qa/evidence/fidelity/` — `lab-final-focus-panel.png` (approved), `geom-FINAL.png` (production),
 `process-final.png`, `financials-final.png`, `health-final.png`, `attendance-populated.png`,
 and the before/after pair `geom-before.png` → `geom-after-horizontal.png`.
+
+---
+
+# Product completion pass — results
+
+Visual authority unchanged: the approved artifact, plus the three command/detail specimens
+supplied with the instruction (Add charge, Financials detail, compact Financials).
+
+## Geometry, after the completion pass
+
+| Card | Child grain | Case grain | Notes |
+|---|---|---|---|
+| `business_process` | 1023 (12/12) | 1023 (12/12) | annotations + participant markers |
+| `financials` | 679 (8/12) summary | 679 **compact** | density selects presentation |
+| `billing_preview` | 334 (4/12) | 334 (4/12) | |
+| `household` | 334 (4/12) | 334 (4/12) | |
+| `health_safety` | 334 (4/12) | 334 (4/12) | |
+| `attendance` | **679 (8/12)** | 679 (8/12) | was 12/12; 12/12 stays configurable |
+| `scheduling` | **334 (4/12)** | 334 (4/12) | the real companion beside Attendance |
+| `children` | 507 (6/12) | 507 (6/12) | |
+
+## Certified in the browser
+
+**Business Process** — title `ENROLLMENT` (process name, not stage) · stage annotations from
+configuration (`Aug 26`, `Aug 27`, and on a second record `Aug 7` / `North Campus` / `Aug 13`) ·
+participants at DIVERGENT stages (`Certb` under Enrolling, `Certa` under Enrolled) with the case
+marker unmoved · four actions, none clipped (151/141/108/152px), one filled primary · activity
+trigger present.
+
+**Financials** — compact at case grain (`data-financials-card="compact"`) beside a 4/12 companion ·
+8/12 summary at child grain with `RESPONSIBILITY` · Add charge command card (4 configured types as
+labels, subject select, event date, domain preview: Field trip $40.00, billing period Oct 1 2026
+from `billable_on`, balance $25.00 → $65.00) · Details ledger-first detail with charge-kind,
+subject and payer filters.
+
+**Health & Safety** — populated summary with CRITICAL / REQUIRED INFORMATION · near-empty summary
+(requirements only, no fabricated sections) · detail projecting allergies, conditions, medications
+with authorization-as-requirement, documents-as-evidence, emergency contacts.
+
+**Attendance** — populated 8/12 timeline ("Expected Monkeys · 3:07 PM · 0m so far", track, band,
+three commands, LAST 5 DAYS) · ineligible state in the SAME card at the same density, with no
+controls offered.
+
+## Gaps named, not papered over
+
+| Gap | Owner | State |
+|---|---|---|
+| No expected attendance TIME — scheduling is day-grain (`schedule_patterns` carries dates) | Scheduling | open; Attendance contributes the room it can name |
+| No payer ALLOCATION store — a `payer` role exists, shares do not | Processing | open; payers are named, no split is invented |
+| Pre-enrollment `customer` billable source | promotion | migration authored in wt6, in NO promoted SHA; `resolveChargeSubject` still requires an enrollment agreement. Census `gar_450e643a2503e1` requested to confirm the deployed CHECK |
+| Only ONE lifecycle process configured (`enrollment`) | configuration | Assignment/Billing exist as lab specimens; the same component renders all three |
