@@ -1629,3 +1629,135 @@
   font-weight: 600;
   color: #b45309;
 }
+
+
+/* ══ FINANCIALS DETAIL — the condensed strip and the period-grouped ledger ═════
+ *
+ * Missed by the first detail extraction, whose line range stopped before this block. The symptom
+ * was precise and ugly: the summary strip rendered as one run-together sentence
+ * ("Balance$75.00Past dueNoneResponsibility$75.00…") because the label/value pairs had no layout,
+ * and the ledger's DESCRIPTION header sat on top of its own values.
+ *
+ * Copied verbatim, and the brace count is asserted at extraction time — the last two extractions
+ * were the ones that inverted the stage rail and 500'd every workspace route.
+ */
+
+/* ── financials detail: condensed strip + period-grouped ledger ────────────── */
+.alloy-os-fdetail__strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 26px;
+  margin-top: 2px;
+}
+.alloy-os-fdetail__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+.alloy-os-fdetail__statlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__statvalue {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--alloy-os-midnight, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__statvalue--strong {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.alloy-os-fdetail__stat[data-tone="due"] .alloy-os-fdetail__statvalue { color: #b45309; }
+.alloy-os-fdetail__stat[data-tone="ok"] .alloy-os-fdetail__statvalue { color: var(--alloy-os-bend-pine, #00a283); }
+.alloy-os-fdetail__payers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 7%, transparent);
+}
+.alloy-os-fdetail__payer {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+.alloy-os-fdetail__filterrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+  align-items: center;
+}
+.alloy-os-fdetail__filterlabel {
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+  margin-right: 2px;
+}
+.alloy-os-fdetail__period { margin-top: 8px; }
+.alloy-os-fdetail__periodhead {
+  margin: 0 0 2px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--alloy-os-midnight, #273f52) 12%, transparent);
+}
+.alloy-os-fdetail__periodname {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--alloy-os-midnight, #273f52);
+}
+.alloy-os-fdetail__periodsum {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--alloy-os-text-secondary, #4b5563);
+  font-variant-numeric: tabular-nums;
+}
+.alloy-os-fdetail__collapsed {
+  margin: 3px 0 0;
+  font-size: 0.68rem;
+  color: var(--alloy-os-text-tertiary, #9ca3af);
+}
+.alloy-os-fdetail__upcoming { margin-top: 8px; }
+.alloy-os-fdetail__upcominglist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 26px;
+}
+.alloy-os-fdetail__up {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+/* The draft note under the preview — quiet, and never competing with the amount above it. */
+.alloy-os-addcharge__draftnote {
+  margin: 4px 0 2px;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
+/* The command lands in the elevated host; its own wrapper adds no box of its own. */
+.alloy-os-addcharge-host {
+  min-width: 0;
+}
+
+/* An absent command names itself. Quiet, non-interactive, and clearly not a button. */
+.alloy-os-healthdetail__unavailable {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 50%, #64748b);
+}

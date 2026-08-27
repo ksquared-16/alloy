@@ -3408,6 +3408,50 @@ html[data-alloy-os-runtime-split="true"]
   animation: alloy-os-fp-card-zoom var(--alloy-os-fp-depth-ms) var(--alloy-os-fp-depth-ease) both;
 }
 
+/*
+ * WORKSTATION DETAIL — an elevated card at EXPANDED density gets real room.
+ *
+ * The default elevated card is 720px, which is right for a focused single-answer card
+ * (Assignments, Household). It is not right for a detail card that carries a filtered ledger with
+ * eight columns, or a health record in three columns: at 720px the Financials ledger rendered its
+ * DESCRIPTION header on top of its own values, and the summary strip had nowhere to lay out.
+ *
+ * This is the existing DENSITY system doing the work — `data-universal-card-density="expanded"` is
+ * what the detail cards already declare — not a Financials-only fixed-position modal. Every detail
+ * card gets the same host, so there is one answer to "how big is an expanded card".
+ *
+ * Roughly 2x the usable area: 1180px wide against 720px, and 88vh of height against 75vh. Still
+ * centered, still scrimmed, still capped against the viewport so it cannot overflow, and still
+ * `min(..., calc(100% - 32px))` so a narrow canvas simply gets a narrower card.
+ */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-density="expanded"] {
+  width: min(var(--alloy-os-focus-panel-detail-max-width, 1180px), calc(100% - 32px));
+  max-height: min(88vh, calc(100dvh - 48px));
+  top: 16px;
+}
+
+/*
+ * And the BODY has to be allowed to use that room.
+ *
+ * `.alloy-os-ucard--expanded .alloy-os-ucard__body` caps at min(360px, 45vh) — right for an
+ * expanded card sitting in the grid, and the reason the taller host changed nothing at first: the
+ * card grew and the body stayed 360px, so the ledger was still clipped one row in, with Upcoming
+ * below the fold.
+ *
+ * Inside the elevated host the card's own max-height is the cap, so the body takes what is left
+ * after the header. It still scrolls — internal scrolling where genuinely necessary — but only
+ * once the content exceeds a nearly full-height workstation card rather than a 360px box.
+ */
+.alloy-os-focus-panel-grid[data-fp-depth="active"]
+  .alloy-os-focus-panel-grid__cell[data-fp-elevated="true"]
+  .alloy-os-ucard[data-universal-card-density="expanded"]
+  .alloy-os-ucard__body {
+  max-height: calc(min(88vh, 100dvh - 48px) - 108px);
+  overflow-y: auto;
+}
+
 /* Scheduling elevated card — SAME elevation contract as Household/Children:
  * content-sized height (never force a viewport height), rounded bottom fully
  * visible on the surface, body scrolls when the form is taller than the body cap.

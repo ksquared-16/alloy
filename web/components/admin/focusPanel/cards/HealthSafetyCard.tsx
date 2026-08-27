@@ -5,6 +5,9 @@ import { useCallback, useEffect, useState } from "react";
 import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import ApprovedHealthSafetyCard from "@/components/operationalCards/HealthSafetyCard";
 import HealthDetailCard from "@/components/operationalCards/HealthDetailCard";
+import HealthFactCommand, {
+    type HealthFactKindOption,
+} from "@/components/admin/focusPanel/cards/HealthFactCommand";
 import {
     useDismissSignal,
     useReportPerspective,
@@ -57,6 +60,9 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
     const [loading, setLoading] = useState(false);
     const [denied, setDenied] = useState(false);
     const [expanded, setExpanded] = useState(false);
+    const [factCommand, setFactCommand] = useState<HealthFactKindOption | null>(null);
+    const [factRunning, setFactRunning] = useState(false);
+    const [factError, setFactError] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!memberId) {
@@ -96,6 +102,56 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
         void load();
     }, [load]);
 
+    /*
+     * THE ONLY WAY HEALTH TRUTH CHANGES HERE.
+     *
+     * `health_fact.add` is the registered action over `healthFactService` (H4). React never calls
+     * the service: the action resolves the actor's grants from the client it already holds, stamps
+     * provenance as `operator`, and writes append-only. On success the card RELOADS from the read
+     * model rather than splicing the row it just created — the summary and the detail must agree,
+     * and they only agree if both come from the same read.
+     */
+    const addFact = useCallback(
+        async (kind: HealthFactKindOption, input: { payload: Record<string, unknown>; relatedFactId: string | null }) => {
+            if (!memberId || factRunning) return;
+            setFactRunning(true);
+            setFactError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({
+                        action_key: "health_fact.add",
+                        entity_type: "child",
+                        entity_id: memberId,
+                        mode: "execute",
+                        confirmation: { confirmed: true },
+                        payload: {
+                            customer_member_id: memberId,
+                            fact_kind: kind,
+                            payload: input.payload,
+                            related_fact_id: input.relatedFactId,
+                        },
+                    }),
+                });
+                const json = (await res.json()) as { ok?: boolean; error?: string };
+                if (!json?.ok) {
+                    // A refusal is the domain speaking — surfaced verbatim, never swallowed.
+                    setFactError(json?.error || "The health record could not be updated.");
+                    return;
+                }
+                setFactCommand(null);
+                await load();
+            } catch {
+                setFactError("The health record could not be updated.");
+            } finally {
+                setFactRunning(false);
+            }
+        },
+        [factRunning, load, memberId],
+    );
+
     const name = scope?.displayName ?? null;
     const criticalCount = vm?.criticalFacts.length ?? 0;
 
@@ -120,8 +176,12 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
      * Financials detail uses. Reporting "focused" is what raises it; the scrim click and ESC come
      * back through `useDismissSignal` rather than a close control this card owns.
      */
-    useReportPerspective(coordination, "health_safety", expanded ? "focused" : "base");
-    useDismissSignal(coordination, "health_safety", () => setExpanded(false));
+    useReportPerspective(coordination, "health_safety", expanded || factCommand ? "focused" : "base");
+    useDismissSignal(coordination, "health_safety", () => {
+        setFactCommand(null);
+        setFactError(null);
+        setExpanded(false);
+    });
 
     /*
      * ── VIEW HEALTH DETAILS — the approved detail, PROJECTING the existing owners ──
@@ -131,10 +191,54 @@ export default function HealthSafetyCard({ model, context, receded = false, coor
      * relationships. The refusal paths below still win — a permission refusal is not an empty
      * health record, and must never open as one.
      */
+    if (factCommand && vm && !denied && !vm.unavailableReason) {
+        return (
+            <div className="alloy-os-health" data-health-card="true" data-health-overlay="fact_command">
+                <HealthFactCommand
+                    kind={factCommand}
+                    childLabel={name ?? "This child"}
+                    /* Only facts a medication can actually treat — the canonical join, offered
+                       from what is already on the record rather than typed in free text. */
+                    relatable={[...vm.criticalFacts, ...vm.careFacts].map((f) => ({
+                        id: f.factId,
+                        label: f.label,
+                    }))}
+                    running={factRunning}
+                    error={factError}
+                    onSubmit={(input) => void addFact(factCommand, input)}
+                    onCancel={() => {
+                        setFactCommand(null);
+                        setFactError(null);
+                    }}
+                />
+            </div>
+        );
+    }
+
     if (expanded && vm && !denied && !vm.unavailableReason) {
         return (
             <div className="alloy-os-health" data-health-card="true" data-health-overlay="detail">
-                <HealthDetailCard evidence={adaptHealthVmToHealthDetail(vm, name)} />
+                <HealthDetailCard
+                    evidence={adaptHealthVmToHealthDetail(vm, name)}
+                    commands={{
+                        addAllergy: () => setFactCommand("allergy"),
+                        addCondition: () => setFactCommand("condition"),
+                        addMedication: () => setFactCommand("medication"),
+                        /*
+                         * NULL, not a no-op. Dietary/accommodation notes are configured CHILD
+                         * FIELDS and health documents are canonical Documents — neither has a
+                         * registered action this card may call, and Health must not grow a second
+                         * writer for data it does not own. The card names the gap instead of
+                         * rendering a control that does nothing.
+                         */
+                        editProfile: null,
+                        uploadDocument: null,
+                        unavailableReason: (key) =>
+                            key === "editProfile" ?
+                                "Dietary and accommodation notes are edited on the child record"
+                            :   "Health documents are uploaded through Documents",
+                    }}
+                />
             </div>
         );
     }

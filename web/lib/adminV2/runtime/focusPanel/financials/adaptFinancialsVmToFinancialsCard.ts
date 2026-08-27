@@ -337,9 +337,6 @@ export function adaptAddChargeSpecimen(input: {
      * exactly the drift the adapter exists to prevent.
      */
     const resolvedAmount = input.previewSummary?.match(/[$][\d,]+\.\d{2}/)?.[0] ?? null;
-    const amountCents =
-        resolvedAmount ? Math.round(Number(resolvedAmount.replace(/[$,]/g, "")) * 100) : null;
-
     return {
         template: input.template,
         subject: input.subjectLabel,
@@ -359,14 +356,13 @@ export function adaptAddChargeSpecimen(input: {
         note: input.note,
         previewBefore: money(input.balanceCents, input.currency),
         /*
-         * Before + the RESOLVED charge. Both numbers are canonical — the balance from the read
-         * model, the amount from the domain's own preview — so this is the addition the card is
-         * asking the operator to authorise, not an estimate of it. With no resolved amount there is
-         * no after to state, and the balance simply does not move on screen.
+         * THE BALANCE DOES NOT MOVE, and this field says so.
+         *
+         * It once carried `balance + amount`, which claimed a posted increase that confirming the
+         * command does not cause: Add charge creates a DRAFT, and a draft is not owed until it
+         * posts. The charge amount is the implication the operator is authorising; the balance is a
+         * fact that is unchanged by authorising it.
          */
-        previewAfter:
-            amountCents != null ?
-                money(input.balanceCents + amountCents, input.currency)
-            :   money(input.balanceCents, input.currency),
+        previewAfter: money(input.balanceCents, input.currency),
     };
 }

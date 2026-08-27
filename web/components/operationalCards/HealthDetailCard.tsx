@@ -33,7 +33,28 @@ import type { HealthDetailEvidence } from "@/lib/cardLab/cardLabTypes";
  * Provenance reuses the existing lineage the platform already records — parent reported, document
  * extraction, operator confirmed — rather than introducing a health audit system.
  */
-export default function HealthDetailCard({ evidence }: { evidence: HealthDetailEvidence }) {
+export default function HealthDetailCard({
+    evidence,
+    commands,
+}: {
+    evidence: HealthDetailEvidence;
+    /**
+     * The detail's real operator commands, when a host supplies them. Absent in the lab, where this
+     * is a specimen and the controls are inert — which is what a specimen should be.
+     *
+     * A command the platform cannot currently execute is passed as `null` rather than omitted, so
+     * the card can say WHY it is unavailable instead of rendering a control that does nothing. A
+     * clickable-looking affordance that no-ops is worse than an absent one.
+     */
+    commands?: {
+        addAllergy?: (() => void) | null;
+        addCondition?: (() => void) | null;
+        addMedication?: (() => void) | null;
+        editProfile?: (() => void) | null;
+        uploadDocument?: (() => void) | null;
+        unavailableReason?: (key: "editProfile" | "uploadDocument") => string | null;
+    };
+}) {
     return (
         <div className="alloy-os-health alloy-os-health--detail" data-health-detail="true">
             <UniversalCard
@@ -89,7 +110,14 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
                                 </article>
                             ))}
                             <ActionRow>
-                                <Action>Add allergy</Action>
+                                {commands === undefined || commands.addAllergy ? (
+                                    <Action onClick={commands?.addAllergy ?? undefined}>Add allergy</Action>
+                                ) : (
+                                    /* Named, not hidden: the operator learns why the seam is absent. */
+                                    <span className="alloy-os-healthdetail__unavailable">
+                                        {commands.unavailableReason?.("addAllergy" as never) ?? "Add allergy is not available yet"}
+                                    </span>
+                                )}
                             </ActionRow>
 
                             {/* ── C · Conditions ─────────────────────────────── */}
@@ -107,7 +135,14 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
                                 </article>
                             ))}
                             <ActionRow>
-                                <Action>Add condition</Action>
+                                {commands === undefined || commands.addCondition ? (
+                                    <Action onClick={commands?.addCondition ?? undefined}>Add condition</Action>
+                                ) : (
+                                    /* Named, not hidden: the operator learns why the seam is absent. */
+                                    <span className="alloy-os-healthdetail__unavailable">
+                                        {commands.unavailableReason?.("addCondition" as never) ?? "Add condition is not available yet"}
+                                    </span>
+                                )}
                             </ActionRow>
 
                             {/* ── E · Profile facts ──────────────────────────── */}
@@ -116,7 +151,14 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
                                 <Fact key={p.label} label={p.label} value={p.value} />
                             ))}
                             <ActionRow>
-                                <Action>Edit health profile</Action>
+                                {commands === undefined || commands.editProfile ? (
+                                    <Action onClick={commands?.editProfile ?? undefined}>Edit health profile</Action>
+                                ) : (
+                                    /* Named, not hidden: the operator learns why the seam is absent. */
+                                    <span className="alloy-os-healthdetail__unavailable">
+                                        {commands.unavailableReason?.("editProfile" as never) ?? "Edit health profile is not available yet"}
+                                    </span>
+                                )}
                             </ActionRow>
                         </section>
 
@@ -148,7 +190,14 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
                                 </article>
                             ))}
                             <ActionRow>
-                                <Action>Add medication</Action>
+                                {commands === undefined || commands.addMedication ? (
+                                    <Action onClick={commands?.addMedication ?? undefined}>Add medication</Action>
+                                ) : (
+                                    /* Named, not hidden: the operator learns why the seam is absent. */
+                                    <span className="alloy-os-healthdetail__unavailable">
+                                        {commands.unavailableReason?.("addMedication" as never) ?? "Add medication is not available yet"}
+                                    </span>
+                                )}
                             </ActionRow>
 
                             {/* ── F · Documents ──────────────────────────────── */}
@@ -181,7 +230,14 @@ export default function HealthDetailCard({ evidence }: { evidence: HealthDetailE
                                 ))}
                             </div>
                             <ActionRow>
-                                <Action>Upload document</Action>
+                                {commands === undefined || commands.uploadDocument ? (
+                                    <Action onClick={commands?.uploadDocument ?? undefined}>Upload document</Action>
+                                ) : (
+                                    /* Named, not hidden: the operator learns why the seam is absent. */
+                                    <span className="alloy-os-healthdetail__unavailable">
+                                        {commands.unavailableReason?.("uploadDocument" as never) ?? "Upload document is not available yet"}
+                                    </span>
+                                )}
                             </ActionRow>
                         </section>
 

@@ -40,6 +40,12 @@ export type OpportunityFocusPanelHeaderProps = {
     actionPreflightBlocked: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
+    /**
+     * The SETTLED participant scope. When it names a child, the header shows that child's identity;
+     * when it is null the header stays the case/household identity — which is the right answer for
+     * a family with several children and none selected.
+     */
+    subjectScope?: { displayName: string | null; imageUrl: string | null; customerMemberId: string | null } | null;
     /** Ignored in Focus Panel — stage movement via operational actions, not header CTA. */
     primaryHeaderAction?: ResolvedActionForClient | null;
     onPrimaryHeaderAction?: (action: ResolvedActionForClient) => void;
@@ -67,6 +73,7 @@ export default function OpportunityFocusPanelHeader({
     onDismissActionPreflightBlocked,
     registryActionFeedback,
     hideClose = false,
+    subjectScope,
 }: OpportunityFocusPanelHeaderProps) {
     const subjectManageActions = useMemo(
         () => buildSubjectManageMenuFromResolvedActions(displayVm.actions.header_menu),
@@ -144,6 +151,16 @@ export default function OpportunityFocusPanelHeader({
     return (
         <FocusPanelCompactHeader
             subjectTitle={title}
+            /*
+             * A scoped child's own identity, or nothing.
+             *
+             * `subjectScope` is the resolver's settled answer, not "the first child on the case" —
+             * merely HAVING children never picks one, and a scope that does not belong to this case
+             * has already resolved to null upstream.
+             */
+            personSubjectName={subjectScope?.displayName ?? null}
+            personSubjectImageUrl={subjectScope?.imageUrl ?? null}
+            personSubjectRecordId={subjectScope?.customerMemberId ?? null}
             contextChips={contextChips}
             secondaryActions={secondaryActions}
             activeMode={activeMode}

@@ -19,6 +19,14 @@ export type FocusPanelCompactHeaderProps = {
     onClose: () => void;
     /** Composer preview — runtime shell without dismiss control. */
     hideClose?: boolean;
+    /**
+     * The scoped person's identity, when the panel is operating on one. Passed straight through to
+     * the identity block, which already owns the ONE avatar model (`CardAvatar`). The header
+     * resolves nothing itself.
+     */
+    personSubjectName?: string | null;
+    personSubjectImageUrl?: string | null;
+    personSubjectRecordId?: string | null;
 };
 
 /**
@@ -34,6 +42,9 @@ export default function FocusPanelCompactHeader({
     onModeChange,
     onClose,
     hideClose = false,
+    personSubjectName,
+    personSubjectImageUrl,
+    personSubjectRecordId,
 }: FocusPanelCompactHeaderProps) {
     return (
         <div
@@ -62,6 +73,9 @@ export default function FocusPanelCompactHeader({
                     subjectTitle={subjectTitle}
                     contextChips={contextChips}
                     identitySummaryLine={identitySummaryLine}
+                    personSubjectName={personSubjectName}
+                    personSubjectImageUrl={personSubjectImageUrl}
+                    personSubjectRecordId={personSubjectRecordId}
                 />
                 <div
                     className="alloy-os-fp-header-compact__rail shrink-0"

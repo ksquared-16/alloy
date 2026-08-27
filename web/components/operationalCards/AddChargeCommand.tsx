@@ -1,5 +1,6 @@
 "use client";
 
+import UniversalCard from "@/components/admin/focusPanel/UniversalCard";
 import { Action, ActionRow, SectionHead } from "@/components/cardLab/CardLabKit";
 import type { AddChargeSpecimen, ChargeTemplateOption } from "@/lib/cardLab/cardLabTypes";
 
@@ -81,8 +82,25 @@ export default function AddChargeCommand({
     const amountLocked = t.amountStrategy !== "manual";
 
     return (
-        <div className="alloy-os-addcharge">
-            <p className="alloy-os-addcharge__title">Add charge</p>
+        <div className="alloy-os-addcharge-host">
+            <UniversalCard
+                title="Add charge"
+                insight=""
+                iconName="Receipt"
+                tier="work"
+                archetype="status"
+                /*
+                 * EXPANDED, so the command lands in the same centered, scrimmed workstation host as
+                 * Health Details and Financials Details. It was rendering as a bare div inside the
+                 * elevated cell, which put it in the Financials column position and made a focused
+                 * command read as another panel in the workspace.
+                 */
+                density="expanded"
+                gridSpan="row"
+                data-universal-card-key="add_charge"
+                footerAction={null}
+            >
+            <div className="alloy-os-addcharge">
 
             {/* The platform select, not a permanent row of chips — the catalog is configured and
                 can be long, and the operator sees labels, never keys. */}
@@ -113,14 +131,24 @@ export default function AddChargeCommand({
                     {templates.length} configured types
                 </span>
             </Field>
+            {/*
+                What this charge type DOES, in words — not the strategy keys that encode it.
+                `occurs event_date · billable next_billing_cycle` is a schema read-out; "dated by the
+                event · billed next cycle" is the same fact an operator can act on.
+            */}
             <p className="alloy-os-addcharge__config">
-                {t.responsibility} · occurs {t.occursOn.toLowerCase()} · billable{" "}
-                {t.billableOn.toLowerCase()} ·{" "}
-                {t.amountStrategy === "fixed"
-                    ? "fixed amount"
-                    : t.amountStrategy === "rate_derived"
-                      ? "rate-derived"
-                      : "operator sets the amount"}
+                {[
+                    t.responsibility,
+                    t.occursOn === "event_date" ? "dated by the event"
+                    : t.occursOn === "service_period_start" ? "dated to the service period"
+                    : "dated today",
+                    t.billableOn === "next_billing_cycle" ? "billed next cycle"
+                    : t.billableOn === "immediate" ? "billed immediately"
+                    : "billed on a configured offset",
+                    t.amountStrategy === "fixed" ? "fixed amount"
+                    : t.amountStrategy === "rate_derived" ? "priced from the rate"
+                    : "you set the amount",
+                ].join(" · ")}
             </p>
 
             {/* Applies to = the financial SUBJECT. Charge to = financial RESPONSIBILITY.
@@ -143,7 +171,6 @@ export default function AddChargeCommand({
                 ) : (
                     <Value>{specimen.subject}</Value>
                 )}
-                <Hint>financial subject</Hint>
             </Field>
             <Field label="Amount" required={!amountLocked}>
                 {controls && !amountLocked ? (
@@ -158,7 +185,7 @@ export default function AddChargeCommand({
                 ) : (
                     <Value locked={amountLocked}>{amountLocked ? (t.amount ?? "—") : specimen.amount}</Value>
                 )}
-                {amountLocked ? <Hint>from template</Hint> : null}
+
             </Field>
             <Field label="Note" required={t.requiresNote}>
                 {controls ? (
@@ -187,35 +214,30 @@ export default function AddChargeCommand({
                 ) : (
                     <Value>{specimen.serviceDate}</Value>
                 )}
-                {t.occursOn === "event_date" ?
-                    <Hint>the event's own date</Hint>
-                : t.allowsDateOverride ? <Hint>override allowed</Hint>
-                :   <Hint>fixed by template</Hint>}
+
             </Field>
             <Field label="Billing period">
                 <Value>{specimen.period}</Value>
-                <Hint>from billable_on</Hint>
             </Field>
             <Field label="Due">
                 <Value>{specimen.due}</Value>
-                <Hint>configured policy</Hint>
             </Field>
+            {/* A DRAFT IS NOT YET OWED. The card says what confirming actually does rather than
+                naming the mechanism that does it. */}
             <Field label="Posting">
-                <Value locked>On confirmation</Value>
-                <Hint>set by the mutation</Hint>
+                <Value locked>Creates a draft — not yet owed</Value>
             </Field>
 
             <SectionHead ruled={false}>Charge to</SectionHead>
+            {/*
+                RESPONSIBILITY IS SHOWN, NOT OFFERED — unless configuration says the operator may
+                choose it. `operator_selectable` is the only targeting that puts a decision in the
+                operator's hands; everything else is a resolved result they need to see and cannot
+                change, so it reads as a stated value rather than an inert control.
+            */}
             <Field label="Responsibility">
                 <Value>{specimen.chargeTo}</Value>
-                <Hint>financial responsibility</Hint>
-                <Hint>
-                    {t.payerTargeting === "operator_selectable"
-                        ? "operator may target a payer"
-                        : t.payerTargeting === "third_party"
-                          ? "third party / agency"
-                          : "template default"}
-                </Hint>
+                {t.payerTargeting === "operator_selectable" ? <Hint>you may target a payer</Hint> : null}
             </Field>
 
             <SectionHead ruled={false}>Preview</SectionHead>
@@ -238,11 +260,19 @@ export default function AddChargeCommand({
                         ))}
                     </>
                 ) : null}
+                {/*
+                    A DRAFT IS NOT YET OWED, so the balance does not move here.
+                    Showing "$75.00 → $115.00" would claim a posted increase that confirming this
+                    command does not cause: it creates a draft, and the balance changes when the
+                    draft posts. The charge amount above is the implication; the balance below is
+                    the fact, and it is stated unchanged on purpose.
+                */}
+                <p className="alloy-os-addcharge__draftnote">
+                    Creates a draft — the balance does not change until it posts.
+                </p>
                 <p className="alloy-os-billing__line alloy-os-billing__line--emphasis">
                     <span className="alloy-os-billing__line-label">Current balance</span>
-                    <span className="alloy-os-billing__line-value">
-                        {specimen.previewBefore} → {specimen.previewAfter}
-                    </span>
+                    <span className="alloy-os-billing__line-value">{specimen.previewBefore}</span>
                 </p>
             </div>
 
@@ -258,6 +288,8 @@ export default function AddChargeCommand({
                 </Action>
                 <Action onClick={controls?.onCancel}>Cancel</Action>
             </ActionRow>
+            </div>
+            </UniversalCard>
         </div>
     );
 }
