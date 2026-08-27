@@ -35,6 +35,7 @@ import type { ChildFocusSavePatch } from "@/lib/adminV2/runtime/focusPanel/child
 import { setChildAvatarSessionPreview } from "@/lib/adminV2/runtime/focusPanel/children/childAvatarSessionPreview";
 import type { InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { resolveLeadSummaryPrimaryPersonId } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
 import { patchHouseholdPrimaryContact } from "@/lib/admin/person/patchHouseholdPrimaryContact";
@@ -602,6 +603,20 @@ export function buildOpportunityFocusPanelMutation(input: BuildFocusPanelMutatio
                 entityId: opportunityId,
                 record: merged,
             });
+            /*
+             * IDENTITY IS DISPLAYED OUTSIDE THE CARD THAT EDITS IT.
+             *
+             * The record patch above converges the Focus Panel's own record, which is why a child
+             * rename updated the Children card and nothing else — the queue row, the Assignments card
+             * on the same panel and Records all kept the old name until the operator reloaded the
+             * browser. A name needs the canonical queue signal; a PROFILE-only save
+             * (special instructions, allergies, medical notes) is displayed nowhere else and stays the
+             * one-request IMMEDIATE_LOCAL save it was measured to be. The condition is what keeps the
+             * blast radius honest — this is not "signal on every save".
+             */
+            if (Object.keys(patch.identityPatch).length > 0) {
+                dispatchOpportunityQueueUpdated(opportunityId, "inquiry_child_identity");
+            }
             return { ok: true };
         },
         savePersonChildPhoto: async ({ childId, personId, documentId }) => {

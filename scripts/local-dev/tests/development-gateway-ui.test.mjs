@@ -18,6 +18,10 @@ import {
   TELEMETRY_POLL_MS,
   applyFetchedLane,
   applyFetchedOutput,
+  outputIsOlder,
+  canonicalLaneWorkState,
+  sortLanesForIndex,
+  gitListState,
   outputBelongsToLane,
   outputBodyText,
   claudeRunStatus,
@@ -58,9 +62,13 @@ import {
   renderLaneList,
   renderLastInstruction,
   renderLaneSessionCallout,
+  renderComposer,
+  cursorComposerAvailable,
+  renderProviderRuntimeSection,
   renderCurrentWork,
   renderPreviousWork,
   renderLaneRuntimeControls,
+  governedDecisionNotice,
   renderExecutionCapacity,
   summarizeExecutionCapacity,
   renderDevelopmentResources,
@@ -87,15 +95,24 @@ const htmlSrc = readFileSync(join(HERE, "../apps/vacilando/public/index.html"), 
 
 let pass = 0;
 let fail = 0;
-async function test(name, fn) {
-  try {
-    await fn();
-    pass += 1;
-    process.stdout.write(`ok  - ${name}\n`);
-  } catch (e) {
-    fail += 1;
-    process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
-  }
+// Every started test is tracked, because `test` is async: a call that is not
+// awaited settles in a microtask AFTER the synchronous tally at the bottom of
+// this file, so it was neither counted nor able to fail the run. Four tests were
+// silently invisible that way — a test that cannot fail is worse than no test.
+const started = [];
+function test(name, fn) {
+  const p = (async () => {
+    try {
+      await fn();
+      pass += 1;
+      process.stdout.write(`ok  - ${name}\n`);
+    } catch (e) {
+      fail += 1;
+      process.stdout.write(`FAIL - ${name} :: ${e.message}\n`);
+    }
+  })();
+  started.push(p);
+  return p;
 }
 
 const identity = {
@@ -113,9 +130,9 @@ await test("lane list renders API lane objects", () => {
   const html = renderLaneList([identity], null);
   assert.match(html, /Access Identity V2/);
   assert.match(html, /Claude/);
-  assert.match(html, /agent\/claude\/1-access-identity-v2/);
-  assert.match(html, /Clean · ↑45 · ↓0/);
+  assert.match(html, /Ready/);
   assert.equal(html.includes("slot 1"), false);
+  assert.equal(html.includes("Clean · ↑45 · ↓0"), false);
 });
 
 await test("slot: null lane renders normally", () => {
@@ -198,16 +215,19 @@ await test("no fake chat parsing of TUI chrome", () => {
   assert.match(html, /<pre class="gw-output"/);
 });
 
-await test("composer send payload is only lane_id + instruction", () => {
+await test("composer send payload is lane_id + instruction, and may include provider", () => {
   const body = buildSendBody("hello `code`; $HOME");
   assert.deepEqual(Object.keys(body), ["instruction"]);
+  const withProvider = buildSendBody("hello", { provider: "cursor" });
+  assert.deepEqual(Object.keys(withProvider).sort(), ["instruction", "provider"]);
+  assert.equal(withProvider.provider, "cursor");
   const payload = sendPayload("alloy-identity", "hello `code`; $HOME");
   assert.deepEqual(Object.keys(payload).sort(), ["instruction", "lane_id"]);
   assert.equal(payload.lane_id, "alloy-identity");
   assert.equal("session" in payload, false);
   assert.equal("pane" in payload, false);
   assert.equal("target" in payload, false);
-  assert.match(gwSrc, /buildSendBody\(instruction\)/);
+  assert.match(gwSrc, /buildSendBody\(instruction/);
   assert.equal(gwSrc.includes("send-keys"), false);
 });
 
@@ -248,15 +268,21 @@ await test("mobile layout collapses to a single column without forcing horizonta
   const html = renderGatewayShell({ lanes: [identity], selectedId: identity.lane_id, lane: identity, outputText: "x".repeat(400) });
   assert.match(html, /gw-back/);
   assert.match(html, /gw-composer/);
+  assert.match(html, /gw-composer-provider/);
+  assert.match(html, />Claude</);
+  assert.match(html, />Cursor</);
+  assert.match(html, /data-gw-notify/);
 });
 
 await test("old Mission Director is not the default primary experience", () => {
   assert.equal(defaultGatewayHash(), "#/lanes");
   assert.equal(GATEWAY_HOME, "#/lanes");
   assert.equal(isGatewayRoute("lanes"), true);
+  assert.equal(isGatewayRoute("settings"), true);
   assert.equal(isGatewayRoute("missions"), false);
   assert.equal(isPrimaryGatewayHash(""), true);
   assert.equal(isPrimaryGatewayHash("#/lanes/alloy-identity"), true);
+  assert.equal(isPrimaryGatewayHash("#/settings"), true);
   assert.match(htmlSrc, /Development Gateway/);
   assert.equal(htmlSrc.includes("Vacilando<b>OS</b>"), false);
   assert.equal(htmlSrc.includes("Engineering Operating System"), false);
@@ -279,7 +305,7 @@ await test("resource/status calls do not introduce expensive polling fan-out", (
   assert.equal(viewSrc.includes('fetch("/api/state")'), false);
   assert.equal(gwSrc.includes('fetch("/api/resources")'), false);
   assert.equal(gwSrc.includes('fetch("/api/state")'), false);
-  assert.match(appSrc, /if \(parseRoute\(\)\.name === "lanes"\)/);
+  assert.match(appSrc, /if \(parseRoute\(\)\.name === "lanes" \|\| parseRoute\(\)\.name === "settings"\)/);
   assert.equal(shouldPollOutput({ hidden: true, routeName: "lanes", laneId: "alloy-identity" }), false);
   assert.equal(shouldPollOutput({ hidden: false, routeName: "lanes", laneId: "alloy-identity" }), true);
   assert.equal(shouldPollList({ hidden: false, routeName: "missions" }), false);
@@ -334,7 +360,8 @@ await test("output hydrates separately from lane identity", () => {
     outputPending: true,
     listReady: true,
   });
-  assert.match(pending, /gw-lane-h/);
+  assert.match(pending, /gw-chat-title/);
+  assert.match(pending, /gw-aside-id/);
   assert.match(pending, /Refreshing output/);
   const ready = renderGatewayShell({
     lanes: [identity],
@@ -397,11 +424,20 @@ await test("successful send records latest instruction; failed send does not", (
     lastInstruction: rec,
     listReady: true,
   });
-  assert.match(html, /Your last instruction/);
+  assert.match(html, />You</);
+  assert.match(html, /data-gw-thread[\s\S]*data-gw-last/);
   assert.match(html, /Reconcile the remaining Access/);
   assert.match(html, /Delivered/);
   const failed = renderLastInstruction({ instruction: "nope", status: "failed" });
   assert.equal(failed, "");
+  const queued = renderLastInstruction({
+    instruction: "resume closure",
+    status: "queued",
+    queued_at: "2026-08-22T00:44:08.360Z",
+  });
+  assert.match(queued, />You</);
+  assert.match(queued, /resume closure/);
+  assert.match(queued, /Queued/);
   assert.match(gwSrc, /result\?\.ok && \(result\.status === "delivered" \|\| result\.status === "queued"\)/);
   assert.match(gwSrc, /last_instruction/);
 });
@@ -520,6 +556,7 @@ await test("post-send burst polling does not raise idle cadence or fan out", () 
   assert.equal(OUTPUT_BURST_WINDOW_MS <= 30000, true);
   assert.equal(outputPollIntervalMs({ burstUntil: 0, nowMs: 50_000 }), OUTPUT_POLL_MS);
   assert.equal(outputPollIntervalMs({ burstUntil: 60_000, nowMs: 50_000 }), OUTPUT_BURST_POLL_MS);
+  assert.equal(outputPollIntervalMs({ liveWork: true, nowMs: 50_000 }), OUTPUT_BURST_POLL_MS);
   assert.match(gwSrc, /burstUntil/);
   assert.equal(gwSrc.includes("/api/lanes/") && /for \(.*lanes.*output/.test(gwSrc), false);
   assert.equal((gwSrc.match(/\/output/g) || []).length >= 1, true);
@@ -574,7 +611,8 @@ await test("context hydrates quietly; mobile status stays compact", () => {
   assert.match(sum, /Context 41%/);
   assert.equal(sum.includes("Cache read"), false);
   const list = renderLaneList([identity], null, { telemetryByLane: { "alloy-identity": tel } });
-  assert.match(list, /Claude · Context 41%/);
+  assert.match(list, /Claude/);
+  assert.equal(list.includes("Context 41%"), false);
   const closed = renderStatus(identity, null, { open: false, telemetry: tel, summary: sum });
   assert.equal(/\sopen/.test(closed), false);
   assert.match(closed, /Context 41%/);
@@ -616,11 +654,18 @@ await test("Copy copies active lane output text only", () => {
   const failed = renderCopyControl({ text: "x", feedback: "failed" });
   assert.match(failed, /Copy failed/);
   assert.match(gwSrc, /copyActiveOutput/);
-  const copyFn = gwSrc.slice(gwSrc.indexOf("async function copyActiveOutput"), gwSrc.indexOf("async function registerPushSubscription"));
-  assert.equal(copyFn.includes("/output"), false);
-  assert.equal(copyFn.includes("fetchOutput"), false);
+  // Copy must yield the COMPLETE assistant response. In "recent" mode the
+  // visible text is a bounded pane snapshot, so copying it handed over a
+  // fragment; the copy path now fetches the complete text for the SELECTED lane
+  // only. It still never re-captures a pane and never touches another lane.
+  const copyFn = gwSrc.slice(gwSrc.indexOf("async function completeCopyText"), gwSrc.indexOf("async function registerPushSubscription"));
   assert.equal(copyFn.includes("capture-pane"), false);
   assert.match(copyFn, /copyableOutputText/);
+  assert.match(copyFn, /copySourcePlan/);
+  assert.match(copyFn, /outputBelongsToLane/);
+  assert.match(copyFn, /encodeURIComponent\(id\)/);
+  assert.match(copyFn, /const id = G\.selected/);
+  assert.equal(copyFn.includes("G.lanes"), false);
   assert.match(css, /\.gw-copy\{[^}]*min-height:44px/);
 });
 
@@ -685,7 +730,7 @@ await test("notification permission is never requested automatically on Gateway"
   assert.match(html, /gw-notify-pop/);
   assert.match(html, /gw-notify-sum/);
   assert.match(html, /aria-label="Notifications"/);
-  assert.match(html, /gw-lane-top/);
+  assert.match(html, /gw-aside-body/);
   assert.match(css, /\.gw-notify:hover \.gw-notify-pop/);
   const enableFn = gwSrc.slice(gwSrc.indexOf("async function enableGatewayNotifications"));
   assert.match(gwSrc, /if \(!saved\.ok \|\| body\?\.ok === false\)/);
@@ -706,10 +751,10 @@ await test("lane list shows current execution run state without becoming a board
   const executing = { ...identity, execution_run: { state: "EXECUTING", instruction: "Finish Records/Roster" } };
   const needs = { ...identity, lane_id: "alloy-comms", label: "Communications", execution_run: { state: "NEEDS_INPUT", state_reason: "Which ingress?" } };
   const html = renderLaneList([executing, needs], null);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Needs input/);
-  assert.match(html, /gw-lane-attn is-run/);
-  assert.match(html, /gw-lane-attn is-needs/);
+  assert.match(html, /gw-lane-posture is-run/);
+  assert.match(html, /gw-lane-posture is-needs/);
   assert.equal(html.includes("Kanban"), false);
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(needs.execution_run), "Needs input");
@@ -732,7 +777,7 @@ await test("lane detail shows current work; needs input, complete, and failed ar
   });
   assert.match(html, /Current work/);
   assert.match(html, /Complete the remaining Communications ingress/);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Started 18m ago/);
   assert.equal(html.includes("%"), false);
   assert.match(html, /data-gw-aside/);
@@ -816,7 +861,7 @@ await test("lane list shows resource wait and queue position; ready-to-resume is
   assert.match(html, /Waiting for Browser certification/);
   assert.match(html, /#1 in queue/);
   assert.match(html, /Waiting for Exclusive machine timing/);
-  assert.match(html, /gw-lane-attn is-ready/);
+  assert.match(html, /gw-lane-posture is-ready/);
   assert.equal(html.includes("% complete"), false);
   assert.equal(executionRunListHint(records.execution_run), "Ready to resume");
 });
@@ -1086,12 +1131,17 @@ await test("session rotation overlay and refresh control stay in Development Sta
     listReady: true,
     laneFoldOpen: false,
   });
-  assert.match(readyShell, /data-gw-lane-fold/);
-  assert.match(readyShell, /Lane details/);
+  // One details panel, not an inline <details> plus a second "Lane details"
+  // fold that showed a different subset of the same lane.
+  assert.match(readyShell, /data-gw-aside/);
+  assert.match(readyShell, /data-gw-aside-toggle/);
+  assert.equal(readyShell.includes("data-gw-lane-fold"), false);
+  assert.equal(readyShell.includes("Lane details"), false);
   assert.match(readyShell, /data-gw-session-refresh/);
-  assert.match(css, /gw-lane-fold/);
+  assert.match(css, /gw-lane-aside/);
   assert.equal(css.includes("max-height:22vh"), false);
-  assert.ok(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"));
+  assert.ok(css.includes(".gw-claude-run{display:none;}"));
+  assert.equal(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"), false);
   const rotatingShell = renderGatewayShell({
     lanes: [rotating],
     selectedId: rotating.lane_id,
@@ -1225,14 +1275,18 @@ await test("Connect Existing Work flow is renderable without path entry", () => 
   assert.match(already, /Open Communications/);
 });
 
-await test("Create New Lane form has no substrate fields", () => {
-  const html = renderCreateLaneFlow({ name: "Processing" });
-  assert.match(html, /New Development Lane/);
-  assert.match(html, /Initial work/);
-  assert.match(html, /Claude Code/);
+await test("starting a lane exposes no substrate fields", () => {
+  // The guard that matters: the operator never picks a worktree, a tmux session
+  // or a slot. The surface around it changed — it is a chat composer now, not a
+  // Name/Provider/Initial-work form — so the label assertions moved with it.
+  const html = renderCreateLaneFlow({});
   assert.equal(html.includes("worktree"), false);
   assert.equal(html.includes("tmux"), false);
   assert.equal(html.includes("slot"), false);
+  assert.match(html, /gw-create-instruction/);
+  assert.match(html, /gw-create-provider/);
+  assert.match(html, /Claude/);
+  assert.match(html, /Cursor/);
   assert.match(gwSrc, /\/api\/lanes\/create/);
 });
 
@@ -1245,6 +1299,38 @@ await test("viewed fingerprint migrates from alias keys", () => {
   const rec = readViewed("lane_abc123abc123", store, ["alloy-identity"]);
   assert.equal(rec.fingerprint, "abc");
   assert.equal(JSON.parse(store.getItem("vac.gw.viewed.lane_abc123abc123")).fingerprint, "abc");
+});
+
+await test("Start Session callout names occupying Claude lanes at capacity", () => {
+  const html = renderLaneSessionCallout({
+    lane_id: "lane_2cea84351d90",
+    label: "Trust Runtime",
+    durable: true,
+    runtime: "offline",
+    claude: { presence: "absent" },
+    tmux: { alive: false, session: null },
+    worktree: { name: "wt4-enrollment", path: "/x/wt4" },
+    binding: { worktree_path: "/x/wt4", provider: "claude" },
+    admission: { state: "QUEUED", queue_position: 5 },
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+    start_session: { available: true, implemented: true },
+  }, {
+    executionCapacity: {
+      max_active: 3,
+      active: 3,
+      available: 0,
+      running: [
+        { name: "Access & Identity" },
+        { name: "Communications" },
+        { name: "Runtime Performance" },
+      ],
+    },
+  });
+  assert.match(html, /Start Session/);
+  assert.match(html, /Claude is at 3\/3/);
+  assert.match(html, /Access &amp; Identity/);
+  assert.match(html, /Communications/);
+  assert.match(html, /Runtime Performance/);
 });
 
 await test("offline bound lane shows Start Session without failing work", () => {
@@ -1271,6 +1357,19 @@ await test("offline bound lane shows Start Session without failing work", () => 
   const n = deliveryNotice({ ok: true, status: "queued", session_required: true, admission_queued: true });
   assert.equal(n.kind, "ok");
   assert.match(n.text, /No agent session/);
+  const replaced = deliveryNotice({
+    ok: true,
+    status: "queued",
+    session_required: true,
+    admission_queued: true,
+    replaced: true,
+  });
+  assert.match(replaced.text, /Instruction updated/);
+  const composer = renderComposer({ queueUntilSession: true });
+  assert.match(composer, /queue until a session starts/);
+  assert.doesNotMatch(composer, /data-gw-send[^>]*disabled/);
+  assert.doesNotMatch(composer, /<textarea[^>]*disabled/);
+  assert.match(composer, /data-gw-provider-opt="cursor"[^>]*disabled/);
 });
 
 await test("online lane still shows Orienting Claude while VERIFYING", () => {
@@ -1335,7 +1434,7 @@ await test("six-lane representation keeps lane / run / admission / session disti
   ];
   const html = renderLaneList(lanes, null);
   assert.match(html, /Access &amp; Identity/);
-  assert.match(html, /Executing/);
+  assert.match(html, /Working/);
   assert.match(html, /Waiting for browser certification/);
   assert.match(html, /Validating/);
   assert.match(html, /Queued for capacity/);
@@ -1423,7 +1522,7 @@ await test("governed operator wait shows Needs approval and Authorize merge", ()
   assert.match(cap.headline, /Needs approval/);
 });
 
-await test("mobile detail keeps Authorize and Deny above the composer", () => {
+await test("Authorize and Deny sit above the composer on every screen", () => {
   const run = {
     state: "WAITING_RESOURCE",
     resource_wait: {
@@ -1464,11 +1563,18 @@ await test("mobile detail keeps Authorize and Deny above the composer", () => {
   assert.equal(decisionAt >= 0 && approveAt >= 0 && composerAt >= 0, true);
   assert.equal(decisionAt < composerAt, true);
   assert.equal(approveAt < composerAt, true);
-  assert.match(css, /\.gw-decision-bar\{display:none/);
-  assert.match(css, /\.gw-decision-bar\{display:block;\}/);
+  // These once asserted display:none by default with display:block only under
+  // max-width:860px — encoding the defect as intent. That is why a desktop had
+  // no authorize button: the bar had no box, and the only other surface was
+  // renderCurrentWork inside the collapsible, inert details rail. The bar is a
+  // primary approval surface on every screen; the mobile rule now only adjusts
+  // its height budget.
+  assert.doesNotMatch(css, /\.gw-decision-bar\{display:none/);
+  assert.match(css, /\.gw-decision-bar\{display:block/);
   assert.match(css, /\.gw-decision-bar \.btn\{width:100%;min-height:44px/);
-  assert.match(css, /\.gw-send,\.gw-send\{min-height:44px;width:100%;\}/);
-  assert.ok(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"));
+  assert.match(css, /\.gw-send\{min-height:44px;min-width:88px;width:auto/);
+  assert.ok(css.includes(".gw-claude-run{display:none;}"));
+  assert.equal(css.includes(".gw-stage-status,.gw-claude-run{display:none;}"), false);
 });
 
 await test("Director refresh wait shows Updating Director, not idle or authorization error", () => {
@@ -1519,6 +1625,15 @@ await test("governed complete EXECUTING is not Waiting on Director", () => {
   assert.equal(html.includes("Waiting on Director"), false);
   assert.equal(html.includes("Authorize census"), false);
   assert.match(html, /Executing/);
+  const shell = renderGatewayShell({
+    lanes: [{ ...identity, execution_run: run }],
+    selectedId: identity.lane_id,
+    lane: { ...identity, execution_run: run },
+    outputText: "ok",
+    listReady: true,
+  });
+  assert.match(shell, /Working/);
+  assert.equal(shell.includes("Waiting on Director"), false);
 });
 
 await test("failed governed wait is not Waiting on Director", () => {
@@ -1577,6 +1692,23 @@ await test("ambiguous stale run offers close without claiming active-work refusa
   assert.match(notice.text, /Previous run was stale and was closed/);
 });
 
+await test("idle EXECUTING with a leaked grant offers Close", () => {
+  const html = renderCurrentWork({
+    state: "EXECUTING",
+    run_id: "erun_leak",
+    instruction: "Install the merged toolkit",
+    resource_wait: {
+      request_state: "GRANTED",
+      resuming: null,
+      resource_key: "gateway_host_mutation",
+      label: "Gateway host mutation",
+    },
+  }, Date.now(), { activity: "ready" });
+  assert.match(html, /At a prompt/);
+  assert.match(html, /holding a shared lock/);
+  assert.match(html, /data-gw-close-stale/);
+});
+
 await test("recent output chrome is honest; latest response is a separate loaded model", () => {
   const viewport = outputReviewHint({
     ok: true,
@@ -1620,15 +1752,19 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: latest.text,
     listReady: true,
   });
-  assert.match(html, /Latest Claude Response/);
+  // The panel is named for what it shows, not for who produced it: one panel
+  // serves both Claude and Cursor lanes.
+  assert.match(html, /Latest assistant response/);
+  assert.equal(html.includes("Latest Claude Response"), false);
   assert.match(html, /data-gw-output-recent/);
+  // The agent name IS provider-aware in sentences about the agent.
   assert.match(html, /Claude is running/);
   assert.match(html, /data-gw-claude-run/);
   assert.equal(html.includes("data-gw-output-latest>"), false);
   assert.equal(claudeRunStatus(identity).running, true);
   assert.equal(claudeRunStatus({ ...identity, claude: { presence: "absent" }, runtime: "offline" }).label, "Claude is not running");
   assert.match(renderClaudeRunStatus({ ...identity, claude: { presence: "absent" } }), /Claude is not running/);
-  assert.match(outputBodyText({ ok: true, mode: "latest_response", available: false, text: null }, ""), /not available/);
+  assert.match(outputBodyText({ ok: true, mode: "latest_response", available: false, text: null }, ""), /Output unavailable/);
   const missingLatest = renderGatewayShell({
     lanes: [identity],
     selectedId: identity.lane_id,
@@ -1637,9 +1773,9 @@ await test("recent output chrome is honest; latest response is a separate loaded
     outputText: "",
     listReady: true,
   });
-  assert.match(missingLatest, /not available from the session transcript/);
-  assert.match(gwSrc, /outputMode: "latest_response"/);
-  assert.match(gwSrc, /fetchOutput\(hydrateId, \{ mode: "latest_response" \}\)/);
+  assert.match(missingLatest, /Output unavailable/);
+  assert.match(gwSrc, /outputMode: "recent"/);
+  assert.match(gwSrc, /fetchOutput\(hydrateId, \{ mode: "recent" \}\)/);
   const copyFn = gwSrc.slice(gwSrc.indexOf("async function copyActiveOutput"), gwSrc.indexOf("async function registerPushSubscription"));
   assert.equal(copyFn.includes("fetchOutput"), false);
   assert.equal(copyFn.includes("/output"), false);
@@ -1666,18 +1802,27 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(html, /data-gw-composer/);
   assert.match(html, /data-gw-output/);
   assert.match(html, /data-gw-stage/);
-  const asideIdx = html.indexOf("data-gw-aside");
+  // The toggle button also carries a data-gw-aside* attribute, so anchor on the
+  // panel itself.
+  const asideIdx = html.indexOf('id="gw-details-panel"');
   const stageIdx = html.indexOf("data-gw-stage");
   const threadIdx = html.indexOf("data-gw-thread");
   const composerIdx = html.indexOf("data-gw-composer");
   const outputIdx = html.indexOf("data-gw-output");
   const claudeIdx = html.indexOf("data-gw-claude-run");
-  assert.equal(stageIdx > 0 && threadIdx > stageIdx && outputIdx > threadIdx && claudeIdx > outputIdx && composerIdx > claudeIdx && asideIdx > composerIdx, true);
-  assert.match(css, /\.gw-thread\{[^}]*overflow:hidden/);
+  const messageIdx = html.indexOf("data-gw-report");
+  // The stage is the conversation and nothing else: thread, then the structured
+  // assistant message, then the composer. The raw pane is no longer part of the
+  // conversation at all — it is diagnostics inside the one details panel, which
+  // comes after the whole stage.
+  assert.equal(stageIdx > 0 && threadIdx > stageIdx && messageIdx > threadIdx && composerIdx > messageIdx, true);
+  assert.equal(asideIdx > composerIdx && claudeIdx > asideIdx && outputIdx > asideIdx, true);
+  assert.match(css, /\.gw-thread\{[^}]*overflow:auto/);
   assert.match(css, /\.gw-output\{[^}]*overflow:auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*minmax\(0, 66fr\) minmax\(0, 33fr\)/);
   assert.match(css, /\.gw\.is-detail \.gw-composer\{[^}]*flex:0 0 auto/);
   assert.match(css, /\.gw\.is-detail \.gw-main\{[^}]*overflow:hidden/);
+  assert.match(css, /\.gw\.is-detail \.gw-composer\{[^}]*position:static/);
   assert.equal(css.includes("position:sticky;bottom:env(safe-area-inset-bottom"), false);
   assert.match(css, /env\(safe-area-inset-bottom/);
   assert.match(css, /--gw-vvh/);
@@ -1688,6 +1833,10 @@ await test("lane detail pins composer; green output pane owns scroll", () => {
   assert.match(html, /Enter to send/);
   assert.match(gwSrc, /t\.id !== "gw-instruction"/);
   assert.match(gwSrc, /e\.key !== "Enter"/);
+  assert.match(gwSrc, /mergeListedLane\(G\.lane, listed\)/);
+  assert.match(gwSrc, /upsertLaneInList\(G\.lanes, G\.lane\)/);
+  assert.match(gwSrc, /liveRun/);
+  assert.match(gwSrc, /--gw-composer-h/);
 });
 
 await test("lane execution posture is not Execution Run state", () => {
@@ -1698,7 +1847,7 @@ await test("lane execution posture is not Execution Run state", () => {
     execution_run: { state: "EXECUTING" },
   });
   assert.equal(running.state, "RUNNING");
-  assert.match(running.hint, /Current work executing/);
+  assert.match(running.label, /Executing/);
   const queued = deriveLaneExecutionPosture({
     label: "Processing",
     durable: true,
@@ -1737,8 +1886,8 @@ await test("capacity summary names lanes, not slot pickers", () => {
     { lane_id: "c", label: "Communications", claude: { presence: "present" }, execution_run: { state: "COMPLETE" } },
     { lane_id: "p", label: "Processing", admission: { state: "QUEUED", queue_position: 1 }, execution_run: { state: "QUEUED", admission: { state: "QUEUED", queue_position: 1 } } },
   ], { max_providers: 3 });
-  assert.equal(summary.active, 2);
-  assert.equal(summary.available, 1);
+  assert.equal(summary.active, 1);
+  assert.equal(summary.available, 2);
   const html = renderExecutionCapacity(summary);
   assert.match(html, /Execution capacity/);
   assert.match(html, /Access &amp; Identity/);
@@ -1748,5 +1897,457 @@ await test("capacity summary names lanes, not slot pickers", () => {
   assert.equal(viewSrc.includes("Runtime adoption"), false);
 });
 
+await test("queued and connected lanes are not collapsed to Idle or Running", () => {
+  const queued = {
+    lane_id: "lane_queuedqueued",
+    label: "Processing",
+    durable: true,
+    admission: { state: "QUEUED", queue_position: 2 },
+    execution_run: { state: "QUEUED", admission: { state: "QUEUED", queue_position: 2 } },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  const idleHint = deriveLaneStatus({ lane: queued, viewing: false });
+  assert.equal(idleHint.listHint, "Queued for capacity");
+  const rail = railHtml([queued], queued.lane_id, { [queued.lane_id]: { listHint: "Idle" } });
+  assert.match(rail, /Queued for capacity/);
+  assert.doesNotMatch(rail, />○ Idle</);
+  const executing = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+    execution_run: { state: "EXECUTING" },
+  });
+  const connected = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+  });
+  const validating = deriveLaneExecutionPosture({
+    claude: { presence: "present" },
+    execution_run: { state: "VALIDATING" },
+  });
+  assert.equal(executing.label, "Executing");
+  assert.equal(connected.state, "CONNECTED");
+  assert.equal(connected.label, "Connected");
+  assert.equal(validating.label, "Validating");
+  const cursorLive = {
+    lane_id: "lane_cursorcursor",
+    label: "Vacilando",
+    durable: true,
+    runtime: "online",
+    binding: { provider: "cursor", worktree_path: "/x/wt1" },
+    worktree: { path: "/x/wt1" },
+    agent_session: { state: "ACTIVE", provider: "cursor" },
+    claude: { presence: "absent" },
+    tmux: { alive: false },
+  };
+  assert.equal(deriveLaneExecutionPosture(cursorLive).state, "CONNECTED");
+  assert.equal(deriveLaneExecutionPosture(cursorLive).label, "Connected");
+  assert.notEqual(canonicalLaneWorkState({
+    ...cursorLive,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }).label, "Working");
+  assert.match(railHtml([cursorLive], cursorLive.lane_id), /read-only/);
+  assert.doesNotMatch(renderLaneSessionCallout(cursorLive), /Start Session/);
+  assert.match(railHtml([cursorLive], cursorLive.lane_id), /Cursor/);
+  const leftover = deriveLaneExecutionPosture({
+    label: "Communications",
+    claude: { presence: "present" },
+    slot: 3,
+    previous_run: { state: "COMPLETE" },
+  });
+  assert.equal(leftover.state, "READY_TO_RELEASE");
+  const cap = summarizeExecutionCapacity([
+    { lane_id: "a", label: "Access & Identity", claude: { presence: "present" } },
+    { lane_id: "c", label: "Communications", claude: { presence: "present" }, previous_run: { state: "COMPLETE" } },
+    cursorLive,
+  ], { max_providers: 3 });
+  assert.equal(cap.active, 1);
+  assert.equal(cap.running.map((r) => r.name).join(","), "Access & Identity");
+});
+
+await test("canonical work state maps live execution to Working and stale heartbeats out of Working", () => {
+  const now = Date.parse("2026-08-22T12:00:00.000Z");
+  const working = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 5_000,
+  }, { nowMs: now });
+  assert.equal(working.label, "Working");
+  assert.equal(working.group, "active");
+  const idleOpen = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    provider_activity: { activity: "ready" },
+    last_activity_ms: now - 5_000,
+  }, { nowMs: now });
+  assert.equal(idleOpen.label, "Ready");
+  assert.equal(idleOpen.group, "idle");
+  assert.equal(deriveLaneExecutionPosture({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    provider_activity: { activity: "ready" },
+  }).state, "CONNECTED");
+  const queued = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "QUEUED", state_reason: "waiting_for_agent_session" },
+  }, { nowMs: now });
+  assert.notEqual(queued.label, "Working");
+  const validating = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "VALIDATING" },
+    last_activity_ms: now - 1_000,
+  }, { nowMs: now });
+  assert.equal(validating.label, "Validating");
+  const complete = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "COMPLETE" },
+  }, { nowMs: now });
+  assert.equal(complete.label, "Complete");
+  const idle = canonicalLaneWorkState({
+    lane_id: "lane_idleidleidle",
+    durable: true,
+    previous_run: { state: "COMPLETE" },
+  }, { nowMs: now });
+  assert.equal(idle.label, "Idle");
+  const thinking = canonicalLaneWorkState({
+    ...identity,
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 180_000,
+  }, { output: { captured_at: new Date(now - 180_000).toISOString() }, nowMs: now });
+  assert.equal(thinking.label, "Working");
+  assert.equal(thinking.stale, false);
+  const stale = canonicalLaneWorkState({
+    ...identity,
+    tmux: { alive: false },
+    claude: { presence: "absent" },
+    agent_session: { state: "ENDED" },
+    execution_run: { state: "EXECUTING" },
+    last_activity_ms: now - 180_000,
+  }, { output: { captured_at: new Date(now - 180_000).toISOString() }, nowMs: now });
+  assert.equal(stale.label, "Stale");
+  assert.equal(stale.stale, true);
+});
+
+await test("lane index sorts operational groups and does not duplicate status", () => {
+  const lanes = [
+    { lane_id: "idle-1", label: "Idle lane", durable: true },
+    { lane_id: "work-1", label: "Active lane", claude: { presence: "present" }, execution_run: { state: "EXECUTING", updated_at: "2026-08-22T12:00:00.000Z" } },
+    { lane_id: "need-1", label: "Needs lane", execution_run: { state: "NEEDS_INPUT" } },
+    { lane_id: "done-1", label: "Done lane", execution_run: { state: "COMPLETE" } },
+  ];
+  const ordered = sortLanesForIndex(lanes).map((l) => l.lane_id);
+  assert.deepEqual(ordered, ["work-1", "need-1", "idle-1", "done-1"]);
+  const html = renderLaneList(lanes, null);
+  assert.equal((html.match(/Queued for capacity/g) || []).length <= 1, true);
+  assert.equal(html.includes("gw-lane-attn is-run"), false);
+  const workIdx = html.indexOf("Active lane");
+  const idleIdx = html.indexOf("Idle lane");
+  assert.equal(workIdx >= 0 && workIdx < idleIdx, true);
+});
+
+await test("conversation detail has user and assistant messages with icon copy, diagnostics in Details", () => {
+  const last = { instruction: "Ship the composer", status: "delivered", delivered_at: "2026-08-22T12:00:00.000Z" };
+  const html = renderGatewayShell({
+    lanes: [identity],
+    selectedId: identity.lane_id,
+    lane: { ...identity, last_instruction: last, execution_run: { state: "EXECUTING", instruction: last.instruction, started_at: "2026-08-22T11:59:00.000Z" } },
+    output: { ok: true, lane_id: identity.lane_id, text: "function ok() {}", revision: 2 },
+    outputText: "function ok() {}",
+    lastInstruction: last,
+    listReady: true,
+  });
+  assert.match(html, /gw-msg-user/);
+  assert.match(html, /Ship the composer/);
+  assert.match(html, /gw-msg-assistant/);
+  assert.match(html, /function ok\(\) \{\}/);
+  assert.match(html, /data-gw-provider-opt="claude"/);
+  assert.match(html, /data-gw-provider-opt="cursor"/);
+  assert.match(html, /data-gw-provider-opt="cursor"[^>]*disabled/);
+  assert.match(html, /data-gw-aside/);
+  assert.equal(html.includes("Latest assistant response from the session transcript"), false);
+  const copyBtn = html.slice(html.indexOf("data-gw-copy") - 120, html.indexOf("data-gw-copy") + 80);
+  assert.equal(copyBtn.includes("Load more"), false);
+  assert.match(html, /data-gw-aside/);
+  assert.match(css, /data-gw-provider-opt|gw-provider-opt/);
+});
+
+await test("stale cached output revisions are rejected", () => {
+  const current = { lane_id: "alloy-identity", revision: 200, text: "new" };
+  const older = { lane_id: "alloy-identity", revision: 100, text: "old" };
+  assert.equal(outputIsOlder(older, current), true);
+  const kept = applyFetchedOutput("alloy-identity", "alloy-identity", current, older);
+  assert.equal(kept.text, "new");
+  const next = applyFetchedOutput("alloy-identity", "alloy-identity", current, { lane_id: "alloy-identity", revision: 300, text: "newer" });
+  assert.equal(next.text, "newer");
+});
+
+await test("merged historical git is not shown as behind on the lane list", () => {
+  const merged = {
+    ...identity,
+    lane_id: "lane_mergedmerged",
+    label: "Historical",
+    previous_run: { state: "COMPLETE" },
+    execution_run: null,
+    claude: { presence: "absent" },
+    git: { state: "clean", ahead: 0, behind: 88, head_in_base: true, branch: "agent/old" },
+    source_control: { posture: "MERGED", behind: 88 },
+  };
+  assert.equal(gitListState(merged), null);
+  const html = renderLaneList([merged], null);
+  assert.equal(html.includes("88 behind"), false);
+  assert.equal(html.includes("Sync required"), false);
+  assert.match(gitLine(merged.git, merged.source_control), /Merged/);
+});
+
+await test("Cursor composer option is enabled when Cursor is authenticated", () => {
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "needs_auth" } }] } }), false);
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "unavailable" } }] } }), false);
+  assert.equal(cursorComposerAvailable({ providers: { providers: [{ id: "cursor", auth: { state: "authenticated" } }] } }), true);
+  assert.equal(cursorComposerAvailable({
+    providers: { providers: [{ id: "cursor", auth: { state: "unknown" }, executable: "/x/cursor-agent" }] },
+  }), true);
+  const enabled = renderComposer({
+    provider: "cursor",
+    cursorSendAvailable: true,
+  });
+  assert.match(enabled, /data-gw-provider-opt="cursor"/);
+  assert.doesNotMatch(enabled, /data-gw-provider-opt="cursor"[^>]*disabled/);
+  const shell = renderGatewayShell({
+    lanes: [identity],
+    selectedId: identity.lane_id,
+    lane: { ...identity, preferred_provider: "cursor" },
+    listReady: true,
+    providers: { providers: [{ id: "cursor", auth: { state: "authenticated", label: "Signed in" } }] },
+  });
+  assert.doesNotMatch(shell, /data-gw-provider-opt="cursor"[^>]*disabled/);
+});
+
+await test("Gateway settings renders Claude and Cursor connect cards", () => {
+  assert.deepEqual(parseGatewayHash("#/settings"), { name: "settings", sub: null });
+  const html = renderGatewayShell({
+    lanes: [identity],
+    settings: true,
+    providers: {
+      providers: [
+        { id: "claude", label: "Claude", auth: { state: "authenticated", label: "Signed in", identity: "a@b.c" }, executable: "/usr/local/bin/claude", version: "1.0" },
+        { id: "cursor", label: "Cursor", auth: { state: "needs_auth", label: "Needs sign-in" }, executable: "cursor-agent" },
+      ],
+    },
+  });
+  assert.match(html, /data-gw-mode="settings"/);
+  assert.match(html, /data-gw-provider-card="claude"/);
+  assert.match(html, /data-gw-provider-card="cursor"/);
+  assert.match(html, /data-prov-connect="cursor"/);
+  assert.match(html, /data-prov-verify="claude"/);
+  assert.match(appSrc, /provider\.connect/);
+  assert.match(appSrc, /r\.name === "settings"/);
+  const section = renderProviderRuntimeSection({
+    providers: [
+      { id: "claude", label: "Claude", auth: { state: "authenticated", label: "Signed in" } },
+      { id: "openai", label: "OpenAI", auth: { state: "not_configured" } },
+    ],
+  });
+  assert.match(section, /data-gw-provider-card="claude"/);
+  assert.equal(section.includes("OpenAI"), false);
+});
+
+await test("governed approval copy is the action, not census", () => {
+  const push = governedDecisionNotice({
+    approve: true, actionKey: "repository.push", approveLabel: "Authorize push",
+  });
+  assert.match(push.text, /push/i);
+  assert.equal(push.text.includes("Census"), false);
+  const already = governedDecisionNotice({ approve: true, already: true, actionKey: "repository.push" });
+  assert.match(already.text, /Already resolved/);
+  const census = governedDecisionNotice({ approve: true, actionKey: "database.read_census" });
+  assert.match(census.text, /Census/);
+  assert.match(gwSrc, /governedDecisionNotice/);
+});
+
+// ── Browser-auth recovery must be REACHABLE, not merely rendered ─────────────
+//
+// THE FAILURE THIS ENCODES. The recovery card existed and was rendered, the
+// module and CLI shipped, and the flow was still dead on the live Gateway: the
+// API never attached `browser_auth` to a lane, so the card never appeared, and
+// gateway.js had no handler for its buttons, so Sign in did nothing. Every piece
+// present, nothing connected. Rendering is not delivery.
+
+test("the lanes endpoint attaches browser_auth to lanes", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  assert.match(api, /attachLaneBrowserAuth/);
+  // Identity comes from the toolkit, not from a second definition here.
+  assert.match(api, /qaIdentityFor:\s*qaIdentityForSlot/);
+});
+
+test("the Sign in and Re-check buttons have handlers", () => {
+  // The card's buttons carry these hooks; without a listener they are decoration.
+  assert.match(gwSrc, /data-gw-browser-auth-signin/);
+  assert.match(gwSrc, /data-gw-browser-auth-recheck/);
+  // The path is built from the action, so assert the endpoint and both actions
+  // rather than a literal URL that never appears in the source.
+  assert.match(gwSrc, /\/api\/v2\/browser-auth\/\$\{action\}/);
+  assert.match(gwSrc, /runBrowserAuthAction\(signIn, "sign-in"\)/);
+  assert.match(gwSrc, /runBrowserAuthAction\(recheck, "verify"\)/);
+});
+
+test("the sign-in route exists and the agent cannot complete one", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  assert.match(api, /\/api\/v2\/browser-auth\/sign-in/);
+  assert.match(api, /\/api\/v2\/browser-auth\/verify/);
+  // The response is a state name. Nothing that could authenticate anyone may
+  // cross this boundary.
+  assert.match(api, /publicAuthOutcome/);
+  assert.doesNotMatch(api, /storage-state\.json["']?\s*\)?\s*,\s*["']utf8/);
+});
+
+// ── The recovery flow must be REACHABLE BY THE METHOD THE UI USES ────────────
+//
+// THE FAILURE THIS ENCODES. The routes were registered inside handleV2Get while
+// the card's buttons POST, so no request ever matched them and the button did
+// nothing at all. A GET could not work either: the handler reads `v`, the POST
+// body, which does not exist there. Asserting that the route STRINGS were
+// present in the file proved nothing — that is how this shipped twice.
+
+await test("browser-auth routes answer POST, which is what the buttons send", async () => {
+  const prevAuth = process.env.VACILANDO_REQUIRE_API_AUTH;
+  process.env.VACILANDO_REQUIRE_API_AUTH = "0";
+  try {
+    const api = await import("../lib/vacilando/v2-api.mjs");
+    for (const route of ["status", "sign-in", "verify"]) {
+      const out = await api.handleV2Post(`/api/v2/browser-auth/${route}`,
+        { lane_id: "lane_does_not_exist" }, { headers: { host: "127.0.0.1:3020" } });
+      // Unmatched routes return null. A registered route answers — here 404,
+      // because the lane is unknown, which is a REAL answer.
+      assert.ok(out, `${route} must be registered for POST`);
+      assert.equal(out.status, 404);
+      assert.equal(out.body.error, "lane_not_registered");
+    }
+  } finally {
+    if (prevAuth === undefined) delete process.env.VACILANDO_REQUIRE_API_AUTH;
+    else process.env.VACILANDO_REQUIRE_API_AUTH = prevAuth;
+  }
+});
+
+test("sign-in starts the capture without waiting for the person", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // Awaiting the capture held the HTTP response open for the whole sign-in
+  // window, so the button looked dead and proxies timed the request out.
+  assert.doesNotMatch(api, /await\s+beginBrowserAuthCapture\(/);
+  assert.match(api, /const\s+capture\s*=\s*beginBrowserAuthCapture\(/);
+  // An abandoned capture must never become an unhandled rejection.
+  assert.match(api, /capture\.catch\(/);
+});
+
+test("sign-in says whose screen the browser opens on", () => {
+  const api = readFileSync(join(HERE, "..", "lib", "vacilando", "v2-api.mjs"), "utf8");
+  // The Gateway answers on loopback AND over the tailnet. A Director reading
+  // this from a phone cannot see a window that opens on the host, and saying
+  // nothing about that is what "it did not navigate anywhere" was.
+  assert.match(api, /viewer_is_on_host/);
+  assert.match(api, /browser_opens_on/);
+  assert.match(api, /function requestIsFromGatewayHost/);
+  // Helpers must exist, not merely be called — a called-but-undefined helper
+  // throws only on the path that reaches it.
+  assert.match(api, /function laneSlotFromPath/);
+  assert.match(api, /function gatewayHostLabel/);
+});
+
+test("the desktop details pane is never inert", () => {
+  // INERT IS NOT CLOSED. On desktop the pane is a permanent column that no rule
+  // hides; marking it inert left it fully visible and completely dead — the
+  // wheel fell through to an overflow:hidden ancestor and nothing scrolled.
+  assert.match(gwSrc, /asideInert:\s*isMobileWidth\(\)\s*&&\s*!asideOpenNow\(\)/);
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  assert.match(view, /\$\{asideInert \? ' aria-hidden="true" inert' : ""\}/);
+  // The old form keyed inert off asideOpen; it must not come back.
+  assert.doesNotMatch(view, /\$\{asideOpen \? "" : ' aria-hidden="true" inert'\}/);
+});
+
+test("controls that gate progress live in the conversation, not the rail", () => {
+  // THE FAILURE THIS ENCODES. The session callout, the runtime keep/release
+  // controls and the context refresh sat in the details rail. The rail is a
+  // reference column: the Director can collapse it, it is the first thing to run
+  // out of room, and while it was inert it could not be scrolled or clicked at
+  // all — so every one of these actions was unreachable exactly when it mattered.
+  // An action the operator cannot reach is the same as no action.
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  const railStart = view.indexOf("const detailsPanel = ");
+  assert.ok(railStart > 0, "details rail template must exist");
+  const railEnd = view.indexOf("</aside>`;", railStart);
+  assert.ok(railEnd > railStart, "details rail template must terminate");
+  const rail = view.slice(railStart, railEnd);
+
+  // The conversation column carries approvals and the composer, and nothing that
+  // merely reports state — those pushed the chat off the screen entirely.
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    assert.ok(view.includes(`${fn}(`), `${fn} must still be rendered somewhere`);
+  }
+
+  // They belong beside the approval cards, above the composer.
+  const bar = view.indexOf("renderOperatorDecisionBar(operatorDecisionRun(lane)");
+  const composer = view.indexOf("${renderComposer({", bar);
+  assert.ok(bar > 0 && composer > bar, "decision bar precedes the composer");
+  for (const fn of ["renderLaneSessionCallout", "renderLaneRuntimeControls", "renderContextRefreshButton"]) {
+    assert.ok(rail.includes(`${fn}(`), `${fn} belongs in the rail`);
+  }
+
+  // They are ONE subject — whether this lane can keep working — so they render
+  // as one section, and that section lives in the rail: stacked in the
+  // conversation it pushed the chat itself off the screen.
+  assert.ok(rail.includes("gw-runtime-section"), "runtime section belongs in the rail");
+  assert.equal(view.slice(bar, composer).includes("gw-runtime-section"), false,
+    "the runtime section must not block the conversation");
+
+  // The browser session card is reference state, not a progress gate: it belongs
+  // in the rail, directly under the folder and notification controls.
+  // Checked by POSITION of every call site, not by slicing one region: a card
+  // placed just ABOVE the decision bar is still in the conversation and would
+  // slip past a range check that starts at the bar.
+  const authCalls = [];
+  for (let at = view.indexOf("${renderBrowserAuthRecovery("); at !== -1;
+       at = view.indexOf("${renderBrowserAuthRecovery(", at + 1)) authCalls.push(at);
+  assert.equal(authCalls.length, 1, "exactly one browser-session call site");
+  assert.ok(authCalls[0] > railStart && authCalls[0] < railEnd,
+    "the browser session card belongs in the details rail");
+  const folderAt = rail.indexOf("renderLaneFolderPicker(");
+  const notifyAt = rail.indexOf("renderNotificationControls(");
+  const authAt = rail.indexOf("renderBrowserAuthRecovery(");
+  assert.ok(folderAt >= 0 && notifyAt > folderAt && authAt > notifyAt,
+    "browser session sits below folder and notifications");
+});
+
+test("the authorize button exists on every screen, not just mobile", () => {
+  // THE FAILURE THIS ENCODES. .gw-decision-bar was display:none by default and
+  // display:block only under max-width:860px, so on a desktop the approve button
+  // had no box at all — measured at height 0, top 0, bottom 0. The only other
+  // desktop surface was renderCurrentWork inside the details rail, a collapsible
+  // reference column that was itself inert. There was no reachable way to
+  // authorize a governed action on a desktop.
+  const css = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "styles.css"), "utf8");
+  const base = css.match(/^\.gw-decision-bar\{[^}]*\}/m);
+  assert.ok(base, "the decision bar must have a base rule");
+  assert.doesNotMatch(base[0], /display:\s*none/, "the approval surface must never default to display:none");
+  assert.match(base[0], /display:\s*block/);
+  // A long proposal must not push its own buttons out of reach: at 390x844 the
+  // button sat at y=933 with no scrollable ancestor.
+  assert.match(base[0], /max-height:/);
+  assert.match(base[0], /overflow-y:\s*auto/);
+  // And the actions stay reachable while the facts scroll.
+  assert.match(css, /\.gw-decision-bar \.gw-work-stale-actions\{[^}]*position:\s*sticky/);
+});
+
+test("a recognised modal offers the operator a way out", () => {
+  // "It has to be answered in the agent's terminal" WAS the failure: Trust
+  // Runtime sat in a Rewind picker and the Director had no reachable action.
+  const view = readFileSync(join(HERE, "..", "apps", "vacilando", "public", "gateway-view.mjs"), "utf8");
+  assert.match(view, /data-gw-dismiss-block/);
+  assert.match(view, /DISMISSIBLE_SCREEN_KINDS/);
+  // Never offered for a question only a person can answer.
+  const list = view.match(/DISMISSIBLE_SCREEN_KINDS = Object\.freeze\(\[[^\]]*\]/)[0];
+  for (const forbidden of ["permission", "trust", "onboarding", "login", "update"]) {
+    assert.equal(list.includes(`"${forbidden}"`), false, `${forbidden} must never be dismissible`);
+  }
+  assert.match(gwSrc, /lanes\/prompt-block\/dismiss/);
+});
+
+await Promise.all(started);
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);

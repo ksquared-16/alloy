@@ -1,0 +1,618 @@
+{
+  "trusted_host_action_id": "tha_1d2752ee0d0ab6",
+  "query_hash": "96110c3c13cf1aa4d4e68041f39786871f0be82cb829a531af5a7704c747ecdb",
+  "results": {
+    "format": "q15_labeled_rows",
+    "census_run_at": "2026-08-25T21:50:31.773Z",
+    "question_ids": [
+      "loopback_msg",
+      "loopback_by_state",
+      "hosted_origin_msg",
+      "tour_alias",
+      "body_bearing_columns"
+    ],
+    "questions": {
+      "loopback_msg": {
+        "question_id": "loopback_msg",
+        "row_count": null,
+        "rows": [
+          {
+            "message_id": "ad84d381-3df9-49a4-9154-854abcad0864",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "delivered",
+            "created_at": "2026-08-25T21:33:18.6506+00:00",
+            "loopback_url": "http://localhost:3014/a/R25htnbk"
+          },
+          {
+            "message_id": "2fc4b7a5-f0fb-4f11-96c8-2157ec0cb827",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-13T17:59:06.087302+00:00",
+            "loopback_url": "http://localhost:3015/tour-booking/7PZgayMmsc-1bAHlQAG7dYHQqR4PM53A-UbGz5D6yB0"
+          },
+          {
+            "message_id": "db4bc328-f0c7-4c3b-a49c-10df83e5bd30",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-13T17:54:45.975637+00:00",
+            "loopback_url": "http://localhost:3015/a/EjkRN7JS"
+          },
+          {
+            "message_id": "a343d782-91fd-4b40-821e-fe29fca86634",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-12T21:13:49.331896+00:00",
+            "loopback_url": "http://localhost:3015/tour-booking/v5HF2RFrfTJMTV-isGbTJHnQFN-CfsEMOyBLKAwWgqE"
+          },
+          {
+            "message_id": "12c17237-2301-41fa-9bf9-4b8ed76e7169",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-12T20:59:53.494802+00:00",
+            "loopback_url": "http://localhost:3015/tour-booking/abM-WP1uzMYv0_tYNbQIGv5JDt4Ux9apNc9nuOwHKYU"
+          },
+          {
+            "message_id": "66c49329-b1b4-4b3e-9905-5acb507aa5f1",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-12T20:37:03.926313+00:00",
+            "loopback_url": "http://localhost:3015/tour-booking/az4cXTCDa007Kz6y0byFcQS51wfvYlvaQgibfYX8V7k"
+          },
+          {
+            "message_id": "664c0b4b-311b-46d6-a3c3-1757e064b040",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-12T19:54:17.161616+00:00",
+            "loopback_url": "http://localhost:3015/a/2GPHMjuu"
+          },
+          {
+            "message_id": "44652e17-5604-4612-898f-d1e4d14baf53",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "created_at": "2026-08-08T23:02:00.217126+00:00",
+            "loopback_url": "http://localhost:3015/tour-booking/9-P5jgOb-VE16FpcODhM6rjATvYaN57AfrSINHFPH8o?option=823fd406-cdb9-4cf9-bff1-26d0f511d0a3%3A2026-08-10T16%3A00%3A00.000Z"
+          }
+        ]
+      },
+      "loopback_by_state": {
+        "question_id": "loopback_by_state",
+        "row_count": null,
+        "rows": [
+          {
+            "channel": "email",
+            "direction": "outbound",
+            "status": "delivered",
+            "n": 1
+          },
+          {
+            "channel": "email",
+            "direction": "outbound",
+            "status": "sent",
+            "n": 7
+          }
+        ]
+      },
+      "hosted_origin_msg": {
+        "question_id": "hosted_origin_msg",
+        "row_count": null,
+        "rows": [
+          {
+            "origin": "staging.workwithalloy.com",
+            "n": 0
+          }
+        ]
+      },
+      "tour_alias": {
+        "question_id": "tour_alias",
+        "row_count": null,
+        "rows": [
+          {
+            "link_id": "32604be0-33e2-415b-a7b9-e4af6fa1105c",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "c4SNU25V",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.503644+00:00",
+            "expires_at": "2026-09-15T21:40:39.383+00:00",
+            "redirect_path": "/tour-booking/pExQvZ8-8he9hbV0tuBKLf7YRaferDX60Cae8BnkclM"
+          },
+          {
+            "link_id": "74d80ce4-8f9a-42e5-8552-3bce4959958f",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "R8CcdybJ",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.434855+00:00",
+            "expires_at": "2026-09-15T21:40:39.326+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE"
+          },
+          {
+            "link_id": "39f61722-3b14-432d-9a2e-ef66a5e92773",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "RLuCnByU",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.382499+00:00",
+            "expires_at": "2026-09-15T21:40:39.271+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "abe71b90-cc30-41a3-9589-a693a750111f",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "yBQa97FB",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.322785+00:00",
+            "expires_at": "2026-09-15T21:40:39.222+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "ec70e535-0b2d-4f16-a121-e01e14a8b6ec",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "KV8TQmh3",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.271847+00:00",
+            "expires_at": "2026-09-15T21:40:39.141+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "170ee232-c904-400d-96f7-c8e997f0cccb",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "U378E5uS",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.196594+00:00",
+            "expires_at": "2026-09-15T21:40:39.082+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "81dd5ca8-42e3-4a46-aafc-be45f1c01b5e",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "BGjUJBgZ",
+            "entity_id": "2350dbbd-a003-4c26-996e-24817b12b6c2",
+            "created_at": "2026-08-25T21:40:39.134978+00:00",
+            "expires_at": "2026-09-15T21:40:39.016+00:00",
+            "redirect_path": "/tour-booking/EPmcfMYxvOfprqM_OAcdSVleGLOfXMSAbW7jhJDPXHE?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "508a3dca-87d0-4fe1-87b1-6c59cc9a2f39",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "hwJMZTKB",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.359515+00:00",
+            "expires_at": "2026-09-15T21:39:42.255+00:00",
+            "redirect_path": "/tour-booking/T7sOSK0egLpQC2VkZR688xygOJW81pCqtW5T6T_vAow"
+          },
+          {
+            "link_id": "48347d9d-e597-4759-a7fe-e1b7ddccba23",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "TpyU5NWB",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.307805+00:00",
+            "expires_at": "2026-09-15T21:39:42.195+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY"
+          },
+          {
+            "link_id": "224dc3d3-29cb-44dc-a5dd-537e994c3ee5",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "nL8yDP2D",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.246352+00:00",
+            "expires_at": "2026-09-15T21:39:42.131+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "0daa87a7-fe6d-4151-a143-c537b706b545",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "UM7Lv3sd",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.187661+00:00",
+            "expires_at": "2026-09-15T21:39:42.081+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "c683fe67-d329-454f-9e47-ab8fb2c6dd46",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "wM3WbLyE",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.135635+00:00",
+            "expires_at": "2026-09-15T21:39:42.025+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "16c5a4ef-7933-4d0c-890c-6ac443a09579",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "W5upAJhV",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.078749+00:00",
+            "expires_at": "2026-09-15T21:39:41.964+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "7c30d1e4-bd90-421c-8725-ed6c024256d2",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "z7phSCDe",
+            "entity_id": "3843773b-46de-4a82-b544-6a81ce5c317a",
+            "created_at": "2026-08-25T21:39:42.015821+00:00",
+            "expires_at": "2026-09-15T21:39:41.912+00:00",
+            "redirect_path": "/tour-booking/3SrWUgodsS078o-PLZbWOt5R-2VlPkaJdnvNZOXNydY?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "864b4876-6471-4888-8ea3-0db679d8a9b4",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "MEbycU8V",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.737911+00:00",
+            "expires_at": "2026-09-15T21:36:38.622+00:00",
+            "redirect_path": "/tour-booking/QEaJJOsbIAG4_Jo5BqHXYj3fUZifGXxUmtlQnOnuEvM"
+          },
+          {
+            "link_id": "1aaa3ae1-4b33-4e9a-b930-5b851d4a1cb4",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "FdaRASqu",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.680772+00:00",
+            "expires_at": "2026-09-15T21:36:38.578+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk"
+          },
+          {
+            "link_id": "9c1464a3-16bf-4f32-803c-0e29f23d0720",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "dQnUDfyz",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.63821+00:00",
+            "expires_at": "2026-09-15T21:36:38.538+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "6daa9dd2-f5f1-46ec-bfe8-3e9d6c404d7b",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "ReBtwFas",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.589897+00:00",
+            "expires_at": "2026-09-15T21:36:38.477+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "3974829b-0f13-4b4f-9bf9-bfc225bb15d0",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "Q65D2dPK",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.527831+00:00",
+            "expires_at": "2026-09-15T21:36:38.422+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "f00f1bad-32d4-4432-9237-39f15376dab0",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "6TmtQ6an",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.476714+00:00",
+            "expires_at": "2026-09-15T21:36:38.367+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "82c844a6-1012-49b5-8c4b-a6cc0df36853",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "hZxq3RYR",
+            "entity_id": "2d1a0be4-9cf7-4d0b-91b0-401129ab0b8a",
+            "created_at": "2026-08-25T21:36:38.413237+00:00",
+            "expires_at": "2026-09-15T21:36:38.301+00:00",
+            "redirect_path": "/tour-booking/wc5NVNmRdmKufOeLRGaje4mumIQjrkJ2_H1TsdTfBgk?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "1c9f535c-4dee-425a-9977-4fd5ceed4aec",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "nxCdDNps",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.520246+00:00",
+            "expires_at": "2026-09-15T21:36:16.413+00:00",
+            "redirect_path": "/tour-booking/8RBOU6lMJViEItpj_PbgLU8bGAOZT8Va1-RWxGbqAyU"
+          },
+          {
+            "link_id": "89292328-14ad-4cb1-97a2-ff6dc660a3e7",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "fdbcG6EN",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.462876+00:00",
+            "expires_at": "2026-09-15T21:36:16.352+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks"
+          },
+          {
+            "link_id": "5a81785e-f8d1-464d-8a33-3641ef09d6d8",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "qknpDu7E",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.404736+00:00",
+            "expires_at": "2026-09-15T21:36:16.295+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "b0073091-534e-4b9c-bd8e-41321df0e789",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "EhAzCYGP",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.33838+00:00",
+            "expires_at": "2026-09-15T21:36:16.234+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "43744592-f5b0-4391-a092-4dca44e1c28e",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "SfYq4QBx",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.285994+00:00",
+            "expires_at": "2026-09-15T21:36:16.161+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "abf6f83d-5c77-422c-931f-ea68fafb6be4",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "A7NEFk6f",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.213712+00:00",
+            "expires_at": "2026-09-15T21:36:16.099+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "45ff3962-3eec-4d93-9fc8-3900a0585758",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "gqsWU5EL",
+            "entity_id": "d8b03a18-ea38-48ae-95f0-4a676922470c",
+            "created_at": "2026-08-25T21:36:16.15055+00:00",
+            "expires_at": "2026-09-15T21:36:16.035+00:00",
+            "redirect_path": "/tour-booking/5ZGgmkqpbaC4HZRhpfZGqcokOmtRW1j6tN_OD3q13ks?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "a29aefe6-9568-4792-a759-705bbb1a81d3",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "LuMNsgMK",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:09.394907+00:00",
+            "expires_at": "2026-09-15T21:36:09.331+00:00",
+            "redirect_path": "/tour-booking/Qj96EjNhS25n2mFhMIAxhK5P8RszdhzJu3n7KB6HQJc"
+          },
+          {
+            "link_id": "0b5aa014-2b9b-4941-933a-7679a371d7ba",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "sKjR9dPL",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:09.273907+00:00",
+            "expires_at": "2026-09-15T21:36:09.224+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0"
+          },
+          {
+            "link_id": "07f951b8-458f-4573-b308-13bef68d8c02",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "ERNZ6AJa",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:09.155487+00:00",
+            "expires_at": "2026-09-15T21:36:09.108+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "e82fcd17-b8ab-4be7-bd6a-9cfe1ca78799",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "nbSkGk38",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:09.055259+00:00",
+            "expires_at": "2026-09-15T21:36:09.002+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "5d6550ea-162d-42df-9493-5e974ae3fb69",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "3q388xPG",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:08.950484+00:00",
+            "expires_at": "2026-09-15T21:36:08.899+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "5e37d691-7de1-4144-bf30-de50da780b34",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "Vgs3uWWb",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:08.826329+00:00",
+            "expires_at": "2026-09-15T21:36:08.772+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "cb3865dd-3df1-4ca8-a986-609aaffb02e7",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "tx2bSuxB",
+            "entity_id": "0407b65e-05a4-4557-8f84-e9487e1e4b30",
+            "created_at": "2026-08-25T21:36:08.718379+00:00",
+            "expires_at": "2026-09-15T21:36:08.663+00:00",
+            "redirect_path": "/tour-booking/daJo3crhsiY6Herr8o99aCtTsiVfenH3oXJK0XrWUw0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "e3da01ce-b3fb-4b4e-bdc3-1105d4f9de64",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "sazSvRLp",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:50.181817+00:00",
+            "expires_at": "2026-09-15T21:35:50.07+00:00",
+            "redirect_path": "/tour-booking/7w56BOD-l6KHUfqVlGo7iArV-pTxplVN0zfp1JsDVBo"
+          },
+          {
+            "link_id": "319d87c3-d1f8-45b2-9e94-d026d7a49ad8",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "hDeZZuha",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:50.125096+00:00",
+            "expires_at": "2026-09-15T21:35:50.017+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0"
+          },
+          {
+            "link_id": "dd57b214-c6ca-48e5-8f1d-8521fb16cf4d",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "RcUjQc62",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:50.070264+00:00",
+            "expires_at": "2026-09-15T21:35:49.957+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "c4dcd024-8a4f-4a37-87f0-73b97df17fe1",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "9RUs8baN",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:50.012811+00:00",
+            "expires_at": "2026-09-15T21:35:49.901+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "0bac0032-b86a-4e8e-8a55-2a055cb892af",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "YAEAT2au",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:49.951866+00:00",
+            "expires_at": "2026-09-15T21:35:49.842+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "f0446eb4-cc23-44d5-beb7-b4dc186ae8b8",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "32MACNTs",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:49.89549+00:00",
+            "expires_at": "2026-09-15T21:35:49.79+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "5e935d79-7f37-42ad-8790-33ee12396caf",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "n9wa24Kn",
+            "entity_id": "0c82633e-486d-45cd-aa14-327dfaaf3704",
+            "created_at": "2026-08-25T21:35:49.832817+00:00",
+            "expires_at": "2026-09-15T21:35:49.725+00:00",
+            "redirect_path": "/tour-booking/fzkbu0vZiQawIKHDDH_o1AdYjdk6ZesPimeZdbY4xv0?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "eab6d75b-ec26-47bf-a13a-3b921cf66c8f",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "X7hqhwY5",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.557422+00:00",
+            "expires_at": "2026-09-15T21:33:21.445+00:00",
+            "redirect_path": "/tour-booking/sase79DJ4DLm-iXozBGU42ut-TBRhvglRTCC-29c4tQ"
+          },
+          {
+            "link_id": "d6cbe958-19e3-476f-8ad0-aeeff7a2fca6",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "SnJ88fqM",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.492329+00:00",
+            "expires_at": "2026-09-15T21:33:21.384+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ"
+          },
+          {
+            "link_id": "5f3789ee-6646-4492-92fa-c4a4c893862b",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "m285nHWt",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.43456+00:00",
+            "expires_at": "2026-09-15T21:33:21.325+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "77d2face-0381-4b38-acd4-27b3f8af9ac6",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "qCVK27QZ",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.378443+00:00",
+            "expires_at": "2026-09-15T21:33:21.262+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ?option=3f600420-1fe7-4822-ae0c-92ff4834cb99%3A2026-08-28T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "c175618a-68a4-4e21-900a-a21cbfe444e3",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "6kqTDmwK",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.315035+00:00",
+            "expires_at": "2026-09-15T21:33:21.183+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T18%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "2f2772d0-2866-452d-9214-dad834553f16",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "Dcwq67Ht",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.233734+00:00",
+            "expires_at": "2026-09-15T21:33:21.125+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T17%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "6159e83e-26aa-491c-ad1c-7445e1883d93",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "CK9uXNd9",
+            "entity_id": "37383bf4-963d-4abc-8f6d-59b5bb3042dd",
+            "created_at": "2026-08-25T21:33:21.175864+00:00",
+            "expires_at": "2026-09-15T21:33:21.063+00:00",
+            "redirect_path": "/tour-booking/CSX07hFFXqfU74I-6SnvqHxi1mCotN83vOevoWHBVuQ?option=567146fc-6fbf-48e8-9970-49725ccd90a0%3A2026-08-26T16%3A00%3A00.000Z"
+          },
+          {
+            "link_id": "9eaff8cf-25da-4eb1-951b-5c98e028f3df",
+            "org_id": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+            "short_code": "kmYtEdy9",
+            "entity_id": "4b4f835f-5181-48f2-b923-95bef4816e73",
+            "created_at": "2026-08-25T21:32:48.557227+00:00",
+            "expires_at": "2026-09-15T21:32:48.444+00:00",
+            "redirect_path": "/tour-booking/yMvJJGBFKgrmXfdoRl9u61aOw9Yf5NbQB1DRyZg11CI"
+          }
+        ]
+      },
+      "body_bearing_columns": {
+        "question_id": "body_bearing_columns",
+        "row_count": null,
+        "rows": [
+          {
+            "table": "announcements",
+            "column": "body"
+          },
+          {
+            "table": "communication_inbound_ingress",
+            "column": "body"
+          },
+          {
+            "table": "communication_messages",
+            "column": "body"
+          },
+          {
+            "table": "communication_messages",
+            "column": "rendered_snapshot"
+          },
+          {
+            "table": "communication_snippets",
+            "column": "body"
+          },
+          {
+            "table": "communication_template_versions",
+            "column": "body"
+          },
+          {
+            "table": "messages",
+            "column": "body"
+          },
+          {
+            "table": "messages_outbox",
+            "column": "body"
+          }
+        ]
+      }
+    },
+    "row_count": 69
+  }
+}

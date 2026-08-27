@@ -14,6 +14,8 @@ import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/w
 import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useOperatorRecordFocus } from "@/lib/runtime/focus/useOperatorRecordFocus";
+import { dispatchOpportunityDrawerScopedUpdate } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { broadcastWorkspaceMutation } from "@/lib/adminV2/workspaceRefreshBroadcast";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { useCommandRailActionPending } from "@/components/presentation/rightRail/useCommandRailActionPending";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -69,6 +71,20 @@ export function WorkUnitCommandRailActionsBody({ actions, departmentId, workUnit
                         surface: "work_unit",
                         department_id: departmentId,
                         work_unit_id: workUnitId,
+                    },
+                    /*
+                     * CONVERGE, DO NOT REFRESH — see the note on the workspace rail.
+                     *
+                     * When a record is selected the mutation HAS a subject, so the targeted scoped
+                     * update is used and listeners patch that row. With no selection there is no row
+                     * to match, and the surface-neutral broadcast is the honest signal. Both are the
+                     * canonical owners the record header already uses.
+                     */
+                    invalidate: (opts) => {
+                        const key = opts?.action_key ?? action.key;
+                        const id = opts?.entity_id ?? selectedRecordId;
+                        if (id) dispatchOpportunityDrawerScopedUpdate(id, key, ["activity", "header_actions"]);
+                        else broadcastWorkspaceMutation(key);
                     },
                 }),
             );

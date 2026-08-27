@@ -17,6 +17,10 @@
  * rows and returns a map. Authorization is still evaluated per document — the
  * batch is a performance shape, not an authorization shortcut.
  *
+ * That was true of the SIGNATURE and false of the BODY until R1: the resolver took a set and then
+ * awaited each person in turn, so callers paid the per-avatar round trip the batch existed to
+ * avoid. The waiting is now bounded-concurrent; see `PHOTO_RESOLUTION_CONCURRENCY`.
+ *
  * CACHING
  * Request-scoped only, keyed by actor. Never written back to person metadata.
  */
@@ -27,6 +31,7 @@ import {
     signedUrlExpirySeconds,
     type DocumentActor,
 } from "@/lib/documents/assertDocumentAccess";
+import { mapWithConcurrencyLimit } from "@/lib/workspace/mapWithConcurrencyLimit";
 
 export const PROFILE_PHOTO_DOCUMENT_ID_KEY = "profile_photo_document_id";
 export const LEGACY_PHOTO_URL_KEY = "photo_url";
@@ -90,60 +95,73 @@ export function profilePhotoDocumentId(metadata: Record<string, unknown> | null 
  * Every document is authorized individually through the canonical helper, so an
  * actor who may see one child's photo does not thereby see another's.
  */
+/**
+ * How many photos may be access-checked and signed at once.
+ *
+ * ── WHY THIS IS NOT A SERIAL LOOP ──
+ *
+ * Resolving ONE photo costs two round trips that cannot be merged: a per-document access decision
+ * and a storage signing call. Measured on the certification tenant that pair is ~130 ms. Awaiting
+ * them one person at a time made the cost of a page LINEAR in the number of children who happen to
+ * have a photo — a Records page of 100 such children would spend ~13 s inside this function, and
+ * `/api/admin/records/children` was observed at 3.3–4.5 s for exactly that reason.
+ *
+ * The serialism was accidental, not a constraint: each person's decision is independent and reads
+ * nothing the others write. So the work is run with BOUNDED concurrency — bounded rather than
+ * unbounded because an unbounded burst of signing calls would simply move the queue from this
+ * function into the storage API, where it would also compete with the operator's other requests.
+ *
+ * Per-document authorization is unchanged: every person still gets its own `assertDocumentAccess`
+ * decision and its own outcome. Only the WAITING is shared.
+ */
+const PHOTO_RESOLUTION_CONCURRENCY = 8;
+
+async function resolveOnePhoto(
+    supabase: SupabaseClient,
+    actor: DocumentActor,
+    person: PersonPhotoInput,
+): Promise<ResolvedPhoto> {
+    const documentId = profilePhotoDocumentId(person.metadata);
+
+    if (!documentId) {
+        return { personId: person.personId, photoUrl: null, documentId: null, reason: "no_reference" };
+    }
+
+    const decision = await assertDocumentAccess({
+        supabase,
+        actor,
+        documentId,
+        operation: "preview",
+    });
+
+    if (decision.outcome !== "allowed") {
+        return { personId: person.personId, photoUrl: null, documentId, reason: "unauthorized" };
+    }
+
+    const { data, error } = await supabase.storage
+        .from(decision.document.bucket)
+        .createSignedUrl(decision.document.storagePath, signedUrlExpirySeconds("preview"));
+
+    if (error || !data?.signedUrl) {
+        return { personId: person.personId, photoUrl: null, documentId, reason: "sign_failed" };
+    }
+
+    return { personId: person.personId, photoUrl: data.signedUrl, documentId };
+}
+
 export async function resolveProfilePhotosForActor(params: {
     supabase: SupabaseClient;
     actor: DocumentActor;
     people: PersonPhotoInput[];
 }): Promise<Map<string, ResolvedPhoto>> {
+    const resolved = await mapWithConcurrencyLimit(
+        params.people,
+        PHOTO_RESOLUTION_CONCURRENCY,
+        (person) => resolveOnePhoto(params.supabase, params.actor, person),
+    );
+
     const out = new Map<string, ResolvedPhoto>();
-
-    for (const person of params.people) {
-        const documentId = profilePhotoDocumentId(person.metadata);
-
-        if (!documentId) {
-            out.set(person.personId, {
-                personId: person.personId,
-                photoUrl: null,
-                documentId: null,
-                reason: "no_reference",
-            });
-            continue;
-        }
-
-        const decision = await assertDocumentAccess({
-            supabase: params.supabase,
-            actor: params.actor,
-            documentId,
-            operation: "preview",
-        });
-
-        if (decision.outcome !== "allowed") {
-            out.set(person.personId, {
-                personId: person.personId,
-                photoUrl: null,
-                documentId,
-                reason: "unauthorized",
-            });
-            continue;
-        }
-
-        const { data, error } = await params.supabase.storage
-            .from(decision.document.bucket)
-            .createSignedUrl(decision.document.storagePath, signedUrlExpirySeconds("preview"));
-
-        if (error || !data?.signedUrl) {
-            out.set(person.personId, {
-                personId: person.personId,
-                photoUrl: null,
-                documentId,
-                reason: "sign_failed",
-            });
-            continue;
-        }
-
-        out.set(person.personId, { personId: person.personId, photoUrl: data.signedUrl, documentId });
-    }
-
+    for (const photo of resolved) out.set(photo.personId, photo);
     return out;
 }
 

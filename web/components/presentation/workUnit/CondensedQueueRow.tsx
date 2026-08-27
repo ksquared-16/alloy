@@ -24,6 +24,7 @@
  * server-owned (Work View sort_v1 via QueueService) — this component never sorts.
  */
 
+import { waitlistPrecedenceReasonCopy } from "@/lib/ui-v2/waitlistPrecedenceReasonCopy";
 import {
     queueRowSubjectDisplayName,
     type CompactRowSlots,
@@ -244,6 +245,12 @@ export function CondensedQueueRow({
         Boolean(placementCandidateId)
         && context.waitlist_context?.can_adjust_placement !== false;
     const compactRank = compactWaitlistPositionLabel(context.waitlist_context?.position_label);
+    /*
+     * The precedence explanation is the CANONICAL reason code resolved to copy — never inferred from
+     * this row's rendered position or compared against its neighbours. If placement did not emit a
+     * reason, the row says nothing.
+     */
+    const precedenceCopy = waitlistPrecedenceReasonCopy(context.waitlist_context?.precedence_reason);
     // Rank lives top-right above Adjust — strip from secondary so it is not duplicated.
     // Age/time-in-stage lives bottom-right only (never also top-right).
     const secondaryForRender = pinSingleAgeBottomRight(
@@ -323,6 +330,16 @@ export function CondensedQueueRow({
                                             title={context.waitlist_context?.position_label ?? compactRank}
                                             className="text-[11px] font-semibold leading-4 text-alloy-midnight/70"
                                         />
+                                    ) : null}
+                                    {precedenceCopy ? (
+                                        <span
+                                            data-queue-row-waitlist-precedence
+                                            data-precedence-reason={context.waitlist_context?.precedence_reason ?? undefined}
+                                            className="max-w-[11rem] text-right text-[10px] font-medium leading-[13px] text-alloy-midnight/55"
+                                            title={precedenceCopy}
+                                        >
+                                            {precedenceCopy}
+                                        </span>
                                     ) : null}
                                     {showPlacementAdjust && placementCandidateId ? (
                                         <WaitlistPlacementAdjustControl

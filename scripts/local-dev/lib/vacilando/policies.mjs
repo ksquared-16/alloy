@@ -61,7 +61,7 @@ export async function collectPolicies() {
         P("Cursor session", "cursor-agent · -p/--trust/--resume/json — authenticated", "cursor-agent --help", "provider adapter", "no", "director.ask"),
       ]},
       { title: "Worktree rules", rows: [
-        P("Worktree root", `${os.homedir()}/Code/alloy-worktrees`, "ALLOY_WORKTREE_ROOT", "alloy-worktree-create", "config", "sprint.start"),
+        P("Worktree root", cfg("ALLOY_WORKTREE_ROOT", `${os.homedir()}/Code/alloy-worktrees`), "ALLOY_WORKTREE_ROOT", "alloy-worktree-create", "config", "sprint.start"),
         P("Dependencies", "installed per-worktree; never symlinked", "README §5", "alloy-sprint-start", "no", "sprint.start"),
         P("Base ref", cfg("ALLOY_BASE_BRANCH", "origin/staging"), "alloy config / read-core", "alloy-worktree-create", "config", "sprint.start"),
       ]},

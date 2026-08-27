@@ -7,6 +7,8 @@ import path from "node:path";
 import fs from "node:fs";
 import { chromium, type Page } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
+// The app's own cookie serializer/chunker — not a second implementation of it.
+import { createChunks, stringToBase64URL } from "@supabase/ssr/dist/main/utils";
 
 dotenv.config({ path: path.join(process.cwd(), ".env.local") });
 
@@ -15,7 +17,7 @@ const BASE = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "") || "http://127.
 const ORG_ID = process.env.DEV_QUEUE_ORG_ID?.trim() || "93667019-bd28-49b5-a688-acc9bb1e0a19";
 const THREAD_ID = process.env.WI3_COMMS_QA_THREAD_ID?.trim() || "4de7b8e8-ef5c-4609-b4b0-0e611dcd4600";
 
-async function mintSessionCookie(): Promise<string> {
+async function mintSessionCookie(): Promise<Array<{ name: string; value: string }>> {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
     const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -40,7 +42,22 @@ async function mintSessionCookie(): Promise<string> {
     const otp = await anon.auth.verifyOtp({ type: "email", token_hash: tokenHash });
     if (!otp.data.session) throw new Error("verifyOtp failed");
     const projectRef = new URL(supabaseUrl).hostname.split(".")[0];
-    return `sb-${projectRef}-auth-token=${encodeURIComponent(JSON.stringify(otp.data.session))}`;
+    /*
+     * The cookie is produced by @supabase/ssr's OWN encoder and chunker, because the running app
+     * decodes with that same module. This used to return raw JSON, which predates the installed SSR
+     * version (0.8.x): that version reads a `base64-` prefixed, base64URL-encoded value, and splits
+     * long values across `name.0`, `name.1`. base64URL is unpadded and uses `-`/`_`, so it differs
+     * from standard base64 for most payloads — measured at 188 of 200 random samples.
+     *
+     * A cookie in the old shape is not rejected loudly; it is silently ignored, which presents as
+     * "storage contains a session but the app reports no authenticated identity". That is a very
+     * expensive symptom to debug, so the encoding is delegated rather than reproduced here.
+     */
+    const encoded = `base64-${stringToBase64URL(JSON.stringify(otp.data.session))}`;
+    return createChunks(`sb-${projectRef}-auth-token`, encoded).map((part) => ({
+        name: part.name,
+        value: part.value,
+    }));
 }
 
 async function openWorkItemsQueue(page: Page) {
@@ -56,19 +73,15 @@ async function openWorkItemsQueue(page: Page) {
 
 async function main() {
     fs.mkdirSync(OUT, { recursive: true });
-    const cookie = await mintSessionCookie();
+    const cookieParts = await mintSessionCookie();
     const results: Record<string, string | number | boolean> = {};
 
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-    await context.addCookies([
-        {
-            name: cookie.split("=")[0],
-            value: decodeURIComponent(cookie.split("=").slice(1).join("=")),
-            domain: "127.0.0.1",
-            path: "/",
-        },
-    ]);
+    // Every chunk must be added: a session split across `.0`/`.1` is unreadable if only one lands.
+    await context.addCookies(
+        cookieParts.map((part) => ({ name: part.name, value: part.value, domain: "127.0.0.1", path: "/" })),
+    );
     const page = await context.newPage();
     page.setDefaultTimeout(90000);
     const tasksModal = () => page.locator('[data-adminv2-bos-modal="adminv2-tasks-modal"]');

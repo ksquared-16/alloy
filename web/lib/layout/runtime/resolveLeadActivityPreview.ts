@@ -14,6 +14,15 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 export type LeadActivityPreviewKind = "note" | "communication" | "task" | "activity" | "created" | "updated";
 
 export type LeadActivityPreviewEntry = {
+    /**
+     * Canonical, namespaced identity for this entry when the producer has one.
+     *
+     * The layout-runtime timeline already carries an immutable `id` per entry (the canonical event
+     * row id where one exists). It was dropped here, so rendering had nothing to key on but the
+     * label and the FORMATTED timestamp — which is minute-granular. Optional because the lead
+     * preview producer below has no event id of its own.
+     */
+    id?: string;
     kind: LeadActivityPreviewKind;
     label: string;
     detail: string | null;

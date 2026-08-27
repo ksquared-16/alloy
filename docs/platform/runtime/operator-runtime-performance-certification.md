@@ -22,11 +22,42 @@ casually redefined.
 
 | class | measured | operator relevance |
 |---|---|---|
-| **TRUE COLD / DIRECT ENTRY** | ~11.7 s to first usable | diagnostic + resilience. No operator takes this path. |
+| **TRUE COLD / DIRECT ENTRY** | **T3 ~1.0 s** to first usable (T4 ~3.4 s hydrated) | deep links, reloads, new tabs — see the R2 correction below |
 | **PREPARED CANONICAL JOURNEY** | **~0.4 s** to a complete surface | the operating experience |
 
 A direct-URL cold number must never be quoted as the operator experience. The cold cell bypasses
-Workspace readiness *and* the in-place K1 entry gesture; it measures a route the product does not use.
+Workspace readiness *and* the in-place K1 entry gesture, so it is a different class — but it is a
+path operators *do* take (a bookmarked or pasted link, a reload, a new tab), so it is not purely
+diagnostic.
+
+**R2 CORRECTION (2026-08-22) — the 11.7 s figure is DISPROVED.** It could not be reproduced on a
+production build at `0b51beb4d` on any of six fresh-process cold samples:
+
+| mark | cold direct (6 samples) | prepared control | dev server, first hit |
+|---|---|---|---|
+| T3 first usable | **839–2,527 ms** (median ~1.0 s) | **343 ms** | **5,029 ms** |
+| T4 all cells hydrated | **3,076–4,978 ms** (median ~3.4 s) | — | **7,944 ms** |
+
+Two things produced the old number, and neither is production runtime:
+
+1. **Dev-server compilation.** The same harness against `next dev` gives T3 5,029 ms / T4 7,944 ms
+   *with an already-warm `.next/dev` cache*; a genuinely cold cache adds the whole route compile on
+   top. That is the class of number 11.7 s belongs to.
+2. **Host load.** The single slowest cold sample (T3 2,527 ms) coincided with a load average of
+   **18.60**; the other five ran at 3.9–4.2 and none exceeded T3 1,490 ms. The host gate exists for
+   exactly this reason (§6) and a cold number taken without it is not admissible.
+
+**What was NOT cold.** The database is remote Supabase, so restarting the server process does not
+reset remote DB or page-cache warmth. Every cell above shares that condition equally, which is why
+they are comparable to each other — but none of them is a claim about a cold database.
+
+**The operator is not blocked before T4.** A Work View switch issued at t=1,368 ms — while two Focus
+Panel cells were still holding — was accepted and responded in **293 ms**, inside the certified
+switch budget. Subject identity and two truthful cards are present at T3; the remaining cells fill
+progressively behind a usable surface.
+
+Direct revisit is 580 ms and the prepared revisit 295 ms, so nothing about the cold path degrades
+the certified journey. **Do not open cold-path optimisation work against the 11.7 s figure.**
 
 ## 2. Certified production measurements
 
@@ -103,6 +134,28 @@ justification, regression updates, and re-certification.
 22. **A workspace reopens to its last stable internal position, and never to transient state.** Stable navigation (section, mode, view, lens, filter, lane) is remembered; an editor, dialog, popover, half-completed form, selected record or command destination is not. The exclusion is STRUCTURAL: a position is a flat `Record<string, string>` of navigation identity, so transient state has no representation and cannot be committed by mistake. A remembered position is a hint, never an authority — anything that fails its workspace's validity guard falls back to the default rather than opening broken.
 23. **Reuse is only safe with an invalidation seam.** A TTL alone is not freshness. Every cached projection a command can change must be dropped by that command, at every layer that holds it. Caching a mutable projection without its seam is how a green toast leaves a stale board on screen.
 24. **Readiness follows resume.** Preparing the default destination for a workspace that reopens somewhere else prepares the wrong thing. Readiness reads the remembered position, and arms on nav intent (hover/focus) — warming inside the modal's own open effect runs at the same instant the workspace mounts and cannot shorten a serial chain.
+25. **The latest operator intent wins.** Two loads in flight, responses unordered: an older response may never overwrite a newer one. One gate per load — two loads sharing one gate cancel each other, which shows up as a green toast over a stale projection.
+26. **NO UNEXPLAINED PAGE REFRESH. Convergence is normal; refresh is exceptional.** A canonical mutation updates the SMALLEST affected authoritative projection through canonical invalidation owners. It never reloads the document, and it never re-renders a whole route to show a row that changed. A refresh is legitimate only for an auth transition (sign-out, idle logout, login), which is a navigation, not a data-freshness mechanism. Corollary: the same command must have the same blast radius from every surface that offers it — a command that converges from one surface and refreshes from another is a defect even when both "work".
+27. **A broadcast only converges COUNTS if its action key is registered as membership-changing.** Otherwise listeners patch the rows they can see and never refetch the ones they cannot, so totals stay stale while the visible row looks correct. Replacing a reload with a broadcast is only safe once the key is registered.
+28. **A signal converges only what something SUBSCRIBES to.** Registering the action key (law 27) is necessary and not sufficient. `placement_manual_order` is registered membership-changing, the broadcast fires, KPIs and the record VM converge — and the queue rows do not, because the Work Unit surface listens to nothing: `shouldRefetchWorkUnitQueueRowsForEvent` / `shouldRefreshQueueSummariesForEvent` / `shouldPatchWorkUnitQueueRowsForEvent` are exported, documented and unit-tested with **zero production callers**. Before a reload is replaced by a signal, name the subscriber that will do the work the reload did. Corollary: a source-text guard must name a file that exists — the guard for this contract reads a route path deleted in a route move, so it protected nothing.
+29. **A record patch converges the card that owns the record, never the projections that copy its facts.** `dispatchOpportunityDrawerRecordPatch` updates the Focus Panel's record, so a child rename updates the Children card while the Assignments card on the same panel and the queue rows behind it keep the old name — two names for one child on one screen. A fact displayed outside its record's own card needs the queue signal as well, and "until the user refreshes the browser" is not an acceptable contract for it.
+30. **MOUNTED PROJECTION CONVERGENCE.** When canonical truth changes, every currently-mounted projection that displays that truth must either reconcile directly from the authoritative mutation result, or receive a canonical targeted invalidation/event. It may not remain stale until a browser refresh. This does NOT oblige unmounted surfaces to update in realtime — but an unmounted consumer still needs a stated freshness contract for its next use (a cache its mutation invalidates, or a re-read on open). "Until the operator reloads" is not a contract.
+31. **A membership or counted-fact mutation must invalidate BOTH the row/list projection AND every mounted derived count it governs.** They are separate projections with separate owners and must be decided independently — refreshing rows does not refresh totals, and refreshing totals does not refresh rows. The action key must be registered explicitly; never assume "a broadcast went out" means counts moved. Corollary to law 28: the surface that owns the rows and the surface that owns the counts must each have a subscriber, and on a Work Unit route the Workspace's own nonce is not one — it is only mounted on `/workspace`.
+32. **An instrument that cannot observe a mechanism reports its absence.** A probe that taps `window.dispatchEvent` cannot see an in-module pub/sub bus, and duly recorded a working configuration invalidation as "no signal is emitted at all". Before a missing-signal finding is believed, prove the instrument can see a signal of that KIND — the same positive-control discipline guards already owe (§6).
+33. **A publication-versioned object is not a reversible probe target.** Restoring its value APPENDS a revision; it does not remove the one you wrote. A Program renamed and restored during certification left the live label exactly correct and two revisions named `Toddler RCPROBE` in its history, permanently. So the reversible-probe contract has two halves: verify EVERY projection the mutation touched (not the surface you edited — a prior probe restored a child's name in its own card and left the placement projection wrong to this day), and refuse versioned configuration as a probe target up front, because no restore can make it clean.
+34. **ONE CANONICAL HUMAN IDENTITY OWNER (implemented).** For a person-backed child, `persons` owns intrinsic human identity; `customer_members` is the identity fallback only while no Person exists. A participation/member record may carry scoped or compatibility data, but may never become a second independently writable live identity authority. The write already targeted `persons`; what made the member a rival authority was that every READ resolved from it — not by choosing it, but because the person was never loaded. `resolveInquiryChildIdentityFields` was person-first from the start and returns the member mirror when the person is absent, so two separate performance decisions — a persons map built empty, and member-linked persons deferred to a later hydrate pass — silently changed ownership rather than deferring a value. **A name is first-paint content; there is no later in which to render it.** Corollary, and the reason this was invisible for weeks: when every surface reads the same wrong mirror they all agree, so cross-surface consistency is not evidence of correctness — only agreement with the WRITE target is. Guarded by `tests/runtime/childIdentityOwnerContract.test.ts` (10), positive-controlled.
+35. **PLACEMENT CANDIDATE UNIQUENESS.** One semantic candidate key may have only one active canonical candidate. The subject is (org, opportunity, customer_member); a cohort change MOVES that candidate and never mints a rival. A deterministic key is not automatically a STABLE one: `pc_v1_pi:{opp}:{member}:{cohort}` embeds a mutable classification, so every creation path deduping on it alone inserted a second active candidate the moment a cohort key was normalised. Moving rather than re-creating is load-bearing beyond tidiness — `wait_since` and any operator override are keyed to the candidate id, so re-creation silently resets a child's queue time and orphans their pin. Guarded by `tests/runtime/placementCandidateUniquenessContract.test.ts` (7), positive-controlled.
+36. **OPERATOR OVERRIDE HONESTY.** An active operator override the UI exposes must affect canonical runtime behaviour, or the UI must not claim it does. Proven violated for waitlist pins: the override→sort-tuple machinery exists, but the child-grain projection carries no `active_override_kinds`, so the ranking never sees it and the precedence note written to explain a pinned row cannot render either. The operator gets neither the effect nor the explanation.
+37. **DATABASE COUNTING.** An aggregate count must not be derived from a bounded result page when the true universe can exceed that bound. `summarizeOperationalTaskCounts` measured a `limit: 200` list, so `open` silently saturated at 200 and `overdue`/`due_soon` counted only what fitted on that page. A badge is a denominator claim; it has to be counted, not sampled.
+38. **A REPAIR WITH A CONTESTED SURVIVOR RULE MAY NOT RUN IMPLICITLY.** Data repair belongs in an explicit, reviewable, run-once path — never as a side effect of a read. A duplicate repair wired into the Work View read path chose its survivor by the cohort the ENSURE pass derives, while the projection resolves a different normalised cohort; the two disagreed about which candidate was live, so each page load flipped the survivor back and forth on real tenant data. Prevention may be always-on precisely because it cannot oscillate — it only moves a candidate the child already has. Corollary: a repair that can act must also be able to UNDO its own action, or a wrong survivor rule becomes permanent the first time it runs.
+39. **ONE RESOLVER IS NECESSARY, NOT SUFFICIENT — THE INPUTS MUST MATCH TOO.** Two call sites sharing a resolver still disagree when they feed it different facts. The waitlist projection resolves a cohort from the candidate's stored key/label plus OCM context; the ensure path has only process-instance facts, so the same owner returned `infant_0_18_months` for one and `unknown_program_room` for the other. Corollary, and the expensive half: **a migration that changes an identity key changes it for every row at once**, so any write that migration performs BEYOND identity is a mass mutation by definition — here it rewrote 14 of 17 stored cohorts on a single page load and re-sectioned a live waitlist. A key migration must write the key and nothing else. **Implemented:** the duplicate repair now has no default survivor at all — a caller must name the survivor per subject, and a subject without an explicit decision is reported and skipped. An implicit default IS the contested rule.
+40. **EXPLICIT DUPLICATE SURVIVOR.** Duplicate reconciliation requires a named survivor whenever persisted business facts differ or downstream rows reference a candidate. There is no default — not earliest, newest, lowest id, currently active, nor currently projecting — because an implicit default IS the contested rule, and one of them (earliest) already retired the row a live projection was resolving and then flip-flopped. The owner is fail-closed: a subject without an explicit decision is reported and skipped. Proven on Firefly: two uncontested sets reconciled with order, sections and every business fact unchanged, while PassA — whose pin sits on the NON-projecting candidate, whose `wait_since` differs by a day, and whose two candidates hold different cohorts — was refused by the owner itself (`skipped_no_survivor_decision: 1`).
+41. **PIN OWNERSHIP.** A pin/manual-order fact belongs to stable subject/candidate identity and may not disappear during migration or reconciliation. Certified: both Firefly pins survived the identity-key migration, the cohort regression, its restoration, and duplicate reconciliation — identical after fresh load, Work View switch and workspace reopen. Corollary, and the reason reconciliation must be able to refuse: when the loser of a duplicate set holds the pin, the survivor decision is a decision about the OPERATOR'S instruction, not about rows.
+42. **FEDERATED COUNT SEMANTICS — the same field is not the same fact across sources.** A federated queue's metric may only count sources that own the underlying fact authoritatively; the rest contribute UNSUPPORTED, never a plausible-looking number. `due_at` is stored as an operator commitment on `operational_tasks`, but DERIVED by both projections — Communications uses last activity (so every item is overdue on creation) and Processing uses `statusChangedAt + 1 day`. Summing all three produced a unified **Overdue 9** beside an honest KPI **Overdue 1**; the 9 counted a commitment nobody made. Excluding derived due dates from due metrics — not relabelling them — is what makes one label mean one thing.
+43. **CANONICAL LOADER OWNERSHIP.** A reference resource has one loader/freshness owner; mounted consumers may not independently refetch it. Two shapes were measured. Operations' Staff and Children tabs used a raw `fetch`, so each issued its identical URL twice — the loaders around them absorb React's dev double-invoke and these did not, which is the tell that the resource had no owner at all rather than a dev artefact. Communications was worse and not a dev artefact: identical URLs ×3 on open and ×4 on reopen, because several consumers each check the warm cache BEFORE it lands, all miss, and all fetch — a warm short-circuit cannot win a race it does not participate in. The fix in both places adds nothing: use the canonical dedupe owner the file already imports, so the first caller fetches and the rest join the in-flight request. Corollary: dedupe coalesces a RACE, it does not become the freshness owner — a list the surface itself mutates must keep its explicit reload path, because a duplicate request is cheaper than showing an operator their own save missing.
+44. **MUTABLE LIST OWNERSHIP.** A mutable list may use bounded/in-flight dedupe ONLY when every canonical mutation busts that owner before the next read. Templates and announcements were deliberately left raw while no bust seam existed, because a plain TTL would have shown an operator their own save missing; adopting the existing `bustCommunications*FetchDedupe` pattern is what earned the reuse. Corollary, proven by the residual ×2 that consumer-side dedupe could not remove: **the warm cache and its consumers must share one fetch owner.** They were fetching the same six URLs independently — a warm prefetch and a component load, neither aware of the other — and deduping only one side can never collapse two owners. Communications open fell 29 → 15 requests and reopen 27 → 14 once both sides shared it. A forced refresh must bypass the coalescing layer entirely: a force a cache can satisfy is not a force.
+45. **PIN EFFECT — AND WHAT A SILENT NO-OP ACTUALLY LOOKS LIKE.** A persisted pin must participate in ordering or expose the canonical reason a stronger rule wins. Certified working: Wrigley's pin IS spliced into the evaluated sort tuple as a manual precedence (`[label, 1, 50, …]` against `[label, 50, …]`), and it does rank Wrigley first among its own cohort group. It renders at 2/12 rather than 1/12 because tuple element 0 is the cohort LABEL compared as a string, and one row carries the un-normalised `"infant"` which sorts before `"infant — 0–18 months"` — that row being the contested PassA duplicate whose reconciliation is deliberately deferred. So the ordering rule that outranks the pin is legitimate and explainable. What remains genuinely missing is the EXPLANATION: `runtime_position_precedence_note` is gated on shadow mode and never renders, so a row ranked below a pinned row is told nothing.
+46. **OPERATIONS REOPEN — A FRESHNESS CONTRACT IS NOT A CACHE MISS.** Warm operational data survives close/reopen according to explicit TTL ownership, and a refetch inside that contract is correct behaviour rather than a cold reload. Operations runs two deliberate classes: reference reads (sites, bootstrap, assignment types) at 5 minutes, and operating-day reads (roster, assignment roster, adjacent weeks) at 30 seconds, because "a mutation must not wait out 30 s". Measured: first open 7 requests, immediate reopen **0**, second reopen **0**, reopen after the 30 s window 6 — exactly the day class, with the reference read still reused. The earlier "reopen refetches 6/7" was a MEASUREMENT ARTEFACT: the probe ran ~56 s of intermediate steps before reopening and outlived the TTL it was testing. **A reopen benchmark must be timed against the freshness contract it is measuring, or it measures the clock.**
 
 ## 5. Invariant → guard matrix — SUPERSEDED BY §17
 
@@ -351,7 +404,7 @@ measured value, so the gap is explicit rather than implied by silence.
 | Command destination commit | T2 | < 200 ms | not yet measured | **owed** |
 | `/organization` warm navigation | T2 | < 300 ms | not yet measured | **owed** |
 | Prepared path | cumulative layout shift | **0** | 0 | **met** |
-| True cold / direct entry | T3 Work Unit | (no budget — see §1) | 11,708 ms | accepted class |
+| True cold / direct entry | T3 Work Unit | (no budget — see §1) | **839–2,527 ms** (median ~1.0 s) | **remeasured (R2); 11,708 ms disproved** |
 
 **Budgets are per performance class.** A cold-start number and a prepared-journey number are not
 comparable and must never be averaged into one figure; §1 exists because conflating them is how a
@@ -695,7 +748,9 @@ silently stopped working entirely could not pass.
 - **Vacilando** — ABANDONED execution-run checkpoint transition.
 
 ### TRUE-COLD TECHNICAL DEBT
-- Work Unit bare cold path: 11,708 ms (accepted class; see §1).
+- ~~Work Unit bare cold path: 11,708 ms~~ — **DISPROVED by R2 (§1).** Remeasured on a production
+  build at `0b51beb4d`: T3 median ~1.0 s, T4 median ~3.4 s, over six fresh-process samples. The old
+  figure is a dev-compilation and host-load artifact. No cold-path optimisation is owed.
 - `/organization` first entry to a route family: 1,486–2,594 ms. **Nav-intent prefetch measurably
   does not help** — do not "fix" it with one.
 
@@ -726,3 +781,66 @@ most flattering window.
 
 The 11 console errors observed during the smoke are the known speculative drawer-VM prefetch 404
 (§18, OPEN PLATFORM DEFECT) — unchanged by this promotion.
+
+
+---
+
+## 20. Unexpected page refresh — first wave
+
+**The report was "the app sometimes appears to randomly refresh".** Visual behaviour cannot separate a
+document reload from an RSC route refresh from a subtree remount, and those have different owners, so
+the symptom was classified before anything was changed (`scripts/rcRefreshDetector.mjs`, which
+appends every event to `sessionStorage` — an in-memory log dies with the document, which is exactly
+the evidence that matters).
+
+### What the detector proved
+
+Over canonical journeys plus idle dwell on a production build:
+
+| signal | count | reading |
+|---|---|---|
+| `DOCUMENT_REPLACED` | 3 | all three are the harness's own `goto`s |
+| RSC requests (`_rsc=`) | **0** | no `router.refresh()` fired |
+| `LOCATION_RELOAD_CALLED` | **0** | nothing reloaded the document |
+| page crashes | 0 | |
+
+**The refresh is NOT an idle or background phenomenon.** Passive operation does not refresh. It is
+**mutation-triggered**, which is why it appears random: it depends on what the operator did and from
+which surface.
+
+### Owners found and fixed
+
+1. **Both operator command rails omitted `invalidate`.** `applyRegistryResolvedActionClient`
+   documents `router.refresh()` as legacy behaviour for hosts that supply none. The record header
+   supplies one; `WorkspaceRightRailActions` and `WorkUnitRightRailActions` did not — so the SAME
+   command converged surgically from the header and re-rendered the whole route from a rail. Both now
+   use the canonical owners: the targeted scoped update when a record is selected (there is a row for
+   listeners to match), the surface-neutral broadcast when there is not.
+
+2. **`WaitlistPlacementAdjustControl` reloaded the DOCUMENT — sometimes.** Both fallbacks called
+   `window.location.reload()`, and whether they fired depended on whether attention happened to carry
+   a lens. That state-dependence is the whole explanation for "random". The reload was doing real
+   work (it guaranteed the operator saw the new order), so it was replaced by a signal carrying the
+   same guarantee — `placement_manual_order` is already registered as membership-changing, so
+   listeners refetch rows AND counts (law 27).
+
+Auth-transition refreshes (sign-out, idle logout, login) are deliberately untouched: they navigate to
+`/login` and are not a data-freshness mechanism.
+
+### Honest limit on this evidence
+
+**The rail path could not be exercised live on this tenant.** Both command rails render ZERO actions
+on the certification tenant at this route, so there is no before/after measurement of a rail command
+here — the defect and the fix are established by the code path (a host without `invalidate` reaches
+`else host.router.refresh()`) and frozen by guard, not by a live A/B. Stated rather than implied.
+
+Guards: `tests/runtime/noUnexplainedPageRefreshContract.test.ts` (5), including a positive control
+that the legacy fallback still exists (so the guard protects something) and one proving the
+comment-stripper cannot hide a real reload.
+
+### Still open in this area
+
+- `LifecycleActivationBoard.reloadConfiguration` (Organization) calls `window.location.reload()` as
+  an explicit stale-draft recovery. Operator-initiated rather than random, so it is Priority 6
+  ("convergence after save") rather than Priority 1.
+- `/legacy-admin/*` reloads are out of the canonical operator contract and were not touched.

@@ -20,16 +20,15 @@ import {
     SEND_TOUR_INVITATION_OPERATOR_MESSAGE,
     sendTourInvitation,
 } from "@/lib/tours/invitation/sendTourInvitation";
+import {
+    PUBLIC_ORIGIN_OPERATOR_MESSAGE,
+    resolvePublicAppOrigin,
+} from "@/lib/publicAppUrl";
 
 export const SEND_TOUR_INVITATION_ACTION_KEY = "send_tour_invitation";
 
 function trimmed(v: unknown): string {
     return v != null ? String(v).trim() : "";
-}
-
-function resolveBaseUrl(): string {
-    const raw = trimmed(process.env.NEXT_PUBLIC_APP_URL);
-    return raw ? raw.replace(/\/+$/, "") : "";
 }
 
 export const sendTourInvitationAction: RegisteredAction = {
@@ -81,15 +80,20 @@ export const sendTourInvitationAction: RegisteredAction = {
 
     async execute({ supabase, ctx, invocation, payload }): Promise<ActionResult> {
         const correlationId = randomUUID();
-        const baseUrl = resolveBaseUrl();
-        if (!baseUrl) {
+        // The origin comes from the ONE canonical authority, not from this action's own
+        // reading of an env var, and not from the request. A booking link is delivered to
+        // a family who is not holding the operator's browser — so it must not be a
+        // function of which host that browser happened to reach.
+        const origin = resolvePublicAppOrigin();
+        if (!origin.ok) {
             return {
                 ok: false,
                 correlationId,
                 status: 500,
-                error: "Tour invitations cannot be sent until the public site address is configured.",
+                error: PUBLIC_ORIGIN_OPERATOR_MESSAGE[origin.code],
             };
         }
+        const baseUrl = origin.origin;
 
         const src = (payload ?? {}) as Record<string, unknown>;
         // Default prepare: operator compose must confirm before enqueue. Explicit mode:"send"

@@ -709,7 +709,7 @@ export default function MyTasksPanel({
         return <p className="text-sm text-alloy-midnight/70">Operational work is not enabled.</p>;
     }
 
-    const activeViewLabel = WORK_ITEM_VIEW_DEFS.find((f) => f.key === scope.view)?.label ?? "Mine";
+    const activeViewLabel = WORK_ITEM_VIEW_DEFS.find((f) => f.key === scope.view)?.label ?? "Assigned to me";
     const selectedTask = visibleTasks.find((t) => t.id === selectedTaskId) ?? null;
 
     const renderTaskCard = (t: MyTasksTaskRow) => {

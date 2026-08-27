@@ -80,7 +80,11 @@ export function mapProcessInstanceToTrackRow(
 
 const OPP_SELECT =
     "id, name, title, status_key, stage_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at";
-const CM_SELECT = "id, display_name, first_name, last_name, dob, person_id, relationship, is_active";
+// `persons` is embedded because it OWNS a person-backed child's identity (law 34). Without it the
+// queue row title falls back to the `customer_members` mirror and can disagree with every other
+// surface about the same child's name.
+const CM_SELECT =
+    "id, display_name, first_name, last_name, dob, person_id, relationship, is_active, persons(first_name, last_name, full_name, date_of_birth)";
 const PI_SELECT =
     "id, org_id, process_key, subject_type, subject_id, context_id, stage_key, state, close_reason_key, metadata, updated_at, created_at";
 

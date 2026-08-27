@@ -10,8 +10,11 @@ import { homedir } from "node:os";
 import { basename, join } from "node:path";
 
 import { gitFactsForPath, readAllMetadata, resolveRuntimeConfig, TOOLKIT_DIR } from "./workspace-facts.mjs";
-import { isRuntimeAdoptionBlocked } from "./development-lane.mjs";
+import { isRuntimeAdoptionBlocked, listDurableLanes } from "./development-lane.mjs";
+import { localNodeId } from "./execution-node.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 import {
+  inferAgentPresence,
   inferClaudePresence,
   isAllowlistedSession,
   listTmuxPanesRaw,
@@ -36,6 +39,7 @@ export function parseCandidateId(id) {
 function suggestedName(worktreeName, sprint) {
   const n = String(worktreeName || "").replace(/^wt\d+-/, "").replace(/-/g, " ");
   if (/communications/i.test(n)) return "Communications";
+  if (/enrollment/i.test(n)) return "Enrollment";
   if (/records|roster/i.test(n)) return "Records / Roster";
   if (/identity|access/i.test(n)) return "Access & Identity";
   if (sprint && !/v2|phase|t00/i.test(sprint)) {
@@ -152,7 +156,72 @@ export function sprintSlugFromLaneName(name, laneId) {
 }
 
 /** Alloy answers: can this queued lane safely be provisioned now? */
-export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
+/**
+ * Which worktrees are currently running an agent, from live evidence.
+ *
+ * `providerPanes` is a list of {cwd, command, title, dead} — the same pane facts
+ * lane discovery already reads. A worktree counts as running an agent only when
+ * a live pane sits inside it AND that pane looks like an agent.
+ */
+/**
+ * How many FIXED placement slots exist. These map to the permanent ports
+ * (3011–3016) and the legacy `alloy-sprint-*` commands. A lane or worktree
+ * without a slot is entirely valid — most of them have none.
+ */
+export const FIXED_SLOT_RANGE = 6;
+
+/**
+ * A tmux session name tmux will actually accept, matching the allowlist
+ * discovery uses (`^alloy-[a-z0-9]+(-[a-z0-9]+)*$`). Anything the source name
+ * contributes that is not a lowercase alphanumeric becomes a separator, and
+ * empty results yield null rather than a session that can never be found.
+ */
+export function tmuxSessionNameFor(worktreeName) {
+  const base = String(worktreeName || "")
+    .replace(/^wt\d+-/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/g, "");
+  return base ? `alloy-${base}` : null;
+}
+
+export function agentBearingWorktreePaths(providerPanes = []) {
+  const paths = new Set();
+  for (const pane of providerPanes || []) {
+    if (!pane || pane.dead) continue;
+    const cwd = String(pane.cwd || "").replace(/\/+$/, "");
+    if (!cwd) continue;
+    const cmd = String(pane.command || "");
+    const title = String(pane.title || "");
+    // Same contract lane presence uses: a named agent, or the TUI reporting its
+    // own semver as the process name. A shell or a node script is NOT an agent.
+    const isAgent = /claude|cursor[- ]?agent/i.test(cmd)
+      || /claude|cursor[- ]?agent/i.test(title)
+      || /^\d+\.\d+\.\d+$/.test(cmd);
+    if (isAgent) paths.add(cwd);
+  }
+  return paths;
+}
+
+/**
+ * Host capacity for starting another agent.
+ *
+ * WHY THIS COUNTS PANES. It used to count METADATA: every worktree whose
+ * `lifecycle` was not "finished" was treated as running an agent, and a worktree
+ * whose `agent_status` was EMPTY counted as active too. Measured on this host,
+ * that reported 5 active providers against a cap of 3 while only ONE of those
+ * five worktrees had a live agent in it — three sprints had ended without their
+ * metadata being marked finished, and a fourth had never recorded a status. New
+ * lanes were refused for capacity that nothing was using.
+ *
+ * A slot is a place to work; a provider is a running process. Only the second
+ * is scarce, so only the second is counted — and it is counted from live panes,
+ * which cannot go stale. Metadata is still the fallback when pane facts are not
+ * available, but "unknown status" no longer means "active".
+ */
+export function assessProvisionCapacity({ cfg = null, metadata = null, providerPanes = null } = {}) {
   const runtime = cfg || resolveRuntimeConfig();
   const meta = metadata || readAllMetadata(runtime);
   const occupied = meta.filter((m) => {
@@ -161,24 +230,62 @@ export function assessProvisionCapacity({ cfg = null, metadata = null } = {}) {
     if (String(m.lifecycle || "").toLowerCase() === "finished") return false;
     return Boolean(m.path && existsSync(m.path));
   });
-  const freeSlots = Math.max(0, 6 - occupied.length);
+  // Slots are a PLACEMENT identifier — for governed fixed ports and the legacy
+  // sprint commands — not the upper bound on durable work. Six slots never
+  // meant six workspaces, and `no_free_slot` was refusing new lanes on that
+  // reading. Free slots are still reported (a fixed-port task needs one) but
+  // running out of them no longer blocks admission: see FIXED_SLOT_RANGE.
+  const freeSlots = Math.max(0, FIXED_SLOT_RANGE - occupied.length);
   const maxProviders = Number(process.env.ALLOY_MAX_ACTIVE_PROVIDERS || 3);
-  const activeProviders = occupied.filter((m) => {
-    const st = String(m.agent_status || "").toLowerCase();
-    return st === "active" || st === "open" || st === "";
-  }).length;
+
+  let activeProviders;
+  let holders;
+  let countedFrom;
+  if (Array.isArray(providerPanes)) {
+    // Live truth: every agent-bearing pane on the host, whether or not a slot
+    // record exists for it. Two of this host's busiest worktrees have no
+    // metadata file at all, so a metadata-only count under-counts them exactly
+    // as badly as it over-counts the dormant ones.
+    const live = agentBearingWorktreePaths(providerPanes);
+    activeProviders = live.size;
+    holders = [...live].map((path) => {
+      const m = occupied.find((x) => String(x.path || "").replace(/\/+$/, "") === path);
+      return { path, name: m?.name || path.split("/").pop() || null, slot: m?.slot ?? null };
+    });
+    countedFrom = "live_panes";
+  } else {
+    activeProviders = occupied.filter((m) => {
+      const st = String(m.agent_status || "").toLowerCase();
+      // An empty status is UNKNOWN, not running. Treating it as active is what
+      // let a dormant worktree hold a provider slot indefinitely.
+      return st === "active" || st === "open";
+    }).length;
+    holders = occupied
+      .filter((m) => ["active", "open"].includes(String(m.agent_status || "").toLowerCase()))
+      .map((m) => ({ path: m.path, name: m.name || null, slot: m.slot ?? null }));
+    countedFrom = "metadata";
+  }
+
   const blockers = [];
-  if (freeSlots <= 0) blockers.push("no_free_slot");
+  // A full slot table means no more FIXED-PORT placements are available. It
+  // does not mean the machine cannot hold another lane, another worktree, or
+  // another agent, so it is reported and no longer blocks.
   if (activeProviders >= maxProviders) blockers.push("provider_capacity");
   return {
     ok: blockers.length === 0,
     available: blockers.length === 0,
     free_slots: freeSlots,
     occupied_slots: occupied.length,
+    // Reported so a fixed-port task can see it; never a concurrency ceiling.
+    fixed_slot_range: FIXED_SLOT_RANGE,
+    fixed_slots_exhausted: freeSlots <= 0,
     active_providers: activeProviders,
     max_providers: maxProviders,
+    // Who is actually holding the capacity, so a refusal can name them.
+    provider_holders: holders,
+    counted_from: countedFrom,
     blockers,
-    execution_node: "local",
+    execution_node: localNodeId(),
   };
 }
 
@@ -207,8 +314,9 @@ export async function provisionLaneBinding({ lane, run } = {}) {
   if (!realProvisionAllowed()) {
     return { ok: false, error: "provision_adapter_disabled", skip_queue: true };
   }
+  const provider = normalizeExecutionProvider(lane?.binding?.provider, "claude") || "claude";
   const name = sprintSlugFromLaneName(lane?.name, lane?.lane_id);
-  const args = [name, "--provider", "claude", "--slot", "auto", "--without-server"];
+  const args = [name, "--provider", provider, "--slot", "auto", "--without-server"];
   if (run?.instruction || run?.run_id) {
     args.push("--objective", String(lane?.name || name));
   }
@@ -217,9 +325,15 @@ export async function provisionLaneBinding({ lane, run } = {}) {
     return { ok: false, error: out.stderr?.slice(0, 400) || out.error || "sprint_start_failed", created: null };
   }
   const slot = Number((out.stdout.match(/slot:\s+(\d+)/i) || [])[1]);
-  const worktree = (out.stdout.match(/worktree:\s+(\S+)/i) || [])[1] || null;
   const path = (out.stdout.match(/path:\s+(\S+)/i) || [])[1] || null;
   const branch = (out.stdout.match(/Branch:\s+(\S+)/i) || [])[1] || null;
+  // The PATH is authoritative for the name. Scraping a "worktree:" line off the
+  // toolkit's output produced the literal token "name:" on this host, which then
+  // became the tmux session "alloy-name:" — a name tmux cannot have, so the
+  // provider could never start in the lane that was just provisioned for it.
+  const scraped = (out.stdout.match(/worktree:\s+(\S+)/i) || [])[1] || null;
+  const worktree = (path ? basename(path) : null)
+    || (scraped && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(scraped) ? scraped : null);
   return {
     ok: true,
     created: {
@@ -235,9 +349,9 @@ export async function provisionLaneBinding({ lane, run } = {}) {
       worktree_path: path,
       worktree_name: worktree,
       branch,
-      tmux_session: worktree ? `alloy-${String(worktree).replace(/^wt\d+-/, "").slice(0, 40)}` : null,
+      tmux_session: tmuxSessionNameFor(worktree),
       slot: Number.isInteger(slot) ? slot : null,
-      provider: "claude",
+      provider,
     },
   };
 }
@@ -257,27 +371,51 @@ export async function inspectWorktreeGit(worktreePath) {
   };
 }
 
-export async function commitWorktreeCheckpoint({ path, message } = {}) {
+/**
+ * Commit an EXPLICIT list of paths. Never a broad add.
+ *
+ * THIS FUNCTION CAUSED THE 67-FILE INCIDENT. It ran `git add -A` in the lane
+ * worktree and committed whatever that produced, with a status summary as the
+ * message. `git add -A` cannot express "the files this run touched" — it means
+ * every dirty file in the repository, always — so a checkpoint triggered by a
+ * status report took unrelated work with it.
+ *
+ * A manifest is now REQUIRED and there is no path back to the old behaviour: no
+ * flag re-enables it, and an empty manifest is refused rather than treated as
+ * "everything". Callers that cannot name their paths cannot commit.
+ */
+export async function commitWorktreeCheckpoint({ path, message, paths = null } = {}) {
   const cwd = String(path || "");
   if (!cwd || cwd.includes("..") || /[;|&]/.test(cwd)) return { ok: false, error: "path_refused" };
-  const add = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "add", "-A"], { timeout: 15000 }, (err, stdout, stderr) => {
+
+  const manifest = Array.isArray(paths) ? paths.map(String).filter(Boolean) : [];
+  if (!manifest.length) {
+    // Fail closed. The absence of a manifest is the absence of authorization,
+    // never an instruction to commit the whole worktree.
+    return { ok: false, error: "checkpoint_requires_manifest" };
+  }
+  for (const rel of manifest) {
+    if (rel.startsWith("/") || rel.includes("..") || /[;|&]/.test(rel)) {
+      return { ok: false, error: "manifest_path_refused", path: rel.slice(0, 120) };
+    }
+  }
+
+  const run = (args, timeout) => new Promise((resolve) => {
+    execFile("git", ["-C", cwd, ...args], { timeout }, (err, stdout, stderr) => {
       resolve({ ok: !err, stdout, stderr, error: err ? String(err.message || err) : null });
     });
   });
+
+  // Stage exactly the manifest. `--` keeps a path that looks like an option
+  // from being read as one.
+  const add = await run(["add", "--", ...manifest], 15000);
   if (!add.ok) return { ok: false, error: add.error || "git_add_failed" };
-  const commit = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "commit", "-m", String(message)], { timeout: 20000 }, (err, stdout, stderr) => {
-      resolve({ ok: !err, stdout, stderr, error: err ? String(err.message || err) : null });
-    });
-  });
+
+  const commit = await run(["commit", "-m", String(message), "--", ...manifest], 20000);
   if (!commit.ok) return { ok: false, error: commit.stderr?.slice(0, 240) || commit.error || "commit_failed" };
-  const sha = await new Promise((resolve) => {
-    execFile("git", ["-C", cwd, "rev-parse", "HEAD"], { timeout: 8000 }, (err, stdout) => {
-      resolve(err ? null : String(stdout || "").trim());
-    });
-  });
-  return { ok: true, sha, pushed: false };
+
+  const sha = await run(["rev-parse", "HEAD"], 8000);
+  return { ok: true, sha: sha.ok ? String(sha.stdout || "").trim() : null, pushed: false, paths: manifest };
 }
 
 export async function syncWorktreeFromBase({ worktreeName } = {}) {
@@ -306,6 +444,36 @@ function resolveClaudeBin() {
     if (existsSync(p)) return p;
   }
   return "claude";
+}
+
+function resolveCursorBin() {
+  const home = process.env.HOME || homedir();
+  for (const p of [join(home, ".local/bin/cursor-agent"), "/usr/local/bin/cursor-agent", "/opt/homebrew/bin/cursor-agent"]) {
+    if (existsSync(p)) return p;
+  }
+  return "cursor-agent";
+}
+
+/**
+ * Interactive TUI argv only — never `-p` / print mode. Cursor does not take
+ * Claude's `--session-id` on a fresh start.
+ */
+export function providerSpawnArgv(provider, providerSessionId = null) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
+  if (wanted === "cursor") return [resolveCursorBin()];
+  const argv = [resolveClaudeBin()];
+  if (providerSessionId) argv.push("--session-id", String(providerSessionId));
+  return argv;
+}
+
+function paneHasWantedProvider(pane, provider) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
+  const cmd = String(pane?.command || "");
+  const title = String(pane?.title || "");
+  if (wanted === "cursor") {
+    return /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title);
+  }
+  return inferClaudePresence(pane) === "present";
 }
 
 let tmuxRunImpl = null;
@@ -379,18 +547,39 @@ function sleep(ms) {
 
 /** Wait until the interactive Claude TUI can accept a pasted instruction. */
 export async function waitForClaudePrompt(session, { timeoutMs = 20000, intervalMs = 400 } = {}) {
+  return waitForProviderPrompt(session, { provider: "claude", timeoutMs, intervalMs });
+}
+
+async function waitForProviderPrompt(session, { provider = "claude", timeoutMs = 20000, intervalMs = 400 } = {}) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const pane = sessionPane(session);
     const cap = runTmuxSync(["capture-pane", "-p", "-t", pane?.pane_id || `${session}:0.0`]);
     const text = String(cap.stdout || "");
-    const present = inferClaudePresence({ command: pane?.command, title: "" }) === "present";
-    if (present && /[❯›]/.test(text)) {
+    const present = paneHasWantedProvider({ command: pane?.command, title: "" }, wanted)
+      || inferAgentPresence({ command: pane?.command, title: "" }, { provider: wanted }) === "present";
+    if (wanted === "cursor") {
+      if (present) return { ok: true, waited_ms: Date.now() - started };
+    } else if (present && /[❯›]/.test(text)) {
       return { ok: true, waited_ms: Date.now() - started };
     }
     await sleep(intervalMs);
   }
-  return { ok: false, error: "claude_prompt_timeout", waited_ms: Date.now() - started };
+  return {
+    ok: false,
+    error: wanted === "cursor" ? "cursor_prompt_timeout" : "claude_prompt_timeout",
+    waited_ms: Date.now() - started,
+  };
+}
+
+function paneLooksLikeLiveAgent(p) {
+  if (!isAllowlistedSession(p.session)) return false;
+  const cmd = String(p.command || "");
+  const title = String(p.title || "");
+  if (inferClaudePresence(p) === "present") return true;
+  if (/cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) return true;
+  return false;
 }
 
 async function liveClaudePanes() {
@@ -400,31 +589,114 @@ async function liveClaudePanes() {
   return panes.filter((p) => isAllowlistedSession(p.session) && inferClaudePresence(p) === "present");
 }
 
+async function liveAgentPanes() {
+  if (listPanesImpl) {
+    const injected = await listPanesImpl();
+    return Array.isArray(injected) ? injected.filter(paneLooksLikeLiveAgent) : [];
+  }
+  const raw = await listTmuxPanesRaw();
+  const panes = parseTmuxPaneLines(raw?.stdout || "");
+  return panes.filter(paneLooksLikeLiveAgent);
+}
+
+function laneForClaudePane(pane, lanes) {
+  const session = pane?.session || null;
+  const cwd = pane?.cwd || null;
+  return (lanes || []).find((l) =>
+    (session && l.binding?.tmux_session === session)
+    || (cwd && l.binding?.worktree_path === cwd)
+  ) || null;
+}
+
+/**
+ * A live Claude pane occupies session-start capacity unless it belongs to a
+ * Cursor lane or a leftover finished session (work COMPLETE, no current run).
+ */
+export function claudePaneOccupiesCapacity(pane, lanes, root, {
+  activeRunForLane,
+  isTerminalRunState,
+  listExecutionRunsForLane,
+} = {}) {
+  const hit = laneForClaudePane(pane, lanes);
+  if (!hit) return true;
+  if (normalizeExecutionProvider(hit.binding?.provider, "claude") === "cursor") return false;
+  const run = activeRunForLane ? activeRunForLane(hit.lane_id, root) : null;
+  if (run && run.state !== "QUEUED") return true;
+  const prev = listExecutionRunsForLane
+    ? listExecutionRunsForLane(hit.lane_id, root).filter((r) => isTerminalRunState(r.state)).at(-1)
+    : null;
+  if (!run && prev?.state === "COMPLETE") return false;
+  return true;
+}
+
 /**
  * Capacity to start a provider on an *existing* binding. Does not require a
  * free sprint slot — the worktree already occupies one.
  */
-export async function assessSessionStartCapacity({ maxProviders = null } = {}) {
-  const max = Number(maxProviders ?? process.env.ALLOY_MAX_ACTIVE_PROVIDERS ?? 3);
-  const live = await liveClaudePanes();
-  const active = live.length;
-  const blockers = [];
-  if (!(max > 0)) blockers.push("provider_capacity");
-  if (active >= max) blockers.push("provider_capacity");
+/**
+ * Capacity for starting one more provider.
+ *
+ * Delegates to the canonical owner (provider-capacity.mjs) so the whole system
+ * agrees on one number. This used to carry its own pane predicate — a third
+ * counter alongside the lane-posture count and the metadata count — which could
+ * disagree with the one that governs admission and knew nothing about suspended
+ * providers.
+ */
+export async function assessSessionStartCapacity({ maxProviders = null, root = null } = {}) {
+  const runtime = root || process.env.ALLOY_RUNTIME_ROOT?.trim() || undefined;
+  const { assessProviderCapacity, configuredProviderCeiling } = await import("./provider-capacity.mjs");
+  const { suspendedLaneIds } = await import("./provider-suspension.mjs");
+  const { listCurrentAgentSessions } = await import("./agent-session.mjs");
+  const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+
+  const ceiling = Number(maxProviders ?? configuredProviderCeiling());
+  // Honour the adapter's own pane seam first: tests inject panes through it,
+  // and bypassing it made this function read the live machine from a test.
+  let panes = null;
+  try {
+    const injected = listPanesImpl ? await listPanesImpl() : null;
+    if (Array.isArray(injected)) panes = injected;
+  } catch { panes = null; }
+  if (!panes) {
+    try {
+      const raw = await listTmuxPanesRaw();
+      if (raw?.ok) panes = parseTmuxPaneLines(raw.stdout);
+    } catch { panes = null; }
+  }
+  const lanes = listDurableLanes(runtime);
+  const sessions = listCurrentAgentSessions(runtime);
+  const { activeRunForLane } = await import("./execution-run.mjs");
+  const cap = assessProviderCapacity({
+    panes,
+    lanes,
+    sessions,
+    ceiling,
+    // Durable lane records hold no run projection; resolve it from the run
+    // store so an attributed process is judged on what it is actually doing.
+    runStateFor: (laneId) => {
+      try { return activeRunForLane(laneId, runtime)?.state || null; } catch { return null; }
+    },
+    suspendedLaneIds: suspendedLaneIds(lanes.map((l) => ({
+      ...l,
+      agent_session: sessions.find((s) => s.lane_id === l.lane_id) || null,
+    }))),
+  });
   return {
-    ok: blockers.length === 0,
-    available: blockers.length === 0,
-    active_providers: active,
-    max_providers: max,
-    blockers,
+    ok: cap.ok,
+    available: cap.ok,
+    active_providers: cap.active,
+    max_providers: cap.ceiling,
+    blockers: cap.blockers,
+    degraded: cap.degraded,
     kind: "session_start",
+    occupying: (cap.holders || []).map((h) => ({ session: h.tmux_session || null, cwd: h.worktree_path || null, lane_id: h.lane_id })),
   };
 }
 
 /**
  * Create the missing persistent tmux runtime for an already-bound worktree.
  * Does not create a worktree, branch, or slot. Does not mutate Git.
- * Starts one interactive Claude in the pane (never `claude -p`).
+ * Starts one interactive provider in the pane (never `claude -p` / `cursor-agent -p`).
  */
 export async function startPersistentAgentSession({
   worktreePath,
@@ -434,10 +706,15 @@ export async function startPersistentAgentSession({
   expectedBranch = null,
   providerSessionId = null,
   runtimeRoot = null,
+  expectedRepositoryId = null,
+  provider = "claude",
 } = {}) {
+  const wanted = normalizeExecutionProvider(provider, "claude") || "claude";
   if (sessionStartImpl) {
     return sessionStartImpl({
       worktreePath, worktreeName, laneName, existingTmuxSession, expectedBranch, providerSessionId, runtimeRoot,
+      expectedRepositoryId,
+      provider: wanted,
     });
   }
   const cwd = String(worktreePath || "");
@@ -445,9 +722,29 @@ export async function startPersistentAgentSession({
     return { ok: false, error: "path_refused" };
   }
   const cfg = resolveRuntimeConfig();
-  const root = String(cfg.worktree_root || join(homedir(), "Code", "alloy-worktrees")).replace(/\/+$/, "");
-  if (!(cwd === root || cwd.startsWith(`${root}/`))) {
-    return { ok: false, error: "worktree_not_managed" };
+  // THE MULTI-REPOSITORY CHOKEPOINT.
+  //
+  // This used to compare cwd against one constant — Alloy's worktree root — so
+  // every provider in Vacilando could only ever start inside Alloy. The
+  // containment property is unchanged: a provider still cannot start in an
+  // arbitrary directory. What changed is the definition of "managed": it now
+  // means "inside a repository the operator registered", and the registry is
+  // the authority rather than a hard-coded path.
+  const { managedWorktreePath } = await import("./repository-registry.mjs");
+  const managed = managedWorktreePath(cwd);
+  if (!managed.ok) {
+    return { ok: false, error: "worktree_not_managed", path: cwd };
+  }
+  // If the caller named a repository, the path must actually belong to it. A
+  // stale lane binding must never be able to start a provider in a different
+  // repository than the one the run believes it is in.
+  if (expectedRepositoryId && managed.repository_id !== expectedRepositoryId) {
+    return {
+      ok: false,
+      error: "repository_mismatch",
+      expected: expectedRepositoryId,
+      actual: managed.repository_id,
+    };
   }
   if (!existsSync(cwd)) return { ok: false, error: "worktree_missing" };
   if (isRuntimeAdoptionBlocked({ worktree_path: cwd, worktree_name: worktreeName })) {
@@ -469,13 +766,26 @@ export async function startPersistentAgentSession({
     if (!session) return { ok: false, error: "invalid_tmux_name" };
   }
 
-  const live = await liveClaudePanes();
+  const live = await liveAgentPanes();
   const other = live.find((p) => p.cwd === cwd || p.cwd?.startsWith(`${cwd}/`));
   if (other && other.session !== session) {
     return { ok: false, error: "provider_already_running", tmux_session: other.session };
   }
 
   let createdTmux = false;
+  if (sessionExists(session)) {
+    const pane = sessionPane(session);
+    if (pane?.cwd && pane.cwd !== cwd && pane.cwd !== `${cwd}`) {
+      if (existingTmuxSession) {
+        return { ok: false, error: "tmux_cwd_mismatch", tmux_session: session, cwd: pane.cwd };
+      }
+      const fallback = tmuxSessionNameForLane(null, worktreeName);
+      if (!fallback || fallback === session) {
+        return { ok: false, error: "tmux_cwd_mismatch", tmux_session: session, cwd: pane.cwd };
+      }
+      session = fallback;
+    }
+  }
   if (sessionExists(session)) {
     const pane = sessionPane(session);
     if (pane?.cwd && pane.cwd !== cwd && pane.cwd !== `${cwd}`) {
@@ -507,12 +817,10 @@ export async function startPersistentAgentSession({
     return { ok: false, error: "tmux_cwd_mismatch", cwd: pane.cwd };
   }
 
-  const claudePresent = inferClaudePresence({ command: pane.command, title: "" }) === "present";
+  const alreadyWanted = paneHasWantedProvider(pane, wanted);
   let startedProvider = false;
-  if (!claudePresent) {
-    const claude = resolveClaudeBin();
-    const argv = [claude];
-    if (providerSessionId) argv.push("--session-id", String(providerSessionId));
+  if (!alreadyWanted) {
+    const argv = providerSpawnArgv(wanted, wanted === "claude" ? providerSessionId : null);
     const spawn = runTmuxSync([
       "respawn-pane", "-k", "-c", cwd, "-t", pane.pane_id, "--",
       ...argv,
@@ -525,13 +833,14 @@ export async function startPersistentAgentSession({
         detail: spawn.stderr || spawn.error,
         rolled_back: createdTmux,
         created: { tmux: createdTmux, provider: false },
+        provider: wanted,
       };
     }
     startedProvider = true;
   }
 
   if (startedProvider) {
-    await waitForClaudePrompt(session);
+    await waitForProviderPrompt(session, { provider: wanted });
   }
 
   const after = sessionPane(session);
@@ -540,6 +849,7 @@ export async function startPersistentAgentSession({
     tmux_session: session,
     pane_id: after?.pane_id || pane.pane_id,
     cwd,
+    provider: wanted,
     created: { tmux: createdTmux, provider: startedProvider },
     adopted: !createdTmux && !startedProvider,
     pre_existing: createdTmux ? [] : ["tmux"],

@@ -3,5 +3,10 @@
 # Dependencies — directory OR symlink (see root .gitignore for why both forms).
 node_modules
 node_modules/
+
+# R11 measurement working state (raw subject ids — never committed)
+.r11-out/
+
+# Certification probe scratch + Playwright report output.
 .certrun/
 playwright-report/

@@ -42,6 +42,11 @@ import {
   mergePullRequest,
   publicMergeResult,
 } from "./trusted-host-merge.mjs";
+import { executeRestoreQaSessionSync } from "./qa-session-restore-action.mjs";
+import { executeProvisionQaIdentitySync } from "./qa-identity-provision-action.mjs";
+import { executeAssignQaAccessSync } from "./qa-access-assign-action.mjs";
+import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
+import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -54,12 +59,24 @@ import { attachEvidence } from "./evidence.mjs";
 
 const RUNTIME_ROOT = process.env.ALLOY_RUNTIME_ROOT?.trim()
   || join(os.homedir(), ".local", "state", "alloy-dev");
-const STORE_DIR = join(RUNTIME_ROOT, "vacilando", "trusted-host-actions");
+
+/*
+ * Resolved per call, not frozen at import.
+ *
+ * A diagnostic reproduction wrote a placeholder-owned action into the SHARED store because the path
+ * was captured when the module loaded, so pointing `ALLOY_RUNTIME_ROOT` at a temp directory
+ * afterwards had no effect. Resolving on each access makes isolation actually work: a test sets the
+ * variable and its writes land in its own directory, and can never contaminate the production store.
+ */
+function storeDir() {
+  const root = process.env.ALLOY_RUNTIME_ROOT?.trim() || RUNTIME_ROOT;
+  return join(root, "vacilando", "trusted-host-actions");
+}
 const HERE = dirname(fileURLToPath(import.meta.url));
 const RUN_SQL_SH = join(HERE, "trusted-host-run-sql.sh");
 const iso = (ms) => new Date(ms ?? Date.now()).toISOString();
 
-function ensureDir(p = STORE_DIR) {
+function ensureDir(p = storeDir()) {
   mkdirSync(p, { recursive: true });
 }
 
@@ -125,11 +142,11 @@ export function parseTrustedHostSqlOutput(outText) {
 }
 
 function storePath(actionId) {
-  return join(STORE_DIR, `${actionId}.json`);
+  return join(storeDir(), `${actionId}.json`);
 }
 
 function indexPath(missionId) {
-  return join(STORE_DIR, `index_${missionId}.json`);
+  return join(storeDir(), `index_${missionId}.json`);
 }
 
 function readAction(actionId) {
@@ -195,6 +212,35 @@ function buildAudit(action, extra = {}) {
   };
 }
 
+/**
+ * May an existing action be reused for THIS request?
+ *
+ * Reuse is an identity claim: it says the stored action is the same piece of work, so a grant issued
+ * for the new request may drive it. That is only true when the ownership dimensions agree.
+ *
+ * They did not have to. A record owned by `run_x` — written by a diagnostic reproduction — was
+ * adopted for `erun_89f9cbad389cc851` because both carried an undefined `queryHash`, so
+ * `undefined === undefined` matched. `grantAuthorizesAction` then refused it with
+ * `grant_run_mismatch`, correctly, and the request bounced back to `awaiting_operator` on every
+ * approval. The operator approved twice and nothing could ever execute.
+ *
+ * The refusal was right; the adoption was wrong. This is the missing half: a candidate must match on
+ * run, assignment and lane before its identity may be claimed. Comparison is null-tolerant, so an
+ * action that genuinely carries no run is still reusable by another that carries none — that is the
+ * pre-existing census behaviour and it is not widened here.
+ */
+export function sameActionOwnership(candidate, { executionSessionId = null, assignmentId = null, inputs = {} } = {}) {
+  const same = (a, b) => (a ?? null) === (b ?? null);
+  if (!same(candidate?.executionSessionId, executionSessionId)) return false;
+  if (!same(candidate?.assignmentId, assignmentId)) return false;
+  // The lane is carried in the action's own inputs for lane-scoped actions; for actions that have
+  // no lane both sides are null and this is a no-op.
+  const candidateLane = candidate?.inputs?.laneId ?? candidate?.inputs?.lane_id ?? null;
+  const requestLane = inputs?.laneId ?? inputs?.lane_id ?? null;
+  if (!same(candidateLane, requestLane)) return false;
+  return true;
+}
+
 export function requestTrustedHostAction({
   missionId,
   assignmentId = null,
@@ -219,6 +265,7 @@ export function requestTrustedHostAction({
   // Dedupe in-flight / completed only — failed actions may be retried.
   const existing = listTrustedHostActions(missionId).find((a) =>
     a.actionType === actionType
+    && sameActionOwnership(a, { executionSessionId, assignmentId, inputs: validated.normalized })
     && (dedupeKey
       ? (a.inputs?.dedupeKey === dedupeKey || a.inputs?.queryHash === dedupeKey)
       : a.inputs?.queryHash === validated.normalized.queryHash)
@@ -269,10 +316,66 @@ export function requestTrustedHostAction({
   return { ok: true, action, normalized: validated.normalized };
 }
 
+/**
+ * Does this single-use grant authorize THIS action?
+ *
+ * Re-derived from the action's own normalized inputs, never from the governed
+ * request that produced it — a check that reads the same record twice proves
+ * nothing. Each field is compared on its own so the refusal can say what
+ * changed; `grant_head_sha_mismatch` is the one that carries the weight, because
+ * it is what happens when the branch moves after a Director approves.
+ */
+export function grantAuthorizesAction(grant, action, { nowMs = Date.now() } = {}) {
+  if (!grant) return { ok: false, error: "grant_missing" };
+  if (grant.status === "CONSUMED") return { ok: false, error: "grant_already_used" };
+  if (grant.status === "REVOKED") return { ok: false, error: "grant_revoked" };
+  if (!(Date.parse(grant.expires_at) > nowMs)) return { ok: false, error: "grant_expired" };
+  if (grant.action_key !== action.actionType) return { ok: false, error: "grant_action_mismatch" };
+  if (grant.repository_id && action.missionId && grant.repository_id !== action.missionId) {
+    return { ok: false, error: "grant_scope_mismatch" };
+  }
+  if (grant.run_id && action.executionSessionId && grant.run_id !== action.executionSessionId) {
+    return { ok: false, error: "grant_run_mismatch" };
+  }
+  const i = action.inputs || {};
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH
+    || action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    // The commit is the decision. A branch that moved is a different question.
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    const branch = i.branch || i.headBranch || null;
+    if (String(grant.branch || "") !== String(branch || "")) {
+      return { ok: false, error: "grant_branch_mismatch" };
+    }
+    if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR
+      && String(grant.target_branch || "") !== String(i.base || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    return { ok: true };
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (Number(grant.pull_request_number) !== Number(i.pullRequestNumber)) {
+      return { ok: false, error: "grant_pull_request_mismatch" };
+    }
+    if (String(grant.expected_head_sha || "").toLowerCase() !== String(i.expectedHeadSha || "").toLowerCase()) {
+      return { ok: false, error: "grant_head_sha_mismatch" };
+    }
+    if (String(grant.target_branch || "") !== String(i.targetBranch || "")) {
+      return { ok: false, error: "grant_target_branch_mismatch" };
+    }
+    if (String(grant.merge_method || "") !== String(i.mergeMethod || "")) {
+      return { ok: false, error: "grant_merge_method_mismatch" };
+    }
+  }
+  return { ok: true };
+}
+
 export function authorizeTrustedHostAction(actionId, {
   actor = "operator",
   authorizationId = null,
   nowMs,
+  grant = null,
 } = {}) {
   const action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
@@ -299,6 +402,27 @@ export function authorizeTrustedHostAction(actionId, {
       nowMs: nowMs ?? Date.now(),
     });
   }
+  if (!auth && grant) {
+    // A repository-authorized action carries a single-use grant instead of a
+    // mission authorization. It still has to CLEAR: the grant is verified
+    // against this action's own parameters, not merely presented. A grant that
+    // is expired, already spent, revoked, or pinned to a different head SHA is
+    // no authorization at all, and the action falls through to policy_review
+    // below exactly as an unauthorized one does.
+    const check = grantAuthorizesAction(grant, action, { nowMs: nowMs ?? Date.now() });
+    if (check.ok) {
+      auth = {
+        authorizationId: grant.grant_id,
+        kind: "repository_grant",
+        actor: grant.approved_by,
+        grantedAt: grant.approved_at,
+        expiresAt: grant.expires_at,
+        singleUse: true,
+      };
+    } else {
+      action.grantRefusal = check.error;
+    }
+  }
   if (!auth) {
     action.state = "policy_review";
     action.authorizationState = "required";
@@ -314,22 +438,37 @@ export function authorizeTrustedHostAction(actionId, {
   return { ok: true, action, authorization: auth };
 }
 
-export function executeTrustedHostAction(actionId, { actor = "director", nowMs } = {}) {
+export function executeTrustedHostAction(actionId, { actor = "director", nowMs, grant = null } = {}) {
   let action = readAction(actionId);
   if (!action) return { ok: false, error: "not_found" };
   if (action.state === "completed") return { ok: true, action, already: true };
 
   if (action.actionType === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    return executeMergeTrustedHostAction(action, { actor, nowMs });
+    return executeMergeTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-    return executeMigrationTrustedHostAction(action, { actor, nowMs });
+    return executeMigrationTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.REPOSITORY_PUSH) {
+    return executePushTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return executeOpenPrTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    return executeRestoreQaSessionTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return executeProvisionQaIdentityTrustedHostAction(action, { actor, nowMs, grant });
+  }
+  if (action.actionType === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    return executeAssignQaAccessTrustedHostAction(action, { actor, nowMs, grant });
   }
   if (action.actionType !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "unknown_action_type", actionType: action.actionType };
   }
 
-  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs });
+  const authz = authorizeTrustedHostAction(actionId, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
 
@@ -347,7 +486,7 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs }
     return { ok: false, error: "query_hash_mismatch", action };
   }
 
-  const tmpDir = join(STORE_DIR, "tmp");
+  const tmpDir = join(storeDir(), "tmp");
   ensureDir(tmpDir);
   const sqlFile = join(tmpDir, `${action.id}.sql`);
   const outFile = join(tmpDir, `${action.id}.out`);
@@ -458,7 +597,7 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs }
   const queryRel = action.inputs.queryArtifactPath
     || "docs/platform/planning/vacilando-os/qa/access-identity-v2/wave0-authority-census.json";
   const evidenceRel = String(queryRel).replace(/\.json$/i, "") + ".results.json";
-  const storeEvidenceAbs = join(STORE_DIR, `${action.id}.results.json`);
+  const storeEvidenceAbs = join(storeDir(), `${action.id}.results.json`);
   try {
     writeFileSync(storeEvidenceAbs, JSON.stringify({
       trusted_host_action_id: action.id,
@@ -509,7 +648,7 @@ export function executeTrustedHostAction(actionId, { actor = "director", nowMs }
     /* originating worktree write is best-effort; Director store holds the result */
   }
 
-  const auditPath = join(STORE_DIR, `${action.id}.audit.json`);
+  const auditPath = join(storeDir(), `${action.id}.audit.json`);
   const audit = buildAudit(action, {
     success: true,
     rowCount: 1,
@@ -580,6 +719,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
   worktreePath = null,
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   recognizePriorCensusAuthorization(missionId, { nowMs });
 
@@ -601,7 +741,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
     return { ok: true, action: req.action, already: true };
   }
 
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -620,7 +760,7 @@ export function fulfillDatabaseCensusForMission(missionId, {
     };
   }
 
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function trustedHostDiagnostics() {
@@ -633,7 +773,7 @@ export function trustedHostDiagnostics() {
   try {
     for (const f of fsReaddirSafe()) {
       try {
-        const a = JSON.parse(readFileSync(join(STORE_DIR, f), "utf8"));
+        const a = JSON.parse(readFileSync(join(storeDir(), f), "utf8"));
         if (["requested", "policy_review", "authorized", "executing", "retrying"].includes(a.state)) {
           activeActions.push({ id: a.id, state: a.state, actionType: a.actionType });
         }
@@ -677,7 +817,7 @@ export function trustedHostDiagnostics() {
 }
 
 function fsReaddirSafe() {
-  return readdirSync(STORE_DIR).filter((f) => f.startsWith("tha_") && f.endsWith(".json"));
+  return readdirSync(storeDir()).filter((f) => f.startsWith("tha_") && f.endsWith(".json"));
 }
 
 /**
@@ -689,7 +829,7 @@ export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
   const interrupted = [];
   for (const f of fsReaddirSafe()) {
     try {
-      const a = JSON.parse(readFileSync(join(STORE_DIR, f), "utf8"));
+      const a = JSON.parse(readFileSync(join(storeDir(), f), "utf8"));
       if (a.state === "executing" || a.state === "retrying") {
         a.state = "failed";
         a.executionState = "interrupted_by_restart";
@@ -719,6 +859,19 @@ export function reconcileTrustedHostActionsOnBoot({ nowMs } = {}) {
 }
 
 let mergeGhForTests = null;
+// Injection seams for the two remote actions added alongside merge. The guard
+// in trusted-host-remote-guard treats an injected client as simulated, so a
+// test that forgets one is refused rather than reaching the real remote.
+let pushGitForTests = null;
+let openPrGhForTests = null;
+
+export function setPushGitForTests(fn) {
+  pushGitForTests = typeof fn === "function" ? fn : null;
+}
+export function setOpenPrGhForTests(fn) {
+  openPrGhForTests = typeof fn === "function" ? fn : null;
+}
+
 let migrationRunnersForTests = null;
 
 export function setTrustedHostMergeGhForTests(fn) {
@@ -758,8 +911,12 @@ function completeTrustedAction(action, result, { nowMs } = {}) {
   return { ok: true, action, result };
 }
 
-export function executeMergeTrustedHostAction(action, { actor = "director", nowMs } = {}) {
-  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+export function executeMergeTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  // Re-authorized here on purpose: execution must never trust that an earlier
+  // call in this same flow already checked. The grant is threaded through so
+  // this second check re-derives from the action's own inputs rather than being
+  // skipped — the defence stays, it just has the evidence it needs.
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
   action.state = "executing";
@@ -778,7 +935,7 @@ export function executeMergeTrustedHostAction(action, { actor = "director", nowM
 }
 
 function defaultInspectLedger({ version }) {
-  const tmpDir = join(STORE_DIR, "tmp");
+  const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const sqlFile = join(tmpDir, `ledger-${version}.sql`);
   const outFile = join(tmpDir, `ledger-${version}.out`);
@@ -814,7 +971,7 @@ function defaultInspectLedger({ version }) {
 }
 
 function defaultApplyMigrationFile({ entry, text }) {
-  const tmpDir = join(STORE_DIR, "tmp");
+  const tmpDir = join(storeDir(), "tmp");
   mkdirSync(tmpDir, { recursive: true });
   const file = join(tmpDir, `${entry.version}.sql`);
   const outFile = join(tmpDir, `${entry.version}.out`);
@@ -842,8 +999,8 @@ function defaultApplyMigrationFile({ entry, text }) {
   return { ok: true, ledger: "applied" };
 }
 
-export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs } = {}) {
-  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs });
+export function executeMigrationTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
   if (!authz.ok) return authz;
   action = authz.action;
   action.state = "executing";
@@ -886,12 +1043,235 @@ export function executeMigrationTrustedHostAction(action, { actor = "director", 
   return completeTrustedAction(action, result, { nowMs });
 }
 
+/**
+ * Push a reviewed branch. Re-authorized here on purpose: execution must never
+ * trust that an earlier call in this same flow already checked.
+ */
+export function executePushTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = pushBranch(action.inputs, pushGitForTests ? { git: pushGitForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Push result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "push_failed", out?.detail || "Push failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicPushResult(out), { nowMs });
+}
+
+/**
+ * Restore a managed slot's QA browser session.
+ *
+ * Mirrors the push and open-PR executors exactly, because `applyExecuteResult` requires the
+ * `{ ok, action }` shape with `action.state === "completed"` — returning a bare restore result
+ * reads to the caller as a failed execution. `executeRestoreQaSessionSync` is used because this
+ * path is synchronous: `processGovernedAction` does not await its executor.
+ */
+export function executeRestoreQaSessionTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeRestoreQaSessionSync({
+    action,
+    grant,
+    grantCheck: grantAuthorizesAction,
+    nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Restore result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "restore_failed", out?.failure_detail || "QA session restore failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Provision the managed QA identity, in the `{ ok, action }` shape applyExecuteResult requires. */
+export function executeProvisionQaIdentityTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeProvisionQaIdentitySync({
+    action, grant, grantCheck: grantAuthorizesAction, nowMs: nowMs || Date.now(),
+  });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Provisioning result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "provision_failed", out?.failure_detail || "QA identity provisioning failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Assign application access, in the `{ ok, action }` shape applyExecuteResult requires. */
+export function executeAssignQaAccessTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = executeAssignQaAccessSync({ action, grant, grantCheck: grantAuthorizesAction, nowMs: nowMs || Date.now() });
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Assignment result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.failure_code || "assign_failed", out?.failure_detail || "QA access assignment failed", { nowMs });
+  }
+  return completeTrustedAction(action, out, { nowMs });
+}
+
+/** Mission-scoped entry point for access assignment; `defaultExecute` dispatches here. */
+export function fulfillAssignQaAccessForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/** Mission-scoped entry point for provisioning; `defaultExecute` dispatches here. */
+export function fulfillProvisionQaIdentityForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/**
+ * The mission-scoped entry point the governed processor calls.
+ *
+ * `defaultExecute` in governed-action-request.mjs dispatches to a `fulfill*ForMission` helper per
+ * action and falls through to `action_unavailable` for anything without one. The restore was
+ * registered and mode-mapped but had no helper, so it fell through and failed after the operator
+ * had already approved it. Modelled on `fulfillRepositoryPushForMission`.
+ */
+export function fulfillRestoreQaSessionForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+/** Open the promotion pull request, or report the one that already exists. */
+export function executeOpenPrTrustedHostAction(action, { actor = "director", nowMs, grant = null } = {}) {
+  const authz = authorizeTrustedHostAction(action.id, { actor, nowMs, grant });
+  if (!authz.ok) return authz;
+  action = authz.action;
+  action.state = "executing";
+  action.executionState = "executing";
+  action.started_at = action.started_at || iso(nowMs);
+  action.updated_at = iso(nowMs);
+  writeAction(action);
+  const out = openPullRequest(action.inputs, openPrGhForTests ? { gh: openPrGhForTests } : {});
+  if (payloadHasSecrets(out)) {
+    return failTrustedAction(action, "result_contained_secrets", "Pull request result contained secrets and was discarded.", { nowMs });
+  }
+  if (!out?.ok) {
+    return failTrustedAction(action, out?.code || "open_pr_failed", out?.detail || "Opening the pull request failed", { nowMs });
+  }
+  return completeTrustedAction(action, publicOpenPrResult(out), { nowMs });
+}
+
+export function fulfillRepositoryPushForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.REPOSITORY_PUSH, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
+export function fulfillPromotionOpenPrForMission(missionId, {
+  assignmentId = null,
+  executionSessionId = null,
+  inputs = {},
+  actor = "director",
+  nowMs,
+  grant = null,
+} = {}) {
+  const req = requestTrustedHostAction({
+    missionId, assignmentId, executionSessionId, requestedBy: actor,
+    actionType: ACTION_TYPES.PROMOTION_OPEN_PR, inputs, nowMs,
+  });
+  if (!req.ok) return req;
+  if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+  if (!auth.ok) return { ok: false, error: "authorization_required", action: auth.action };
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
+}
+
 export function fulfillRepositoryMergeForMission(missionId, {
   assignmentId = null,
   executionSessionId = null,
   inputs = {},
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -904,7 +1284,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -912,7 +1292,7 @@ export function fulfillRepositoryMergeForMission(missionId, {
       action: auth.action,
     };
   }
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export function fulfillDatabaseMigrationForMission(missionId, {
@@ -921,6 +1301,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   inputs = {},
   actor = "director",
   nowMs,
+  grant = null,
 } = {}) {
   const req = requestTrustedHostAction({
     missionId,
@@ -933,7 +1314,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
   });
   if (!req.ok) return req;
   if (req.action.state === "completed" && req.deduped) return { ok: true, action: req.action, already: true };
-  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs });
+  const auth = authorizeTrustedHostAction(req.action.id, { actor, nowMs, grant });
   if (!auth.ok) {
     return {
       ok: false,
@@ -941,7 +1322,7 @@ export function fulfillDatabaseMigrationForMission(missionId, {
       action: auth.action,
     };
   }
-  return executeTrustedHostAction(req.action.id, { actor, nowMs });
+  return executeTrustedHostAction(req.action.id, { actor, nowMs, grant });
 }
 
 export { ACTION_TYPES, listRegisteredActions };

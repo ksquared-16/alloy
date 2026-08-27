@@ -29,6 +29,7 @@ import {
   resetAgentSessionLifecycleForTests,
 } from "../lib/vacilando/agent-session-lifecycle.mjs";
 import { listAgentSessionsForLane, resetAgentSessionsForTests } from "../lib/vacilando/agent-session.mjs";
+import { resetAlloyAdapterImplForTests, setAlloyAdapterImplForTests } from "../lib/vacilando/alloy-dev-adapter.mjs";
 
 const ROOT = mkdtempSync(join(tmpdir(), "vac-offline-"));
 const WT = join(ROOT, "wt-comms");
@@ -45,6 +46,8 @@ async function test(name, fn) {
   resetAdmissionsForTests(ROOT);
   resetAgentSessionsForTests(ROOT);
   resetAgentSessionLifecycleForTests();
+  resetAlloyAdapterImplForTests();
+  setAlloyAdapterImplForTests({ listPanes: () => [] });
   setAdmissionImplForTests({
     canProvisionNow: () => ({ ok: false, available: false }),
     provisionLaneBinding: () => {
@@ -88,6 +91,33 @@ await test("send to bound offline lane stays QUEUED and does not FAILED", async 
   assert.equal(activeRunForLane(created.lane.lane_id, ROOT).state, "QUEUED");
   assert.equal(listExecutionRunsForLane(created.lane.lane_id, ROOT).some((r) => r.state === "FAILED"), false);
   assert.equal(admissionForLane(created.lane.lane_id, ROOT).state, "QUEUED");
+});
+
+await test("second send replaces queued instruction instead of refusing", async () => {
+  const created = makeComms();
+  const first = await deliverManagedLaneInstruction(created.lane.lane_id, "Ship inbound SMS routing.", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: async () => {
+      throw new Error("must not attempt pane delivery");
+    },
+  });
+  assert.equal(first.ok, true);
+  const second = await deliverManagedLaneInstruction(created.lane.lane_id, "Ship inbound SMS plus retries.", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: async () => {
+      throw new Error("must not attempt pane delivery");
+    },
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.status, "queued");
+  assert.equal(second.replaced, true);
+  assert.equal(second.session_required, true);
+  const run = activeRunForLane(created.lane.lane_id, ROOT);
+  assert.equal(run.state, "QUEUED");
+  assert.equal(run.instruction, "Ship inbound SMS plus retries.");
+  assert.equal(listExecutionRunsForLane(created.lane.lane_id, ROOT).length, 1);
 });
 
 await test("inspect of bound offline lane does not mint an Agent Session", async () => {

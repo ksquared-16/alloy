@@ -96,6 +96,6 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // Returned once, to the page the parent is already looking at.
     return tourPublicJson({
         ok: true,
-        cancel_url: `${resolvePublicBaseUrl(request).replace(/\/+$/, "")}/tour-booking/${encodeURIComponent(token)}`,
+        cancel_url: `${resolvePublicBaseUrl().replace(/\/+$/, "")}/tour-booking/${encodeURIComponent(token)}`,
     });
 }

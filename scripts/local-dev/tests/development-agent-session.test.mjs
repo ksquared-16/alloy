@@ -45,6 +45,7 @@ import {
   recoverDeadAgentSession,
   reconcileAutomaticContextRotation,
   requestSessionRotation,
+  getHandoff,
   maybeAdvanceSessionRotation,
   resetAgentHandoffsForTests,
   resetAgentSessionLifecycleForTests,
@@ -854,6 +855,81 @@ await test("no TUI scrape, no claude -p, no tmux kill, no package-script changes
   assert.equal(gitDiff("scripts/local-dev/lib/browser-cert-lease.mjs"), "");
   assert.equal(gitDiff("scripts/local-dev/lib/lock.sh"), "");
   assert.equal(gitDiff("scripts/local-dev/vac-run"), "");
+});
+
+// --------------------------------------------------------------------------
+// Rotation must never leave a session in a HANDOFF it cannot leave.
+//
+// Observed: automatic rotation patched the session to HANDOFF *before* the
+// handoff instruction was delivered. The paste was refused because the pane was
+// showing a permission prompt, so the handoff stayed "requested" — and
+// maybeAdvanceSessionRotation only ever aborts a handoff that reached "ready".
+// The session stayed HANDOFF forever.
+// --------------------------------------------------------------------------
+
+await test("a refused handoff paste restores the session to ACTIVE", async () => {
+  claudePresent = true;
+  claudeCount = 1;
+  const run = makeRun("Work that is mid-flight.");
+  activateSession(run);
+
+  setAgentSessionLifecycleImplForTests({
+    sendLaneInstruction: async (laneId) => ({
+      ok: false,
+      status: "refused",
+      lane_id: laneId,
+      error: "provider_prompt_not_ready",
+      prompt_readiness: {
+        state: "blocked", blocker_kind: "permission", needs_terminal_operator: true,
+        summary: "Claude is waiting on a permission prompt.",
+      },
+    }),
+    observeLane: async (id) => fakeLane(id),
+    countClaude: () => claudeCount,
+  });
+
+  const req = await requestSessionRotation({
+    laneId: "alloy-records", origin: "automatic", confirm: true, root: ROOT, lane: fakeLane(),
+  });
+  assert.equal(req.ok, false);
+  assert.equal(req.error, "handoff_delivery_failed");
+  assert.equal(req.session_restored, "ACTIVE");
+  assert.equal(activeAgentSessionForLane("alloy-records", ROOT).state, "ACTIVE",
+    "a rotation that could not START must not hold the session");
+  const handoff = getHandoff(req.handoff_id, ROOT);
+  assert.equal(handoff.state, "failed", "the handoff records why it never began");
+  assert.equal(handoff.error, "provider_prompt_not_ready");
+  // The refusal was about the terminal, not the work.
+  assert.equal(getExecutionRun(run.run_id, ROOT).state, "EXECUTING");
+  installLifecycle();
+});
+
+await test("a handoff stuck at requested restores ACTIVE after a bounded wait", async () => {
+  claudePresent = true;
+  claudeCount = 1;
+  const run = makeRun("Still working.");
+  activateSession(run);
+
+  const req = await requestSessionRotation({
+    laneId: "alloy-records", origin: "automatic", confirm: true, root: ROOT, lane: fakeLane(),
+  });
+  assert.equal(req.ok, true, req.error);
+  assert.equal(activeAgentSessionForLane("alloy-records", ROOT).state, "HANDOFF");
+  assert.equal(getHandoff(req.handoff_id, ROOT).state, "requested");
+
+  const lane = fakeLane("alloy-records");
+  // A real handoff gets its chance first.
+  const early = await maybeAdvanceSessionRotation(lane, { root: ROOT, nowMs: Date.now() });
+  assert.notEqual(early.error, "handoff_never_delivered");
+  assert.equal(activeAgentSessionForLane("alloy-records", ROOT).state, "HANDOFF");
+
+  // Past the wait, with Claude still present, there is nothing to hand off TO.
+  const late = await maybeAdvanceSessionRotation(lane, {
+    root: ROOT, nowMs: Date.now() + ROTATION_POLICY.exit_wait_ms + 5_000,
+  });
+  assert.equal(late.aborted, true);
+  assert.equal(late.error, "handoff_never_delivered");
+  assert.equal(activeAgentSessionForLane("alloy-records", ROOT).state, "ACTIVE");
 });
 
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);

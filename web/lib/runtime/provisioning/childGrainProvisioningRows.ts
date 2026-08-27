@@ -27,6 +27,8 @@
  *     Runtime never inherits that ambiguity.
  */
 
+import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ChildParticipationIdentity } from "@/lib/lifecycle/childParticipationIdentity";
 import {
@@ -90,11 +92,31 @@ const one = <T,>(v: T | T[] | null | undefined): T | null =>
 function childName(row: RawChildRow): string | null {
     const cm = one(row.customer_members as Record<string, unknown> | Record<string, unknown>[] | null);
     if (!cm) return null;
-    const display = str(cm.display_name);
-    if (display) return display;
-    const first = str(cm.first_name);
-    const last = str(cm.last_name);
-    const joined = [first, last].filter(Boolean).join(" ").trim();
+    /*
+     * LAW 34 — the queue row title names the same child the Focus Panel and Records name, so it must
+     * read the same authority. Resolved through the shared resolver rather than re-deriving the rule:
+     * person when the child has one, the member row only while it does not.
+     */
+    const person = one(cm.persons as Record<string, unknown> | Record<string, unknown>[] | null);
+    const identity = resolveInquiryChildIdentityFields({
+        personId: str(cm.person_id),
+        person: person
+            ? {
+                  first_name: str(person.first_name),
+                  last_name: str(person.last_name),
+                  full_name: str(person.full_name),
+                  date_of_birth: str(person.date_of_birth),
+              }
+            : null,
+        member: {
+            first_name: str(cm.first_name),
+            last_name: str(cm.last_name),
+            display_name: str(cm.display_name),
+            dob: str(cm.dob),
+        },
+    });
+    if (identity.display_name) return identity.display_name;
+    const joined = [identity.first_name, identity.last_name].filter(Boolean).join(" ").trim();
     return joined || null;
 }
 

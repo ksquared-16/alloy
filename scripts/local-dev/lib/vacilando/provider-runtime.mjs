@@ -21,7 +21,7 @@
  * No secrets are ever read into responses. Auth probes extract only presence
  * booleans, expiry timestamps, and the signed-in identity (email) — never tokens.
  */
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import { join } from "node:path";
@@ -59,6 +59,7 @@ export const ADAPTERS = {
     auth_kind: "oauth", auth_location: `macOS login Keychain · "${CLAUDE_KEYCHAIN_SERVICE}"`,
     capabilities: { start: true, resume: true, ask: true, stream: true, cost: true, usage: true, authentication: "oauth" },
     reconnect_cmd: "claude  (then /login in the Claude CLI, or `claude` desktop sign-in)",
+    login_cmd: "claude",
     disconnect_cmd: "claude  (then /logout) — clears the shared Keychain credential for every worker",
     docs: "Headless: `claude -p` (prompt on stdin). Resumable via --resume <session>. Reports authoritative cost + token usage when authenticated.",
   },
@@ -67,6 +68,7 @@ export const ADAPTERS = {
     auth_kind: "oauth", auth_location: "cursor-agent credential store (cursor-agent login)",
     capabilities: { start: true, resume: true, ask: true, stream: true, cost: false, usage: true, authentication: "oauth" },
     reconnect_cmd: "cursor-agent login",
+    login_cmd: "cursor-agent login",
     disconnect_cmd: "cursor-agent logout",
     docs: "Headless: `cursor-agent -p --trust` (prompt on stdin). Reports token usage; no authoritative per-token price → cost unavailable.",
   },
@@ -284,6 +286,55 @@ export function reconnectInfo(id) {
     ok: true, id, label: a.label, command: a.reconnect_cmd, auth_location: a.auth_location,
     note: "Vacilando cannot perform an interactive OAuth sign-in from a governed headless command. Run the command in a terminal once; the whole Provider Runtime (and every worker) then uses it.",
   };
+}
+
+const LOGIN_CMDS = Object.freeze({
+  claude: "claude",
+  cursor: "cursor-agent login",
+});
+
+let loginOpenImpl = null;
+export function setProviderLoginOpenImplForTests(fn) {
+  loginOpenImpl = typeof fn === "function" ? fn : null;
+}
+
+/**
+ * Open a Terminal window for the allowlisted login command. Vacilando cannot
+ * complete OAuth itself; the operator finishes sign-in, then clicks Verify.
+ */
+export async function openProviderLogin(id) {
+  const a = ADAPTERS[id];
+  if (!a) return { ok: false, error: `unknown provider: ${id}` };
+  const command = LOGIN_CMDS[id];
+  if (!command) {
+    return {
+      ok: false,
+      error: "login_not_interactive",
+      id,
+      label: a.label,
+      command: a.reconnect_cmd,
+    };
+  }
+  const line = `${command}; echo; echo Done — return to Vacilando Settings and click Verify.`;
+  if (loginOpenImpl) return loginOpenImpl({ id, command, line, label: a.label });
+  try {
+    execFileSync("/usr/bin/osascript", [
+      "-e", "tell application \"Terminal\" to activate",
+      "-e", `tell application "Terminal" to do script ${JSON.stringify(line)}`,
+    ], { timeout: 8000, stdio: ["ignore", "pipe", "pipe"] });
+    return { ok: true, opened: true, id, label: a.label, command };
+  } catch (e) {
+    return {
+      ok: true,
+      opened: false,
+      id,
+      label: a.label,
+      command,
+      error: "terminal_open_failed",
+      detail: String(e.stderr || e.message || e).slice(0, 240),
+      note: a.reconnect_cmd,
+    };
+  }
 }
 
 /** Diagnostics: everything an operator needs, no secrets. */

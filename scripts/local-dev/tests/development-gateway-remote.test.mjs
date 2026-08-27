@@ -140,6 +140,17 @@ await test("arbitrary tmux target still refused remotely", async () => {
   assert.equal(j.error, "unexpected_control_field");
 });
 
+await test("provider on send is not a targeting field", async () => {
+  const r = await fetch(`${base}/api/lanes/alloy-missing-lane/instruction`, {
+    method: "POST",
+    headers: { ...bearer, "content-type": "application/json" },
+    body: JSON.stringify({ instruction: "auth-only probe — this lane must not exist", provider: "cursor" }),
+  });
+  const j = await r.json();
+  assert.notEqual(j.error, "unexpected_control_field");
+  assert.ok(["lane_not_found", "invalid_lane_id"].includes(j.error));
+});
+
 await test("non-lane pane still inaccessible", async () => {
   const r = await fetch(`${base}/api/lanes/alloy-test/output`, { headers: bearer });
   const j = await r.json();

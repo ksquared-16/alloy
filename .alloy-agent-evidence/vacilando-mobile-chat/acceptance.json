@@ -1,0 +1,149 @@
+{
+  "list_order": [
+    {
+      "label": "Vacilando",
+      "status": "Working",
+      "summary": "fix(gateway): chat-only lane page with one details panel",
+      "meta": "Claude · 0s ago",
+      "group": "active"
+    },
+    {
+      "label": "Trust Runtime",
+      "status": "Needs input",
+      "summary": "PR #488 merged (staging 73d9872c1); :3014 restarted on merged staging; one fresh Firefly Enrollment journey minted and untouched; participan",
+      "meta": "Claude · 0s ago",
+      "group": "needs_input"
+    },
+    {
+      "label": "Communications",
+      "status": "Idle",
+      "summary": "alloy-sprint-finish 3 completed: DURABILITY_VERDICT=pass, 0 dirty files, 0 unpushed commits, ahead=0, lease released, 0 owned processes. Slo",
+      "meta": "Claude · 0s ago",
+      "group": "idle"
+    },
+    {
+      "label": "Runtime Performance",
+      "status": "Ready",
+      "summary": "Abandoned: stale/orphaned run; no work failure.",
+      "meta": "Claude · 0s ago",
+      "group": "idle"
+    },
+    {
+      "label": "Access & Identity",
+      "status": "Offline",
+      "summary": "Abandoned: run never reported managed status and is no longer live work.",
+      "meta": "Claude · 0s ago",
+      "group": "offline"
+    },
+    {
+      "label": "Lifecycle Cert",
+      "status": "Offline",
+      "summary": "Queued for capacity this lane cannot receive: no runtime binding. Admission cancelled; instruction preserved.",
+      "meta": "Offline · 0s ago",
+      "group": "offline"
+    },
+    {
+      "label": "Processing",
+      "status": "Offline",
+      "summary": "Queued for capacity this lane cannot receive: no runtime binding. Admission cancelled; instruction preserved.",
+      "meta": "Offline · 0s ago",
+      "group": "offline"
+    }
+  ],
+  "list_objectObject": false,
+  "shot_list": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/01-lane-list.png",
+  "shot_chat": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/02-mobile-chat-default.png",
+  "chat_metrics": {
+    "thread": {
+      "h": 358,
+      "w": 373
+    },
+    "user": {
+      "h": 225,
+      "w": 373
+    },
+    "assistant": {
+      "h": 796,
+      "w": 373
+    },
+    "output": {
+      "h": 730,
+      "w": 355
+    },
+    "outputChars": 1703,
+    "outputScrollH": 730,
+    "visibleLines": 18,
+    "threadScrolledToBottom": true,
+    "composer": {
+      "h": 132,
+      "w": 373
+    },
+    "objectObject": false,
+    "docScrollX": 0
+  },
+  "chat_asideVisible": {
+    "x": 393,
+    "offscreen": true
+  },
+  "user_collapsed": {
+    "clamped": true,
+    "renderedH": 117,
+    "fullH": 1389,
+    "lineHeight": 19.575,
+    "button": "View more"
+  },
+  "shot_collapsed": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/03-user-message-collapsed.png",
+  "user_expanded": {
+    "clamped": false,
+    "renderedH": 1389,
+    "button": "View less"
+  },
+  "shot_expanded": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/04-user-message-expanded.png",
+  "shot_details": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/05-details-panel-open.png",
+  "details": {
+    "onscreen": true,
+    "sections": {
+      "runtime": true,
+      "claudeRun": true,
+      "status": true,
+      "notify": true,
+      "rename": true,
+      "outputChrome": true
+    },
+    "stageHasDetails": false
+  },
+  "copy": {
+    "visibleChars": 1703,
+    "clipboardChars": 1704,
+    "clipboardHead": "\n                                                             \n⏺ The keyboard-open state loses the reply — the thread ke",
+    "feedback": "Copy"
+  },
+  "shot_copy": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/06-copy-proof.png",
+  "keyboard": {
+    "composerBottom": 355,
+    "vvh": 363,
+    "withinViewport": true,
+    "textareaFontPx": 16,
+    "safeAreaPadding": "10px",
+    "threadBox": {
+      "h": 147,
+      "top": 68,
+      "bottom": 215,
+      "scrollTop": 87,
+      "scrollH": 796
+    },
+    "assistantBox": {
+      "h": 796,
+      "top": -19,
+      "bottom": 777
+    },
+    "stageBox": {
+      "h": 347,
+      "bottom": 355
+    },
+    "assistantVisiblePx": 147,
+    "docScrollX": 0
+  },
+  "shot_keyboard": "/private/tmp/claude-502/-Users-Kelly-Code-alloy-worktrees-wt5-vacilando-gateway-v2/1ddd507f-92cc-4d9f-beac-ea2a7a23143d/scratchpad/shots/07-keyboard-open-composer.png",
+  "console": []
+}

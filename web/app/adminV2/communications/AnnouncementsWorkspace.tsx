@@ -44,6 +44,10 @@ import {
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
+    bustCommunicationsAnnouncementsFetchDedupe,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
     getCommunicationsWarmActiveTemplates,
     getCommunicationsWarmAnnouncements,
     getCommunicationsWarmAudienceMetadata,
@@ -186,6 +190,25 @@ function initialActiveTemplatesFromWarm(): TemplateOption[] {
     return warm.map((t) => ({ id: t.id, name: t.name, channel: t.channel }));
 }
 
+/*
+ * ── REFERENCE RESOURCES HAVE ONE LOADER OWNER ──
+ *
+ * These loaders already short-circuit on a warm hit (`if (getCommunicationsWarmAudienceMetadata()
+ * !== null) return`). What they could not do is survive the RACE: several consumers check the warm
+ * cache before it lands, every one misses, and every one issues the same request. Measured on a
+ * Communications open, identical URLs — templates?status=active ×3, location-program-categories ×3,
+ * locations?hierarchy=1 ×3, status-options ×3 per grain (×4 on reopen).
+ *
+ * Routing them through the canonical dedupe owner makes the first caller fetch and the rest JOIN the
+ * in-flight request. The warm contract is unchanged, no cache is added, and freshness is unchanged
+ * beyond a few seconds of coalescing.
+ *
+ * The MUTABLE lists (announcements here, templates in TemplatesWorkspace) also use this owner now,
+ * but only because every canonical mutation busts it first — dedupe coalesces the open-time race, it
+ * never becomes the freshness owner for data the surface itself writes.
+ */
+const REFERENCE_TTL_MS = 15_000;
+
 export default function AnnouncementsWorkspace() {
     const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const siteFilter = useWorkspaceSiteFilter();
@@ -320,7 +343,11 @@ export default function AnnouncementsWorkspace() {
             setError(null);
         }
         try {
-            const res = await fetch(ANNOUNCEMENTS_API, { credentials: "include" });
+            /*
+             * Same contract as the templates list: bounded reuse is safe because every mutation
+             * below busts this owner before the reload it triggers.
+             */
+            const res = await dedupeAdminFetchWithTtl(ANNOUNCEMENTS_API, { credentials: "include" }, REFERENCE_TTL_MS);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to load announcements");
             setList(Array.isArray(json.announcements) ? (json.announcements as AnnouncementRow[]) : []);
@@ -340,7 +367,7 @@ export default function AnnouncementsWorkspace() {
             }
         }
         try {
-            const res = await fetch(`${TEMPLATES_API}?status=active`, { credentials: "include" });
+            const res = await dedupeAdminFetchWithTtl(`${TEMPLATES_API}?status=active`, { credentials: "include" }, REFERENCE_TTL_MS);
             const json = await res.json().catch(() => ({}));
             if (res.ok && Array.isArray(json.templates)) {
                 setTemplates(
@@ -364,8 +391,8 @@ export default function AnnouncementsWorkspace() {
         void opts;
         try {
             const [progRes, hierarchyRes] = await Promise.all([
-                fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
-                fetch(LOCATION_HIERARCHY_API, { credentials: "include" }),
+                dedupeAdminFetchWithTtl(PROGRAM_OPTIONS_API, { credentials: "include" }, REFERENCE_TTL_MS),
+                dedupeAdminFetchWithTtl(LOCATION_HIERARCHY_API, { credentials: "include" }, REFERENCE_TTL_MS),
             ]);
             const progJson = await progRes.json().catch(() => ({}));
             const hierarchyJson = await hierarchyRes.json().catch(() => ({}));
@@ -394,7 +421,7 @@ export default function AnnouncementsWorkspace() {
         void opts;
         const fetchOpts = async (g: "family" | "child"): Promise<StatusOpt[]> => {
             try {
-                const res = await fetch(`${STATUS_OPTIONS_API}?grain=${g}`, { credentials: "include" });
+                const res = await dedupeAdminFetchWithTtl(`${STATUS_OPTIONS_API}?grain=${g}`, { credentials: "include" }, REFERENCE_TTL_MS);
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok || !Array.isArray(json.options)) return [];
                 return (json.options as Record<string, unknown>[]).map((o) => ({ status_key: String(o.status_key), label: String(o.label ?? o.status_key) }));
@@ -607,6 +634,7 @@ export default function AnnouncementsWorkspace() {
                 throw new Error(typeof tJson.error === "string" ? tJson.error : "Failed to save audience");
             }
 
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             if (id) await selectAnnouncement(id);
         } catch (e) {
@@ -630,6 +658,7 @@ export default function AnnouncementsWorkspace() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to schedule");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {
@@ -647,6 +676,7 @@ export default function AnnouncementsWorkspace() {
             const res = await fetch(`${ANNOUNCEMENTS_API}/${selectedId}/cancel`, { method: "POST", credentials: "include" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to cancel");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {
@@ -664,6 +694,7 @@ export default function AnnouncementsWorkspace() {
             const res = await fetch(`${ANNOUNCEMENTS_API}/${selectedId}/archive`, { method: "POST", credentials: "include" });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Failed to archive announcement");
+            bustCommunicationsAnnouncementsFetchDedupe();
             await loadList();
             await selectAnnouncement(selectedId);
         } catch (e) {

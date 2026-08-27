@@ -2,6 +2,11 @@
  * Bounded trusted-host GitHub merge. No generic shell. No worker tokens.
  */
 import { spawnSync } from "node:child_process";
+// The remote-mutation guard is shared: merging is not the only thing here that
+// leaves this machine, and one guard in one place is the point.
+import { canonicalGatewayRuntimeRoot, liveMergePermitted } from "./trusted-host-remote-guard.mjs";
+
+export { canonicalGatewayRuntimeRoot, liveMergePermitted };
 
 export const ALLOWED_TARGET_BRANCHES = Object.freeze(["staging"]);
 export const ALLOWED_MERGE_METHODS = Object.freeze(["merge", "squash", "rebase"]);
@@ -49,9 +54,26 @@ export function validateMergeInputs(inputs = {}) {
   if (!allowlistedRepositories().includes(repository)) {
     return { ok: false, code: "repository_not_allowlisted", detail: `Repository ${repository} is not allowlisted` };
   }
-  const pullRequestNumber = Number(inputs.pull_request_number || inputs.pullRequestNumber || inputs.pr);
+  // `pull_request` is accepted alongside the other spellings. A lane proposed
+  // `{"pull_request": 522}` — an unambiguous pull request number by any reading —
+  // and got `pull_request_number must be a positive integer`, which describes a
+  // malformed value rather than a field name it did not recognise. The number is
+  // still validated exactly as before; only the ways of naming it widened.
+  const rawPullRequest = inputs.pull_request_number
+    ?? inputs.pullRequestNumber
+    ?? inputs.pull_request
+    ?? inputs.pullRequest
+    ?? inputs.pr;
+  const pullRequestNumber = Number(rawPullRequest);
   if (!Number.isInteger(pullRequestNumber) || pullRequestNumber < 1) {
-    return { ok: false, code: "invalid_pull_request_number", detail: "pull_request_number must be a positive integer" };
+    return {
+      ok: false,
+      code: "invalid_pull_request_number",
+      // Say what arrived, so a near-miss reads as a near-miss.
+      detail: rawPullRequest === undefined
+        ? "a pull request number is required (pull_request_number, pullRequestNumber, pull_request or pr)"
+        : `pull_request_number must be a positive integer; received ${JSON.stringify(rawPullRequest)}`,
+    };
   }
   const targetBranch = String(inputs.target_branch || inputs.targetBranch || "staging").trim();
   if (BLOCKED_TARGET_BRANCHES.includes(targetBranch) || targetBranch === "production") {
@@ -338,7 +360,7 @@ export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
   const view = gh([
     "pr", "view", String(n.pullRequestNumber),
     "--repo", n.repository,
-    "--json", "number,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefOid,url,title,statusCheckRollup,reviewDecision,mergeCommit",
+    "--json", "number,state,isDraft,mergeable,mergeStateStatus,baseRefName,headRefName,headRefOid,url,title,statusCheckRollup,reviewDecision,mergeCommit,changedFiles,additions,deletions",
   ]);
   if (view.status !== 0) {
     return {
@@ -365,6 +387,10 @@ export function inspectPullRequest(inputs, { gh = defaultGh } = {}) {
       headRefOid: firstDefined(pr.headRefOid, pr.headRefOid, pr.headSha),
       mergeCommitSha: pr.mergeCommit?.oid || pr.mergeCommit || null,
       reviewDecision: pr.reviewDecision || pr.reviewDecision || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: Number.isFinite(pr.changedFiles) ? pr.changedFiles : null,
+      additions: Number.isFinite(pr.additions) ? pr.additions : null,
+      deletions: Number.isFinite(pr.deletions) ? pr.deletions : null,
       checks: checkSummary(enriched.rollup, { requiredNames: enriched.requiredNames }),
     },
   };
@@ -494,6 +520,12 @@ export function mergePullRequest(inputs, { gh = defaultGh } = {}) {
       checks: ready.pr.checks,
       credentialsExposed: false,
     };
+  }
+  // Everything above this line only READ the pull request. This is the first
+  // statement that changes the repository, so this is where the guard belongs.
+  const permitted = liveMergePermitted({ injectedGh: gh !== defaultGh });
+  if (!permitted.ok) {
+    return { ok: false, code: permitted.code, detail: permitted.detail };
   }
   const methodFlag = n.mergeMethod === "squash" ? "--squash" : n.mergeMethod === "rebase" ? "--rebase" : "--merge";
   const merged = gh([

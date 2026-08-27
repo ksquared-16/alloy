@@ -39,6 +39,11 @@ import {
   grantMissionAuthorization,
 } from "./trusted-host-authz.mjs";
 import {
+  fulfillRepositoryPushForMission,
+  fulfillRestoreQaSessionForMission,
+  fulfillProvisionQaIdentityForMission,
+  fulfillAssignQaAccessForMission,
+  fulfillPromotionOpenPrForMission,
   fulfillDatabaseCensusForMission,
   fulfillRepositoryMergeForMission,
   fulfillDatabaseMigrationForMission,
@@ -59,6 +64,14 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { canonicalLaneStoreId, getDurableLane, missionIdForLane } from "./development-lane.mjs";
+import { laneSlot, qaIdentityForSlot } from "./browser-auth.mjs";
+import {
+  consumeGrant,
+  getGrant,
+  mintGrant,
+  resolveGovernedAuthoritySync,
+} from "./governed-repository-authority.mjs";
+import { inspectPullRequest } from "./trusted-host-merge.mjs";
 
 export const GOVERNED_ACTION_SCHEMA = "vacilando.governed_action_request.v1";
 export const DIRECTOR_GOVERNED_RESOURCE_KEY = "director_governed_action";
@@ -178,6 +191,25 @@ export function isPendingGovernedStatus(status) {
   return PENDING_GOVERNED_STATUSES.includes(status);
 }
 
+/**
+ * Resolve a lane's slot and registered QA identity FOR DISPLAY ONLY.
+ *
+ * Consults the same registry the executor uses, so the approval names the account it will act on.
+ * Never throws: a control that cannot resolve a name must still render, falling back to generic
+ * wording rather than breaking the surface the operator approves from.
+ */
+function resolveSlotIdentityForDisplay(laneId) {
+  try {
+    if (!laneId) return { identity: null, slot: null };
+    const lane = getDurableLane(laneId);
+    const slot = lane ? laneSlot(lane) : null;
+    if (!Number.isInteger(Number(slot))) return { identity: null, slot: null };
+    return { identity: qaIdentityForSlot(Number(slot)) || null, slot: Number(slot) };
+  } catch {
+    return { identity: null, slot: null };
+  }
+}
+
 export function presentationForGovernedAction(req = {}) {
   const key = req.action_key || "";
   const inputs = req.inputs || {};
@@ -205,6 +237,94 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Merge PR #${n} into staging · expected SHA ${sha || "—"} · method ${inputs.merge_method || inputs.mergeMethod || "merge"}`,
     };
   }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize push",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — branch push",
+      mission_need: `Needs approval — Push ${b || "a reviewed branch"}`,
+      detail: `Push ${b} at ${sha || "—"} to the remote · non-force · single ref`,
+    };
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = inputs.head_branch || inputs.headBranch || inputs.branch || "";
+    const base = inputs.base || req.target || "staging";
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").slice(0, 12);
+    return {
+      approve_label: "Authorize pull request",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — promotion pull request",
+      mission_need: `Needs approval — Open ${b} → ${base}`,
+      detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    /*
+     * Says what access is granted, to whom, and where. "Staging admin" is the whole substance of
+     * this approval, so it belongs in the label rather than behind it.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA access assignment",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA access assignment",
+      mission_need: `Needs approval — Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Assign staging admin access to ${identity}${slot ? ` for Slot ${slot}` : ""} in the canonical staging organization · lane ${lane} · one user_roles row · organization derived from existing staging admins, never supplied · no production or customer access`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    /*
+     * Names the account being created and the slot it belongs to. Provisioning creates an account;
+     * restoring signs into one. Two different decisions, so the words must not be interchangeable.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    /*
+     * The identity is RESOLVED for display, not read off the request.
+     *
+     * The request carries only a lane id - deliberately, so a caller cannot name a target - which
+     * left the control saying "the slot's registered QA identity". An approval that does not name
+     * the account being created is not an informed approval, so the same registry the executor uses
+     * is consulted here. It is display only: nothing downstream reads these values.
+     */
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA identity provisioning",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA identity provisioning",
+      mission_need: `Needs approval — Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`,
+      detail: `Create the managed, non-production QA account ${identity}${slot ? ` for Slot ${slot}` : ""} in hosted staging · lane ${lane} · no email is sent · no human-managed password is created · creates no browser session`,
+    };
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    /*
+     * Without this branch the restore fell through to the census presentation and asked the operator
+     * to "Authorize census — Read-only database census · Data mode: Read-only" for an action that
+     * mints a Supabase session. Approving one thing while shown another is the specific hazard the
+     * subject-matching rules elsewhere in this file exist to prevent, so a privileged action must
+     * never inherit another action's words.
+     *
+     * The label names the identity and the slot, because those are the two facts that decide whether
+     * this approval is the right one.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const resolved = resolveSlotIdentityForDisplay(lane);
+    const identity = req.registered_identity || inputs.registered_identity || resolved.identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || resolved.slot || "";
+    return {
+      approve_label: "Authorize QA session restore",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA session restore",
+      mission_need: `Needs approval — Restore QA session${slot ? ` on Slot ${slot}` : ""}`,
+      detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
+    };
+  }
   if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const n = list.length || (inputs.expected_version ? 1 : 0);
@@ -228,12 +348,199 @@ export function presentationForGovernedAction(req = {}) {
   };
 }
 
+/**
+ * The facts a Director weighs before authorizing a merge, as structured rows.
+ *
+ * WHY STRUCTURED AND NOT A SENTENCE. The card used to be one line — "Merge PR
+ * #508 into staging · expected SHA 4cffed0abe32 · method merge". That is enough
+ * to identify the action and not enough to DECIDE it: it never said what the PR
+ * was called, whether CI was green, how much it changed, or what merging would
+ * do that could not be undone. A Director approving from a phone had to leave
+ * the app to find out.
+ *
+ * Everything here is either pinned in the request or captured from a read-only
+ * inspection at request time. Nothing is a credential, and nothing is inferred.
+ */
+export const GRANT_TTL_MINUTES = 30;
+
+const MERGE_CONSEQUENCES = Object.freeze([
+  "The pull request is merged into the target branch on GitHub.",
+  "The target branch moves for everyone, not just this lane.",
+  "Vacilando cannot undo this. Reverting is a separate, human decision.",
+]);
+
+function factRow(label, value) {
+  if (value === null || value === undefined || value === "") return null;
+  return { label, value: String(value) };
+}
+
+const PUSH_CONSEQUENCES = Object.freeze([
+  "The named commit is published to the remote branch, visible to everyone.",
+  "Nothing is force-pushed and no other branch is touched.",
+  "The branch can be moved again afterwards, but this commit cannot be unpublished.",
+]);
+
+const OPEN_PR_CONSEQUENCES = Object.freeze([
+  "A pull request is opened against the canonical promotion branch.",
+  "It does not merge anything — merging is a separate decision.",
+  "An open pull request for the same branch is reused rather than duplicated.",
+]);
+
+/** The facts a Director weighs before authorizing a push. */
+function pushProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const branch = i.branch || i.head_branch || i.headBranch || null;
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("Branch", branch),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Remote ref", branch ? `refs/heads/${branch}` : null),
+    factRow("Force", "no — non-fast-forward is refused"),
+    factRow("Commits reviewed", Array.isArray(i.expected_commits || i.expectedCommits)
+      ? (i.expected_commits || i.expectedCommits).length : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "repository_push",
+    headline: branch ? `Push ${branch} to the remote` : "Push a reviewed branch",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...PUSH_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
+/** The facts a Director weighs before opening a promotion pull request. */
+function openPrProposal(req) {
+  const i = req.inputs || {};
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const head = i.head_branch || i.headBranch || i.branch || null;
+  const base = i.base || req.target || "staging";
+  const facts = [
+    factRow("Repository", i.repository || null),
+    factRow("From", head),
+    factRow("Into", base),
+    factRow("Commit", sha ? sha.slice(0, 12) : null),
+    factRow("Title", i.title || null),
+    factRow("Merges anything", "no — opening a pull request only"),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+  return {
+    kind: "promotion_open_pr",
+    headline: head ? `Open ${head} → ${base}` : "Open a promotion pull request",
+    url: null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...OPEN_PR_CONSEQUENCES],
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_available: true,
+  };
+}
+
+export function governedProposalFor(req = {}) {
+  if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH) return pushProposal(req);
+  if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) return openPrProposal(req);
+  if (req.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  const i = req.inputs || {};
+  const snap = req.proposal_snapshot || null;
+  const sha = String(i.expected_head_sha || i.expectedHeadSha || "");
+  const number = i.pull_request_number || i.pullRequestNumber || null;
+
+  // CI is reported as what was OBSERVED, including "not checked" — a card that
+  // silently omits the check state reads as "fine" when it means "unknown".
+  let ci = "not checked at proposal time";
+  if (snap?.checks) {
+    const c = snap.checks;
+    const failing = (c.failing || []).length;
+    const pending = (c.pending || []).length;
+    const unknown = (c.unknown || []).length;
+    ci = failing ? `${failing} failing`
+      : pending ? `${pending} still running`
+        : unknown ? `${unknown} unknown`
+          : "all required checks green";
+  }
+
+  const facts = [
+    factRow("Repository", i.repository || i.repo || null),
+    factRow("Pull request", number ? `#${number}` : null),
+    factRow("Title", snap?.title || null),
+    factRow("Branch", snap?.headRefName ? `${snap.headRefName} → ${i.target_branch || i.targetBranch || req.target}` : null),
+    factRow("Target branch", i.target_branch || i.targetBranch || req.target || null),
+    factRow("Head commit", sha ? sha.slice(0, 12) : null),
+    factRow("Merge method", i.merge_method || i.mergeMethod || "merge"),
+    factRow("Continuous integration", ci),
+    factRow("Mergeable", snap?.mergeable || null),
+    factRow("Changed files", Number.isFinite(snap?.changedFiles) ? snap.changedFiles : null),
+    factRow("Lines", Number.isFinite(snap?.additions) && Number.isFinite(snap?.deletions)
+      ? `+${snap.additions} / −${snap.deletions}` : null),
+    factRow("Requested by", req.requesting_worker || req.lane_id || null),
+  ].filter(Boolean);
+
+  return {
+    kind: "repository_merge",
+    headline: number ? `Merge PR #${number} into ${i.target_branch || i.targetBranch || req.target}` : "Merge pull request",
+    url: snap?.url || null,
+    facts,
+    reason: req.reason_worker_cannot_execute || null,
+    consequences: [...MERGE_CONSEQUENCES],
+    // Stated before approval so the Director knows what approving creates.
+    authorization_note: `Approving creates a single-use authorization pinned to commit ${sha.slice(0, 12) || "—"}, valid for ${GRANT_TTL_MINUTES} minutes. If the branch moves, it stops working and this has to be decided again.`,
+    grant_ttl_minutes: GRANT_TTL_MINUTES,
+    snapshot_at: snap?.observed_at || null,
+    snapshot_available: Boolean(snap),
+  };
+}
+
+/**
+ * Read-only look at the pull request, captured once when the proposal is made.
+ *
+ * Best effort on purpose: a Director must still be able to see and decide the
+ * proposal when GitHub is unreachable. When it fails the card says the facts
+ * were not captured rather than showing blanks that read as zeroes.
+ */
+function capturePullRequestSnapshot(rec, { gh = null } = {}) {
+  if (rec?.action_key !== ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return null;
+  // Never reach the network from the test runner. Tests inject `gh`.
+  if (!gh && process.env.NODE_TEST_CONTEXT) return null;
+  try {
+    const out = inspectPullRequest(rec.inputs || {}, gh ? { gh } : {});
+    if (!out?.ok || !out.pr) return null;
+    const pr = out.pr;
+    return {
+      title: pr.title || null,
+      url: pr.url || null,
+      state: pr.state || null,
+      mergeable: pr.mergeable || null,
+      merge_state: pr.mergeStateStatus || null,
+      headRefName: pr.headRefName || null,
+      changedFiles: pr.changedFiles ?? null,
+      additions: pr.additions ?? null,
+      deletions: pr.deletions ?? null,
+      checks: pr.checks || null,
+      observed_at: iso(Date.now()),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
   return {
     request_id: req.request_id,
     mission_id: req.mission_id,
+    // What vouched for this action, so the approval card can say so instead of
+    // leaving a repository-authorized request looking unattributed.
+    authority: req.authority || (req.mission_id ? { kind: "mission", mission_id: req.mission_id } : null),
+    grant_id: req.grant_id || null,
+    proposal: governedProposalFor(req),
+    grant_expires_at: req.grant_expires_at || null,
     lane_id: req.lane_id,
     run_id: req.run_id || null,
     action_key: req.action_key,
@@ -243,6 +550,7 @@ export function publicGovernedAction(req) {
     requested_mode: req.requested_mode,
     reason_worker_cannot_execute: req.reason_worker_cannot_execute || null,
     operator_approval_required: Boolean(req.operator_approval_required),
+    operator_approval: req.operator_approval || null,
     status: req.status,
     result_ref: req.result_ref || null,
     failure_reason: req.failure_reason || null,
@@ -295,6 +603,57 @@ export function pendingGovernedActionForLane(laneId, root = runtimeRoot()) {
   if (!laneId) return null;
   const lane = canonicalLaneStoreId(laneId, root);
   return newestPending(listGovernedActions({ laneId: lane, root }));
+}
+
+/**
+ * The most recently RESOLVED governed action for a lane.
+ *
+ * The approval card exists only while a request is PENDING, so the moment a
+ * Director approves, it disappears — identically whether the action succeeded
+ * or failed. Hiding a resolved card was the right fix for a stale button; it
+ * still leaves the operator with silence. "Unsure if the authorize push click
+ * actually worked" is the consequence, and the answer was in the record the
+ * whole time.
+ */
+export function lastResolvedGovernedActionForLane(laneId, root = runtimeRoot()) {
+  if (!laneId) return null;
+  const lane = canonicalLaneStoreId(laneId, root);
+  const resolved = listGovernedActions({ laneId: lane, root })
+    .filter((r) => r.status === "complete" || r.status === "failed");
+  if (!resolved.length) return null;
+  return resolved.sort((a, b) => Date.parse(b.updated_at || 0) - Date.parse(a.updated_at || 0))[0];
+}
+
+/**
+ * What actually happened, in the terms the operator asked in.
+ *
+ * Read from the trusted-host RESULT rather than restating the request, because
+ * the question is never "what did I ask for" — it is "did it land". Bounded, and
+ * it names only identifiers that are already public.
+ */
+export function governedOutcomeFor(req) {
+  if (!req || (req.status !== "complete" && req.status !== "failed")) return null;
+  const ok = req.status === "complete";
+  const r = req.result || {};
+  let detail = null;
+  if (ok) {
+    if (req.action_key === ACTION_TYPES.REPOSITORY_PUSH && r.pushedSha) {
+      detail = `${r.branch || "branch"} is on the remote at ${String(r.pushedSha).slice(0, 12)}${r.idempotent ? " (already there)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.PROMOTION_OPEN_PR && r.pullRequestNumber) {
+      detail = `pull request #${r.pullRequestNumber} into ${r.base || "staging"}${r.reused ? " (already open)" : ""}`;
+    } else if (req.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST && (r.merge_sha || r.mergeSha)) {
+      detail = `merged as ${String(r.merge_sha || r.mergeSha).slice(0, 12)}`;
+    }
+  }
+  return {
+    ok,
+    action_key: req.action_key,
+    title: req.title || req.action_key,
+    at: req.updated_at || null,
+    approved_by: req.operator_approval?.actor || null,
+    detail: detail || (ok ? "completed" : bound(req.failure_reason || req.failure_code, 240)),
+    failure_code: ok ? null : (req.failure_code || null),
+  };
 }
 
 export function latestGovernedActionForMission(missionId, root = runtimeRoot()) {
@@ -558,9 +917,21 @@ function resolveWorktreePath(input, laneId, run, root) {
     || null;
 }
 
-function sanitizeActionInputs(raw) {
+/**
+ * Strip anything that looks like an arbitrary payload.
+ *
+ * `body` is on the blanket reject list because it is how a SQL or HTTP payload
+ * would arrive. A promotion pull request legitimately HAS a body — its
+ * description — so the exception is granted to that one action and nowhere
+ * else, and the text is still bounded and secret-scanned by
+ * validateOpenPrInputs before it reaches GitHub. Widening the blanket rule for
+ * everyone would have been the easy fix and the wrong one.
+ */
+function sanitizeActionInputs(raw, actionKey = null) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  if (raw.sql || raw.statement || raw.body || raw.database_url || raw.databaseUrl || raw.token || raw.argv || raw.shell) {
+  const bodyAllowed = actionKey === ACTION_TYPES.PROMOTION_OPEN_PR;
+  if (raw.sql || raw.statement || (raw.body && !bodyAllowed)
+    || raw.database_url || raw.databaseUrl || raw.token || raw.argv || raw.shell) {
     return { __rejected: "arbitrary_sql_rejected" };
   }
   const out = {};
@@ -575,7 +946,22 @@ function sanitizeActionInputs(raw) {
 function defaultModeForAction(actionKey, requested) {
   if (requested) return requested;
   if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) return "promotion";
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) return "promotion";
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) return "promotion";
   if (actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION) return "migration_apply";
+  /*
+   * A privileged_write action must not inherit the read_only default. `validateAgainstRegistry`
+   * refuses any non-read risk class in read_only mode, so an action added to the registry without
+   * a mode here is registered, discoverable, proposable — and then denied with `policy_denied`,
+   * which reads as "the operator's policy forbids this" rather than "nobody assigned it a mode".
+   * That cost a full delivery cycle to diagnose once; the fallthrough is the hazard, not this line.
+   */
+  // "other" is the existing GOVERNED_MODES member for a privileged action that is neither a
+  // promotion nor a migration. Inventing a mode name instead fails `invalid_mode`, and widening the
+  // enum would add governance vocabulary for one action that already has a home.
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
+  if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
   return "read_only";
 }
 
@@ -587,29 +973,71 @@ function validateRequestShape(input, { root } = {}) {
   const missionId = String(
     input.mission_id || input.missionId || missionIdForLane(laneId, root) || "",
   ).trim();
-  if (!missionId) return { ok: false, error: "missing_mission_binding" };
+  // A lane with no Mission is not automatically ungoverned.
+  //
+  // A provider on an authorized run reached repository.merge_pull_request and
+  // this refused with `missing_mission_binding`, leaving nothing for a Director
+  // to approve — the only route left was merging by hand outside Vacilando.
+  // The refusal was right; having nothing on the other side of it was the bug.
+  //
+  // Authority may instead come from the lane's REPOSITORY, and only when its
+  // profile actually carries governed promotion. A generic repository has no
+  // promotion policy and stays exactly as fail-closed as before: this widens
+  // where authority may come from, never what may be done without it.
+  let repositoryAuthority = null;
+  if (!missionId) {
+    // Resolve here rather than requiring every caller to thread it. Both entry
+    // points — the CLI and the WAITING_RESOURCE orchestrator — reach this one
+    // function, and a caller that forgot to pass authority would have failed
+    // closed for the wrong reason.
+    const authority = input.__authority || resolveGovernedAuthoritySync(laneId, { root });
+    if (!authority || authority.ok !== true) {
+      return {
+        ok: false,
+        error: authority?.error || "missing_mission_binding",
+        detail: authority?.detail || null,
+        repository_id: authority?.repository_id || null,
+      };
+    }
+    if (authority.kind !== "repository") return { ok: false, error: "missing_mission_binding" };
+    repositoryAuthority = authority;
+  }
   const mode = defaultModeForAction(
     actionKey,
     String(input.requested_mode || input.requestedMode || "").trim() || null,
   );
+  const authorityRecord = repositoryAuthority
+    ? {
+      kind: "repository",
+      repository_id: repositoryAuthority.repository_id,
+      repository_name: repositoryAuthority.repository_name || null,
+      profile: repositoryAuthority.profile || null,
+      canonical_branch: repositoryAuthority.canonical_branch || null,
+    }
+    : { kind: "mission", mission_id: missionId };
   if (!GOVERNED_MODES.includes(mode)) return { ok: false, error: "invalid_mode", requested_mode: mode };
   const reason = bound(input.reason_worker_cannot_execute || input.reasonWorkerCannotExecute, 1000);
   if (!reason) return { ok: false, error: "missing_reason_worker_cannot_execute" };
   const purpose = bound(input.purpose, 1000) || "Governed capability required";
   const defaultTarget = actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
     || actionKey === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+    || actionKey === ACTION_TYPES.REPOSITORY_PUSH
+    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
     ? "staging"
     : DEFAULT_TARGET;
   const target = String(input.target || defaultTarget).trim() || defaultTarget;
   const artifactRefs = Array.isArray(input.artifact_refs || input.artifactRefs)
     ? (input.artifact_refs || input.artifactRefs).map(String).filter(Boolean)
     : (input.artifact ? [String(input.artifact)] : []);
-  const inputs = sanitizeActionInputs(input.inputs || {});
+  const inputs = sanitizeActionInputs(input.inputs || {}, actionKey);
   if (inputs.__rejected) return { ok: false, error: inputs.__rejected, failure_code: "policy_denied" };
   return {
     ok: true,
     actionKey,
-    missionId,
+    // null, never "", so every `if (missionId)` downstream reads the same way.
+    missionId: missionId || null,
+    // Present when a repository, not a mission, is vouching for this action.
+    authority: authorityRecord,
     laneId,
     mode,
     reason,
@@ -638,8 +1066,10 @@ function validateAgainstRegistry(actionKey, target, artifactRefs, mode, { worktr
       ...(inputs || {}),
       queryArtifactPath: artifactPathFrom(artifactRefs),
       databaseTarget: target,
-      worktreePath,
-      worktree_path: worktreePath,
+      // Only override when the RUN actually knows its worktree. Spreading
+      // `undefined` here erased a path the caller had supplied in `inputs`,
+      // which surfaced as `invalid_worktree_path` on a perfectly valid request.
+      ...(worktreePath ? { worktreePath, worktree_path: worktreePath } : {}),
     });
     if (!validated.ok) {
       const readonlyFail = new Set([
@@ -662,6 +1092,12 @@ function validateAgainstRegistry(actionKey, target, artifactRefs, mode, { worktr
 }
 
 function actionQueryHash(rec) {
+  if (rec?.action_key === ACTION_TYPES.REPOSITORY_PUSH
+    || rec?.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    // A push or a promotion is a decision about one COMMIT. Keying on the head
+    // SHA is what makes an approval stop applying the moment the branch moves.
+    return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null;
+  }
   if (rec?.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     return rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || rec.inputs?.head_sha || null;
   }
@@ -709,6 +1145,14 @@ function requestTitle(rec) {
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
     const n = rec.inputs?.pull_request_number || rec.inputs?.pullRequestNumber || "";
     return n ? `Merge PR #${n} into staging` : "Merge pull request into staging";
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    const b = rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || "";
+    return b ? `Push ${b} to the remote` : "Push a reviewed branch";
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const b = rec.inputs?.head_branch || rec.inputs?.headBranch || rec.inputs?.branch || "";
+    return b ? `Open a staging pull request for ${b}` : "Open a promotion pull request";
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     return "Apply Access & Identity staging migrations";
@@ -806,6 +1250,9 @@ export function requestGovernedAction(input = {}, {
     schema_version: GOVERNED_ACTION_SCHEMA,
     request_id: newRequestId(),
     mission_id: shape.missionId,
+    // What vouched for this action. A repository-authorized request has no
+    // mission, so this is the only place the audit trail can name its source.
+    authority: shape.authority || null,
     lane_id: laneId,
     run_id: runId,
     worktree_path: worktreePath,
@@ -838,6 +1285,11 @@ export function requestGovernedAction(input = {}, {
     created_at: iso(nowMs),
     updated_at: iso(nowMs),
   };
+  // Capture the pull request's facts ONCE, at the moment the proposal is made,
+  // so the Director decides against what was true then and the head-SHA pin
+  // catches anything that moves afterwards.
+  const snapshot = capturePullRequestSnapshot(rec, { gh: input.__gh || null });
+  if (snapshot) rec.proposal_snapshot = snapshot;
   saveRequest(rec, storeRoot);
   appendAudit(rec, "requested", { nowMs }, storeRoot);
   attachRunWait(rec, { nowMs, root: storeRoot });
@@ -878,28 +1330,56 @@ export function orchestrateDirectorGovernedWait({
   const laneId = run.lane_id;
   const rec = getDurableLane(laneId, root);
   const missionId = fields.mission_id || fields.missionId || run.mission_id || rec?.mission_id || null;
-  if (!missionId) {
-    patchRunFields(run.run_id, {
-      state_reason: "Lane has no Mission binding",
-    }, { nowMs, root });
-    return { ok: false, error: "missing_mission_binding" };
+  const authority = fields.__authority
+    || (missionId ? null : resolveGovernedAuthoritySync(laneId, { root }));
+  if (!missionId && !(authority && authority.ok === true && authority.kind === "repository")) {
+    // Say WHICH authority is missing. "Lane has no Mission binding" sent the
+    // Director looking for a mission to repair, when the real answer is that
+    // this repository's profile does not carry governed promotion at all.
+    const detail = authority?.error === "repository_profile_forbids_governed_action"
+      ? `This repository's ${authority.profile} profile does not carry governed promotion.`
+      : "Lane has no Mission binding and no repository that can authorize this action.";
+    patchRunFields(run.run_id, { state_reason: detail }, { nowMs, root });
+    return { ok: false, error: authority?.error || "missing_mission_binding", detail };
   }
 
   const request = {
     mission_id: missionId,
+    // Which authority vouched for this action, recorded on the request so the
+    // approval card and the audit trail can say so.
+    authority: missionId
+      ? { kind: "mission", mission_id: missionId }
+      : {
+        kind: "repository",
+        repository_id: authority.repository_id,
+        repository_name: authority.repository_name || null,
+        profile: authority.profile || null,
+        canonical_branch: authority.canonical_branch || null,
+      },
     lane_id: laneId,
     run_id: run.run_id,
     action_key: fields.action_key || fields.actionKey || null,
     target: fields.target || null,
     purpose: fields.purpose || null,
     artifact_refs: fields.artifact_refs || fields.artifactRefs || (fields.artifact ? [fields.artifact] : []),
-    requested_mode: fields.requested_mode || fields.requestedMode || "read_only",
+    // Defer to the action's own default instead of hardcoding read_only.
+    // A merge is privileged_write, so forcing read_only here made every merge
+    // raised through the WAITING_RESOURCE seam fail `policy_denied` before a
+    // Director ever saw it — the CLI path never hit this because it sends its
+    // own mode. Census still resolves to read_only, which is its default.
+    requested_mode: fields.requested_mode || fields.requestedMode || null,
     reason_worker_cannot_execute: fields.reason_worker_cannot_execute
       || fields.reasonWorkerCannotExecute
       || reason
       || "Lane cannot execute this privileged capability",
     worktree_path: run.worktree_path || rec?.binding?.worktree_path || null,
     title: fields.title || null,
+    // Forwarded, because a merge or a migration IS its inputs. Dropping them
+    // here left the request with nothing to validate and it failed as
+    // `missing_repository` — which reads like a registry problem rather than
+    // the plumbing gap it was. Census carries its parameters in artifact_refs
+    // and so never noticed.
+    inputs: fields.inputs || fields.action_inputs || {},
   };
   if (!request.action_key) {
     patchRunFields(run.run_id, { state_reason: "Governed wait missing action_key" }, { nowMs, root });
@@ -908,19 +1388,138 @@ export function orchestrateDirectorGovernedWait({
   return requestGovernedAction(request, { nowMs, root, processNow: false });
 }
 
+/**
+ * What a Decision is ABOUT, as a comparable key.
+ *
+ * A Decision for a merge is not a standing permission to merge; it names one
+ * pull request at one head SHA. Reuse therefore has to be scoped to the
+ * subject, not merely to the action type — see openApprovalDecision.
+ *
+ * Returns null when the action has no identifiable subject, and a null subject
+ * never matches another null: unknown is not the same as equal.
+ */
+export function governedActionSubjectKey(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    const sha = String(inputs.expected_head_sha || inputs.expectedHeadSha || "").toLowerCase();
+    if (n == null) return null;
+    return `merge:#${n}@${sha.slice(0, 40)}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    const versions = Array.isArray(inputs.migrations)
+      ? inputs.migrations.map((m) => String(m?.version || m)).filter(Boolean).sort()
+      : [];
+    if (!versions.length) return null;
+    return `migration:${versions.join(",")}`;
+  }
+  if (rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const artifact = artifactPathFrom(rec.artifact_refs) || "";
+    if (!rec.target) return null;
+    return `census:${rec.target}:${artifact.split("/").pop()}`;
+  }
+  return null;
+}
+
+/**
+ * The subject an EXISTING decision was opened for.
+ *
+ * Prefers the structured marker written below. Decisions created before that
+ * marker existed are read from the situation text this same function composes,
+ * so an already-open decision is still matched correctly rather than being
+ * treated as subject-less and reused for anything.
+ */
+export function decisionSubjectKey(decision) {
+  if (!decision) return null;
+  const marked = (Array.isArray(decision.evidence) ? decision.evidence : [])
+    .find((e) => e && typeof e === "object" && e.governed_action_subject);
+  if (marked) return String(marked.governed_action_subject);
+
+  const text = String(decision.situation || "");
+  const pr = text.match(/^PR: #(\d+)\s*$/m);
+  if (pr) {
+    const sha = text.match(/^Expected SHA: ([0-9a-fA-F]{7,40})\s*$/m);
+    return `merge:#${pr[1]}@${String(sha ? sha[1] : "").toLowerCase()}`;
+  }
+  return null;
+}
+
+/**
+ * Evidence plus a structural record of what this decision is about, so matching
+ * never has to depend on parsing the prose above it.
+ */
+function decisionEvidenceWithSubject(rec) {
+  const base = Array.isArray(rec?.artifact_refs) ? rec.artifact_refs.slice() : [];
+  const subject = governedActionSubjectKey(rec);
+  if (!subject) return base;
+  base.push({
+    governed_action_subject: subject,
+    action_key: rec.action_key,
+    request_id: rec.request_id,
+  });
+  return base;
+}
+
+function subjectsMatch(decision, rec) {
+  const want = governedActionSubjectKey(rec);
+  const have = decisionSubjectKey(decision);
+  // Unknown on either side is not a match. Reusing a decision whose subject we
+  // cannot read is exactly the failure this guards against.
+  return Boolean(want) && Boolean(have) && want === have;
+}
+
 function openApprovalDecision(rec, { nowMs, root } = {}) {
   const presentation = presentationForGovernedAction(rec);
+
+  // A repository-authorized request has no Mission, and the Decision store is
+  // mission-scoped by construction — createDecision throws without one. Two
+  // things follow, and both matter.
+  //
+  // First, do NOT fall through to listDecisions(null): that scans EVERY
+  // mission's open decisions, and the merge branch below matches on
+  // `defaultAction === "approve_governed_merge"` alone. This request would have
+  // silently adopted an unrelated mission's open merge decision, so approving
+  // one would have approved the other.
+  //
+  // Second, no parallel approval system is invented here. The governed action
+  // record IS the approval surface — `awaiting_operator` plus `operator_approval`
+  // is what the Director approves, exactly as a mission-bound request does. The
+  // Decision is the extra mission-side view, and its absence costs nothing.
+  if (!rec.mission_id) {
+    emitNotification("governed_action_approval_required", rec, {
+      title: presentation.mission_need,
+      body: presentation.detail,
+      root,
+    });
+    return null;
+  }
+
   const isCensus = rec.action_key === ACTION_TYPES.DATABASE_READ_CENSUS;
+  // A DECISION IS ABOUT A SUBJECT, NOT ABOUT A CAPABILITY.
+  //
+  // This used to reuse any open decision of the right action type. Within one
+  // mission that meant a second merge request adopted the first one's decision:
+  // PR #531 bound itself to the open decision titled "Merge PR #529", and #529
+  // was already merged. The Director was shown an approval labelled for a
+  // finished PR, approving it could not produce the #531 merge, and the stale
+  // request sat on the shared decision indefinitely. Three approvals failed to
+  // land that way.
+  //
+  // Reuse now requires the same subject — same PR at the same head SHA, same
+  // migration set, same census artifact. A different SHA is a different
+  // decision, exactly as the single-use grant already treats it.
   const open = listDecisions(rec.mission_id, { status: "open" })
     .find((d) => {
-      if (isCensus) return d.defaultAction === "approve_governed_census" || /census/i.test(d.title || "");
-      if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-        return d.defaultAction === "approve_governed_merge" || /merge pr/i.test(d.title || "");
-      }
-      if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-        return d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "");
-      }
-      return d.title === rec.title;
+      const typeMatches = isCensus
+        ? d.defaultAction === "approve_governed_census" || /census/i.test(d.title || "")
+        : rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST
+          ? d.defaultAction === "approve_governed_merge" || /merge pr/i.test(d.title || "")
+          : rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION
+            ? d.defaultAction === "approve_governed_migration" || /staging migration/i.test(d.title || "")
+            : d.title === rec.title;
+      if (!typeMatches) return false;
+      return subjectsMatch(d, rec);
     });
   if (open) {
     rec.decision_id = open.decisionId;
@@ -973,7 +1572,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
       defaultAction: "approve_governed_census",
       actor: "director",
       nowMs,
-      evidence: rec.artifact_refs || [],
+      evidence: decisionEvidenceWithSubject(rec),
     });
     rec.decision_id = decision.decisionId;
     emitNotification("governed_action_approval_required", rec, {
@@ -1029,7 +1628,7 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
     defaultAction: isMerge ? "approve_governed_merge" : "approve_governed_migration",
     actor: "director",
     nowMs,
-    evidence: rec.artifact_refs || [],
+    evidence: decisionEvidenceWithSubject(rec),
   });
   rec.decision_id = decision.decisionId;
   emitNotification("governed_action_approval_required", rec, {
@@ -1040,18 +1639,78 @@ function openApprovalDecision(rec, { nowMs, root } = {}) {
   return decision;
 }
 
-function defaultExecute(rec, { nowMs, actor } = {}) {
+/**
+ * The key the trusted-host stores are partitioned by.
+ *
+ * A mission when there is one; otherwise the repository that vouched. Same
+ * store, same states, same execution path — only the authority differs, which
+ * is the whole point of this change.
+ */
+function authorityScopeFor(rec) {
+  return rec?.mission_id || rec?.authority?.repository_id || null;
+}
+
+/** Everything a Director actually weighs, in the shape the grant is pinned to. */
+function proposalForRequest(rec) {
+  return {
+    proposal_id: rec.request_id,
+    action_key: rec.action_key,
+    repository_id: rec.authority?.repository_id || null,
+    pull_request_number: rec.inputs?.pull_request_number ?? rec.inputs?.pullRequestNumber ?? null,
+    expected_head_sha: rec.inputs?.expected_head_sha || rec.inputs?.expectedHeadSha || null,
+    // Normalized the way validateMergeInputs will normalize them, so the grant
+    // pins the values the action is actually built from. Comparing an unset
+    // merge_method against the action's defaulted "merge" would make every
+    // grant look stale.
+    target_branch: rec.target || "staging",
+    merge_method: rec.inputs?.merge_method || rec.inputs?.mergeMethod || "merge",
+    // Present for a push or a promotion; null for a merge, whose identity is
+    // the pull request number rather than a branch name.
+    branch: rec.inputs?.branch || rec.inputs?.head_branch || rec.inputs?.headBranch || null,
+    run_id: rec.run_id || null,
+    lane_id: rec.lane_id || null,
+    requested_by: rec.requesting_worker || null,
+  };
+}
+
+function defaultExecute(rec, { nowMs, actor, root } = {}) {
+  const scope = authorityScopeFor(rec);
+  // Present only on the repository-authorized path. A mission-bound request is
+  // authorized exactly as before and never looks at this.
+  const grant = rec.grant_id ? getGrant(rec.grant_id, root) : null;
+
   if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
-    return fulfillRepositoryMergeForMission(rec.mission_id, {
+    return fulfillRepositoryMergeForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: rec.inputs || {},
       actor,
       nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
+    return fulfillRepositoryPushForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return fulfillPromotionOpenPrForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
     });
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
-    return fulfillDatabaseMigrationForMission(rec.mission_id, {
+    return fulfillDatabaseMigrationForMission(scope, {
       assignmentId: rec.run_id || null,
       executionSessionId: rec.run_id || null,
       inputs: {
@@ -1061,12 +1720,48 @@ function defaultExecute(rec, { nowMs, actor } = {}) {
       },
       actor,
       nowMs,
+      grant,
     });
   }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    return fulfillAssignQaAccessForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    return fulfillProvisionQaIdentityForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    return fulfillRestoreQaSessionForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: { ...(rec.inputs || {}), worktree_path: rec.worktree_path, worktreePath: rec.worktree_path },
+      actor,
+      nowMs,
+      grant,
+    });
+  }
+  /*
+   * Anything without a branch above lands here. That fallthrough is why a registered, mode-mapped,
+   * operator-APPROVED restore still failed `action_unavailable`: the action existed everywhere
+   * except in this dispatch, and the error names the registry rather than the missing branch.
+   */
   if (rec.action_key !== ACTION_TYPES.DATABASE_READ_CENSUS) {
     return { ok: false, error: "action_unavailable" };
   }
-  return fulfillDatabaseCensusForMission(rec.mission_id, {
+  return fulfillDatabaseCensusForMission(scope, {
     assignmentId: rec.run_id || null,
     executionSessionId: rec.run_id || null,
     queryArtifactPath: artifactPathFrom(rec.artifact_refs),
@@ -1273,11 +1968,151 @@ export function executeGovernedAction(requestId, {
   } catch (e) {
     out = { ok: false, error: "execution_threw", detail: String(e && e.message || e) };
   }
+  // Spend the grant the moment it is used for anything other than a refusal.
+  // Single-use is the property that makes this an authorization for ONE merge
+  // rather than standing permission: a retry, a replay, or a second tap needs a
+  // fresh Director decision. `already` covers the double-click, so consuming
+  // twice reads as done rather than as a second execution.
+  if (rec.grant_id && out?.error !== "authorization_required") {
+    const spent = consumeGrant(rec.grant_id, { by: actor || "director", nowMs, root });
+    appendAudit(rec, "grant_consumed", { nowMs, grant_id: rec.grant_id, already: Boolean(spent.already) }, root);
+  }
   const applied = applyExecuteResult(rec, out, { nowMs, root, actor });
   if (applied.ok && rec.status === "complete") {
     applied.resumePromise = resumeLaneAfterGovernedAction(rec.request_id, { nowMs, root, actor });
   }
   return applied;
+}
+
+/**
+ * Repair approval records that reality or a mislabelled decision has stranded.
+ *
+ * TWO THINGS STRAND A GOVERNED MERGE.
+ *
+ * The first is that the merge already happened. A request pinned to a PR that
+ * is now merged at the expected head has nothing left to authorize — the state
+ * the Director would be approving already exists. Leaving it `awaiting_operator`
+ * is not caution, it is a queue entry that can never be satisfied, and while it
+ * shares a decision it blocks the requests behind it. It is resolved here as
+ * complete/idempotent, WITHOUT minting a grant: no privileged mutation is
+ * performed, so no authorization is created.
+ *
+ * The second is a decision that names a different subject, from the reuse bug
+ * openApprovalDecision now prevents. Records already written that way are
+ * detached and given a decision that names what they actually are.
+ *
+ * Deliberately NOT done here: denying anything. A merge that already landed is
+ * satisfied, not refused, and recording it as denied would be false.
+ */
+export async function reconcileGovernedApprovals({
+  root = runtimeRoot(),
+  nowMs = Date.now(),
+  inspect = null,
+  laneId = null,
+} = {}) {
+  const store = readGovernedActionStore(root);
+  const pending = store.requests.filter((r) => {
+    if (r.status !== "awaiting_operator" && r.status !== "awaiting_director") return false;
+    if (laneId && canonicalLaneStoreId(r.lane_id, root) !== canonicalLaneStoreId(laneId, root)) return false;
+    return true;
+  });
+
+  const satisfied = [];
+  const rebound = [];
+  const unchanged = [];
+
+  let inspectFn = inspect;
+  if (!inspectFn) {
+    const mod = await import("./trusted-host-merge.mjs");
+    inspectFn = (inputs) => {
+      const seen = mod.inspectPullRequest(inputs);
+      return mod.evaluateMergeReadiness(seen);
+    };
+  }
+
+  for (const rec of pending) {
+    if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+      let verdict = null;
+      try {
+        verdict = inspectFn(rec.inputs || {});
+      } catch (err) {
+        // An unreachable remote is not evidence of anything; leave the record be.
+        unchanged.push({ request_id: rec.request_id, reason: "inspect_failed", detail: String(err?.message || err) });
+        continue;
+      }
+      if (verdict?.ok && verdict.idempotent && verdict.code === "already_merged") {
+        rec.status = "complete";
+        rec.operator_approval_required = false;
+        rec.policy_decision = "already_satisfied";
+        rec.result = {
+          ...(rec.result || {}),
+          idempotent: true,
+          code: "already_merged",
+          merge_sha: verdict.mergeSha || null,
+          staging_sha: verdict.stagingSha || null,
+        };
+        rec.updated_at = iso(nowMs);
+        // Close the decision only when it actually described THIS request.
+        if (rec.decision_id && rec.mission_id) {
+          const d = listDecisions(rec.mission_id, { status: "open" })
+            .find((x) => x.decisionId === rec.decision_id);
+          if (d && subjectsMatch(d, rec)) {
+            try {
+              answerDecision({
+                missionId: rec.mission_id,
+                decisionId: rec.decision_id,
+                chosenOptionId: "authorize_staging_merge",
+                response: `Already merged as ${verdict.mergeSha || "the recorded merge commit"}; no action was required.`,
+                actor: "system",
+                nowMs,
+              });
+            } catch { /* decision close is best-effort */ }
+          } else if (d) {
+            // The decision belongs to a different subject. Releasing it is the
+            // whole point; closing it would answer someone else's question.
+            rec.decision_id = null;
+          }
+        }
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_already_merged", { nowMs, merge_sha: verdict.mergeSha || null }, root);
+        satisfied.push({ request_id: rec.request_id, merge_sha: verdict.mergeSha || null });
+        continue;
+      }
+    }
+
+    // Still live: make sure the decision bound to it names the right subject.
+    //
+    // Searched across ALL decisions, not just open ones: reconciling an earlier
+    // request in this same pass can close the very decision this one is wrongly
+    // bound to, and a binding to a CLOSED decision that was never about this
+    // request is no better than a binding to an open one.
+    if (rec.decision_id && rec.mission_id) {
+      const d = listDecisions(rec.mission_id)
+        .find((x) => x.decisionId === rec.decision_id);
+      if (!d || !subjectsMatch(d, rec)) {
+        const wrong = rec.decision_id;
+        rec.decision_id = null;
+        const opened = openApprovalDecision(rec, { nowMs, root });
+        rec.updated_at = iso(nowMs);
+        saveRequest(rec, root);
+        appendAudit(rec, "reconciled_decision_rebound", {
+          nowMs,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+          subject: governedActionSubjectKey(rec),
+        }, root);
+        rebound.push({
+          request_id: rec.request_id,
+          from_decision_id: wrong,
+          to_decision_id: opened?.decisionId || rec.decision_id || null,
+        });
+        continue;
+      }
+    }
+    unchanged.push({ request_id: rec.request_id, reason: "no_repair_needed" });
+  }
+
+  return { ok: true, satisfied, rebound, unchanged };
 }
 
 export async function approveGovernedAction(requestId, {
@@ -1294,16 +2129,44 @@ export async function approveGovernedAction(requestId, {
     rec.failure_reason = null;
   }
 
-  grantMissionAuthorization({
-    missionId: rec.mission_id,
-    actionType: rec.action_key,
-    databaseTarget: rec.target,
-    actor,
-    queryHash: actionQueryHash(rec),
-    sourceDecisionId: rec.decision_id,
-    note: `Operator approved governed action ${rec.action_key}.`,
-    nowMs,
-  });
+  // WHICH AUTHORIZATION THIS APPROVAL CREATES.
+  //
+  // A mission-bound request keeps grantMissionAuthorization exactly as it was:
+  // mission scoped, reusable within the mission, unchanged behaviour.
+  //
+  // A repository-authorized request must NOT get that. A mission authorization
+  // is keyed only by action type and target, so approving one merge would leave
+  // standing permission to merge that branch again — including a head SHA the
+  // Director never saw. It gets a single-use grant pinned to this exact
+  // proposal instead: this PR, this head SHA, this target, this method, this
+  // run. A different SHA is a different decision.
+  if (rec.mission_id) {
+    grantMissionAuthorization({
+      missionId: rec.mission_id,
+      actionType: rec.action_key,
+      databaseTarget: rec.target,
+      actor,
+      queryHash: actionQueryHash(rec),
+      sourceDecisionId: rec.decision_id,
+      note: `Operator approved governed action ${rec.action_key}.`,
+      nowMs,
+    });
+  } else {
+    const minted = mintGrant({
+      proposal: proposalForRequest(rec),
+      approvedBy: actor,
+      nowMs,
+      root,
+    });
+    if (!minted.ok) {
+      // Refuse loudly rather than executing unauthorized. self_approval_refused
+      // lands here: the provider that asked cannot be the identity that approves.
+      appendAudit(rec, "approval_refused", { nowMs, error: minted.error }, root);
+      return { ok: false, error: minted.error, request: publicGovernedAction(rec) };
+    }
+    rec.grant_id = minted.grant.grant_id;
+    rec.grant_expires_at = minted.grant.expires_at;
+  }
   rec.operator_approval = {
     decision: "approved",
     actor,
@@ -1439,15 +2302,133 @@ export function tickGovernedActions({
   return out;
 }
 
+/**
+ * The result envelope for ONE action type.
+ *
+ * THE DEFECT THIS REPLACES. This was hardcoded to the census shape: it read
+ * `action.result.census` whatever the action was, so a completed
+ * `repository.push` reported itself back to the lane as
+ *
+ *   { census_run_at: null, org_count: null, question_ids: null, keys: [] }
+ *
+ * — a null-filled census envelope for an action that had just published a
+ * commit, under the instruction "Do not retry the census from this lane". Every
+ * field the lane needed (the ref, the SHA, whether it was already there) was
+ * absent, and every field present was meaningless.
+ *
+ * A MISMATCH IS AN ERROR, NOT A BLANK. When the result does not carry the shape
+ * its action type requires, this says so. Rendering nulls turns a wiring fault
+ * into something that merely looks like nothing happened, which is how the
+ * original defect survived a successful push.
+ */
+export function governedResultEnvelope(actionKey, result = {}) {
+  const r = result && typeof result === "object" ? result : {};
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    const sha = r.pushedSha || r.pushed_sha || null;
+    const ref = r.remoteRef || r.remote_ref || (r.branch ? `refs/heads/${r.branch}` : null);
+    if (!sha || !ref) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.push", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        remote_ref: ref,
+        pushed_sha: sha,
+        state: r.idempotent ? "already_present" : "pushed",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const n = r.pullRequestNumber ?? r.pull_request_number ?? null;
+    if (!n) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "promotion.open_pr", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: n,
+        url: r.url || null,
+        base: r.base || null,
+        head_branch: r.headBranch || r.head_branch || null,
+        state: r.reused ? "already_open" : "opened",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    const sha = r.merge_sha || r.mergeSha || null;
+    if (!sha) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "repository.merge_pull_request", got: Object.keys(r).slice(0, 12) };
+    }
+    return {
+      ok: true,
+      summary: {
+        repository: r.repository || null,
+        pull_request_number: r.pull_request_number ?? r.pullRequestNumber ?? null,
+        merge_sha: sha,
+        staging_sha: r.staging_sha || r.stagingSha || null,
+        state: r.idempotent ? "already_merged" : "merged",
+      },
+    };
+  }
+  if (actionKey === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    const census = r.census && typeof r.census === "object" ? r.census : null;
+    if (!census) {
+      return { ok: false, error: "result_envelope_mismatch", expected: "database.read_census", got: Object.keys(r).slice(0, 12) };
+    }
+    const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
+    return {
+      ok: true,
+      summary: {
+        census_run_at: census.census_run_at || null,
+        format: census.format || null,
+        org_count: census.org_count ?? null,
+        database: census.database || null,
+        question_ids: census.question_ids || null,
+        question_row_counts: questions
+          ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
+          : null,
+        keys: Object.keys(census).slice(0, 20),
+      },
+    };
+  }
+  return { ok: true, summary: { note: "completed", keys: Object.keys(r).slice(0, 12) } };
+}
+
+/**
+ * Which credentials the lane did NOT receive, named for the action that ran.
+ *
+ * A push never involves database credentials, and saying so is not merely
+ * imprecise — the sentence exists to tell the lane exactly what it still does
+ * not hold, so naming the wrong secret weakens it.
+ */
+function credentialIsolationLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH
+    || actionKey === ACTION_TYPES.PROMOTION_OPEN_PR
+    || actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "You did NOT receive GitHub credentials or any privileged secret.";
+  }
+  return "You did NOT receive hosted database credentials or any privileged secret.";
+}
+
+/** What a lane must NOT do again, phrased for the action that actually ran. */
+function doNotRetryLine(actionKey) {
+  if (actionKey === ACTION_TYPES.REPOSITORY_PUSH) {
+    return "Do not push from this lane. The commit is already on the remote.";
+  }
+  if (actionKey === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    return "Do not open another pull request from this lane. The one below is the promotion.";
+  }
+  if (actionKey === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    return "Do not retry the merge from this lane. It already landed.";
+  }
+  return "Do not retry the census from this lane. Read the result file and continue.";
+}
+
 export function continuationTextForGovernedAction(rec, action = null) {
-  const census = action?.result?.census || {};
-  const evidencePath = rec.result_ref
-    || action?.result?.evidencePath
-    || null;
-  const questions = census.questions && typeof census.questions === "object" ? census.questions : null;
-  const rowCounts = questions
-    ? Object.fromEntries(Object.entries(questions).map(([id, q]) => [id, q?.row_count ?? null]))
-    : null;
+  const evidencePath = rec.result_ref || action?.result?.evidencePath || null;
+  const envelope = governedResultEnvelope(rec.action_key, action?.result || rec.result || {});
   return redact([
     "[VACILANDO GOVERNED ACTION COMPLETE]",
     `Request: ${rec.request_id}`,
@@ -1457,20 +2438,12 @@ export function continuationTextForGovernedAction(rec, action = null) {
     evidencePath ? `Result file (read this in the current worktree): ${evidencePath}` : null,
     "",
     "Director executed this on the trusted host.",
-    "You did NOT receive hosted database credentials or any privileged secret.",
-    "Do not retry the census from this lane. Read the result file and continue.",
+    credentialIsolationLine(rec.action_key),
+    doNotRetryLine(rec.action_key),
     rec.run_id ? `When this assignment is finished, report: vac run-status ${rec.run_id} complete --summary "..."${rec.lane_id ? ` --lane ${rec.lane_id}` : ""}` : null,
     "",
-    "Bounded result summary:",
-    JSON.stringify({
-      census_run_at: census.census_run_at || null,
-      format: census.format || null,
-      org_count: census.org_count ?? null,
-      database: census.database || null,
-      question_ids: census.question_ids || null,
-      question_row_counts: rowCounts,
-      keys: Object.keys(census).slice(0, 20),
-    }, null, 2),
+    envelope.ok ? "Bounded result summary:" : "RESULT ENVELOPE MISMATCH — the trusted-host result did not carry the shape this action produces. Report this rather than acting on it:",
+    JSON.stringify(envelope.ok ? envelope.summary : envelope, null, 2),
     "",
     rec.continuation_intent || "Continue the current assignment using this evidence.",
   ].filter((line) => line != null).join("\n"));
@@ -1626,40 +2599,80 @@ export function attachLaneGovernedActions(lanes, root = runtimeRoot()) {
   const list = Array.isArray(lanes) ? lanes : [];
   if (!list.length) return list;
   return list.map((lane) => {
-    const pending = pendingGovernedActionForLane(lane?.lane_id, root)
-      || pendingGovernedActionForRun(lane?.execution_run?.run_id, root);
-    if (!pending) return lane;
+    const hydrated = {
+      ...lane,
+      execution_run: hydrateGovernedOnRun(lane.execution_run, root),
+      previous_run: hydrateGovernedOnRun(lane.previous_run, root),
+    };
+    const pending = pendingGovernedActionForLane(hydrated?.lane_id, root)
+      || pendingGovernedActionForRun(hydrated?.execution_run?.run_id, root);
+    if (!pending) {
+      // A resolved approval must not keep advertising itself from the run
+      // snapshot. Runtime Performance's push completed; previous_run still
+      // said awaiting_operator, so Authorize push stayed on screen and the
+      // click looked like a no-op (already complete + "Census authorized").
+      // Hiding the resolved card stops a stale button; it does not tell the
+      // operator what happened. Report the last resolved decision alongside it,
+      // so an approval that has just vanished from the screen still has an
+      // answer on the screen.
+      const outcome = governedOutcomeFor(lastResolvedGovernedActionForLane(hydrated?.lane_id, root));
+      const snapshot = hydrated.governed_action;
+      if (snapshot && !isPendingGovernedStatus(snapshot.status)) {
+        return { ...hydrated, governed_action: null, last_governed_outcome: outcome };
+      }
+      return outcome ? { ...hydrated, last_governed_outcome: outcome } : hydrated;
+    }
     const pub = publicGovernedAction(pending);
-    const run = lane.execution_run
+    const withAction = (r) => (r
       ? {
-        ...lane.execution_run,
+        ...r,
         governed_action: pub,
         resource_wait: {
-          ...(lane.execution_run.resource_wait || {}),
+          ...(r.resource_wait || {}),
           ...waitProjection(pending),
         },
       }
-      : null;
+      : null);
+    // AN APPROVAL OUTLIVES THE TURN THAT ASKED FOR IT.
+    //
+    // A lane whose run has finished has `execution_run: null` — attachLaneRuns
+    // only reports a non-terminal run as active. Attaching the pending request
+    // to the active run alone left an `awaiting_operator` approval reachable
+    // nowhere: Communications filed a merge request for PR #510, closed its
+    // turn, and the Director had a decision to make with no card to make it on.
+    // The request is the LANE's, so it is attached wherever the lane's run is.
     return {
-      ...lane,
+      ...hydrated,
       governed_action: pub,
-      execution_run: run,
+      execution_run: withAction(hydrated.execution_run),
+      previous_run: hydrated.execution_run ? hydrated.previous_run : withAction(hydrated.previous_run),
     };
   });
 }
 
+function hydrateGovernedOnRun(run, root) {
+  if (!run?.governed_action?.request_id) return run || null;
+  const rec = getGovernedAction(run.governed_action.request_id, root);
+  if (!rec) return run;
+  return { ...run, governed_action: publicGovernedAction(rec) };
+}
+
 export function applyGovernedActionToPublicRun(run, root = runtimeRoot()) {
   if (!run?.run_id && !run?.lane_id) return run;
-  const pending = pendingGovernedActionForRun(run.run_id, root)
-    || pendingGovernedActionForLane(run.lane_id, root);
+  const hydrated = hydrateGovernedOnRun(run, root);
+  const pending = pendingGovernedActionForRun(hydrated?.run_id, root)
+    || pendingGovernedActionForLane(hydrated?.lane_id, root);
   if (!pending) {
-    return run.governed_action ? run : { ...run, governed_action: run.governed_action || null };
+    if (hydrated?.governed_action && !isPendingGovernedStatus(hydrated.governed_action.status)) {
+      return { ...hydrated, governed_action: null };
+    }
+    return hydrated;
   }
   return {
-    ...run,
+    ...hydrated,
     governed_action: publicGovernedAction(pending),
     resource_wait: {
-      ...(run.resource_wait || {}),
+      ...(hydrated.resource_wait || {}),
       ...waitProjection(pending),
     },
   };

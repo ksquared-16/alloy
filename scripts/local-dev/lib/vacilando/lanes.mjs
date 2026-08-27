@@ -32,10 +32,20 @@ import {
   validateRuntimeBinding,
 } from "./development-lane.mjs";
 import { collectLatestClaudeResponse } from "./providers/claude/telemetry.mjs";
+import { collectLatestCursorResponse } from "./providers/cursor/telemetry.mjs";
+import {
+  PROMPT_NOT_READY_ERROR,
+  assessPanePromptReadiness,
+  promptReadinessAllowsSend,
+  publicPromptReadiness,
+} from "./provider-prompt-readiness.mjs";
 
 export const LANE_SCHEMA = "vacilando.lane.v1";
 export const LANE_OUTPUT_SCHEMA = "vacilando.lane.output.v1";
 export const LANE_SEND_SCHEMA = "vacilando.lane.send.v1";
+export const CURSOR_DELIVERY_UNAVAILABLE = "cursor_delivery_unavailable";
+export const CURSOR_DELIVERY_UNAVAILABLE_SUMMARY =
+  "Cursor delivery unavailable: transcript is readable, but no executable Cursor transport is attached.";
 export const TMUX_SESSION_RE = /^alloy-[a-z0-9]+(-[a-z0-9]+)*$/;
 export const LANE_ID_RE = /^(?:lane_[a-f0-9]{12}|alloy-[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 /** Recent: fast poll / fingerprint. Extended: operator-requested review only. */
@@ -154,6 +164,28 @@ export function inferClaudePresence(pane) {
   return "unknown";
 }
 
+/**
+ * Provider-aware presence. inferClaudePresence only ever recognised Claude, so
+ * a Cursor lane read as "unknown" and the Gateway showed it as not running.
+ * Claude detection is unchanged; Cursor is recognised on its own terms.
+ */
+export function inferAgentPresence(pane, { provider = null } = {}) {
+  const p = String(provider || "").toLowerCase();
+  const cmd = String(pane?.command || "");
+  const title = String(pane?.title || "");
+  if (p === "cursor" || /cursor[- ]?agent/i.test(cmd) || /cursor[- ]?agent/i.test(title)) {
+    if (/cursor/i.test(cmd) || /cursor/i.test(title)) return "present";
+    // Cursor's TUI reports a bare version the same way Claude's does.
+    if (/^\d+\.\d+\.\d+$/.test(cmd)) return "present";
+    // Bound Cursor Agent panes often report as `node` with an operator-set
+    // tmux title (not "Cursor Agent"). Command + provider is the live signal.
+    if (/^node(\b|$)/i.test(cmd) && !pane?.dead) return "present";
+    if (pane?.dead) return "absent";
+    return "unknown";
+  }
+  return inferClaudePresence(pane);
+}
+
 export function selectPrimaryPane(panes) {
   if (!Array.isArray(panes) || !panes.length) return null;
   const claude = panes.find((p) => inferClaudePresence(p) === "present");
@@ -239,6 +271,8 @@ export function composeLane({ pane, gitFacts = null, slot = null, worktreeRoot, 
         state: gitFacts.git || "unknown",
         ahead: ab.ahead,
         behind: ab.behind,
+        head: gitFacts.head || null,
+        head_in_base: gitFacts.head_in_base ?? null,
       }
       : { branch: null, state: "unknown", ahead: 0, behind: 0 },
     slot,
@@ -341,6 +375,7 @@ export async function listDevelopmentLanes({
             conflict: Boolean(facts?.conflict),
             last_commit_at: facts?.last_commit_at || null,
             head: facts?.head || null,
+            head_in_base: facts?.head_in_base ?? null,
           },
           worktree: {
             name: rec.binding.worktree_name || projected.worktree?.name,
@@ -400,6 +435,9 @@ export function projectDurableObservation(rec, observations = []) {
     execution_capacity: rec.execution_capacity || null,
     mission_id: rec.mission_id || null,
     mission_bound_at: rec.mission_bound_at || null,
+    preferred_provider: rec.preferred_provider || rec.binding?.provider || null,
+    folder_id: rec.folder_id || null,
+    repository_id: rec.repository_id || null,
   };
 }
 
@@ -497,7 +535,7 @@ function clientTriedTmuxOverride(opts) {
   return CONTROL_OVERRIDE_KEYS.some((k) => opts[k] != null && opts[k] !== "");
 }
 
-function unavailable(laneId, error, nowMs) {
+function unavailable(laneId, error, nowMs, extra = {}) {
   return {
     ok: false,
     available: false,
@@ -506,6 +544,34 @@ function unavailable(laneId, error, nowMs) {
     error,
     captured_at: new Date(nowMs ?? Date.now()).toISOString(),
     text: null,
+    revision: nowMs ?? Date.now(),
+    provider: extra.provider || null,
+    session_id: extra.session_id || null,
+    run_id: extra.run_id || null,
+  };
+}
+
+export function outputRevisionMs(capturedAt, nowMs = Date.now()) {
+  const ms = Date.parse(capturedAt);
+  return Number.isFinite(ms) ? ms : nowMs;
+}
+
+function laneOutputProvider(lane) {
+  const raw = String(lane?.binding?.provider || lane?.preferred_provider || lane?.agent_session?.provider || "").toLowerCase();
+  if (raw === "cursor" || raw === "cursor-agent" || raw === "cursor_ide") return "cursor";
+  if (raw === "claude" || raw === "claudecode" || raw === "claude-code") return "claude";
+  return raw || null;
+}
+
+function withOutputIdentity(out, lane, nowMs) {
+  const capturedAt = out.captured_at || new Date(nowMs).toISOString();
+  return {
+    ...out,
+    captured_at: capturedAt,
+    revision: Number.isFinite(Number(out.revision)) ? Number(out.revision) : outputRevisionMs(capturedAt, nowMs),
+    provider: out.provider || laneOutputProvider(lane),
+    session_id: out.session_id || lane?.agent_session?.provider_session_id || lane?.agent_session?.agent_session_id || null,
+    run_id: out.run_id || lane?.execution_run?.run_id || null,
   };
 }
 
@@ -555,52 +621,136 @@ async function latestResponseForLane(lane, durableId, nowMs, opts = {}) {
       sessionId = activeAgentSessionForLane(durableId, opts.runtimeRoot)?.provider_session_id || null;
     } catch { /* presentation-only */ }
   }
-  const collect = opts.collectLatestResponse || collectLatestClaudeResponse;
+  const provider = laneOutputProvider(lane);
+  const collect = opts.collectLatestResponse
+    || (provider === "cursor" ? collectLatestCursorResponse : collectLatestClaudeResponse);
+  const source = provider === "cursor" ? "cursor_agent_transcript" : "claude_code_session_transcript";
   let result;
   try {
-    result = collect({ cwd, sessionId, configDir: opts.claudeConfigDir });
+    result = collect({
+      cwd,
+      sessionId,
+      configDir: opts.claudeConfigDir,
+      projectsDir: opts.cursorProjectsDir,
+    });
   } catch {
     result = { available: false, error: "latest_response_failed", text: null };
   }
+  const capturedAt = result?.timestamp || (Number.isFinite(result?.mtime_ms) ? new Date(result.mtime_ms).toISOString() : new Date(nowMs).toISOString());
   if (!result?.available) {
-    return {
+    return withOutputIdentity({
       ok: true,
       available: false,
       schema_version: LANE_OUTPUT_SCHEMA,
       lane_id: durableId,
       mode: "latest_response",
-      source: "claude_code_session_transcript",
+      source,
       error: result?.error || "latest_response_unavailable",
-      captured_at: new Date(nowMs).toISOString(),
+      captured_at: capturedAt,
+      revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : nowMs,
       text: null,
       fingerprint: null,
       line_count: 0,
       truncated: false,
       empty: true,
-    };
+    }, lane, nowMs);
   }
   const text = String(result.text || "");
-  return {
+  return withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
     lane_id: durableId,
     mode: "latest_response",
-    source: "claude_code_session_transcript",
+    source,
     session_id: result.session_id || sessionId,
-    captured_at: result.timestamp || new Date(nowMs).toISOString(),
+    captured_at: capturedAt,
+    revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : outputRevisionMs(capturedAt, nowMs),
     text,
     fingerprint: outputFingerprint(text),
     line_count: text === "" ? 0 : text.split("\n").length,
     truncated: Boolean(result.truncated),
     empty: text.length === 0,
-  };
+  }, lane, nowMs);
+}
+
+function cursorTranscriptOutput(lane, durableId, nowMs, opts = {}) {
+  const cwd = lane?.worktree?.path || lane?.tmux?.cwd || null;
+  const collect = opts.collectLatestResponse || collectLatestCursorResponse;
+  let result;
+  try {
+    result = collect({
+      cwd,
+      sessionId: opts.sessionId || lane?.agent_session?.provider_session_id || null,
+      projectsDir: opts.cursorProjectsDir,
+    });
+  } catch {
+    result = { available: false, error: "transcript_unreadable", text: null };
+  }
+  const capturedAt = result?.timestamp || (Number.isFinite(result?.mtime_ms) ? new Date(result.mtime_ms).toISOString() : new Date(nowMs).toISOString());
+  const text = result?.available ? String(result.text || "") : "";
+  if (!result?.available) {
+    return withOutputIdentity({
+      ok: false,
+      available: false,
+      schema_version: LANE_OUTPUT_SCHEMA,
+      lane_id: durableId,
+      mode: opts.mode || "recent",
+      source: "cursor_agent_transcript",
+      error: result?.error || "output_unavailable",
+      captured_at: capturedAt,
+      revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : nowMs,
+      text: null,
+      fingerprint: null,
+      line_count: 0,
+      truncated: false,
+      empty: true,
+    }, lane, nowMs);
+  }
+  return withOutputIdentity({
+    ok: true,
+    available: true,
+    schema_version: LANE_OUTPUT_SCHEMA,
+    lane_id: durableId,
+    mode: opts.mode || "recent",
+    source: "cursor_agent_transcript",
+    session_id: result.session_id || null,
+    captured_at: capturedAt,
+    revision: Number.isFinite(result?.mtime_ms) ? result.mtime_ms : outputRevisionMs(capturedAt, nowMs),
+    text,
+    fingerprint: outputFingerprint(text),
+    line_count: text === "" ? 0 : text.split("\n").length,
+    truncated: Boolean(result.truncated),
+    empty: text.length === 0,
+  }, lane, nowMs);
 }
 
 /**
  * Bounded observation of a discovered Development Lane's tmux pane.
  * mode=recent is polled; mode=extended / latest_response are operator-requested.
  */
+/**
+ * Persist receipt confirmation the first time this run's own token appears in
+ * advanced output. After that the run's output is its own, even once the
+ * envelope scrolls out of the capture window.
+ */
+async function maybeConfirmInstructionReceipt(run, out, opts = {}) {
+  if (!run?.run_id || opts.skipRunCorrelation || opts.listPanes) return run;
+  if (!runReceiptToken(run) || runReceiptConfirmed(run)) return run;
+  if (!textProvesInstructionReceipt(run, out?.text, out?.fingerprint)) return run;
+  try {
+    const { noteInstructionReceipt } = await import("./execution-run.mjs");
+    const noted = noteInstructionReceipt(run.run_id, {
+      text: out.text,
+      fingerprint: out.fingerprint,
+      nowMs: opts.nowMs ?? Date.now(),
+    });
+    return noted?.run || run;
+  } catch {
+    return run;
+  }
+}
+
 export async function getLaneOutput(laneId, opts = {}) {
   const nowMs = opts.nowMs ?? Date.now();
   const mode = normalizeOutputMode(opts.mode);
@@ -614,12 +764,25 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const lane = found.lane;
   const durableId = lane.lane_id || id;
-
-  if (mode === "latest_response") {
-    return latestResponseForLane(lane, durableId, nowMs, opts);
+  let correlatedRun = lane?.execution_run || lane?.previous_run || null;
+  if (!opts.skipRunCorrelation && !opts.listPanes) {
+    try {
+      const { inspectLaneRun } = await import("./execution-run.mjs");
+      const pack = inspectLaneRun(durableId);
+      correlatedRun = pack?.execution_run || pack?.previous_run || correlatedRun;
+    } catch { /* observation still returns */ }
   }
 
-  if (!lane?.tmux?.alive) return unavailable(durableId, "pane_unavailable", nowMs);
+  if (mode === "latest_response") {
+    return bindOutputToRun(await latestResponseForLane(lane, durableId, nowMs, opts), correlatedRun);
+  }
+
+  if (!lane?.tmux?.alive) {
+    if (laneOutputProvider(lane) === "cursor") {
+      return bindOutputToRun(cursorTranscriptOutput(lane, durableId, nowMs, { ...opts, mode }), correlatedRun);
+    }
+    return bindOutputToRun(unavailable(durableId, "pane_unavailable", nowMs, { provider: laneOutputProvider(lane) }), correlatedRun);
+  }
 
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return unavailable(durableId, "pane_unavailable", nowMs);
@@ -642,12 +805,13 @@ export async function getLaneOutput(laneId, opts = {}) {
 
   const bounded = boundVisibleText(cap.stdout, { maxLines, maxChars });
   const viewportOnly = facts.alternate_screen === true && Number(facts.history_size) === 0;
-  return {
+  const observed = withOutputIdentity({
     ok: true,
     available: true,
     schema_version: LANE_OUTPUT_SCHEMA,
     lane_id: durableId,
     mode,
+    source: "tmux_pane",
     captured_at: new Date(nowMs).toISOString(),
     text: bounded.text,
     fingerprint: outputFingerprint(bounded.text),
@@ -661,7 +825,9 @@ export async function getLaneOutput(laneId, opts = {}) {
     history_limit: facts.history_limit,
     pane_height: facts.pane_height,
     viewport_only: viewportOnly,
-  };
+  }, lane, nowMs);
+  correlatedRun = await maybeConfirmInstructionReceipt(correlatedRun, observed, opts);
+  return bindOutputToRun(observed, correlatedRun);
 }
 
 // --------------------------------------------------------------------------
@@ -692,8 +858,66 @@ export function pasteBufferArgv(bufferName, target) {
   return ["paste-buffer", "-d", "-p", "-b", bufferName, "-t", target];
 }
 
+/**
+ * Read a pane's visible text.
+ *
+ * Exported because callers outside this module need the CURRENT screen — a
+ * blocking dialog must be re-read at answer time, not trusted from whatever the
+ * UI last rendered.
+ */
+export async function capturePaneText(target, historyLines = 200) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target", text: "" };
+  const out = await runTmux(capturePaneArgv(t, historyLines));
+  return { ok: Boolean(out?.ok), text: String(out?.stdout || ""), error: out?.error || null };
+}
+
+/**
+ * Send one bounded key argv to a pane.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how three earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function sendPaneKeys(argv) {
+  if (!Array.isArray(argv) || argv[0] !== "send-keys") {
+    return { ok: false, error: "unsupported_key_argv" };
+  }
+  return runTmux(argv);
+}
+
+/**
+ * Kill whatever is on the composer line before pasting into it.
+ *
+ * NOT yet wired into delivery. paste-buffer inserts at the cursor, so residual
+ * text on the composer is appended to and submitted as one line — observed on
+ * the Surfaces pane sitting at `❯ alloy-dev-stop wt6-surfaces-faacca`. Adding
+ * this to defaultDeliverInstruction is the fix, but the delivery sequence is a
+ * governed contract with tests asserting the exact tmux mutations, and widening
+ * it broke five of them. That belongs in a change that updates the contract
+ * deliberately, not as a side effect of a bug fix.
+ */
+export function clearComposerArgv(target) {
+  return ["send-keys", "-t", target, "C-u"];
+}
+
 export function submitEnterArgv(target) {
   return ["send-keys", "-t", target, "Enter"];
+}
+
+/**
+ * Tell the provider to abandon the turn it is working on.
+ *
+ * Exported deliberately: `runTmux` is private, and reaching for a private
+ * symbol from another module is how two earlier fixes silently no-opped — the
+ * import resolved to undefined and the caller's catch swallowed it.
+ */
+export async function interruptPane(target) {
+  const t = String(target || "").trim();
+  if (!t) return { ok: false, error: "missing_target" };
+  // Escape twice: the first dismisses any transient overlay, the second
+  // cancels the turn underneath it.
+  return runTmux(["send-keys", "-t", t, "Escape", "Escape"]);
 }
 
 export function deleteBufferArgv(bufferName) {
@@ -722,15 +946,142 @@ export function validateSendTarget(lane) {
   const cwd = String(lane.tmux.cwd || "");
   const wt = String(lane.worktree.path);
   if (!cwd || (cwd !== wt && !cwd.startsWith(`${wt}/`))) return { ok: false, error: "target_mismatch" };
-  const presence = inferClaudePresence({
+  const provider = String(lane.binding?.provider || lane.preferred_provider || "").toLowerCase();
+  const presence = inferAgentPresence({
     command: lane.tmux.command,
     title: lane.tmux.title,
     dead: !lane.tmux.alive,
-  });
+  }, { provider: provider || undefined });
   if (presence !== "present") return { ok: false, error: "target_mismatch" };
   const resolved = resolvedTmuxTarget(lane);
   if (!resolved.ok) return { ok: false, error: "pane_unavailable" };
   return { ok: true, target: resolved.target, lane };
+}
+
+/**
+ * Cursor IDE transcripts are observation-only. Send requires a live tmux pane
+ * whose command/title is an executable cursor-agent (or Cursor TUI) process.
+ * An attached conversation UUID is not a delivery transport.
+ */
+export function cursorExecutableTransport(lane) {
+  if (!lane) {
+    return { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: "lane_missing" };
+  }
+  const check = validateSendTarget({
+    ...lane,
+    binding: { ...(lane.binding || {}), provider: "cursor" },
+    preferred_provider: "cursor",
+  });
+  if (!check.ok) {
+    return {
+      ok: false,
+      error: CURSOR_DELIVERY_UNAVAILABLE,
+      detail: check.error,
+      observation_only: true,
+    };
+  }
+  return { ok: true, kind: "tmux_cursor_agent", target: check.target };
+}
+
+function runAcknowledgedDelivery(run) {
+  if (!run) return false;
+  if (run.delivery && typeof run.delivery === "object") {
+    return run.delivery.acknowledged === true;
+  }
+  return Boolean(run.started_at);
+}
+
+/**
+ * The per-run receipt token. The execution envelope opens with the run id, so
+ * the run id appearing in pane output is direct evidence that THIS instruction
+ * reached the provider. Runs delivered before receipt tracking existed carry no
+ * token and are governed by the older baseline rule alone.
+ */
+export function runReceiptToken(run) {
+  return run?.delivery?.receipt_token || null;
+}
+
+export function runReceiptConfirmed(run) {
+  return run?.delivery?.receipt_confirmed === true;
+}
+
+/**
+ * Does captured text prove receipt of this run's instruction? Requires both:
+ * the token is present, and the text has moved past the pre-paste baseline.
+ * Either alone is insufficient — the token can be echoed by an operator paste,
+ * and movement alone can be the PREVIOUS turn still rendering.
+ */
+export function textProvesInstructionReceipt(run, text, fingerprint = null) {
+  const token = runReceiptToken(run);
+  if (!token) return false;
+  const body = String(text || "");
+  if (!body.includes(token)) return false;
+  const baseline = run.output_fingerprint_at_send || run.delivery?.output_baseline_fingerprint || null;
+  if (baseline && fingerprint && fingerprint === baseline) return false;
+  return true;
+}
+
+export function bindOutputToRun(out, run) {
+  if (!out) return out;
+  if (!run?.run_id) return out;
+  const delivered = runAcknowledgedDelivery(run);
+  const live = ["QUEUED", "EXECUTING", "VALIDATING", "WAITING_RESOURCE", "RECOVERING"].includes(run.state);
+  if (run.state === "FAILED" && !delivered) {
+    return {
+      ...out,
+      ok: false,
+      available: false,
+      text: null,
+      fingerprint: null,
+      awaiting: false,
+      withheld_prior_output: true,
+      error: run.state_reason || run.delivery?.error || "delivery_failed",
+      run_id: run.run_id,
+    };
+  }
+  if (!delivered && live) {
+    return {
+      ...out,
+      ok: true,
+      available: false,
+      text: null,
+      fingerprint: null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_provider_output",
+      run_id: run.run_id,
+    };
+  }
+  const baseline = run.output_fingerprint_at_send || run.delivery?.output_baseline_fingerprint || null;
+  if (delivered && run.state === "EXECUTING" && baseline && out.fingerprint === baseline) {
+    return {
+      ...out,
+      available: false,
+      text: null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_provider_output",
+      run_id: run.run_id,
+    };
+  }
+  // Output that advanced past the baseline is still not THIS run's output until
+  // the run's own receipt token appears in it. Without this, a pane finishing
+  // the PREVIOUS turn reads as the new instruction being worked on — which is
+  // exactly how a stale completion was attributed to a newer run.
+  if (delivered && live && runReceiptToken(run) && !runReceiptConfirmed(run)
+      && !textProvesInstructionReceipt(run, out.text, out.fingerprint)) {
+    return {
+      ...out,
+      available: false,
+      text: null,
+      fingerprint: out.fingerprint || null,
+      awaiting: true,
+      withheld_prior_output: true,
+      error: "awaiting_instruction_receipt",
+      run_id: run.run_id,
+    };
+  }
+  return { ...out, run_id: out.run_id || run.run_id };
 }
 
 function instructionHash(text) {
@@ -746,7 +1097,7 @@ export function wouldDuplicateLaneSend(laneId, instruction, nowMs = Date.now(), 
   return prev.hash === hash && (nowMs - prev.at) >= 0 && (nowMs - prev.at) < windowMs;
 }
 
-function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreePath }) {
+function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreePath, readiness, baseline }) {
   const rec = {
     ok,
     schema_version: LANE_SEND_SCHEMA,
@@ -758,7 +1109,55 @@ function sendResult({ ok, laneId, error, status, nowMs, size, auditId, worktreeP
     audit_id: auditId || null,
   };
   if (worktreePath) rec.worktree_path = worktreePath;
+  if (readiness) rec.prompt_readiness = publicPromptReadiness(readiness);
+  if (baseline) {
+    rec.output_baseline_fingerprint = baseline.fingerprint || null;
+    rec.output_baseline_captured_at = baseline.captured_at || null;
+  }
   return rec;
+}
+
+/**
+ * Read the pane immediately before pasting. Two facts come out of one capture:
+ * whether the pane is at an actionable prompt, and the exact output baseline
+ * this delivery is bound to. Both must come from the SAME read — a baseline
+ * taken after the paste already contains the instruction, and a readiness check
+ * taken earlier can describe a screen that has since changed.
+ */
+async function prePasteObservation(target, { tmux, capturePane, provider, nowMs }) {
+  let text = "";
+  let captured = false;
+  try {
+    if (typeof capturePane === "function") {
+      const cap = await capturePane(target, { historyLines: LANE_OUTPUT_RECENT_LINES });
+      if (cap?.ok) {
+        text = String(cap.stdout ?? cap.text ?? "");
+        captured = true;
+      }
+    } else if (typeof tmux === "function") {
+      const cap = await tmux(capturePaneArgv(target, LANE_OUTPUT_RECENT_LINES));
+      if (cap?.ok) {
+        text = String(cap.stdout ?? "");
+        captured = true;
+      }
+    }
+  } catch {
+    captured = false;
+    text = "";
+  }
+  const bounded = boundVisibleText(text, {
+    maxLines: LANE_OUTPUT_RECENT_LINES,
+    maxChars: LANE_OUTPUT_RECENT_CHARS,
+  });
+  return {
+    readiness: assessPanePromptReadiness(bounded.text, {
+      provider: provider || null,
+      captured: captured && Boolean(bounded.text.trim()),
+    }),
+    baseline: captured && bounded.text
+      ? { fingerprint: outputFingerprint(bounded.text), captured_at: new Date(nowMs).toISOString() }
+      : null,
+  };
 }
 
 async function defaultDeliverInstruction({ target, instruction, bufferName, tmux }) {
@@ -860,6 +1259,50 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
     }
 
     const tmux = opts.tmux || runTmux;
+    const provider = String(found.lane?.binding?.provider || found.lane?.preferred_provider || "").toLowerCase() || null;
+
+    // Readiness is decided BEFORE the paste, from a live read of the pane. A
+    // successful paste-buffer is not evidence an agent read anything.
+    let observed = await prePasteObservation(targetCheck.target, {
+      tmux,
+      capturePane: opts.capturePane,
+      provider,
+      nowMs,
+    });
+    // Operator Send is a new turn. If the pane is mid-turn (a spinner, not a
+    // modal), interrupt once and re-read. Queued admission retries do not pass
+    // interruptIfBusy — they wait for the pane to become ready on its own.
+    if (opts.interruptIfBusy === true && observed.readiness?.state === "busy") {
+      try {
+        await tmux(["send-keys", "-t", targetCheck.target, "Escape", "Escape"]);
+      } catch { /* recapture below still decides */ }
+      const settle = Number.isFinite(opts.interruptSettleMs) ? opts.interruptSettleMs : 800;
+      if (settle > 0) {
+        const sleep = typeof opts.sleep === "function" ? opts.sleep : (ms) => new Promise((r) => setTimeout(r, ms));
+        await sleep(settle);
+      }
+      observed = await prePasteObservation(targetCheck.target, {
+        tmux,
+        capturePane: opts.capturePane,
+        provider,
+        nowMs,
+      });
+    }
+    const gate = promptReadinessAllowsSend(observed.readiness, {
+      strictCapture: opts.strictPromptCapture === true,
+    });
+    if (!gate.allow) {
+      return auditAndReturn(sendResult({
+        ok: false,
+        laneId: durableId,
+        error: PROMPT_NOT_READY_ERROR,
+        status: "refused",
+        nowMs,
+        size,
+        readiness: observed.readiness,
+      }));
+    }
+
     const delivered = await defaultDeliverInstruction({
       target: targetCheck.target,
       instruction: body.instruction,
@@ -867,7 +1310,7 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
       tmux,
     });
     if (!delivered.ok) {
-      return auditAndReturn(sendResult({ ok: false, laneId: durableId, error: "delivery_failed", status: "failed", nowMs, size }));
+      return auditAndReturn(sendResult({ ok: false, laneId: durableId, error: "delivery_failed", status: "failed", nowMs, size, readiness: observed.readiness }));
     }
 
     lastDelivered.set(id, { hash, at: nowMs, size });
@@ -880,6 +1323,8 @@ export async function sendLaneInstruction(laneId, instruction, opts = {}) {
       nowMs,
       size,
       worktreePath: found.lane?.worktree?.path || null,
+      readiness: observed.readiness,
+      baseline: observed.baseline,
     }));
   } finally {
     laneSendLocks.delete(id);

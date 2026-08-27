@@ -54,7 +54,7 @@ describe("Communications modal tabs", () => {
     it("CommsModalTabBar renders subordinate underline tabs with a Bend Pine active state (not floating pills)", () => {
         const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
         const ui = read("app/adminV2/communications/commsWorkspaceUi.tsx");
-        expect(tabBar).toContain('data-comms-modal-tabs="true"');
+        expect(tabBar).toContain('data-workspace-section-tabs="true"');
         expect(tabBar).toContain("border-b-2");
         expect(tabBar).toContain("border-alloy-juniper");
         expect(tabBar).toContain("text-alloy-juniper");

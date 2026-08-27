@@ -99,6 +99,7 @@ export function gitObjectStoreCandidates(root) {
     process.env.ALLOY_CANONICAL_ROOT,
     process.env.ALLOY_REPO,
     "/Users/Kelly/Alloy",
+    join(process.env.HOME || "", "Alloy"),
   ].filter(Boolean))];
 }
 

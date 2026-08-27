@@ -4,7 +4,7 @@
 #
 # Paths are configurable. Defaults match the Phase 1 directory model.
 
-ALLOY_REPO="/Users/Kelly/Alloy"
+ALLOY_REPO="$HOME/Alloy"
 ALLOY_WORKTREE_ROOT="$HOME/Code/alloy-worktrees"
 ALLOY_RUNTIME_ROOT="$HOME/.local/state/alloy-dev"
 ALLOY_CONFIG_DIR="$HOME/.config/alloy-dev"
@@ -50,8 +50,16 @@ ALLOY_SLOT_5_DEFAULT_AGENT="claude"
 ALLOY_SLOT_6_ROLE="Experimental"
 ALLOY_SLOT_6_DEFAULT_AGENT="cursor"
 
-# Phase 3 — per-slot QA identity aliases (email/label only; never passwords).
-# Provision six dedicated local/staging portal users manually (see VERIFICATION-SECURITY.md).
+# Per-slot QA identities — MANAGED MACHINE ACCOUNTS in hosted staging, not mailboxes.
+#
+# These addresses are the real identities, not placeholders to replace: they are machine
+# identifiers that receive no mail and that no human signs in as. Leave them as shipped unless a
+# slot should point at a different managed QA account.
+#
+# They are created by the governed action `environment.provision_qa_identity` and signed in by
+# `environment.restore_qa_session` — two separate operator approvals, because creating an account
+# and signing into one are different decisions. Never put a password here; none is created for a
+# person to hold. See VERIFICATION-SECURITY.md.
 ALLOY_SLOT_1_QA_IDENTITY="qa-slot1-product@example.com"
 ALLOY_SLOT_2_QA_IDENTITY="qa-slot2-architecture@example.com"
 ALLOY_SLOT_3_QA_IDENTITY="qa-slot3-performance@example.com"

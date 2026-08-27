@@ -8,10 +8,8 @@
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import os from "node:os";
-import { join } from "node:path";
 
-const WT_ROOT = join(os.homedir(), "Code", "alloy-worktrees");
+import { worktreePathForName } from "./workspace-facts.mjs";
 
 function gh(args, cwd, timeout = 12000) {
   return new Promise((res) => {
@@ -23,8 +21,8 @@ function gh(args, cwd, timeout = 12000) {
 
 /** Authoritative PR state for a worktree's branch. Never throws. */
 export async function prForWorktree(worktree, branch) {
-  const cwd = join(WT_ROOT, worktree);
-  if (!existsSync(cwd)) return { available: false, reason: "worktree path not found" };
+  const cwd = worktreePathForName(worktree);
+  if (!cwd || !existsSync(cwd)) return { available: false, reason: "worktree path not found" };
   const fields = "number,state,isDraft,title,url,baseRefName,headRefName,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup";
   const r = await gh(["pr", "view", "--json", fields], cwd);
   if (!r.ok) {

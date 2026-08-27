@@ -452,9 +452,23 @@ export function useWorkspaceSurfaceRuntime(): WorkspaceSurfaceModel {
         // Chain the default subject off the SAME prepared answer — no second fetch, one identity.
         void answerPromise
             .then((answer) => {
-                if (answer && answer.terminal === "operational" && answer.recordOfAttention?.id) {
-                    void prewarmRecordWork(String(answer.recordOfAttention.id));
-                }
+                if (!answer || answer.terminal !== "operational" || !answer.recordOfAttention?.id) return;
+                /*
+                 * ASK THE ANSWER WHAT ITS SUBJECT IS — do not assume an opportunity.
+                 *
+                 * `prewarmRecordWork` loads the OPPORTUNITY record-work VM. On a child-grain work
+                 * view `recordOfAttention` is a child participation, so warming it issued
+                 * `GET /api/admin/view-models/drawer/opportunity/<participation-id>` — a 404 on
+                 * every Workspace load and every return to it.
+                 *
+                 * `prepareOperationalDestination` — the canonical prep path — has always made this
+                 * check. This chain is a SECOND prep path (it cannot use `kernel.provisioning.prepare`
+                 * across surfaces; see the note above), and it duplicated the chain without the rule.
+                 * Absent subject type keeps the previous behaviour, matching the canonical owner.
+                 */
+                const subjectType = answer.subjectGrain?.subjectType;
+                if (subjectType != null && subjectType !== "opportunity") return;
+                void prewarmRecordWork(String(answer.recordOfAttention.id));
             })
             .catch(() => {});
     }, []);

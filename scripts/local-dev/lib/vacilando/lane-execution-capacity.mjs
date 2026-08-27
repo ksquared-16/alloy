@@ -22,7 +22,7 @@ import {
   releaseDurableLaneRuntimeBinding,
   setDurableLaneExecutionCapacity,
 } from "./development-lane.mjs";
-import { activeRunForLane, isTerminalRunState, listExecutionRunsForLane } from "./execution-run.mjs";
+import { activeRunForLane, isTerminalRunState, listExecutionRunsForLane, transitionExecutionRun } from "./execution-run.mjs";
 import {
   ADMISSION_OCCUPYING,
   admissionForLane,
@@ -151,6 +151,80 @@ async function reevaluateAdmission(root) {
 }
 
 /**
+ * Is this lane's open admission a claim it cannot possibly be granted?
+ *
+ * Proof, not inference. All of these must hold:
+ *   - the lane has no runtime binding, so provisioning cannot start
+ *   - an admission is open (QUEUED / ADMITTED / PROVISIONING)
+ *   - the run behind it never started
+ * A lane that is merely waiting its turn WITH a binding is untouched.
+ */
+export function staleAdmissionFacts(rec, { root = runtimeRoot() } = {}) {
+  if (!rec?.lane_id) return { stale: false, reason: "lane_not_found" };
+  const bound = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session) || Boolean(rec.binding?.worktree_path);
+  if (bound) return { stale: false, reason: "lane_is_bound" };
+  const adm = admissionForLane(rec.lane_id, root);
+  const state = String(adm?.state || "").toUpperCase();
+  if (!adm || !["QUEUED", "ADMITTED", "PROVISIONING"].includes(state)) {
+    return { stale: false, reason: "no_open_admission" };
+  }
+  const run = latestRunForLane(rec.lane_id, root);
+  if (run?.started_at) return { stale: false, reason: "run_started" };
+  if (run && UNSAFE_RUN.has(run.state)) return { stale: false, reason: "unsafe_in_flight" };
+  return {
+    stale: true,
+    admission_id: adm.admission_id,
+    admission_state: state,
+    requested_at: adm.requested_at || null,
+    run_id: run?.run_id || null,
+    run_state: run?.state || null,
+    reason: "lane_has_no_runtime_binding",
+  };
+}
+
+/**
+ * Cancel a proven-dead admission through the canonical capacity owner
+ * (execution-admission), and fail its run with the same reason so the ledger
+ * and the queue tell one story. Never invents a second capacity store.
+ */
+export function cancelUnprovisionableAdmission(rec, {
+  origin = "operator",
+  nowMs = Date.now(),
+  root = runtimeRoot(),
+} = {}) {
+  const facts = staleAdmissionFacts(rec, { root });
+  if (!facts.stale) return { cancelled: false, ...facts };
+  const out = transitionAdmission(facts.admission_id, "CANCELLED", {
+    reason: facts.reason,
+    nowMs,
+    root,
+  });
+  if (!out.ok) return { cancelled: false, ...facts, error: out.error };
+  let runClosed = null;
+  if (facts.run_id && facts.run_state && !isTerminalRunState(facts.run_state)) {
+    const failed = transitionExecutionRun(facts.run_id, "FAILED", {
+      reason: "unprovisionable_admission",
+      origin,
+      nowMs,
+      root,
+      completion_report: {
+        summary: "Queued for capacity this lane cannot receive: no runtime binding. Admission cancelled; instruction preserved.",
+      },
+    });
+    runClosed = failed.ok ? failed.run.state : null;
+  }
+  return {
+    cancelled: true,
+    admission_id: facts.admission_id,
+    prior_admission_state: facts.admission_state,
+    requested_at: facts.requested_at,
+    run_id: facts.run_id,
+    run_state: runClosed || facts.run_state,
+    reason: facts.reason,
+  };
+}
+
+/**
  * Governed release of temporary execution capacity.
  * Preserves durable lane identity and worktree/branch.
  */
@@ -178,12 +252,21 @@ export async function releaseLaneExecutionCapacity(laneId, {
 
   const hasCapacity = rec.binding?.slot != null || Boolean(rec.binding?.tmux_session);
   if (!hasCapacity) {
+    // A lane with no runtime binding cannot be provisioned. If it is ALSO
+    // holding an open admission, that admission is a claim on capacity it can
+    // never receive — and this early return was the reason nothing ever cleared
+    // it. Observed: two lanes reading "Queued for capacity" for three days.
+    const stale = cancelUnprovisionableAdmission(rec, { origin, nowMs, root });
+    if (stale?.cancelled) {
+      try { await reevaluateAdmission(root); } catch { /* queue re-evaluates on the next tick */ }
+    }
     return {
       ok: true,
       already_idle: true,
       command: RELEASE_COMMAND,
       lane_id: rec.lane_id,
       execution_capacity: { state: "IDLE" },
+      ...(stale?.cancelled ? { stale_admission_cancelled: stale } : {}),
     };
   }
 
@@ -225,11 +308,18 @@ export async function releaseLaneExecutionCapacity(laneId, {
       if (run?.checkpoint_ready) {
         const ck = await checkpointLane(rec.lane_id, root, nowMs);
         if (!ck?.ok) {
+          // A checkpoint now requires an explicit path manifest, so this path
+          // no longer commits on the lane's behalf. Say what to run instead —
+          // the alternative was the automatic broad commit this replaced.
+          const detail = ck?.error === "checkpoint_requires_manifest"
+            ? "This lane has uncommitted work and Vacilando no longer commits it automatically. Run vac checkpoint-create with the paths to keep, or release after committing by hand."
+            : (ck?.detail || ck?.error || "checkpoint_failed");
           return {
             ok: false,
             error: "source_control_gate",
             command: RELEASE_COMMAND,
-            detail: ck?.error || "checkpoint_failed",
+            detail,
+            checkpoint_error: ck?.error || null,
           };
         }
       } else {
@@ -314,20 +404,54 @@ export async function releaseLaneExecutionCapacity(laneId, {
 
 export async function summarizeHostExecutionCapacity(lanes, { root = runtimeRoot() } = {}) {
   const { assessProvisionCapacity } = await import("./alloy-dev-adapter.mjs");
-  const provision = assessProvisionCapacity({ root });
+  // Same live count the admission gate uses, so the number the operator READS
+  // is the number that decides whether their lane starts.
+  let providerPanes = null;
+  try {
+    const { listTmuxPanesRaw, parseTmuxPaneLines } = await import("./lanes.mjs");
+    const raw = await listTmuxPanesRaw();
+    if (raw?.ok) providerPanes = parseTmuxPaneLines(raw.stdout);
+  } catch { /* metadata fallback */ }
+  const provision = assessProvisionCapacity({ root, ...(providerPanes ? { providerPanes } : {}) });
   const { summarizeExecutionCapacity } = await import("../../apps/vacilando/public/gateway-view.mjs");
   const ui = summarizeExecutionCapacity(lanes, {
     max_active: provision.max_providers,
     max_providers: provision.max_providers,
   });
-  const available = provision.available ? ui.available : 0;
+  // ONE authoritative number, and it is the LIVE one.
+  //
+  // `ui.active` counts lane posture: lanes whose run is in an occupying state.
+  // A lane can hold a live provider with NO active run — Runtime Performance
+  // did exactly that: pid 24584 alive in its worktree, run `none`, so posture
+  // counted 2 while three real Claude processes held all three seats. Admission
+  // gates on this number, so Vacilando believed a seat was free and would have
+  // started a fourth provider over the ceiling.
+  //
+  // Provider capacity is about PROCESSES, so the process count decides.
+  const holders = provision.provider_holders || [];
+  const liveActive = Number.isFinite(provision.active_providers)
+    ? provision.active_providers
+    : holders.length;
+  // Live processes only. Taking max(ui.active) re-introduced ghost occupancy:
+  // leftover RUNNING claims and status-only NEEDS_INPUT lanes inflated the
+  // count, Vacilando reported 0 seats, and Trust/Surfaces could not start.
+  const active = Math.max(liveActive, holders.length);
+  const available = Math.max(0, provision.max_providers - active);
   return {
     ...ui,
+    active,
     max_active: provision.max_providers,
     occupied_slots: provision.occupied_slots,
     free_slots: provision.free_slots,
     active_providers: provision.active_providers,
+    provider_holders: holders,
+    counted_from: provision.counted_from || null,
+    // Lanes whose posture occupies a seat, kept for display — never for the
+    // arithmetic that gates admission.
+    posture_active: ui.active || 0,
     available,
-    blockers: provision.blockers || [],
+    blockers: available > 0
+      ? (provision.blockers || []).filter((b) => b !== "provider_capacity")
+      : Array.from(new Set(["provider_capacity", ...(provision.blockers || [])])),
   };
 }

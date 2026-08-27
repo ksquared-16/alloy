@@ -60,6 +60,7 @@ import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inqu
 import { enrichInquiryChildrenWithPlacementOptionLabels } from "@/lib/admin/drawer/enrichInquiryChildrenPlacementLabels";
 import { attachCustomerMemberProfileToInquiryChildren } from "@/lib/admin/drawer/attachCustomerMemberProfileToInquiryChildren";
 import type { DocumentActor } from "@/lib/documents/assertDocumentAccess";
+import { RESOLVED_PHOTO_URL_KEY } from "@/lib/adminV2/runtime/focusPanel/resolveIdentityPhotoUrl";
 import { projectResolvedProfilePhotosOntoRows } from "@/lib/documents/projectPersonProfilePhotos";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
@@ -760,6 +761,24 @@ function applyInquiryChildrenMetadataFallbacks(
  * Option-set label batch (`batchOptionItemLabelsForOrg`) is intentionally omitted here (~400–500ms):
  * read-only rows use item_key fallbacks; editable dropdowns load option sets when edit mode arms.
  */
+/**
+ * Carry the photo projection's single key onto the profiled rows.
+ *
+ * Both inputs are derived from the same base array by `.map`, so index `i` is the same child in
+ * both. A row that resolved no photo is returned untouched — an absent photo must stay absent rather
+ * than become an explicit null the card would render as "no photo on file".
+ */
+export function mergeResolvedPhotoOntoProfiledChildren<T extends Record<string, unknown>>(
+  profiled: T[],
+  photographed: Array<Record<string, unknown>>,
+): T[] {
+  if (profiled.length !== photographed.length) return profiled;
+  return profiled.map((row, i) => {
+    const photo = photographed[i]?.[RESOLVED_PHOTO_URL_KEY];
+    return photo === undefined ? row : ({ ...row, [RESOLVED_PHOTO_URL_KEY]: photo } as T);
+  });
+}
+
 export async function attachOpportunityInquiryChildrenShell(
   supabase: AdminSupabase,
   orgId: string,
@@ -838,7 +857,45 @@ export async function attachOpportunityInquiryChildrenShell(
   }
 
   const memberMap = new Map(memList.map((m) => [m.id, m]));
+
+  /*
+   * ── LAW 34: A PERSON-BACKED CHILD'S IDENTITY COMES FROM `persons` ──
+   *
+   * `resolveInquiryChildIdentityFields` has always been person-first — but it can only be person-first
+   * if the person is actually LOADED. This map was constructed empty and never filled, so `pmap.get(pid)`
+   * missed for every child, `person` arrived null, and the resolver silently took its
+   * `customer_members` fallback branch for person-backed children too.
+   *
+   * That is not a cosmetic miss. It is precisely how a child could read "Lennon Kurzman" on every
+   * operator surface while `persons` held `perf-probe-1787311039569`: the surfaces were showing the
+   * member mirror, the placement projection (which loads persons through its own join) was showing the
+   * canonical row, and identity edits — which write `persons` — were invisible to the editor that made
+   * them. The editor then baselined on the member, so re-typing the correct value wrote nothing at all.
+   *
+   * Loading the children's persons here fixes every consumer of `_inquiry_children` at once — Children,
+   * Assignment, Focus Panel header, drawer VM, Records and the queue row projections all read this one
+   * record. One authority, resolved once, rather than a rule re-implemented per card.
+   */
   const pmap = new Map<string, WarmPersonRow>();
+  const childPersonIds = [
+    ...new Set(
+      [...memList, ...bootstrapList]
+        .map((m) => trimOrNull(m.person_id))
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (childPersonIds.length > 0) {
+    const tChildPersons0 = Date.now();
+    const { data: childPersons } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth, metadata")
+      .eq("org_id", orgId)
+      .in("id", childPersonIds);
+    for (const row of (childPersons ?? []) as WarmPersonRow[]) {
+      if (row?.id) pmap.set(row.id, row);
+    }
+    cph.child_persons_ms = Date.now() - tChildPersons0;
+  }
 
   const optionLabelMap = EMPTY_OPTION_LABEL_MAP as Map<string, string>;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberDefsTaggedPack.rows);
@@ -920,21 +977,46 @@ export async function attachOpportunityInquiryChildrenShell(
   const tDraft0 = Date.now();
   inquiryChildrenOut = await overlayProcessDraftParticipation(supabase, orgId, opportunityId, inquiryChildrenOut);
   cph.process_draft_ms = Date.now() - tDraft0;
-  inquiryChildrenOut = await attachCustomerMemberProfileToInquiryChildren(
-    supabase,
-    orgId,
-    inquiryChildrenOut,
-  );
-
-  // Actor-scoped profile photos — person_id key (not OCM/inquiry-child id).
-  inquiryChildrenOut = await projectResolvedProfilePhotosOntoRows({
-    supabase,
-    orgId,
-    actor: documentActor,
-    rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
-    personIdKey: "person_id",
-    metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
-  }) as typeof inquiryChildrenOut;
+  // The two legs below sit AFTER the timed batch and were the only untimed work in this shell:
+  // `children_orientation_ms` summed to ~417-491 ms while the leg itself measured 602-884 ms, and
+  // the difference had nowhere to be attributed. Naming them is what makes the remainder findable.
+  /**
+   * THE LAST TWO LEGS OF THIS SHELL, RUN TOGETHER.
+   *
+   * They were awaited in sequence and were the only untimed work here — `children_orientation_ms`
+   * summed to ~417-491 ms while the leg measured 602-884 ms, and the difference had nowhere to be
+   * attributed. Named, they are 177 ms and 153 ms: 330 ms of the 631 ms leg, one after the other.
+   *
+   * They are independent, and disjointly so rather than incidentally. The profile attach keys on
+   * `customer_member_id` and writes `gender`, `allergies`, `medical_notes`, `preferred_name`,
+   * `special_instructions` and `custom_fields`. The photo projection keys on `person_id`, reads no
+   * profile field, and writes exactly one key — `resolved_photo_url`. Neither reads what the other
+   * writes, so ordering never decided the result; only the clock did.
+   *
+   * Both derive from the SAME base rows and both preserve order and length, so the photo value is
+   * carried across by index. Sequencing is preserved where it matters: the profiled row is the base,
+   * and only the one photo key is merged onto it.
+   *
+   * R1's bounded photo concurrency is untouched — this changes when the projection starts, never how
+   * many signatures it mints at once, and the actor is still the one passed in.
+   */
+  const tShellTail0 = Date.now();
+  const [profiledChildren, photographedChildren] = await Promise.all([
+    attachCustomerMemberProfileToInquiryChildren(supabase, orgId, inquiryChildrenOut),
+    projectResolvedProfilePhotosOntoRows({
+      supabase,
+      orgId,
+      actor: documentActor,
+      rows: inquiryChildrenOut as unknown as Array<Record<string, unknown>>,
+      personIdKey: "person_id",
+      metadataByPersonId: metadataByPersonIdFromWarmMap(pmap),
+    }),
+  ]);
+  inquiryChildrenOut = mergeResolvedPhotoOntoProfiledChildren(
+    profiledChildren,
+    photographedChildren,
+  ) as typeof inquiryChildrenOut;
+  cph.children_shell_tail_ms = Date.now() - tShellTail0;
 
   host._inquiry_children = inquiryChildrenOut;
   host._enrollment_participation_by_member = buildEnrollmentParticipationByMemberMap(processInstances);
@@ -1603,12 +1685,28 @@ export async function buildOpportunityDrawerVisiblePayload(
   vis._field_definitions = [];
   vis._record_surface = "drawer_visible";
   const documentActor = options?.documentActor ?? null;
+  /**
+   * Bounded per-leg timing for the shell batch. `visible_entity_ms` measured 1,091 ms of an 1,880 ms
+   * compose while only ~584 ms of it was attributable, and a dominant leg must never be inferred
+   * from the aggregate. `phaseMs` is the same object `vis._drawer_primary_phase_ms` already points
+   * at, so these writes surface in the response's `phases_ms` like the earlier legs.
+   */
+  const tShell0 = Date.now();
+  const timedLeg = async <T,>(key: string, work: Promise<T>): Promise<T> => {
+    const t0 = Date.now();
+    try {
+      return await work;
+    } finally {
+      phaseMs[key] = Date.now() - t0;
+    }
+  };
   await Promise.all([
-    attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor),
-    attachOpportunityPersonsShell(supabase, orgId, vis, documentActor),
-    attachOpportunityActivitySignalShell(supabase, orgId, vis),
-    attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis),
+    timedLeg("shell_children_ms", attachOpportunityInquiryChildrenShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_persons_ms", attachOpportunityPersonsShell(supabase, orgId, vis, documentActor)),
+    timedLeg("shell_activity_signal_ms", attachOpportunityActivitySignalShell(supabase, orgId, vis)),
+    timedLeg("shell_task_preview_ms", attachOpportunityInquirySummaryTaskPreview(supabase, orgId, vis)),
   ]);
+  phaseMs.shell_parallel_ms = Date.now() - tShell0;
   vis._relationship_displays = {};
   const householdIdV =
     typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
@@ -1657,6 +1755,7 @@ export async function buildOpportunityDrawerVisiblePayload(
   // The cost is one indexed query over the case's contacts, and for the overwhelming majority of
   // families it returns zero rows and no composition runs at all.
   try {
+    const tEmployment0 = Date.now();
     vis._case_employment = await buildCaseEmploymentProjection(supabase, orgId, {
       // The HOUSEHOLD is the authoritative contact set. A household case can legitimately carry an
       // empty `_opportunity_persons` and a null `primary_person_id` — the seeded Smith case does
@@ -1666,6 +1765,7 @@ export async function buildOpportunityDrawerVisiblePayload(
       primaryPersonId: trimOrNull(opp.primary_person_id ?? null),
       knownContacts: collectLinkedContactsFromOpportunityRecord(vis),
     });
+    phaseMs.case_employment_ms = Date.now() - tEmployment0;
   } catch {
     // A projection failure must not fail the record. Absent reads as not-composed, which keeps
     // the card silent rather than asserting "nobody here is staff".
@@ -2422,8 +2522,36 @@ export async function respondOpportunityEntityGet(
     }
   }
 
+  /*
+   * ── LAW 34: IDENTITY CANNOT BE DEFERRED TO A LATER PASS ──
+   *
+   * Member-linked `persons` rows were deferred to Pass 6 for first-paint cost. That is a sound
+   * instinct for RELATIONSHIP data and a wrong one for IDENTITY: `resolveInquiryChildIdentityFields`
+   * needs the person to be present, and when it is missing the resolver does not wait — it silently
+   * returns the `customer_members` mirror. So the deferral did not postpone a name, it CHANGED which
+   * store owned it, and the record shipped with the fallback as if it were canonical.
+   *
+   * A child's name is first-paint content; there is no later in which to render it. One batched,
+   * id-indexed query is the honest price, and it is the same query Pass 6 would have issued anyway.
+   */
+  const identityPersonIdsMissing = memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid));
+  if (identityPersonIdsMissing.length > 0) {
+    const tIdent0 = Date.now();
+    const { data: identityPersonRows } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone, metadata")
+      .eq("org_id", orgId)
+      .in("id", identityPersonIdsMissing);
+    for (const pr of (identityPersonRows ?? []) as WarmPersonRow[]) {
+      if (pr.id) pmap.set(pr.id, pr);
+    }
+    hydrateGraphTimings.child_identity_person_lookup_ms = Date.now() - tIdent0;
+  }
+  // The graph is only "pending" for persons still absent AFTER identity has been resolved.
+  out._member_person_graph_pending = memberLinkedPersonIdsDeferred.some((pid) => !pmap.has(pid));
+
   let person_lookup_missing_count =
-    memberLinkedPersonIdsDeferred.length +
+    memberLinkedPersonIdsDeferred.filter((pid) => !pmap.has(pid)).length +
     oppRolesPersonPrefetchIds.filter((pid) => !pmap.has(pid)).length;
 
   lapSegment("customer_member_linked_person_lookup");

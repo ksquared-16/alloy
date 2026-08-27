@@ -1,0 +1,33 @@
+{
+  "final": {
+    "type": "completion",
+    "revision": "2",
+    "kindLabel": "Complete",
+    "renderedChars": 2702,
+    "headings": 7,
+    "tables": 2,
+    "codeBlocks": 1,
+    "listItems": 7,
+    "resultRows": 4,
+    "fullyRendered": true,
+    "lastVisibleText": " branch is merged.:3015 was never used and the Runtime Performance lane was never touched.",
+    "hasBlockerLine": true,
+    "hasCommit": true,
+    "rawPaneInThread": false
+  },
+  "copy": {
+    "chars": 2961,
+    "sha": "e8f7c8e46168c339",
+    "matchesSubmitted": true
+  },
+  "afterReload": {
+    "type": "completion",
+    "chars": 2702,
+    "stillHasBlocker": true
+  },
+  "errors": [],
+  "submitted": {
+    "chars": 2961,
+    "sha": "e8f7c8e46168c339"
+  }
+}

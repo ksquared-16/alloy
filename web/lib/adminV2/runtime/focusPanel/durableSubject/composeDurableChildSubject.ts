@@ -1,3 +1,4 @@
+import { resolveInquiryChildIdentityFields } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import "server-only";
 
 /**
@@ -144,24 +145,48 @@ export async function composeDurableChildSubject(
         (await loadCustomerMemberProfileFieldsByMemberId(supabase, orgId, [id]).catch(() => null))?.get(id)
         ?? null;
 
-    // `display_name` is NOT NULL in the schema, so the name parts are a defence against whitespace,
-    // not a real second source. "Child" is the last resort and means the data is wrong, not absent.
+    /*
+     * LAW 34 — for a person-backed child, `persons` owns intrinsic identity; the member row is the
+     * fallback only while no Person exists. Resolved through the SHARED authority
+     * (`resolveInquiryChildIdentityFields`) so this surface cannot drift from the drawer record,
+     * Records, or the placement projection. "Child" is the last resort and means the data is wrong.
+     */
+    const identity = resolveInquiryChildIdentityFields({
+        personId,
+        person: personId && personRecord
+            ? {
+                  first_name: trimOrNull(personRecord.first_name),
+                  last_name: trimOrNull(personRecord.last_name),
+                  full_name: trimOrNull(personRecord.full_name),
+                  date_of_birth: trimOrNull(personRecord.date_of_birth),
+              }
+            : null,
+        member: {
+            first_name: member.first_name,
+            last_name: member.last_name,
+            display_name: member.display_name,
+            dob: member.dob,
+        },
+    });
     const label =
-        trimOrNull(member.display_name)
-        ?? trimOrNull([trimOrNull(member.first_name), trimOrNull(member.last_name)].filter(Boolean).join(" "))
+        trimOrNull(identity.display_name)
+        ?? trimOrNull([identity.first_name, identity.last_name].filter(Boolean).join(" "))
         ?? "Child";
 
-    // Member facts LAST: they override the person payload on any shared identity key, because the
-    // membership is what the operator maintains for a child.
+    // Member facts last for PARTICIPATION keys (relationship, active, status, profile) — those the
+    // membership genuinely owns. Identity keys are resolved above and are NOT overridden here:
+    // treating the member as the winner on a shared identity key is what made it a second writable
+    // identity authority, which law 34 forbids.
     const truth: Record<string, unknown> = {
         ...(personRecord ?? {}),
         customer_member_id: member.id,
         person_id: personId,
         customer_id: householdId,
-        display_name: trimOrNull(member.display_name),
-        first_name: trimOrNull(member.first_name),
-        last_name: trimOrNull(member.last_name),
-        dob: trimOrNull(member.dob),
+        // Identity from the canonical owner (law 34); the member row supplies it only when personless.
+        display_name: identity.display_name,
+        first_name: identity.first_name,
+        last_name: identity.last_name,
+        dob: identity.dob,
         relationship: trimOrNull(member.relationship),
         is_active: member.is_active !== false,
         status_key: trimOrNull(member.status_key),

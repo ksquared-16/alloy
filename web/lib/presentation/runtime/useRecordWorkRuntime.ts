@@ -205,6 +205,11 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
             setDisplayVm(null);
             setColdLoading(false);
             setError(null);
+            // A Work Unit with no committed subject has no primary content to reveal. That is a
+            // TERMINAL outcome, not an unfinished one: without saying so the reveal lifecycle would
+            // sit at `pending` for the life of the surface, and anything waiting on it would wait
+            // forever. Nothing else changes — no fetch, no VM, no timing.
+            endWorkUnitPrimaryReveal("empty");
             return;
         }
         if (displayVm && String(displayVm.entity.id) === String(validSubject)) {
@@ -245,13 +250,13 @@ export function useRecordWorkRuntime(subjectId: string | null): RecordWorkRuntim
                 setColdLoading(false);
                 setError(formatLoadError(result));
                 logDrawerVmRuntime("cold_fetch_error", { opportunity_id: validSubject, reason: result.reason });
-                endWorkUnitPrimaryReveal(); // reveal failed — release prewarm (no displayVm change to trigger cleanup)
+                endWorkUnitPrimaryReveal("error"); // reveal failed — release prewarm (no displayVm change to trigger cleanup)
                 return;
             }
             if (!isOpportunityDrawerViewModelPreload(result.preload)) {
                 setColdLoading(false);
                 setError("vm_preload_missing");
-                endWorkUnitPrimaryReveal();
+                endWorkUnitPrimaryReveal("error");
                 return;
             }
             // ATOMIC COMPLETE REVEAL (Kelly): resolve the deferred stage-work BEFORE applying, so the

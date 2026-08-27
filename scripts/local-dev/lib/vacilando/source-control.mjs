@@ -24,6 +24,8 @@ export const SCM_POSTURES = Object.freeze([
   "SYNC_REQUIRED",
   "CONFLICT",
   "PROMOTION_READY",
+  "MERGED",
+  "UNKNOWN",
 ]);
 
 export const SCM_POLICY = Object.freeze({
@@ -145,33 +147,57 @@ export function boundCheckpointMessage(raw) {
   return String(raw || "").trim().replace(/\s+/g, " ").split(/\n/)[0].trim().slice(0, 72);
 }
 
+/** True when Git drift is actionable before more work on this lane. */
+export function laneNeedsGitSync(lane) {
+  const runState = String(lane?.execution_run?.state || "");
+  if (["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING", "QUEUED"].includes(runState)) {
+    return true;
+  }
+  const sess = String(lane?.agent_session?.state || "");
+  return ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(sess);
+}
+
 /** PROMOTION_READY is never inferred from cleanliness. */
 export function deriveSourceControlPosture({
   git = {},
   run = null,
   scm = null,
   nowMs = Date.now(),
+  lane = null,
 } = {}) {
   if (git.conflict === true || git.state === "conflict") {
     return { posture: "CONFLICT", reason: "unresolved_conflict" };
+  }
+  if (git.state === "unknown" || git.state === "missing") {
+    return { posture: "UNKNOWN", reason: "git_unknown" };
   }
   if (scm?.promotion_ready === true) {
     return { posture: "PROMOTION_READY", reason: "explicit_promotion_review" };
   }
   const behind = Number(git.behind);
+  const ahead = Number(git.ahead);
   const dirty = git.state === "dirty";
   const modified = Number(git.modified) || 0;
   const lastCommitMs = git.last_commit_at ? Date.parse(git.last_commit_at) : NaN;
   const dirtyAge = Number.isFinite(lastCommitMs) ? nowMs - lastCommitMs : 0;
+  const merged = git.head_in_base === true && (!Number.isFinite(ahead) || ahead === 0);
+  const active = lane == null ? true : laneNeedsGitSync(lane);
 
-  if (Number.isFinite(behind) && behind >= SCM_POLICY.behind_require) {
+  if (merged) {
+    return { posture: "MERGED", reason: "head_is_ancestor_of_base", behind: Number.isFinite(behind) ? behind : 0 };
+  }
+  if (!active && Number.isFinite(behind) && behind > 0 && (!Number.isFinite(ahead) || ahead === 0)) {
+    return { posture: "MERGED", reason: "inactive_base_drift", behind };
+  }
+
+  if (active && Number.isFinite(behind) && behind >= SCM_POLICY.behind_require) {
     return {
       posture: "SYNC_REQUIRED",
       reason: behind >= SCM_POLICY.behind_block ? "material_base_drift" : "high_base_drift",
       behind,
     };
   }
-  if (Number.isFinite(behind) && behind >= SCM_POLICY.behind_recommend) {
+  if (active && Number.isFinite(behind) && behind >= SCM_POLICY.behind_recommend) {
     return { posture: "SYNC_RECOMMENDED", reason: "moderate_base_drift", behind };
   }
 
@@ -197,7 +223,7 @@ export function publicSourceControl(lane, { nowMs = Date.now(), root = runtimeRo
   if (!lane?.lane_id) return null;
   const scm = getLaneSourceControl(lane.lane_id, root);
   const git = lane.git && typeof lane.git === "object" ? lane.git : {};
-  const derived = deriveSourceControlPosture({ git, run: lane.execution_run, scm, nowMs });
+  const derived = deriveSourceControlPosture({ git, run: lane.execution_run, scm, nowMs, lane });
   return {
     posture: derived.posture,
     reason: derived.reason,
@@ -212,6 +238,7 @@ export function publicSourceControl(lane, { nowMs = Date.now(), root = runtimeRo
     durability_push_recommended: Boolean(derived.durability_push_recommended),
     promotion_ready: false,
     explicit_checkpoint: Boolean(derived.explicit),
+    head_in_base: git.head_in_base ?? null,
   };
 }
 
@@ -306,6 +333,7 @@ export async function maybeCreateCheckpoint({
   laneId,
   origin = "governor",
   summary = null,
+  paths = null,
   nowMs = Date.now(),
   root = runtimeRoot(),
   requireExplicit = SCM_POLICY.checkpoint_requires_explicit,
@@ -316,6 +344,28 @@ export async function maybeCreateCheckpoint({
   const path = rec?.binding?.worktree_path || run?.worktree_path;
   emitScmEvent("checkpoint_requested", { lane_id: id, run_id: run?.run_id }, root, { origin });
 
+  // THE GATE THAT WASN'T. This used to read
+  // `requireExplicit && !run?.checkpoint_ready`, and the only caller that
+  // reached it was `vac run-status --checkpoint-ready`, which set that very flag
+  // moments earlier in the same call. The check could not refuse the one path it
+  // existed to govern, and 67 unrelated files went into a lane branch twice.
+  //
+  // A checkpoint is now a manifest operation. Without an explicit list of paths
+  // there is no authorization to commit anything, and there is no flag that
+  // restores the old behaviour — see checkpoint-create for the sanctioned owner.
+  const manifest = Array.isArray(paths) ? paths.map(String).filter(Boolean) : [];
+  if (!manifest.length) {
+    emitScmEvent("checkpoint_refused", { lane_id: id, run_id: run?.run_id }, root, {
+      error: "checkpoint_requires_manifest",
+      origin,
+    });
+    return {
+      ok: false,
+      skipped: true,
+      error: "checkpoint_requires_manifest",
+      detail: "A checkpoint must name the paths it commits. Use vac checkpoint-create.",
+    };
+  }
   if (requireExplicit && !run?.checkpoint_ready) {
     return { ok: false, skipped: true, error: "checkpoint_not_explicit" };
   }
@@ -349,10 +399,10 @@ export async function maybeCreateCheckpoint({
 
   let committed;
   try {
-    if (commitImpl) committed = await commitImpl({ path, message, laneId: id });
+    if (commitImpl) committed = await commitImpl({ path, message, laneId: id, paths: manifest });
     else {
       const { commitWorktreeCheckpoint } = await import("./alloy-dev-adapter.mjs");
-      committed = await commitWorktreeCheckpoint({ path, message });
+      committed = await commitWorktreeCheckpoint({ path, message, paths: manifest });
     }
   } catch (e) {
     committed = { ok: false, error: String(e && e.message || e) };

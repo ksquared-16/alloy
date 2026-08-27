@@ -921,7 +921,12 @@ describe("Admin forms routes", () => {
         expect(res.status).toBe(401);
     });
 
-    it("POST public link returns plaintext_token once and embed_path", async () => {
+    it("POST public link returns plaintext_token once and embed_path, on the CONFIGURED origin", async () => {
+        // The embed origin used to be derived from the request's own Host /
+        // X-Forwarded-Host headers. Those are caller-supplied, and this link is copied
+        // into messages that leave the building — so the hostile Host below must have no
+        // effect at all, and the configured public origin must win.
+        vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://staging.workwithalloy.com");
         const fid = crypto.randomUUID();
         storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
         const res = await createPublicLink(
@@ -929,7 +934,8 @@ describe("Admin forms routes", () => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    Host: "localhost:3000",
+                    Host: "attacker.example.com",
+                    "x-forwarded-host": "attacker.example.com",
                     "x-forwarded-proto": "http",
                 },
                 body: JSON.stringify({ label: "Camp", allowed_embed_origins: ["http://localhost:3000"] }),
@@ -948,9 +954,11 @@ describe("Admin forms routes", () => {
         };
         expect(j.data.plaintext_token.length).toBeGreaterThan(20);
         expect(j.data.embed_path).toContain("/forms/embed/");
-        expect(j.data.embed_url?.startsWith("http://localhost:3000/forms/embed/")).toBe(true);
+        expect(j.data.embed_url?.startsWith("https://staging.workwithalloy.com/forms/embed/")).toBe(true);
+        expect(j.data.embed_url).not.toContain("attacker.example.com");
         expect(j.data.token_hash).toBeUndefined();
         expect(j.data.metadata.label).toBe("Camp");
+        vi.unstubAllEnvs();
     });
 
     it("POST public link launch_from_entity stamps existing_record metadata", async () => {

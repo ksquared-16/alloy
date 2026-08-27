@@ -26,6 +26,7 @@ import {
 } from "@/lib/communications/eligibility/evaluateEligibility";
 import { loadEligibilityContext } from "@/lib/communications/eligibility/loadEligibilityContext";
 import { renderOutboundMessage } from "@/lib/communications/render/renderOutboundMessage";
+import { enforceOutboundPublicLinkOrigin } from "@/lib/communications/outboundPublicLinkOrigin";
 import { resolveOutboundSender } from "@/lib/communications/identity/resolveOutboundSender";
 import {
     decideThreadForLocation,
@@ -542,6 +543,87 @@ export async function enqueueCanonicalOutboundMessage(params: {
 
     const rendered = renderResult.output;
 
+    // ---- PUBLIC LINK ORIGIN --------------------------------------------------
+    // The last point at which application code owns this body. Dispatch is a
+    // separate worker reading queued rows, so whatever origin is frozen into the
+    // text here is the origin a family sees.
+    //
+    // It must be re-checked HERE rather than trusted from the author, because the
+    // authoring runtime and the delivering runtime are not the same machine. A
+    // managed agent slot runs at `http://localhost:301X` against the same database
+    // hosted staging reads, so a draft prepared in a slot reaches staging's composer
+    // already carrying a localhost booking link — and an operator on staging sends it
+    // without the hosted origin ever being consulted. That is exactly how a tour
+    // invitation went out pointing at somebody's laptop.
+    //
+    // `renderResult.snapshot` is enforced alongside the body because the email that
+    // actually leaves the building is built from `rendered_snapshot.html` / `.text`.
+    // Repairing only `body` would fix the record and still deliver the broken link.
+    const linkOrigin = enforceOutboundPublicLinkOrigin({
+        body: rendered.text,
+        subject: rendered.subject,
+        renderedSnapshot: renderResult.snapshot,
+    });
+
+    if (!linkOrigin.ok) {
+        // Refused the same way a render refusal is refused, and for the same reason:
+        // there is no deliverable body. It is a `workflow_events` row and NOT a
+        // `communication_messages` row, because the dispatch poller selects from that
+        // table and nothing undeliverable may ever sit somewhere a poller could reach.
+        try {
+            await emitEvent({
+                org_id: orgIdTrim,
+                event_type: "message_link_origin_blocked",
+                entity_type: params.primaryEntityType,
+                entity_id: params.primaryEntityId,
+                action_type: null,
+                occurred_at: new Date().toISOString(),
+                payload: {
+                    thread_id: threadId,
+                    channel: mc,
+                    direction: "outbound" as const,
+                    workflow_run_id: workflowRunUuid,
+                    outcome: "blocked",
+                    stage: "link_origin",
+                    reason: linkOrigin.code,
+                    operator_message: linkOrigin.message,
+                    // The diagnostic names the configured origin and the offending
+                    // links. Deliberately absent: the body and the recipient.
+                    detail: linkOrigin.detail,
+                },
+            });
+        } catch (e) {
+            console.warn(
+                "[communications] message_link_origin_blocked emit failed",
+                e instanceof Error ? e.message : e,
+            );
+        }
+
+        return {
+            communicationMessageId: null,
+            threadId,
+            skippedReason: `link_origin_blocked:${linkOrigin.code}`,
+            blockedMessage: linkOrigin.message,
+        };
+    }
+
+    if (linkOrigin.rehostedCount > 0) {
+        // Not silent: a link authored elsewhere was re-anchored onto this runtime.
+        // Worth seeing, because it means something upstream is still minting links
+        // with a foreign origin.
+        console.warn("[communications] re-anchored loopback links onto the hosted origin", {
+            org_id: orgIdTrim,
+            thread_id: threadId,
+            channel: mc,
+            rehosted: linkOrigin.rehostedCount,
+            origin: linkOrigin.origin,
+        });
+    }
+
+    const deliverableBody = linkOrigin.body;
+    const deliverableSubject = linkOrigin.subject ?? null;
+    const deliverableRenderedSnapshot = linkOrigin.renderedSnapshot;
+
     // ---- ELIGIBILITY GATE ---------------------------------------------------
     // Evaluated immediately before the insert, so no TypeScript path can create
     // an outbound row without a decision. Blocking here creates no QUEUED row —
@@ -644,8 +726,8 @@ export async function enqueueCanonicalOutboundMessage(params: {
             status: "blocked",
             // The rendered body is retained: an operator judging a refusal needs
             // to see what would have gone out, not just that something didn't.
-            body: rendered.text,
-            subject: rendered.subject,
+            body: deliverableBody,
+            subject: deliverableSubject,
             workflow_run_id: workflowRunUuid,
             metadata: meta,
             to_address: toAddress,
@@ -657,7 +739,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
             category,
             purpose: params.purpose ?? null,
             eligibility_snapshot: snapshot,
-            rendered_snapshot: renderResult.snapshot,
+            rendered_snapshot: deliverableRenderedSnapshot,
             eligibility_decision: blockAudit,
             error: `policy:${decision.code}`,
         });
@@ -727,8 +809,8 @@ export async function enqueueCanonicalOutboundMessage(params: {
         thread_id: threadId,
         channel: mc,
         direction: "outbound",
-        body: rendered.text,
-        subject: rendered.subject,
+        body: deliverableBody,
+        subject: deliverableSubject,
         workflow_run_id: workflowRunUuid,
         metadata: meta,
         to_address: toAddress,
@@ -740,7 +822,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
         category,
         purpose: params.purpose ?? null,
         eligibility_snapshot: snapshot,
-        rendered_snapshot: renderResult.snapshot,
+        rendered_snapshot: deliverableRenderedSnapshot,
     });
 
     if (error?.message) {

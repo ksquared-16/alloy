@@ -357,7 +357,7 @@ window.renderMissionRail = function renderMissionRail(missions) {
 
 async function fetchMissionRail() {
   try {
-    if (parseRoute().name === "lanes") return;
+    if (parseRoute().name === "lanes" || parseRoute().name === "settings") return;
     const r = await fetch("/api/v2/views/mission-rail", { cache: "no-store" });
     const j = await r.json();
     if (j?.missions) window.renderMissionRail(j.missions);
@@ -438,10 +438,14 @@ function render(force) {
   const r = parseRoute();
   const V2 = window.VacilandoV2;
 
-  if (r.name === "lanes") {
-    setActiveNav("lanes");
+  if (r.name === "lanes" || r.name === "settings") {
+    setActiveNav(r.name);
     const gw = window.VacilandoGateway;
     if (!gw?.show) return;
+    if (r.name === "settings") {
+      gw.show({ name: "settings" });
+      return;
+    }
     const same = gw._state?.visible && gw._state.selected === (r.sub || null);
     if (same && !force) gw.paint();
     else gw.show(r);
@@ -1320,7 +1324,14 @@ async function objPrepareNext(cap) {
     else toast("err", "Couldn't prepare next", (data && data.error) || "");
   } catch { toast("err", "Couldn't prepare next", ""); }
 }
-async function fetchProviders() { try { const r = await fetch("/api/providers"); state._providers = await r.json(); render(true); } catch {} }
+async function fetchProviders() {
+  try {
+    const r = await fetch("/api/providers");
+    state._providers = await r.json();
+    if (window.VacilandoGateway?._state) window.VacilandoGateway._state.providers = state._providers;
+    render(true);
+  } catch { /* keep last */ }
+}
 // A worker's provider status is READ from the Provider Runtime (shared), never owned by the worker.
 function providerRt(id) { return (state._providers?.providers || state._dash?.provider_runtime?.providers || []).find((p) => p.id === id) || null; }
 
@@ -1427,6 +1438,18 @@ function showConfirm(pv, onConfirm) {
   ov.querySelector(".ok").onclick = () => { ov.remove(); onConfirm(); };
   ov.addEventListener("click", (e) => { if (e.target === ov) { ov.remove(); render(true); } });
   document.body.appendChild(ov);
+}
+async function connectProviderUI(id) {
+  toast("ok", `Connecting ${id}…`, "opening Terminal for sign-in");
+  const { data } = await api("/api/commands", { command: "provider.connect", input: { provider: id }, actor: "operator" });
+  const r = data?.result?.data;
+  if (r?.ok && r.opened) {
+    toast("ok", `Sign in to ${r.label || id}`, "finish login in the Terminal window, then click Verify");
+  } else if (r?.ok && !r.opened) {
+    showProviderAction(id, "reconnect");
+  } else {
+    toast("err", `Connect ${id} failed`, data?.reason || data?.code || r?.error || "");
+  }
 }
 async function verifyProviderUI(id) {
   toast("ok", `Verifying ${id}…`, "re-checking authentication");
@@ -2061,6 +2084,7 @@ document.addEventListener("click", (e) => {
   }
   if ((n = t("[data-prcmd]"))) { e.stopPropagation(); showOpenPr(Number(n.dataset.slot)); return; }
   if ((n = t("[data-delcmd]"))) { e.stopPropagation(); showDelete(Number(n.dataset.delcmd)); return; }
+  if ((n = t("[data-prov-connect]"))) { e.stopPropagation(); connectProviderUI(n.dataset.provConnect); return; }
   if ((n = t("[data-prov-verify]"))) { e.stopPropagation(); verifyProviderUI(n.dataset.provVerify); return; }
   if ((n = t("[data-prov-reconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provReconnect, "reconnect"); return; }
   if ((n = t("[data-prov-disconnect]"))) { e.stopPropagation(); showProviderAction(n.dataset.provDisconnect, "disconnect"); return; }
@@ -2189,7 +2213,7 @@ function onSnap(s) {
   if (!adoptSnapshot(s)) return;
   chrome();
   const r = parseRoute();
-  if (r.name === "lanes") return;
+  if (r.name === "lanes" || r.name === "settings") return;
   if (window.VacilandoV2?.enabled && MC_ROUTES.has(r.name)) {
     const now = Date.now();
     const last = window.VacilandoV2.state?._lastSseRevisionSync || 0;
@@ -2202,7 +2226,7 @@ function onSnap(s) {
 }
 async function poll() {
   try {
-    if (parseRoute().name === "lanes") {
+    if (parseRoute().name === "lanes" || parseRoute().name === "settings") {
       setLive(sseOk ? "live" : "polling");
       return;
     }

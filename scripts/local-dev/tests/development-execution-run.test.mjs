@@ -20,6 +20,8 @@ import {
   executionRunStorePath,
   findExecutionRun,
   inspectLaneRun,
+  lastInstructionFromRun,
+  getExecutionRun,
   isLegalRunTransition,
   listExecutionRunsForLane,
   publicExecutionRun,
@@ -38,6 +40,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = mkdtempSync(join(tmpdir(), "vac-erun-"));
 const WT = mkdtempSync(join(tmpdir(), "vac-erun-wt-"));
 process.env.ALLOY_RUNTIME_ROOT = ROOT;
+process.env.VACILANDO_DURABLE_LANES = "0";
 
 const IDENTITY_WT = "/Users/Kelly/Code/alloy-worktrees/wt1-access-identity-v2";
 const WT_ROOT = "/Users/Kelly/Code/alloy-worktrees";
@@ -227,11 +230,37 @@ await test("one active run per lane; second instruction is refused", async () =>
   assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, 1);
 });
 
+await test("operator follow-up after grace closes leftover executing work", async () => {
+  const { out } = await startRun("first job");
+  const firstId = out.run_id;
+  const second = await deliverManagedLaneInstruction("alloy-identity", "second job", {
+    root: ROOT,
+    worktreePath: WT,
+    sendLaneInstruction: deliveredSend(),
+    getOutput: quietGet(),
+    notifyIntervalMs: 60_000,
+    nowMs: Date.now() + 30_000,
+  });
+  assert.equal(second.ok, true, second.error);
+  assert.equal(second.stale_run_closed, true);
+  assert.notEqual(second.run_id, firstId);
+  assert.equal(getExecutionRun(firstId, ROOT).state, "COMPLETE");
+  assert.equal(getExecutionRun(firstId, ROOT).state_reason, "operator_follow_up");
+  assert.equal(activeRunForLane("alloy-identity", ROOT).instruction, "second job");
+});
+
 await test("NEEDS_INPUT continues the same run instead of creating another", async () => {
   const { out } = await startRun("original");
   const id = out.run_id;
-  const need = reportRunState(id, "needs-input", { reason: "Which fixture?", origin: "agent", root: ROOT });
-  assert.equal(need.ok, true);
+  const { submitAgentReport } = await import("../lib/vacilando/execution-run-report.mjs");
+  const need = submitAgentReport(id, {
+    type: "needs_input",
+    message: "Which fixture?",
+    cwd: WT,
+    laneId: "alloy-identity",
+    root: ROOT,
+  });
+  assert.equal(need.ok, true, need.error);
   assert.equal(need.run.state, "NEEDS_INPUT");
   const payloads = [];
   const cont = await deliverManagedLaneInstruction("alloy-identity", "Use the loopback fixture.", {
@@ -253,7 +282,12 @@ await test("legal transitions accepted; illegal rejected; terminals hold", async
   const created = createQueuedRun({ laneId: "alloy-identity", instruction: "x", worktreePath: WT, root: ROOT });
   const id = created.run.run_id;
   assert.equal(isLegalRunTransition("QUEUED", "EXECUTING"), true);
-  assert.equal(isLegalRunTransition("QUEUED", "NEEDS_INPUT"), false);
+  // QUEUED -> NEEDS_INPUT is legal since the ready-pane repair: an instruction
+  // that could not be delivered because the pane showed a modal needs the
+  // operator, and must not be forced through EXECUTING to say so.
+  assert.equal(isLegalRunTransition("QUEUED", "NEEDS_INPUT"), true);
+  assert.equal(isLegalRunTransition("QUEUED", "VALIDATING"), false);
+  assert.equal(isLegalRunTransition("QUEUED", "COMPLETE"), false);
   assert.equal(transitionExecutionRun(id, "VALIDATING", { root: ROOT }).error, "illegal_transition");
   assert.equal(transitionExecutionRun(id, "EXECUTING", { root: ROOT, origin: "operator" }).ok, true);
   assert.equal(transitionExecutionRun(id, "VALIDATING", { root: ROOT, origin: "agent" }).ok, true);
@@ -351,6 +385,7 @@ await test("active and completed runs survive reread; history is bounded", async
   const { out } = await startRun("persist me");
   const again = readExecutionRunStore(ROOT);
   assert.equal(again.lanes["alloy-identity"].runs[0].run_id, out.run_id);
+  assert.equal(again.lanes["alloy-identity"].runs[0].run_id, out.run_id);
   assert.equal(existsSync(executionRunStorePath(ROOT)), true);
   reportRunState(out.run_id, "complete", { root: ROOT, origin: "agent", summary: "done" });
   for (let i = 0; i < EXECUTION_RUN_MAX_PER_LANE + 3; i++) {
@@ -366,6 +401,20 @@ await test("active and completed runs survive reread; history is bounded", async
     reportRunState(r.run_id, "complete", { root: ROOT, origin: "agent", summary: `done ${i}` });
   }
   assert.equal(listExecutionRunsForLane("alloy-identity", ROOT).length, EXECUTION_RUN_MAX_PER_LANE);
+});
+
+await test("queued run last instruction is visible before pane delivery", () => {
+  const last = lastInstructionFromRun({
+    run_id: "erun_queued",
+    state: "QUEUED",
+    instruction: "queued hello",
+    updated_at: "2026-08-22T00:44:08.360Z",
+  });
+  assert.equal(last.status, "queued");
+  assert.equal(last.instruction, "queued hello");
+  const failed = lastInstructionFromRun({ state: "FAILED", instruction: "x" });
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.instruction, "x");
 });
 
 await test("last-instruction UX is preserved and overlays from a started run", async () => {
@@ -426,6 +475,7 @@ await test("envelope helper stays small and does not change product scope", () =
   assert.match(text, /Ship it\./);
   assert.match(text, /governed-action/);
   assert.match(text, /run-status/);
+  assert.match(text, /complete --summary/);
   assert.equal(/fair queue|self-heal|lease grant/i.test(text), false);
 });
 
@@ -437,23 +487,35 @@ await test("findExecutionRun uses the isolated runtime root", () => {
   assert.equal(publicExecutionRun(found.run).instruction, undefined);
 });
 
-await test("Phase 1 did not modify resource-governance files", () => {
+await test("resource-governance files stay frozen outside their owning slice", () => {
+  // Phase 1 froze these. S5 (validation admission) deliberately extends
+  // `vac-run` — the instruction was to use the EXISTING wrapper rather than
+  // invent a parallel CLI — so vac-run is no longer in the frozen set.
+  //
+  // Validation path convergence is the OWNING SLICE for `alloy-validate` and
+  // `lib/lock.sh`: its whole purpose is to remove the second capacity regime
+  // those two carried — a host-wide mutex and a counted heavy-job budget — and
+  // point them at S5. Both leave the frozen set for the same reason vac-run did.
+  // What replaces the freeze is stronger than it was: the convergence suite
+  // asserts by name that neither budget can come back, and that every semantic
+  // alloy-validate legitimately owns survived.
+  //
+  // Worth stating plainly: this guard compares the working tree to HEAD, so it
+  // only ever catches UNCOMMITTED edits. Committing would have turned it green
+  // on its own. Removing the entry deliberately is the honest form of the change.
   const files = [
     "web/package.json",
-    "scripts/local-dev/vac-run",
-    "scripts/local-dev/alloy-validate",
     "scripts/local-dev/alloy-compute",
     "scripts/local-dev/lib/sprint-ops.sh",
     "scripts/local-dev/lib/browser-cert-lease.sh",
     "scripts/local-dev/lib/browser-cert-lease.mjs",
-    "scripts/local-dev/lib/lock.sh",
     "scripts/local-dev/lib/machine-capacity.sh",
     "scripts/local-dev/lib/actuation-core.sh",
     "scripts/workspace/doctor.mjs",
   ];
   const repo = join(HERE, "../../..");
   const existing = files.filter((p) => existsSync(join(repo, p)));
-  assert.ok(existing.length >= 8, `expected resource files present, got ${existing.join(",")}`);
+  assert.ok(existing.length >= 6, `expected resource files present, got ${existing.join(",")}`);
   const diff = spawnSync("git", ["diff", "--name-only", "HEAD", "--", ...existing], { cwd: repo, encoding: "utf8" });
   assert.equal(diff.status, 0, diff.stderr);
   assert.equal(diff.stdout.trim(), "", diff.stdout);

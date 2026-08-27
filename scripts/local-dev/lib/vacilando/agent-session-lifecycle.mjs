@@ -26,7 +26,8 @@ import {
   transitionExecutionRun,
 } from "./execution-run.mjs";
 import { readResourceRequestStore } from "./execution-resource.mjs";
-import { getDevelopmentLane, inferClaudePresence, sendLaneInstruction } from "./lanes.mjs";
+import { getDevelopmentLane, inferClaudePresence, LANE_INSTRUCTION_MAX, sendLaneInstruction, cursorExecutableTransport, CURSOR_DELIVERY_UNAVAILABLE } from "./lanes.mjs";
+import { PROMPT_NOT_READY_ERROR } from "./provider-prompt-readiness.mjs";
 import { collectClaudeSessionTelemetry } from "./providers/claude/telemetry.mjs";
 import {
   activeAgentSessionForLane,
@@ -49,8 +50,11 @@ import {
   findLaneByBinding,
   getDurableLane,
   isRuntimeAdoptionBlocked,
+  listDurableLanes,
+  setLanePreferredProvider,
   validateRuntimeBinding,
 } from "./development-lane.mjs";
+import { normalizeExecutionProvider } from "./execution-providers.mjs";
 
 export const ROTATION_POLICY = Object.freeze({
   auto_mode: "on",
@@ -361,7 +365,20 @@ export function buildHandoffRequestInstruction({ run, git, handoffId }) {
   ].filter(Boolean).join("\n");
 }
 
+function boundOrientationField(value, max) {
+  const s = String(value || "");
+  if (s.length <= max) return s;
+  return `${s.slice(0, Math.max(0, max - 16))}\n…[truncated]`;
+}
+
 export function buildContinuationInstruction({ run, handoff, git, successorSessionId, recovery = false }) {
+  const queued = run?.state === "QUEUED";
+  const approved = queued
+    ? "Approved instruction is already queued on this Execution Run. Do not start it until you report ORIENTED. Vacilando pastes it after orientation."
+    : boundOrientationField(run?.instruction, 6000);
+  const remaining = queued
+    ? "Report ORIENTED, then Vacilando delivers the queued instruction."
+    : boundOrientationField(handoff?.remaining_work, 2000);
   const lines = [
     recovery
       ? "Vacilando recovered this Development Lane after the previous Claude session ended unexpectedly."
@@ -379,25 +396,27 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
     "",
     "Approved instruction:",
     "---",
-    String(run.instruction || ""),
+    approved,
     "---",
     "",
     "Structured handoff:",
     JSON.stringify({
-      completed_work: handoff?.completed_work || "",
-      remaining_work: handoff?.remaining_work || "",
+      completed_work: boundOrientationField(handoff?.completed_work, 1200),
+      remaining_work: remaining,
       current_phase: handoff?.current_phase || run.current_phase || run.state,
-      validation_state: handoff?.validation_state || "",
-      resource_state: handoff?.resource_state || "",
-      known_blockers: handoff?.known_blockers || "",
-      important_decisions: handoff?.important_decisions || "",
-      recent_files: handoff?.recent_files || "",
+      validation_state: boundOrientationField(handoff?.validation_state, 400),
+      resource_state: boundOrientationField(handoff?.resource_state, 400),
+      known_blockers: boundOrientationField(handoff?.known_blockers, 400),
+      important_decisions: boundOrientationField(handoff?.important_decisions, 800),
+      recent_files: boundOrientationField(handoff?.recent_files, 400),
       next_action: handoff?.next_action || "",
     }, null, 2),
     "",
     recovery
       ? "Inspect current Git and worktree state and reconcile before any mutation. Do not assume the previous session's last thought is still true."
-      : "After orientation, continue the same Execution Run from next_action.",
+      : (queued
+        ? "After orientation, Vacilando delivers the queued instruction on this same Execution Run."
+        : "After orientation, continue the same Execution Run from next_action."),
     "Report ORIENTED with the Gateway-owned helper once lane, run, worktree, branch, and next action match.",
     `node ${JSON.stringify(sessionReportHelperPath(run.worktree_path || git?.worktree || ""))} oriented --run ${run.run_id} --lane ${run.lane_id} --json ${jsonFlag({
       lane: run.lane_id,
@@ -408,7 +427,9 @@ export function buildContinuationInstruction({ run, handoff, git, successorSessi
       next_action: handoff?.next_action || "",
     })}`,
   ];
-  return lines.join("\n");
+  const text = lines.join("\n");
+  if (text.length <= LANE_INSTRUCTION_MAX) return text;
+  return boundOrientationField(text, LANE_INSTRUCTION_MAX);
 }
 
 export async function requestSessionRotation({
@@ -499,7 +520,38 @@ export async function requestSessionRotation({
     dedupeKey: `handoff:${handoffId}`,
   });
   if (!delivered?.ok) {
-    return { ok: false, error: "handoff_delivery_failed", delivery: delivered, handoff_id: handoffId };
+    // The session was patched to HANDOFF before the instruction was delivered,
+    // so a refused paste left it there with the handoff still "requested" —
+    // and maybeAdvanceSessionRotation only ever aborts a handoff that reached
+    // "ready". The session stayed HANDOFF forever. Rotation that could not
+    // start must put the session back exactly as it found it.
+    const rec = readHandoffs(root);
+    if (rec.handoffs[handoffId]) {
+      rec.handoffs[handoffId].state = "failed";
+      rec.handoffs[handoffId].failed_at = iso(nowMs);
+      rec.handoffs[handoffId].error = delivered?.error || "handoff_delivery_failed";
+      writeHandoffs(rec, root);
+    }
+    const promptBlocked = delivered?.error === PROMPT_NOT_READY_ERROR;
+    restoreSessionAfterFailedRotation(session, {
+      root,
+      error: promptBlocked ? PROMPT_NOT_READY_ERROR : "handoff_delivery_failed",
+      escalate: !promptBlocked,
+      extra: {
+        origin,
+        handoff_id: handoffId,
+        reason: promptBlocked
+          ? "Context refresh could not start: the agent terminal is showing a prompt that must be answered there."
+          : undefined,
+      },
+    });
+    return {
+      ok: false,
+      error: "handoff_delivery_failed",
+      delivery: delivered,
+      handoff_id: handoffId,
+      session_restored: "ACTIVE",
+    };
   }
   if (!run) {
     const rec = store.handoffs[handoffId];
@@ -541,7 +593,7 @@ function resolveRunContext({ runId, laneId, root = null } = {}) {
   return null;
 }
 
-function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } = {}) {
+function restoreSessionAfterFailedRotation(session, { root, error, extra = {}, escalate = true } = {}) {
   if (!session?.agent_session_id) return;
   const trigger = session.rotation_trigger && typeof session.rotation_trigger === "object"
     ? { ...session.rotation_trigger, attempted: true }
@@ -553,7 +605,13 @@ function restoreSessionAfterFailedRotation(session, { root, error, extra = {} } 
   emitAgentSessionEvent("rotation_failed", session, root, { error, ...extra });
   const auto = trigger?.origin === "automatic" || extra.origin === "automatic";
   const run = session.run_id ? getExecutionRun(session.run_id, root) : null;
-  if (auto && run) {
+  // A rotation blocked by a terminal dialog must NOT escalate the run to
+  // NEEDS_INPUT. That is the same trap the send path just stopped setting: the
+  // operator cannot answer a Claude permission prompt from the composer, and a
+  // NEEDS_INPUT run is protected from the governor. The work is still fine —
+  // it is the terminal that needs a person, which the provider-health banner
+  // and Details already say.
+  if (escalate && auto && run) {
     escalateNeedsInput(run, extra.reason || `Automatic context rotation failed: ${error}`, Date.now(), root).catch(() => {});
   }
 }
@@ -630,6 +688,18 @@ async function observeLane(laneId, opts) {
   if (observeImpl) return observeImpl(laneId, opts);
   const found = await getDevelopmentLane(laneId, { includeGitFacts: false });
   return found.ok ? found.lane : null;
+}
+
+function laneProviderKind(lane, rec) {
+  return normalizeExecutionProvider(
+    rec?.preferred_provider || rec?.binding?.provider || lane?.binding?.provider || rec?.provider,
+    "claude",
+  ) || "claude";
+}
+
+function cursorSessionLive(rec, lane) {
+  if (!rec || !["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(rec.state)) return false;
+  return rec.provider === "cursor" || laneProviderKind(lane, rec) === "cursor";
 }
 
 export function laneClaudePresent(lane) {
@@ -1093,6 +1163,29 @@ export async function maybeAdvanceSessionRotation(lane, { root = runtimeRoot(), 
   const session = activeAgentSessionForLane(lane.lane_id, root);
   if (!session || session.state !== "HANDOFF" || !session.handoff_id) return auto;
   const handoff = getHandoff(session.handoff_id, root);
+  // A handoff that never left "requested" means the outgoing agent never
+  // received the request. With Claude still present there is nothing to hand
+  // off TO and nothing to wait for, so after a bounded wait the session goes
+  // back to ACTIVE rather than sitting in HANDOFF indefinitely.
+  if (handoff && handoff.state !== "ready") {
+    const requestedAt = Date.parse(handoff.failed_at || handoff.created_at || "");
+    const stalled = handoff.state === "failed"
+      || (Number.isFinite(requestedAt) && (nowMs - requestedAt) > ROTATION_POLICY.exit_wait_ms);
+    if (stalled && laneClaudePresent(lane)) {
+      restoreSessionAfterFailedRotation(session, {
+        root,
+        error: handoff.error || "handoff_never_delivered",
+        escalate: handoff.error !== PROMPT_NOT_READY_ERROR,
+        extra: {
+          handoff_state: handoff.state,
+          waited_ms: Number.isFinite(requestedAt) ? nowMs - requestedAt : null,
+          origin: session.rotation_trigger?.origin,
+          reason: "Context refresh never started; the session was left running.",
+        },
+      });
+      return { ok: false, error: "handoff_never_delivered", aborted: true, restored: "ACTIVE" };
+    }
+  }
   if (handoff?.state !== "ready") return auto?.deferred ? auto : { ok: true, skipped: true };
   if (laneClaudePresent(lane)) {
     const started = Date.parse(handoff.ready_at || handoff.created_at || "");
@@ -1142,17 +1235,353 @@ export async function startLaneAgentSession({
   laneId,
   nowMs = Date.now(),
   root = runtimeRoot(),
+  origin = "admission",
 } = {}) {
   if (startInflight.has(laneId)) return { ok: true, phase: "IN_FLIGHT", start_session_implemented: true };
   startInflight.add(laneId);
   try {
-    return await startLaneAgentSessionUnlocked({ laneId, nowMs, root });
+    return await startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin });
   } finally {
     startInflight.delete(laneId);
   }
 }
 
-async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
+/**
+ * S8 — try to free ONE seat because this lane is waiting for provider capacity.
+ *
+ * Called only from the two places where the ceiling has already refused, so the
+ * contention is real rather than predicted. The decision about which seat (if
+ * any) may be released belongs to provider-capacity and the seat-state model;
+ * this is the caller that supplies the waiting admission.
+ *
+ * Failure is never fatal: a reclaim that cannot happen leaves the lane on the
+ * ordinary queue-or-refuse path it took before S8 existed.
+ */
+async function reclaimSeatForWaitingLane({ laneId, root, nowMs }) {
+  try {
+    const { reclaimForWaitingAdmission } = await import("./provider-capacity.mjs");
+    const run = activeRunForLane(laneId, root);
+    return await reclaimForWaitingAdmission({
+      waiting: [{ lane_id: laneId, run_id: run?.run_id || null, admission_id: null }],
+      availableSeats: 0,
+      root,
+      nowMs,
+      origin: "agent-session-lifecycle",
+    });
+  } catch (err) {
+    return { ok: false, reclaimed: [], refused: [], plan: { reason: "reclaim_unavailable" }, error: err?.message || String(err) };
+  }
+}
+
+function occupyingLaneSummaries(cap, root) {
+  const live = Array.isArray(cap?.occupying) ? cap.occupying : [];
+  const lanes = listDurableLanes(root);
+  return live.map((p) => {
+    const session = p?.session || null;
+    const cwd = p?.cwd || null;
+    const hit = lanes.find((l) =>
+      (session && l.binding?.tmux_session === session)
+      || (cwd && l.binding?.worktree_path === cwd)
+    );
+    return {
+      name: hit?.name || hit?.label || session || "unknown",
+      lane_id: hit?.lane_id || null,
+      tmux_session: session,
+    };
+  });
+}
+
+function supersedeObservationOnlyCursorSession(lane, rec, { nowMs, root }) {
+  const existing = activeAgentSessionForLane(rec.lane_id, root);
+  if (!existing || existing.provider !== "cursor") return existing;
+  if (cursorExecutableTransport(lane).ok) return existing;
+  endAgentSession(existing.agent_session_id, {
+    reason: "observation_only_superseded",
+    nowMs,
+    root,
+  });
+  return null;
+}
+
+function bindClaudeExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "claude",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "claude", { nowMs, root });
+  } catch { /* preferred already Claude is fine */ }
+  return out;
+}
+
+function bindCursorExecutable(rec, extra, { nowMs, root }) {
+  const boundPath = extra.worktree_path || rec.binding?.worktree_path;
+  const out = bindDurableLane(rec.lane_id, {
+    ...rec.binding,
+    ...extra,
+    provider: "cursor",
+    worktree_path: boundPath,
+  }, { nowMs, root });
+  try {
+    setLanePreferredProvider(rec.lane_id, "cursor", { nowMs, root });
+  } catch { /* preferred already Cursor is fine */ }
+  return out;
+}
+
+async function spawnCursorInPane({ lane }) {
+  const argv = ["cursor-agent"];
+  const forbidden = assertSafeSpawnArgv(argv);
+  if (!forbidden.ok) return forbidden;
+  if (spawnImpl) return spawnImpl({ lane, argv, provider: "cursor" });
+  const pane = lane?.tmux?.pane_id;
+  const cwd = lane?.worktree?.path;
+  if (!pane || !cwd) return { ok: false, error: "missing_pane" };
+  try {
+    execFileSync("tmux", [
+      "respawn-pane", "-k", "-c", cwd, "-t", pane, "--",
+      ...argv,
+    ], { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "pipe"] });
+    return { ok: true, argv, provider: "cursor" };
+  } catch (e) {
+    return { ok: false, error: "spawn_failed", detail: String(e.stderr || e.message || e).slice(0, 300) };
+  }
+}
+
+function endActiveSessionForProviderSwitch(laneId, { nowMs, root, reason }) {
+  const existing = activeAgentSessionForLane(laneId, root);
+  if (!existing) return null;
+  if (!["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) return existing;
+  endAgentSession(existing.agent_session_id, { reason, nowMs, root });
+  return null;
+}
+
+async function startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin }) {
+  const transport = cursorExecutableTransport(found);
+  if (transport.ok) {
+    const existing = activeAgentSessionForLane(found.lane_id, root);
+    if (existing && ["ACTIVE", "STARTING", "VERIFYING", "RESTARTING", "HANDOFF"].includes(existing.state)) {
+      if (existing.state !== "ACTIVE") {
+        markAgentSessionActive(existing.agent_session_id, { root });
+      }
+      return {
+        ok: true,
+        adopted: true,
+        provider: "cursor",
+        agent_session_id: existing.agent_session_id,
+        start_session_implemented: true,
+      };
+    }
+    const run = activeRunForLane(found.lane_id, root);
+    const created = createAgentSession({
+      laneId: found.lane_id,
+      runId: run?.run_id || null,
+      provider: "cursor",
+      nowMs,
+      root,
+    });
+    if (!created.ok && created.error === "lane_has_active_session") {
+      const sess = created.session || activeAgentSessionForLane(found.lane_id, root);
+      return {
+        ok: true,
+        adopted: true,
+        provider: "cursor",
+        agent_session_id: sess?.agent_session_id || null,
+        start_session_implemented: true,
+      };
+    }
+    if (!created.ok) return created;
+    const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    return {
+      ok: true,
+      started: true,
+      adopted: false,
+      provider: "cursor",
+      agent_session_id: sess.agent_session_id,
+      start_session_implemented: true,
+    };
+  }
+
+  const hasPane = Boolean(found.tmux?.pane_id) && found.tmux?.alive !== false;
+  let createdRuntime = null;
+  if (!hasPane) {
+    const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
+    let cap = await assessSessionStartCapacity({ root });
+    let seatReclaim = null;
+    if (!cap.ok) {
+      // S8. The ceiling has actually bound and THIS lane is what is waiting for
+      // it — that is contention, and contention is the only thing permitted to
+      // reclaim a seat. Nothing here runs on a timer or on a sweep.
+      seatReclaim = await reclaimSeatForWaitingLane({ laneId: found.lane_id, root, nowMs });
+      if (seatReclaim?.reclaimed?.length) cap = await assessSessionStartCapacity({ root });
+    }
+    if (!cap.ok) {
+      const occupying = occupyingLaneSummaries(cap, root);
+      if (origin === "operator") {
+        return {
+          ok: false,
+          error: "provider_capacity",
+          start_session_implemented: true,
+          max_providers: cap.max_providers,
+          active_providers: cap.active_providers,
+          occupying,
+          occupying_names: occupying.map((o) => o.name),
+          capacity: cap,
+          // What the reclaim attempt concluded, so a refusal can say whether a
+          // seat could have been freed and why it was not.
+          seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
+        };
+      }
+      const run = activeRunForLane(found.lane_id, root);
+      const { createAdmissionRequest } = await import("./execution-admission.mjs");
+      const adm = createAdmissionRequest({
+        laneId: found.lane_id,
+        runId: run?.run_id || null,
+        nowMs,
+        root,
+      });
+      return {
+        ok: true,
+        status: "queued",
+        queued: true,
+        waiting_for_execution_capacity: true,
+        admission_id: adm.request?.admission_id || null,
+        start_session_implemented: true,
+        occupying,
+        occupying_names: occupying.map((o) => o.name),
+        capacity: cap,
+        seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
+      };
+    }
+    let started;
+    try {
+      started = startRuntimeImpl
+        ? await startRuntimeImpl({ lane: found, rec, root, nowMs, provider: "cursor" })
+        : await startPersistentAgentSession({
+          worktreePath: boundPath,
+          worktreeName: rec.binding?.worktree_name || found.worktree?.name,
+          laneName: rec.name,
+          existingTmuxSession: rec.binding?.tmux_session || null,
+          expectedBranch: rec.binding?.branch || null,
+          runtimeRoot: root,
+          expectedRepositoryId: rec.repository_id || null,
+          provider: "cursor",
+        });
+    } catch (e) {
+      started = { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: String(e.message || e).slice(0, 240) };
+    }
+    if (!started?.ok) {
+      return {
+        ok: false,
+        error: started?.error || CURSOR_DELIVERY_UNAVAILABLE,
+        start_session_implemented: true,
+        observation_only: true,
+        skip_queue: started?.skip_queue !== false,
+        rolled_back: Boolean(started?.rolled_back),
+      };
+    }
+    createdRuntime = started;
+  } else {
+    const { startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
+    let started;
+    try {
+      started = startRuntimeImpl
+        ? await startRuntimeImpl({ lane: found, rec, root, nowMs, provider: "cursor" })
+        : await startPersistentAgentSession({
+          worktreePath: boundPath,
+          worktreeName: rec.binding?.worktree_name || found.worktree?.name,
+          laneName: rec.name,
+          existingTmuxSession: rec.binding?.tmux_session || found.tmux?.session || null,
+          expectedBranch: rec.binding?.branch || null,
+          runtimeRoot: root,
+          expectedRepositoryId: rec.repository_id || null,
+          provider: "cursor",
+        });
+    } catch (e) {
+      started = { ok: false, error: CURSOR_DELIVERY_UNAVAILABLE, detail: String(e.message || e).slice(0, 240) };
+    }
+    if (!started?.ok) {
+      const spawned = await spawnCursorInPane({ lane: found });
+      if (!spawned.ok) {
+        return {
+          ok: false,
+          error: spawned.error || CURSOR_DELIVERY_UNAVAILABLE,
+          start_session_implemented: true,
+          observation_only: true,
+        };
+      }
+      createdRuntime = { ok: true, tmux_session: found.tmux?.session, pane_id: found.tmux?.pane_id, created: { tmux: false, provider: true } };
+    } else {
+      createdRuntime = started;
+    }
+  }
+
+  bindCursorExecutable(rec, {
+    tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+    tmux_pane: createdRuntime?.pane_id || found.tmux?.pane_id,
+    worktree_path: boundPath,
+  }, { nowMs, root });
+
+  endActiveSessionForProviderSwitch(found.lane_id, {
+    nowMs,
+    root,
+    reason: "observation_only_superseded",
+  });
+
+  const run = activeRunForLane(found.lane_id, root);
+  const created = createAgentSession({
+    laneId: found.lane_id,
+    runId: run?.run_id || null,
+    provider: "cursor",
+    nowMs,
+    root,
+  });
+  if (!created.ok && created.error === "lane_has_active_session") {
+    const sess = created.session || activeAgentSessionForLane(found.lane_id, root);
+    if (sess && sess.provider !== "cursor") {
+      endAgentSession(sess.agent_session_id, { reason: "provider_switched", nowMs, root });
+      const retry = createAgentSession({
+        laneId: found.lane_id,
+        runId: run?.run_id || null,
+        provider: "cursor",
+        nowMs,
+        root,
+      });
+      if (!retry.ok) return retry;
+      const next = markAgentSessionActive(retry.session.agent_session_id, { root }) || retry.session;
+      return {
+        ok: true,
+        started: true,
+        provider: "cursor",
+        agent_session_id: next.agent_session_id,
+        tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+        start_session_implemented: true,
+      };
+    }
+    return {
+      ok: true,
+      adopted: true,
+      provider: "cursor",
+      agent_session_id: sess?.agent_session_id || null,
+      start_session_implemented: true,
+    };
+  }
+  if (!created.ok) return created;
+  const sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+  return {
+    ok: true,
+    started: true,
+    adopted: false,
+    provider: "cursor",
+    agent_session_id: sess.agent_session_id,
+    tmux_session: createdRuntime?.tmux_session || found.tmux?.session,
+    start_session_implemented: true,
+  };
+}
+
+async function startLaneAgentSessionUnlocked({ laneId, nowMs, root, origin = "admission" }) {
   const found = await observeLane(laneId);
   if (!found) return { ok: false, error: "lane_not_found" };
   const rec = getDurableLane(found.lane_id, root);
@@ -1172,6 +1601,24 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   if (!check.ok && check.blockers.some((b) => b.code === "worktree_missing" || b.code === "missing_worktree" || b.code === "worktree_mismatch")) {
     return { ok: false, error: check.blockers[0].code, blockers: check.blockers };
   }
+
+  const bound = normalizeExecutionProvider(rec?.binding?.provider, "");
+  const preferred = normalizeExecutionProvider(rec?.preferred_provider, bound || "claude");
+  let provider;
+  if (preferred === "claude") {
+    provider = "claude";
+  } else if (preferred === "cursor" || bound === "cursor") {
+    provider = "cursor";
+  } else if (laneClaudePresent(found)) {
+    provider = "claude";
+  } else {
+    provider = laneProviderKind(found, rec);
+  }
+  if (provider === "cursor") {
+    return startCursorExecutableSession({ found, rec, boundPath, nowMs, root, origin });
+  }
+
+  supersedeObservationOnlyCursorSession(found, rec, { nowMs, root });
 
   if (laneClaudePresent(found)) {
     if (countClaudeOnLane(found) > 1) {
@@ -1195,9 +1642,15 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     });
     if (!created.ok) return created;
     sess = markAgentSessionActive(created.session.agent_session_id, { root }) || created.session;
+    bindClaudeExecutable(rec, {
+      tmux_session: found.tmux?.session || rec.binding?.tmux_session,
+      tmux_pane: found.tmux?.pane_id || rec.binding?.tmux_pane,
+      worktree_path: boundPath,
+    }, { nowMs, root });
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
     };
@@ -1219,8 +1672,32 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
   const hasPane = Boolean(lane.tmux?.pane_id) && lane.tmux?.alive !== false;
   if (!hasPane) {
     const { assessSessionStartCapacity, startPersistentAgentSession } = await import("./alloy-dev-adapter.mjs");
-    const cap = await assessSessionStartCapacity();
+    let cap = await assessSessionStartCapacity({ root });
+    let seatReclaim = null;
     if (!cap.ok) {
+      // S8. The ceiling has actually bound and THIS lane is what is waiting for
+      // it — that is contention, and contention is the only thing permitted to
+      // reclaim a seat. Nothing here runs on a timer or on a sweep.
+      seatReclaim = await reclaimSeatForWaitingLane({ laneId: found.lane_id, root, nowMs });
+      if (seatReclaim?.reclaimed?.length) cap = await assessSessionStartCapacity({ root });
+    }
+    if (!cap.ok) {
+      const occupying = occupyingLaneSummaries(cap, root);
+      if (origin === "operator") {
+        return {
+          ok: false,
+          error: "provider_capacity",
+          start_session_implemented: true,
+          max_providers: cap.max_providers,
+          active_providers: cap.active_providers,
+          occupying,
+          occupying_names: occupying.map((o) => o.name),
+          capacity: cap,
+          // What the reclaim attempt concluded, so a refusal can say whether a
+          // seat could have been freed and why it was not.
+          seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
+        };
+      }
       const run = activeRunForLane(found.lane_id, root);
       const { createAdmissionRequest } = await import("./execution-admission.mjs");
       const adm = createAdmissionRequest({
@@ -1236,7 +1713,10 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
         waiting_for_execution_capacity: true,
         admission_id: adm.request?.admission_id || null,
         start_session_implemented: true,
+        occupying,
+        occupying_names: occupying.map((o) => o.name),
         capacity: cap,
+        seat_reclaim: seatReclaim ? { reclaimed: seatReclaim.reclaimed, reason: seatReclaim.plan?.reason ?? null, refused: seatReclaim.refused ?? [] } : null,
       };
     }
     const started = startRuntimeImpl
@@ -1248,6 +1728,10 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
         existingTmuxSession: rec.binding?.tmux_session || null,
         expectedBranch: rec.binding?.branch || null,
         runtimeRoot: root,
+        // The lane's attribution travels with the start, so the provider cannot
+        // come up in a repository other than the one this lane belongs to.
+        expectedRepositoryId: rec.repository_id || null,
+        provider: "claude",
       });
     if (!started?.ok) {
       return {
@@ -1259,8 +1743,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
       };
     }
     createdRuntime = started;
-    bindDurableLane(rec.lane_id, {
-      ...rec.binding,
+    bindClaudeExecutable(rec, {
       tmux_session: started.tmux_session,
       tmux_pane: started.pane_id,
       worktree_path: boundPath,
@@ -1294,6 +1777,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     return {
       ok: true,
       adopted: true,
+      provider: "claude",
       agent_session_id: sess.agent_session_id,
       start_session_implemented: true,
       tmux_session: createdRuntime.tmux_session,
@@ -1361,6 +1845,7 @@ async function startLaneAgentSessionUnlocked({ laneId, nowMs, root }) {
     ok: true,
     started: true,
     status: "starting",
+    provider: "claude",
     agent_session_id: created.session.agent_session_id,
     tmux_session: createdRuntime?.tmux_session || lane.tmux?.session || rec.binding?.tmux_session,
     start_session_implemented: true,
@@ -1388,7 +1873,8 @@ export async function reconcilePendingOrientation({ root = runtimeRoot(), nowMs 
     const run = activeRunForLane(rec.lane_id, root);
     if (!run || run.state !== "QUEUED" || run.state_reason !== "waiting_for_agent_session") continue;
     const attempts = Number(session.orientation_attempts || 0);
-    if (attempts >= 4) continue;
+    const maxAttempts = session.state === "STARTING" ? 8 : 4;
+    if (attempts >= maxAttempts) continue;
     const last = session.last_orientation_attempt_at ? Date.parse(session.last_orientation_attempt_at) : 0;
     if (last && nowMs - last < 8000) continue;
     const found = await observeLane(rec.lane_id);
@@ -1435,10 +1921,11 @@ export function attachLaneAgentSessions(lanes, root = runtimeRoot()) {
     const pending = rec?.state === "ROTATION_PENDING" || need.kind === "safe_automatic";
     const rotating = rec && ["HANDOFF", "RESTARTING", "VERIFYING"].includes(rec.state);
     const present = laneClaudePresent(lane);
+    const cursorLive = cursorSessionLive(rec, lane);
     const run = lane.execution_run;
     let sessionHint = need.reason || null;
     const liveRun = run && ["EXECUTING", "VALIDATING", "WAITING_RESOURCE", "NEEDS_INPUT", "RECOVERING"].includes(run.state);
-    if (rec && rec.state === "ACTIVE" && !present && liveRun) {
+    if (rec && rec.state === "ACTIVE" && !present && liveRun && rec.provider !== "cursor") {
       sessionHint = "Claude session ended unexpectedly";
     }
     const posture = rotating
@@ -1454,14 +1941,15 @@ export function attachLaneAgentSessions(lanes, root = runtimeRoot()) {
     }
     const sessionActivity = recentSessionActivity(lane.lane_id, root);
     const prior = Array.isArray(lane.recent_system_activity) ? lane.recent_system_activity : [];
-    const showSession = rec && (present || rotating || pending || Boolean(sessionHint && liveRun) || ["STARTING", "VERIFYING", "RESTARTING"].includes(rec.state));
+    const showSession = rec && (present || cursorLive || rotating || pending || Boolean(sessionHint && liveRun) || ["STARTING", "VERIFYING", "RESTARTING"].includes(rec.state));
+    const live = present || cursorLive;
     return {
       ...lane,
       runtime_posture: rotating ? posture : (pending ? posture : lane.runtime_posture),
       execution_run: nextRun,
       agent_session: showSession ? publicAgentSession(rec, economics) : null,
-      runtime: present ? "online" : "offline",
-      start_session: present ? null : {
+      runtime: live ? "online" : "offline",
+      start_session: live ? null : {
         available: Boolean(lane.worktree?.path || lane.binding?.worktree_path),
         implemented: Boolean(lane.worktree?.path || lane.binding?.worktree_path),
       },
