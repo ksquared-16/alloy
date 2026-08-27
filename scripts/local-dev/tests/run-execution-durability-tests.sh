@@ -59,6 +59,7 @@ SUITES=(
   "development-validation-convergence.test.mjs"
   "development-executor-authority.test.mjs"
   "development-memory-capacity.test.mjs"
+  "development-governed-approval-ui.test.mjs"
 )
 
 PASS=0
