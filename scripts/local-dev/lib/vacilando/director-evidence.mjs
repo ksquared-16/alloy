@@ -14,6 +14,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { repositoryStorePath } from "./repository-registry.mjs";
+import { governedActionStorePath } from "./governed-action-request.mjs";
+import { executionRunStorePath } from "./execution-run.mjs";
 import {
   measureClosePullRequestGates,
   measureDeleteRemoteBranchGates,
@@ -45,8 +47,7 @@ export function managedRepository(remoteOrName, stateRoot) {
   // repository", which is a REFUSAL, so the bug hid as conservatism.
   let path = null;
   try { path = repositoryStorePath(stateRoot); } catch { path = null; }
-  const reg = readJson(path || join(stateRoot, "repositories.json"))
-    || readJson(join(stateRoot, "repositories.json"));
+  const reg = path ? readJson(path) : null;
   // The registry stores repositories as an object keyed by repository_id;
   // older snapshots used an array. Accept both, and return null if neither
   // shape yields entries, because "cannot tell" must escalate.
@@ -172,7 +173,11 @@ export function collectDirectorEvidence(rec, {
 /** Is a governed merge still legitimately targeting this pull request? */
 function activeGovernedMergeFor(stateRoot, repository, prNumber) {
   if (!prNumber) return null;
-  const db = readJson(join(stateRoot, "governed-actions", "requests.json"));
+  // Ask the owner. Reconstructing a canonical Vacilando store path by hand is
+  // how this gate came back unmeasured in the first place.
+  let gaPath = null;
+  try { gaPath = governedActionStorePath(stateRoot); } catch { gaPath = null; }
+  const db = gaPath ? readJson(gaPath) : null;
   const rows = Array.isArray(db) ? db : (db?.requests || db?.records || (db && Object.values(db).find(Array.isArray)) || null);
   if (!Array.isArray(rows)) return null;                       // cannot tell -> escalate
   const pending = ["requested", "awaiting_director", "awaiting_operator", "awaiting_control_plane_refresh", "executing"];
@@ -185,7 +190,9 @@ function activeGovernedMergeFor(stateRoot, repository, prNumber) {
 /** Does any non-terminal run or lane still name this branch? */
 function activeLaneReference(stateRoot, branch) {
   if (!branch) return null;
-  const runs = readJson(join(stateRoot, "execution-runs", "runs.json"));
+  let runsPath = null;
+  try { runsPath = executionRunStorePath(stateRoot); } catch { runsPath = null; }
+  const runs = runsPath ? readJson(runsPath) : null;
   if (!runs?.lanes) return null;                               // cannot tell -> escalate
   const terminal = new Set(["COMPLETE", "FAILED", "ABANDONED"]);
   for (const v of Object.values(runs.lanes)) {
