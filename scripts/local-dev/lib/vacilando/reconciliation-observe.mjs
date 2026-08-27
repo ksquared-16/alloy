@@ -9,6 +9,7 @@
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { classifyWorktree } from "./resource-reconciliation.mjs";
 
@@ -131,3 +132,55 @@ export function observeReconciliation({
 }
 
 
+
+
+/**
+ * Observe reality WITHOUT being handed it.
+ *
+ * The trusted executor must re-observe for itself: certification caught it
+ * calling observeReconciliation with `inputs.processes || []`, so it modelled
+ * a host with no running servers, every port reclassified, and the plan could
+ * never match its own fingerprint — a permanent stale_plan. A re-observation
+ * that depends on the caller supplying reality is not a re-observation.
+ */
+export function gatherObservation({ root, worktreeParent = null } = {}) {
+  let processes = [];
+  try {
+    processes = execFileSync("ps", ["-Ao", "pid=,args="], { encoding: "utf8", maxBuffer: 8 * 1024 * 1024, timeout: 15000 })
+      .split("\n").map((l) => { const m = l.trim().match(/^(\d+)\s+(.*)$/); return m ? { pid: Number(m[1]), command: m[2] } : null; })
+      .filter(Boolean);
+  } catch { processes = []; }
+
+  let gitWorktrees = null;
+  for (const cwd of [join(homedir(), "Alloy"), process.cwd()]) {
+    try {
+      gitWorktrees = execFileSync("git", ["worktree", "list", "--porcelain"], { cwd, encoding: "utf8", timeout: 15000, stdio: ["ignore", "pipe", "ignore"] })
+        .split("\n").filter((l) => l.startsWith("worktree ")).map((l) => l.replace("worktree ", ""));
+      break;
+    } catch { /* try the next */ }
+  }
+
+  const activeRunsByWorktree = {};
+  try {
+    const p = join(root, "vacilando", "execution-runs", "runs.json");
+    if (existsSync(p)) {
+      const j = JSON.parse(readFileSync(p, "utf8"));
+      const terminal = new Set(["COMPLETE", "FAILED", "ABANDONED"]);
+      for (const v of Object.values(j.lanes || {})) {
+        const rs = Array.isArray(v) ? v : (v.runs || Object.values(v).find(Array.isArray) || []);
+        for (const r of rs) {
+          if (!r || terminal.has(String(r.state).toUpperCase()) || !r.worktree_path) continue;
+          (activeRunsByWorktree[String(r.worktree_path).split("/").pop()] ||= []).push({ run_id: r.run_id });
+        }
+      }
+    }
+  } catch { /* unknown stays unknown */ }
+
+  return observeReconciliation({
+    root,
+    processes,
+    worktreeParent: worktreeParent || join(homedir(), "Code", "alloy-worktrees"),
+    gitWorktrees,
+    activeRunsByWorktree,
+  });
+}

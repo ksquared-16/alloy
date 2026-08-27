@@ -251,3 +251,22 @@ await test("CLI — corrections come from the planner, never from the caller", a
   assert.match(fn, /rebuilt\.fingerprint !== action\.inputs\?\.planFingerprint/, "and refuse on fingerprint mismatch");
   assert.match(fn, /stale_plan/);
 });
+
+await test("EXECUTOR — re-observation gathers reality, never accepts it from inputs", async () => {
+  // Live certification caught this: the executor called observeReconciliation
+  // with `inputs.processes || []`, so it modelled a host with no running
+  // servers, every port reclassified, and the plan could never match its own
+  // fingerprint — a PERMANENT stale_plan that no correct plan could survive.
+  // A re-observation that depends on the caller supplying reality is not one.
+  const fsx = await import("node:fs");
+  const src = fsx.readFileSync(new URL("../lib/vacilando/trusted-host-actions.mjs", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("executeApplyReconciliationPlanTrustedHostAction"),
+    src.indexOf("export function fulfillApplyReconciliationPlanForMission"));
+  assert.match(fn, /gatherObservation\(/, "the executor must gather observation itself");
+  assert.ok(!/processes:\s*action\.inputs/.test(fn), "it must not take the process table from inputs");
+  assert.ok(!/gitWorktrees:\s*action\.inputs/.test(fn), "nor the git worktree list");
+  // And it still refuses on a genuine mismatch.
+  assert.match(fn, /stale_plan/);
+  const O = await import("../lib/vacilando/reconciliation-observe.mjs");
+  assert.equal(typeof O.gatherObservation, "function");
+});

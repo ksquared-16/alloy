@@ -51,7 +51,7 @@ import { pushBranch, publicPushResult } from "./trusted-host-push.mjs";
 import { openPullRequest, publicOpenPrResult } from "./trusted-host-open-pr.mjs";
 import { closePullRequest, deleteRemoteBranch } from "./trusted-host-repository-housekeeping.mjs";
 import { applyReconciliationPlan, buildReconciliationPlan } from "./reconciliation-apply.mjs";
-import { observeReconciliation } from "./reconciliation-observe.mjs";
+import { gatherObservation } from "./reconciliation-observe.mjs";
 import {
   applyMigrationBatch,
   publicMigrationResult,
@@ -1354,12 +1354,9 @@ export function executeApplyReconciliationPlanTrustedHostAction(action, { actor 
   const root = action.inputs?.runtimeRoot || runtimeRoot();
   let fresh;
   try {
-    fresh = observeReconciliation({
-      root,
-      processes: action.inputs?.processes || [],
-      worktreeParent: action.inputs?.worktreeParent || null,
-      gitWorktrees: action.inputs?.gitWorktrees || null,
-    });
+    // Gathers reality itself. Accepting it from inputs meant the executor
+    // observed whatever the caller described, which is not re-observation.
+    fresh = gatherObservation({ root, worktreeParent: action.inputs?.worktreeParent || null });
   } catch (e) {
     return failTrustedAction(action, "observation_failed", String(e?.message || e), { nowMs });
   }
