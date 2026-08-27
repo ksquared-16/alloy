@@ -9,6 +9,7 @@
  * decisions, and trusted-host actions.
  */
 import { createHash, randomBytes } from "node:crypto";
+import { describeWait } from "./run-wait.mjs";
 import { evaluateDirectorAuthority } from "./director-authority.mjs";
 import { collectDirectorEvidence } from "./director-evidence.mjs";
 import {
@@ -1088,9 +1089,28 @@ export function isRecoverableStaleRegistryFailure(rec) {
   return avail.code === "available" || avail.code === "director_registry_stale" || Boolean(getActionDefinition(rec.action_key));
 }
 
-function waitProjection(rec) {
+function waitProjection(rec, { nowMs } = {}) {
   const presentation = presentationForGovernedAction(rec);
+  // A GOVERNED WAIT IS AN S6 WAIT, NOT A CAPTION.
+  //
+  // This used to return presentation fields only — resource_key, label,
+  // summary — with no schema, reason, owner, waiting_since, deadline or bound
+  // policy. describeWait() answers a missing reason with bound_policy
+  // "invalid", which is exactly how health came to report
+  // "Waiting on Director — staging merge" as an unowned wait nothing could
+  // resolve. The text was never the problem; the missing envelope was.
+  //
+  // The reason is needs_operator_input because that is what this IS: a
+  // question for a person. Its policy is human_indefinite, so it has no
+  // deadline BY DESIGN and must never be counted stale for waiting.
+  const descriptor = describeWait({
+    reason: "needs_operator_input",
+    resource_id: rec.request_id,
+    waiting_since: nowMs ?? Date.now(),
+    now: nowMs ?? Date.now(),
+  });
   return {
+    ...descriptor,
     resource_key: DIRECTOR_GOVERNED_RESOURCE_KEY,
     label: "Director",
     summary: presentation.wait_label || rec.title || "Waiting on Director",
@@ -1106,7 +1126,7 @@ function attachRunWait(rec, { nowMs, root } = {}) {
   const run = getExecutionRun(rec.run_id, root);
   if (!run || isTerminalRunState(run.state)) return;
   const publicReq = publicGovernedAction(rec);
-  const wait = waitProjection(rec);
+  const wait = waitProjection(rec, { nowMs });
   if (run.state === "WAITING_RESOURCE") {
     patchRunResourceWait(rec.run_id, { ...(run.resource_wait || {}), ...wait }, root);
     patchRunFields(rec.run_id, {
@@ -2127,6 +2147,13 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   rec.failure_reason = null;
   saveRequest(rec, root);
   appendAudit(rec, "complete", { nowMs, detail: { result_ref: rec.result_ref } }, root);
+  // A RESOLVED WAIT IS NOT A LIVE WAIT. The failure path already released the
+  // run; success did not, so a completed governed action left "Waiting on
+  // Director" sitting on the record as though it were still true. Seventeen
+  // terminal runs were carrying wait text for work that had long since landed.
+  if (rec.run_id) {
+    try { patchRunResourceWait(rec.run_id, null, root); } catch { /* the run may be gone */ }
+  }
   emitNotification("governed_action_complete", rec, {
     title: `${rec.title || rec.action_key} complete`,
     body: "Director finished the trusted-host action and is resuming the originating lane.",
