@@ -8,7 +8,10 @@
  * This is not a parallel orchestrator: it sits on execution runs, mission
  * decisions, and trusted-host actions.
  */
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
+import { describeWait } from "./run-wait.mjs";
+import { evaluateDirectorAuthority } from "./director-authority.mjs";
+import { collectDirectorEvidence } from "./director-evidence.mjs";
 import {
   appendFileSync,
   existsSync,
@@ -37,9 +40,13 @@ import {
 import {
   findAuthorization,
   grantMissionAuthorization,
+  grantExactRequestAuthorization,
 } from "./trusted-host-authz.mjs";
 import {
   fulfillRepositoryPushForMission,
+  fulfillClosePullRequestForMission,
+  fulfillApplyReconciliationPlanForMission,
+  fulfillDeleteRemoteBranchForMission,
   fulfillRestoreQaSessionForMission,
   fulfillProvisionQaIdentityForMission,
   fulfillAssignQaAccessForMission,
@@ -128,6 +135,18 @@ function bound(s, max) {
   const t = String(s || "").trim();
   if (!t) return null;
   return t.length > max ? t.slice(0, max) : t;
+}
+
+/**
+ * THE canonical location of the governed-action request store.
+ *
+ * Exported because a Director evidence collector hand-joined this path, missed
+ * the "vacilando" segment, and read nothing — which surfaced as an UNMEASURED
+ * gate and refused a cleanup. A missed file reads as "cannot tell", so that
+ * bug wore the costume of caution. Callers ask the owner now.
+ */
+export function governedActionStorePath(root = runtimeRoot()) {
+  return storePath(root);
 }
 
 function storePath(root = runtimeRoot()) {
@@ -529,11 +548,250 @@ function capturePullRequestSnapshot(rec, { gh = null } = {}) {
   }
 }
 
+/**
+ * The canonical identity of WHAT an operator is being asked to approve.
+ *
+ * A request id is not enough. It names a row; it says nothing about the content
+ * that row currently points at. If the branch moves, the commit changes, or the
+ * migration set is edited after the approval card is drawn, the id still
+ * matches and the operator's tap would approve something they never read.
+ *
+ * So the decision binds to the content: the action, the normalised environment,
+ * the repository, the branch, the source commit, the pull request, and the
+ * migration set. Both halves compute it from this one function — the card
+ * renders what the server produced, and the server recomputes it at decision
+ * time. A fingerprint the client invented would prove nothing.
+ */
+export function governedContentFingerprint(req) {
+  if (!req) return null;
+  const inputs = req.inputs || {};
+  const migrations = Array.isArray(inputs.migrations)
+    ? inputs.migrations.map((m) => (typeof m === "string" ? m : `${m?.version || ""}:${m?.path || m?.migration_path || ""}`)).sort()
+    : [];
+  // Fields that get a normalisation rule of their own. Everything ELSE in
+  // inputs still contributes verbatim below — an allowlist here would mean
+  // that for an action whose content lives in an unlisted field (a census IS
+  // its query) the fingerprint could not tell two different requests apart,
+  // and the protection would be theatre for exactly that action.
+  const normalised = new Set([
+    "environment", "repository", "branch", "headBranch", "head_branch",
+    "expectedHeadSha", "expected_sha", "expectedSha",
+    "pullRequestNumber", "pull_request_number", "migrations",
+  ]);
+  const rest = {};
+  for (const key of Object.keys(inputs).sort()) {
+    if (normalised.has(key)) continue;
+    rest[key] = canonicalForFingerprint(inputs[key]);
+  }
+  const canonical = JSON.stringify({
+    action_key: req.action_key || null,
+    // Normalised so `cert` and `certification` cannot read as different
+    // content, and `development_certification` cannot read as the same.
+    environment: String(inputs.environment || req.target || "").trim().toLowerCase() || null,
+    repository: inputs.repository || null,
+    branch: inputs.branch || inputs.headBranch || inputs.head_branch || null,
+    source_sha: String(inputs.expectedHeadSha || inputs.expected_sha || inputs.expectedSha || "").toLowerCase() || null,
+    pull_request: inputs.pullRequestNumber ?? inputs.pull_request_number ?? null,
+    migrations,
+    rest,
+  });
+  return createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 32);
+}
+
+/**
+ * Deep key-sorted value, so an object that serialises in a different key order
+ * is not mistaken for different content. Array order is PRESERVED — for
+ * anything but the migration set, order is meaning.
+ */
+function canonicalForFingerprint(value) {
+  if (Array.isArray(value)) return value.map(canonicalForFingerprint);
+  if (value && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = canonicalForFingerprint(value[k]);
+    return out;
+  }
+  return value ?? null;
+}
+
+/**
+ * Shared by approve and deny.
+ *
+ * Deny is checked too, deliberately: denying content the operator did not read
+ * is a smaller harm than approving it, but it is still a decision recorded
+ * against the wrong thing, and a stale deny would let the real request slip
+ * through unnoticed.
+ */
+export function rejectStaleDecision(rec, expectedFingerprint) {
+  if (!expectedFingerprint) return null;
+  const current = governedContentFingerprint(rec);
+  if (current === expectedFingerprint) return null;
+  return {
+    ok: false,
+    error: "stale_content",
+    detail: "The request changed after this approval card was shown. Nothing was approved or denied; review the current request.",
+    presented_fingerprint: expectedFingerprint,
+    current_fingerprint: current,
+    request: publicGovernedAction(rec),
+  };
+}
+
+/**
+ * THE NAME OF THE THING BEING DECIDED.
+ *
+ * An approval was announced to the operator as "approve gar_4dc7b4d8bcd0e0".
+ * Nothing in the UI carried that string, so there was no way to tell which
+ * visible item it meant — and a governed action the operator cannot NAME is a
+ * governed action the operator cannot find. The request id is diagnostic
+ * metadata; it is never the operator's concept of the work.
+ *
+ * The label answers one question: what am I being asked to approve? It is
+ * derived deterministically from canonical inputs, so the same request always
+ * produces the same words, and it never falls back to an identifier.
+ */
+export function operatorLabel(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const work = operatorWorkTitle(rec);
+  const key = rec.action_key;
+  const target = rec.target || DEFAULT_TARGET;
+  const pr = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+  const branch = inputs.branch || inputs.head_branch || inputs.headBranch || "";
+
+  if (key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) {
+    if (work && pr) return `Merge ${work} — PR #${pr}`;
+    if (pr) return `Merge PR #${pr} to ${target}`;
+    return `Merge pull request to ${target}`;
+  }
+  if (key === ACTION_TYPES.REPOSITORY_PUSH) {
+    if (work) return `Push ${work} branch`;
+    return branch ? `Push ${branch}` : "Push a reviewed branch";
+  }
+  if (key === ACTION_TYPES.PROMOTION_OPEN_PR) {
+    const base = inputs.base || target;
+    if (work) return `Open PR for ${work}`;
+    return branch ? `Open PR ${branch} → ${base}` : `Open promotion PR into ${base}`;
+  }
+  if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
+    // Never hardcode a work name here. The label used to read "Apply Access &
+    // Identity staging migrations" for EVERY migration set, which named the
+    // wrong work for every caller but one.
+    const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
+    if (work) return `Apply ${work} migrations`;
+    const n = list.length || (inputs.expected_version ? 1 : 0);
+    return n
+      ? `Apply ${n} ${target} migration${n === 1 ? "" : "s"}`
+      : `Apply ${target} migrations`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
+    const slot = operatorSlotHint(rec);
+    return `Provision managed QA identity${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
+    const slot = operatorSlotHint(rec);
+    return `Assign staging admin access${slot ? ` for Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    const slot = operatorSlotHint(rec);
+    return `Restore QA browser session${slot ? ` on Slot ${slot}` : ""}`;
+  }
+  if (key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    const n = Array.isArray(inputs.corrections) ? inputs.corrections.length : 0;
+    return n ? `Apply Vacilando reconciliation metadata — ${n} correction${n === 1 ? "" : "s"}` : "Apply Vacilando reconciliation metadata";
+  }
+  if (key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    const n = inputs.pull_request_number ?? inputs.pullRequestNumber ?? null;
+    if (work && n) return `Close ${work} PR #${n}`;
+    return n ? `Close pull request #${n}` : "Close a pull request";
+  }
+  if (key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    const b = inputs.branch || inputs.branchName || "";
+    if (work) return `Delete ${work} branch`;
+    return b ? `Delete remote branch ${b}` : "Delete a remote branch";
+  }
+  if (key === ACTION_TYPES.DATABASE_READ_CENSUS) {
+    if (work) return `Read-only census — ${work}`;
+    return `Read-only database census on ${target}`;
+  }
+  // An unregistered key still gets words rather than an identifier.
+  return work || (key ? String(key).replace(/[._]/g, " ") : "Governed action");
+}
+
+/** An explicit human work name, when the caller supplied one. Never invented. */
+function operatorWorkTitle(rec) {
+  const raw = rec?.work_title || rec?.inputs?.workTitle || rec?.inputs?.work_title || null;
+  const t = raw == null ? "" : String(raw).trim();
+  return t && t.length <= 80 ? t : null;
+}
+
+function operatorSlotHint(rec) {
+  const lane = rec?.inputs?.laneId || rec?.inputs?.lane_id || rec?.lane_id || "";
+  const resolved = typeof resolveSlotIdentityForDisplay === "function"
+    ? resolveSlotIdentityForDisplay(lane)
+    : null;
+  return rec?.slot || resolved?.slot || "";
+}
+
+/**
+ * The card, as a hierarchy rather than a sentence: what it is, then why, then
+ * the facts, and the request id LAST and small. The order here is the order the
+ * operator reads, so presentation cannot drift from the contract.
+ */
+export function operatorApprovalCard(rec) {
+  if (!rec) return null;
+  const inputs = rec.inputs || {};
+  const presentation = presentationForGovernedAction(rec);
+  const context = [];
+  const push = (label, value) => { if (value) context.push({ label, value: String(value) }); };
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST) push("Action", `Merge to ${rec.target || DEFAULT_TARGET}`);
+  else if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) push("Action", "Push to the remote");
+  else if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) push("Action", `Open a pull request into ${inputs.base || rec.target || DEFAULT_TARGET}`);
+  else push("Action", rec.target ? `${rec.action_key} · ${rec.target}` : rec.action_key);
+  const sha = String(inputs.expectedHeadSha || inputs.expected_head_sha || inputs.expectedSha || "");
+  push("Commit", sha ? sha.slice(0, 12) : "");
+  push("Branch", inputs.branch || inputs.headBranch || inputs.head_branch || "");
+  push("Repository", inputs.repository || "");
+  return {
+    label: operatorLabel(rec),
+    decision: "Approval required",
+    context,
+    reason: rec.purpose || rec.reason_worker_cannot_execute || null,
+    approve_label: presentation.approve_label,
+    deny_label: presentation.deny_label,
+    // Diagnostic only. Rendered small, beneath the controls, never as the name.
+    request_id_debug: `Request ${rec.request_id}`,
+  };
+}
+
+/**
+ * EVERY pending approval on this host, ordered deterministically.
+ *
+ * The operator should not have to know which lane originated a request. They
+ * had no way to reach one at all: the only approval surface lived inside a lane
+ * you already had to be looking at.
+ *
+ * Order: work that is actively blocked first, then oldest, then request id as a
+ * final tiebreak so the list never reshuffles between two renders.
+ */
+export function pendingApprovals({ root = runtimeRoot() } = {}) {
+  const rows = listGovernedActions({ root })
+    .filter((r) => r && PENDING_GOVERNED_STATUSES.includes(r.status) && r.status !== "executing");
+  const blocking = (r) => (r.run_id ? 0 : 1);
+  const filedAt = (r) => Date.parse(r.created_at || "") || 0;
+  rows.sort((a, b) =>
+    blocking(a) - blocking(b)
+    || filedAt(a) - filedAt(b)
+    || String(a.request_id).localeCompare(String(b.request_id)));
+  return rows.map((r) => ({ ...publicGovernedAction(r), operator_card: operatorApprovalCard(r) }));
+}
+
 export function publicGovernedAction(req) {
   if (!req) return null;
   const presentation = presentationForGovernedAction(req);
   return {
     request_id: req.request_id,
+    // The identity the operator is actually deciding about. The card renders
+    // this and hands it back; the server recomputes and compares.
+    content_fingerprint: governedContentFingerprint(req),
     mission_id: req.mission_id,
     // What vouched for this action, so the approval card can say so instead of
     // leaving a repository-authorized request looking unattributed.
@@ -568,6 +826,12 @@ export function publicGovernedAction(req) {
     wait_label: presentation.wait_label,
     mission_need: presentation.mission_need,
     detail: presentation.detail,
+    // The operator's name for this decision. The id is diagnostic only.
+    operator_label: operatorLabel(req),
+    operator_card: operatorApprovalCard(req),
+    director_approval: req.director_approval || null,
+    director_decision: req.director_decision || null,
+    escalation_reason: req.escalation_reason || null,
     created_at: req.created_at,
     updated_at: req.updated_at,
   };
@@ -854,9 +1118,28 @@ export function isRecoverableStaleRegistryFailure(rec) {
   return avail.code === "available" || avail.code === "director_registry_stale" || Boolean(getActionDefinition(rec.action_key));
 }
 
-function waitProjection(rec) {
+function waitProjection(rec, { nowMs } = {}) {
   const presentation = presentationForGovernedAction(rec);
+  // A GOVERNED WAIT IS AN S6 WAIT, NOT A CAPTION.
+  //
+  // This used to return presentation fields only — resource_key, label,
+  // summary — with no schema, reason, owner, waiting_since, deadline or bound
+  // policy. describeWait() answers a missing reason with bound_policy
+  // "invalid", which is exactly how health came to report
+  // "Waiting on Director — staging merge" as an unowned wait nothing could
+  // resolve. The text was never the problem; the missing envelope was.
+  //
+  // The reason is needs_operator_input because that is what this IS: a
+  // question for a person. Its policy is human_indefinite, so it has no
+  // deadline BY DESIGN and must never be counted stale for waiting.
+  const descriptor = describeWait({
+    reason: "needs_operator_input",
+    resource_id: rec.request_id,
+    waiting_since: nowMs ?? Date.now(),
+    now: nowMs ?? Date.now(),
+  });
   return {
+    ...descriptor,
     resource_key: DIRECTOR_GOVERNED_RESOURCE_KEY,
     label: "Director",
     summary: presentation.wait_label || rec.title || "Waiting on Director",
@@ -872,7 +1155,7 @@ function attachRunWait(rec, { nowMs, root } = {}) {
   const run = getExecutionRun(rec.run_id, root);
   if (!run || isTerminalRunState(run.state)) return;
   const publicReq = publicGovernedAction(rec);
-  const wait = waitProjection(rec);
+  const wait = waitProjection(rec, { nowMs });
   if (run.state === "WAITING_RESOURCE") {
     patchRunResourceWait(rec.run_id, { ...(run.resource_wait || {}), ...wait }, root);
     patchRunFields(rec.run_id, {
@@ -962,6 +1245,9 @@ function defaultModeForAction(actionKey, requested) {
   if (actionKey === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) return "other";
   if (actionKey === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) return "other";
+  if (actionKey === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) return "other";
+  if (actionKey === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) return "other";
+  if (actionKey === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) return "other";
   return "read_only";
 }
 
@@ -1131,6 +1417,50 @@ function policyDecision(rec, { nowMs } = {}) {
       reason: "privileged_read_requires_operator",
     };
   }
+  // DELEGATED GOVERNANCE. The Director may decide only what an explicit
+  // policy covers, on evidence gathered from sources the worker does not
+  // control. Anything unmatched, unmeasured or consequential falls through to
+  // the operator below — this can only ever produce MORE escalations than the
+  // policy set allows, never fewer.
+  try {
+    const evidence = collectDirectorEvidence(rec, {
+      stateRoot: runtimeRoot(),
+      worktree: rec.worktree_path || null,
+    });
+    if (Array.isArray(evidence.changed_files) && evidence.changed_files.length) {
+      // Let a governance-policy edit be SEEN rather than declared.
+      rec = { ...rec, inputs: { ...(rec.inputs || {}), changed_files: evidence.changed_files } };
+    }
+    const verdict = evaluateDirectorAuthority({
+      request: { ...rec, content_fingerprint: governedContentFingerprint(rec) },
+      evidence,
+      nowMs: nowMs ?? Date.now(),
+    });
+    if (verdict.decision === "director_approved") {
+      return {
+        auto_execute: true,
+        operator_approval_required: false,
+        reason: "director_approved",
+        director_decision: verdict,
+      };
+    }
+    if (verdict.decision === "policy_denied") {
+      return {
+        auto_execute: false,
+        operator_approval_required: true,
+        reason: "policy_denied_requires_operator",
+        director_decision: verdict,
+      };
+    }
+    return {
+      auto_execute: false,
+      operator_approval_required: true,
+      reason: "policy_default_requires_operator",
+      director_decision: verdict,
+    };
+  } catch {
+    // A broken evaluator must never approve. Fall through to the operator.
+  }
   return {
     auto_execute: false,
     operator_approval_required: true,
@@ -1203,6 +1533,29 @@ export function requestGovernedAction(input = {}, {
   const artifactRefs = shape.artifactRefs.length
     ? shape.artifactRefs
     : (shape.actionKey === ACTION_TYPES.DATABASE_READ_CENSUS ? [Q15_CENSUS_ARTIFACT] : []);
+  // AN ABBREVIATED SHA CANNOT BE APPROVED INTO ANYTHING.
+  //
+  // A merge was requested with expectedHeadSha "d40f469b4". The operator pressed
+  // Approve three times; every attempt died inside GitHub with "Could not coerce
+  // value to GitObjectID", and because a failed request leaves the pending list,
+  // the operator was left hunting for a request that no longer appeared anywhere.
+  // Asking a human to authorize something that cannot possibly succeed is the
+  // defect — so the request is refused HERE, when the worker files it, rather
+  // than after a decision has been spent on it.
+  const shaInput = input.inputs || input.input || {};
+  const declaredSha = shaInput.expectedHeadSha || shaInput.expected_head_sha || shaInput.expectedSha || shaInput.expected_sha || null;
+  if (declaredSha != null && String(declaredSha).trim() !== "") {
+    const sha = String(declaredSha).trim();
+    if (!/^[0-9a-f]{40}$/i.test(sha)) {
+      return {
+        ok: false,
+        error: "abbreviated_source_sha",
+        failure_code: "invalid_request_inputs",
+        detail: `expectedHeadSha must be the full 40-character commit SHA; received "${sha}" (${sha.length} characters). An abbreviated SHA is ambiguous and is rejected by the merge API, so it can never be approved.`,
+      };
+    }
+  }
+
   const availability = classifyActionAvailability(shape.actionKey);
   if (availability.code === "unsupported_action_key") {
     return { ok: false, error: "unsupported_action_key", failure_code: "action_unavailable" };
@@ -1675,6 +2028,15 @@ function proposalForRequest(rec) {
 
 function defaultExecute(rec, { nowMs, actor, root } = {}) {
   const scope = authorityScopeFor(rec);
+  // Director-derived authority for THIS exact request, if any was minted.
+  const authorizationId = rec.director_approval?.authorization_id || null;
+  const exactContext = authorizationId ? {
+    requestId: rec.request_id,
+    contentFingerprint: rec.director_approval?.content_fingerprint || null,
+    environment: rec.director_decision?.environment || null,
+    repository: rec.inputs?.repository || null,
+    sourceSha: rec.inputs?.expectedHeadSha || rec.inputs?.expected_head_sha || rec.inputs?.expectedSha || null,
+  } : null;
   // Present only on the repository-authorized path. A mission-bound request is
   // authorized exactly as before and never looks at this.
   const grant = rec.grant_id ? getGrant(rec.grant_id, root) : null;
@@ -1687,6 +2049,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.REPOSITORY_PUSH) {
@@ -1697,6 +2061,44 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN) {
+    return fulfillApplyReconciliationPlanForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST) {
+    return fulfillClosePullRequestForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
+    });
+  }
+  if (rec.action_key === ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH) {
+    return fulfillDeleteRemoteBranchForMission(scope, {
+      assignmentId: rec.run_id || null,
+      executionSessionId: rec.run_id || null,
+      inputs: rec.inputs || {},
+      actor,
+      nowMs,
+      grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.PROMOTION_OPEN_PR) {
@@ -1707,6 +2109,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
@@ -1721,6 +2125,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS) {
@@ -1731,6 +2137,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY) {
@@ -1741,6 +2149,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   if (rec.action_key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
@@ -1751,6 +2161,8 @@ function defaultExecute(rec, { nowMs, actor, root } = {}) {
       actor,
       nowMs,
       grant,
+      authorizationId,
+      exactContext,
     });
   }
   /*
@@ -1803,6 +2215,13 @@ function applyExecuteResult(rec, out, { nowMs, root, actor } = {}) {
   rec.failure_reason = null;
   saveRequest(rec, root);
   appendAudit(rec, "complete", { nowMs, detail: { result_ref: rec.result_ref } }, root);
+  // A RESOLVED WAIT IS NOT A LIVE WAIT. The failure path already released the
+  // run; success did not, so a completed governed action left "Waiting on
+  // Director" sitting on the record as though it were still true. Seventeen
+  // terminal runs were carrying wait text for work that had long since landed.
+  if (rec.run_id) {
+    try { patchRunResourceWait(rec.run_id, null, root); } catch { /* the run may be gone */ }
+  }
   emitNotification("governed_action_complete", rec, {
     title: `${rec.title || rec.action_key} complete`,
     body: "Director finished the trusted-host action and is resuming the originating lane.",
@@ -1932,6 +2351,57 @@ export function processGovernedAction(requestId, {
   const policy = policyDecision(rec, { nowMs });
   rec.policy_decision = policy.reason;
   rec.operator_approval_required = Boolean(policy.operator_approval_required);
+  // A DIRECTOR APPROVAL IS NEVER DRESSED UP AS THE OPERATOR'S. It is recorded
+  // in its own field, naming the policy and the evidence that authorised it,
+  // so the ledger can always answer WHO decided and on what grounds. The
+  // escalation verdict is kept too, so an approval that reached the operator
+  // can say why it had to.
+  if (policy.director_decision) {
+    rec.director_decision = policy.director_decision;
+    if (policy.director_decision.decision === "director_approved") {
+      rec.director_approval = {
+        decision: "approved",
+        actor: "director",
+        policy: policy.director_decision.matched_policy,
+        policy_version: policy.director_decision.policy_version,
+        content_fingerprint: policy.director_decision.content_fingerprint,
+        at: policy.director_decision.evaluated_at,
+      };
+      // THE DECISION IS FINAL, SO EXECUTION AUTHORITY MAY NOW BE DERIVED.
+      //
+      // V1 authorised the decision and not the execution, so a Director-
+      // approved push still stopped at the trusted host and interrupted the
+      // operator anyway. This mints authority for ONE exact content identity:
+      // request id, content fingerprint, action, normalised environment,
+      // repository, source SHA and deciding policy. It expires, it is refused
+      // outright for operator-only environments, and it is VERIFIED again at
+      // the execution boundary rather than merely presented.
+      const dInputs = rec.inputs || {};
+      const dGranted = grantExactRequestAuthorization({
+        missionId: rec.mission_id,
+        requestId: rec.request_id,
+        contentFingerprint: policy.director_decision.content_fingerprint,
+        actionType: rec.action_key,
+        environment: policy.director_decision.environment,
+        repository: dInputs.repository || null,
+        sourceSha: dInputs.expectedHeadSha || dInputs.expected_head_sha || dInputs.expectedSha || null,
+        decisionId: rec.decision_id || null,
+        decisionActor: "director",
+        policyId: policy.director_decision.matched_policy,
+        policyVersion: policy.director_decision.policy_version,
+        nowMs: nowMs ?? Date.now(),
+      });
+      if (dGranted && dGranted.ok && dGranted.authorization) {
+        rec.director_approval.authorization_id = dGranted.authorization.authorizationId;
+      } else if (dGranted && dGranted.error) {
+        // Failing to derive authority is the safe direction: the action simply
+        // escalates at the execution boundary, exactly as it did before.
+        rec.director_approval.authorization_error = dGranted.error;
+      }
+    } else {
+      rec.escalation_reason = policy.director_decision.escalation_reason || null;
+    }
+  }
   saveRequest(rec, root);
 
   if (policy.operator_approval_required) {
@@ -2119,9 +2589,16 @@ export async function approveGovernedAction(requestId, {
   actor = "operator",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  // STALE CONTENT. The operator approved what the card showed them. If the
+  // content moved since, the id still matches and approving would authorise
+  // something they never saw — so the decision is refused and the current
+  // request is returned so the card can redraw with the truth.
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   if (rec.status === "complete") return { ok: true, request: publicGovernedAction(rec), already: true };
   if (rec.status === "failed") {
     rec.status = "awaiting_director";
@@ -2210,9 +2687,12 @@ export function denyGovernedAction(requestId, {
   code = "approval_denied",
   nowMs = Date.now(),
   root = runtimeRoot(),
+  expectedFingerprint = null,
 } = {}) {
   const rec = getGovernedAction(requestId, root);
   if (!rec) return { ok: false, error: "request_not_found" };
+  const stale = rejectStaleDecision(rec, expectedFingerprint);
+  if (stale) return stale;
   rec.operator_approval = {
     decision: "denied",
     actor,

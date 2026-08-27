@@ -51,7 +51,19 @@ function toolkitPlan({ total, retained, prunable, keep = 10 }) {
 
 const HEALTHY_PROBES = {
   load: { one: 2, five: 2, fifteen: 2 },
-  memory: { free_gb: 8, free_pct: 33, compressor_gb: 1, swapouts_delta: 0, swap_rate_known: true },
+  // The canonical memory snapshot (memory-capacity.mjs). Health no longer
+  // derives severity from `Pages free`: that is not memory available for new
+  // work on macOS, and reading it as such refused every production build on a
+  // host with ~5 GB available and zero swapping.
+  memory: {
+    total_gb: 24, free_gb: 0.09, inactive_gb: 4.6, reclaimable_gb: 3.45,
+    available_gb: 8, available_pct: 33, reserve_gb: 2.4, available_above_reserve_gb: 5.6,
+    compressor_gb: 1, os_free_pct: 40, swapouts_delta: 0, swapins_delta: 0,
+    swap_rate_known: true, pressure_state: "healthy", pressure_reasons: [],
+    under_pressure: false, incomplete: false,
+    measurement_strategy: "darwin_vm_stat_page_accounting", inactive_reclaim_fraction: 0.75,
+    policy_version: "v1",
+  },
   disk: { mount: "/", total_gb: 460, free_gb: 200, free_pct: 43 },
   gateway: { status: "ok", ms: 120, retried: false },
   seats: [{ pid: 1, provider: "claude", lane_id: "lane_a", lane_name: "A" }],
@@ -109,13 +121,34 @@ await test("2 — high load", () => {
   assert.equal(sevOf(report({ load: { one: 3, five: 3, fifteen: 3 } }), "compute.load"), "healthy");
 });
 
-await test("3 — low memory and ACTIVE swap pressure", () => {
-  assert.equal(sevOf(report({ memory: { ...HEALTHY_PROBES.memory, free_pct: 1, free_gb: 0.2 } }), "memory.pressure"), "problem");
-  assert.equal(sevOf(report({ memory: { ...HEALTHY_PROBES.memory, free_pct: 10 } }), "memory.pressure"), "watch");
-  // Plenty free, but actively swapping during the sample — still a problem.
-  const swapping = report({ memory: { ...HEALTHY_PROBES.memory, free_pct: 40, swapouts_delta: 900, swap_rate_known: true } });
+await test("3 — severity comes from the canonical pressure state, not from free pages", async () => {
+  const M = await import("../lib/vacilando/memory-capacity.mjs");
+  const withState = (over) => report({ memory: { ...HEALTHY_PROBES.memory, ...over } });
+
+  // Genuinely low AVAILABILITY blocks.
+  assert.equal(sevOf(withState({ available_gb: 0.9, pressure_state: "pressure", under_pressure: true, pressure_reasons: ["available 0.9 GB is below the 2.4 GB reserve"] }), "memory.pressure"), "problem");
+  // Approaching the reserve is a watch.
+  assert.equal(sevOf(withState({ available_gb: 3, pressure_state: "watch", pressure_reasons: ["available 3 GB is within 1.5x of the reserve"] }), "memory.pressure"), "watch");
+  // Plenty available, but actively swapping during the sample — still a problem.
+  const swapping = withState({ available_gb: 9, swapouts_delta: 900, pressure_state: "pressure", under_pressure: true, pressure_reasons: ["900 swapout(s) during the bounded sample"] });
   assert.equal(sevOf(swapping, "memory.pressure"), "problem");
-  assert.match(swapping.findings.find((f) => f.check === "memory.pressure").explanation, /actively swapping/);
+  assert.match(swapping.findings.find((f) => f.check === "memory.pressure").explanation, /swapout/);
+
+  // THE REGRESSION THIS REPLACES: near-zero free pages with real availability
+  // and no swapping is HEALTHY. Reading `Pages free` here is what refused
+  // every production build on a host that had ~5 GB to give.
+  const macosNormal = withState({ free_gb: 0.06, available_gb: 3.6, pressure_state: "healthy" });
+  assert.equal(sevOf(macosNormal, "memory.pressure"), "healthy");
+  assert.equal(macosNormal.findings.find((f) => f.check === "memory.pressure").measurements.free_gb, 0.06,
+    "free pages are still reported — they are simply not the verdict");
+  // And the state genuinely comes from the owner, not from a threshold here.
+  assert.equal(M.PRESSURE_STATES.includes("pressure"), true);
+});
+
+await test("3b — an unreadable memory measurement is a PROBLEM, never a healthy default", () => {
+  assert.equal(sevOf(report({ memory: { ...HEALTHY_PROBES.memory, incomplete: true } }), "memory.pressure"), "watch",
+    "an incomplete probe degrades the report rather than asserting health");
+  assert.equal(sevOf(report({ memory: { ...HEALTHY_PROBES.memory, pressure_state: "unknown" } }), "memory.pressure"), "problem");
 });
 
 await test("4 — low disk", () => {

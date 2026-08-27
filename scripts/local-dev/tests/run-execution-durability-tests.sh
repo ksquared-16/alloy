@@ -52,12 +52,23 @@ SUITES=(
   "development-validation-admission.test.mjs"
   "development-run-wait.test.mjs"
   "development-resource-reconciliation.test.mjs"
+  "development-reconciliation-apply.test.mjs"
   "development-provider-seat-state.test.mjs"
   "development-governed-dependency.test.mjs"
   "development-toolkit-retention.test.mjs"
   "development-governed-dependency-runtime.test.mjs"
   "development-validation-convergence.test.mjs"
   "development-executor-authority.test.mjs"
+  "development-memory-capacity.test.mjs"
+  "development-governed-approval-ui.test.mjs"
+  "development-approval-discoverability.test.mjs"
+  "development-director-authority.test.mjs"
+  "development-director-certification.test.mjs"
+  "development-exact-authorization.test.mjs"
+  "development-authorization-lifecycle.test.mjs"
+  "development-director-execution-bridge.test.mjs"
+  "development-governed-run-wait.test.mjs"
+  "development-repository-housekeeping.test.mjs"
 )
 
 PASS=0

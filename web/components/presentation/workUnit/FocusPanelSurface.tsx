@@ -25,6 +25,7 @@ import {
     runtimeLabelProps,
 } from "@/components/presentation/runtimeLabels";
 import { BUILD_SHA } from "@/lib/runtime/buildInfo";
+import { FocusPanelOpenContext, type FocusPanelOpenContextValue } from "./FocusPanelOpenContext";
 import { InlineOpportunityFocusPanel } from "./InlineOpportunityFocusPanel";
 import {
     deriveWorkUnitSelectionMode,
@@ -32,20 +33,12 @@ import {
 } from "@/lib/presentation/adaptiveWorkspacePresentation";
 import { adaptiveRegionDomAttrs } from "@/lib/presentation/adaptiveWorkspaceRegions";
 
-type FocusPanelOpenContextValue = {
-    openRecord: (row: QueueRowModel) => void;
-    prefetchRecord: (row: QueueRowModel) => void;
-};
-
-const FocusPanelOpenContext = createContext<FocusPanelOpenContextValue | null>(null);
-
-export function useFocusPanelOpen(): FocusPanelOpenContextValue {
-    const ctx = useContext(FocusPanelOpenContext);
-    if (!ctx) {
-        throw new Error("useFocusPanelOpen must be used within FocusPanelSurface");
-    }
-    return ctx;
-}
+/*
+ * The context and its hook moved to `FocusPanelOpenContext` so the QUEUE can import them without
+ * importing this file — this one reaches `InlineOpportunityFocusPanel` and the whole card/drawer
+ * graph. Re-exported here so existing importers (including the barrel) are unchanged.
+ */
+export { useFocusPanelOpen, type FocusPanelOpenContextValue } from "./FocusPanelOpenContext";
 
 function FocusPanelPlaceholder() {
     return (

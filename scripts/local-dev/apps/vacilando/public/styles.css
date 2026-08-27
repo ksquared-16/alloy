@@ -2267,3 +2267,90 @@ button[disabled]{opacity:.5;cursor:not-allowed;}
 .gw-login-err{color:var(--blocked);font-weight:600;}
 .gw-login-card .btn{width:100%;min-height:44px;}
 .gw-login-card .btn[disabled]{opacity:.6;pointer-events:none;}
+
+
+/* Governed approval card.
+   Sized for a thumb first: the two controls are full-width and stacked on a
+   phone, because an operator approving a promotion is usually not at a desk.
+   Nothing here is behind hover, an overflow menu, or a details disclosure. */
+.gw-approval { border-left: 3px solid var(--accent, #365C4A); }
+.gw-approval .gw-approval-title { margin: .25rem 0 .5rem; font-weight: 600; line-height: 1.3; }
+.gw-approval-facts { display: grid; grid-template-columns: auto 1fr; gap: .15rem .75rem; margin: .5rem 0; font-size: .85rem; }
+.gw-approval-facts dt { opacity: .7; }
+.gw-approval-facts dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gw-approval-actions { display: flex; gap: .5rem; margin-top: .75rem; }
+.gw-approval-actions .btn { min-height: 44px; flex: 1 1 auto; }
+.gw-approval-ref { margin-top: .6rem; font-size: .72rem; opacity: .55; overflow-wrap: anywhere; }
+@media (max-width: 860px) {
+  .gw-approval-actions { flex-direction: column; }
+  .gw-approval-actions .btn { width: 100%; }
+}
+
+/* ── Global pending approvals ───────────────────────────────────────────────
+   The operator was told to "approve gar_4dc7b4d8bcd0e0" with no surface
+   anywhere carrying that string. This bar sits at the top of every route so a
+   pending decision is found without knowing which lane raised it, and the
+   NAME of the work leads — the request id is diagnostic, and is sized to say
+   so. */
+.gw-approvals-bar[hidden] { display: none; }
+.gw-approvals {
+  margin: 12px 16px 0;
+  border: 1px solid var(--needs-border, #b7791f);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--needs-bg, rgba(183, 121, 31, 0.08));
+  padding: 12px 14px;
+}
+.gw-approvals-h {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  opacity: .85; margin-bottom: 10px;
+}
+.gw-approvals-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  background: var(--needs-border, #b7791f); color: #fff; font-size: 12px;
+}
+.gw-approval-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "main actions" "ref ref";
+  gap: 10px 16px;
+  align-items: start;
+  padding: 10px 0;
+  border-top: 1px solid rgba(128, 128, 128, .22);
+}
+.gw-approval-row:first-of-type { border-top: 0; }
+.gw-approval-row-main { grid-area: main; min-width: 0; }
+.gw-approval-row-actions { grid-area: actions; display: flex; gap: 8px; }
+.gw-approval-row-ref { grid-area: ref; }
+/* The name of the work dominates. */
+.gw-approval-row-title { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; }
+.gw-approval-row-ctx { margin: 3px 0 0; font-size: 12.5px; opacity: .8; }
+.gw-approval-row-why { margin: 3px 0 0; font-size: 12.5px; opacity: .7; }
+/* The id is secondary by size, weight and colour — never mistakable for a name. */
+.gw-approval-row-ref, .gw-approval-ref {
+  margin: 6px 0 0; font-size: 11px; opacity: .5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.gw-approvals .btn { min-height: 44px; }
+
+/* iPhone: stacked, full-width, genuinely tappable, no disclosure to open. */
+@media (max-width: 860px) {
+  .gw-approvals { margin: 10px 10px 0; padding: 12px; }
+  .gw-approval-row {
+    grid-template-columns: 1fr;
+    grid-template-areas: "main" "actions" "ref";
+  }
+  .gw-approval-row-actions { flex-direction: column; }
+  .gw-approvals .btn { width: 100%; min-height: 44px; }
+}
+
+/* Why an approval reached the operator at all. Under delegated governance most
+   actions never appear here, so when one does the reason is the point. */
+.gw-approval-row-esc {
+  margin: 4px 0 0; font-size: 12.5px; line-height: 1.4;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(183, 121, 31, .10);
+  border-left: 2px solid var(--needs-border, #b7791f);
+}

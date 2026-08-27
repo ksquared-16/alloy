@@ -156,7 +156,8 @@ export async function attachChildGrainWaitlistPlacement(params: {
     // placement-config gate. Missing candidates are the root cause of rank "—" — create via
     // the existing lifecycle hook even when ranking attach is later fail-open.
     const tEnsure = Date.now();
-    let ensureResult: { attempted: number; created: number; skipped_existing: number } | null = null;
+    // Inferred from the bulk helper so the candidate rows it already read stay visible here.
+    let ensureResult: Awaited<ReturnType<typeof ensurePlacementCandidatesForWaitlistedChildrenBulk>> | null = null;
     try {
         /**
          * ONE bulk pass, not one hook call per child. The per-child hook makes 4-6 SERIAL round
@@ -226,11 +227,26 @@ export async function attachChildGrainWaitlistPlacement(params: {
         const locationProgramCategoriesPromise = locationProgramCategoriesPromiseForEnsure;
 
         const tCand = Date.now();
+        /*
+         * ONE serial round trip removed from the queue-critical path.
+         *
+         * The ensure pass above already read `placement_candidates` for exactly this org and these
+         * opportunity ids, inside its own concurrent wave; it now reads the queue loader's column
+         * list, so those rows can be mapped directly instead of re-reading the same table as the
+         * next serial step.
+         *
+         * ONLY when nothing was created. Those rows were read BEFORE the insert, so a pass that
+         * inserted candidates would be handing over a set that is missing them — that case re-reads,
+         * which is also the first-load case, not the steady state.
+         */
+        const reusableCandidateRows =
+            ensureResult && ensureResult.created === 0 ? (ensureResult.candidateRows ?? null) : null;
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
             orgId: params.orgId,
             opportunityIds,
             activeOnly: false,
+            preloadedRows: reusableCandidateRows,
         });
         logDbTiming("waitlist.bulk_candidates", Date.now() - tCand, { opportunities: opportunityIds.length });
 

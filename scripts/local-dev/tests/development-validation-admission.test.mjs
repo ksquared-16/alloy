@@ -47,7 +47,10 @@ const DEAD = () => false;
 
 /** This host: 8 cores / 24 GB -> 6 tokens, 2 workers. */
 const hostCap = (over = {}) => CP.computeCapacityPolicy({
-  logical_cores: 8, memory_total_gb: 24, memory_free_gb: 10,
+  // `memory_available_gb` is the canonical comparand. `memory_free_gb` alone is
+  // no longer a measurement: an unmeasured host constrains rather than being
+  // admitted on unused pages, so a fixture must state availability.
+  logical_cores: 8, memory_total_gb: 24, memory_free_gb: 0.1, memory_available_gb: 10,
   disk_total_gb: 460, disk_free_gb: 200, load_1m: 2,
   provider_seats: 0, dev_servers: 0, active_workloads: 0,
   active_validation_weight: 0, machine_exclusive_present: false,

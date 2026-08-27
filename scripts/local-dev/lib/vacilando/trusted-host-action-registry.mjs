@@ -14,6 +14,10 @@ import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
 import { validateAssignQaAccessInputs } from "./qa-access-assign-action.mjs";
+import {
+  validateClosePullRequestInputs,
+  validateDeleteRemoteBranchInputs,
+} from "./trusted-host-repository-housekeeping.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -24,6 +28,9 @@ export const ACTION_TYPES = Object.freeze({
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
   ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
+  REPOSITORY_CLOSE_PULL_REQUEST: "repository.close_pull_request",
+  REPOSITORY_DELETE_REMOTE_BRANCH: "repository.delete_remote_branch",
+  VACILANDO_APPLY_RECONCILIATION_PLAN: "vacilando.apply_reconciliation_plan",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -282,6 +289,91 @@ function definePromotionOpenPr() {
   };
 }
 
+
+function defineApplyReconciliationPlan() {
+  return {
+    actionType: ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN,
+    version: 1,
+    title: "Apply safe Vacilando reconciliation metadata corrections",
+    requiredCapability: "trusted_host.vacilando.apply_reconciliation_plan",
+    riskClass: "privileged_write",
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["planId", "planFingerprint", "generatedAt", "policyVersion", "corrections"],
+    },
+    outputSchema: { applied: "array", skipped: "array", withheld: "array" },
+    evidenceSchema: ["plan_id", "plan_fingerprint", "corrections", "withheld", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const planId = String(inputs.planId || "").trim();
+      const fingerprint = String(inputs.planFingerprint || "").trim();
+      const corrections = Array.isArray(inputs.corrections) ? inputs.corrections : null;
+      const withheld = Array.isArray(inputs.withheld) ? inputs.withheld : [];
+      if (!planId) return { ok: false, code: "missing_plan_id" };
+      if (!/^[0-9a-f]{32}$/.test(fingerprint)) return { ok: false, code: "invalid_plan_fingerprint" };
+      if (!corrections) return { ok: false, code: "missing_corrections" };
+      if (!String(inputs.policyVersion || "").trim()) return { ok: false, code: "missing_policy_version" };
+      if (!String(inputs.generatedAt || "").trim()) return { ok: false, code: "missing_generated_at" };
+      // The executor recomputes the plan itself; an ad hoc correction list
+      // supplied by a caller must never be executable, so the fingerprint is
+      // required and re-derived downstream.
+      return {
+        ok: true,
+        normalized: {
+          planId, planFingerprint: fingerprint, generatedAt: String(inputs.generatedAt),
+          policyVersion: String(inputs.policyVersion), corrections, withheld,
+          runtimeRoot: inputs.runtimeRoot || null,
+          dedupeKey: `reconcile:${planId}#${fingerprint.slice(0, 12)}`,
+        },
+      };
+    },
+  };
+}
+
+function defineRepositoryClosePullRequest() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST,
+    version: 1,
+    title: "Close a disposable pull request without merging",
+    requiredCapability: "trusted_host.repository.close_pull_request",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "pullRequestNumber", "expectedHeadBranch", "expectedHeadSha"],
+    },
+    outputSchema: { pullRequestNumber: "number", state: "string", merged: "boolean" },
+    evidenceSchema: ["repository", "pull_request", "expected_head_sha", "state_before", "state_after", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateClosePullRequestInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
+function defineRepositoryDeleteRemoteBranch() {
+  return {
+    actionType: ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH,
+    version: 1,
+    title: "Delete a disposable remote branch",
+    requiredCapability: "trusted_host.repository.delete_remote_branch",
+    riskClass: "privileged_write",
+    timeoutMs: 60_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: {
+      required: ["repository", "branch", "expectedHeadSha"],
+    },
+    outputSchema: { branch: "string", deleted: "boolean" },
+    evidenceSchema: ["repository", "branch", "expected_head_sha", "remote_head_sha", "dependents", "execution_audit"],
+    validateInputs(inputs = {}) {
+      const v = validateDeleteRemoteBranchInputs(inputs);
+      if (!v.ok) return v;
+      return { ok: true, normalized: v.normalized };
+    },
+  };
+}
+
 function defineDatabaseApplyMigration() {
   return {
     actionType: ACTION_TYPES.DATABASE_APPLY_MIGRATION,
@@ -392,6 +484,9 @@ const REGISTRY = new Map([
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
+  [ACTION_TYPES.REPOSITORY_CLOSE_PULL_REQUEST, defineRepositoryClosePullRequest()],
+  [ACTION_TYPES.REPOSITORY_DELETE_REMOTE_BRANCH, defineRepositoryDeleteRemoteBranch()],
+  [ACTION_TYPES.VACILANDO_APPLY_RECONCILIATION_PLAN, defineApplyReconciliationPlan()],
   [ACTION_TYPES.DATABASE_APPLY_MIGRATION, defineDatabaseApplyMigration()],
 ]);
 

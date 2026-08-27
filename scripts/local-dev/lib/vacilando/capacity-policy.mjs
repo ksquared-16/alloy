@@ -126,12 +126,23 @@ export function hostCapability({
     memory_total_gb: totalBytes ? Number((totalBytes / 1073741824).toFixed(1)) : null,
     memory_source: totalBytes ? "os.totalmem" : "unavailable",
     memory_free_gb: memory?.free_gb ?? null,
+    // AVAILABILITY, not unused pages. The reserve is compared against this.
+    // See memory-capacity.mjs: on macOS `free` is near zero by design and says
+    // nothing about what the host can give to new work.
+    memory_available_gb: memory?.available_gb ?? null,
+    memory_reclaimable_gb: memory?.reclaimable_gb ?? null,
+    memory_pressure_state: memory?.pressure_state ?? null,
+    memory_measurement_strategy: memory?.measurement_strategy ?? null,
+    memory_measurement_incomplete: memory?.incomplete === true,
     memory_free_pct: Number.isFinite(memory?.free_pct) ? memory.free_pct : null,
     memory_compressor_gb: memory?.compressor_gb ?? null,
     // The S2 live-pressure model: a RATE, never a lifetime counter.
     swap_rate_known: memory?.swap_rate_known === true,
     swapouts_delta: memory?.swap_rate_known ? memory.swapouts_delta : null,
-    under_memory_pressure: memory?.swap_rate_known === true && memory.swapouts_delta > 0,
+    // The canonical owner decides pressure from ALL live evidence — swap rate,
+    // the OS's own free percentage, availability against the reserve — not from
+    // a swap delta alone. An unreadable measurement counts as pressure.
+    under_memory_pressure: memory?.under_pressure === true,
 
     arch: os?.arch?.() || null,
     platform: os?.platform?.() || null,
@@ -227,11 +238,26 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
     constrained.push(gate("disk_headroom", diskFree,
       `free ${diskFree} GB is below the ${diskReserveGb} GB reserve; disk-expanding classes are unavailable`));
   }
-  const memoryBelowReserve = Number.isFinite(cap?.memory_free_gb) && memoryReserveGb != null
-    && cap.memory_free_gb < memoryReserveGb;
-  if (memoryBelowReserve) {
-    constrained.push(gate("memory_capacity", cap.memory_free_gb,
-      `free ${cap.memory_free_gb} GB is below the ${memoryReserveGb} GB reserve`));
+  // Compared against AVAILABLE, which is what the host can actually give out.
+  // Comparing unused pages here is the defect this replaces: a machine with
+  // ~5 GB available and zero swapping reported 0.06 GB and refused every build.
+  // NO FALLBACK TO `Pages free`. The first cut of this correction fell back to
+  // `memory_free_gb` when availability was missing, which left the entire old
+  // shape — Pages free -> free_gb -> memoryBelowReserve — reachable for any
+  // caller passing a legacy memory object. That is the exact path this hotfix
+  // exists to remove, so a snapshot without availability is now treated as an
+  // unmeasured host and constrains, rather than silently reverting to the
+  // number that refused every build.
+  const memoryAvailableGb = Number.isFinite(cap?.memory_available_gb) ? cap.memory_available_gb : null;
+  const memoryUnmeasured = memoryAvailableGb == null;
+  const memoryBelowReserve = memoryAvailableGb != null && memoryReserveGb != null
+    && memoryAvailableGb < memoryReserveGb;
+  if (memoryUnmeasured) {
+    constrained.push(gate("memory_capacity", null,
+      "available memory could not be measured; expensive work is constrained rather than admitted on an unknown host"));
+  } else if (memoryBelowReserve) {
+    constrained.push(gate("memory_capacity", memoryAvailableGb,
+      `available ${memoryAvailableGb} GB is below the ${memoryReserveGb} GB reserve`));
   }
 
   // ── compute bounds ─────────────────────────────────────────────────────────
@@ -271,11 +297,18 @@ export function computeCapacityPolicy(cap, { policy = CAPACITY_POLICY_V1 } = {})
         remaining: Number.isFinite(cap?.load_1m) ? Number((loadProblem - cap.load_1m).toFixed(2)) : null,
       },
       memory_capacity: {
-        total_gb: memGb, free_gb: cap?.memory_free_gb ?? null,
+        total_gb: memGb,
+        free_gb: cap?.memory_free_gb ?? null,
+        available_gb: memoryAvailableGb ?? null,
+        reclaimable_gb: cap?.memory_reclaimable_gb ?? null,
+        pressure_state: cap?.memory_pressure_state ?? null,
+        measurement_strategy: cap?.memory_measurement_strategy ?? null,
+        measurement_incomplete: cap?.memory_measurement_incomplete === true,
         reserve_gb: memoryReserveGb,
-        remaining_gb: Number.isFinite(cap?.memory_free_gb) && memoryReserveGb != null
-          ? Number((cap.memory_free_gb - memoryReserveGb).toFixed(2)) : null,
-        under_pressure: Boolean(cap?.under_memory_pressure),
+        remaining_gb: Number.isFinite(memoryAvailableGb) && memoryReserveGb != null
+          ? Number((memoryAvailableGb - memoryReserveGb).toFixed(2)) : null,
+        under_pressure: Boolean(cap?.under_memory_pressure) || memoryUnmeasured,
+        unmeasured: memoryUnmeasured,
         pressure_signal: cap?.swap_rate_known ? "swap_rate" : "unavailable",
       },
       validation_capacity: {

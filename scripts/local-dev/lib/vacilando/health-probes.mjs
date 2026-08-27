@@ -14,6 +14,8 @@ import { execFile } from "node:child_process";
 import { statfsSync } from "node:fs";
 
 /** Run a command with a hard time budget. Never throws; never hangs. */
+import { memorySnapshot } from "./memory-capacity.mjs";
+
 export function boundedExec(cmd, args, { timeoutMs = 2000, maxBuffer = 32 * 1024 * 1024 } = {}) {
   return new Promise((resolve) => {
     let settled = false;
@@ -59,48 +61,84 @@ export function probeLoad({ os }) {
 const PAGE = 16384;
 
 /**
- * Memory, with a bounded two-sample swap delta.
+ * Memory, measured as AVAILABILITY rather than as unused pages.
  *
- * The audit's 249 million lifetime swapouts said almost nothing about current
- * pressure. Only the DELTA between two samples does, so this takes a second
- * sample after a short interval — and when it cannot, it says the rate is
- * unknown instead of reusing the lifetime counter as if it were a rate.
+ * This used to return `Pages free` and call it free memory. On macOS that is
+ * not what the number means: the kernel keeps free pages near zero on purpose
+ * and holds reclaimable memory on the inactive queue. The result was a host
+ * with ~5 GB it could hand out reporting 0.06 GB, and S4 refusing every
+ * production build against a 2.4 GB reserve that was never actually breached.
+ *
+ * The measurement now goes through memory-capacity.mjs, which is the single
+ * owner: health and capacity admission read the same snapshot, so they cannot
+ * disagree about what the host has. The bounded two-sample swap delta stays,
+ * because a lifetime counter is still not a rate.
+ *
+ * Legacy fields are kept so nothing downstream breaks, but `free_gb` now means
+ * what it says — genuinely unused pages — and is no longer what the reserve is
+ * compared against. `available_gb` is.
  */
 export async function probeMemory({ os, sampleMs = 700, exec = boundedExec } = {}) {
-  const read = async () => {
+  const readVmStat = async () => {
     const out = await exec("vm_stat", [], { timeoutMs: 1500 });
-    if (!out.ok) return null;
+    return out.ok ? out.stdout : null;
+  };
+  const counters = (text) => {
     const m = {};
-    for (const line of out.stdout.split("\n")) {
+    for (const line of String(text ?? "").split("\n")) {
       const kv = line.match(/^(.+?):\s+(\d+)\.?$/);
       if (kv) m[kv[1].trim()] = Number(kv[2]);
     }
     return m;
   };
-  const a = await read();
-  if (!a) return null;
 
-  const free = (a["Pages free"] || 0) * PAGE;
-  const compressor = (a["Pages occupied by compressor"] || 0) * PAGE;
-  const total = Number(os?.totalmem?.()) || 0;
+  const first = await readVmStat();
+  if (!first) return null;
+  const a = counters(first);
 
   let swapRateKnown = false;
   let swapoutsDelta = null;
+  let swapinsDelta = null;
   if (sampleMs > 0) {
     await new Promise((r) => { setTimeout(r, sampleMs); });
-    const b = await read();
+    const second = await readVmStat();
+    const b = second ? counters(second) : null;
     if (b && Number.isFinite(b.Swapouts) && Number.isFinite(a.Swapouts)) {
       swapoutsDelta = b.Swapouts - a.Swapouts;
+      swapinsDelta = Number.isFinite(b.Swapins) && Number.isFinite(a.Swapins) ? b.Swapins - a.Swapins : null;
       swapRateKnown = true;
     }
   }
 
+  // macOS's own availability opinion, where it is readable. Bounded and
+  // optional: its absence degrades confidence, never correctness.
+  let pressureText = null;
+  const platform = os?.platform?.() || null;
+  if (platform === "darwin") {
+    const mp = await exec("memory_pressure", [], { timeoutMs: 2500 });
+    if (mp.ok) pressureText = mp.stdout;
+  }
+  let meminfoText = null;
+  if (platform === "linux") {
+    const mi = await exec("cat", ["/proc/meminfo"], { timeoutMs: 1500 });
+    if (mi.ok) meminfoText = mi.stdout;
+  }
+
+  const snapshot = memorySnapshot({
+    platform,
+    totalBytes: Number(os?.totalmem?.()) || null,
+    vmStatText: first,
+    memoryPressureText: pressureText,
+    meminfoText,
+    osFreeBytes: Number(os?.freemem?.()) || null,
+    swapoutsDelta, swapinsDelta, swapRateKnown,
+  });
+
   return {
-    free_gb: Number((free / 1073741824).toFixed(2)),
-    free_pct: total ? (free / total) * 100 : NaN,
-    compressor_gb: Number((compressor / 1073741824).toFixed(2)),
-    swapouts_delta: swapoutsDelta,
-    swap_rate_known: swapRateKnown,
+    ...snapshot,
+    // Legacy shape, retained so existing readers keep working. `free_pct` is
+    // the percentage of genuinely unused pages and is NOT the admission signal.
+    free_pct: snapshot.total_gb ? (snapshot.free_gb / snapshot.total_gb) * 100 : NaN,
   };
 }
 

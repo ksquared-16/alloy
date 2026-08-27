@@ -476,7 +476,13 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       : (pendingGovernedActionForMission(v.mission_id || v.missionId)
         || pendingGovernedActionForLane(v.lane_id || v.laneId));
     try {
-      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, { actor: actorDefault }));
+      // The card hands back the identity it was rendered for. A request id
+      // alone would let a tap approve content that moved after the operator
+      // read it.
+      const out = await Promise.resolve(approveGovernedAction(id || pending?.request_id, {
+        actor: actorDefault,
+        expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
+      }));
       return { status: out.ok ? 200 : 409, body: out };
     } catch (e) {
       return {
@@ -496,6 +502,7 @@ export async function handleV2Post(path, body, { headers = {} } = {}) {
       actor: actorDefault,
       reason: v.reason || "approval_denied",
       code: v.code || "approval_denied",
+      expectedFingerprint: v.content_fingerprint || v.contentFingerprint || null,
     });
     return { status: out.ok ? 200 : 409, body: out };
   }
@@ -1226,6 +1233,16 @@ export async function handleV2Get(path, url, { headers = {} } = {}) {
   if (path === "/api/v2/trusted-host/diagnostics" || path === "/api/v2/views/trusted-host/diagnostics") {
     const { trustedHostDiagnostics } = await import("./trusted-host-actions.mjs");
     return { status: 200, body: { ok: true, diagnostics: trustedHostDiagnostics() } };
+  }
+  // EVERY pending approval, without needing to know a lane.
+  //
+  // The only approval surface used to live inside a lane the operator already
+  // had to be looking at, so a pending decision was unreachable unless you
+  // already knew where it came from.
+  if (path === "/api/v2/governed-actions/pending" || path === "/api/v2/approvals") {
+    const { pendingApprovals } = await import("./governed-action-request.mjs");
+    const approvals = pendingApprovals();
+    return { status: 200, body: { ok: true, count: approvals.length, approvals } };
   }
   if (path === "/api/v2/governed-actions") {
     const { listGovernedActions, pendingGovernedActionForMission, pendingGovernedActionForLane } = await import("./governed-action-request.mjs");

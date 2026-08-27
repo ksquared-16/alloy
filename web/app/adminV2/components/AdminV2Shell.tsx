@@ -1,5 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
+
 import { Suspense, useEffect, useState, useCallback, useRef, type CSSProperties } from "react";
 import {
     readAdminV2SidebarCollapsed,
@@ -24,9 +26,23 @@ import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
 import AskBosHandoffListener from "@/components/adminV2/AskBosHandoffListener";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
-import KPIBand from "./dashboard/KPIBand";
-import SystemCanvas from "./canvas/SystemCanvas";
-import RecordsExpandable from "./records/RecordsExpandable";
+/*
+ * THE LEGACY DASHBOARD BODY LOADS WHEN THE LEGACY DASHBOARD RENDERS.
+ *
+ * These three render only BELOW the early return above: on a workspace, AI-activity, settings or
+ * workflows route this component returns before reaching them, so they are never mounted there. They
+ * were still statically imported, so every authenticated page downloaded and parsed them — and
+ * `SystemCanvas` brings `reactflow`, measured at 345 KB transferred / 1,354 KB parsed, arriving at
+ * 170 ms on a queue path whose rows do not appear until ~1,490 ms. That is 17% of the entire
+ * JavaScript path for a node canvas the operator never sees on those routes.
+ *
+ * `next/dynamic` WITHOUT `ssr: false`: on the legacy dashboard, where these ARE the visible content,
+ * they still server-render exactly as before — only the client chunk is split out. Nothing that was
+ * in the HTML leaves it, so this cannot trade truthfulness for bytes.
+ */
+const KPIBand = dynamic(() => import("./dashboard/KPIBand"));
+const SystemCanvas = dynamic(() => import("./canvas/SystemCanvas"));
+const RecordsExpandable = dynamic(() => import("./records/RecordsExpandable"));
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";

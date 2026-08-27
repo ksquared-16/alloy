@@ -172,32 +172,56 @@ export function checkComputeLoad({ hw, thresholds, load }) {
 }
 
 export function checkMemoryPressure({ hw, thresholds, memory }) {
-  if (!memory || !Number.isFinite(memory.free_pct)) return incompleteFinding("memory.pressure", "memory statistics unavailable");
-  const swapping = memory.swap_rate_known === true && memory.swapouts_delta > 0;
-  const sev = memory.free_pct < thresholds.memory_problem_pct || swapping ? "problem"
-    : memory.free_pct < thresholds.memory_watch_pct ? "watch" : "healthy";
+  if (!memory || memory.incomplete === true) return incompleteFinding("memory.pressure", "memory statistics unavailable");
+
+  // Severity comes from the canonical snapshot, which health and capacity
+  // admission both consume — they cannot disagree about what the host has.
+  // It used to be derived here from `Pages free`, which on macOS is near zero
+  // by design: a machine with 5 GB available and no swapping was reported as a
+  // memory PROBLEM, and S4 refused every production build on the same number.
+  const state = memory.pressure_state || "unknown";
+  const sev = state === "pressure" || state === "unknown" ? "problem"
+    : state === "watch" ? "watch" : "healthy";
+
   return finding({
     check: "memory.pressure",
     severity: sev,
     owner_resource: "host.memory",
     measurements: {
-      free_pct: memory.free_pct, free_gb: memory.free_gb, compressor_gb: memory.compressor_gb,
+      total_gb: memory.total_gb ?? hw.memory_gb,
+      // Kept, and clearly NOT the admission signal.
+      free_gb: memory.free_gb,
+      inactive_gb: memory.inactive_gb,
+      reclaimable_gb: memory.reclaimable_gb,
+      available_gb: memory.available_gb,
+      available_pct: memory.available_pct,
+      reserve_gb: memory.reserve_gb,
+      available_above_reserve_gb: memory.available_above_reserve_gb,
+      compressor_gb: memory.compressor_gb,
+      os_free_pct: memory.os_free_pct,
       swapouts_delta: memory.swap_rate_known ? memory.swapouts_delta : null,
-      swap_rate_known: memory.swap_rate_known === true, total_gb: hw.memory_gb,
+      swap_rate_known: memory.swap_rate_known === true,
+      pressure_state: state,
+      measurement_strategy: memory.measurement_strategy,
+      inactive_reclaim_fraction: memory.inactive_reclaim_fraction,
+      policy_version: memory.policy_version,
     },
     evidence: [
-      `${memory.free_gb} GB free of ${hw.memory_gb} GB (${memory.free_pct.toFixed(1)}%)`,
-      `compressor holding ${memory.compressor_gb} GB`,
+      `${memory.available_gb} GB available of ${memory.total_gb} GB against a ${memory.reserve_gb} GB reserve`,
+      `free pages ${memory.free_gb} GB · inactive ${memory.inactive_gb} GB · ${memory.inactive_reclaim_fraction} of inactive counted as reclaimable`,
+      `compressor holding ${memory.compressor_gb} GB — never counted as available`,
       memory.swap_rate_known
         ? `${memory.swapouts_delta} swapouts in the sample interval`
         : "swap rate unavailable (single sample) — lifetime counters deliberately not used as a pressure signal",
+      ...(memory.pressure_reasons || []),
     ],
-    explanation: swapping
-      ? "The machine is actively swapping during the sample, not merely showing lifetime counters."
-      : sev === "healthy" ? "Free memory is comfortable." : "Free memory is low; the compressor is absorbing the difference.",
-    suggested_action: sev === "healthy" ? null : "Reduce concurrent heavy workloads or release an idle provider seat.",
-    // A single sample cannot prove live pressure from swap alone.
-    confidence: memory.swap_rate_known ? "measured" : "approximate",
+    explanation: sev === "healthy"
+      ? "Available memory is above the reserve and the host is not swapping."
+      : state === "watch"
+        ? `Memory is usable but worth watching: ${(memory.pressure_reasons || []).join("; ")}`
+        : `The host is under memory pressure: ${(memory.pressure_reasons || []).join("; ")}`,
+    suggested_action: sev === "healthy" ? null
+      : "Let running work finish. Expensive validation is gated by the same snapshot; nothing is killed to reclaim memory.",
   });
 }
 

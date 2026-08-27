@@ -576,6 +576,27 @@ export function staleAdmissionClaim(lane, nowMs = Date.now()) {
 }
 
 export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
+  // DISCOVERABILITY SHARES THE FIX. The lane list already had a NEEDS_APPROVAL
+  // branch, but it read this posture — which carried the same run-state gating
+  // that hid the card. So a pending approval was invisible in the list for the
+  // same reason it was unpressable in the lane: the request was real, and every
+  // surface asked the run about it instead of the lane.
+  //
+  // Deciding it here means the list badge, the group placement and the card all
+  // come from one answer and cannot disagree.
+  const pendingApproval = laneAwaitingOperatorApproval(lane);
+  if (pendingApproval) {
+    return {
+      state: "NEEDS_APPROVAL",
+      label: "Needs approval",
+      mark: "!",
+      hint: governedActionLabel(pendingApproval),
+      headline: `Needs approval — ${governedActionLabel(pendingApproval)}`,
+      tone: "needs",
+      slot: lane?.slot ?? lane?.binding?.slot ?? null,
+      queue_position: null,
+    };
+  }
   const stored = String(lane?.execution_capacity?.state || "").toUpperCase();
   const bound = laneIsBound(lane);
   const liveAgent = liveAgentOnLane(lane);
@@ -616,7 +637,7 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
     const needsApproval = ga?.status === "awaiting_operator";
     const title = refreshing
       ? "Updating governed capabilities"
-      : (ga?.title || run?.resource_wait?.summary || "Governed action requested");
+      : (governedActionLabel(ga) || run?.resource_wait?.summary || "Governed action requested");
     return {
       state: refreshing ? "UPDATING_DIRECTOR" : (needsApproval ? "NEEDS_APPROVAL" : "WAITING_ON_DIRECTOR"),
       label: refreshing ? "Updating Director" : (needsApproval ? "Needs approval" : "Waiting on Director"),
@@ -624,7 +645,7 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
       hint: title,
       headline: refreshing
         ? "Updating Director · governed capabilities"
-        : (needsApproval ? `Needs approval · ${title}` : `Waiting on Director · ${title}`),
+        : (needsApproval ? `Needs approval — ${title}` : `Waiting on Director · ${title}`),
       tone: "run",
       slot,
       queue_position: null,
@@ -674,13 +695,13 @@ export function deriveLaneExecutionPosture(lane, { nowMs = Date.now() } = {}) {
   if (runState === "WAITING_RESOURCE" && isGovernedDirectorWait(run)) {
     const gaStatus = run?.governed_action?.status;
     const needsApproval = gaStatus === "awaiting_operator";
-    const title = run?.governed_action?.title || run?.resource_wait?.summary || "Governed action requested";
+    const title = governedActionLabel(run?.governed_action) || run?.resource_wait?.summary || "Governed action requested";
     return {
       state: needsApproval ? "NEEDS_APPROVAL" : "WAITING_ON_DIRECTOR",
       label: needsApproval ? "Needs approval" : "Waiting on Director",
       mark: "◷",
       hint: title,
-      headline: needsApproval ? `Needs approval · ${title}` : `Waiting on Director · ${title}`,
+      headline: needsApproval ? `Needs approval — ${title}` : `Waiting on Director · ${title}`,
       tone: "run",
       slot,
       queue_position: null,
@@ -1285,9 +1306,195 @@ export function renderCapacityHolders(capacity) {
   </div>`;
 }
 
+/**
+ * The governed action on this lane that is waiting for a person, if any.
+ *
+ * Looks at every place the projection can carry one, and accepts the states
+ * that genuinely mean "a human must decide" — `awaiting_operator`, and
+ * `requested` where approval is already known to be required, because a request
+ * spends its first seconds there and an operator who looks in that window
+ * should still see the control rather than an empty panel.
+ */
+/**
+ * The governed action a dependency is waiting on, shaped for the approval card.
+ *
+ * A dependency in WAITING_APPROVAL already carries the governed action's
+ * identity; what it lacks is the presentation fields the card reads. This
+ * adapts rather than duplicates, so the operator sees one surface and the two
+ * records cannot describe the same decision differently.
+ */
+export function dependencyGovernedAction(dep) {
+  if (!dep || dep.state !== "WAITING_APPROVAL" && dep.dependency_state !== "WAITING_APPROVAL") return null;
+  const ga = dep.governed_action || null;
+  if (ga) return ga;
+  if (!dep.governed_action_id && !dep.governed_action_key) return null;
+  return {
+    request_id: dep.governed_action_id || null,
+    status: "awaiting_operator",
+    operator_approval_required: true,
+    action_key: dep.governed_action_key || null,
+    target: dep.environment || dep.target_environment || null,
+    title: dep.title || `${dep.governed_action_key || "Governed action"} for ${dep.capability || dep.requested_capability || "required work"}`,
+    reason_worker_cannot_execute: dep.reason || "A dependency is waiting on a governed decision.",
+    purpose: dep.purpose || "Approving lets the dependency dispatch to an authorized executor.",
+    content_fingerprint: dep.content_fingerprint || null,
+    inputs: dep.action_inputs || dep.inputs || {},
+    from_dependency: dep.dependency_id || null,
+  };
+}
+
+export function laneAwaitingOperatorApproval(lane) {
+  const candidates = [
+    lane?.governed_action,
+    lane?.execution_run?.governed_action,
+    lane?.previous_run?.governed_action,
+    // A Governed Dependency in WAITING_APPROVAL is the same human decision
+    // wearing a different record. The operator must not have to care whether
+    // the request came from `vac governed-action`, a dependency, or anything
+    // else canonical — pending human governance is ONE interaction, so the
+    // dependency's governed action feeds the same card rather than a second
+    // component that would drift from it.
+    dependencyGovernedAction(lane?.governed_dependency),
+    dependencyGovernedAction(lane?.execution_run?.governed_dependency),
+  ].filter(Boolean);
+  for (const ga of candidates) {
+    // A decision already made never offers the buttons again, whatever the
+    // status still says — a record can sit in `awaiting_operator` briefly after
+    // it has in fact been approved, and re-offering Approve there would invite
+    // a second, meaningless decision.
+    if (ga.operator_approval) continue;
+    if (ga.status === "awaiting_operator") return ga;
+    if (ga.operator_approval_required === true
+      && (ga.status === "requested" || ga.status === "awaiting_director")) return ga;
+  }
+  return null;
+}
+
+/**
+ * The operator's approval card.
+ *
+ * Written for someone deciding, not someone debugging: what the action is,
+ * where it lands, why it needs a person, and what approving does. The request
+ * id is last and small — it is a handle for support, never the thing being
+ * approved.
+ */
+/**
+ * The operator's name for a governed action.
+ *
+ * The server issues `operator_label`; this only falls back when talking to an
+ * older runtime that predates it. The request id is NEVER a fallback — an
+ * approval announced as "approve gar_4dc7b4d8bcd0e0" is one the operator cannot
+ * match to anything on screen, which is the whole defect.
+ */
+export function governedActionLabel(ga) {
+  if (!ga) return "Governed action";
+  if (ga.operator_label) return ga.operator_label;
+  if (ga.operator_card?.label) return ga.operator_card.label;
+  const i = ga.inputs || {};
+  const pr = i.pullRequestNumber ?? i.pull_request_number;
+  if (ga.action_key === "repository.merge_pull_request" && pr) return `Merge PR #${pr} to ${ga.target || "staging"}`;
+  const branch = i.branch || i.headBranch || i.head_branch;
+  if (ga.action_key === "repository.push" && branch) return `Push ${branch}`;
+  if (ga.action_key === "promotion.open_pr" && branch) return `Open PR ${branch} → ${i.base || ga.target || "staging"}`;
+  if (ga.title) return ga.title;
+  return ga.action_key ? String(ga.action_key).replace(/[._]/g, " ") : "Governed action";
+}
+
+/**
+ * EVERY pending approval, at the top of every route.
+ *
+ * Before this, the only approval surface lived inside a lane — so the operator
+ * had to already know which lane had raised the request in order to find the
+ * request that would have told them. Being told "approve gar_4dc7b4d8bcd0e0"
+ * was unactionable: no surface anywhere carried that string.
+ *
+ * Each row leads with the NAME of the work and carries its own controls, so a
+ * decision costs one tap from wherever the operator already is.
+ */
+export function renderPendingApprovalsBar(approvals) {
+  const rows = Array.isArray(approvals) ? approvals.filter(Boolean) : [];
+  if (!rows.length) return "";
+  const n = rows.length;
+  return `<section class="gw-approvals" data-gw-approvals data-count="${n}" aria-label="Pending approvals">
+    <div class="gw-approvals-h"><span class="gw-approvals-badge">${n}</span> ${n === 1 ? "approval needs you" : "approvals need you"}</div>
+    ${rows.map((ga) => {
+      const rid = esc(ga.request_id || "");
+      const fp = esc(ga.content_fingerprint || "");
+      const ctx = (ga.operator_card?.context || [])
+        .map((c) => `${esc(c.label)} ${esc(c.value)}`).join(" · ");
+      return `<article class="gw-approval-row" data-request-id="${rid}">
+        <div class="gw-approval-row-main">
+          <p class="gw-approval-row-title">${esc(governedActionLabel(ga))}</p>
+          ${ctx ? `<p class="gw-approval-row-ctx">${ctx}</p>` : ""}
+          ${ga.escalation_reason ? `<p class="gw-approval-row-esc"><strong>Why this needs you.</strong> ${esc(ga.escalation_reason)}</p>` : ""}
+          ${ga.purpose ? `<p class="gw-approval-row-why">${esc(ga.purpose)}</p>` : ""}
+        </div>
+        <div class="gw-approval-row-actions">
+          <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.approve_label || "Approve")}</button>
+          <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fp}">${esc(ga.deny_label || "Deny")}</button>
+        </div>
+        <p class="gw-approval-row-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
+      </article>`;
+    }).join("")}
+  </section>`;
+}
+
+export function renderLaneApprovalCard(lane, ga) {
+  const inputs = ga?.inputs || {};
+  const rid = esc(ga?.request_id || "");
+  const facts = [
+    ["Repository", inputs.repository],
+    ["Environment", ga?.target],
+    ["Branch", inputs.branch || inputs.headBranch],
+    ["Commit", String(inputs.expectedHeadSha || inputs.expectedSha || "").slice(0, 12)],
+    ["Pull request", inputs.pullRequestNumber ? `#${inputs.pullRequestNumber}` : null],
+    ["Migrations", Array.isArray(inputs.migrations) ? `${inputs.migrations.length} file(s)` : null],
+  ].filter(([, v]) => v != null && v !== "");
+  const why = ga?.reason_worker_cannot_execute || "This action needs authority the worker does not hold.";
+  const effect = ga?.purpose || "Approving runs this one registered action on the trusted host. The worker never receives credentials.";
+  // Stale protection: the card carries the identity it was rendered for, so an
+  // Approve pressed after the content changed can be refused rather than
+  // silently approving something the operator never read.
+  // The SERVER's identity for this content, not one the client invented — a
+  // fingerprint computed here would only prove the client agreed with itself.
+  const fingerprint = esc(ga?.content_fingerprint || "");
+  return `<aside class="gw-runtime gw-approval" data-gw-runtime data-posture="NEEDS_APPROVAL" data-gw-governed-approval data-request-id="${rid}">
+    <p class="gw-approval-title">${esc(governedActionLabel(ga))}</p>
+    <div class="gw-work-h">Approval required</div>
+    ${facts.length ? `<dl class="gw-approval-facts">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>` : ""}
+    <p class="gw-runtime-d"><strong>Why this needs you.</strong> ${esc(ga?.escalation_reason || why)}</p>
+    <p class="gw-runtime-d"><strong>Effect.</strong> ${esc(effect)}</p>
+    <div class="gw-runtime-actions gw-approval-actions">
+      <button type="button" class="btn sm primary" data-gw-governed-approve data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.approve_label || "Approve")}</button>
+      <button type="button" class="btn sm" data-gw-governed-deny data-request-id="${rid}" data-content-fingerprint="${fingerprint}">${esc(ga?.deny_label || "Deny")}</button>
+    </div>
+    <p class="gw-approval-ref" title="Diagnostic identifier — not the name of the work">Request ${rid}</p>
+  </aside>`;
+}
+
 export function renderLaneRuntimeControls(lane, cap, { capacity = null } = {}) {
   if (!lane) return "";
   const posture = cap || deriveLaneExecutionPosture(lane);
+
+  // APPROVAL IS GATED ON THE LANE, NOT ON THE RUN'S WAIT STATE.
+  //
+  // The defect this fixes, reproduced live: with a real pending governed action
+  // on the lane, the operator watched for 60 seconds and no Approve control
+  // ever appeared. The posture stayed RUNNING because the existing approval
+  // surface required ALL THREE of runState === WAITING_RESOURCE, a governed
+  // wait carried on the run, and status === awaiting_operator — and a request
+  // filed through `vac governed-action` sets none of them: the run stays
+  // EXECUTING with resource_wait NULL.
+  //
+  // So the request projected onto the lane, the API worked, the markup existed
+  // and the click handler existed — and the operator still had nothing to
+  // press, because the card keyed off run state the CLI path never writes.
+  //
+  // A pending approval is a fact about the LANE. If one exists, the operator
+  // gets the control, whatever the run happens to be doing.
+  const pendingGa = laneAwaitingOperatorApproval(lane);
+  if (pendingGa) return renderLaneApprovalCard(lane, pendingGa);
+
   const slot = posture.slot;
   const slotNote = slot ? ` · Slot ${slot}` : "";
   const id = esc(lane.lane_id || "");
