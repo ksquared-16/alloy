@@ -12,6 +12,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
     type RefObject,
@@ -116,6 +117,26 @@ export function BosPresentationControllerProvider({
      * exists yet for the current epoch, and a consumer must not expose provisional geometry.
      */
     const [parkedRevealEpoch, setParkedRevealEpoch] = useState<number | null>(null);
+    /*
+     * A MIRROR SO THE SUBSCRIBER CAN DECIDE WITHOUT ENQUEUEING.
+     *
+     * The reveal listener below runs synchronously from `publishRevealLifecycle`, which is called
+     * from `declareWorkUnitSurfaceMounted` inside a `useMemo` — during `WorkUnitSlugRouteHost`'s
+     * render, deliberately, because declaring it in an effect left the lifecycle reading terminal
+     * from paint until 717 ms later. That render-phase declaration is certified and stays.
+     *
+     * What did not need to happen is calling a state setter from inside that render. On load
+     * `parkedRevealEpoch` is null, so the updater returned `prev` unchanged — a no-op — and React
+     * still reported that this provider was updated while another component was rendering. Reading
+     * the current value from a ref lets the listener return early instead, so the common case
+     * enqueues nothing at all and the observable state is identical.
+     */
+    const parkedRevealEpochRef = useRef<number | null>(null);
+    const commitParkedRevealEpoch = useCallback((next: number | null) => {
+        if (parkedRevealEpochRef.current === next) return;
+        parkedRevealEpochRef.current = next;
+        setParkedRevealEpoch(next);
+    }, []);
     /**
      * Whether the ambient measurement has clamped the floating geometry to a real viewport at least
      * once. The park chooses WHERE within the canvas; this settles the canvas itself. Revealing
@@ -313,7 +334,7 @@ export function BosPresentationControllerProvider({
              */
             if (isWorkUnitRevealTerminal()) {
                 const epoch = workUnitRevealEpoch();
-                setParkedRevealEpoch((prev) => (prev === epoch ? prev : epoch));
+                commitParkedRevealEpoch(epoch);
             }
         };
 
@@ -333,7 +354,10 @@ export function BosPresentationControllerProvider({
         const unsubscribeReveal = subscribeWorkUnitRevealLifecycle(() => {
             if (isWorkUnitRevealTerminal()) return;
             const epoch = workUnitRevealEpoch();
-            setParkedRevealEpoch((prev) => (prev === null || prev === epoch ? prev : null));
+            const prev = parkedRevealEpochRef.current;
+            // Nothing parked, or the same epoch: trust is unchanged and no update is owed.
+            if (prev === null || prev === epoch) return;
+            commitParkedRevealEpoch(null);
         });
 
         // Organization pages load their content asynchronously, so the first
