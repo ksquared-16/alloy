@@ -238,6 +238,28 @@ export function presentationForGovernedAction(req = {}) {
       detail: `Open a pull request from ${b} at ${sha || "—"} into ${base}`,
     };
   }
+  if (key === ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION) {
+    /*
+     * Without this branch the restore fell through to the census presentation and asked the operator
+     * to "Authorize census — Read-only database census · Data mode: Read-only" for an action that
+     * mints a Supabase session. Approving one thing while shown another is the specific hazard the
+     * subject-matching rules elsewhere in this file exist to prevent, so a privileged action must
+     * never inherit another action's words.
+     *
+     * The label names the identity and the slot, because those are the two facts that decide whether
+     * this approval is the right one.
+     */
+    const lane = inputs.laneId || inputs.lane_id || req.lane_id || "";
+    const identity = req.registered_identity || inputs.registered_identity || "the slot's registered QA identity";
+    const slot = req.slot || inputs.slot || "";
+    return {
+      approve_label: "Authorize QA session restore",
+      deny_label: "Deny",
+      wait_label: "Waiting on Director — QA session restore",
+      mission_need: `Needs approval — Restore QA session${slot ? ` on Slot ${slot}` : ""}`,
+      detail: `Restore the browser session for ${identity}${slot ? ` on Slot ${slot}` : ""} · lane ${lane} · single-use magic link minted and redeemed inside the trusted host · no password created or shown`,
+    };
+  }
   if (key === ACTION_TYPES.DATABASE_APPLY_MIGRATION) {
     const list = Array.isArray(inputs.migrations) ? inputs.migrations : [];
     const n = list.length || (inputs.expected_version ? 1 : 0);
