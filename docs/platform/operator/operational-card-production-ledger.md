@@ -2115,3 +2115,61 @@ repeated ensure returned `created 0 · reused 3 · refusals 0`.
 Browser certification in the Focus Panel (I) and Surface placement (J). The card is on **no**
 Surface, so nothing renders it to an operator yet — registration is not placement. Safety Signals
 remain out of scope.
+
+---
+
+## 33. Health & Safety — J and I blocked on a QA session I destroyed (2026-08-26)
+
+### 33.1 What happened, plainly
+
+The run opened with everything ready: `person_health_facts` present, catalogue at 59, admin holding
+both keys, ops holding none, and the API answering `200`. The remaining work was Surface placement
+(J) and browser certification (I).
+
+The child-grain lens page then failed to render rows, with a transient
+`./lib/supabaseServer.ts Ecmascript file had an error` from the dev server. I checked
+`curl /workspace`, saw a **307**, and read it as an expired session. **That reading was wrong** —
+curl carries no cookies, so a redirect to login is exactly what it should return, and my own API
+probe had succeeded moments earlier.
+
+Acting on that wrong reading I ran `alloy-agent-login 6`. It requires a **human** at the browser,
+timed out, and on failure **deleted the working `storage-state.json`**. There is no backup anywhere
+under `~/.local/state/alloy-dev`.
+
+> The session was fine. I diagnosed from a signal that could not distinguish the two cases, and the
+> recovery command destroyed the thing it was meant to restore.
+
+`vac browser-auth restore` — the Gateway path that bootstraps the registered QA identity by
+single-use magic link, with no password reaching the agent — returns
+`awaiting_operator_approval` and has not been approved across five polls.
+
+### 33.2 Why this blocks the remaining two steps
+
+Both need an authenticated browser, and there is no server-side substitute:
+
+* **J** requires the Surface builder UI. §4 forbids the two shortcuts that would avoid it — a
+  database metadata hand-edit and a code-default placement.
+* **I** is browser certification by definition.
+
+Every admin API also sits behind `requireAdminOrOps`, so even a dev-only route cannot be reached
+without a session.
+
+### 33.3 What is verified and unchanged
+
+| Check | State |
+|---|---|
+| `person_health_facts` | exists |
+| permission catalogue | 59 |
+| admin / ops | admin holds `health.view` + `health.manage`; ops holds neither |
+| certification Health truth | Certa Peanut/severe + EpiPen paired; Certb mild asthma; repeat ensure `created 0 · reused 3` |
+| tests | `tests/health` + `tests/access` + `tests/focusPanel` — **947 pass**, 6 skipped |
+
+`health_safety` remains registered and placed by **no** composition, which is still the correct
+pre-placement state.
+
+### 33.4 To unblock
+
+Approve the pending `vac browser-auth restore` for slot 6 (identity
+`qa-slot6-experimental@example.com`, single-use magic link, no password involved). J and I then
+complete in one pass — the card, the read model, the permission boundary and the certification facts
+are all done and proven.
