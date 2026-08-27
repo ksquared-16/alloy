@@ -235,14 +235,21 @@ test("walk every artifact to completion", async ({ page }) => {
             }
         }
         console.log(`  finish -> runtime advanced: ${advancedMs ?? "did not advance within 60s"} ms`);
-        // The next artifact still has to be fetched and painted before the parent can act on it.
+        /*
+         * The next surface, whatever it is.
+         *
+         * The previous locator pair matched nothing on the "You're all set" screen, so it burned a
+         * full 60s timeout after every artifact and reported that as a measurement. What the parent
+         * waits for is the next thing they can act on — a document, the conversation, or the
+         * completion notice — so the wait names all three and stops as soon as one appears.
+         */
         const tReady = Date.now();
         await page
-            .locator("[data-participant-document] canvas, [data-participant-thread]")
+            .locator("[data-participant-document] canvas, #participant-composer, [data-participant-suggested], text=You're all set")
             .first()
-            .waitFor({ state: "attached", timeout: 60_000 })
+            .waitFor({ state: "attached", timeout: 30_000 })
             .catch(() => undefined);
-        console.log(`  next artifact surface ready: ${Date.now() - tReady} ms after that`);
+        console.log(`  next surface ready: ${Date.now() - tReady} ms after that`);
         await page.waitForTimeout(4000);
         console.log("  objective after:", JSON.stringify(after));
         console.log("AFTER FINISH:\n" + (await texts()).slice(0, 14).join("\n"));
