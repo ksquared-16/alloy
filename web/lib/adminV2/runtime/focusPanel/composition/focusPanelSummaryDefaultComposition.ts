@@ -327,7 +327,16 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         encodedDensity: "compact",
     },
     {
-        // The reference band: three 4/12 cards across one row, as the specimen composes them.
+        /*
+         * The reference band: three 4/12 cards across one row, as the approved panel composes them
+         * — Household, Health & Safety, Care Team.
+         *
+         * Care Team is NOT registered yet, so columns 9–12 of this band are deliberately empty
+         * rather than backfilled with whichever card happens to fit. Putting Children there would
+         * have matched the band's rhythm and contradicted the approved panel, which places Children
+         * at 6/12 in its own row below. An empty cell is an honest reservation; a substitution is a
+         * quiet redesign.
+         */
         key: "household",
         tier: "reference",
         visibility: "visible",
@@ -353,14 +362,7 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         encodedSpan: 1,
         encodedDensity: "standard",
     },
-    {
-        key: "children",
-        tier: "reference",
-        visibility: "visible",
-        area: { colStart: 9, colSpan: 4, rowStart: 5, rowSpan: 3 },
-        encodedSpan: 1,
-        encodedDensity: "standard",
-    },
+
     {
         /*
          * THE OPERATING DAY, and the one composition where this card has an unambiguous subject.
@@ -394,9 +396,23 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 6, rowStart: 10, rowSpan: 2 },
+        area: { colStart: 7, colSpan: 6, rowStart: 10, rowSpan: 3 },
         encodedSpan: 1,
         encodedDensity: "compact",
+    },
+    {
+        /*
+         * CHILDREN at 6/12, which is where the approved panel puts it — paired across the closing
+         * row rather than squeezed into the 4/12 reference band above. The panel's own companion
+         * there is Staff, which is employee grain and has no place on a child's panel; Assignments
+         * is the child-grain card that shares the question "who is placed where".
+         */
+        key: "children",
+        tier: "reference",
+        visibility: "visible",
+        area: { colStart: 1, colSpan: 6, rowStart: 10, rowSpan: 3 },
+        encodedSpan: 1,
+        encodedDensity: "standard",
     },
     { key: "tour_summary", tier: "context", visibility: "linked", encodedSpan: 1, encodedDensity: "compact" },
     { key: "communications", tier: "reference", visibility: "linked", encodedSpan: 1, encodedDensity: "standard" },
