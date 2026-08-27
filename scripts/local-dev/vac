@@ -4,9 +4,6 @@
 #   vac run-status <run_id> <state> [...]
 #   vac run-report <run_id> <type> --message-file <path|-> [...]
 #   vac governed-action --run <id> --lane <lane> --json '{...}'
-  vac governed-dependency --run <id> --lane <lane> --json '{...}'
-                           Declare what capability is required. Vacilando
-                           decides where it executes; you may not.
 #   vac governed-dependency --run <id> --lane <lane> --json '{...}'
 #   vac status
 #   vac cancel <request_id>
@@ -28,6 +25,9 @@ Usage:
                            conversation: progress | needs-input | completion | failure
   vac governed-action --run <id> --lane <lane> --json '{...}'
                            Report a Director-owned governed action (not the validation broker)
+  vac governed-dependency --run <id> --lane <lane> --json '{...}'
+                           Declare what capability is required. Vacilando
+                           decides where it executes; you may not.
   vac status                   Show active lease + FIFO queue
   vac cancel <request_id>      Cancel a waiter or signal the holder
 

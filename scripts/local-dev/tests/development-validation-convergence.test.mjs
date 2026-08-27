@@ -397,5 +397,25 @@ await test("MUTATION — killing unbrokered work instead of observing it: no suc
   }
 });
 
+await test("GUARD — the `vac` dispatcher is valid shell and its help lives in the heredoc", () => {
+  // A live regression this slice shipped and this fixture now prevents: a
+  // usage line was inserted by substring match, and the FIRST match was inside
+  // the header COMMENT — so three uncommented lines landed in executable
+  // position and every `vac` invocation printed "command not found" before
+  // doing its job. Caught on the merged runtime, not by any unit test.
+  const src = readFileSync(new URL("../vac", import.meta.url), "utf8");
+  const lines = src.split("\n");
+  const setIndex = lines.findIndex((l) => l.startsWith("set -euo pipefail"));
+  assert.ok(setIndex > 0, "the script has a shebang preamble");
+  for (let i = 1; i < setIndex; i += 1) {
+    const l = lines[i];
+    if (!l.trim()) continue;
+    assert.match(l, /^\s*#/, `line ${i + 1} of vac is above \`set -e\` and is not a comment: ${l}`);
+  }
+  // And the help text is inside the heredoc, where it belongs.
+  const usage = src.slice(src.indexOf("usage() {"), src.indexOf("EOF\n}"));
+  assert.match(usage, /vac governed-dependency/);
+});
+
 process.stdout.write(`\n${pass} passed, ${fail} failed\n`);
 process.exit(fail ? 1 : 0);
