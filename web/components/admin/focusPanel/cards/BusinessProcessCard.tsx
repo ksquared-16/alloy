@@ -81,15 +81,20 @@ export default function BusinessProcessCard({ model, context, receded = false, c
         <div className="alloy-os-process" data-business-process-card="true">
             <UniversalCard
                 /*
-                 * THE PROCESS'S OWN IDENTITY, preferred over the card model's frame title.
+                 * THE CARD'S OWN IDENTITY — deliberately NOT `evidence.processLabel`.
                  *
-                 * `processLabel` is the tenant's configured process label where the runtime carries
-                 * one. It does not yet carry the Business Process NAME — the provisioning answer
-                 * knows `process.name` but nothing plumbs it into the operational context — so the
-                 * fallback is the card's registered identity rather than the predecessor's
-                 * "What's Next", which is what QA saw.
+                 * `processLabel` resolves to `context.businessProcess.label`, which is the STAGE
+                 * label. Using it made the title read "WAITLIST" directly above a rail whose current
+                 * column already says Waitlist — the card saying the same thing twice, which is the
+                 * exact duplication the locked composition removed when it merged Journey and
+                 * What's Next.
+                 *
+                 * The tenant's Business Process NAME would be the right title. The provisioning
+                 * answer knows it (`process.name`) but nothing carries it into the operational
+                 * context, so the registered card identity stands in until that is plumbed. It is
+                 * generic, but it is not a lie and it is not the predecessor's "What's Next".
                  */
-                title={evidence.processLabel ?? model.title}
+                title={model.title}
                 insight=""
                 iconName={model.iconName}
                 tier={model.tier}
