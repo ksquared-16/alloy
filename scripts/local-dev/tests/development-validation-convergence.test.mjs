@@ -43,7 +43,11 @@ const ledger = () => join(ROOT, `claims-${Math.random().toString(36).slice(2)}.j
 // 8 cores / 24 GB — this host.
 const hostCap = () => computeCapacityPolicy(hostCapability({
   os: { cpus: () => new Array(8), totalmem: () => 24 * 1073741824, arch: () => "arm64", platform: () => "darwin" },
-  memory: { free_gb: 8, free_pct: 33, swap_rate_known: true, swapouts_delta: 0 },
+  // Canonical memory snapshot. `free_gb` alone is no longer a measurement:
+  // an unmeasured host constrains, so a fixture must state availability.
+  memory: { free_gb: 0.1, available_gb: 8, reserve_gb: 2.4, inactive_gb: 10, reclaimable_gb: 7.5,
+    total_gb: 24, pressure_state: "healthy", under_pressure: false, incomplete: false,
+    swap_rate_known: true, swapouts_delta: 0 },
   disk: { total_gb: 460, free_gb: 200, free_pct: 43 },
   load: { one: 2 },
 }));
