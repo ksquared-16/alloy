@@ -15,6 +15,7 @@
 import type { ParticipantObjectiveWire } from "@/lib/enrollment/participantRuntime/participantObjectiveWireModel";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import { formatDisplayDate } from "@/lib/presentation/presentationDateFormat";
+import { formatPhoneDisplay } from "@/lib/intake/normalize/phone";
 
 /**
  * The control a turn needs.
@@ -258,6 +259,15 @@ export function displayValue(value: unknown): string {
         const formatted = formatDisplayDate(raw, { timeZone: "UTC" });
         if (formatted && !isIsoDateString(formatted)) return formatted;
     }
+    /*
+     * A phone is STORED as ten digits and READ as a phone number.
+     *
+     * The normalizer is right to keep `5415551234` — one canonical string, no punctuation to
+     * disagree about. But that is a storage decision, and it was reaching the parent verbatim in
+     * the correction surface, where it reads as a serial number rather than the number they gave.
+     * Formatting is presentation, so it happens here and the stored value never changes.
+     */
+    if (/^\d{10}$/.test(raw)) return formatPhoneDisplay(raw);
     return raw;
 }
 
