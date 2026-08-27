@@ -2271,3 +2271,82 @@ Tests: health + access + focusPanel + surfaces + financials — **1183 passing**
   open a row.
 * All four Health requirements read `missing` because no Documents exist for the certification
   children — correct, and worth seeding if a satisfied-requirement specimen is wanted.
+
+---
+
+## 35. Runtime fidelity correction — QA FAIL answered (2026-08-27)
+
+### 35.1 Business Process — the shim that was never replaced
+
+The card was rendering the locked anatomy all along (rail, stages, activity trigger). What QA saw
+was its **identity**, borrowed from the predecessor:
+
+```js
+map.set(BUSINESS_PROCESS_KEY, { ...currentWorkModel, key: BUSINESS_PROCESS_KEY });
+```
+
+written as "until Slice 2 deepens the presentation" and never revisited. It inherited the title
+*What's Next*, Current Work's insight, its secondary line and its due chip. The successor now has its
+own model carrying only the frame; everything else is composed by the evidence builder, because two
+sources for one line is how they drift.
+
+A first attempt set the title from `evidence.processLabel` and made it worse — that field is the
+**stage** label, so the card read "WAITLIST" above a rail already saying Waitlist. Reverted.
+
+### 35.2 The stable-card rule
+
+Missing prerequisites change the **facts** and the **commands**; they do not replace the card.
+
+| Card | Before | After |
+|---|---|---|
+| Attendance | *"This child has no active enrolment, so attendance cannot be recorded for them."* — the whole card | `PassA · —` with Expected / Arrived / Now / Departed rendering real empty values, the reason stated quietly beneath, commands withheld |
+| Financials | *"No enrollment agreement, so there is nothing billable yet."* — the whole card | `CURRENT PERIOD · Charges $0.00 · Responsibility $0.00`, `PAST DUE · Nothing past due`, `PAYMENT`, `Add charge →`, `Details →` |
+| Health & Safety | *"No recorded health facts"* + four red pills | quiet *"No recorded allergies, conditions or medications"* + requirements in the restrained treatment |
+
+### 35.3 Financials is not enrollment-gated, and HOUSEHOLD_BILLABLE_SOURCE is closed
+
+The gate encoded a product assumption the business rejects — a family incurs charges **before**
+enrolling. Worse, it told the operator the family had nothing billable when the truth was that we had
+not looked.
+
+`customer` joins the polymorphic vocabulary in code and schema
+(`20260827120000_household_billable_source.sql`). It is an **existing** canonical durable subject, so
+no Financials-only account is invented and no childcare-specific `child_id` is added. The read model
+now reads charges from the agreements **and** the household; a household-sourced charge has no child
+subject, and leaving that null is honest — picking a child would put a family fee on one sibling's
+ledger.
+
+Whether a *particular* charge needs an agreement belongs to the charge template and the `charge.add`
+resolver. Nothing in the card provider asks that question any more.
+
+### 35.4 A migration lock corrected rather than satisfied
+
+`financialSubstrateGeneralizationMigration` asserted the historical P3.1 file contained every value in
+`BILLABLE_SOURCE_TYPES`, so growing the vocabulary demanded a **shipped migration be edited to contain
+a value it never wrote**. It now discovers across the tree; an unbacked value still fails.
+
+### 35.5 Verified in the real Focus Panel — 0 page errors, 0 failed requests
+
+* **Waitlist case (QA's own scenario)** — Business Process rail 6 stages, current-work band, foot row,
+  compact activity trigger (24), no expanded link. Attendance, Financials and Health all keep their
+  anatomy with truthful empty states.
+* **Certification family (Certa)** — Attendance with live commands, Financials $75.00, Health with the
+  severe Peanut allergy and its paired EpiPen.
+
+### 35.6 What is still NOT fidelity-complete — and not claimed as ready
+
+Per §10 these cards are **not** re-declared production-ready.
+
+1. **Canonical actions are absent from the Business Process card.** The locked composition has an
+   action row; the runtime card consumes no `evidence.actions` at all. This is a real gap, not a data
+   condition.
+2. **No process NAME reaches the client.** The provisioning answer knows `process.name`; nothing
+   carries it into `OperationalContext`, whose `businessProcess.label` is the stage. Until it is
+   plumbed the title is the registered card identity.
+3. **Stage annotations render 0.** The two configured support slots are empty for this tenant —
+   configuration, pending confirmation against a tenant that declares them.
+4. **Participant markers render 0.** Correct when every child is aligned with the case stage (the
+   design collapses them), but the aligned summary line did not render either — unresolved.
+5. **`customer` billable source is authored, not applied.** The CHECK constraint still admits only
+   `job` and `enrollment_agreement`, so the pre-enrolment Add Charge scenario cannot be certified
+   until the migration is promoted and applied.
