@@ -153,6 +153,22 @@ function ConversationTopic({
 }
 
 /**
+ * What a screen reader says about a grouped confirmation.
+ *
+ * The heading and every fact, in the order they are drawn, so the announcement carries the same
+ * information as the card rather than a summary of it.
+ */
+function groupAnnouncement(
+    group: NonNullable<ParticipantObjectiveWire["next_turn"]["confirmation_group"]>,
+): string {
+    const facts = group.facts
+        .filter((f) => !f.in_headline)
+        .map((f) => `${f.label}: ${f.value}`)
+        .join(". ");
+    return [group.title, group.headline, facts].filter(Boolean).join(" ");
+}
+
+/**
  * One semantic subject's known facts, confirmed together.
  *
  * ## Why this is a card and not three questions
@@ -430,7 +446,15 @@ export function EnrollmentConversationCard({
             }
             setCorrecting(false);
             setElaborating(false);
-            setChangingGroup(false);
+            /*
+             * CORRECTING ONE FACT LEAVES THE PARENT WHERE THEY WERE.
+             *
+             * A parent who chose "Make a change" and fixed the birthday is still looking at the
+             * card, very possibly to fix something else. Collapsing back to the summary after each
+             * save made them re-open the values every time. Only the OPEN EDITOR closes here; the
+             * mode itself ends when the turn moves on, which the objective decides.
+             */
+            if (!payload.editFact) setChangingGroup(false);
             setEditingRef(null);
             setText("");
             try {
@@ -757,7 +781,13 @@ export function EnrollmentConversationCard({
                                         onSave={(ref, value) =>
                                             void submit({
                                                 editFact: { ref, value },
-                                                settledAs: String(value),
+                                                /*
+                                                 * What the THREAD echoes is what the parent would
+                                                 * say, not what the column stores. `2021-04-03` is
+                                                 * a database string; the parent corrected a
+                                                 * birthday to Apr 3, 2021.
+                                                 */
+                                                settledAs: displayValue(value),
                                             })
                                         }
                                     />
@@ -824,7 +854,15 @@ export function EnrollmentConversationCard({
                       * free of duplicate assistive markup.
                       */}
                     <p className="sr-only" aria-live="polite" role="status">
-                        {notice ?? clarification ?? participantQuestion(objective)}
+                        {/*
+                          * The announcement must describe the interaction ON SCREEN.
+                          *
+                          * With a grouped confirmation showing, `participantQuestion` returns the
+                          * single-need sentence the runtime would have asked — "I have Chidinma's
+                          * last name as Okonkwo. Is that still right?" — so a parent using a screen
+                          * reader was told about one fact while the card in front of them held four.
+                          */}
+                        {notice ?? clarification ?? (group ? groupAnnouncement(group) : participantQuestion(objective))}
                     </p>
                     {typed ? (
                         <TypedAnswer

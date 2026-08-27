@@ -25,6 +25,7 @@ import {
     questionForNeed,
     voiceForSubject,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -216,6 +217,31 @@ function activeCluster(
 }
 
 /**
+ * A card row is a NOUN; a question is a sentence.
+ *
+ * Many destinations are whole questions the school wrote — "How would you describe your child's
+ * gender?" — and `naturalFieldLabel` rightly hands those back untouched, because that is how they
+ * should be ASKED. Beside a value in a summary card the same words read as an interrogation with the
+ * answer already filled in, and they wrap to three lines on a phone.
+ *
+ * So where the authored label is a question or simply too long to sit beside a value, the row falls
+ * back to the canonical FIELD KEY, humanized through the platform's own display-label behaviour.
+ * That is not a guess: the key is what the fact IS, which is exactly what a row label wants.
+ */
+const CARD_ROW_MAX = 28;
+
+function cardRowLabel(natural: string, fieldKey: string | null): string {
+    const tidy = natural.trim();
+    const tooLong = tidy.length > CARD_ROW_MAX;
+    if (!tidy.endsWith("?") && !tooLong) return tidy;
+    const key = (fieldKey ?? "").trim();
+    if (!key) return tidy;
+    // `child_first_name` under the `child` entity is already handled above; this is for keys like
+    // `gender`, `nap_routine`, `medical_notes` whose label is the school's own question.
+    return humanizeOperatorSlug(key).toLowerCase();
+}
+
+/**
  * The grouped confirmation card for the CURRENT turn, or null when this turn stands alone.
  *
  * Composition only. Membership was decided by `confirmationGroup.ts` from canonical identity; this
@@ -273,7 +299,7 @@ function confirmationGroupCard(
         const natural = naturalFieldLabel(occurrence?.label ?? null, need.identity.canonical_key ?? null);
         // "Birthday", not "date of birth" — the same substitution the spoken question already makes,
         // so a parent reads the same word whether the fact is in a card or in a sentence.
-        const spoken = natural === "date of birth" ? "birthday" : natural;
+        const spoken = natural === "date of birth" ? "birthday" : cardRowLabel(natural, need.identity.field_key);
         return [{
             ref: member.ref,
             label: spoken.charAt(0).toUpperCase() + spoken.slice(1),
