@@ -13,6 +13,7 @@ import { validateOpenPrInputs } from "./trusted-host-open-pr.mjs";
 import { validateMigrationInputs } from "./trusted-host-migrate.mjs";
 import { validateRestoreQaSessionInputs } from "./qa-session-restore-action.mjs";
 import { validateProvisionQaIdentityInputs } from "./qa-identity-provision-action.mjs";
+import { validateAssignQaAccessInputs } from "./qa-access-assign-action.mjs";
 
 export const ACTION_TYPES = Object.freeze({
   DATABASE_READ_CENSUS: "database.read_census",
@@ -22,6 +23,7 @@ export const ACTION_TYPES = Object.freeze({
   DATABASE_APPLY_MIGRATION: "database.apply_migration",
   ENVIRONMENT_RESTORE_QA_SESSION: "environment.restore_qa_session",
   ENVIRONMENT_PROVISION_QA_IDENTITY: "environment.provision_qa_identity",
+  ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS: "environment.assign_qa_identity_access",
 });
 
 const DEFAULT_TARGET = "alloy_deployed_primary";
@@ -357,10 +359,36 @@ function defineEnvironmentProvisionQaIdentity() {
   };
 }
 
+/**
+ * Grant a managed QA identity its application access.
+ *
+ * Separate from provisioning: creating an account and granting it a place in the application are
+ * different decisions, and collapsing them would let one approval imply another.
+ */
+function defineEnvironmentAssignQaIdentityAccess() {
+  return {
+    actionType: ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS,
+    version: 1,
+    title: "Assign staging application access to a managed QA identity",
+    requiredCapability: "trusted_host.environment.assign_qa_identity_access",
+    riskClass: "privileged_write",
+    alwaysRequiresOperatorApproval: true,
+    timeoutMs: 120_000,
+    retry: { maxAttempts: 1, backoffMs: 0, retryOn: [] },
+    inputSchema: { required: ["laneId"] },
+    outputSchema: { status: "string", org_id: "string", role: "string" },
+    evidenceSchema: ["lane_id", "slot", "registered_identity", "user_id", "org_id", "role", "execution_audit"],
+    validateInputs(inputs = {}) {
+      return validateAssignQaAccessInputs(inputs);
+    },
+  };
+}
+
 const REGISTRY = new Map([
   [ACTION_TYPES.DATABASE_READ_CENSUS, defineDatabaseReadCensus()],
   [ACTION_TYPES.ENVIRONMENT_RESTORE_QA_SESSION, defineEnvironmentRestoreQaSession()],
   [ACTION_TYPES.ENVIRONMENT_PROVISION_QA_IDENTITY, defineEnvironmentProvisionQaIdentity()],
+  [ACTION_TYPES.ENVIRONMENT_ASSIGN_QA_IDENTITY_ACCESS, defineEnvironmentAssignQaIdentityAccess()],
   [ACTION_TYPES.REPOSITORY_MERGE_PULL_REQUEST, defineRepositoryMergePullRequest()],
   [ACTION_TYPES.REPOSITORY_PUSH, defineRepositoryPush()],
   [ACTION_TYPES.PROMOTION_OPEN_PR, definePromotionOpenPr()],
