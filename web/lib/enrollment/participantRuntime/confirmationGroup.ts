@@ -42,6 +42,7 @@
  */
 
 import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+import { isConfirmationOfPriorTruth } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 
 /**
  * Whose facts these are.
@@ -253,7 +254,24 @@ export function groupSettledConfirmations(
     const bySubject = new Map<string, { subject: ConfirmationSubject; members: ConfirmationGroupMember[] }>();
 
     for (const need of needs) {
-        if (need.state !== "confirmed" || !need.has_value) continue;
+        /*
+         * PROVENANCE, NOT STATE.
+         *
+         * This filter used to be `state === "confirmed"`, which reads as "the parent confirmed
+         * this" and does not mean it: the runtime records a D-99 confirmation when a participant
+         * SUPPLIES a value too, because without that evidence the fact recomputes straight back to
+         * `known_requires_confirmation` and the conversation asks about the value they typed
+         * seconds earlier. `confirmed` means EVIDENCED.
+         *
+         * The result was a card headed "Your family's details · Confirmed" holding employers,
+         * emergency contacts, custody arrangements, a physician, developmental history, toileting,
+         * sleep, fears, previous schools and a material fee — every household-scoped question the
+         * parent had just answered, handed back as things they had verified, thirty-one of them
+         * behind a "Show 31 more". A confirmation card whose contents need a fold is proof the
+         * boundary is wrong.
+         */
+        if (!need.has_value) continue;
+        if (!isConfirmationOfPriorTruth(needProvenance(need))) continue;
         const subject = confirmationSubjectFor(need);
         let bucket = bySubject.get(subject.key);
         if (!bucket) {
@@ -288,6 +306,9 @@ export function resolveDisplayedFactRef(
     for (const group of groupSettledConfirmations(needs)) {
         for (const member of group.members) displayed.set(member.ref, needByKey(needs, member.need_key));
     }
+    for (const member of collectedAnswers(needs)) {
+        displayed.set(member.ref, needByKey(needs, member.need_key));
+    }
     const active = activeConfirmationGroup(needs, activeNeedKey);
     for (const member of active?.members ?? []) {
         displayed.set(member.ref, needByKey(needs, member.need_key));
@@ -301,4 +322,37 @@ function needByKey(
 ): EnrollmentInformationNeed {
     // Every key here came from this same array moments ago, so the lookup cannot miss.
     return needs.find((n) => n.identity.key === key)!;
+}
+
+/** The provenance entry shape the need carries, as the classifier expects it. */
+function needProvenance(need: EnrollmentInformationNeed) {
+    return need.value_origin ? { origin: need.value_origin, recorded_at: "" } : undefined;
+}
+
+/**
+ * Answers the participant gave DURING this session — collected, never confirmed.
+ *
+ * These are settled and evidenced exactly like a confirmation, and they are not one. A parent who
+ * has just told the school their child's sleep routine has not verified anything; presenting it
+ * back under "Confirmed" tells them they checked something they never saw.
+ *
+ * Returned FLAT and in the objective's own order rather than grouped by subject. Grouping is what a
+ * confirmation card is for — "here is what we hold about this person, is it right" — and a list of
+ * things the parent said this afternoon is a different object with a different job: it recedes,
+ * stays legible, and stays editable.
+ */
+export function collectedAnswers(
+    needs: readonly EnrollmentInformationNeed[],
+): ConfirmationGroupMember[] {
+    const out: ConfirmationGroupMember[] = [];
+    for (const need of needs) {
+        if (!need.has_value) continue;
+        if (need.value_origin !== "collected_in_session") continue;
+        out.push({
+            need_key: need.identity.key,
+            ref: confirmationRef(need.identity.key),
+            is_identity: isIdentityFact(need),
+        });
+    }
+    return out;
 }

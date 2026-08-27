@@ -1181,7 +1181,14 @@ export function FormEmbedClient({
                         <button
                             type="button"
                             onClick={() => setReviewStep("review")}
-                            className="mt-4 w-full rounded-xl bg-alloy-midnight px-5 py-3.5 text-[16px] font-medium text-white"
+                            /*
+                             * BEND PINE, like every other primary action in Participant Runtime.
+                             *
+                             * This one was Midnight, so the single most important action on the
+                             * surface was the only one not speaking the runtime's primary language.
+                             * Pinned by a token regression control rather than a literal colour.
+                             */
+                            className="mt-4 w-full rounded-xl bg-alloy-bend-pine px-5 py-3.5 text-[16px] font-medium text-white"
                             data-review-paperwork="true"
                         >
                             Review paperwork

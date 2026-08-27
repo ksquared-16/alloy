@@ -71,6 +71,14 @@ export type ProjectNeedsInput = {
      */
     readonly declines?: EnrollmentNeedDeclineMap;
     /**
+     * How each settled value came to be — the confirmation/collection distinction.
+     *
+     * Passed in beside the confirmations and declines because it lives in the same session
+     * metadata and answers a question neither of them can: a D-99 entry proves a value was
+     * evidenced, never that it pre-existed the ask.
+     */
+    readonly provenance?: import("@/lib/enrollment/informationNeeds/enrollmentValueProvenance").EnrollmentValueProvenanceMap;
+    /**
      * Which canonical keys require participant confirmation for this objective.
      *
      * NARROW BY DESIGN. No repository-wide assurance framework exists, and inventing one would be a
@@ -251,6 +259,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
             has_value: false,
             current_value: null,
             value_source: "none",
+            value_origin: null,
             requires_participant_action: false,
         };
     }
@@ -302,6 +311,8 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
                 has_value: false,
                 current_value: null,
                 value_source: "none",
+                value_origin: null,
+            value_origin: null,
                 requires_participant_action: false,
                 optional: true,
             };
@@ -313,6 +324,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
             has_value: false,
             current_value: null,
             value_source: "none",
+            value_origin: null,
             requires_participant_action: blocking,
             optional: !blocking,
         };
@@ -340,6 +352,7 @@ function finalize(acc: Accumulator, input: ProjectNeedsInput): EnrollmentInforma
         has_value: true,
         current_value,
         value_source,
+        value_origin: input.provenance?.[identity.key]?.origin ?? null,
         requires_participant_action: state === "known_requires_confirmation",
     };
 }

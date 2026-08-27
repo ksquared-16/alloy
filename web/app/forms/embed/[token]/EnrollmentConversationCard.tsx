@@ -50,6 +50,7 @@ import {
     type SemanticEditor,
 } from "@/lib/enrollment/participantRuntime/semanticValueEditor";
 import { IntakeCard, IntakeHeading } from "./ParentIntakeShell";
+import { ParticipantUploads } from "./ParticipantUploads";
 import {
     ConversationProgress,
     ConversationViewport,
@@ -443,6 +444,93 @@ function SettledRecord({
     );
 }
 
+/**
+ * What the parent told us in this session — collected, and never labelled Confirmed.
+ *
+ * These are settled and evidenced exactly like a confirmation, and they are not one: a parent who
+ * has just described their child's sleep routine has verified nothing. Kept out of the confirmation
+ * cards entirely, flat rather than grouped by subject, and folded by default — this is conversation
+ * history that recedes, not a summary of what the platform holds about a person.
+ */
+const COLLECTED_ROWS_VISIBLE = 3;
+
+function CollectedAnswers({
+    collected,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    collected: ParticipantObjectiveWire["collected"];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    const [open, setOpen] = useState(false);
+    if (collected.length === 0) return null;
+    const editingHere = collected.some((f) => f.ref === editingRef);
+    const rows = open || editingHere ? collected : collected.slice(0, COLLECTED_ROWS_VISIBLE);
+    const hidden = collected.length - rows.length;
+    return (
+        <section className="px-0.5" data-participant-collected={collected.length}>
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-midnight/25">
+                What you told us
+            </p>
+            <dl className="mt-1.5 space-y-1">
+                {rows.map((fact) => (
+                    <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-collected-fact={fact.ref}>
+                        <dt className="text-[12px] text-alloy-midnight/30">{fact.label}</dt>
+                        <span aria-hidden className="text-alloy-midnight/15">·</span>
+                        {editingRef === fact.ref ? (
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    initial={fact.value}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
+                        ) : (
+                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/50">
+                                <span data-participant-collected-value={fact.ref}>{fact.value || "—"}</span>
+                                {justUpdated.has(fact.ref) ? (
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                        Updated
+                                    </span>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => onEdit(fact.ref)}
+                                    disabled={busy}
+                                    className="text-[12px] text-alloy-midnight/35 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Edit
+                                </button>
+                            </dd>
+                        )}
+                    </div>
+                ))}
+            </dl>
+            {hidden > 0 ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="mt-1.5 text-[12px] text-alloy-midnight/35 underline underline-offset-2"
+                >
+                    Show {hidden} more
+                </button>
+            ) : null}
+        </section>
+    );
+}
+
 function SettledGroup({
     group,
     busy,
@@ -582,6 +670,63 @@ export function EnrollmentConversationCard({
      * edit history the session does not keep.
      */
     const [justUpdated, setJustUpdated] = useState<ReadonlySet<string>>(() => new Set());
+    /** Documents attached in this sitting, by field id — the upload row's own done-state. */
+    const [attachedEvidence, setAttachedEvidence] = useState<
+        Record<string, { document_id: string; filename: string } | undefined>
+    >({});
+
+    /**
+     * Re-read the objective after evidence lands.
+     *
+     * The platform decides whether the obligation is satisfied and what comes next — the surface
+     * asks, exactly as it does after a turn. Attaching a file is not a claim that the requirement
+     * is met; the recomputed objective is.
+     */
+    const refreshObjective = useCallback(async () => {
+        try {
+            const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-objective`);
+            const json = (await res.json()) as { ok: boolean; data?: ParticipantObjectiveWire };
+            if (json.ok && json.data) {
+                setObjective(json.data);
+                onPhaseChange?.(json.data.phase);
+                if (json.data.next_turn.kind === "complete_artifact") onArtifactHandoff?.();
+            }
+        } catch {
+            // Left as it was; the parent can attach again or reload.
+        }
+    }, [token, onPhaseChange, onArtifactHandoff]);
+
+    /** Send one document to the token-scoped route. The server derives everything about it. */
+    const uploadEvidence = useCallback(
+        async (fieldId: string, file: File) => {
+            try {
+                const buffer = new Uint8Array(await file.arrayBuffer());
+                // Chunked, matching the review surface's own encoder: spreading a whole megabyte
+                // into `String.fromCharCode` overflows the argument limit on real photographs.
+                let binary = "";
+                for (let i = 0; i < buffer.length; i += 8192) {
+                    binary += String.fromCharCode(...buffer.subarray(i, i + 8192));
+                }
+                const res = await fetch(`/api/public/forms/${encodeURIComponent(token)}/enrollment-upload`, {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({ field_id: fieldId, filename: file.name, file_base64: btoa(binary) }),
+                });
+                const json = (await res.json()) as {
+                    ok?: boolean;
+                    error?: string;
+                    data?: { document_id?: string; filename?: string };
+                };
+                if (!json.ok || !json.data?.document_id) {
+                    return { error: json.error ?? "That file could not be attached." };
+                }
+                return { document_id: json.data.document_id, filename: json.data.filename ?? file.name };
+            } catch {
+                return { error: "That file could not be attached." };
+            }
+        },
+        [token],
+    );
     /** The parent said yes to an optional question and is now telling us the detail. */
     const [elaborating, setElaborating] = useState(false);
     const [text, setText] = useState("");
@@ -766,6 +911,54 @@ export function EnrollmentConversationCard({
         return (
             <IntakeCard>
                 <IntakeHeading title="Everything we need is complete." subtitle="Thank you." />
+            </IntakeCard>
+        );
+    }
+
+    if (control.kind === "evidence") {
+        /*
+         * REQUIRED DOCUMENTS, BEFORE THE PAPERWORK IS PREPARED.
+         *
+         * The conversation does not hand off yet and no artifact is shown — the phase is still
+         * collection, so the host keeps the packet Form deferred and [Review paperwork] is not
+         * reachable. Attaching a document creates canonical evidence; it does not tell Alloy what
+         * the document says, and nothing here fills a vaccine grid.
+         */
+        return (
+            <IntakeCard>
+                <div className="flex flex-col gap-5">
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    <ThreadTurn who="alloy" depth="current">
+                        <ThreadSaid who="alloy" depth="current">{participantQuestion(objective)}</ThreadSaid>
+                    </ThreadTurn>
+                    <div data-participant-evidence-turn={turn.evidence.length}>
+                        <ParticipantUploads
+                            requests={turn.evidence.map((e) => ({
+                                field_id: e.field_id,
+                                title: e.title,
+                                description: e.description,
+                                required: true,
+                                docType: "",
+                            }))}
+                            attached={attachedEvidence}
+                            onAttached={(fieldId, doc) => {
+                                setAttachedEvidence((prev) => ({ ...prev, [fieldId]: doc }));
+                                void refreshObjective();
+                            }}
+                            onUpload={uploadEvidence}
+                        />
+                    </div>
+                </div>
             </IntakeCard>
         );
     }
@@ -994,6 +1187,17 @@ export function EnrollmentConversationCard({
                       */}
                     <SettledRecord
                         settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    <CollectedAnswers
+                        collected={objective.collected}
                         busy={busy}
                         editingRef={editingRef}
                         justUpdated={justUpdated}

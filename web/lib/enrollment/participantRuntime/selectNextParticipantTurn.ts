@@ -24,6 +24,7 @@ import type {
 } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
 import type { EnrollmentParticipantProgress } from "@/lib/enrollment/participantProgress/enrollmentParticipantProgressTypes";
 import type { ParticipantTurn } from "@/lib/enrollment/participantRuntime/participantTurnTypes";
+import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
 
 /**
  * Deterministic wording — the FALLBACK that always exists.
@@ -75,6 +76,13 @@ const TURN_PRIORITY: Record<string, number> = {
 export type NextParticipantTurnInput = {
     readonly needs: EnrollmentInformationNeeds;
     readonly progress: EnrollmentParticipantProgress;
+    /**
+     * Required attachments still outstanding, in packet order.
+     *
+     * Absent means the caller resolved no evidence, which selects exactly as before — so every
+     * existing caller and test is unchanged by the addition.
+     */
+    readonly outstandingEvidence?: readonly ParticipantEvidenceObligation[];
 };
 
 /**
@@ -115,6 +123,31 @@ export function selectNextParticipantTurn(input: NextParticipantTurnInput): Part
             prompt: deterministicPrompt(next),
             proposed_value: next.state === "known_requires_confirmation" ? next.current_value : null,
             resolves_occurrences: next.occurrence_count,
+        };
+    }
+
+    /**
+     * EVIDENCE BEFORE PREPARATION.
+     *
+     * Every shared fact is settled, so the next thing the parent owes is any REQUIRED document. It
+     * comes before the handoff for two reasons, and the second is the one that matters long term:
+     * the runtime must not say it has filled out paperwork that is waiting on an attachment, and a
+     * document that arrives after generation cannot inform what was generated. Asking here is what
+     * lets a future Health extraction populate structured dose truth and regenerate the CIS before
+     * the parent ever reads it.
+     */
+    const evidence = input.outstandingEvidence ?? [];
+    if (evidence.length > 0) {
+        return {
+            kind: "collect_evidence",
+            need: null,
+            prompt:
+                evidence.length === 1
+                    ? `Before I prepare the paperwork, please attach ${evidence[0]!.title}.`
+                    : `Before I prepare the paperwork, please attach ${evidence.length} required documents.`,
+            proposed_value: null,
+            resolves_occurrences: 0,
+            evidence,
         };
     }
 

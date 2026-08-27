@@ -37,6 +37,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import { buildEnrollmentValueProvenancePatch } from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
     activeConfirmationGroup,
@@ -164,6 +165,17 @@ export async function applyConfirmationGroup(
             continue;
         }
         metadata = patched;
+        /*
+         * Every member of a confirmation card is `known_requires_confirmation` by construction —
+         * that filter is what put it on the card — so this whole gesture is the parent verifying
+         * pre-existing truth, one independent fact at a time.
+         */
+        metadata = buildEnrollmentValueProvenancePatch({
+            metadata,
+            needKey: need.identity.key,
+            origin: "confirmed_prior_truth",
+            recordedAtIso: input.nowIso,
+        });
 
         /*
          * The confirmed value also becomes this session's answer of record — the same rule the
@@ -303,7 +315,21 @@ export async function applyConfirmationGroupMemberEdit(
         confirmedValue: disposition.value,
         confirmedAtIso: input.nowIso,
     });
-    if (metadata) patch.metadata = metadata;
+    /*
+     * A CORRECTION DOES NOT CHANGE WHERE A FACT CAME FROM.
+     *
+     * A parent fixing a birthday the school already held is still dealing with pre-existing truth;
+     * the value moved, its lifecycle did not. Overwriting the origin here would quietly reclassify
+     * a confirmed fact as collected and drop it out of the card it belongs to the moment anyone
+     * corrected it. Where nothing is on file, the need's state at this instant decides.
+     */
+    patch.metadata = buildEnrollmentValueProvenancePatch({
+        metadata: metadata ?? base.metadata ?? {},
+        needKey: need.identity.key,
+        origin: need.state === "missing" ? "collected_in_session" : "confirmed_prior_truth",
+        recordedAtIso: input.nowIso,
+        preserveExisting: true,
+    });
 
     const { error } = await supabase
         .from("form_packet_sessions")

@@ -22,6 +22,7 @@
  */
 
 import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeeds/enrollmentInformationNeedsTypes";
+import type { ParticipantEvidenceObligation } from "@/lib/enrollment/participantRuntime/participantEvidenceObligations";
 
 /**
  * The turn kinds V1 supports.
@@ -41,6 +42,15 @@ import type { EnrollmentInformationNeed } from "@/lib/enrollment/informationNeed
 export const PARTICIPANT_TURN_KINDS = [
     "confirm_known_value",
     "collect_missing_value",
+    /**
+     * A required document the parent must attach — BEFORE the paperwork is prepared.
+     *
+     * Evidence is participant work like any other, and it used to be discovered inside the artifact
+     * review, after the runtime had already claimed to have filled the paperwork out. Its own turn
+     * kind is what lets the deterministic selector order it correctly, and what lets a future
+     * extraction step run while there is still an artifact to inform.
+     */
+    "collect_evidence",
     "complete_artifact",
     "complete",
 ] as const;
@@ -62,6 +72,13 @@ export type ParticipantTurn = {
     readonly proposed_value: unknown;
     /** How many Form targets this one turn resolves. The ask-once ratio, made visible. */
     readonly resolves_occurrences: number;
+    /**
+     * The attachments this turn is asking for. Present only on `collect_evidence`.
+     *
+     * Carried on the turn rather than fetched by the surface so one authority decides what is owed —
+     * the same rule that keeps a model from choosing its own subject.
+     */
+    readonly evidence?: readonly ParticipantEvidenceObligation[];
 };
 
 /**

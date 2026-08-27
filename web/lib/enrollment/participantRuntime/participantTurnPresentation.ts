@@ -38,6 +38,8 @@ export type ParticipantTurnControl =
       }
     | ParticipantValueControl
     | { readonly kind: "handoff" }
+    /** Required documents to attach, BEFORE any paperwork is prepared. */
+    | { readonly kind: "evidence" }
     | { readonly kind: "done" };
 
 /** The controls that actually collect a value. Shared by collection and by correction. */
@@ -66,6 +68,7 @@ export type ParticipantValueControl =
  */
 export function controlForTurn(turn: ParticipantObjectiveWire["next_turn"]): ParticipantTurnControl {
     if (turn.kind === "complete") return { kind: "done" };
+    if (turn.kind === "collect_evidence") return { kind: "evidence" };
     if (turn.kind === "complete_artifact") return { kind: "handoff" };
     if (turn.kind === "confirm_known_value") {
         return {
@@ -510,12 +513,28 @@ export function participantQuestion(objective: ParticipantObjectiveWire): string
         // "What is your phone number?" — not "What is your your phone number?".
         return possessive === "your" ? `What is your ${label}?` : `What is ${possessive} ${label}?`;
     }
+    if (turn.kind === "collect_evidence") {
+        /*
+         * ASKED BEFORE ANY PAPERWORK IS PREPARED.
+         *
+         * The runtime used to reach this obligation inside the artifact review, having already said
+         * it filled the paperwork out. The sentence names the document rather than the form, because
+         * that is what the parent has to go and find.
+         */
+        return turn.prompt;
+    }
     if (turn.kind === "complete_artifact") {
-        // The instruction lives on the [Review paperwork] action, not in the sentence — the
-        // conversation ends by saying what was done, and the button says what happens next.
+        /*
+         * PREPARATION LANGUAGE MUST BE TRUTHFUL.
+         *
+         * "I filled out your paperwork" was said while a required attachment had not been asked for,
+         * let alone supplied. This turn is now only reachable once collection AND required evidence
+         * are complete — the selector puts `collect_evidence` ahead of it — so the sentence can
+         * describe what is actually happening, in the present tense.
+         */
         return subject
-            ? `Great — that's everything I needed. I filled out ${subject}'s enrollment paperwork.`
-            : "Great — that's everything I needed. I filled out the enrollment paperwork.";
+            ? `Great — that's everything I need. I'm preparing ${subject}'s paperwork now.`
+            : "Great — that's everything I need. I'm preparing the paperwork now.";
     }
     if (turn.kind === "complete") {
         return "That's everything — thank you.";

@@ -16,6 +16,7 @@ import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participan
 import { packageOutstandingNeeds } from "@/lib/enrollment/participantRuntime/conversationalPackage";
 import {
     activeConfirmationGroup,
+    collectedAnswers,
     groupSettledConfirmations,
     identityFactRank,
     type ConfirmationGroup,
@@ -151,6 +152,18 @@ export type ParticipantObjectiveWire = {
          * the only way to fix a city was to retype the street and ZIP from memory.
          */
         readonly editor: SemanticEditor | null;
+        /**
+         * Required attachments this turn is asking for, before any paperwork is prepared.
+         *
+         * Field id and the school's own words for the document — nothing about storage, entity or
+         * classification, which the upload route derives server-side from the pinned schema.
+         */
+        readonly evidence: readonly {
+            readonly field_id: string;
+            readonly title: string;
+            readonly description: string | null;
+            readonly artifact_title: string;
+        }[];
         /** Closed option set, when the authored control has one. Empty otherwise. */
         readonly options: readonly string[];
         /** The authored Form permits leaving this unanswered — offer a real way past it. */
@@ -180,6 +193,20 @@ export type ParticipantObjectiveWire = {
             readonly value: string;
             readonly editor: SemanticEditor;
         }[];
+    }[];
+    /**
+     * Answers the participant gave DURING this session.
+     *
+     * Settled and evidenced exactly like a confirmation, and NOT one — a parent who has just told
+     * the school their child's sleep routine has not verified anything. Kept separate so a
+     * confirmation card can never accumulate them, and flat rather than grouped by subject: this is
+     * conversation history that recedes, not a summary of what the platform holds about a person.
+     */
+    readonly collected: readonly {
+        readonly ref: string;
+        readonly label: string;
+        readonly value: string;
+        readonly editor: SemanticEditor;
     }[];
     /**
      * An outstanding question the runtime raised about this need.
@@ -334,6 +361,23 @@ function groupVoice(group: ConfirmationGroup, subjectName: string | null) {
 }
 
 /**
+ * The answers given in this session, as rows the parent can read and still change.
+ *
+ * No heading, no subject, no "Confirmed": this is not a claim about what the platform holds, it is
+ * what the parent said. The label and value composition is shared with the confirmation card so the
+ * same fact never reads two ways.
+ */
+function collectedRecord(objective: ParticipantEnrollmentObjective): ParticipantObjectiveWire["collected"] {
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    return collectedAnswers(objective.needs.needs).flatMap((member) => {
+        const need = byKey.get(member.need_key);
+        if (!need) return [];
+        const { ref, label, value, editor } = factRow(need, member.ref);
+        return [{ ref, label, value, editor }];
+    });
+}
+
+/**
  * The settled semantic record.
  *
  * Grouped by the SAME subject rule as the active card, so a group a parent confirmed together stays
@@ -476,6 +520,13 @@ export function participantObjectiveWireModel(
      * Two readers of the same situation disagreed because they asked different questions. Now the
      * turn — which is the deterministic runtime's own answer to "what next" — decides both.
      */
+    /*
+     * `collect_evidence` is participant COLLECTION, not review.
+     *
+     * The host defers the packet Form while the phase is `shared_collection`, which is exactly what
+     * must happen while a required document is outstanding: no artifact is shown, and [Review
+     * paperwork] is not reachable, because the paperwork has not been prepared.
+     */
     const phase: ParticipantPhase =
         turn.kind === "complete"
             ? "complete"
@@ -504,6 +555,12 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             cluster: activeCluster(objective, subjectName),
+            evidence: (turn.evidence ?? []).map((e) => ({
+                field_id: e.field_id,
+                title: e.title,
+                description: e.description,
+                artifact_title: e.artifact_title,
+            })),
             editor: turn.need
                 ? semanticEditorFor({
                       canonicalKey: turn.need.identity.canonical_key,
@@ -521,6 +578,7 @@ export function participantObjectiveWireModel(
             field_ids: (turn.need?.occurrences ?? []).map((o) => o.form_field_id),
         },
         settled: settledRecord(objective, subjectName),
+        collected: collectedRecord(objective),
         pending_clarification: context?.pendingClarificationQuestion
             ? { question: context.pendingClarificationQuestion }
             : null,

@@ -30,6 +30,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { shallowMergeSharedValues } from "@/lib/forms/packets/formPacketService";
 import { buildEnrollmentNeedDeclinePatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionDeclines";
 import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informationNeeds/enrollmentSessionConfirmations";
+import {
+    buildEnrollmentValueProvenancePatch,
+    originForSettledTurn,
+} from "@/lib/enrollment/informationNeeds/enrollmentValueProvenance";
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
     recomputeParticipantObjectiveFromContext,
@@ -275,7 +279,25 @@ export async function applyParticipantTurnResponse(
              * are filled from, and what "collected or confirmed ONCE and applied everywhere" means.
              */
             const patch: Record<string, unknown> = {};
-            if (metadata) patch.metadata = metadata;
+            /*
+             * PROVENANCE, recorded where the distinction is still knowable.
+             *
+             * The need's state at the moment this turn was SELECTED is the whole classification:
+             * `known_requires_confirmation` means the platform already held a usable value and was
+             * asking the parent to verify it. A moment later that is unrecoverable — the confirmed
+             * value is written into `shared_values`, so `value_source` reads
+             * `session_shared_value` for a fact the parent merely nodded at and for one they typed
+             * from scratch alike. That is exactly how a card headed "Confirmed" came to contain
+             * every question they had just answered.
+             */
+            const withProvenance = buildEnrollmentValueProvenancePatch({
+                metadata: metadata ?? row.metadata ?? {},
+                needKey,
+                origin: originForSettledTurn(turn.need?.state ?? ""),
+                recordedAtIso: input.nowIso,
+            });
+            if (withProvenance) patch.metadata = withProvenance;
+            else if (metadata) patch.metadata = metadata;
             // Accepting an answer retires any question the runtime had raised about this need — in
             // the same write, so a crash cannot leave a question outstanding over a settled value.
             if (input.clearPendingFor) {
@@ -354,7 +376,17 @@ export async function applyParticipantTurnResponse(
                 confirmedAtIso: input.nowIso,
             });
             const patch: Record<string, unknown> = { shared_values };
-            if (metadata) patch.metadata = metadata;
+            // The same classification. A parent CORRECTING a value the school already held is still
+            // dealing with pre-existing truth, so the state that selected the turn decides — not
+            // the fact that a write happened.
+            const withProvenance = buildEnrollmentValueProvenancePatch({
+                metadata: metadata ?? row.metadata ?? {},
+                needKey,
+                origin: originForSettledTurn(turn.need?.state ?? ""),
+                recordedAtIso: input.nowIso,
+            });
+            if (withProvenance) patch.metadata = withProvenance;
+            else if (metadata) patch.metadata = metadata;
             // Accepting an answer retires any question the runtime had raised about this need — in
             // the same write, so a crash cannot leave a question outstanding over a settled value.
             if (input.clearPendingFor) {
