@@ -164,7 +164,12 @@ export default function HealthSafetyCard({
 
                         {evidence.requirements.length ? (
                             <>
-                                <SectionHead ruled={false}>Enrollment health</SectionHead>
+                                {/* NOT "Enrollment health". The card is Health & Safety and is not owned by any one
+                                    business process; naming a section after Enrollment encoded one
+                                    process's vocabulary into a cross-process card. The requirements
+                                    themselves stay Business Process-owned — Health only projects the
+                                    evidence state where it is operationally useful. */}
+                                <SectionHead ruled={false}>Required information</SectionHead>
                                 <div className="alloy-os-health__reqs">
                                     {evidence.requirements.map((r) => (
                                         <p key={r.name} className="alloy-os-health__req">

@@ -383,8 +383,20 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "attendance",
         tier: "work",
         visibility: "visible",
-        area: { colStart: 1, colSpan: 12, rowStart: 8, rowSpan: 2 },
-        encodedSpan: "row",
+        /*
+         * EIGHT of twelve, with a real 4/12 companion — not the full row it first took.
+         *
+         * The full row was the approved specimen's own placement, in a panel built to show the
+         * timeline. In an ordinary Focus Panel the day is wider than the information needs: one
+         * arrival, a movement or two, and a current room do not fill 1038px, and the whitespace
+         * reads as missing content rather than as room.
+         *
+         * 12/12 stays available through Surface configuration for attendance-heavy contexts. This
+         * is the DEFAULT, not the only option, and Surface placement — never this card — decides
+         * which companion sits beside it.
+         */
+        area: { colStart: 1, colSpan: 8, rowStart: 8, rowSpan: 2 },
+        encodedSpan: 1,
         encodedDensity: "standard",
     },
     {
@@ -396,7 +408,16 @@ export const FOCUS_PANEL_SUMMARY_CHILD_WITH_FAMILY_COMPOSITION: readonly Summary
         key: "scheduling",
         tier: "reference",
         visibility: "visible",
-        area: { colStart: 7, colSpan: 6, rowStart: 10, rowSpan: 3 },
+        /*
+         * The 4/12 companion beside Attendance, and a genuine one: Assignment owns the EXPECTED
+         * place and time, Attendance owns the ACTUAL presence and movement. Reading them together
+         * is how an operator asks "is the day going as arranged".
+         *
+         * They stay separate owners. Merging them into one card would put one model in charge of
+         * both the arrangement and its execution, and the two change for entirely different
+         * reasons. The pairing lives here, in composition, not inside either card.
+         */
+        area: { colStart: 9, colSpan: 4, rowStart: 8, rowSpan: 2 },
         encodedSpan: 1,
         encodedDensity: "compact",
     },

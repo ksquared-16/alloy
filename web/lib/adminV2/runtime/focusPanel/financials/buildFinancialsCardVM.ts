@@ -155,6 +155,16 @@ export type FinancialsCardVM = {
      * a development finding and never operator copy.
      */
     paymentSetup: string | null;
+    /**
+     * WHO is responsible for this account, from the canonical `payer` contact role.
+     *
+     * `share` is deliberately nullable and is null today for every payer. Alloy has a payer ROLE
+     * (`customer_person_role_types`, seeded `childcare_contact_role` → `payer`) but NO allocation
+     * store — nothing anywhere records that Jordan carries 70% and Taylor 30%. The card therefore
+     * names the payers and states no split, because a split invented here would assign real money
+     * to real people on no record.
+     */
+    payers: Array<{ personId: string; name: string; share: string | null; method: string | null }>;
     /** Absent when the subject has no attendable/billable enrolment — the card renders no controls. */
     unavailableReason: string | null;
 };
@@ -188,6 +198,7 @@ function baseVm(period: BillingPeriod): FinancialsCardVM {
     return {
         account: null,
         period,
+        payers: [],
         subjects: [],
         rows: [],
         reconciliation: emptyReconciliation(),
@@ -226,6 +237,57 @@ function platformUnavailabilities(): FinancialsUnavailable[] {
             reason: "responsibility splits are owned by Processing, not by Financials configuration",
         },
     ];
+}
+
+/**
+ * The account's payers, from the canonical contact role — never from a guess about who pays.
+ *
+ * `share` comes back null for everyone because no allocation store exists. That is the honest
+ * answer and the card renders no split for it; when Processing gains an allocation, this is the one
+ * place that has to learn to read it.
+ */
+async function readAccountPayers(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerId: string,
+): Promise<FinancialsCardVM["payers"]> {
+    const { data: links, error } = await supabase
+        .from("customer_persons")
+        .select("person_id, role_type, is_primary")
+        .eq("org_id", orgId)
+        .eq("customer_id", customerId);
+    // A payer read that fails is an absence of payers on the card, never a reason to fail the account.
+    if (error) return [];
+
+    const rows = ((links ?? []) as Array<Record<string, unknown>>).filter(
+        (r) => t(r.role_type).toLowerCase() === "payer",
+    );
+    if (rows.length === 0) return [];
+
+    const personIds = [...new Set(rows.map((r) => t(r.person_id)).filter(Boolean))];
+    if (personIds.length === 0) return [];
+
+    const { data: people } = await supabase
+        .from("persons")
+        .select("id, first_name, last_name, display_name")
+        .eq("org_id", orgId)
+        .in("id", personIds);
+
+    const nameById = new Map(
+        ((people ?? []) as Array<Record<string, unknown>>).map((p) => [
+            t(p.id),
+            t(p.display_name) || [t(p.first_name), t(p.last_name)].filter(Boolean).join(" ") || "Payer",
+        ]),
+    );
+
+    return personIds.map((id) => ({
+        personId: id,
+        name: nameById.get(id) ?? "Payer",
+        // No allocation store, and no per-payer method store either. Both stay null rather than
+        // being filled with a plausible-looking default.
+        share: null,
+        method: null,
+    }));
 }
 
 export async function buildFinancialsCardVM(
@@ -297,6 +359,7 @@ export async function buildFinancialsCardVM(
     );
 
     vm.account = { customerId: resolvedCustomerId, label: null };
+    vm.payers = resolvedCustomerId ? await readAccountPayers(supabase, args.orgId, resolvedCustomerId) : [];
     // A household with no enrolment still HAS an account. Financials answers for it.
     vm.subjects = agreements.map((a) => ({
         customerMemberId: a.customer_member_id,

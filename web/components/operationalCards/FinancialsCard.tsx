@@ -111,7 +111,18 @@ export default function FinancialsCard({
                             {period.funding.map((l) => (
                                 <Line key={l.label} label={l.label} value={l.value} />
                             ))}
-                            <Line label="Family responsibility" value={period.familyResponsibility} emphasis />
+                            <Line label="Responsibility" value={period.familyResponsibility} emphasis />
+                            {/* The payer split, quiet and immediately beneath the total it divides.
+                                Rendered only when Processing has supplied an allocation — a split
+                                invented here would assign real money to real people on no record. */}
+                            {evidence.payers.some((p) => p.share) ? (
+                                <p className="alloy-os-billing__split">
+                                    {evidence.payers
+                                        .filter((p) => p.share)
+                                        .map((p) => `${p.name.split(" ")[0]} ${p.share}`)
+                                        .join(" · ")}
+                                </p>
+                            ) : null}
                             <Line label="Payments received" value={period.paymentsReceived} />
                             <Line label="Current balance" value={period.currentBalance} emphasis />
                         </div>

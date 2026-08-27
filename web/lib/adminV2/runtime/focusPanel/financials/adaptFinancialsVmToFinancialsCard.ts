@@ -127,14 +127,20 @@ export function adaptFinancialsVmToFinancialsCard(input: {
         :   "";
 
     /*
-     * PAYERS AND AUTOPAY ARE NOT IN THIS READ MODEL YET.
+     * PAYERS ARE CANONICAL; THE SPLIT IS NOT.
      *
-     * `buildFinancialsCardVM` resolves a single `paymentSetup` string and no payer split. Rather
-     * than invent shares the platform cannot own, the payer list is empty and the payment zone
-     * states the setup it does have. An empty list renders as an empty list — the card must not
-     * imply a split it was never given.
+     * The read model names the account's payers from the `payer` contact role. It carries no
+     * `share`, because Alloy has no allocation store — nothing records that Jordan carries 70%. So
+     * a payer arrives here with a name and no percentage, the Responsibility line renders no split,
+     * and the payment zone lists who is responsible without claiming how much.
+     *
+     * `method` is null for the same reason: there is no per-payer payment method store either.
      */
-    const payers: FinancialsPayer[] = [];
+    const payers: FinancialsPayer[] = vm.payers.map((p) => ({
+        name: p.name,
+        share: p.share ?? "",
+        method: p.method ?? "No method on file",
+    }));
 
     return {
         // Lab-only specimen label; never rendered inside the card.
@@ -144,7 +150,7 @@ export function adaptFinancialsVmToFinancialsCard(input: {
                 pastDue ? `${pastDue.amount} past due`
                 :   money(reconciliation.balanceCents, currency),
             lines: [
-                { label: "Family responsibility", value: money(reconciliation.responsibilityCents, currency) },
+                { label: "Responsibility", value: money(reconciliation.responsibilityCents, currency) },
                 { label: "Current balance", value: money(reconciliation.balanceCents, currency) },
             ],
             paymentLine: vm.paymentSetup ?? "No payment method on file",

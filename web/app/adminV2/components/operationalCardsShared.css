@@ -608,6 +608,14 @@
   font-weight: 700;
   color: var(--alloy-os-midnight, #273f52);
 }
+/* The payer split, directly under the Responsibility total it divides. Quiet by construction:
+ * it is context for the number above it, never a second number competing with it. */
+.alloy-os-billing__split {
+  margin: 1px 0 0;
+  font-size: 0.72rem;
+  color: color-mix(in srgb, var(--alloy-os-midnight, #273f52) 55%, #64748b);
+}
+
 .alloy-os-billing__due {
   margin: 3px 0 0;
   max-width: 380px;

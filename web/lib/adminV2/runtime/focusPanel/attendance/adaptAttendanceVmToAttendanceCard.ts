@@ -135,11 +135,23 @@ export function adaptAttendanceVmToAttendanceCard(vm: AttendanceCardVM): Attenda
         : vm.state === "not_arrived" ? "Not arrived"
         : "No record for today";
 
-    const supportingLine =
+    /*
+     * EXPECTED, THEN ACTUAL — the approved reading order, with the expectation truth that exists.
+     *
+     * The specimen reads "Expected 8:00 AM – 4:30 PM · Monkeys" because its fixture has both times.
+     * Assignment/Scheduling owns the expected place and time; Alloy models only the PLACE. So the
+     * expectation contributes the room it can name and no window it cannot, and the actual span
+     * follows it from canonical presence.
+     *
+     * Attendance consumes this projection; it does not own it. Assignment remains the owner of the
+     * arrangement, Attendance of its execution.
+     */
+    const expectedContext = vm.expected.roomLabel ? `Expected ${vm.expected.roomLabel}` : null;
+    const actualSpan =
         fromMin != null && toMin != null ?
             `${timeLabel(vm.checkInAt)}${vm.checkOutAt ? ` – ${timeLabel(vm.checkOutAt)}` : ""} · ${durationLabel(fromMin, toMin)} so far`
-        : vm.expected.roomLabel ? `Expected in ${vm.expected.roomLabel}`
-        : "";
+        :   null;
+    const supportingLine = [expectedContext, actualSpan].filter(Boolean).join(" · ");
 
     return {
         answerLine,
