@@ -10,7 +10,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 
 const TOKEN = process.env.PARTICIPANT_TOKEN ?? "";
 const OUT = process.env.R1_OUT ?? "/tmp/r1edit";
-test.use({ storageState: { cookies: [], origins: [] } });
+const VIEWPORT = process.env.R1_VIEWPORT === "mobile" ? { width: 375, height: 812 } : undefined;
+test.use({ storageState: { cookies: [], origins: [] }, ...(VIEWPORT ? { viewport: VIEWPORT } : {}) });
 
 test("edit one answer on the generated document", async ({ page }) => {
     test.setTimeout(420_000);
@@ -76,7 +77,9 @@ test("edit one answer on the generated document", async ({ page }) => {
 
     const before = await artifact();
     console.log("=== artifact:", JSON.stringify({ title: before?.title, renderer: before?.renderer, id: before?.render_identity, version: before?.form_definition_version_id }), "===");
-    expect(before?.renderer, "this proof is about the generated renderer").toBe("generated_document");
+    // Both renderer classes must honour a correction; the spec proves whichever is open.
+    const EXPECT_RENDERER = process.env.R1_RENDERER;
+    if (EXPECT_RENDERER) expect(before?.renderer, "the renderer under proof").toBe(EXPECT_RENDERER);
 
     const docBefore = await grabDoc();
     void (await documentText());
@@ -140,5 +143,5 @@ test("edit one answer on the generated document", async ({ page }) => {
     // Same Form, same version, same composer — a correction is not a new document.
     expect(after?.form_definition_version_id).toBe(before?.form_definition_version_id);
     expect(after?.render_identity).toBe(before?.render_identity);
-    expect(after?.renderer).toBe("generated_document");
+    expect(after?.renderer, "no fallback to a generic Form").toBe(before?.renderer);
 });

@@ -133,9 +133,23 @@ function readOptions(field: unknown): readonly string[] {
  * parent is free to leave blank. An optional unbound boolean is this artifact's own work, and it is
  * classified as exactly that.
  */
-function classify(field: FormField, sharedKey: string | null, value: unknown): CompiledControlKind {
+function classify(
+    field: FormField,
+    sharedKey: string | null,
+    value: unknown,
+    participantLabel: string | null,
+): CompiledControlKind {
     if (!formFieldCollectsValue(field)) return "display_content";
     if (field.type === "signature") return "signature";
+
+    /*
+     * A control Alloy has no words for is not work Alloy can present.
+     *
+     * The source document named this box, so any caption here would be invented and any input would
+     * be forty-one boxes all labelled the same thing. It belongs to the artifact, where the school's
+     * own sentence sits beside it, and the same rule already keeps it out of the conversation.
+     */
+    if (participantLabel == null) return "display_content";
 
     /*
      * A READ-ONLY destination is placed, not asked.
@@ -194,11 +208,12 @@ export function compileParticipantArtifact(
             }
             const value = values[field.id];
             const sharedKey = sharedKeyOf(field);
+            const participantLabel = participantFacingLabel(field.label, sourceNames[field.id]);
             controls.push({
                 field_id: field.id,
                 label: field.label ?? "",
-                participant_label: participantFacingLabel(field.label, sourceNames[field.id]),
-                kind: classify(field, sharedKey, value),
+                participant_label: participantLabel,
+                kind: classify(field, sharedKey, value, participantLabel),
                 input_type: field.type,
                 options: readOptions(field),
                 required: field.required === true,
