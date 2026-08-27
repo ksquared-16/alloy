@@ -115,7 +115,11 @@ export function participantScopeFromChildSubjectTruth(
         customerMemberId,
         personId: str(truth["child.person_id"]),
         displayName: str(truth["child.display_name"]),
-        imageUrl: str(truth["child.photo_url"]) ?? str(truth["child.image_url"]),
+        // Same precedence as the candidate mapper: the resolved/signed URL is the one that renders.
+        imageUrl:
+            str(truth["child.resolved_photo_url"])
+            ?? str(truth["child.photo_url"])
+            ?? str(truth["child.image_url"]),
         stageKey: str(truth["child.stage_key"]),
         stageLabel: str(truth["child.outcome_status_label"]),
     };

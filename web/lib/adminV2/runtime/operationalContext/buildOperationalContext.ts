@@ -325,7 +325,17 @@ function participantCandidatesFromTruth(truth: Record<string, unknown>): Partici
                 customerMemberId: str(r.customer_member_id),
                 personId: str(r.person_id),
                 name: str(r.child_name) ?? str(r.display_name) ?? str(r.name),
-                imageUrl: str(r.photo_url) ?? str(r.image_url),
+                /*
+                 * `resolved_photo_url` FIRST — it is the signed, authorized URL, and the only one
+                 * that renders.
+                 *
+                 * `photo_url` is the stored reference and is null on every child in the tenant, so
+                 * reading it first meant the scope carried no image and EVERY avatar fell back to
+                 * initials — including for children who genuinely have a photo. The resolved field
+                 * is minted per actor per request by the same document path the cards already use
+                 * (R-019); preferring it here is what makes one avatar model produce one answer.
+                 */
+                imageUrl: str(r.resolved_photo_url) ?? str(r.photo_url) ?? str(r.image_url),
                 stageKey: str(r.stage_key),
                 stageLabel: str(r.outcome_status_label),
             } as ParticipantScopeCandidate;
