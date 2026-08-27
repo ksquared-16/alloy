@@ -137,6 +137,18 @@ function classify(field: FormField, sharedKey: string | null, value: unknown): C
     if (!formFieldCollectsValue(field)) return "display_content";
     if (field.type === "signature") return "signature";
 
+    /*
+     * A READ-ONLY destination is placed, not asked.
+     *
+     * Four of them on the Admissions packet — the derived "Student Age Upon Enrolling" among them —
+     * were offered on the change surface as editable inputs, and the platform then restored the
+     * baseline over whatever the parent typed. An input whose value is discarded on write is worse
+     * than no input at all.
+     */
+    if (field.read_only === true) {
+        return sharedKey != null && hasValue(value) ? "resolved_shared_value" : "display_content";
+    }
+
     const bound = sharedKey != null;
     if (!bound && field.type === "boolean") {
         return field.required === true ? "acknowledgment" : "unresolved_artifact_specific";

@@ -253,13 +253,31 @@ export async function renderParticipantEnrollmentDocument(
         payload?: { values?: Record<string, unknown>; signatures?: Record<string, unknown> };
     } | null)?.payload;
     const draftValues = (payload?.values ?? {}) as Record<string, unknown>;
-    const values: Record<string, unknown> = {
-        ...draftValues,
+    /*
+     * THE DRAFT IS THE ARTIFACT'S OWN CURRENT STATE, AND IT WINS.
+     *
+     * Prefill used to be spread OVER the draft, so a correction made at the review surface never
+     * reached the document: the parent retyped "Parent/Guardian #2 Name", the draft stored it, and
+     * the render put the conversation's older answer back on the page. The correction was real and
+     * invisible, which is the worst of the three possible outcomes.
+     *
+     * Prefill's job is to fill what this artifact does not have — a fact the parent settled in
+     * conversation, a value from the canonical record. Where the artifact already holds a value,
+     * that value is the answer, because it is the one the parent last gave.
+     *
+     * A process-scoped answer belongs to exactly one destination on exactly this Form. It fills that
+     * box and nothing else — the reason it can be collected without becoming canonical.
+     */
+    const values: Record<string, unknown> = { ...draftValues };
+    const prefilled = {
         ...sharedValuesToFieldIds(schema, prefill),
-        // A process-scoped answer belongs to exactly one destination on exactly this Form. It fills
-        // that box and nothing else — the reason it can be collected without becoming canonical.
         ...processScopedAnswersToFieldIds(schema, prefill, artifact.formDefinitionId),
     };
+    for (const [fieldId, value] of Object.entries(prefilled)) {
+        const held = values[fieldId];
+        const alreadyAnswered = typeof held === "string" ? held.trim().length > 0 : held != null;
+        if (!alreadyAnswered) values[fieldId] = value;
+    }
     /*
      * Derived destinations are filled at render — but never OVER a value that was already recorded.
      *

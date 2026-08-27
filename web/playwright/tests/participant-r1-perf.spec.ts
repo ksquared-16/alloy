@@ -29,7 +29,7 @@ test("what the parent waits for", async ({ page }) => {
     await page.waitForTimeout(6000);
 
     // ── the document itself: server compose/fill, then transfer ──────────────────────────────────
-    const docSamples: Array<{ total: number; server: number; bytes: number }> = [];
+    const docSamples: Array<{ total: number; server: number; render: number; bytes: number }> = [];
     for (let i = 0; i < RUNS; i++) {
         docSamples.push(
             await page.evaluate(async (t) => {
@@ -37,10 +37,15 @@ test("what the parent waits for", async ({ page }) => {
                 const r = await fetch(`/api/public/forms/${t}/enrollment-document?rev=perf${Date.now()}`);
                 const buf = await r.arrayBuffer();
                 const total = performance.now() - t0;
-                // `server-timing: token;dur=..., render;dur=...` — the route's own accounting.
+                /*
+                 * `total` is a PHASE in this header, beside `token` and `render` — summing every
+                 * `dur=` double-counts and reports roughly twice the real server time, which is how
+                 * "network + transfer" first came out negative. Read the one that means the whole.
+                 */
                 const header = r.headers.get("server-timing") ?? "";
-                const server = [...header.matchAll(/dur=([\d.]+)/g)].reduce((a, m) => a + Number(m[1]), 0);
-                return { total, server, bytes: buf.byteLength };
+                const server = Number(/(?:^|,)\s*total;dur=([\d.]+)/.exec(header)?.[1] ?? "0");
+                const render = Number(/(?:^|,)\s*render;dur=([\d.]+)/.exec(header)?.[1] ?? "0");
+                return { total, server, render, bytes: buf.byteLength };
             }, TOKEN),
         );
     }
@@ -95,7 +100,8 @@ test("what the parent waits for", async ({ page }) => {
     console.log("\n=== WHAT THE PARENT WAITS FOR ===");
     console.log(`document bytes: ${bytes}`);
     console.log(stats("document fetch (total)", docSamples.map((s) => s.total)));
-    console.log(stats("  of which server (server-timing)", docSamples.map((s) => s.server)));
+    console.log(stats("  of which server (total;dur)", docSamples.map((s) => s.server)));
+    console.log(stats("  of which PDF fill/compose", docSamples.map((s) => s.render)));
     console.log(stats("  network + transfer", docSamples.map((s) => s.total - s.server)));
     console.log(stats("artifact contract fetch", artifactSamples));
     console.log(stats("objective fetch", objectiveSamples));

@@ -183,11 +183,34 @@ test("walk every artifact to completion", async ({ page }) => {
             console.log("!! no finish affordance; stopping");
             break;
         }
+        /*
+         * MEASURED, not waited out.
+         *
+         * A fixed `waitForTimeout(22000)` here reported "22s" for every artifact, which measured the
+         * test and not the product. The interval that matters is finish -> the runtime has moved on.
+         */
         const tFinish = Date.now();
         await finish.click();
-        await page.waitForTimeout(22000);
-        console.log(`  finish->next ms: ${Date.now() - tFinish}`);
-        const after = await objective();
+        let after = before;
+        let advancedMs: number | null = null;
+        for (let waited = 0; waited < 60_000; waited += 500) {
+            await page.waitForTimeout(500);
+            after = await objective();
+            if (after.complete || after.progress?.satisfied !== before.progress?.satisfied) {
+                advancedMs = Date.now() - tFinish;
+                break;
+            }
+        }
+        console.log(`  finish -> runtime advanced: ${advancedMs ?? "did not advance within 60s"} ms`);
+        // The next artifact still has to be fetched and painted before the parent can act on it.
+        const tReady = Date.now();
+        await page
+            .locator("[data-participant-document] canvas, [data-participant-thread]")
+            .first()
+            .waitFor({ state: "attached", timeout: 60_000 })
+            .catch(() => undefined);
+        console.log(`  next artifact surface ready: ${Date.now() - tReady} ms after that`);
+        await page.waitForTimeout(4000);
         console.log("  objective after:", JSON.stringify(after));
         console.log("AFTER FINISH:\n" + (await texts()).slice(0, 14).join("\n"));
         if (httpErrors.length) console.log("  HTTP errors so far:", JSON.stringify(httpErrors.slice(-3)));

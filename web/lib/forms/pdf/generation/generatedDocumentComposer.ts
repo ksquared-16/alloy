@@ -24,6 +24,7 @@ import { createHash } from "crypto";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import type { FormSchemaV1, FormField } from "@/lib/forms/schema";
 import { humanizeOperatorSlug } from "@/lib/forms/operatorDisplayLabels";
+import { formatValueForDocumentDestination } from "@/lib/forms/pdf/documentDestinationDate";
 
 /**
  * The layout's own version.
@@ -121,10 +122,19 @@ function isAcknowledgement(field: FormField): boolean {
     return field.type === "boolean" && /^(i |we |by signing)/i.test(field.label ?? "");
 }
 
+/**
+ * One stored answer, printed the way a document prints it.
+ *
+ * `formatValueForDocumentDestination` already owns this decision for the fidelity engine, and the
+ * composed engine was skipping it: the same date printed `04/02/2021` on the Oregon CIS and
+ * `2021-04-02` on the completed application beside it, and ten stored digits printed as a bare
+ * number rather than as a phone. One stored value, formatted per destination — a composed document
+ * is a destination too.
+ */
 function displayAnswer(field: FormField, raw: unknown): string {
     if (raw === undefined || raw === null || raw === "") return "—";
     if (typeof raw === "boolean") return raw ? "Yes" : "No";
-    return String(raw);
+    return String(formatValueForDocumentDestination(raw));
 }
 
 /**

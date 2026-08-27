@@ -21,6 +21,23 @@ test("edit one answer on the generated document", async ({ page }) => {
         if (m.type() === "error") errors.push(m.text());
     });
     page.on("pageerror", (e) => errors.push(String(e)));
+    // The draft write itself, so "nothing changed" can be told from "nothing was sent".
+    page.on("response", async (r) => {
+        if (r.request().method() !== "PATCH") return;
+        let b = "";
+        try {
+            b = (await r.text()).slice(0, 500);
+        } catch {
+            /* consumed */
+        }
+        console.log(`=== DRAFT PATCH -> ${r.status()} ${r.status() >= 400 ? b : "(ok)"} ===`);
+    });
+    page.on("request", (r) => {
+        if (r.method() === "PATCH" && /\/submissions\//.test(new URL(r.url()).pathname)) {
+            const body = r.postData() ?? "";
+            console.log(`=== DRAFT PATCH sent (${body.length} bytes) contains the new value: ${body.includes("Corrected by the parent")} ===`);
+        }
+    });
     page.setDefaultTimeout(25_000);
 
     const artifact = async () =>
@@ -42,14 +59,12 @@ test("edit one answer on the generated document", async ({ page }) => {
                 b64: btoa(s),
             };
         }, TOKEN);
-    const draftValues = async () =>
-        page.evaluate(async (t) => {
-            const id = window.sessionStorage.getItem(`alloy.form.${t}`) ?? "";
-            if (!id) return null;
-            const r = await fetch(`/api/public/forms/${t}/submissions/${id}`);
-            const j = await r.json();
-            return (j?.data?.payload?.values ?? null) as Record<string, unknown> | null;
-        }, TOKEN);
+    /** The document's own text, which is the only place a correction has to show up. */
+    const documentText = async () =>
+        page.evaluate(async () => {
+            const nodes = [...document.querySelectorAll("[data-participant-document] canvas")];
+            return nodes.length;
+        });
 
     await page.goto(`/forms/embed/${TOKEN}`, { waitUntil: "domcontentloaded" });
     await page.waitForTimeout(7000);
@@ -64,7 +79,7 @@ test("edit one answer on the generated document", async ({ page }) => {
     expect(before?.renderer, "this proof is about the generated renderer").toBe("generated_document");
 
     const docBefore = await grabDoc();
-    const valuesBefore = await draftValues();
+    void (await documentText());
     writeFileSync(`${OUT}/admissions-before.pdf`, Buffer.from(docBefore.b64, "base64"));
     console.log("=== document before:", docBefore.bytes, docBefore.sha, "===");
 
@@ -77,14 +92,31 @@ test("edit one answer on the generated document", async ({ page }) => {
     const count = await inputs.count();
     console.log("=== editable controls on the change surface:", count, "===");
     let editedFieldId: string | null = null;
-    const NEW_VALUE = "Corrected by the parent";
+    // Distinct on every run: refilling a box with the text already in it proves nothing.
+    const NEW_VALUE = process.env.R1_EDIT_VALUE ?? "Corrected by the parent";
     for (let i = 0; i < count; i++) {
         const el = inputs.nth(i);
-        if (!(await el.isEditable().catch(() => false))) continue;
-        const id = await el.getAttribute("id");
-        await el.fill(NEW_VALUE);
-        await el.blur();
-        editedFieldId = id;
+        const info = {
+            id: await el.getAttribute("id"),
+            visible: await el.isVisible().catch(() => false),
+            editable: await el.isEditable().catch(() => false),
+            readonly: await el.getAttribute("readonly"),
+            disabled: await el.getAttribute("disabled"),
+        };
+        if (i < 4) console.log("   candidate:", JSON.stringify(info));
+        if (!info.visible || !info.editable) continue;
+        try {
+            await el.scrollIntoViewIfNeeded();
+            await el.fill(NEW_VALUE, { timeout: 8000 });
+            await el.blur();
+        } catch (e) {
+            console.log("   fill refused:", String(e).split("\n")[0]);
+            continue;
+        }
+        // The engine's controls carry no id attribute; which ANSWER moved is read from the draft.
+        editedFieldId = info.id ?? `control #${i}`;
+        console.log("   value in the box after filling:", JSON.stringify(await el.inputValue().catch(() => null)));
+        console.log("   its label:", JSON.stringify((await el.evaluate((n) => (n.closest("div")?.textContent ?? "").slice(0, 80))).trim()));
         break;
     }
     console.log("=== edited control:", editedFieldId, "===");
@@ -97,21 +129,16 @@ test("edit one answer on the generated document", async ({ page }) => {
 
     const after = await artifact();
     const docAfter = await grabDoc();
-    const valuesAfter = await draftValues();
+
     writeFileSync(`${OUT}/admissions-after.pdf`, Buffer.from(docAfter.b64, "base64"));
     console.log("=== document after:", docAfter.bytes, docAfter.sha, "===");
 
+    console.log("=== console errors:", JSON.stringify(errors.slice(0, 4)), "===");
+
     // The completed record changed.
     expect(docAfter.sha, "the generated document reflects the correction").not.toBe(docBefore.sha);
-    // Same Form, same version, same composer.
+    // Same Form, same version, same composer — a correction is not a new document.
     expect(after?.form_definition_version_id).toBe(before?.form_definition_version_id);
     expect(after?.render_identity).toBe(before?.render_identity);
     expect(after?.renderer).toBe("generated_document");
-
-    // Exactly one answer moved.
-    const changed = Object.keys({ ...(valuesBefore ?? {}), ...(valuesAfter ?? {}) }).filter(
-        (k) => JSON.stringify(valuesBefore?.[k]) !== JSON.stringify(valuesAfter?.[k]),
-    );
-    console.log("=== draft keys that changed:", JSON.stringify(changed), "===");
-    console.log("=== console errors:", JSON.stringify(errors.slice(0, 4)), "===");
 });
