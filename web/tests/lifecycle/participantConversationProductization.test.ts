@@ -269,12 +269,35 @@ describe("the participant surface is a thread with an anchored composer", () => 
         expect(THREAD).toContain("--participant-conversation-height");
     });
 
-    it("gives settled exchanges a lighter treatment than the current one", () => {
-        // Three depths, and the current Alloy line is the largest thing on the screen.
+    it("gives settled history a lighter treatment than the current turn", () => {
+        /*
+         * The depths remain; what carries settled history no longer does.
+         *
+         * History used to be a growing transcript of exchanges, receding through three depths. It is
+         * now a SEMANTIC RECORD — the values themselves — so "lighter than the current turn" is a
+         * property of that record, and the third depth has nothing left to render.
+         */
         expect(THREAD).toContain('depth === "current"');
         expect(THREAD).toContain('depth === "recent"');
-        expect(CARD).toContain('"history"');
-        expect(THREAD).toMatch(/text-\[18px\][\s\S]*text-alloy-midnight\b/);
+        expect(CARD).toContain("data-participant-settled-record");
+        // Settled values are smaller and lower-contrast than the current question, which alone is
+        // full-strength midnight.
+        expect(CARD).toMatch(/text-\[13px\] text-alloy-midnight\/60[\s\S]{0,200}?data-participant-settled-value/);
+        expect(THREAD).toMatch(/depth === "current"[\s\S]{0,200}?text-alloy-midnight\b/);
+    });
+
+    it("does not spend headline weight on the active question", () => {
+        /*
+         * The active question was 18/19px semi-bold, so every ordinary question read as a page title
+         * and the answer, the record and the controls all read as footnotes to it. Hierarchy comes
+         * from placement, spacing, the Bend Pine eyebrow and contrast instead.
+         */
+        const current = THREAD.match(/depth === "current"\s*\?\s*"([^"]+)"/g) ?? [];
+        const alloyCurrent = current.find((c) => c.includes("text-alloy-midnight"));
+        expect(alloyCurrent, "the current Alloy line is styled").toBeTruthy();
+        expect(alloyCurrent).not.toMatch(/text-\[1[789]px\]|text-\[2\dpx\]/);
+        expect(alloyCurrent).not.toContain("font-semibold");
+        expect(alloyCurrent).not.toContain("font-bold");
     });
 
     it("has one persistent composer, with Enter to send and Shift+Enter for a newline", () => {

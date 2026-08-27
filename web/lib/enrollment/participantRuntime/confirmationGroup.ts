@@ -228,3 +228,77 @@ export function activeConfirmationGroup(
     if (!group || group.members.length < 2) return null;
     return group;
 }
+
+/**
+ * Facts the parent has already settled, grouped by the SAME semantic subject.
+ *
+ * ## Why history is derived, not remembered
+ *
+ * The surface used to keep the transcript in component state, so the record of a grouped
+ * confirmation was the two sentences that produced it — "Let's make sure I have Chidinma's details
+ * right." / "Yes, that's right" — and what was actually agreed to was gone. Worse, it was gone for
+ * good on reload, which would make any Edit affordance in history a lie.
+ *
+ * So settled history is projected from the same durable needs the conversation is made of. It
+ * survives a reload, it cannot drift from what is stored, and every row remains addressable — which
+ * is what lets a parent change an answer after the conversation has moved past it.
+ *
+ * A settled fact is one that no longer needs the participant AND still has a value. A decline is
+ * settlement without a value and is deliberately not a row here: there is nothing to show and
+ * nothing to correct but the question itself.
+ */
+export function groupSettledConfirmations(
+    needs: readonly EnrollmentInformationNeed[],
+): ConfirmationGroup[] {
+    const bySubject = new Map<string, { subject: ConfirmationSubject; members: ConfirmationGroupMember[] }>();
+
+    for (const need of needs) {
+        if (need.state !== "confirmed" || !need.has_value) continue;
+        const subject = confirmationSubjectFor(need);
+        let bucket = bySubject.get(subject.key);
+        if (!bucket) {
+            bucket = { subject, members: [] };
+            bySubject.set(subject.key, bucket);
+        }
+        bucket.members.push({
+            need_key: need.identity.key,
+            ref: confirmationRef(need.identity.key),
+            is_identity: isIdentityFact(need),
+        });
+    }
+
+    return [...bySubject.values()].map((bucket) => ({ subject: bucket.subject, members: bucket.members }));
+}
+
+/**
+ * The need a fact handle refers to — resolved ONLY against facts the platform is displaying.
+ *
+ * The bounded set is the whole security property. A handle is an opaque token the server issued for
+ * a row the parent can currently see; resolving it against every need in the objective would let a
+ * crafted handle reach a fact that was never on screen. So the candidates are exactly the settled
+ * rows and the rows of the active card — nothing else, and never a canonical key supplied by the
+ * browser.
+ */
+export function resolveDisplayedFactRef(
+    needs: readonly EnrollmentInformationNeed[],
+    activeNeedKey: string | null,
+    ref: string,
+): EnrollmentInformationNeed | null {
+    const displayed = new Map<string, EnrollmentInformationNeed>();
+    for (const group of groupSettledConfirmations(needs)) {
+        for (const member of group.members) displayed.set(member.ref, needByKey(needs, member.need_key));
+    }
+    const active = activeConfirmationGroup(needs, activeNeedKey);
+    for (const member of active?.members ?? []) {
+        displayed.set(member.ref, needByKey(needs, member.need_key));
+    }
+    return displayed.get(ref) ?? null;
+}
+
+function needByKey(
+    needs: readonly EnrollmentInformationNeed[],
+    key: string,
+): EnrollmentInformationNeed {
+    // Every key here came from this same array moments ago, so the lookup cannot miss.
+    return needs.find((n) => n.identity.key === key)!;
+}

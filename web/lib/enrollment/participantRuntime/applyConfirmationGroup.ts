@@ -40,6 +40,7 @@ import { buildEnrollmentNeedConfirmationPatch } from "@/lib/enrollment/informati
 import { disposeParticipantCandidate } from "@/lib/enrollment/participantRuntime/validateParticipantCandidate";
 import {
     activeConfirmationGroup,
+    resolveDisplayedFactRef,
     type ConfirmationGroup,
 } from "@/lib/enrollment/participantRuntime/confirmationGroup";
 import { resolveAuthoredFieldForTurn } from "@/lib/enrollment/participantRuntime/resolveAuthoredFieldForTurn";
@@ -206,17 +207,29 @@ export async function applyConfirmationGroup(
 }
 
 /**
- * Correct ONE fact of a group, leaving its siblings untouched.
+ * Correct ONE displayed fact, leaving everything beside it untouched.
  *
  * "Make a change" exposes the individual semantic values, and changing one changes exactly that
  * value and the destinations it is mapped to. The browser names an opaque `ref`; the server matches
- * it against the group it is currently offering and refuses anything else, so a request can only
- * ever reach a fact the platform just displayed.
+ * it against the facts it is currently DISPLAYING and refuses anything else, so a request can only
+ * ever reach a fact the parent can actually see.
+ *
+ * ## A settled answer is still editable
+ *
+ * The displayed set is the active card AND the settled record. A conversation moving on is not a
+ * reason for an answer to become immutable — a parent who realises three questions later that they
+ * gave last year's address must be able to fix it without starting again. The write is identical
+ * either way; only the row they pressed differs.
  *
  * The write is the ordinary one: validate through the same disposal, merge the value under the
  * need's own canonical key, and record a confirmation of the corrected value — a parent typing a
  * value IS the strongest confirmation the platform can get, and without that evidence the need
  * would immediately re-open and ask about the value they had just supplied.
+ *
+ * Evidence invalidation needs no step of its own. A D-99 confirmation is bound to a value
+ * fingerprint, so the moment this value changes the old confirmation stops matching; writing the
+ * new one in the same patch is what keeps a corrected fact settled instead of re-queued. No OTHER
+ * fact's evidence is read or rewritten, which is the whole of "invalidate only what was affected".
  */
 export async function applyConfirmationGroupMemberEdit(
     supabase: SupabaseClient,
@@ -240,15 +253,13 @@ export async function applyConfirmationGroupMemberEdit(
       }
     | { readonly ok: false; readonly refusal: { readonly code: string; readonly detail: string } }
 > {
-    const group = currentConfirmationGroup(input.current.objective);
-    const member = group?.members.find((m) => m.ref === input.ref) ?? null;
-    if (!member) {
-        return { ok: false, refusal: { code: "unknown_fact", detail: "That detail is not on this card." } };
-    }
-
-    const need = input.current.objective.needs.needs.find((n) => n.identity.key === member.need_key);
+    const need = resolveDisplayedFactRef(
+        input.current.objective.needs.needs,
+        input.current.objective.next_turn.need?.identity.key ?? null,
+        input.ref,
+    );
     if (!need) {
-        return { ok: false, refusal: { code: "unknown_fact", detail: "That detail is not on this card." } };
+        return { ok: false, refusal: { code: "unknown_fact", detail: "That detail is not on screen." } };
     }
 
     const turn = turnForMember(need);

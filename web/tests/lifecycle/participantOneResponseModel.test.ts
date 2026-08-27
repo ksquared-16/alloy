@@ -64,22 +64,39 @@ describe("a cluster reads as a topic, not a card of fields", () => {
          * deliberately, in which the parent is correcting one named fact rather than answering the
          * conversation. Counting its markup here would score a correct product as a regression.
          */
-        const conversational = CODE.replace(/function FactEditor\([\s\S]*?\n\}\n/, "");
+        const conversational = CODE.replace(/function StructuredFactEditor\([\s\S]*?\n\}\n/, "");
         const inputs = conversational.match(/<input\b/g) ?? [];
         const textareas = conversational.match(/<textarea\b/g) ?? [];
         expect(inputs.length + textareas.length, "one typed control at most, for date/number").toBeLessThanOrEqual(2);
     });
 
-    it("opens ONE fact editor at a time inside a grouped confirmation", () => {
+    it("opens ONE fact editor at a time, wherever the parent reached it from", () => {
         /*
-         * The same invariant, at the grain the card actually has. "Make a change" exposes the
-         * individual semantic values — that is the requirement — but a row becomes editable only
-         * when it is THE open one, so the parent still faces a single answer surface.
+         * The same invariant across three surfaces: the active card, the settled record, and Change
+         * on a standalone confirmation. A row becomes editable only when it is THE open one, and
+         * one piece of state decides which — it holds a single ref, not a set, so two editors
+         * cannot be open at once however many places can host one.
          */
-        expect(CODE).toContain("editingRef === fact.ref");
-        // Exactly one place decides which row is open, and it holds one ref, not a set.
         expect(CODE).toMatch(/const \[editingRef, setEditingRef\] = useState<string \| null>\(null\)/);
-        expect(CODE.match(/<FactEditor\b/g) ?? []).toHaveLength(1);
+        // Every row-hosted editor is gated on that single ref.
+        const gated = CODE.match(/editingRef === fact\.ref/g) ?? [];
+        expect(gated.length, "each row editor is gated on the open ref").toBeGreaterThanOrEqual(2);
+        // The standalone Change editor is gated on `correcting`, which is likewise a single flag.
+        expect(CODE).toContain("correcting && turn.editor");
+        // And the dock's typed control stands down while it is open, so one question never has two
+        // answer surfaces.
+        expect(CODE).toMatch(/correcting && turn\.editor\s*\n?\s*\? null/);
+    });
+
+    it("gives a whole address structured parts rather than one text box", () => {
+        // The reported failure: Change on an address left the composer waiting for prose, so fixing
+        // a city meant retyping the street and ZIP from memory.
+        expect(CODE).toContain("data-participant-address-editor");
+        for (const part of ["Street", "City", "State", "ZIP"]) {
+            expect(CODE).toContain(`aria-label="${part}"`);
+        }
+        // Recomposed into ONE canonical value on save — no component becomes a fact of its own.
+        expect(CODE).toContain("composeAddress(parts)");
     });
 
     it("recedes settled questions and marks them in Bend Pine", () => {

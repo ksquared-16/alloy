@@ -40,9 +40,15 @@ import {
     participantProgressDisplay,
     participantQuestion,
     participantQuestionSegments,
+    participantUnreadableAnswerMessage,
     type ParticipantValueControl,
     PARTICIPANT_CLARIFICATION_MESSAGE,
 } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import {
+    composeAddress,
+    type AddressParts,
+    type SemanticEditor,
+} from "@/lib/enrollment/participantRuntime/semanticValueEditor";
 import { IntakeCard, IntakeHeading } from "./ParentIntakeShell";
 import {
     ConversationProgress,
@@ -234,7 +240,16 @@ function ConfirmationGroupCard({
                             {fact.label}
                         </dt>
                         {editingRef === fact.ref ? (
-                            <FactEditor fact={fact} busy={busy} onSave={onSave} onCancel={onCancel} />
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    initial={fact.value}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
                         ) : (
                             <dd className="flex items-baseline gap-3 text-[14px] text-alloy-midnight/80">
                                 <span data-participant-fact-value={fact.ref}>{fact.value || "—"}</span>
@@ -257,68 +272,266 @@ function ConfirmationGroupCard({
     );
 }
 
-/** The authored control for ONE fact — the same kind of control its Form would have used. */
-function FactEditor({
-    fact,
+/**
+ * The editor for ONE semantic fact — street/city/state/ZIP, a date, an email, a choice.
+ *
+ * Chosen by the platform (`semanticValueEditor.ts`) and delivered on the wire, so the component
+ * never reads a canonical key to decide what kind of thing it is showing. Used in three places —
+ * the active card, the settled record, and Change on a standalone confirmation — because a parent
+ * correcting their address should meet the same four boxes wherever they reached them from.
+ */
+function StructuredFactEditor({
+    editor,
+    label,
+    initial,
     busy,
     onSave,
     onCancel,
 }: {
-    fact: NonNullable<ParticipantObjectiveWire["next_turn"]["confirmation_group"]>["facts"][number];
+    editor: SemanticEditor;
+    label: string;
+    /** The value being corrected, as the parent reads it — the editor opens on it, not on blank. */
+    initial?: string;
     busy: boolean;
-    onSave: (ref: string, value: unknown) => void;
+    onSave: (value: unknown) => void;
     onCancel: () => void;
 }) {
-    const [draft, setDraft] = useState(() => (fact.input_type === "date" ? isoDraft(fact.value) : fact.value));
-    const inputType =
-        fact.input_type === "date"
-            ? "date"
-            : fact.input_type === "number"
-              ? "number"
-              : fact.input_type === "email"
-                ? "email"
-                : fact.input_type === "phone" || fact.input_type === "tel"
-                  ? "tel"
-                  : "text";
+    const [parts, setParts] = useState<AddressParts>(() =>
+        editor.kind === "address" ? editor.parts : { street: "", city: "", state: "", postal: "" },
+    );
+    const [draft, setDraft] = useState<string>(() => {
+        const shown = (initial ?? "").trim();
+        if (editor.kind === "options") {
+            // The current choice, so a parent changing something else does not have to re-find it.
+            return editor.options.find((o) => o.toLowerCase() === shown.toLowerCase()) ?? editor.options[0] ?? "";
+        }
+        if (editor.kind === "value" && editor.inputType === "date") return isoDraft(shown);
+        return shown;
+    });
+
+    const field = "w-full min-w-0 rounded-lg border border-alloy-midnight/20 bg-white px-2.5 py-1.5 text-[14px] text-alloy-midnight";
+    const caption = "mb-1 block text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/40";
+
+    let body: ReactNode;
+    let value: () => unknown;
+    let ready = true;
+
+    if (editor.kind === "address") {
+        // FOUR BOXES OVER ONE CANONICAL VALUE. The parts are recomposed on save; no component of an
+        // address ever becomes a fact of its own.
+        value = () => composeAddress(parts);
+        ready = parts.street.trim().length > 0 || parts.city.trim().length > 0;
+        body = (
+            <div className="grid w-full gap-2 sm:grid-cols-2" data-participant-address-editor="true">
+                <label className="sm:col-span-2">
+                    <span className={caption}>Street</span>
+                    <input className={field} value={parts.street} aria-label="Street"
+                        onChange={(e) => setParts((p) => ({ ...p, street: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>City</span>
+                    <input className={field} value={parts.city} aria-label="City"
+                        onChange={(e) => setParts((p) => ({ ...p, city: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>State</span>
+                    <input className={field} value={parts.state} aria-label="State" maxLength={2}
+                        onChange={(e) => setParts((p) => ({ ...p, state: e.target.value }))} />
+                </label>
+                <label>
+                    <span className={caption}>ZIP</span>
+                    <input className={field} value={parts.postal} aria-label="ZIP" inputMode="numeric"
+                        onChange={(e) => setParts((p) => ({ ...p, postal: e.target.value }))} />
+                </label>
+            </div>
+        );
+    } else if (editor.kind === "options") {
+        value = () => draft;
+        body = (
+            <select className={field} value={draft} aria-label={label} onChange={(e) => setDraft(e.target.value)}>
+                {editor.options.map((option) => (
+                    <option key={option} value={option}>{option}</option>
+                ))}
+            </select>
+        );
+    } else {
+        value = () => draft;
+        ready = draft.trim().length > 0;
+        body = (
+            <input
+                className={field}
+                type={editor.inputType}
+                aria-label={label}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+            />
+        );
+    }
+
     return (
-        <dd className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            {fact.options.length > 0 ? (
-                <select
-                    aria-label={fact.label}
-                    value={String(draft)}
-                    onChange={(e) => setDraft(e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-alloy-midnight/20 px-2 py-1 text-[14px] sm:flex-none"
+        <div className="flex w-full flex-col gap-2" data-participant-fact-editor={editor.kind}>
+            {body}
+            <div className="flex items-center gap-3">
+                <button
+                    type="button"
+                    disabled={busy || !ready}
+                    onClick={() => onSave(value())}
+                    className="rounded-lg bg-alloy-bend-pine px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
                 >
-                    {fact.options.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                    ))}
-                </select>
-            ) : (
-                <input
-                    aria-label={fact.label}
-                    type={inputType}
-                    value={String(draft)}
-                    onChange={(e) => setDraft(e.target.value)}
-                    className="min-w-0 flex-1 rounded-lg border border-alloy-midnight/20 px-2 py-1 text-[14px] sm:flex-none"
+                    Save
+                </button>
+                <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={busy}
+                    className="text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
+                >
+                    Cancel
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/**
+ * What the parent has already settled — a semantic record, not a button transcript.
+ *
+ * The thread used to keep every exchange that produced a settled fact, so a grouped confirmation
+ * was remembered as "Let's make sure I have Chidinma's details right." / "Yes, that's right" and
+ * what was actually agreed to was gone. Worse, it lived in component state, so it was gone for good
+ * on reload — which would make any Edit affordance here a promise the surface could not keep.
+ *
+ * This renders the platform's own projection of settled needs instead. It survives a reload, it
+ * cannot drift from what is stored, and every row stays addressable: a conversation moving on is
+ * not a reason for an answer to become immutable.
+ */
+const SETTLED_ROWS_VISIBLE = 4;
+
+function SettledRecord({
+    settled,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    settled: ParticipantObjectiveWire["settled"];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    if (settled.length === 0) return null;
+    return (
+        <div className="flex flex-col gap-2" data-participant-settled-record={settled.length}>
+            {settled.map((group) => (
+                <SettledGroup
+                    key={group.heading + (group.headline ?? "")}
+                    group={group}
+                    busy={busy}
+                    editingRef={editingRef}
+                    justUpdated={justUpdated}
+                    onEdit={onEdit}
+                    onCancel={onCancel}
+                    onSave={onSave}
                 />
-            )}
-            <button
-                type="button"
-                disabled={busy || String(draft).trim().length === 0}
-                onClick={() => onSave(fact.ref, draft)}
-                className="rounded-lg bg-alloy-midnight px-3 py-1 text-[13px] font-medium text-white disabled:opacity-50"
-            >
-                Save
-            </button>
-            <button
-                type="button"
-                onClick={onCancel}
-                disabled={busy}
-                className="text-[13px] text-alloy-midnight/50 underline underline-offset-2 disabled:opacity-50"
-            >
-                Cancel
-            </button>
-        </dd>
+            ))}
+        </div>
+    );
+}
+
+function SettledGroup({
+    group,
+    busy,
+    editingRef,
+    justUpdated,
+    onEdit,
+    onCancel,
+    onSave,
+}: {
+    group: ParticipantObjectiveWire["settled"][number];
+    busy: boolean;
+    editingRef: string | null;
+    justUpdated: ReadonlySet<string>;
+    onEdit: (ref: string) => void;
+    onCancel: () => void;
+    onSave: (ref: string, value: unknown) => void;
+}) {
+    /*
+     * Compact by default. A settled subject can accumulate a great many facts over a long
+     * enrolment, and a history pane that grows without bound stops being a summary. The rows are
+     * never DROPPED — the count says exactly how many are folded away, and opening is one tap.
+     */
+    const [open, setOpen] = useState(false);
+    const editingHere = group.facts.some((f) => f.ref === editingRef);
+    const rows = open || editingHere ? group.facts : group.facts.slice(0, SETTLED_ROWS_VISIBLE);
+    const hidden = group.facts.length - rows.length;
+
+    return (
+        <section
+            className="rounded-xl border border-alloy-midnight/8 bg-alloy-midnight/[0.015] px-3.5 py-2.5"
+            data-participant-settled-group={group.heading}
+        >
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.13em] text-alloy-bend-pine/70">
+                {group.heading}
+            </p>
+            {group.headline ? (
+                <p className="mt-0.5 text-[13.5px] font-medium text-alloy-midnight/70" data-participant-settled-headline="true">
+                    {group.headline}
+                </p>
+            ) : null}
+            <dl className="mt-1.5 space-y-1">
+                {rows.map((fact) => (
+                    <div key={fact.ref} className="flex flex-wrap items-baseline gap-x-2 gap-y-1" data-participant-settled-fact={fact.ref}>
+                        <dt className="text-[12px] text-alloy-midnight/35">{fact.label}</dt>
+                        <span aria-hidden className="text-alloy-midnight/20">·</span>
+                        {editingRef === fact.ref ? (
+                            <dd className="w-full">
+                                <StructuredFactEditor
+                                    editor={fact.editor}
+                                    label={fact.label}
+                                    busy={busy}
+                                    onSave={(value) => onSave(fact.ref, value)}
+                                    onCancel={onCancel}
+                                />
+                            </dd>
+                        ) : (
+                            <dd className="flex items-baseline gap-2 text-[13px] text-alloy-midnight/60">
+                                <span data-participant-settled-value={fact.ref}>{fact.value || "—"}</span>
+                                {justUpdated.has(fact.ref) ? (
+                                    <span className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-bend-pine/70">
+                                        Updated
+                                    </span>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => onEdit(fact.ref)}
+                                    disabled={busy}
+                                    className="text-[12px] text-alloy-midnight/40 underline underline-offset-2 hover:text-alloy-bend-pine disabled:opacity-50"
+                                >
+                                    Edit
+                                </button>
+                            </dd>
+                        )}
+                    </div>
+                ))}
+            </dl>
+            {hidden > 0 ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen(true)}
+                    className="mt-1.5 text-[12px] text-alloy-midnight/40 underline underline-offset-2"
+                >
+                    Show {hidden} more
+                </button>
+            ) : null}
+            <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/25">
+                Confirmed
+            </p>
+        </section>
     );
 }
 
@@ -361,6 +574,14 @@ export function EnrollmentConversationCard({
      */
     const [changingGroup, setChangingGroup] = useState(false);
     const [editingRef, setEditingRef] = useState<string | null>(null);
+    /**
+     * Facts corrected in THIS sitting, so the record can say "Updated" beside them.
+     *
+     * Presentation, and deliberately local: the platform records that a value was confirmed, not
+     * that it was once something else. Claiming a durable "updated" state would mean inventing an
+     * edit history the session does not keep.
+     */
+    const [justUpdated, setJustUpdated] = useState<ReadonlySet<string>>(() => new Set());
     /** The parent said yes to an optional question and is now telling us the detail. */
     const [elaborating, setElaborating] = useState(false);
     const [text, setText] = useState("");
@@ -488,6 +709,10 @@ export function EnrollmentConversationCard({
 
                 setObjective(json.data.objective);
                 setText("");
+                if (payload.editFact) {
+                    const ref = payload.editFact.ref;
+                    setJustUpdated((prev) => new Set([...prev, ref]));
+                }
 
                 // `refused` and `no_change` both mean the platform did not accept the answer. The
                 // participant is told plainly and the controls stay — never an internal code.
@@ -498,7 +723,16 @@ export function EnrollmentConversationCard({
                     if (json.data.clarification) {
                         setClarification(json.data.clarification);
                     } else {
-                        setNotice(PARTICIPANT_CLARIFICATION_MESSAGE);
+                        /*
+                         * NOT A DEAD END.
+                         *
+                         * "Sorry — I didn't catch that" was the whole answer, so a parent who said
+                         * "it's Bend" had no way forward but to retype an address they had not
+                         * meant to change. Where the fact has a structured editor the runtime says
+                         * what it CAN do and opens it. Nothing about what may be interpreted moves.
+                         */
+                        setNotice(participantUnreadableAnswerMessage(json.data.objective));
+                        if (json.data.objective.next_turn.editor) setCorrecting(true);
                     }
                 }
                 onPhaseChange?.(json.data.objective.phase);
@@ -561,13 +795,17 @@ export function EnrollmentConversationCard({
         return (
             <IntakeCard>
                 <div className="flex flex-col gap-5" data-participant-settled="true">
-                    {settled.map((entry, i) => (
-                        <ThreadExchange
-                            key={i}
-                            exchange={entry}
-                            depth={i === settled.length - 1 ? "recent" : "history"}
-                        />
-                    ))}
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
                     <ThreadTurn who="alloy" depth="current">
                         <ThreadSaid who="alloy" depth="current">
                             {participantQuestion(objective)}
@@ -723,13 +961,17 @@ export function EnrollmentConversationCard({
     /** Input types whose answer a keyboard alone cannot supply well: a picker earns its place. */
     const NEEDS_ITS_OWN_CONTROL = new Set(["date", "number"]);
     const typed: ParticipantValueControl | null =
-        typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
-            ? typedCandidate
-            : null;
+        // The structured editor above OWNS the correction once Change has been pressed. Rendering
+        // the dock's typed control beside it would put two answer surfaces on one question.
+        correcting && turn.editor
+            ? null
+            : typedCandidate && typedCandidate.kind === "value" && NEEDS_ITS_OWN_CONTROL.has(typedCandidate.inputType)
+              ? typedCandidate
+              : null;
 
     return (
         <ConversationViewport
-            followSignal={`${settled.length}:${participantQuestion(objective)}:${clarification ?? ""}:${changingGroup ? "individual" : "summary"}`}
+            followSignal={`${settled.length}:${objective.settled.length}:${participantQuestion(objective)}:${clarification ?? ""}:${changingGroup ? "individual" : "summary"}:${editingRef ?? ""}`}
             progress={progress ? <ConversationProgress label={progress.label} percent={progress.percent} /> : null}
             thread={
                 <>
@@ -741,20 +983,28 @@ export function EnrollmentConversationCard({
                         </ThreadTurn>
                     ) : null}
 
-                    {settled.map((entry, i) => (
-                        <ThreadExchange
-                            key={i}
-                            exchange={entry}
-                            depth={
-                                // The exchange in flight reads as the live one; otherwise the newest
-                                // settled exchange stays legible and everything older recedes.
-                                awaitingTurn && i === settled.length - 1
-                                    ? "current"
-                                    : i === settled.length - 1
-                                      ? "recent"
-                                      : "history"
-                            }
-                        />
+                    {/*
+                      * HISTORY IS A SEMANTIC RECORD, NOT A BUTTON TRANSCRIPT.
+                      *
+                      * What a parent wants to see above the current question is what they have
+                      * settled — the values — not the sequence of taps that settled them. The
+                      * mechanical exchanges are still shown, but only the one in flight: it is the
+                      * acknowledgement that their answer was received, and it stops being useful the
+                      * moment the record below it reflects the answer.
+                      */}
+                    <SettledRecord
+                        settled={objective.settled}
+                        busy={busy}
+                        editingRef={editingRef}
+                        justUpdated={justUpdated}
+                        onEdit={setEditingRef}
+                        onCancel={() => setEditingRef(null)}
+                        onSave={(ref, value) =>
+                            void submit({ editFact: { ref, value }, settledAs: displayValue(value) })
+                        }
+                    />
+                    {settled.slice(-1).map((entry, i) => (
+                        <ThreadExchange key={`live-${i}`} exchange={entry} depth={awaitingTurn ? "current" : "recent"} />
                     ))}
 
                     {/* THE CURRENT QUESTION — the largest thing on the screen, and never rendered
@@ -793,15 +1043,44 @@ export function EnrollmentConversationCard({
                                     />
                                 </>
                             ) : (
-                                <ThreadSaid who="alloy" depth="current">
-                                    {participantQuestionSegments(objective).map((segment, i) =>
-                                        segment.emphasis ? (
-                                            <strong key={i} className="font-semibold">{segment.text}</strong>
-                                        ) : (
-                                            <span key={i}>{segment.text}</span>
-                                        ),
-                                    )}
-                                </ThreadSaid>
+                                <>
+                                    <ThreadSaid who="alloy" depth="current">
+                                        {participantQuestionSegments(objective).map((segment, i) =>
+                                            segment.emphasis ? (
+                                                <strong key={i} className="font-semibold">{segment.text}</strong>
+                                            ) : (
+                                                <span key={i}>{segment.text}</span>
+                                            ),
+                                        )}
+                                    </ThreadSaid>
+                                    {correcting && turn.editor ? (
+                                        /*
+                                         * CHANGE OPENS AN EDITOR, NOT A WAITING COMPOSER.
+                                         *
+                                         * Pressing Change used to reveal the authored control, and
+                                         * for a plain text field the surface renders no second text
+                                         * box — so the parent had just said "let me correct this"
+                                         * and was handed a prompt saying "Message Alloy…". For a
+                                         * whole address it was worse: the only way to fix a city was
+                                         * to retype the street and ZIP from memory.
+                                         *
+                                         * The composer stays available beneath for anyone who would
+                                         * rather say it in words; this is the deterministic path.
+                                         */
+                                        <div className="mt-3">
+                                            <StructuredFactEditor
+                                                editor={turn.editor}
+                                                label={turn.label ?? "Your answer"}
+                                                initial={displayValue(turn.proposed_value)}
+                                                busy={busy}
+                                                onSave={(value) =>
+                                                    void submit({ value, settledAs: displayValue(value) })
+                                                }
+                                                onCancel={() => setCorrecting(false)}
+                                            />
+                                        </div>
+                                    ) : null}
+                                </>
                             )}
                             {objective.pending_clarification ? (
                                 /* THE PLATFORM'S OWN QUESTION — deterministic, not the provider's.

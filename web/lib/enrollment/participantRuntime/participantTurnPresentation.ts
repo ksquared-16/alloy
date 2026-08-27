@@ -619,3 +619,36 @@ export function progressLine(objective: ParticipantObjectiveWire): string {
  */
 export const PARTICIPANT_CLARIFICATION_MESSAGE =
     "Sorry — I didn't catch that. You can use the buttons or type the value directly.";
+
+/**
+ * What to say when the runtime could not read a typed answer — and there IS a better way.
+ *
+ * ## The dead end this closes
+ *
+ * A parent answered "it's Bend" to a question about their address and got "Sorry — I didn't catch
+ * that." That is true, and it is useless: it names no way forward, and their only remaining option
+ * was to retype an address they had not meant to change.
+ *
+ * The reason the runtime cannot read it is worth being honest about. The tenant's packet binds ONE
+ * address datum — `customer:address` — while D-101 admits the COMPONENTIZED address domains
+ * (`address_line1`, `city`, `postal_code`). So there is no `city` need for "Bend" to be a candidate
+ * correction to; a candidate for this need would be a candidate for the ENTIRE address, and
+ * accepting it would replace "418 NE Hancock St, Portland, OR 97212" with "Bend". Refusing is
+ * correct. Saying only "sorry" is not.
+ *
+ * So where the fact has a structured editor, the runtime says what it can do instead and opens it.
+ * This widens NOTHING: no new domain becomes interpretable, no provider is consulted, and the
+ * deterministic controls are unchanged. It replaces a dead end with a door.
+ */
+export function participantUnreadableAnswerMessage(
+    objective: ParticipantObjectiveWire,
+): string {
+    const editor = objective.next_turn.editor;
+    if (editor?.kind === "address") {
+        return "I can only change an address as a whole, so I've opened it below — change just the part that's wrong.";
+    }
+    if (editor) {
+        return "Sorry — I didn't catch that. I've opened the field below so you can set it directly.";
+    }
+    return PARTICIPANT_CLARIFICATION_MESSAGE;
+}

@@ -303,8 +303,21 @@ export function ThreadSaid({
     return (
         <p
             className={clsx(
+                /*
+                 * THE ACTIVE QUESTION IS NOT A HEADLINE.
+                 *
+                 * It was 18/19px semi-bold, which made every ordinary question read as a page title
+                 * and left the answer, the settled record and the controls looking like footnotes to
+                 * it. Hierarchy here comes from PLACEMENT (the current turn sits at the foot of the
+                 * thread, next to the composer), from spacing, from the Bend Pine eyebrow above it,
+                 * and from contrast — the current question is the only full-strength midnight text
+                 * on the surface. Weight is not needed to say "this one", and spending it here cost
+                 * the page its evenness.
+                 *
+                 * Same family, same tokens. Only the scale and weight move.
+                 */
                 depth === "current"
-                    ? "text-[18px] font-medium leading-[1.35] tracking-[-0.005em] text-alloy-midnight sm:text-[19px]"
+                    ? "text-[15.5px] font-normal leading-[1.45] text-alloy-midnight sm:text-[16px]"
                     : depth === "recent"
                       ? "text-[14px] leading-relaxed text-alloy-midnight/50"
                       : "text-[13.5px] leading-relaxed text-alloy-midnight/35",
