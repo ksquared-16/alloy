@@ -391,6 +391,25 @@ export function EnrollmentConversationCard({
             label: control.deny,
             onSelect: () => setCorrecting(true),
         });
+    } else if (control.kind === "options") {
+        /*
+         * THE CHOICES COME FIRST, INCLUDING WHEN THE QUESTION IS OPTIONAL.
+         *
+         * The optional branch used to be tested ahead of this one, so a question with a closed
+         * option set and `optional: true` offered "Nothing to add" and "Yes — I'll tell you" and
+         * never its own choices. A parent asked "How would you describe Mateo's gender?" — a
+         * question the school authored with three answers — had to volunteer to tell us, and was
+         * then handed a text box for a closed set. Optionality is about whether an answer is
+         * REQUIRED, never about whether the answers are shown.
+         */
+        suggestionKind = "options";
+        for (const option of control.options) {
+            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
+        }
+        // Leaving it blank stays available, beside the choices rather than instead of them.
+        if (optionalUnanswered && skipLabel) {
+            suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
+        }
     } else if (optionalUnanswered && skipLabel && affirmLabel) {
         suggestionKind = "optional";
         suggestions.push({
@@ -410,11 +429,6 @@ export function EnrollmentConversationCard({
         suggestionKind = "boolean";
         suggestions.push({ label: control.affirm, emphasis: true, onSelect: () => void submit({ value: true, settledAs: control.affirm }) });
         suggestions.push({ label: control.deny, onSelect: () => void submit({ value: false, settledAs: control.deny }) });
-    } else if (control.kind === "options") {
-        suggestionKind = "options";
-        for (const option of control.options) {
-            suggestions.push({ label: option, onSelect: () => void submit({ value: option, settledAs: option }) });
-        }
     } else if (skipLabel && elaborating) {
         suggestions.push({ label: skipLabel, onSelect: () => void submit({ value: skipLabel, settledAs: skipLabel }) });
     }

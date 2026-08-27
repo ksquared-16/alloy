@@ -104,13 +104,17 @@ test("hold the conversation until the paperwork is ready", async ({ page }) => {
                               : "Alex Sigwalk"
                           : "Not applicable";
 
+        /*
+         * A date and a number get their own control, with its own Done — the composer's Send stays
+         * disabled because the composer is empty, which is correct and is not the button to press.
+         */
+        const controlDone = page.locator("[data-participant-control] button");
         if (await dateInput.count()) {
             await dateInput.first().fill("2026-09-01");
-            if (await send.count()) await send.first().click();
-            else await page.getByRole("button", { name: /^(send|save|continue|next|use this)$/i }).first().click();
+            await controlDone.first().click();
         } else if (await numberInput.count()) {
             await numberInput.first().fill("5415551234");
-            if (await send.count()) await send.first().click();
+            await controlDone.first().click();
         } else if ((await suggested.count()) > 0) {
             await suggested.first().click();
         } else if (await composer.count()) {
