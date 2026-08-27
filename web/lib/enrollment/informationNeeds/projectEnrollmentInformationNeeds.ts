@@ -26,6 +26,7 @@ import {
     type EnrollmentNeedIdentity,
 } from "@/lib/enrollment/informationNeeds/enrollmentNeedIdentity";
 import { inferUnboundDestinationEntity } from "@/lib/enrollment/informationNeeds/unboundDestinationSubject";
+import { broadcastingPartyFieldIds } from "@/lib/enrollment/participantRuntime/artifactPartySlots";
 import {
     confirmationSatisfiesCurrentValue,
     type EnrollmentNeedConfirmationMap,
@@ -80,6 +81,13 @@ export type ProjectNeedsInput = {
      */
     readonly provenance?: import("@/lib/enrollment/informationNeeds/enrollmentValueProvenance").EnrollmentValueProvenanceMap;
     /**
+     * The tenant's canonical person-role vocabulary (`customer_person_role_types`).
+     *
+     * Supplied so party-slot destinations can be recognised and excluded from the conversation.
+     * Absent, nothing is excluded and the historical behaviour stands.
+     */
+    readonly partyRoles?: readonly string[];
+    /**
      * Which canonical keys require participant confirmation for this objective.
      *
      * NARROW BY DESIGN. No repository-wide assurance framework exists, and inventing one would be a
@@ -113,6 +121,10 @@ export function projectEnrollmentInformationNeeds(
     const byKey = new Map<string, Accumulator>();
 
     for (const form of input.forms) {
+        // Per artifact: which of its destinations are waiting for a person rather than an answer.
+        const partySlots = input.partyRoles?.length
+            ? broadcastingPartyFieldIds(form.schema, input.partyRoles)
+            : new Set<string>();
         // The authored section each destination sits in — read once per Form, not per field.
         const sectionByFieldId = new Map<string, string>();
         for (const sec of ((form.schema as { sections?: { title?: string; field_ids?: string[] }[] }).sections ?? [])) {
@@ -160,6 +172,17 @@ export function projectEnrollmentInformationNeeds(
              * canonical Document. The conversation collects values; this is not one.
              */
             if (field.type === "file_ref") return;
+
+            /*
+             * A SHARED PARTY DESTINATION IS NOT A QUESTION.
+             *
+             * "Parent/Guardian #2 Phone Number", "Emergency Contact #3 Phone Number", the
+             * physician's and the dentist's all carry `entity_type: person, field_key: phone`, so
+             * the ask-once layer collapsed six different people's phones into ONE canonical need —
+             * and one answer would have printed into all six boxes. These are filled by projecting
+             * a party into them; they never join dedupe and are never asked about directly.
+             */
+            if (partySlots.has(field.id)) return;
 
             const identity = resolveEnrollmentNeedIdentity({
                 field,

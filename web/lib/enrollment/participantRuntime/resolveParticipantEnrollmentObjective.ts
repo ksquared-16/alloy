@@ -205,21 +205,30 @@ export async function resolveParticipantEnrollmentObjectiveWithContext(
         return { ok: false, refusal: { code: "read_failed", detail: "Needs context was not captured." } };
     }
 
-    const evidenceOnFile = await resolveEvidenceOnFile(supabase, {
-        orgId: input.orgId,
-        sessionId: (captured as EnrollmentNeedsContext).session?.id ?? null,
-    });
+    const [evidenceOnFile, partyRoles] = await Promise.all([
+        resolveEvidenceOnFile(supabase, {
+            orgId: input.orgId,
+            sessionId: (captured as EnrollmentNeedsContext).session?.id ?? null,
+        }),
+        resolveTenantPartyRoles(supabase, input.orgId),
+    ]);
+    const contextWithRoles = { ...(captured as EnrollmentNeedsContext), partyRoles };
 
     return {
         ok: true,
-        value: buildParticipantObjective(progressResult.value, needsResult.value, {
-            forms: (captured as EnrollmentNeedsContext).forms,
-            evidenceOnFile,
-            requiresConfirmation,
-        }),
+        value: buildParticipantObjective(
+            progressResult.value,
+            // Re-assembled with the vocabulary in hand: the first pass could not know which
+            // destinations are party slots, so it counted six people's phone boxes as one question.
+            assembleEnrollmentInformationNeeds(contextWithRoles, {
+                requiresConfirmation,
+                canonicalValues: input.canonicalValues,
+            }),
+            { forms: contextWithRoles.forms, evidenceOnFile, requiresConfirmation },
+        ),
         context: {
             progress: progressResult.value,
-            needsContext: captured,
+            needsContext: contextWithRoles,
             requiresConfirmation,
             canonicalValues: input.canonicalValues,
             evidenceOnFile,
@@ -274,5 +283,31 @@ async function resolveEvidenceOnFile(
         return out;
     } catch {
         return new Set<string>();
+    }
+}
+
+/**
+ * The tenant's canonical person-role vocabulary.
+ *
+ * `customer_person_role_types` is Alloy's own seeded list — parent, guardian, emergency_contact,
+ * authorized_pickup, primary_contact, payer — and it is what makes party-slot recognition a
+ * property of the TENANT rather than of this packet. A read failure yields an empty vocabulary,
+ * which recognises no slots and leaves the historical behaviour: worse, and not broken.
+ */
+async function resolveTenantPartyRoles(
+    supabase: SupabaseClient,
+    orgId: string,
+): Promise<readonly string[]> {
+    try {
+        const { data } = await supabase
+            .from("customer_person_role_types")
+            .select("key")
+            .eq("org_id", orgId)
+            .eq("is_active", true);
+        return ((data ?? []) as { key?: string }[])
+            .map((r) => String(r.key ?? "").trim().toLowerCase())
+            .filter(Boolean);
+    } catch {
+        return [];
     }
 }
