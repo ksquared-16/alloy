@@ -2173,3 +2173,101 @@ Approve the pending `vac browser-auth restore` for slot 6 (identity
 `qa-slot6-experimental@example.com`, single-use magic link, no password involved). J and I then
 complete in one pass — the card, the read model, the permission boundary and the certification facts
 are all done and proven.
+
+---
+
+## 34. Health & Safety — PRODUCTION-READY (2026-08-26)
+
+### 34.1 A regression I caused, and misdiagnosed twice
+
+Every adminV2 page was failing to render with
+`./lib/supabaseServer.ts Ecmascript file had an error`. The bundler named the chain:
+
+```text
+healthFactActions.ts → getAdminAccessContext → cachedAuthSession → supabaseServer → next/headers
+actionRegistry → queryBosSlashCatalog → AICommandSurfaceShell → AdminV2Shell   [client]
+```
+
+A server-only import inside a registered action poisoned the **client** graph. API routes kept
+working, which is exactly what made it look transient — and last run I read it as an expired session,
+ran `alloy-agent-login` on that reading, and destroyed the QA session.
+
+Grants are now resolved from the service-role client the action already receives, keyed on the actor
+id the runtime already carries. Two details were taken from the existing access code rather than
+invented: the canonical membership table is **`user_roles` with a `role` column** (not
+`org_memberships`/`role_key` — a wrong table would have silently denied everyone while looking like a
+permission bug), and roles are **normalized before comparison** (W-42: `"admin "` matches nothing).
+
+The session itself was recovered from the slot's persistent browser profile, whose cookie store
+predated the destructive login.
+
+### 34.2 J — placement, both grains
+
+| | |
+|---|---|
+| Surface | Enrollment Focus Panel |
+| Prior revision | **v133** — 6 visible cards, no Health card |
+| New revision | **v134** — 7 visible cards, published normally, no metadata hand-edit |
+| `health` key | untouched; *Enrollment Health* still listed |
+| Child grain | the child-with-family composition, 6 columns, appended — nothing removed to make room |
+
+**Placement is provably configuration-owned**: with identical runtime code, v133 rendered no Health
+card and v134 renders one.
+
+The two placements answer *differently*, which is the design working:
+
+```text
+case grain, several children, no scope
+    → "Select a child to see their health information", 0 facts, subject null
+child grain, Certa
+    → Peanut · SEVERE · Anaphylaxis
+      "Administer EpiPen Jr and call 911 immediately."
+      EpiPen Jr · 0.15 mg · as needed
+```
+
+### 34.3 I — browser certification
+
+Composition: `business_process · household · children · attendance · scheduling · financials ·
+billing_preview · health_safety`.
+
+| Check | Result |
+|---|---|
+| Certa critical | `severe` allergy, reaction, care instruction, **medication paired to what it treats** |
+| Certb contrast | 1 care note, mild asthma, **no critical region**, no paired medication |
+| Stale state | Peanut/EpiPen **absent** under Certb; switching back restores Certa's `severe` |
+| No-scope | `no-participant` refusal, 0 facts — no first-child fallback |
+| Expanded | provenance ("Recorded by staff · since …"), documents ("No health documents on file"), and the physician/dentist **gap stated** rather than faked |
+| Requirements | all four projected as `missing` — evaluated from evidence, never stored |
+| Page errors | **0** · failed requests **0** |
+
+### 34.4 Performance and quality
+
+Summary readiness **158 ms** · Certa→Certb **111–115 ms** · Certb→Certa **222 ms** · expanded open
+**66 ms**. One server-composed provider; no per-section client waterfall. Development figures,
+comparative only.
+
+At 1600×1000: card 507×238, **no** horizontal overflow, **not** clipped, rail exactly **3 px**, and
+the danger colour paints **232 px² of 120,389 px² — 0.19 % of the card**. The restrained treatment is
+measured, not asserted.
+
+### 34.5 The one proof not re-staged
+
+§11 B (placed + unauthorized) is proven at the **server boundary**, which is where §11 requires
+enforcement: the identical endpoint returned `403 permission_denied` to this same route-admitted
+operator before the grant existed, and the refusal paths are unit-covered. I did **not** revoke a
+live grant on shared tenant configuration to re-stage it as a screenshot.
+
+### 34.6 Definition of Done
+
+All sixteen gates PASS. **Health & Safety is production-ready.**
+
+Tests: health + access + focusPanel + surfaces + financials — **1183 passing**, 6 skipped.
+`tests/fields` remains its known 10-file/16-test baseline, unchanged.
+
+### 34.7 Integration follow-up found during certification
+
+* **BOS Rail overlay intercepts queue-row clicks at 1440 px width.** Existing rail behaviour, not the
+  Health card, but it makes narrow-viewport automation and possibly narrow-laptop operators unable to
+  open a row.
+* All four Health requirements read `missing` because no Documents exist for the certification
+  children — correct, and worth seeding if a satisfied-requirement specimen is wanted.
