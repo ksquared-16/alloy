@@ -29,6 +29,31 @@ function required(name: string): string {
     return value;
 }
 
+/** An overridable fixture value, so a fresh family needs no code edit. */
+function fixture(name: string, fallback: string): string {
+    return (process.env[name] ?? "").trim() || fallback;
+}
+
+/**
+ * The family this journey is about.
+ *
+ * Overridable because each Director QA pass wants a JOURNEY THEY HAVE NOT SEEN — reusing a name
+ * makes it impossible to tell a fresh session from a resumed one at a glance, and the whole point of
+ * a QA link is that it is untouched.
+ */
+const FAMILY = {
+    childFirst: fixture("FIXTURE_CHILD_FIRST", "Chidinma"),
+    childLast: fixture("FIXTURE_CHILD_LAST", "Okonkwo"),
+    childDob: fixture("FIXTURE_CHILD_DOB", "2021-04-02"),
+    childGender: fixture("FIXTURE_CHILD_GENDER", "Female"),
+    guardianFirst: fixture("FIXTURE_GUARDIAN_FIRST", "Adaeze"),
+    guardianLast: fixture("FIXTURE_GUARDIAN_LAST", "Okonkwo"),
+    guardianEmail: fixture("FIXTURE_GUARDIAN_EMAIL", "adaeze.okonkwo@example.com"),
+    guardianPhone: fixture("FIXTURE_GUARDIAN_PHONE", "5035550142"),
+    householdName: fixture("FIXTURE_HOUSEHOLD", "Okonkwo-Bennett Household"),
+    address: fixture("FIXTURE_ADDRESS", "418 NE Hancock St, Portland, OR 97212"),
+};
+
 async function main() {
     const supabase = createClient(required("SUPABASE_URL"), required("SUPABASE_SERVICE_ROLE_KEY"), {
         auth: { persistSession: false },
@@ -52,9 +77,9 @@ async function main() {
         .from("customers")
         .insert({
             org_id: ORG,
-            name: "Okonkwo-Bennett Household",
+            name: FAMILY.householdName,
             customer_type: "family",
-            metadata: { source: SOURCE, address: "418 NE Hancock St, Portland, OR 97212" },
+            metadata: { source: SOURCE, address: FAMILY.address },
         })
         .select("id")
         .single();
@@ -66,11 +91,11 @@ async function main() {
         .from("persons")
         .insert({
             org_id: ORG,
-            first_name: "Adaeze",
-            last_name: "Okonkwo",
-            full_name: "Adaeze Okonkwo",
-            email: "adaeze.okonkwo@example.com",
-            phone: "5035550142",
+            first_name: FAMILY.guardianFirst,
+            last_name: FAMILY.guardianLast,
+            full_name: `${FAMILY.guardianFirst} ${FAMILY.guardianLast}`,
+            email: FAMILY.guardianEmail,
+            phone: FAMILY.guardianPhone,
             metadata: { source: SOURCE },
         })
         .select("id")
@@ -101,19 +126,26 @@ async function main() {
         .insert({
             org_id: ORG,
             customer_id: customerId,
-            first_name: "Chidinma",
-            last_name: "Okonkwo",
-            display_name: "Chidinma Okonkwo",
-            dob: "2021-04-02",
+            first_name: FAMILY.childFirst,
+            last_name: FAMILY.childLast,
+            display_name: `${FAMILY.childFirst} ${FAMILY.childLast}`,
+            dob: FAMILY.childDob,
             relationship: "child",
             is_active: true,
+            /*
+             * Pre-existing truth from the enquiry, and deliberately PARTIAL.
+             *
+             * `allergies` is left absent on purpose: it is the reference case for an optional
+             * question with a real way past it ("No known allergies"), and seeding it would settle
+             * the need silently and remove that affordance from what a QA pass can experience. The
+             * point of the fixture is a journey where some things are known and most are not.
+             */
             metadata: {
                 source: SOURCE,
-                gender: "Female",
-                allergies: "Peanuts — carries an EpiPen",
-                temperament: "Warm and observant; takes a few minutes to join a new group",
-                nap_routine: "Naps about an hour after lunch",
-                eating_habits: "Eats well, prefers to feed herself",
+                gender: FAMILY.childGender,
+                temperament: fixture("FIXTURE_CHILD_TEMPERAMENT", "Warm and observant; takes a few minutes to join a new group"),
+                nap_routine: fixture("FIXTURE_CHILD_NAP", "Naps about an hour after lunch"),
+                eating_habits: fixture("FIXTURE_CHILD_EATING", "Eats well, prefers to feed herself"),
             },
         })
         .select("id")
