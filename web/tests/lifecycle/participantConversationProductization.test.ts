@@ -380,8 +380,20 @@ describe("presentation changed; authority did not", () => {
          * be declined at all. That is the same authority boundary `text` and `value` sit behind,
          * which is why widening the vocabulary does not widen what the browser can claim.
          */
-        const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-z_]+)/g)].map((m) => m[1]);
-        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value", "decline"]));
+        const bodyKeys = [...CARD.matchAll(/submit\(\{\s*([a-zA-Z_]+)/g)].map((m) => m[1]);
+        expect(new Set(bodyKeys)).toEqual(
+            new Set(["text", "value", "decline", "confirmGroup", "editFact"]),
+        );
+        /*
+         * `confirmGroup` is admitted on exactly the terms `decline` was: a BARE literal flag. It
+         * says "the parent agreed to the card"; WHICH facts the card held is re-derived server-side
+         * from the objective, so a stale or edited tab can only ever settle what the platform is
+         * currently showing.
+         */
+        const groupColons = (CARD.match(/\bconfirm_group:/g) ?? []).length;
+        const groupTrue = (CARD.match(/\bconfirm_group: true\b/g) ?? []).length;
+        expect(groupColons).toBeGreaterThan(0);
+        expect(groupTrue).toBe(groupColons);
         // The flag is sent as a literal true, never as a key, an id or a label. Counted rather
         // than matched with a lookahead, which backtracks past the space and passes vacuously.
         const declineColons = (CARD.match(/\bdecline:/g) ?? []).length;

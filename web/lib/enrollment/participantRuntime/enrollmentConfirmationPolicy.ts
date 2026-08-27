@@ -64,6 +64,26 @@ export const ENROLLMENT_CONFIRMATION_REQUIRED_KEYS: ReadonlySet<string> = new Se
     "guardian_last_name",
     "guardian_email",
     "guardian_phone",
+    /**
+     * The parent's NAME, and the child's gender and home address.
+     *
+     * Added when the canonical read learned to see the household: these are the spellings real
+     * tenant packets actually bind (`guardian_name` carries `field_key: "name"`, and the Admissions
+     * packet's address boxes bind `customer:address` as one household datum), and every one is an
+     * ordinary identity or contact fact a parent verifies at a glance — the same bar the keys above
+     * meet. Without them a fact the organization holds is silently treated as `known` and never put
+     * in front of the person who is the only reliable authority on it.
+     *
+     * Health narrative is deliberately still absent. "Does your child have allergies" is a question
+     * to ask, not a value to nod at.
+     */
+    "guardian_name",
+    "guardian_full_name",
+    "guardian:name",
+    "customer_member:gender",
+    "child:gender",
+    "customer:address",
+    "household:address",
     // Household / primary contact
     "person:first_name",
     "person:last_name",

@@ -14,8 +14,17 @@
 
 import type { ParticipantEnrollmentObjective } from "@/lib/enrollment/participantRuntime/resolveParticipantEnrollmentObjective";
 import { packageOutstandingNeeds } from "@/lib/enrollment/participantRuntime/conversationalPackage";
+import {
+    activeConfirmationGroup,
+    identityFactRank,
+} from "@/lib/enrollment/participantRuntime/confirmationGroup";
 import { turnIsEligibleForProviderInterpretation } from "@/lib/enrollment/participantRuntime/turnInterpretationEligibility";
-import { questionForNeed } from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
+import {
+    displayValue,
+    naturalFieldLabel,
+    questionForNeed,
+    voiceForSubject,
+} from "@/lib/enrollment/participantRuntime/participantTurnPresentation";
 import {
     projectParticipantWorkProgress,
     type ParticipantWorkProgress,
@@ -86,6 +95,34 @@ export type ParticipantObjectiveWire = {
                 readonly question: string;
                 readonly state: "settled" | "active" | "upcoming";
                 readonly answer: string | null;
+            }[];
+        } | null;
+        /**
+         * The known facts about ONE semantic subject, confirmed together.
+         *
+         * Present only when the subject has more than one fact awaiting confirmation. Everything in
+         * it is presentation over needs the objective already resolved — the membership comes from
+         * `confirmationGroup.ts`, which reads canonical identity and never an artifact's headings,
+         * so the surface cannot draw two people as one.
+         *
+         * `facts` carries EVERY member, including the ones drawn into the heading, because "Make a
+         * change" has to expose each semantic value on its own.
+         */
+        readonly confirmation_group?: {
+            /** "Let's make sure I have Solene's details right." */
+            readonly title: string;
+            /** The composed identity line — "Solene Marchetti" — or null when nothing names them. */
+            readonly headline: string | null;
+            readonly facts: readonly {
+                /** Opaque handle. The browser addresses a fact without naming a field. */
+                readonly ref: string;
+                readonly label: string;
+                readonly value: string;
+                /** The authored control, for correcting this one fact in place. */
+                readonly input_type: string | null;
+                readonly options: readonly string[];
+                /** Drawn in the heading rather than as its own row. Still its own need. */
+                readonly in_headline: boolean;
             }[];
         } | null;
         /** Closed option set, when the authored control has one. Empty otherwise. */
@@ -178,6 +215,89 @@ function activeCluster(
     return { title: pkg.section_title, questions };
 }
 
+/**
+ * The grouped confirmation card for the CURRENT turn, or null when this turn stands alone.
+ *
+ * Composition only. Membership was decided by `confirmationGroup.ts` from canonical identity; this
+ * turns those needs into words — the subject's own voice for the heading, the platform's own value
+ * formatter for each fact, and the authored control type so a correction is made with the control
+ * the Form itself would have used.
+ */
+function confirmationGroupCard(
+    objective: ParticipantEnrollmentObjective,
+    subjectName: string | null,
+): ParticipantObjectiveWire["next_turn"]["confirmation_group"] {
+    const turn = objective.next_turn;
+    if (turn.kind !== "confirm_known_value") return null;
+    const group = activeConfirmationGroup(objective.needs.needs, turn.need?.identity.key ?? null);
+    if (!group) return null;
+
+    const byKey = new Map(objective.needs.needs.map((n) => [n.identity.key, n]));
+    const voice = voiceForSubject({
+        entityType: group.subject.entity_type,
+        scope: group.subject.kind === "child" ? "child" : "household",
+        childName: (subjectName ?? "").trim().split(/\s+/)[0] ?? "",
+    });
+
+    /*
+     * The heading, built from the facts that NAME this subject.
+     *
+     * A value already contained in what has been composed is skipped rather than repeated, so a
+     * record carrying both `first_name`/`last_name` and a `full_name` reads "Solene Marchetti" once.
+     * Every one of those needs still appears in `facts`, and is still confirmed on its own.
+     */
+    const identity = group.members
+        .filter((m) => m.is_identity)
+        .map((m) => ({ member: m, need: byKey.get(m.need_key) }))
+        .filter((row): row is { member: typeof row.member; need: NonNullable<typeof row.need> } => Boolean(row.need))
+        .sort((a, b) => identityFactRank(a.need) - identityFactRank(b.need));
+
+    const consumed = new Set<string>();
+    let headline = "";
+    for (const row of identity) {
+        const shown = displayValue(row.need.current_value).trim();
+        if (!shown) continue;
+        if (headline.toLowerCase().includes(shown.toLowerCase())) {
+            // Already said. The need is still a member; it simply adds no new words to the heading.
+            consumed.add(row.member.ref);
+            continue;
+        }
+        headline = headline ? `${headline} ${shown}` : shown;
+        consumed.add(row.member.ref);
+    }
+
+    const facts = group.members.flatMap((member) => {
+        const need = byKey.get(member.need_key);
+        if (!need) return [];
+        const occurrence = need.occurrences[0] ?? null;
+        const natural = naturalFieldLabel(occurrence?.label ?? null, need.identity.canonical_key ?? null);
+        // "Birthday", not "date of birth" — the same substitution the spoken question already makes,
+        // so a parent reads the same word whether the fact is in a card or in a sentence.
+        const spoken = natural === "date of birth" ? "birthday" : natural;
+        return [{
+            ref: member.ref,
+            label: spoken.charAt(0).toUpperCase() + spoken.slice(1),
+            value: displayValue(need.current_value),
+            input_type: occurrence?.field_type ?? null,
+            options: occurrence?.options ?? [],
+            in_headline: consumed.has(member.ref),
+        }];
+    });
+
+    return {
+        /*
+         * A STRAIGHT apostrophe, matching every other sentence the runtime composes.
+         *
+         * `participantQuestion` builds its possessive as `${name}'s`, so a curly one here produced
+         * "Let’s make sure I have Solene's details right." — two apostrophes of different shapes
+         * in one sentence. Typography is a property of the voice, not of the file it is written in.
+         */
+        title: `Let's make sure I have ${voice.possessive} details right.`,
+        headline: headline || null,
+        facts,
+    };
+}
+
 export function participantObjectiveWireModel(
     objective: ParticipantEnrollmentObjective,
     context?: {
@@ -231,6 +351,7 @@ export function participantObjectiveWireModel(
             input_type: firstOccurrence ? inputTypeForNeed(objective, firstOccurrence.form_field_id) : null,
             label: firstOccurrence?.label ?? null,
             cluster: activeCluster(objective, subjectName),
+            confirmation_group: confirmationGroupCard(objective, subjectName),
             scope: turn.need?.identity.scope ?? null,
             entity_type: turn.need?.identity.entity_type ?? null,
             canonical_key: turn.need?.identity.canonical_key ?? null,

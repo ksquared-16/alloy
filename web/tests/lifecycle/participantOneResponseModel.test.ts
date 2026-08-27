@@ -55,11 +55,31 @@ describe("a cluster reads as a topic, not a card of fields", () => {
     });
 
     it("gives only the ACTIVE question an answer surface", () => {
-        // Three inputs with three buttons is the shape this slice replaced. The composer below the
-        // topic answers the one active question, so "which am I answering?" is never ambiguous.
-        const inputs = CODE.match(/<input\b/g) ?? [];
-        const textareas = CODE.match(/<textarea\b/g) ?? [];
+        /*
+         * Three inputs with three buttons is the shape this slice replaced. The composer below the
+         * topic answers the one active question, so "which am I answering?" is never ambiguous.
+         *
+         * The grouped-confirmation editor is excluded from the count and asserted separately below.
+         * It is not a competing answer surface for the same question: it is a different MODE, opened
+         * deliberately, in which the parent is correcting one named fact rather than answering the
+         * conversation. Counting its markup here would score a correct product as a regression.
+         */
+        const conversational = CODE.replace(/function FactEditor\([\s\S]*?\n\}\n/, "");
+        const inputs = conversational.match(/<input\b/g) ?? [];
+        const textareas = conversational.match(/<textarea\b/g) ?? [];
         expect(inputs.length + textareas.length, "one typed control at most, for date/number").toBeLessThanOrEqual(2);
+    });
+
+    it("opens ONE fact editor at a time inside a grouped confirmation", () => {
+        /*
+         * The same invariant, at the grain the card actually has. "Make a change" exposes the
+         * individual semantic values — that is the requirement — but a row becomes editable only
+         * when it is THE open one, so the parent still faces a single answer surface.
+         */
+        expect(CODE).toContain("editingRef === fact.ref");
+        // Exactly one place decides which row is open, and it holds one ref, not a set.
+        expect(CODE).toMatch(/const \[editingRef, setEditingRef\] = useState<string \| null>\(null\)/);
+        expect(CODE.match(/<FactEditor\b/g) ?? []).toHaveLength(1);
     });
 
     it("recedes settled questions and marks them in Bend Pine", () => {

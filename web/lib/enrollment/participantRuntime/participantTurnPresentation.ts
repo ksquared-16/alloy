@@ -350,8 +350,29 @@ export type ConversationVoice = {
 
 export function conversationVoice(objective: ParticipantObjectiveWire): ConversationVoice {
     const turn = objective.next_turn as { scope?: string | null; entity_type?: string | null };
-    const child = familiarName(objective);
+    return voiceForSubject({
+        entityType: turn.entity_type ?? null,
+        scope: turn.scope ?? null,
+        childName: familiarName(objective),
+    });
+}
+
+/**
+ * The same voice, addressed by SUBJECT rather than by the current turn.
+ *
+ * A grouped confirmation speaks about a subject before any one of its facts is the turn, so the
+ * heading needs the voice without a turn to read it from. Extracted rather than duplicated: the card
+ * that says "let's check your details" and the question that follows it must never describe
+ * different people, and the only way to guarantee that is for both to ask this one function.
+ */
+export function voiceForSubject(input: {
+    readonly entityType: string | null;
+    readonly scope: string | null;
+    readonly childName: string;
+}): ConversationVoice {
+    const child = input.childName;
     const childPossessive = child ? `${child}'s` : "your child's";
+    const turn = { scope: input.scope, entity_type: input.entityType };
 
     // The canonical entity is the strongest signal, because it names the record the fact lives on.
     switch ((turn.entity_type ?? "").toLowerCase()) {

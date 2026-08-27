@@ -198,9 +198,22 @@ describe("14. the browser sends words, never authority", () => {
          * `decline` joined `text` and `value` when leaving a question blank stopped being a value.
          * It names no field, no need and no target — the server decides whether the current turn may
          * be declined — so the vocabulary widened without the browser gaining anything to claim.
+         *
+         * `confirmGroup` and `editFact` joined it on the same terms when known facts began being
+         * confirmed by subject. `confirmGroup` is a bare flag: the server re-derives which facts the
+         * card held. `editFact` carries an OPAQUE handle the server itself issued moments earlier,
+         * and matches it against the card it is currently offering — so it addresses a fact without
+         * being able to name one, and a handle for anything else is refused.
          */
-        const bodyKeys = [...COMPONENT.matchAll(/submit\(\{\s*([a-z_]+)/g)].map((m) => m[1]);
-        expect(new Set(bodyKeys)).toEqual(new Set(["text", "value", "decline"]));
+        const bodyKeys = [...COMPONENT.matchAll(/submit\(\{\s*([a-zA-Z_]+)/g)].map((m) => m[1]);
+        expect(new Set(bodyKeys)).toEqual(
+            new Set(["text", "value", "decline", "confirmGroup", "editFact"]),
+        );
+        // The handle is passed straight through from the server's own payload — never composed in
+        // the browser out of anything the parent or the DOM could supply.
+        for (const call of COMPONENT.match(/editFact: \{[^}]*\}/g) ?? []) {
+            expect(call).toMatch(/^editFact: \{ ref, value \}$/);
+        }
     });
 
     it("no authority-bearing identifier appears anywhere in the component", () => {

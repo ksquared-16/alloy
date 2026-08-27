@@ -52,6 +52,24 @@ function usable(value: unknown): boolean {
     return true;
 }
 
+/**
+ * Canonical PRIMARY-GUARDIAN fields, mapped to the keys a need carries.
+ *
+ * Both binding shapes are emitted for the same reason the child list emits both: a form binds by
+ * `shared_value_key` alias or by `entity_type` + `field_key`, and a tenant using the other spelling
+ * would otherwise be told the platform knows nothing about the parent it is talking to.
+ */
+const GUARDIAN_FIELD_ALIASES: ReadonlyArray<{
+    readonly column: string;
+    readonly keys: readonly string[];
+}> = [
+    { column: "first_name", keys: ["guardian_first_name", "guardian:first_name"] },
+    { column: "last_name", keys: ["guardian_last_name", "guardian:last_name"] },
+    { column: "full_name", keys: ["guardian_name", "guardian_full_name", "guardian:name"] },
+    { column: "email", keys: ["guardian_email", "guardian:email", "guardian:guardian_email"] },
+    { column: "phone", keys: ["guardian_phone", "guardian:phone", "guardian:guardian_phone"] },
+];
+
 export type ParticipantCanonicalValues = Readonly<Record<string, unknown>>;
 
 export type ParticipantCanonicalContext = {
@@ -88,7 +106,7 @@ export async function resolveParticipantCanonicalContext(
 
         const { data: child } = await supabase
             .from("customer_members")
-            .select("id, first_name, last_name, display_name, dob, metadata")
+            .select("id, customer_id, first_name, last_name, display_name, dob, metadata")
             .eq("org_id", input.orgId)
             .eq("id", subjectId)
             .maybeSingle();
@@ -118,6 +136,28 @@ export async function resolveParticipantCanonicalContext(
             }
         }
 
+        /**
+         * The HOUSEHOLD this child belongs to, and the adult the school deals with.
+         *
+         * Both are facts the organization already holds — usually from the inquiry months earlier —
+         * and until this read existed the participant runtime could not see either, so a parent whose
+         * name, phone and email were on file was asked for all three as though they were strangers.
+         *
+         * ## `person:*` is deliberately NOT emitted from the guardian record
+         *
+         * On a real packet `person:phone` is bound by seven destinations at once — Parent/Guardian
+         * #2, three emergency contacts, the dentist and the physician — which the identity layer
+         * correctly collapses into ONE need, because they share one canonical key. Filling that need
+         * from the primary guardian would print this parent's phone number in the emergency
+         * contact's box and the dentist's. The guardian's facts are emitted under the `guardian`
+         * entity ONLY, which is a different subject and a different need; the generic `person`
+         * bucket stays unknown and is asked for, which is the truthful outcome.
+         */
+        const customerId = String(row.customer_id ?? "").trim();
+        if (customerId) {
+            await mergeHouseholdValues(supabase, input.orgId, customerId, out);
+        }
+
         const displayName =
             String(row.display_name ?? "").trim() ||
             [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
@@ -126,6 +166,77 @@ export async function resolveParticipantCanonicalContext(
         return { values: out, subjectDisplayName: displayName };
     } catch {
         return { values: {}, subjectDisplayName: null };
+    }
+}
+
+/**
+ * Household-grain canonical facts: the customer record, and its primary adult.
+ *
+ * Reads only. Never throws — a failure here degrades to "ask for it" exactly as the child read does,
+ * because a parent must not be blocked from enrolling by a prefill lookup.
+ *
+ * The customer's own `metadata` is read GENERICALLY, mirroring the child's: the field registry is
+ * tenant-authored, so an allow-list would go stale the first time an operator added a household
+ * field. A household fact emitted here keeps its household identity — `customer:address` is one
+ * need however many address boxes the packet's artifacts print, which is why the parent is not asked
+ * for their address again because a second document happens to contain another address box.
+ */
+async function mergeHouseholdValues(
+    supabase: SupabaseClient,
+    orgId: string,
+    customerId: string,
+    out: Record<string, unknown>,
+): Promise<void> {
+    try {
+        const [{ data: customer }, { data: link }] = await Promise.all([
+            supabase
+                .from("customers")
+                .select("id, metadata")
+                .eq("org_id", orgId)
+                .eq("id", customerId)
+                .maybeSingle(),
+            supabase
+                .from("customer_persons")
+                .select("person_id, is_primary, role_type")
+                .eq("org_id", orgId)
+                .eq("customer_id", customerId)
+                .eq("is_primary", true)
+                .limit(1)
+                .maybeSingle(),
+        ]);
+
+        const metadata = (customer as { metadata?: unknown } | null)?.metadata;
+        if (metadata != null && typeof metadata === "object" && !Array.isArray(metadata)) {
+            for (const [key, value] of Object.entries(metadata as Record<string, unknown>)) {
+                if (key === "source" || !usable(value)) continue;
+                out[`customer:${key}`] = value;
+                out[`household:${key}`] = value;
+            }
+        }
+
+        const personId = String((link as { person_id?: unknown } | null)?.person_id ?? "").trim();
+        if (!personId) return;
+
+        const { data: person } = await supabase
+            .from("persons")
+            .select("first_name, last_name, full_name, email, phone")
+            .eq("org_id", orgId)
+            .eq("id", personId)
+            .maybeSingle();
+        if (!person) return;
+
+        const personRow = person as Record<string, unknown>;
+        for (const alias of GUARDIAN_FIELD_ALIASES) {
+            let value = personRow[alias.column];
+            // A record with the parts but no composed name still knows the parent's name.
+            if (alias.column === "full_name" && !usable(value)) {
+                value = [personRow.first_name, personRow.last_name].filter(Boolean).join(" ").trim();
+            }
+            if (!usable(value)) continue;
+            for (const key of alias.keys) out[key] = value;
+        }
+    } catch {
+        // Nothing merged. Every affected fact simply arrives as a question.
     }
 }
 
